@@ -51,16 +51,10 @@ jobs:
 
       # we run our rust tests before the webdriver tests to avoid testing a broken application
       - name: Cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test --package citadel-workspace
-
+        run: cargo test --package citadel-workspace
       # build a release build of our application to be used during our WebdriverIO tests
       - name: Cargo build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build --package citadel-workspace
-          args: --release
+        run: cargo build --package citadel-workspace --release
 
       # install the latest stable node version at the time of writing
       - name: Node v16
