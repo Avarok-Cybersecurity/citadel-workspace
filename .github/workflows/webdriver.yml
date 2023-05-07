@@ -1,8 +1,21 @@
-# run this action when the repository is pushed to
-on: [push]
+name: Validate branch
+on:
+  workflow_call:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
-# the name of our workflow
-name: WebDriver
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  # 40 MiB stack
+  RUST_MIN_STACK: 40971520
+  RUST_LOG: "citadel=warn"
 
 jobs:
   # a single job named test
@@ -17,7 +30,7 @@ jobs:
     steps:
       # checkout the code on the workflow runner
       - uses: actions/checkout@v2
-
+      - uses: Avarok-Cybersecurity/gh-actions-deps@master
       # install system dependencies that Tauri needs to compile on Linux.
       # note the extra dependencies for `tauri-driver` to run which are: `webkit2gtk-driver` and `xvfb`
       - name: Tauri dependencies
@@ -40,13 +53,13 @@ jobs:
       - name: Cargo test
         uses: actions-rs/cargo@v1
         with:
-          command: cargo test --target-dir ./src-tauri/
+          command: cargo test --package ./src-tauri/
 
       # build a release build of our application to be used during our WebdriverIO tests
       - name: Cargo build
         uses: actions-rs/cargo@v1
         with:
-          command: build
+          command: build --package citadel-workspace
           args: --release
 
       # install the latest stable node version at the time of writing
