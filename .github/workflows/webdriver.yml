@@ -53,7 +53,7 @@ jobs:
       - name: Cargo test
         uses: actions-rs/cargo@v1
         with:
-          command: cargo test --package citadel-workspace
+          command: test --package citadel-workspace
 
       # build a release build of our application to be used during our WebdriverIO tests
       - name: Cargo build
