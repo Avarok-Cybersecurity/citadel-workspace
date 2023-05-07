@@ -2,9 +2,9 @@ name: Validate branch
 on:
   workflow_call:
   push:
-    branches: [ "master" ]
+    branches: ['master']
   pull_request:
-    branches: [ "master" ]
+    branches: ['master']
 
 concurrency:
   group: ${{ github.head_ref || github.run_id }}
@@ -15,7 +15,7 @@ env:
   RUST_BACKTRACE: full
   # 40 MiB stack
   RUST_MIN_STACK: 40971520
-  RUST_LOG: "citadel=warn"
+  RUST_LOG: 'citadel=warn'
 
 jobs:
   # a single job named test
@@ -49,10 +49,10 @@ jobs:
         with:
           toolchain: stable
 
-      # we run our rust tests before the webdriver tests to avoid testing a broken application
+      # # we run our rust tests before the webdriver tests to avoid testing a broken application
       - name: Cargo test
         run: cargo test --package citadel-workspace
-      # build a release build of our application to be used during our WebdriverIO tests
+      # # build a release build of our application to be used during our WebdriverIO tests
       - name: Cargo build
         run: cargo build --package citadel-workspace --release
 
