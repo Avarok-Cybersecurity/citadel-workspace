@@ -1,8 +1,15 @@
 import { AppProps } from 'next/app';
 import Head from 'next/head';
 import '../tailwind.css';
+import { FC, ReactNode } from 'react';
 
-function CustomApp({ Component, pageProps }: AppProps) {
+const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
+
+function CustomApp({
+  Component,
+  pageProps,
+}: AppProps & { Component: { Layout: FC<{ children: ReactNode }> } }) {
+  const Layout = Component.Layout ?? Noop;
   return (
     <div className="select-none">
       <Head>
@@ -10,7 +17,9 @@ function CustomApp({ Component, pageProps }: AppProps) {
       </Head>
       <div className="min-h-screen flex flex-col">
         <main className="flex-grow bg-gray-100 shadow-inner">
-          <Component {...pageProps} />
+          <Layout>
+            <Component {...pageProps} />
+          </Layout>
         </main>
       </div>
     </div>
