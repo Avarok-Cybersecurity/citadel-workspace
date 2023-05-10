@@ -14,13 +14,19 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "baseUrl": ".",
     "plugins": [
       {
         "name": "next"
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@framework": ["./framework"],
+      "@framework/*": ["./framework/*"],
+      "@components/*": ["components/*"],
+      "@common": ["framework/common"],
+      "@common/*": ["framework/common/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

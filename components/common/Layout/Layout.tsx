@@ -1,8 +1,8 @@
 import React, { FC } from 'react';
 import { Aside } from '../Navbar';
 import { Header } from '../Header';
-import { useUI } from '@/components/ui/context';
-import { ApiProvider } from '@/framework/app';
+import { useUI } from '@components/ui/context';
+import { ApiProvider } from '@framework/app/index';
 
 type Props = {
   children: React.ReactNode;
