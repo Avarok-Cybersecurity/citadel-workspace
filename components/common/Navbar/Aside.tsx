@@ -1,4 +1,5 @@
 import { StateModifiers } from '@/components/ui/context';
+import WorkspaceBar from '@/components/ui/workspacesBar/WorkspaceBar';
 import React from 'react';
 
 interface Props {
@@ -8,14 +9,15 @@ interface Props {
 
 export function Aside({ onClose, isOpen }: Props) {
   return (
-    <>
+    <div className="flex">
       {isOpen ? (
         <aside
           id="logo-sidebar"
-          className="fixed top-0 left-0 z-40 w-64 h-screen pt-20 transition-transform -translate-x-full border-r sm:translate-x-0 bg-gray-800 border-gray-700"
+          className="flex fixed top-0 left-0 z-40 w-64 h-screen pt-[65px] transition-transform -translate-x-full border-r sm:translate-x-0 bg-gray-800 border-gray-700"
           aria-label="Sidebar"
         >
-          <div className="h-full px-3 pb-4 overflow-y-auto bg-gray-800">
+          <WorkspaceBar />
+          <div className="h-full px-3 pb-4 overflow-y-auto bg-gray-800 pt-3">
             <ul className="space-y-2 font-medium">
               <li>
                 <a
@@ -128,7 +130,7 @@ export function Aside({ onClose, isOpen }: Props) {
           </div>
         </aside>
       ) : null}
-    </>
+    </div>
   );
 }
 
