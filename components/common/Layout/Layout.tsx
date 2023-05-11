@@ -13,10 +13,13 @@ export const Layout = ({ children }: Props) => {
     <ApiProvider>
       <div>
         <Header />
-        <Aside onClose={closeSidebar} isOpen={isSidebarOpen} />
 
-        <div className="p-4 sm:ml-64">
-          <div className="p-4 border-2 border-dashed rounded-lg border-gray-700 mt-14">
+        <div className="block">
+          <Aside onClose={closeSidebar} isOpen={isSidebarOpen} />
+        </div>
+
+        <div className="p-4 sm:ml-92 pl-20 sm:pl-[335px]">
+          <div className="p-4 border-2 border-dashed rounded-lg border-gray-700 mt-16 ">
             {children}
           </div>
         </div>
