@@ -1,5 +1,6 @@
 import React from 'react';
 import Image from 'next/image';
+import SearchBar from '@/components/ui/searchBar/SearchBar';
 export function Header() {
   return (
     <nav className="fixed top-0 left-0 z-50 w-full border-b bg-gray-800 border-gray-700">
@@ -25,16 +26,8 @@ export function Header() {
                 ></path>
               </svg>
             </button>
-            <a href="/" className="flex md:mr-24 ml-5 md:ml-0">
-              <Image
-                className="w-[200px] md:w-[230px]"
-                src="/logo.png"
-                alt="Citadel Logo"
-                width="200"
-                height="64"
-              />
-            </a>
           </div>
+          <SearchBar></SearchBar>
           <div className="flex items-center">
             <div className="flex items-center ml-3">
               <div>
@@ -46,7 +39,7 @@ export function Header() {
                 >
                   <span className="sr-only">Open user menu</span>
                   <img
-                    className="w-8 h-8 rounded-full"
+                    className="w-8 h-8 rounded-sm"
                     src="https://flowbite.com/docs/images/people/profile-picture-5.jpg"
                     alt="user photo"
                   />
