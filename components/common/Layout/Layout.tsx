@@ -18,10 +18,8 @@ export const Layout = ({ children }: Props) => {
           <Aside onClose={closeSidebar} isOpen={isSidebarOpen} />
         </div>
 
-        <div className="p-4 sm:ml-92 pl-20 sm:pl-[335px]">
-          <div className="p-4 border-2 border-dashed rounded-lg border-gray-700 mt-16 ">
-            {children}
-          </div>
+        <div className="pl-20 sm:pl-[335px]">
+          <div className="pr-3 pb-4 pt-24 h-screen">{children}</div>
         </div>
       </div>
     </ApiProvider>
