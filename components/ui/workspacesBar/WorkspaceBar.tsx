@@ -7,8 +7,8 @@ function WorkspaceBar() {
   return (
     <div className="overflow-scroll h-screen w-16 bg-slate-500 pt-5 grid ">
       <div className="mx-auto flex flex-col gap-y-[20px] ">
-        {arr.map((el) => (
-          <WorkspaceAvatar />
+        {arr.map((el, idx) => (
+          <WorkspaceAvatar key={idx} />
         ))}
       </div>
     </div>
