@@ -1,25 +1,29 @@
-import React from 'react';
-import { Dropdown, DropdownProps, DropdownItemProps } from 'flowbite-react';
+import React, { useState } from 'react';
+import { Dropdown, CustomFlowbiteTheme } from 'flowbite-react';
 
 function Chat() {
+  const [label, setLab] = useState('Standart');
   return (
-    <div className="">
+    <div className="px-5">
       <form>
         <div className="flex">
-          <label
-            htmlFor="search-dropdown"
-            className="mb-2 text-sm font-medium text-gray-900 sr-only dark:text-white"
-          >
-            Your Email
-          </label>
-          <Dropdown label="Security type" className={'w-20'}>
-            <Dropdown.Item>Shopping</Dropdown.Item>
-            <Dropdown.Item>Images</Dropdown.Item>
-            <Dropdown.Item>News</Dropdown.Item>
-            <Dropdown.Item>Finance</Dropdown.Item>
+          <Dropdown label={label}>
+            <Dropdown.Header>
+              <span className="block text-sm">Security type</span>
+            </Dropdown.Header>
+
+            {label !== 'Standart' ? (
+              <Dropdown.Item onClick={() => setLab('Standart')}>
+                Standart
+              </Dropdown.Item>
+            ) : (
+              <Dropdown.Item onClick={() => setLab('REVFS')}>
+                REVFS
+              </Dropdown.Item>
+            )}
           </Dropdown>
 
-          {/* <div className="relative w-full">
+          <div className="relative right-2 w-full">
             <input
               type="search"
               id="search-dropdown"
@@ -32,7 +36,7 @@ function Chat() {
             >
               Send
             </button>
-          </div> */}
+          </div>
         </div>
       </form>
     </div>
