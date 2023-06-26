@@ -1,8 +1,7 @@
 import React, { useMemo, useEffect, useState, useCallback } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { IMessage } from '@/lib/utils';
+import { IMessage } from '@common/types/messages';
 import dayjs from 'dayjs';
-import { Dropdown, CustomFlowbiteTheme } from 'flowbite-react';
+import { Dropdown } from 'flowbite-react';
 
 import _ from 'lodash';
 

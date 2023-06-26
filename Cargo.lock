@@ -571,14 +571,14 @@ version = "0.1.0"
 dependencies = [
  "bincode2",
  "bytes",
- "citadel_workspace_types",
+ "citadel_workspace_lib",
+ "citadel_workspace_types 0.1.0 (git+https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git)",
  "futures",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tokio",
- "tokio-util",
  "uuid",
 ]
 
@@ -770,6 +770,32 @@ dependencies = [
  "stun",
  "tokio",
  "tokio-rustls 0.23.4",
+ "uuid",
+]
+
+[[package]]
+name = "citadel_workspace_lib"
+version = "0.1.0"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git?branch=common_lib#691959489e96d11365b6614d5eedf7ff83db1d0e"
+dependencies = [
+ "bincode2",
+ "bytes",
+ "citadel_sdk",
+ "citadel_workspace_types 0.1.0 (git+https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git?branch=common_lib)",
+ "serde",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "citadel_workspace_types"
+version = "0.1.0"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git?branch=common_lib#691959489e96d11365b6614d5eedf7ff83db1d0e"
+dependencies = [
+ "bytes",
+ "citadel_sdk",
+ "serde",
  "uuid",
 ]
 

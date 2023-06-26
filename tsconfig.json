@@ -22,11 +22,13 @@
     ],
     "paths": {
       "@/*": ["./*"],
-      "@framework": ["./framework"],
-      "@framework/*": ["./framework/*"],
-      "@components/*": ["components/*"],
       "@common": ["framework/common"],
-      "@common/*": ["framework/common/*"]
+      "@common/*": ["framework/common/*"],
+      "@framework": ["framework/app"],
+      "@framework/*": ["framework/app/*"],
+      "@components/*": ["components/*"],
+      "@assets/*": ["assets/*"],
+      "@lib/*": ["lib/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
