@@ -8,6 +8,7 @@ export function Aside() {
   const { isSidebarOpen, sidebar } = useUI();
   const size = useWindowSize();
   useEffect(() => {
+    sidebar(false);
     if (size.width === 500) {
       sidebar(false);
     }

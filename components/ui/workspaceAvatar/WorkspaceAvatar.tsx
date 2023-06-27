@@ -4,7 +4,7 @@ function WorkspaceAvatar() {
   return (
     <img
       className="w-10 h-10 rounded"
-      src={'/avatar-mock.jpg'}
+      src={'/assets/avatar-mock.jpg'}
       alt="Medium avatar"
     ></img>
   );
