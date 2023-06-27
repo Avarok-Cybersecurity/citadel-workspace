@@ -8,14 +8,14 @@ type Props = {
   children: React.ReactNode;
 };
 export const Layout = ({ children }: Props) => {
-  const { isSidebarOpen, closeSidebar } = useUI();
+  const { isSidebarOpen, sidebar } = useUI();
   return (
     <ApiProvider>
       <div>
         <Header />
 
         <div className="block">
-          <Aside onClose={closeSidebar} isOpen={isSidebarOpen} />
+          <Aside />
         </div>
 
         <div className="pl-20 sm:pl-[335px]">

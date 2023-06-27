@@ -8,8 +8,7 @@ import {
 } from 'react';
 
 export interface StateModifiers {
-  openSidebar: () => void;
-  closeSidebar: () => void;
+  sidebar: (payload: boolean) => void;
 }
 
 export interface StateValues {
@@ -17,8 +16,7 @@ export interface StateValues {
 }
 
 const stateModifiers = {
-  openSidebar: () => {},
-  closeSidebar: () => {},
+  sidebar: (payload: boolean) => {},
 };
 
 const initialState = { isSidebarOpen: true };
@@ -30,20 +28,14 @@ const UIContext = createContext<State>({
   ...initialState,
 });
 
-type Action = { type: 'OPEN_SIDEBAR' | 'CLOSE_SIDEBAR' };
+type Action = { type: 'SIDEBAR'; payload: boolean };
 
 function uiReducer(state: StateValues, action: Action) {
   switch (action.type) {
-    case 'OPEN_SIDEBAR': {
+    case 'SIDEBAR': {
       return {
         ...state,
-        isSidebarOpen: true,
-      };
-    }
-    case 'CLOSE_SIDEBAR': {
-      return {
-        ...state,
-        isSidebarOpen: false,
+        isSidebarOpen: action.payload,
       };
     }
   }
@@ -52,14 +44,16 @@ function uiReducer(state: StateValues, action: Action) {
 export const UIProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(uiReducer, initialState);
 
-  const openSidebar = () => dispatch({ type: 'OPEN_SIDEBAR' });
-  const closeSidebar = () => dispatch({ type: 'CLOSE_SIDEBAR' });
+  const sidebar = (payload: boolean) =>
+    dispatch({
+      type: 'SIDEBAR',
+      payload,
+    });
 
   const value = useMemo(() => {
     return {
       ...state,
-      openSidebar,
-      closeSidebar,
+      sidebar,
     };
   }, [state.isSidebarOpen]);
 

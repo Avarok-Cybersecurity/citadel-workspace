@@ -1,7 +1,9 @@
 import React from 'react';
 import Image from 'next/image';
 import SearchBar from '@/components/ui/searchBar/SearchBar';
+import { useUI } from '@/components/ui/context';
 export function Header() {
+  const { sidebar, isSidebarOpen } = useUI();
   return (
     <nav className="fixed top-0 left-0 z-50 w-full border-b bg-gray-800 border-gray-700">
       <div className="px-4 py-4 lg:px-5 lg:pl-5">
@@ -9,6 +11,7 @@ export function Header() {
           <div className="flex items-center justify-start">
             <button
               type="button"
+              onClick={() => sidebar(!isSidebarOpen)}
               className="inline-flex items-center p-2 text-sm rounded-lg sm:hidden  focus:outline-none focus:ring-2  text-gray-400 hover:bg-gray-700 focus:ring-gray-600"
             >
               <span className="sr-only">Open sidebar</span>
