@@ -5,6 +5,7 @@
 use citadel_workspace_lib::wrap_tcp_conn;
 use futures::stream::SplitSink;
 use futures::StreamExt;
+use serde::de::value::Error;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -35,17 +36,21 @@ struct ConnectionState {
 // https://github.com/tauri-apps/tauri/pull/6124
 // https://github.com/tauri-apps/tauri/issues/2533
 #[tauri::command]
-async fn open_tcp_conn(conn_state: State<'_, ConnectionState>) -> Result<(), ()> {
-    let addr: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3000);
+async fn open_tcp_conn(conn_state: State<'_, ConnectionState>) -> Result<String, String> {
+    let addr: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)), 3000);
     let connection = TcpStream::connect(addr);
-    if let Ok(conn) = timeout(Duration::from_millis(10), connection).await {
-        let framed = wrap_tcp_conn(conn.unwrap());
-        let (sink, stream) = framed.split();
-        *conn_state.sink.lock().unwrap() = Some(sink);
-        *conn_state.stream.lock().unwrap() = Some(stream);
-        Ok(())
-    } else {
-        Err(())
+    match timeout(Duration::from_millis(3000), connection)
+        .await
+        .map_err(|err| err.to_string())?
+    {
+        Ok(conn) => {
+            let framed = wrap_tcp_conn(conn);
+            let (sink, stream) = framed.split();
+            *conn_state.sink.lock().unwrap() = Some(sink);
+            *conn_state.stream.lock().unwrap() = Some(stream);
+            Ok(format!("Connected"))
+        }
+        Err(err) => Err(format!("Error:")),
     }
 }
 
