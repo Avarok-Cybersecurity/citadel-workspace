@@ -31,17 +31,21 @@ struct ConnectionState {
     >,
 }
 
+//Resources
+// https://github.com/tauri-apps/tauri/pull/6124
+// https://github.com/tauri-apps/tauri/issues/2533
 #[tauri::command]
-async fn open_tcp_conn(conn_state: State<'_, ConnectionState>) -> String {
+async fn open_tcp_conn(conn_state: State<'_, ConnectionState>) -> Result<(), ()> {
     let addr: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3000);
     let connection = TcpStream::connect(addr);
     if let Ok(conn) = timeout(Duration::from_millis(10), connection).await {
         let framed = wrap_tcp_conn(conn.unwrap());
-        *conn_state.sink.lock().unwrap() = Some(framed.split().0);
-        *conn_state.stream.lock().unwrap() = Some(&framed.split().1);
-        format!("Connected")
+        let (sink, stream) = framed.split();
+        *conn_state.sink.lock().unwrap() = Some(sink);
+        *conn_state.stream.lock().unwrap() = Some(stream);
+        Ok(())
     } else {
-        format!("Timeout")
+        Err(())
     }
 }
 
