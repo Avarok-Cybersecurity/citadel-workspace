@@ -52,7 +52,11 @@ async fn open_tcp_conn(
             while let Some(packet) = stream.next().await {
                 let _ = window.emit(
                     "packet",
-                    bincode2::deserialize::<InternalServiceResponse>(&packet.unwrap()).unwrap(),
+                    serde_json::to_string(
+                        &bincode2::deserialize::<InternalServiceResponse>(&packet.unwrap())
+                            .unwrap(),
+                    )
+                    .unwrap(),
                 );
             }
             Ok(format!("Connected"))
