@@ -1,6 +1,6 @@
-use crate::lib::types::{ConnSink, ConnStream};
+use crate::helpers::types::{ConnSink, ConnStream};
 
-pub(crate) struct ConnectionState {
+pub struct ConnectionState {
     pub sink: ConnSink,
     pub stream: ConnStream,
 }

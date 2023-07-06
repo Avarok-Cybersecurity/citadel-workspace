@@ -1,7 +1,7 @@
+pub mod types;
 use crate::ConnectionState;
 use citadel_workspace_types::InternalServicePayload;
 use tauri::State;
-pub mod types;
 
 pub(crate) async fn send_to_service(
     state: State<'_, ConnectionState>,
