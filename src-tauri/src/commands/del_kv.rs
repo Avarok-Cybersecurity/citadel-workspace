@@ -11,7 +11,6 @@ pub async fn del_kv(
     cid: u64,
     peer_cid: Option<u64>,
     key: String,
-    value: String,
     state: State<'_, ConnectionState>,
 ) -> Result<(), String> {
     let uuid = Uuid::parse_str(&uuid).unwrap();

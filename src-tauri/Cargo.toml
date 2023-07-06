@@ -17,9 +17,9 @@ serde_json = "1.0"
 tokio = {version = "1.28.2", features = ["net", "rt", "macros"] }
 bincode2 = "2.0.1"
 bytes = "1.4.0"
-uuid = {version = "1.3.4", feature=["macro-diagnostics", "serde"]}
+uuid = {version = "1.3.4", feature= ["macro-diagnostics", "serde"] }
 citadel_workspace_types = {version="0.1.0", git="https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git", package="citadel_workspace_types"}
-citadel_workspace_lib= {version="0.1.0", git="https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git", package="citadel_workspace_lib", branch="common_lib"}
+citadel_workspace_lib= {version="0.1.0", git="https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git", package="citadel_workspace_lib" }
 futures = "0.3.28"
 tokio-util = { version = "0.7.8", default-features = false }
 

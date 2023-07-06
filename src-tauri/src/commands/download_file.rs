@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use citadel_workspace_types::InternalServicePayload;
 use futures::SinkExt;
 use tauri::State;
@@ -15,7 +17,7 @@ pub async fn download_file(
 ) -> Result<(), String> {
     let uuid = Uuid::parse_str(&uuid).unwrap();
     let payload = InternalServicePayload::DownloadFile {
-        virtual_path,
+        virtual_path: PathBuf::from(virtual_path),
         transfer_security_level: Default::default(),
         delete_on_pull,
         cid,
