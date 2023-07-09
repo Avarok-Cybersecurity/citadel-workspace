@@ -600,6 +600,7 @@ version = "0.1.0"
 dependencies = [
  "bincode2",
  "bytes",
+ "citadel_logging 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "citadel_workspace_lib",
  "citadel_workspace_types",
  "futures",
@@ -651,6 +652,17 @@ source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=ma
 dependencies = [
  "parking_lot",
  "tokio",
+]
+
+[[package]]
+name = "citadel_logging"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45d8c3a8b4bc7dbbe367c509b0b06ffc4164ce5266da0e8cf29598742d061731"
+dependencies = [
+ "log",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -732,7 +744,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "citadel_io",
- "citadel_logging",
+ "citadel_logging 0.5.0 (git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master)",
  "citadel_proto",
  "dirs2",
  "futures",

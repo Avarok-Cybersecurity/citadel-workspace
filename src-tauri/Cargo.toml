@@ -22,6 +22,7 @@ citadel_workspace_types = {version="0.1.0", git="https://github.com/Avarok-Cyber
 citadel_workspace_lib= {version="0.1.0", git="https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git", package="citadel_workspace_lib" }
 futures = "0.3.28"
 tokio-util = { version = "0.7.8", default-features = false }
+citadel_logging = { version = "0.5.0", default-features = false }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

@@ -5,6 +5,7 @@ mod commands;
 mod helpers;
 mod structs;
 use bytes::BytesMut;
+use citadel_logging::{error, setup_log};
 use citadel_workspace_lib::wrap_tcp_conn;
 use citadel_workspace_types::InternalServiceResponse;
 use commands::{
@@ -32,9 +33,6 @@ async fn send_response(packet: BytesMut, window: tauri::Window) -> Result<(), Bo
 
 pub static ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3000);
 
-//Resources
-// https://github.com/tauri-apps/tauri/pull/6124
-// https://github.com/tauri-apps/tauri/issues/2533
 #[tauri::command]
 async fn open_tcp_conn(
     conn_state: State<'_, ConnectionState>,
@@ -51,9 +49,10 @@ async fn open_tcp_conn(
             *conn_state.sink.lock().await = Some(sink);
             let service_to_gui = async move {
                 while let Some(packet) = stream.next().await {
-                    // todo: get rid of unwrap
-                    if let Err(e) = send_response(packet.unwrap(), window.clone()).await {
-                        // Todo log
+                    if let Ok(packet) = packet {
+                        if let Err(e) = send_response(packet, window.clone()).await {
+                            error!(e)
+                        }
                     }
                 }
             };
@@ -72,6 +71,7 @@ async fn main() {
             stream: Default::default(),
         })
         .setup(|app| {
+            setup_log();
             #[cfg(debug_assertions)] // only include this code on debug builds
             {
                 let window = app.get_window("main").unwrap();
