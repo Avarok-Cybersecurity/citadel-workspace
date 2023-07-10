@@ -4,13 +4,13 @@ import { ApiHooks } from './types/hooks';
 
 interface ApiProviderProps {
   children: ReactNode | ReactNode[];
-
+  config: ApiConfig;
   hooks: ApiHooks;
 }
 
 export const ApiContext = createContext<Partial<ApiProviderContext>>({});
 
-export const ApiProvider = ({ children, hooks }: ApiProviderProps) => {
+export const ApiProvider = ({ children, config, hooks }: ApiProviderProps) => {
   const coreConfig = useMemo(() => {
     return {
       hooks,

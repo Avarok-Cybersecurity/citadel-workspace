@@ -1,3 +1,3 @@
-import { SWRResponse } from 'swr';
-
-export interface ApiHooks {}
+export interface ApiHooks {
+  c2s: {};
+}

@@ -9,16 +9,19 @@ export type ApiFetcherResults<T> = {
 };
 
 export type Variables = { [key: string]: string | any | undefined };
-
+export type ApiInvokeTypes = 'message' | 'anything';
 export interface ApiConfig {
-  fetch<T>(options: ApiFetcherOptions): Promise<ApiFetcherResults<T>>;
+  invoke<T>(
+    type: ApiInvokeTypes,
+    options: ApiFetcherOptions
+  ): Promise<ApiFetcherResults<T>>;
 }
 
-export type ApiFetcher<T = any> = (
+export type ApiInvoker<T = any> = (
   options: ApiFetcherOptions
 ) => Promise<ApiFetcherResults<T>>;
 
 export interface ApiProviderContext {
   hooks: ApiHooks;
-  fetcher: ApiFetcher;
+  invoke: ApiInvoker;
 }
