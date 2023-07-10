@@ -5,11 +5,21 @@
 * {
   padding: 0;
   margin: 0;
-  outline: 0;
+  scorllbar-width: none;
 }
 
 .sb-show-main.sb-main-padded {
   padding: 0;
+}
+
+#workspace::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hiding scrollbar for IE, Edge and Firefox */
+#workspace {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
 }
 
 @layer base {

@@ -1,15 +1,26 @@
 import React from 'react';
-import WorkspaceAvatar from '../workspaceAvatar/WorkspaceAvatar';
 
-const arr = [1, 2, 3, 4, 5, 6, 7];
+const arr = [1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 71, 2, 3, 4, 5, 6, 7];
 
-function WorkspaceBar() {
+function WorkspaceBar({ arrayOfItems }: any) {
   return (
-    <div className="overflow-scroll h-screen w-16 bg-slate-500 pt-5 grid ">
-      <div className="mx-auto flex flex-col gap-y-[20px] ">
-        {arr.map((el, idx) => (
-          <WorkspaceAvatar key={idx} />
-        ))}
+    <div
+      id="workspace"
+      className="overflow-scroll h-screen w-20 px-2 bg-gray-900 border-r-[1px] border-r-white pt-5 grid "
+    >
+      <div className="mx-auto flex flex-col gap-y-[12px]">
+        <span className="inline-flex h-12 w-12 items-center cursor-pointer justify-center rounded-full bg-teal-500 text-center">
+          <span className="text-xl font-medium leading-none text-white">+</span>
+        </span>
+        {arr.map((el) => {
+          return (
+            <img
+              className="inline-block h-12 w-12 rounded-full"
+              src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
+              alt=""
+            />
+          );
+        })}
       </div>
     </div>
   );

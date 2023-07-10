@@ -22,37 +22,23 @@ function Chat() {
   };
   const [label, setLab] = useState('Standart');
   return (
-    <div className="px-5">
-      <div>
-        {messages.map((message, index) => (
-          <p key={index}>
-            <b>{message.user}:</b> {message.message}{' '}
-            <i>{message.timestamp.toLocaleTimeString()}</i>
-          </p>
-        ))}
-      </div>
-
-      <div className="flex outline-none appearance-none">
-        <div className="relative right-2 w-full">
-          <input
-            type="text"
-            className="block p-2.5 focus:outline-none focus:ring-0 focus:border-gray-300 sring-0 border-inherit w-full text-sm text-gray-900 outline-none appearance-none bg-gray-50 rounded-lg border border-gray-300"
-            placeholder="Message"
-            value={messageInput}
-            onChange={(e) => setMessageInput(e.target.value)}
-          />
-          <button
-            className="absolute top-0 appearance-none right-0 border-inherit outline-none p-2.5 text-sm font-medium text-black"
-            onClick={() => {
-              if (messageInput) handleSend();
-            }}
-          >
-            <PaperAirplaneIcon
-              className="h-6 w-6 shrink-0"
-              aria-hidden="true"
-            />
-          </button>
-        </div>
+    <div className="pl-4 h-full">
+      <div className="relative right-2 ">
+        <input
+          type="text"
+          className="p-2.5 focus:outline-none focus:ring-0 focus:border-inherit border-inherit w-full text-sm text-gray-900 outline-none appearance-none bg-gray-50 rounded-lg border-[2px] border-gray-900"
+          placeholder="Message"
+          value={messageInput}
+          onChange={(e) => setMessageInput(e.target.value)}
+        />
+        <button
+          className="absolute top-0 appearance-none right-0 border-inherit outline-none p-2.5 text-sm font-medium text-black"
+          onClick={() => {
+            if (messageInput) handleSend();
+          }}
+        >
+          <PaperAirplaneIcon className="h-6 w-6 shrink-0" aria-hidden="true" />
+        </button>
       </div>
     </div>
   );

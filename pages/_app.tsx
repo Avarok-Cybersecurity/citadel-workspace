@@ -6,7 +6,6 @@ import { FC, ReactNode, useEffect, useState } from 'react';
 import { UIProvider } from '@/components/ui/context';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/tauri';
-import Chat from '@/components/chat';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 

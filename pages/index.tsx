@@ -22,6 +22,8 @@ import {
 } from '@heroicons/react/20/solid';
 import classNames from 'classnames';
 import Chat from '@/components/chat';
+import ServerAvatar from '@/components/ui/serverAvatar';
+import WorkspaceBar from '@/components/ui/workspacesBar/WorkspaceBar';
 
 const navigation = [
   { name: 'Dashboard', href: '#', icon: HomeIcon, current: true },
@@ -51,7 +53,7 @@ export default function Home({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   return (
     <>
-      <div>
+      <div className="h-full">
         <Transition.Root show={sidebarOpen} as={Fragment}>
           <Dialog
             as="div"
@@ -90,10 +92,10 @@ export default function Home({
                     leaveFrom="opacity-100"
                     leaveTo="opacity-0"
                   >
-                    <div className="absolute left-full top-0 flex w-16 justify-center pt-5">
+                    <div className="absolute left-full ml-5 top-0 flex w-16 justify-center pt-5">
                       <button
                         type="button"
-                        className="-m-2.5 p-2.5"
+                        className="-m-2.5  p-2.5"
                         onClick={() => setSidebarOpen(false)}
                       >
                         <span className="sr-only">Close sidebar</span>
@@ -105,111 +107,120 @@ export default function Home({
                     </div>
                   </Transition.Child>
                   {/* Sidebar component, swap this element with another sidebar if you like */}
-                  <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-gray-900 px-6 pb-4 ring-1 ring-white/10">
-                    <div className="flex h-16 shrink-0 items-center">
-                      <img
-                        className="h-8 w-auto"
-                        src="https://github.com/Avarok-Cybersecurity/Citadel-Protocol/raw/master/resources/logo.png"
-                        alt="Citadel Workspace"
-                      />
-                    </div>
-                    <nav className="flex flex-1 flex-col">
-                      <ul role="list" className="flex flex-1 flex-col gap-y-7">
-                        <li>
-                          <ul role="list" className="-mx-2 space-y-1">
-                            {navigation.map((item) => (
-                              <li key={item.name}>
-                                <a
-                                  href={item.href}
-                                  className={classNames(
-                                    item.current
-                                      ? 'bg-gray-800 text-white'
-                                      : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                                    'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
-                                  )}
-                                >
-                                  <item.icon
-                                    className="h-6 w-6 shrink-0"
-                                    aria-hidden="true"
-                                  />
-                                  {item.name}
-                                </a>
-                              </li>
-                            ))}
-                          </ul>
-                        </li>
+                  <div className="flex">
+                    <WorkspaceBar />
 
-                        <li>
-                          <div className="text-xs font-semibold leading-6 text-gray-400">
-                            Your Peers
-                          </div>
-                          <ul role="list" className="-mx-2 mt-2 space-y-1">
-                            {teams.map((team) => (
-                              <li key={team.name}>
-                                <a
-                                  href={team.href}
-                                  className={classNames(
-                                    team.current
-                                      ? 'bg-gray-800 text-white'
-                                      : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                                    'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
-                                  )}
-                                >
-                                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-gray-700 bg-gray-800 text-[0.625rem] font-medium text-gray-400 group-hover:text-white">
-                                    {team.initial}
-                                  </span>
-                                  <span className="truncate">{team.name}</span>
-                                </a>
-                              </li>
-                            ))}
-                          </ul>
-                        </li>
-                        <li>
-                          <div className="text-xs font-semibold leading-6 text-gray-400">
-                            Security type
-                          </div>
-                          <div className="flex ">
-                            <ul role="list" className="-mx-2 mt-2 space-y-1">
-                              <li className="ml-2 flex items-center">
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    value=""
-                                    className="sr-only peer"
-                                  />
-                                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-
-                                  <span className="ml-3 text-sm font-medium text-gray-300">
-                                    REVFS
-                                  </span>
-                                </label>
-                              </li>
+                    <div className="flex grow w-72 flex-col gap-y-5 overflow-y-auto bg-gray-900 px-6 pb-4 ring-1 ring-white/10">
+                      <div className="flex h-16 shrink-0 items-center">
+                        <img
+                          className="h-8 w-auto"
+                          src="https://github.com/Avarok-Cybersecurity/Citadel-Protocol/raw/master/resources/logo.png"
+                          alt="Citadel Workspace"
+                        />
+                      </div>
+                      <nav className="flex flex-1 flex-col">
+                        <ul
+                          role="list"
+                          className="flex flex-1 flex-col gap-y-7"
+                        >
+                          <li>
+                            <ul role="list" className="-mx-2 space-y-1">
+                              {navigation.map((item) => (
+                                <li key={item.name}>
+                                  <a
+                                    href={item.href}
+                                    className={classNames(
+                                      item.current
+                                        ? 'bg-gray-800 text-white'
+                                        : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                                      'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                                    )}
+                                  >
+                                    <item.icon
+                                      className="h-6 w-6 shrink-0"
+                                      aria-hidden="true"
+                                    />
+                                    {item.name}
+                                  </a>
+                                </li>
+                              ))}
                             </ul>
-                            <Tooltip
-                              style="dark"
-                              className="text-black bg-white"
-                              content="The security type defines how the data is transfered from the client to server. Default: Standart. REVFS stands for"
+                          </li>
+
+                          <li>
+                            <div className="text-xs font-semibold leading-6 text-gray-400">
+                              Your Peers
+                            </div>
+                            <ul role="list" className="-mx-2 mt-2 space-y-1">
+                              {teams.map((team) => (
+                                <li key={team.name}>
+                                  <a
+                                    href={team.href}
+                                    className={classNames(
+                                      team.current
+                                        ? 'bg-gray-800 text-white'
+                                        : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                                      'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                                    )}
+                                  >
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-gray-700 bg-gray-800 text-[0.625rem] font-medium text-gray-400 group-hover:text-white">
+                                      {team.initial}
+                                    </span>
+                                    <span className="truncate">
+                                      {team.name}
+                                    </span>
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          </li>
+                          <li>
+                            <div className="text-xs font-semibold leading-6 text-gray-400">
+                              Security type
+                            </div>
+                            <div className="flex ">
+                              <ul role="list" className="-mx-2 mt-2 space-y-1">
+                                <li className="ml-2 flex items-center">
+                                  <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      value=""
+                                      className="sr-only peer"
+                                    />
+                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+
+                                    <span className="ml-3 text-sm font-medium text-gray-300">
+                                      REVFS
+                                    </span>
+                                  </label>
+                                </li>
+                              </ul>
+                              <Tooltip
+                                style="dark"
+                                className="text-black bg-white"
+                                content="The security type defines how the data is transfered from the client to server. Default: Standart. REVFS stands for"
+                              >
+                                <Button className="ml-[100px] mt-1 w-6 h-6">
+                                  ?
+                                </Button>
+                              </Tooltip>
+                            </div>
+                          </li>
+                          <li className="mt-auto">
+                            <a
+                              href="#"
+                              className="group -mx-2 flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-gray-400 hover:bg-gray-800 hover:text-white"
                             >
-                              <Button className="ml-[100px] mt-1 w-6 h-6">
-                                ?
-                              </Button>
-                            </Tooltip>
-                          </div>
-                        </li>
-                        <li className="mt-auto">
-                          <a
-                            href="#"
-                            className="group -mx-2 flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-gray-400 hover:bg-gray-800 hover:text-white"
-                          >
-                            <Cog6ToothIcon
-                              className="h-6 w-6 shrink-0"
-                              aria-hidden="true"
-                            />
-                            Settings
-                          </a>
-                        </li>
-                      </ul>
-                    </nav>
+                              <Cog6ToothIcon
+                                className="h-6 w-6 shrink-0"
+                                aria-hidden="true"
+                              />
+                              Settings
+                            </a>
+                          </li>
+                        </ul>
+                      </nav>
+                    </div>
                   </div>
                 </Dialog.Panel>
               </Transition.Child>
@@ -218,7 +229,11 @@ export default function Home({
         </Transition.Root>
 
         {/* Static sidebar for desktop */}
-        <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col">
+        <div
+          className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-96"
+          id="workspace"
+        >
+          <WorkspaceBar />
           {/* Sidebar component, swap this element with another sidebar if you like */}
           <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-gray-900 px-6 pb-4">
             <div className="flex h-16 shrink-0 items-center">
@@ -326,7 +341,10 @@ export default function Home({
           </div>
         </div>
 
-        <div className="lg:pl-72">
+        <div
+          className="lg:pl-96 h-[99vh] flex flex-col justify-between "
+          id="workspace"
+        >
           <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
             <button
               type="button"
@@ -429,11 +447,11 @@ export default function Home({
             </div>
           </div>
 
-          <main className="py-10">
-            <div className="px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col justify-between">
+            <main className="pt-10 h-full w-full flex flex-col justify-between">
               <Chat />
-            </div>
-          </main>
+            </main>
+          </div>
         </div>
       </div>
     </>
