@@ -2,6 +2,7 @@ import { Layout } from '@/components/common/Layout';
 import React from 'react';
 import { Fragment, useState } from 'react';
 import { Dialog, Menu, Transition } from '@headlessui/react';
+import { Button, Tooltip } from 'flowbite-react';
 import {
   Bars3Icon,
   BellIcon,
@@ -13,12 +14,14 @@ import {
   HomeIcon,
   UsersIcon,
   XMarkIcon,
+  PaperAirplaneIcon,
 } from '@heroicons/react/24/outline';
 import {
   ChevronDownIcon,
   MagnifyingGlassIcon,
 } from '@heroicons/react/20/solid';
 import classNames from 'classnames';
+import Chat from '@/components/chat';
 
 const navigation = [
   { name: 'Dashboard', href: '#', icon: HomeIcon, current: true },
@@ -135,9 +138,10 @@ export default function Home({
                             ))}
                           </ul>
                         </li>
+
                         <li>
                           <div className="text-xs font-semibold leading-6 text-gray-400">
-                            Your teams
+                            Your Peers
                           </div>
                           <ul role="list" className="-mx-2 mt-2 space-y-1">
                             {teams.map((team) => (
@@ -159,6 +163,38 @@ export default function Home({
                               </li>
                             ))}
                           </ul>
+                        </li>
+                        <li>
+                          <div className="text-xs font-semibold leading-6 text-gray-400">
+                            Security type
+                          </div>
+                          <div className="flex ">
+                            <ul role="list" className="-mx-2 mt-2 space-y-1">
+                              <li className="ml-2 flex items-center">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    value=""
+                                    className="sr-only peer"
+                                  />
+                                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+
+                                  <span className="ml-3 text-sm font-medium text-gray-300">
+                                    REVFS
+                                  </span>
+                                </label>
+                              </li>
+                            </ul>
+                            <Tooltip
+                              style="dark"
+                              className="text-black bg-white"
+                              content="The security type defines how the data is transfered from the client to server. Default: Standart. REVFS stands for"
+                            >
+                              <Button className="ml-[100px] mt-1 w-6 h-6">
+                                ?
+                              </Button>
+                            </Tooltip>
+                          </div>
                         </li>
                         <li className="mt-auto">
                           <a
@@ -241,6 +277,37 @@ export default function Home({
                       </li>
                     ))}
                   </ul>
+                </li>
+                {/* {sec type} */}
+                <li>
+                  <div className="text-xs font-semibold leading-6 text-gray-400">
+                    Security type
+                  </div>
+                  <div className="flex ">
+                    <ul role="list" className="-mx-2 mt-2 space-y-1">
+                      <li className="ml-2 flex items-center">
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            value=""
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+
+                          <span className="ml-3 text-sm font-medium text-gray-300">
+                            REVFS
+                          </span>
+                        </label>
+                      </li>
+                    </ul>
+                    <Tooltip
+                      style="dark"
+                      className="text-black bg-white"
+                      content="The security type defines how the data is transfered from the client to server. Default: Standart. REVFS stands for Remote Encrypted Virtual Filesystem"
+                    >
+                      <Button className="ml-[100px] mt-1 w-6 h-6">?</Button>
+                    </Tooltip>
+                  </div>
                 </li>
                 <li className="mt-auto">
                   <a
@@ -363,7 +430,9 @@ export default function Home({
           </div>
 
           <main className="py-10">
-            <div className="px-4 sm:px-6 lg:px-8">{/* Your content */}</div>
+            <div className="px-4 sm:px-6 lg:px-8">
+              <Chat />
+            </div>
           </main>
         </div>
       </div>

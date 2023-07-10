@@ -1,7 +1,6 @@
-import React, { useMemo, useEffect, useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { IMessage } from '@common/types/messages';
-import dayjs from 'dayjs';
-import { Dropdown } from 'flowbite-react';
+import { PaperAirplaneIcon } from '@heroicons/react/24/outline';
 
 import _ from 'lodash';
 
@@ -32,45 +31,29 @@ function Chat() {
           </p>
         ))}
       </div>
-      <form>
-        <div className="flex">
-          <Dropdown label={label}>
-            <Dropdown.Header>
-              <span className="block text-sm">Security type</span>
-            </Dropdown.Header>
 
-            {label !== 'Standart' ? (
-              <Dropdown.Item onClick={() => setLab('Standart')}>
-                Standart
-              </Dropdown.Item>
-            ) : (
-              <Dropdown.Item onClick={() => setLab('REVFS')}>
-                REVFS
-              </Dropdown.Item>
-            )}
-          </Dropdown>
-
-          <div className="relative right-2 w-full">
-            <input
-              type="search"
-              id="search-dropdown"
-              className="block p-2.5 w-full z-20 text-sm text-gray-900 bg-gray-50 rounded-r-lg border-l-gray-100 border-l-2 border border-gray-300 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:border-blue-500"
-              placeholder="Message"
-              value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
+      <div className="flex outline-none appearance-none">
+        <div className="relative right-2 w-full">
+          <input
+            type="text"
+            className="block p-2.5 focus:outline-none focus:ring-0 focus:border-gray-300 sring-0 border-inherit w-full text-sm text-gray-900 outline-none appearance-none bg-gray-50 rounded-lg border border-gray-300"
+            placeholder="Message"
+            value={messageInput}
+            onChange={(e) => setMessageInput(e.target.value)}
+          />
+          <button
+            className="absolute top-0 appearance-none right-0 border-inherit outline-none p-2.5 text-sm font-medium text-black"
+            onClick={() => {
+              if (messageInput) handleSend();
+            }}
+          >
+            <PaperAirplaneIcon
+              className="h-6 w-6 shrink-0"
+              aria-hidden="true"
             />
-            <button
-              type="button"
-              className="absolute top-0 right-0 p-2.5 text-sm font-medium text-white bg-blue-700 rounded-r-lg border border-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800"
-              onClick={() => {
-                if (messageInput) handleSend();
-              }}
-            >
-              Send
-            </button>
-          </div>
+          </button>
         </div>
-      </form>
+      </div>
     </div>
   );
 }
