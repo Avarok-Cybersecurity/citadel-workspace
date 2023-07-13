@@ -26,19 +26,17 @@ function Chat() {
       <div className="relative right-2 ">
         <input
           type="text"
-          className="p-2.5 focus:outline-none focus:ring-0 focus:border-inherit border-inherit w-full text-sm text-gray-900 outline-none appearance-none bg-gray-50 rounded-lg border-[2px] border-gray-900"
+          className="p-2.5 placeholder:text-white text-white bg-gray-600 border-inherit w-full text-sm outline-none appearance-none mb-3 rounded-lg"
           placeholder="Message"
           value={messageInput}
           onChange={(e) => setMessageInput(e.target.value)}
         />
         <button
-          className="absolute top-0 appearance-none right-0 border-inherit outline-none p-2.5 text-sm font-medium text-black"
+          className="absolute top-0 appearance-none right-0 border-inherit outline-none p-2.5 text-sm font-medium text-white"
           onClick={() => {
             if (messageInput) handleSend();
           }}
-        >
-          <PaperAirplaneIcon className="h-6 w-6 shrink-0" aria-hidden="true" />
-        </button>
+        ></button>
       </div>
     </div>
   );
