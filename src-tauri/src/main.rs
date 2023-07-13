@@ -50,6 +50,7 @@ async fn open_tcp_conn(
             let service_to_gui = async move {
                 while let Some(packet) = stream.next().await {
                     if let Ok(packet) = packet {
+                        print!("{packet:?}");
                         if let Err(e) = send_response(packet, window.clone()).await {
                             error!(e)
                         }

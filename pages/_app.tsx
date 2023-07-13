@@ -18,7 +18,8 @@ function CustomApp({
   useEffect(() => {
     const gen = async () => {
       try {
-        await invoke<string>('open_tcp_conn');
+        const data = await invoke<string>('open_tcp_conn');
+        console.log(data);
       } catch (error) {
         setErr(error as string);
       }

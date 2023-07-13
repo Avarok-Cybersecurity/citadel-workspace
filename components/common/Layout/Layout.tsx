@@ -90,7 +90,7 @@ export const Layout = ({ children }: Props) => {
                     leaveFrom="opacity-100"
                     leaveTo="opacity-0"
                   >
-                    <div className="absolute left-full ml-5 top-0 flex w-16 justify-center pt-5">
+                    <div className="absolute left-full ml-8 top-0 flex w-16 justify-center pt-5">
                       <button
                         type="button"
                         className="-m-2.5  p-2.5"
@@ -125,7 +125,8 @@ export const Layout = ({ children }: Props) => {
                             <ul role="list" className="-mx-2 space-y-1">
                               {navigation.map((item) => (
                                 <li key={item.name}>
-                                  <a
+                                  <Link
+                                    onClick={() => setSidebarOpen(false)}
                                     href={item.href}
                                     className={classNames(
                                       item.current
@@ -139,7 +140,7 @@ export const Layout = ({ children }: Props) => {
                                       aria-hidden="true"
                                     />
                                     {item.name}
-                                  </a>
+                                  </Link>
                                 </li>
                               ))}
                             </ul>
@@ -211,6 +212,7 @@ export const Layout = ({ children }: Props) => {
                           </li>
                           <li className="mt-auto">
                             <Link
+                              onClick={() => setSidebarOpen(false)}
                               href="/settings"
                               className="group -mx-2 flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-gray-400 hover:bg-gray-800 hover:text-white"
                             >
@@ -233,7 +235,10 @@ export const Layout = ({ children }: Props) => {
 
         {addServerOpen && (
           <div className="absolute z-[100] top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-            <AddServerModal onClose={setAddServerOpen} />
+            <AddServerModal
+              onCloseNavbar={setSidebarOpen}
+              onClose={setAddServerOpen}
+            />
           </div>
         )}
         {/* Static sidebar for desktop */}
@@ -334,6 +339,7 @@ export const Layout = ({ children }: Props) => {
                 </li>
                 <li className="mt-auto">
                   <Link
+                    onClick={() => setSidebarOpen(false)}
                     href="/settings"
                     className="group -mx-2 flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-gray-400 hover:bg-gray-800 hover:text-white"
                   >
@@ -360,7 +366,7 @@ export const Layout = ({ children }: Props) => {
               onClick={() => setSidebarOpen(true)}
             >
               <span className="sr-only">Open sidebar</span>
-              <Bars3Icon className="h-6 w-6" aria-hidden="true" />
+              <Bars3Icon className="h-6 w-6 text-white" aria-hidden="true" />
             </button>
 
             {/* Separator */}

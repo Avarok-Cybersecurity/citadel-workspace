@@ -4,7 +4,7 @@ export type ApiFetcherOptions = {
   variables?: Variables;
 };
 
-export type ApiFetcherResults<T> = {
+export type ApiInvokerResults<T> = {
   data: T;
 };
 
@@ -14,12 +14,12 @@ export interface ApiConfig {
   invoke<T>(
     type: ApiInvokeTypes,
     options: ApiFetcherOptions
-  ): Promise<ApiFetcherResults<T>>;
+  ): Promise<ApiInvokerResults<T>>;
 }
 
 export type ApiInvoker<T = any> = (
   options: ApiFetcherOptions
-) => Promise<ApiFetcherResults<T>>;
+) => Promise<ApiInvokerResults<T>>;
 
 export interface ApiProviderContext {
   hooks: ApiHooks;

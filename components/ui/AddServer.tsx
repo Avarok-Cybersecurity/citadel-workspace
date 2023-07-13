@@ -1,25 +1,26 @@
 import { Dispatch, SetStateAction } from 'react';
 
 export default function AddServerModal({
+  onCloseNavbar,
   onClose,
 }: {
+  onCloseNavbar: Dispatch<SetStateAction<boolean>>;
   onClose: Dispatch<SetStateAction<boolean>>;
 }) {
+  onCloseNavbar(false);
   return (
     <>
       <div className="flex min-h-full flex-1 rounded-md flex-col justify-center py-12 sm:px-6 lg:px-8 z-[100]">
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
-          <h2 className="mt-6 text-center text-2xl h-screen absolute opacity-70 bg-black w-screen transform -translate-x-1/2 -translate-y-[52.45%] z-[80] top-1/2 left-1/2 font-bold leading-9 tracking-tight text-gray-900">
-            Register to a new server
-          </h2>
+          <h2 className="h-screen absolute opacity-70 bg-black w-screen transform -translate-x-1/2 -translate-y-1/2 z-[80] top-1/2 left-1/2 font-bold leading-9 tracking-tight text-gray-900"></h2>
         </div>
 
-        <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-[480px] z-[100]">
-          <div className="bg-white px-6 py-12 shadow sm:rounded-lg sm:px-12">
+        <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-[480px] z-[100] rounded-lg">
+          <div className="bg-white px-6 py-12 shadow sm:rounded-lg sm:px-12 rounded-lg">
             <button
               onClick={() => onClose(false)}
               type="button"
-              className="absolute top-28 right-16 text-black bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 ml-auto inline-flex justify-center items-center dark:hover:bg-gray-600 dark:hover:text-white"
+              className="absolute top-24 md:top-28 sm:right-16 right-4 text-black bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 ml-auto inline-flex justify-center items-center dark:hover:bg-gray-600 dark:hover:text-white"
               data-modal-hide="authentication-modal"
             >
               <svg

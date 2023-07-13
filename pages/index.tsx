@@ -54,6 +54,7 @@ export default function Home({
     <>
       <div className="flex flex-col justify-between">
         <main className="pt-10 h-full w-full flex flex-col justify-between">
+          {cid}
           <Chat />
         </main>
       </div>

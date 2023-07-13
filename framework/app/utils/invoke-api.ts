@@ -1,9 +1,9 @@
-import { ApiFetcherOptions, ApiFetcherResults } from '@common/types/api';
+import { ApiFetcherOptions, ApiInvokerResults } from '@common/types/api';
 import { API_URL } from '@framework/const';
 
-const fetchApi = async <T>({
+const invokeApi = async <T>({
   variables,
-}: ApiFetcherOptions): Promise<ApiFetcherResults<T>> => {
+}: ApiFetcherOptions): Promise<ApiInvokerResults<T>> => {
   const res = await fetch(API_URL!, {
     method: 'POST',
     headers: {
@@ -23,4 +23,4 @@ const fetchApi = async <T>({
   return { data };
 };
 
-export default fetchApi;
+export default invokeApi;

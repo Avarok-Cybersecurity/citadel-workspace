@@ -1,5 +1,5 @@
 import { ApiConfig } from '@common/types/api';
-import fetchApi from '@framework/utils/fetch-api';
+import invokeApi from '@/framework/app/utils/invoke-api';
 
 class Config {
   private config: ApiConfig;
@@ -14,7 +14,7 @@ class Config {
 }
 
 const configWrapper = new Config({
-  fetch: fetchApi,
+  invoke: invokeApi,
 });
 
 export function getConfig() {
