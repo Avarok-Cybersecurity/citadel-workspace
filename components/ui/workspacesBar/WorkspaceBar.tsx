@@ -1,15 +1,24 @@
-import React from 'react';
+import React, { Dispatch, SetStateAction } from 'react';
 
 const arr = [1, 2, 7];
 
-function WorkspaceBar({ arrayOfItems }: any) {
+function WorkspaceBar({
+  arrayOfItems,
+  onOpen,
+}: {
+  arrayOfItems?: [any];
+  onOpen: Dispatch<SetStateAction<boolean>>;
+}) {
   return (
     <div
       id="workspace"
       className="overflow-scroll h-screen w-20 px-2 bg-gray-900 border-r-[1px] border-r-[#8aa29e] pt-5 grid "
     >
       <div className="mx-auto flex flex-col gap-y-[12px]">
-        <span className="inline-flex h-12 w-12 items-center cursor-pointer justify-center rounded-full bg-[#8aa29e] text-center">
+        <span
+          onClick={() => onOpen(true)}
+          className="inline-flex h-12 w-12 items-center cursor-pointer justify-center rounded-full bg-[#8aa29e] text-center"
+        >
           <span className="text-xl font-medium leading-none text-white">+</span>
         </span>
         {arr.map((el) => {

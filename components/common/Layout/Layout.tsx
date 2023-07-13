@@ -14,7 +14,6 @@ import {
   HomeIcon,
   UsersIcon,
   XMarkIcon,
-  PaperAirplaneIcon,
 } from '@heroicons/react/24/outline';
 import {
   ChevronDownIcon,
@@ -23,6 +22,7 @@ import {
 import classNames from 'classnames';
 import WorkspaceBar from '@/components/ui/workspacesBar/WorkspaceBar';
 import Link from 'next/link';
+import AddServerModal from '@/components/ui/AddServer';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon, current: true },
@@ -47,6 +47,8 @@ type Props = {
 };
 export const Layout = ({ children }: Props) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [addServerOpen, setAddServerOpen] = useState(false);
+
   return (
     <ApiProvider>
       <div className="h-full">
@@ -104,7 +106,7 @@ export const Layout = ({ children }: Props) => {
                   </Transition.Child>
                   {/* Sidebar component, swap this element with another sidebar if you like */}
                   <div className="flex">
-                    <WorkspaceBar />
+                    <WorkspaceBar onOpen={setAddServerOpen} />
 
                     <div className="flex grow w-72 flex-col gap-y-5 overflow-y-auto bg-gray-900 px-6 pb-4 ring-1 ring-white/10">
                       <div className="flex h-16 shrink-0 items-center">
@@ -229,12 +231,17 @@ export const Layout = ({ children }: Props) => {
           </Dialog>
         </Transition.Root>
 
+        {addServerOpen && (
+          <div className="absolute z-[100] top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+            <AddServerModal onClose={setAddServerOpen} />
+          </div>
+        )}
         {/* Static sidebar for desktop */}
         <div
           className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-96"
           id="workspace"
         >
-          <WorkspaceBar />
+          <WorkspaceBar onOpen={setAddServerOpen} />
           {/* Sidebar component, swap this element with another sidebar if you like */}
           <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-gray-900 px-6 pb-4">
             <div className="flex h-16 shrink-0 items-center">
