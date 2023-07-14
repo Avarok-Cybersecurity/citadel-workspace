@@ -1,4 +1,4 @@
-import { ApiHooks } from './hooks';
+import { ApiHooks } from '@framework/types/hooks';
 
 export type ApiInvokerOptions = {
   type: ApiInvokeTypes;
@@ -9,16 +9,16 @@ export type Variables = { [key: string]: string | any | undefined };
 export type ApiInvokeTypes = 'message' | 'register_c2s' | 'connect_c2s';
 export interface ApiConfig {
   serviceUrl: string;
-  invokeApi<T>(options: ApiInvokerOptions): void;
+  invoker<T>(options: ApiInvokerOptions): void;
 }
 
 export type ApiInvoker<T = any> = (
   options: ApiInvokerOptions
-) => Promise<ApiInvokerResults<T>>;
+) => Promise<ApiInvokerResults<T>> | void;
 
 export interface ApiProviderContext {
   hooks: ApiHooks;
-  invokeApi: ApiInvoker;
+  invoker: ApiInvoker;
 }
 export type ApiInvokerResults<T> = {
   data: T;

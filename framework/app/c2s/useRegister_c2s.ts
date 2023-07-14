@@ -1,16 +1,18 @@
-import invokeApi from '../utils/invoke-api';
+import { MutationHook } from '@common/types/hooks';
 import { useRegister_c2s } from '@common/c2s';
 
 export default useRegister_c2s;
 
-export const handler = {
-  invoker: () => {
+export const handler: MutationHook = {
+  invoker: (input: any) => {
     console.log('Invoked');
+    return JSON.stringify(input) + '_Modified';
   },
-  useHook: () => {
+  useHook: ({ invoke }) => {
     return (input: any) => {
+      const response = invoke(input);
       return {
-        output: input + '_MODIf',
+        output: response,
       };
     };
   },

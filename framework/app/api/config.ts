@@ -15,7 +15,7 @@ class Config {
 
 const configWrapper = new Config({
   serviceUrl: 'http://localhost:3000',
-  invokeApi: invokeApi,
+  invoker: invokeApi,
 });
 
 export function getConfig() {

@@ -3,7 +3,6 @@ import {
   ApiProvider as CoreApiProvider,
   useApiProvider as useCoreApiProvider,
 } from '../common';
-
 import { appHooks } from './hooks';
 import { getConfig } from './api/config';
 const config = getConfig();
@@ -13,7 +12,7 @@ interface AppApiProviderProps {
 
 export const ApiProvider = ({ children }: AppApiProviderProps) => {
   return (
-    <CoreApiProvider hooks={appHooks} config={{ ...config, test: 'test' }}>
+    <CoreApiProvider hooks={appHooks} config={config}>
       {children}
     </CoreApiProvider>
   );
