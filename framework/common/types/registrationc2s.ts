@@ -1,5 +1,5 @@
-export interface RegistrationC2S {
-  RegisterSuccess: {
+export type ServiceConnectionAccepted = {
+  ServiceConnectionAccepted: {
     id: string;
   };
-}
+};

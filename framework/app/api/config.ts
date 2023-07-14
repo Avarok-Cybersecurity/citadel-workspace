@@ -1,5 +1,5 @@
 import { ApiConfig } from '@common/types/api';
-import invokeApi from '@/framework/app/utils/invoke-api';
+import invokeApi from '@framework/utils/invoke-api';
 
 class Config {
   private config: ApiConfig;
@@ -14,7 +14,8 @@ class Config {
 }
 
 const configWrapper = new Config({
-  invoke: invokeApi,
+  serviceUrl: 'http://localhost:3000',
+  invokeApi: invokeApi,
 });
 
 export function getConfig() {

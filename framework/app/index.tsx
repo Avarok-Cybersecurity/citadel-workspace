@@ -5,14 +5,18 @@ import {
 } from '../common';
 
 import { appHooks } from './hooks';
-// import { getConfig } from './api/config';
-// const config = getConfig();
+import { getConfig } from './api/config';
+const config = getConfig();
 interface AppApiProviderProps {
   children: ReactNode | ReactNode[];
 }
 
 export const ApiProvider = ({ children }: AppApiProviderProps) => {
-  return <CoreApiProvider hooks={appHooks}>{children}</CoreApiProvider>;
+  return (
+    <CoreApiProvider hooks={appHooks} config={{ ...config, test: 'test' }}>
+      {children}
+    </CoreApiProvider>
+  );
 };
 
 export const useApiProvider = () => useCoreApiProvider();

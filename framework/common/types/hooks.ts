@@ -1,3 +1,1 @@
-export interface ApiHooks {
-  c2s: {};
-}
+export interface ApiHooks {}

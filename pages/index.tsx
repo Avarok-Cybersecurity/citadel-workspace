@@ -1,4 +1,4 @@
-import { Layout } from '@/components/common/Layout';
+import { Layout } from '@components/common/Layout';
 import React from 'react';
 import { Fragment, useState } from 'react';
 import { Dialog, Menu, Transition } from '@headlessui/react';
@@ -21,9 +21,10 @@ import {
   MagnifyingGlassIcon,
 } from '@heroicons/react/20/solid';
 import classNames from 'classnames';
-import Chat from '@/components/chat';
-import ServerAvatar from '@/components/ui/serverAvatar';
-import WorkspaceBar from '@/components/ui/workspacesBar/WorkspaceBar';
+import Chat from '@components/chat';
+import ServerAvatar from '@components/ui/serverAvatar';
+import WorkspaceBar from '@components/ui/workspacesBar/WorkspaceBar';
+import { useApiProvider } from '@framework';
 
 const navigation = [
   { name: 'Dashboard', href: '#', icon: HomeIcon, current: true },
@@ -50,6 +51,8 @@ export default function Home({
   cid: string;
   connErr: string;
 }) {
+  const data = useApiProvider();
+  console.log(data);
   return (
     <>
       <div className="flex flex-col justify-between">

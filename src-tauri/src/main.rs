@@ -23,9 +23,13 @@ use tauri::{Manager, State};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 
-async fn send_response(packet: BytesMut, window: tauri::Window) -> Result<(), Box<dyn Error>> {
+async fn send_response(
+    packet_name: &str,
+    packet: BytesMut,
+    window: tauri::Window,
+) -> Result<(), Box<dyn Error>> {
     let _ = window.emit(
-        "packet",
+        packet_name,
         serde_json::to_string(&bincode2::deserialize::<InternalServiceResponse>(&packet)?)?,
     );
     Ok(())
@@ -50,8 +54,7 @@ async fn open_tcp_conn(
             let service_to_gui = async move {
                 while let Some(packet) = stream.next().await {
                     if let Ok(packet) = packet {
-                        print!("{packet:?}");
-                        if let Err(e) = send_response(packet, window.clone()).await {
+                        if let Err(e) = send_response("open_conn", packet, window.clone()).await {
                             error!(e)
                         }
                     }

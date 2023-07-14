@@ -20,9 +20,9 @@ import {
   MagnifyingGlassIcon,
 } from '@heroicons/react/20/solid';
 import classNames from 'classnames';
-import WorkspaceBar from '@/components/ui/workspacesBar/WorkspaceBar';
+import WorkspaceBar from '@components/ui/workspacesBar/WorkspaceBar';
 import Link from 'next/link';
-import AddServerModal from '@/components/ui/AddServer';
+import AddServerModal from '@components/ui/AddServer';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon, current: true },

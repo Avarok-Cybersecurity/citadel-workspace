@@ -21,7 +21,6 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"],
       "@common": ["framework/common"],
       "@common/*": ["framework/common/*"],
       "@framework": ["framework/app"],

@@ -3,9 +3,12 @@ import Head from 'next/head';
 import Script from 'next/script';
 import '../tailwind.css';
 import { FC, ReactNode, useEffect, useState } from 'react';
-import { UIProvider } from '@/components/ui/context';
+import { UIProvider } from '@components/ui/context';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/tauri';
+import { ServiceConnectionAccepted } from '@common/types/registrationc2s';
+import { getConfig } from '@framework/api/config';
+import { useApiProvider } from '@framework';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 
@@ -13,20 +16,22 @@ function CustomApp({
   Component,
   pageProps,
 }: AppProps & { Component: { Layout: FC<{ children: ReactNode }> } }) {
-  const [cid, setCid] = useState();
+  const config = getConfig();
+  const [cid, setCid] = useState('');
   const [connErr, setErr] = useState('');
+
   useEffect(() => {
     const gen = async () => {
       try {
-        const data = await invoke<string>('open_tcp_conn');
-        console.log(data);
+        await invoke<string>('open_tcp_conn');
       } catch (error) {
         setErr(error as string);
       }
     };
 
-    const unlisten = listen('packet', (event: any) => {
-      setCid(JSON.parse(event.payload).ServiceConnectionAccepted.id);
+    const unlisten = listen('open_conn', (event: any) => {
+      const payload: ServiceConnectionAccepted = JSON.parse(event.payload);
+      setCid(payload.ServiceConnectionAccepted.id);
     });
 
     gen();

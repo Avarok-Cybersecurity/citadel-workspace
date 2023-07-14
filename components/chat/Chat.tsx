@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { IMessage } from '@common/types/messages';
-import { PaperAirplaneIcon } from '@heroicons/react/24/outline';
 
 import _ from 'lodash';
 
