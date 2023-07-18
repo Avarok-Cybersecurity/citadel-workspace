@@ -1,9 +1,9 @@
-import { useHook } from '@common/utils/useHook';
+import { useHook, useMutationHook } from '@common/utils/useHook';
 
 const useRegister_c2s = () => {
   const hook = useHook((hooks) => hooks.c2s.useRegister);
 
-  return hook.useHook({ invoke: hook.invoker });
+  return useMutationHook({ ...hook });
 };
 
 export default useRegister_c2s;

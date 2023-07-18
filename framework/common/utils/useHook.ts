@@ -6,3 +6,16 @@ export const useHook = (fn: (apiHooks: ApiHooks) => MutationHook) => {
   const { hooks } = useApiProvider();
   return fn(hooks);
 };
+
+export const useMutationHook = (hook: MutationHook) => {
+  const { invoker } = useApiProvider();
+  return hook.useHook({
+    invoke: (input: any) => {
+      return hook.invoker({
+        input,
+        invoke: invoker,
+        options: hook.invokerOptions
+      });
+    },
+  });
+};
