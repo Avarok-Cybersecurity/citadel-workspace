@@ -2,7 +2,7 @@ import { Layout } from '@components/common/Layout';
 import React from 'react';
 import Chat from '@components/chat';
 import { useApiProvider } from '@framework';
-import { useRegister_c2s } from '@common/c2s';
+import { useRegister_c2s } from '@framework/c2s';
 import { invoke } from '@tauri-apps/api/tauri';
 
 export default function Home({
@@ -12,7 +12,6 @@ export default function Home({
   cid: string;
   connErr: string;
 }) {
-  const data = useApiProvider();
   const registerC2s = useRegister_c2s();
   return (
     <>
@@ -21,7 +20,6 @@ export default function Home({
           className="text-red-500"
           onClick={async () => {
             const data = await registerC2s({
-              type: 'register',
               uuid: cid,
               fullName: 'John Doe ',
               username: 'johndoe',

@@ -10,10 +10,10 @@ export interface ApiConfig {
   invoker: ApiInvoker;
 }
 
-export type ApiInvoker<T = any> = (
+export type ApiInvoker<I = any, O = any> = (
   type: ApiInvokeTypes,
-  variables: Variables
-) => Promise<ApiInvokerResults<T>> | void;
+  variables: I
+) => Promise<ApiInvokerResults<O>>;
 
 export interface ApiProviderContext {
   hooks: ApiHooks;
