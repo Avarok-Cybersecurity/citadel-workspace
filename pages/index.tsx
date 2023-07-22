@@ -1,15 +1,13 @@
 import { Layout } from '@components/common/Layout';
 import React from 'react';
 import Chat from '@components/chat';
-import { useApiProvider } from '@framework';
 import { useRegister_c2s } from '@framework/c2s';
-import { invoke } from '@tauri-apps/api/tauri';
 
 export default function Home({
   uuid,
   connErr,
 }: {
-  cid: string;
+  uuid: string;
   connErr: string;
 }) {
   console.log(connErr);
@@ -22,9 +20,10 @@ export default function Home({
           className="text-red-500"
           onClick={async () => {
             const data = await registerC2s({
-              uuid: '39e6d86d-f757-4fee-99cd-ba925dd077bd',
+              uuid,
               fullName: 'John Doe ',
               username: 'johndoe',
+              serverAddr: '192.168.9.1',
               proposedPassword: '_Rudsakjdas123',
             });
             console.log(data);
@@ -36,8 +35,9 @@ export default function Home({
           className="text-red-500 mt-20"
           onClick={async () => {
             const data = await registerC2s({
-              uuid: '39e6d86d-f757-4fee-99cd-ba925dd077bd',
-              fullName: 'John Doe ',
+              uuid,
+              fullName: 'John Doe',
+              serverAddr: '',
               username: 'johndoe',
               proposedPassword: '_Rudsakjdas123',
             });

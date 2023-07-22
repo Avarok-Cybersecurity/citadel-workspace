@@ -18,15 +18,17 @@ function CustomApp({
   Component,
   pageProps,
 }: AppProps & { Component: { Layout: FC<{ children: ReactNode }> } }) {
-  const [uuid, setUuid] = useState<any>();
+  const [uuid, setUuid] = useState<string>('');
   const [connErr, setErr] = useState('');
 
   useEffect(() => {
     const gen = async () => {
       if (uuid) return;
       try {
-        const uuid_value = await invoke('open_tcp_conn', { 'addr': '127.0.0.1:3000' });
-        setUuid(uuid_value)
+        const uuid_value: string = await invoke('open_tcp_conn', {
+          addr: '127.0.0.1:3000',
+        });
+        setUuid(uuid_value);
       } catch (error) {
         setErr(error as string);
       }
