@@ -25,7 +25,7 @@ function CustomApp({
     const gen = async () => {
       if (uuid) return;
       try {
-        await invoke<string>('open_tcp_conn');
+        const uuid = await invoke<string>('open_tcp_conn');
       } catch (error) {
         setErr(error as string);
       }

@@ -22,6 +22,7 @@ use structs::ConnectionState;
 use tauri::{Manager, State};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
+use uuid::Uuid;
 
 async fn send_response(
     packet_name: &str,
@@ -41,7 +42,7 @@ pub static ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0
 async fn open_tcp_conn(
     conn_state: State<'_, ConnectionState>,
     window: tauri::Window,
-) -> Result<String, String> {
+) -> Result<Uuid, String> {
     let connection = TcpStream::connect(ADDR);
     match timeout(Duration::from_millis(3000), connection)
         .await
@@ -51,17 +52,30 @@ async fn open_tcp_conn(
             let framed = wrap_tcp_conn(conn);
             let (sink, mut stream) = framed.split();
             *conn_state.sink.lock().await = Some(sink);
-            let service_to_gui = async move {
-                while let Some(packet) = stream.next().await {
-                    if let Ok(packet) = packet {
-                        if let Err(e) = send_response("open_conn", packet, window.clone()).await {
-                            error!(e)
+            if let Some(greeter_packet) = stream.next().await {
+                let packet = greeter_packet.map_err(|err| err.to_string())?;
+                let packet = bincode2::deserialize::<InternalServiceResponse>(&packet)?;
+                if let InternalServiceResponse::ServiceConnectionAccepted(accepted) = packet {
+                    let service_to_gui = async move {
+                        while let Some(packet) = stream.next().await {
+                            if let Ok(packet) = packet {
+                                if let Err(e) =
+                                    send_response("open_conn", packet, window.clone()).await
+                                {
+                                    error!(e)
+                                }
+                            }
                         }
-                    }
+                    };
+
+                    tauri::async_runtime::spawn(service_to_gui);
+                    Ok(accepted.id)
+                } else {
+                    Err(format!("Wrong first packet type: {:?}", packet))
                 }
-            };
-            tauri::async_runtime::spawn(service_to_gui);
-            Ok(format!("Connected"))
+            } else {
+                Err("Stream died".to_string())
+            }
         }
         Err(err) => Err(format!("Error: {err:?}")),
     }
