@@ -1,15 +1,13 @@
 import { Layout } from '@components/common/Layout';
 import React from 'react';
 import Chat from '@components/chat';
-import { useApiProvider } from '@framework';
 import { useRegister_c2s } from '@framework/c2s';
-import { invoke } from '@tauri-apps/api/tauri';
 
 export default function Home({
   uuid,
   connErr,
 }: {
-  cid: string;
+  uuid: string;
   connErr: string;
 }) {
   console.log(connErr);
@@ -22,9 +20,10 @@ export default function Home({
           className="text-red-500"
           onClick={async () => {
             const data = await registerC2s({
-              uuid: '39e6d86d-f757-4fee-99cd-ba925dd077bd',
+              uuid,
               fullName: 'John Doe ',
               username: 'johndoe',
+              serverAddr: '127.0.0.1:12349',
               proposedPassword: '_Rudsakjdas123',
             });
             console.log(data);
@@ -32,18 +31,7 @@ export default function Home({
         >
           Register
         </button>
-        <button
-          className="text-red-500 mt-20"
-          onClick={async () => {
-            const data = await registerC2s({
-              uuid: '39e6d86d-f757-4fee-99cd-ba925dd077bd',
-              fullName: 'John Doe ',
-              username: 'johndoe',
-              proposedPassword: '_Rudsakjdas123',
-            });
-            console.log(data);
-          }}
-        ></button>
+
         <main className="pt-10 h-full w-full flex flex-col justify-between">
           {/* <span className="text-yellow-400">{uuid.to_string()}</span> */}
           <Chat />

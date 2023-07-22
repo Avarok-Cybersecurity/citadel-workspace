@@ -9,6 +9,7 @@ export type RegisterHookDescriptor = {
   invokerInput: {
     uuid: string;
     fullName: string;
+    serverAddr: string;
     username: string;
     proposedPassword: string;
   };
