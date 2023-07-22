@@ -1,4 +1,6 @@
-use crate::{structs::ConnectionState, ADDR};
+use std::net::SocketAddr;
+use std::str::FromStr;
+use crate::structs::ConnectionState;
 use citadel_workspace_types::InternalServicePayload;
 use futures::SinkExt;
 use tauri::State;
@@ -10,13 +12,15 @@ pub async fn register(
     full_name: String,
     username: String,
     proposed_password: String,
+    server_addr: String,
     state: State<'_, ConnectionState>,
 ) -> Result<String, String> {
+    let server_addr = SocketAddr::from_str(&server_addr).map_err(|_| "Invalid server address")?;
     match Uuid::parse_str(&uuid) {
         Ok(uuid) => {
             let payload = InternalServicePayload::Register {
                 uuid,
-                server_addr: ADDR,
+                server_addr,
                 full_name,
                 username: username.clone(),
                 proposed_password: proposed_password.into_bytes().into(),

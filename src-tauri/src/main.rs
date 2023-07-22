@@ -16,7 +16,6 @@ use commands::{
 };
 use futures::StreamExt;
 use std::error::Error;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 use structs::ConnectionState;
 use tauri::{Manager, State};
@@ -36,14 +35,13 @@ async fn send_response(
     Ok(())
 }
 
-pub static ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3000);
-
 #[tauri::command]
 async fn open_tcp_conn(
     conn_state: State<'_, ConnectionState>,
     window: tauri::Window,
+    addr: String,
 ) -> Result<Uuid, String> {
-    let connection = TcpStream::connect(ADDR);
+    let connection = TcpStream::connect(addr);
     match timeout(Duration::from_millis(3000), connection)
         .await
         .map_err(|err| err.to_string())?
@@ -54,7 +52,8 @@ async fn open_tcp_conn(
             *conn_state.sink.lock().await = Some(sink);
             if let Some(greeter_packet) = stream.next().await {
                 let packet = greeter_packet.map_err(|err| err.to_string())?;
-                let packet = bincode2::deserialize::<InternalServiceResponse>(&packet)?;
+                let packet = bincode2::deserialize::<InternalServiceResponse>(&packet)
+                    .map_err(|err| err.to_string())?;
                 if let InternalServiceResponse::ServiceConnectionAccepted(accepted) = packet {
                     let service_to_gui = async move {
                         while let Some(packet) = stream.next().await {
