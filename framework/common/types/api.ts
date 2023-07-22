@@ -6,7 +6,7 @@ export interface ApiInvokerOptions {
 }
 
 export type Variables = { [key: string]: string };
-export type ApiInvokeTypes = 'message' | 'register' | 'connect_c2s';
+export type ApiInvokeTypes = 'message' | 'register' | 'connect';
 export interface ApiConfig {
   invoker<T>(options: ApiInvokerOptions): void;
 }

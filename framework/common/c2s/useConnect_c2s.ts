@@ -1,9 +1,8 @@
+import { useHook, useMutationHook } from '@common/utils/useHook';
+
 const useConnect_c2s = () => {
-  return (input: any) => {
-    return {
-      output: input + '_MODIf',
-    };
-  };
+  const hook = useHook((hooks) => hooks.c2s.useRegister);
+  return useMutationHook({ ...hook });
 };
 
 export default useConnect_c2s;
