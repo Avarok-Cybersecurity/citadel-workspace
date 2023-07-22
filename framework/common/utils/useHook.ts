@@ -10,7 +10,7 @@ export const useHook = (fn: (apiHooks: ApiHooks) => MutationHook) => {
 export const useMutationHook = (hook: MutationHook) => {
   const { invoker } = useApiProvider();
   return hook.useHook({
-    invoke: (input: any) => {
+    invoke: <T>(input: T) => {
       return hook.invoker({
         input,
         invoke: invoker,

@@ -10,7 +10,7 @@ import {
   ServiceConnectionAccepted,
   ServiceRegisterAccepted,
   ServiceTCPConnectionAccepted,
-} from '@common/types/registrationc2s';
+} from '@common/types/c2s';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 
@@ -33,7 +33,7 @@ function CustomApp({
 
     const unlisten = listen('open_conn', (event: any) => {
       const payload: ServiceTCPConnectionAccepted = JSON.parse(event.payload);
-      console.log('Payload' + payload);
+      console.log(payload);
 
       setCid(payload.ServiceConnectionAccepted.id);
     });

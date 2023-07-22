@@ -2,18 +2,17 @@ import { ApiHooks } from '@framework/types/hooks';
 
 export interface ApiInvokerOptions {
   type: ApiInvokeTypes;
-  variables?: Variables;
 }
 
 export type Variables = { [key: string]: string };
 export type ApiInvokeTypes = 'message' | 'register' | 'connect';
 export interface ApiConfig {
-  invoker<T>(options: ApiInvokerOptions): void;
+  invoker: ApiInvoker;
 }
 
 export type ApiInvoker<T = any> = (
   type: ApiInvokeTypes,
-  options: ApiInvokerOptions
+  variables: Variables
 ) => Promise<ApiInvokerResults<T>> | void;
 
 export interface ApiProviderContext {
