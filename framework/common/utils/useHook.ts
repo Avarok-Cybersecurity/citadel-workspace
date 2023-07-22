@@ -14,7 +14,7 @@ export const useMutationHook = (hook: MutationHook) => {
       return hook.invoker({
         input,
         invoke: invoker,
-        options: hook.invokerOptions
+        options: hook.invokerOptions,
       });
     },
   });

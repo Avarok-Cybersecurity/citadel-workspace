@@ -5,17 +5,20 @@ export default useRegister_c2s;
 
 export const handler: MutationHook = {
   invokerOptions: {
-    type: "connect_c2s"
+    type: 'register',
   },
   invoker: async (context) => {
-    let { invoke, input, options} = context;
-
-    const response = await invoke({...options});
-    return response;
+    let { invoke, input, options } = context;
+    try {
+      const response = await invoke(options.type, input);
+      return response;
+    } catch (error) {
+      throw new Error(error as any);
+    }
   },
   useHook: ({ invoke }) => {
     return async (input: any) => {
-      const response = invoke(input);
+      const response = await invoke(input);
       return {
         output: response,
       };

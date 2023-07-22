@@ -1,2 +1,0 @@
-# Hooks
-useSomething_c2s.ts will call something_c2s -> config -> invoker -> Internal Service

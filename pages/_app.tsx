@@ -6,9 +6,11 @@ import { FC, ReactNode, useEffect, useState } from 'react';
 import { UIProvider } from '@components/ui/context';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/tauri';
-import { ServiceConnectionAccepted } from '@common/types/registrationc2s';
-import { getConfig } from '@framework/api/config';
-import { useApiProvider } from '@framework';
+import {
+  ServiceConnectionAccepted,
+  ServiceRegisterAccepted,
+  ServiceTCPConnectionAccepted,
+} from '@common/types/registrationc2s';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 
@@ -16,12 +18,12 @@ function CustomApp({
   Component,
   pageProps,
 }: AppProps & { Component: { Layout: FC<{ children: ReactNode }> } }) {
-  const config = getConfig();
   const [cid, setCid] = useState('');
   const [connErr, setErr] = useState('');
 
   useEffect(() => {
     const gen = async () => {
+      if (cid) return;
       try {
         await invoke<string>('open_tcp_conn');
       } catch (error) {
@@ -30,12 +32,24 @@ function CustomApp({
     };
 
     const unlisten = listen('open_conn', (event: any) => {
-      const payload: ServiceConnectionAccepted = JSON.parse(event.payload);
+      const payload: ServiceTCPConnectionAccepted = JSON.parse(event.payload);
+      console.log('Payload' + payload);
+
       setCid(payload.ServiceConnectionAccepted.id);
     });
 
+    // const unlisten_register = listen('register', (event: any) => {
+    //   const payload: ServiceRegisterAccepted = JSON.parse(event.payload);
+    //   console.log(payload);
+    // });
+
+    // const unlisten_conn_c2s = listen('connect', (event: any) => {
+    //   const payload: ServiceConnectionAccepted = JSON.parse(event.payload);
+    //   console.log('Payload' + payload);
+    // });
+
     gen();
-  }, []);
+  }, [cid]);
   const Layout = Component.Layout ?? Noop;
   return (
     <div className="select-none">

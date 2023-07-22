@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useContext, useMemo } from 'react';
-import { ApiConfig, ApiProviderContext } from './types/api';
+import { ApiConfig, ApiInvoker, ApiProviderContext } from './types/api';
 import { ApiHooks } from '@framework/types/hooks';
 
 interface ApiProviderProps {
@@ -13,9 +13,8 @@ export const ApiContext = createContext<Partial<ApiProviderContext>>({});
 export const ApiProvider = ({ children, config, hooks }: ApiProviderProps) => {
   const coreConfig = useMemo(() => {
     return {
-      invoker: config.invoker,
+      invoker: config.invoker as unknown as ApiInvoker,
       hooks,
-      config,
     };
   }, [config.invoker, hooks]);
 
