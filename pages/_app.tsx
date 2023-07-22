@@ -18,12 +18,12 @@ function CustomApp({
   Component,
   pageProps,
 }: AppProps & { Component: { Layout: FC<{ children: ReactNode }> } }) {
-  const [cid, setCid] = useState('');
+  const [uuid, setUuid] = useState<any>();
   const [connErr, setErr] = useState('');
 
   useEffect(() => {
     const gen = async () => {
-      if (cid) return;
+      if (uuid) return;
       try {
         await invoke<string>('open_tcp_conn');
       } catch (error) {
@@ -33,9 +33,12 @@ function CustomApp({
 
     const unlisten = listen('open_conn', (event: any) => {
       const payload: ServiceTCPConnectionAccepted = JSON.parse(event.payload);
-      console.log(payload);
 
-      setCid(payload.ServiceConnectionAccepted.id);
+      console.log(payload);
+      if (uuid) return;
+
+      // console.log('rerendered');
+      setUuid(payload.ServiceConnectionAccepted.id);
     });
 
     // const unlisten_register = listen('register', (event: any) => {
@@ -49,7 +52,7 @@ function CustomApp({
     // });
 
     gen();
-  }, [cid]);
+  }, []);
   const Layout = Component.Layout ?? Noop;
   return (
     <div className="select-none">
@@ -68,7 +71,7 @@ function CustomApp({
         <main className="flex-grow bg-gray-100 shadow-inner">
           <UIProvider>
             <Layout>
-              <Component {...pageProps} cid={cid} connErr={connErr} />
+              <Component {...pageProps} uuid={uuid} connErr={connErr} />
             </Layout>
           </UIProvider>
         </main>
