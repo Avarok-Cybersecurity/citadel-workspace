@@ -25,21 +25,12 @@ function CustomApp({
     const gen = async () => {
       if (uuid) return;
       try {
-        const uuid = await invoke<string>('open_tcp_conn');
+        const uuid_value = await invoke('open_tcp_conn', { 'addr': '127.0.0.1:3000' });
+        setUuid(uuid_value)
       } catch (error) {
         setErr(error as string);
       }
     };
-
-    const unlisten = listen('open_conn', (event: any) => {
-      const payload: ServiceTCPConnectionAccepted = JSON.parse(event.payload);
-
-      console.log(payload);
-      if (uuid) return;
-
-      // console.log('rerendered');
-      setUuid(payload.ServiceConnectionAccepted.id);
-    });
 
     // const unlisten_register = listen('register', (event: any) => {
     //   const payload: ServiceRegisterAccepted = JSON.parse(event.payload);
