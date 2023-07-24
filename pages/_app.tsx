@@ -3,7 +3,7 @@ import Head from 'next/head';
 import Script from 'next/script';
 import '../tailwind.css';
 import { FC, ReactNode, useEffect, useState } from 'react';
-import { UIProvider } from '@components/ui/context';
+import { UIProvider, useUI } from '@components/ui/context';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/tauri';
 import {
@@ -11,6 +11,9 @@ import {
   ServiceRegisterAccepted,
   ServiceTCPConnectionAccepted,
 } from '@common/types/c2s';
+import { Provider } from 'react-redux';
+import store from 'framework/redux/store';
+import { setUuid } from 'framework/redux/slices/uuid.slice';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 
@@ -18,17 +21,16 @@ function CustomApp({
   Component,
   pageProps,
 }: AppProps & { Component: { Layout: FC<{ children: ReactNode }> } }) {
-  const [uuid, setUuid] = useState<string>('');
   const [connErr, setErr] = useState('');
-
   useEffect(() => {
     const gen = async () => {
-      if (uuid) return;
       try {
         const uuid_value: string = await invoke('open_tcp_conn', {
           addr: '127.0.0.1:3000',
         });
-        setUuid(uuid_value);
+        console.log(uuid_value);
+        store.dispatch(setUuid(uuid_value));
+        console.log(store.getState().uuid);
       } catch (error) {
         setErr(error as string);
       }
@@ -51,10 +53,6 @@ function CustomApp({
     <div className="select-none">
       <Head>
         <title>Citadel</title>
-        <link
-          href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/1.6.6/flowbite.min.css"
-          rel="stylesheet"
-        />
       </Head>
       <div className="min-h-screen flex flex-col">
         <Script
@@ -62,11 +60,13 @@ function CustomApp({
           src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/1.6.6/flowbite.min.js"
         />
         <main className="flex-grow bg-gray-100 shadow-inner">
-          <UIProvider>
-            <Layout>
-              <Component {...pageProps} uuid={uuid} connErr={connErr} />
-            </Layout>
-          </UIProvider>
+          <Provider store={store}>
+            <UIProvider>
+              <Layout>
+                <Component {...pageProps} />
+              </Layout>
+            </UIProvider>
+          </Provider>
         </main>
       </div>
     </div>

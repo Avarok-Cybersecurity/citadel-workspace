@@ -2,6 +2,7 @@ import { Layout } from '@components/common/Layout';
 import React from 'react';
 import Chat from '@components/chat';
 import { useRegister_c2s } from '@framework/c2s';
+import { useUI } from '@components/ui/context';
 
 export default function Home({
   uuid,
@@ -10,9 +11,9 @@ export default function Home({
   uuid: string;
   connErr: string;
 }) {
-  console.log(connErr);
-  console.log(uuid);
   const registerC2s = useRegister_c2s();
+  const ui = useUI();
+
   return (
     <>
       <div className="flex flex-col justify-between">

@@ -8,18 +8,18 @@ import {
 } from 'react';
 
 export interface StateModifiers {
-  sidebar: (payload: boolean) => void;
+  setUuid: (payload: string) => void;
 }
 
 export interface StateValues {
-  isSidebarOpen: boolean;
+  uuid: string;
 }
 
 const stateModifiers = {
-  sidebar: (payload: boolean) => {},
+  setUuid: (payload: string) => {},
 };
 
-const initialState = { isSidebarOpen: true };
+const initialState = { uuid: '' };
 
 type State = StateValues & StateModifiers;
 
@@ -28,14 +28,14 @@ const UIContext = createContext<State>({
   ...initialState,
 });
 
-type Action = { type: 'SIDEBAR'; payload: boolean };
+type Action = { type: 'UUID'; payload: string };
 
 function uiReducer(state: StateValues, action: Action) {
   switch (action.type) {
-    case 'SIDEBAR': {
+    case 'UUID': {
       return {
         ...state,
-        isSidebarOpen: action.payload,
+        uuid: action.payload,
       };
     }
   }
@@ -44,18 +44,18 @@ function uiReducer(state: StateValues, action: Action) {
 export const UIProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(uiReducer, initialState);
 
-  const sidebar = (payload: boolean) =>
+  const setUuid = (payload: string) =>
     dispatch({
-      type: 'SIDEBAR',
+      type: 'UUID',
       payload,
     });
 
   const value = useMemo(() => {
     return {
       ...state,
-      sidebar,
+      setUuid,
     };
-  }, [state.isSidebarOpen]);
+  }, [state.uuid]);
 
   return <UIContext.Provider value={value}>{children}</UIContext.Provider>;
 };
