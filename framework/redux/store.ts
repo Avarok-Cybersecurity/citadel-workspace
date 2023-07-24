@@ -19,3 +19,7 @@ const store = configureStore({
 });
 
 export default store;
+
+export interface State {
+  [key: string]: { uuid: string };
+}

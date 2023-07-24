@@ -1,4 +1,7 @@
-import { Dispatch, SetStateAction } from 'react';
+import { useRegister_c2s } from '@framework/c2s';
+import { State } from 'framework/redux/store';
+import { Dispatch, SetStateAction, useState } from 'react';
+import { useSelector } from 'react-redux';
 
 export default function AddServerModal({
   onCloseNavbar,
@@ -8,6 +11,13 @@ export default function AddServerModal({
   onClose: Dispatch<SetStateAction<boolean>>;
 }) {
   onCloseNavbar(false);
+  const { uuid } = useSelector((state: State) => state.uuid);
+  const register = useRegister_c2s();
+
+  const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [proposedPassword, setProposedPassword] = useState('');
+  const [ipAddr, setIpAddr] = useState('');
   return (
     <>
       <div className="flex min-h-full flex-1 rounded-md flex-col justify-center py-12 sm:px-6 lg:px-8 z-[100]">
@@ -40,7 +50,81 @@ export default function AddServerModal({
               </svg>
               <span className="sr-only">Close modal</span>
             </button>
-            <form className="space-y-6" action="#" method="POST">
+            <form
+              className="space-y-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const data = await register({
+                  uuid,
+                  fullName,
+                  serverAddr: ipAddr,
+                  username,
+                  proposedPassword,
+                });
+                console.log(data);
+                onClose(false);
+              }}
+            >
+              <div>
+                <label
+                  htmlFor="string"
+                  className="block text-sm font-medium leading-6 text-gray-900"
+                >
+                  Full name
+                </label>
+                <div className="mt-2">
+                  <input
+                    onChange={(e) => setFullName(e.target.value)}
+                    value={fullName}
+                    id="fullName"
+                    name="fullName"
+                    type="string"
+                    required
+                    className="block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="string"
+                  className="block text-sm font-medium leading-6 text-gray-900"
+                >
+                  Username
+                </label>
+                <div className="mt-2">
+                  <input
+                    id="username"
+                    onChange={(e) => setUsername(e.target.value)}
+                    value={username}
+                    name="username"
+                    type="string"
+                    required
+                    className="block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="number"
+                  className="block text-sm font-medium leading-6 text-gray-900"
+                >
+                  Proposed password
+                </label>
+                <div className="mt-2">
+                  <input
+                    onChange={(e) => setProposedPassword(e.target.value)}
+                    value={proposedPassword}
+                    id="password"
+                    name="password"
+                    type="password"
+                    required
+                    className="block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label
                   htmlFor="number"
@@ -50,6 +134,8 @@ export default function AddServerModal({
                 </label>
                 <div className="mt-2">
                   <input
+                    onChange={(e) => setIpAddr(e.target.value)}
+                    value={ipAddr}
                     id="number"
                     name="email"
                     type="string"

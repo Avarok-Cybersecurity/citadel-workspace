@@ -28,9 +28,7 @@ function CustomApp({
         const uuid_value: string = await invoke('open_tcp_conn', {
           addr: '127.0.0.1:3000',
         });
-        console.log(uuid_value);
         store.dispatch(setUuid(uuid_value));
-        console.log(store.getState().uuid);
       } catch (error) {
         setErr(error as string);
       }
