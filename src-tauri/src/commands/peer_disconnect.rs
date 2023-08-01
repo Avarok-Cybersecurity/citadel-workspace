@@ -1,5 +1,5 @@
 use crate::structs::ConnectionState;
-use citadel_workspace_types::InternalServicePayload;
+use citadel_workspace_types::InternalServiceRequest::PeerDisconnect;
 use futures::SinkExt;
 use tauri::State;
 use uuid::Uuid;
@@ -12,7 +12,7 @@ pub async fn peer_disconnect(
     state: State<'_, ConnectionState>,
 ) -> Result<(), String> {
     let uuid = Uuid::parse_str(&uuid).unwrap();
-    let payload = InternalServicePayload::PeerDisconnect {
+    let payload = PeerDisconnect {
         uuid,
         cid,
         peer_cid,

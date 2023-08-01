@@ -1,14 +1,3 @@
-pub mod clear_all_kv;
 pub mod connect;
-pub mod del_kv;
-pub mod disconnect;
-pub mod download_file;
-pub mod get_all_kv;
-pub mod get_kv;
-pub mod message;
-pub mod peer_connect;
-pub mod peer_disconnect;
-pub mod peer_register;
+pub mod get_session;
 pub mod register;
-pub mod send_file;
-pub mod set_kv;

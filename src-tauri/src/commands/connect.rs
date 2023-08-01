@@ -1,4 +1,4 @@
-use citadel_workspace_types::InternalServicePayload;
+use citadel_workspace_types::InternalServiceRequest::Connect;
 use futures::SinkExt;
 use tauri::State;
 use uuid::Uuid;
@@ -10,10 +10,11 @@ pub async fn connect(
     uuid: String,
     username: String,
     password: String,
+    request_id: String,
     state: State<'_, ConnectionState>,
 ) -> Result<(), String> {
     let uuid = Uuid::parse_str(&uuid).unwrap();
-    let payload = InternalServicePayload::Connect {
+    let payload = Connect {
         uuid,
         username,
         password: password.into_bytes().into(),
@@ -21,6 +22,7 @@ pub async fn connect(
         udp_mode: Default::default(),
         keep_alive_timeout: Default::default(),
         session_security_settings: Default::default(),
+        request_id: request_id.parse().unwrap(),
     };
     let _ = state
         .sink

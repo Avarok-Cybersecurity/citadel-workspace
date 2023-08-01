@@ -1,20 +1,16 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
+use tauri_plugin_log::LogTarget;
 mod commands;
 mod helpers;
 mod structs;
 use bytes::BytesMut;
-use citadel_logging::{error, setup_log};
+use citadel_logging::{error, info, setup_log};
 use citadel_workspace_lib::wrap_tcp_conn;
 use citadel_workspace_types::InternalServiceResponse;
-use commands::{
-    clear_all_kv::clear_all_kv, connect::connect, del_kv::del_kv, disconnect::disconnect,
-    download_file::download_file, get_all_kv::get_all_kv, get_kv::get_kv, message::message,
-    peer_connect::peer_connect, peer_disconnect::peer_disconnect, peer_register::peer_redister,
-    register::register, send_file::send_file, set_kv::set_kv,
-};
+use commands::{connect::connect, register::register};
 use futures::StreamExt;
+
 use std::error::Error;
 use std::time::Duration;
 use structs::ConnectionState;
@@ -42,6 +38,8 @@ async fn open_tcp_conn(
     addr: String,
 ) -> Result<Uuid, String> {
     let connection = TcpStream::connect(addr);
+    info!("Info Accepted");
+    println!("Accepted:");
     match timeout(Duration::from_millis(3000), connection)
         .await
         .map_err(|err| err.to_string())?
@@ -54,6 +52,7 @@ async fn open_tcp_conn(
                 let packet = greeter_packet.map_err(|err| err.to_string())?;
                 let packet = bincode2::deserialize::<InternalServiceResponse>(&packet)
                     .map_err(|err| err.to_string())?;
+
                 if let InternalServiceResponse::ServiceConnectionAccepted(accepted) = packet {
                     let service_to_gui = async move {
                         while let Some(packet) = stream.next().await {
@@ -70,9 +69,11 @@ async fn open_tcp_conn(
                     tauri::async_runtime::spawn(service_to_gui);
                     Ok(accepted.id)
                 } else {
+                    error!("Wrong first packet type: {:?}", packet);
                     Err(format!("Wrong first packet type: {:?}", packet))
                 }
             } else {
+                error!("Stream died");
                 Err("Stream died".to_string())
             }
         }
@@ -97,23 +98,12 @@ async fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            open_tcp_conn,
-            connect,
-            register,
-            peer_redister,
-            peer_connect,
-            message,
-            disconnect,
-            peer_disconnect,
-            set_kv,
-            del_kv,
-            get_all_kv,
-            get_kv,
-            clear_all_kv,
-            send_file,
-            download_file
-        ])
+        .invoke_handler(tauri::generate_handler![open_tcp_conn, connect, register,])
+        .plugin(
+            tauri_plugin_log::Builder::default()
+                .targets([LogTarget::LogDir, LogTarget::Stdout])
+                .build(),
+        )
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
