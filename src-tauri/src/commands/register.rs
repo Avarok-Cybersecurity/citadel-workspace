@@ -40,9 +40,12 @@ pub async fn register(
                 .send(bincode2::serialize(&payload).unwrap().into())
                 .await
             {
-                let _ = send_response("register", "Registerd".into(), window).await;
+                window.emit("register", "register".to_string());
+
+                println!("Register command {:?}", payload);
                 Ok(())
             } else {
+                println!("Something went wrong");
                 Err("Unable to register".to_string())
             }
         }

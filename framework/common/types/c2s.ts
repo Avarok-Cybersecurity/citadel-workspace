@@ -7,6 +7,7 @@ export type ServiceTCPConnectionAccepted = {
 export type ServiceRegisterAccepted = {
   ServiceRegisterAccepted: {
     id: string;
+    request_id: string;
   };
 };
 export type ServiceConnectionAccepted = {

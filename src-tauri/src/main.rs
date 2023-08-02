@@ -19,12 +19,12 @@ use tokio::net::TcpStream;
 use tokio::time::timeout;
 use uuid::Uuid;
 
-async fn send_response(
+fn send_response(
     packet_name: &str,
     packet: BytesMut,
     window: tauri::Window,
 ) -> Result<(), Box<dyn Error>> {
-    let _ = window.emit(
+    let _ = window.emit_all(
         packet_name,
         serde_json::to_string(&bincode2::deserialize::<InternalServiceResponse>(&packet)?)?,
     );
@@ -38,8 +38,6 @@ async fn open_tcp_conn(
     addr: String,
 ) -> Result<Uuid, String> {
     let connection = TcpStream::connect(addr);
-    info!("Info Accepted");
-    println!("Accepted:");
     match timeout(Duration::from_millis(3000), connection)
         .await
         .map_err(|err| err.to_string())?
@@ -57,9 +55,7 @@ async fn open_tcp_conn(
                     let service_to_gui = async move {
                         while let Some(packet) = stream.next().await {
                             if let Ok(packet) = packet {
-                                if let Err(e) =
-                                    send_response("open_conn", packet, window.clone()).await
-                                {
+                                if let Err(e) = send_response("open_conn", packet, window.clone()) {
                                     error!(e)
                                 }
                             }
@@ -98,7 +94,7 @@ async fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![open_tcp_conn, connect, register,])
+        .invoke_handler(tauri::generate_handler![register, open_tcp_conn, connect])
         .plugin(
             tauri_plugin_log::Builder::default()
                 .targets([LogTarget::LogDir, LogTarget::Stdout])

@@ -27,7 +27,7 @@ pub async fn get_session(
                     .send(bincode2::serialize(&payload).unwrap().into())
                     .await
                 {
-                    let _ = send_response("register", "Registerd".into(), window).await;
+                    let _ = send_response("register", "Registerd".into(), window);
                     Ok(())
                 } else {
                     Err("Unable to register".to_string())
