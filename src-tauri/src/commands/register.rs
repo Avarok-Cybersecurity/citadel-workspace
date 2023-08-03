@@ -1,6 +1,5 @@
-use crate::send_response;
 use crate::structs::ConnectionState;
-use citadel_workspace_types::InternalServiceRequest::Register;
+use citadel_workspace_types::InternalServiceRequest;
 use futures::SinkExt;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -15,13 +14,13 @@ pub async fn register(
     proposed_password: String,
     server_addr: String,
     state: State<'_, ConnectionState>,
-    window: tauri::Window,
-) -> Result<(), String> {
+    _window: tauri::Window,
+) -> Result<String, String> {
     let server_addr = SocketAddr::from_str(&server_addr).map_err(|_| "Invalid server address")?;
-    let uid = Uuid::new_v4();
+    let request_id = Uuid::new_v4();
     match Uuid::parse_str(&uuid) {
         Ok(uuid) => {
-            let payload = Register {
+            let payload = InternalServiceRequest::Register {
                 uuid,
                 server_addr,
                 full_name,
@@ -29,9 +28,9 @@ pub async fn register(
                 proposed_password: proposed_password.into_bytes().into(),
                 connect_after_register: true,
                 default_security_settings: Default::default(),
-                request_id: uid,
+                request_id,
             };
-            if let Ok(_) = state
+            if state
                 .sink
                 .lock()
                 .await
@@ -39,13 +38,10 @@ pub async fn register(
                 .unwrap()
                 .send(bincode2::serialize(&payload).unwrap().into())
                 .await
+                .is_ok()
             {
-                window.emit("register", "register".to_string());
-
-                println!("Register command {:?}", payload);
-                Ok(())
+                Ok(request_id.to_string())
             } else {
-                println!("Something went wrong");
                 Err("Unable to register".to_string())
             }
         }

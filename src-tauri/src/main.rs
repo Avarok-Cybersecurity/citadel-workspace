@@ -5,7 +5,7 @@ mod commands;
 mod helpers;
 mod structs;
 use bytes::BytesMut;
-use citadel_logging::{error, info, setup_log};
+use citadel_logging::{error, setup_log};
 use citadel_workspace_lib::wrap_tcp_conn;
 use citadel_workspace_types::InternalServiceResponse;
 use commands::{connect::connect, register::register};
@@ -22,7 +22,7 @@ use uuid::Uuid;
 fn send_response(
     packet_name: &str,
     packet: BytesMut,
-    window: tauri::Window,
+    window: &tauri::Window,
 ) -> Result<(), Box<dyn Error>> {
     let _ = window.emit_all(
         packet_name,
@@ -55,7 +55,7 @@ async fn open_tcp_conn(
                     let service_to_gui = async move {
                         while let Some(packet) = stream.next().await {
                             if let Ok(packet) = packet {
-                                if let Err(e) = send_response("open_conn", packet, window.clone()) {
+                                if let Err(e) = send_response("open_conn", packet, &window) {
                                     error!(e)
                                 }
                             }
