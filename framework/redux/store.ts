@@ -1,6 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit';
 import uuid from './slices/uuid.slice';
-
+import executor from './slices/streamHandler.slice';
 const stringMiddleware =
   () =>
   (next: any) =>
@@ -12,7 +12,7 @@ const stringMiddleware =
   };
 
 const store = configureStore({
-  reducer: { uuid },
+  reducer: { uuid, context: executor },
   devTools: process.env.NODE_ENV !== 'production',
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().concat(stringMiddleware),

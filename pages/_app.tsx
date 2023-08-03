@@ -3,14 +3,13 @@ import Head from 'next/head';
 import Script from 'next/script';
 import '../tailwind.css';
 import { FC, ReactNode, useEffect, useState } from 'react';
-import { UIProvider, useUI } from '@components/ui/context';
+import { UIProvider } from '@components/ui/context';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/tauri';
-
 import { Provider } from 'react-redux';
 import store from 'framework/redux/store';
 import { setUuid } from 'framework/redux/slices/uuid.slice';
-import { ServiceRegisterAccepted } from '@common/types/c2s';
+import { execute } from 'framework/redux/slices/streamHandler.slice';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 
@@ -25,7 +24,6 @@ function CustomApp({
         const uuid_value: string = await invoke('open_tcp_conn', {
           addr: '127.0.0.1:3000',
         });
-        console.log('UUID', uuid_value);
         store.dispatch(setUuid(uuid_value));
       } catch (error) {
         console.log(error);
@@ -33,14 +31,19 @@ function CustomApp({
       }
     };
     gen();
-    const unlisten_register = listen<ServiceRegisterAccepted>(
-      'register',
-      (event) => {
-        console.log(event);
+
+    const listen_packet_stream = listen(
+      'packet_stream',
+      (event: { payload: string }) => {
+        const data = JSON.parse(event.payload);
+        console.log('Stream_packet', data);
+        const req_id = data.request_id;
+        store.dispatch(execute({ req_id, data }));
       }
     );
+
     return () => {
-      unlisten_register.then((unlisten) => unlisten());
+      listen_packet_stream.then((unlisten) => unlisten());
     };
   }, []);
 

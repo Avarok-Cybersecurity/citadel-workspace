@@ -2,12 +2,17 @@ import { Layout } from '@components/common/Layout';
 import React from 'react';
 import Chat from '@components/chat';
 import { useRegister_c2s } from '@framework/c2s';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { State } from 'framework/redux/store';
+import genUuid from '@lib/utils';
+import { execute } from 'framework/redux/slices/streamHandler.slice';
 
 export default function Home({ connErr }: { connErr: string }) {
   const registerC2s = useRegister_c2s();
-  const { uuid } = useSelector((state: State) => state.uuid);
+  const dispatch = useDispatch();
+  const { uuid } = useSelector((state: State) => {
+    return state.uuid;
+  });
 
   return (
     <>
@@ -15,14 +20,16 @@ export default function Home({ connErr }: { connErr: string }) {
         <button
           className="text-red-500"
           onClick={async () => {
-            const data = await registerC2s({
+            const req_id = await registerC2s({
               uuid: uuid,
               fullName: 'John Doe ',
               serverAddr: '127.0.0.1:12349',
-              username: 'johndoe',
+              username: genUuid(),
               proposedPassword: '_Rudsakjdas123',
             });
-            console.log(data);
+
+            dispatch(execute({ req_id, data: null }));
+            console.log('Got the req_id register');
           }}
         >
           Register
