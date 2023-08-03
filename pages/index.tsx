@@ -5,7 +5,10 @@ import { useRegister_c2s } from '@framework/c2s';
 import { useDispatch, useSelector } from 'react-redux';
 import { State } from 'framework/redux/store';
 import genUuid from '@lib/utils';
-import { execute } from 'framework/redux/slices/streamHandler.slice';
+import {
+  ContextType,
+  execute,
+} from 'framework/redux/slices/streamHandler.slice';
 
 export default function Home({ connErr }: { connErr: string }) {
   const registerC2s = useRegister_c2s();
@@ -28,7 +31,13 @@ export default function Home({ connErr }: { connErr: string }) {
               proposedPassword: '_Rudsakjdas123',
             });
 
-            dispatch(execute({ req_id, data: null }));
+            dispatch(
+              execute({
+                req_id,
+                data: null,
+                context_type: 'Register',
+              })
+            );
             console.log('Got the req_id register');
           }}
         >

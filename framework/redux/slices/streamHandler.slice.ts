@@ -11,9 +11,7 @@ interface ContextAction {
 
 type Data = ServiceRegisterAccepted | ServiceTCPConnectionAccepted;
 
-enum ContextType {
-  Register = 'Register',
-}
+export type ContextType = 'Register';
 
 const initialState: { [key: string]: ContextAction | null } = {};
 
@@ -25,10 +23,13 @@ const streamExecSlice = createSlice({
       console.log('Before', current(state));
       console.log('Action', action);
       const req_id = action.payload.req_id;
+      const context_type =
+        action.payload.context_type ?? state[req_id]?.context_type;
+      console.log('Type: ', context_type);
 
       const context: ContextAction = {
         payload: action.payload.data,
-        context_type: action.payload.context_type,
+        context_type: context_type && context_type,
       };
 
       state[req_id] = context;
