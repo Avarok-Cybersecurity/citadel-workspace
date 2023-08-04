@@ -10,8 +10,10 @@ export type ServiceRegisterAccepted = {
     request_id: string;
   };
 };
+
 export type ServiceConnectionAccepted = {
   ServiceConnectionAccepted: {
     id: string;
+    request_id: string;
   };
 };

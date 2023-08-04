@@ -8,4 +8,4 @@ export default {
   component: WorkspaceBar,
 } as Meta;
 
-export const Bar: StoryFn = () => <WorkspaceBar />;
+export const Bar: StoryFn = () => <WorkspaceBar onOpen={() => {}} />;

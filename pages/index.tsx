@@ -23,7 +23,7 @@ export default function Home({ connErr }: { connErr: string }) {
         <button
           className="text-red-500"
           onClick={async () => {
-            const req_id = await registerC2s({
+            await registerC2s({
               uuid: uuid,
               fullName: 'John Doe ',
               serverAddr: '127.0.0.1:12349',
@@ -31,13 +31,6 @@ export default function Home({ connErr }: { connErr: string }) {
               proposedPassword: '_Rudsakjdas123',
             });
 
-            dispatch(
-              execute({
-                req_id,
-                data: null,
-                context_type: 'Register',
-              })
-            );
             console.log('Got the req_id register');
           }}
         >
