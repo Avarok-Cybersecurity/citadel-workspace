@@ -84,9 +84,14 @@ async fn main() {
             sink: Default::default(),
             stream: Default::default(),
         })
-        .setup(|_app| {
+        .setup(|app| {
             setup_log();
-
+            #[cfg(debug_assertions)] // only include this code on debug builds
+            {
+                let window = app.get_window("main").unwrap();
+                window.open_devtools();
+                window.close_devtools();
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![register, open_tcp_conn, connect])

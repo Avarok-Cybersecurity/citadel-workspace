@@ -36,10 +36,13 @@ function CustomApp({
       'packet_stream',
       (event: { payload: string }) => {
         const data = JSON.parse(event.payload);
-        console.log('Stream_packet', data);
-        const req_id = data.ConnectSuccess.request_id;
+        const key = Object.keys(data).at(0)!;
+        const payload = data[key];
+
+        console.log('Stream_packet', payload);
+        const req_id = payload.request_id;
         console.log('ReqID stream', req_id);
-        store.dispatch(execute({ req_id, data }));
+        store.dispatch(execute({ req_id, payload }));
       }
     );
 
