@@ -5,7 +5,7 @@ export type UseConnect<H extends MutationHook = MutationHook<any>> = ReturnType<
   H['useHook']
 >;
 
-const useConnect_c2s = () => {
+const useConnect_c2s: UseConnect = () => {
   const hook = useHook((hooks) => hooks.c2s.useConnect);
   return useMutationHook({ ...hook })();
 };

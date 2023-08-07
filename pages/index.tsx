@@ -23,11 +23,13 @@ export default function Home({ connErr }: { connErr: string }) {
         <button
           className="text-red-500"
           onClick={async () => {
+            const username = genUuid();
+            console.log('Username', username);
             await registerC2s({
               uuid: uuid,
               fullName: 'John Doe ',
               serverAddr: '127.0.0.1:12349',
-              username: genUuid(),
+              username,
               proposedPassword: '_Rudsakjdas123',
             });
 

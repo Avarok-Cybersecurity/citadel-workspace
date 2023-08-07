@@ -18,6 +18,7 @@ export type RegisterHookDescriptor = {
 };
 
 export const handler: MutationHook<RegisterHookDescriptor> = {
+  //// Invoker input is connect because connect_after_register is true in register command
   invokerOptions: {
     type: 'register',
   },

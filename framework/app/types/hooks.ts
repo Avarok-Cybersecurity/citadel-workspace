@@ -4,5 +4,7 @@ export interface ApiHooks {
   c2s: {
     useRegister: MutationHook;
     useConnect: MutationHook;
+    useDisconnect: MutationHook;
+    useGetSession: MutationHook;
   };
 }

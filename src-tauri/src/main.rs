@@ -8,7 +8,10 @@ use bytes::BytesMut;
 use citadel_logging::{error, setup_log};
 use citadel_workspace_lib::wrap_tcp_conn;
 use citadel_workspace_types::InternalServiceResponse;
-use commands::{connect::connect, register::register};
+use commands::{
+    connect::connect, disconnect::disconnect, get_session::get_session, message::message,
+    register::register,
+};
 use futures::StreamExt;
 
 use std::error::Error;
@@ -94,7 +97,14 @@ async fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![register, open_tcp_conn, connect])
+        .invoke_handler(tauri::generate_handler![
+            register,
+            open_tcp_conn,
+            connect,
+            disconnect,
+            get_session,
+            message
+        ])
         .plugin(
             tauri_plugin_log::Builder::default()
                 .targets([LogTarget::LogDir, LogTarget::Stdout])

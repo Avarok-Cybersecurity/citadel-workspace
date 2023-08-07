@@ -17,3 +17,10 @@ export type ServiceConnectionAccepted = {
     request_id: string;
   };
 };
+
+export type ServiceDisconnect = {
+  ServiceDisconnectAccepted: {
+    uuid: string;
+    request_id: string;
+  };
+};

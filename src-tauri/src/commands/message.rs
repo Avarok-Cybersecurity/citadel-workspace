@@ -1,4 +1,4 @@
-use citadel_workspace_types::InternalServicePayload;
+use citadel_workspace_types::InternalServiceRequest::Message;
 use futures::SinkExt;
 use tauri::State;
 use uuid::Uuid;
@@ -11,24 +11,34 @@ pub async fn message(
     message: String,
     cid: u64,
     peer_cid: Option<u64>,
+    request_id: String,
     state: State<'_, ConnectionState>,
-) -> Result<(), String> {
-    let uuid = Uuid::parse_str(&uuid).unwrap();
-    let payload = InternalServicePayload::Message {
-        uuid,
-        message: message.into_bytes(),
-        cid,
-        peer_cid,
-        security_level: Default::default(),
-    };
-    let _ = state
-        .sink
-        .lock()
-        .await
-        .as_mut()
-        .unwrap()
-        .send(bincode2::serialize(&payload).unwrap().into())
-        .await;
-
-    Ok(())
+) -> Result<String, String> {
+    match Uuid::parse_str(&uuid) {
+        Ok(uuid) => {
+            let payload = Message {
+                uuid,
+                message: message.into_bytes(),
+                cid,
+                peer_cid,
+                security_level: Default::default(),
+                request_id: request_id.parse().unwrap(),
+            };
+            if state
+                .sink
+                .lock()
+                .await
+                .as_mut()
+                .unwrap()
+                .send(bincode2::serialize(&payload).unwrap().into())
+                .await
+                .is_ok()
+            {
+                Ok(request_id.to_string())
+            } else {
+                return Err("Unable to message".to_string());
+            }
+        }
+        Err(_) => return Err("Invalid UUID".to_string()),
+    }
 }
