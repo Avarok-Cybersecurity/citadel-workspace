@@ -10,6 +10,7 @@ import { Provider } from 'react-redux';
 import store from 'framework/redux/store';
 import { setUuid } from 'framework/redux/slices/uuid.slice';
 import { execute } from 'framework/redux/slices/streamHandler.slice';
+// import { useGetSession_c2s } from '@framework/c2s';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 
@@ -19,18 +20,29 @@ function CustomApp({
 }: AppProps & { Component: { Layout: FC<{ children: ReactNode }> } }) {
   const [connErr, setErr] = useState('');
   useEffect(() => {
-    const gen = async () => {
+    const connect = async () => {
       try {
         const uuid_value: string = await invoke('open_tcp_conn', {
           addr: '127.0.0.1:3000',
         });
         store.dispatch(setUuid(uuid_value));
+        const session_id: string = await invoke('get_session', {
+          uuid: uuid_value,
+        });
+        store.dispatch(
+          execute({
+            req_id: session_id,
+            data: null,
+            context_type: 'Sessions',
+          })
+        );
+        console.log('Session ID', session_id);
       } catch (error) {
         console.log(error);
         setErr(error as string);
       }
     };
-    gen();
+    connect();
 
     const listen_packet_stream = listen(
       'packet_stream',

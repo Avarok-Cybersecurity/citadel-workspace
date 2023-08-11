@@ -12,6 +12,7 @@ import {
 
 export default function Home({ connErr }: { connErr: string }) {
   const registerC2s = useRegister_c2s();
+
   const dispatch = useDispatch();
   const { uuid } = useSelector((state: State) => {
     return state.uuid;

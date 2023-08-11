@@ -1,24 +1,22 @@
 import { MutationHook } from '@common/types/hooks';
-import { useConnect_c2s } from '@common/c2s';
 import { ServiceConnectionAccepted } from '@common/types/c2s';
-import { UseGetSession } from '@common/c2s/useGetSession';
+import useMessage, { UseMessage } from '@common/messaging/useMessage';
 
-export default useConnect_c2s as UseGetSession<typeof handler>;
+export default useMessage as UseMessage<typeof handler>;
 
-export type ConnectHookDescriptor = {
+export type MessageHookDescriptor = {
   invokerInput: {
     uuid: string;
-    fullName: string;
-    serverAddr: string;
-    username: string;
-    proposedPassword: string;
+    cid: bigint;
+    message: string;
+    peerCid?: bigint;
   };
-  dataReturn: ServiceConnectionAccepted;
+  dataReturn: any;
 };
 
-export const handler: MutationHook<ConnectHookDescriptor> = {
+export const handler: MutationHook<MessageHookDescriptor> = {
   invokerOptions: {
-    type: 'connect',
+    type: 'message',
   },
   invoker: async (context) => {
     let { invoke, input, options } = context;
