@@ -23,6 +23,7 @@ import classNames from 'classnames';
 import WorkspaceBar from '@components/ui/workspacesBar/WorkspaceBar';
 import Link from 'next/link';
 import AddServerModal from '@components/ui/AddServer';
+import { useSelector } from 'react-redux';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon, current: true },
@@ -111,7 +112,10 @@ export const Layout = ({ children }: Props) => {
                   </Transition.Child>
                   {/* Sidebar component, swap this element with another sidebar if you like */}
                   <div className="flex">
-                    <WorkspaceBar onOpen={setAddServerOpen} />
+                    <WorkspaceBar
+                      onOpen={setAddServerOpen}
+                      // arrayOfItems={[1, 2, 3]}
+                    />
 
                     <div className="flex grow w-72 flex-col gap-y-5 overflow-y-auto bg-gray-900 px-6 pb-4 ring-1 ring-white/10">
                       <div className="flex h-16 shrink-0 items-center">

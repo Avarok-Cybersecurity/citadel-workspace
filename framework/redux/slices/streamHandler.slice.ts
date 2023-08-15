@@ -11,7 +11,7 @@ interface ContextAction {
 
 type Data = ServiceRegisterAccepted | ServiceTCPConnectionAccepted;
 
-export type ContextType = 'Register';
+export type ContextType = 'Register' | 'GetSession';
 
 const initialState: { [key: string]: ContextAction | null } = {};
 
@@ -19,7 +19,7 @@ const streamExecSlice = createSlice({
   name: 'stram_handler',
   initialState,
   reducers: {
-    execute: (state, action) => {
+    addToContext: (state, action) => {
       console.log('Before', current(state));
       console.log('Action', action);
       const req_id = action.payload.req_id;
@@ -50,5 +50,5 @@ const streamExecSlice = createSlice({
 });
 
 const { reducer, actions } = streamExecSlice;
-export const { execute } = actions;
+export const { addToContext } = actions;
 export default reducer;

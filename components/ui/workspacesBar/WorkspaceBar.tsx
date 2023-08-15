@@ -6,7 +6,7 @@ function WorkspaceBar({
   arrayOfItems,
   onOpen,
 }: {
-  arrayOfItems?: [any];
+  arrayOfItems: [any];
   onOpen: Dispatch<SetStateAction<boolean>>;
 }) {
   return (

@@ -7,7 +7,7 @@ import { State } from 'framework/redux/store';
 import genUuid from '@lib/utils';
 import {
   ContextType,
-  execute,
+  addToContext,
 } from 'framework/redux/slices/streamHandler.slice';
 
 export default function Home({ connErr }: { connErr: string }) {

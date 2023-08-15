@@ -9,7 +9,9 @@ import { invoke } from '@tauri-apps/api/tauri';
 import { Provider } from 'react-redux';
 import store from 'framework/redux/store';
 import { setUuid } from 'framework/redux/slices/uuid.slice';
-import { execute } from 'framework/redux/slices/streamHandler.slice';
+import { addToContext } from 'framework/redux/slices/streamHandler.slice';
+import { uuid } from 'uuidv4';
+import { setSessions } from 'framework/redux/slices/session.slice';
 // import { useGetSession_c2s } from '@framework/c2s';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
@@ -19,6 +21,7 @@ function CustomApp({
   pageProps,
 }: AppProps & { Component: { Layout: FC<{ children: ReactNode }> } }) {
   const [connErr, setErr] = useState('');
+
   useEffect(() => {
     const connect = async () => {
       try {
@@ -26,23 +29,42 @@ function CustomApp({
           addr: '127.0.0.1:3000',
         });
         store.dispatch(setUuid(uuid_value));
-        const session_id: string = await invoke('get_session', {
+
+        const session_req_id = await invoke('get_session', {
           uuid: uuid_value,
         });
         store.dispatch(
-          execute({
-            req_id: session_id,
-            data: null,
-            context_type: 'Sessions',
+          addToContext({
+            req_id: session_req_id,
+            context: { context_type: 'GetSession', context_data: null },
           })
         );
-        console.log('Session ID', session_id);
       } catch (error) {
         console.log(error);
         setErr(error as string);
       }
     };
     connect();
+
+    const handlePacket = (req_id: string, payload: { [key: string]: any }) => {
+      console.log('ReqID', req_id);
+      console.log('Payload', payload);
+      const map = store.getState();
+      const context = map.context[req_id];
+
+      if (context) {
+        switch (context.context_type) {
+          case 'GetSession':
+            console.log('GetSession');
+            const activeSessions = payload.sessions as Array<number | string>;
+            store.dispatch(setSessions(activeSessions));
+            break;
+          default:
+            console.log('default');
+            break;
+        }
+      }
+    };
 
     const listen_packet_stream = listen(
       'packet_stream',
@@ -54,7 +76,7 @@ function CustomApp({
         console.log('Stream_packet', payload);
         const req_id = payload.request_id;
         console.log('ReqID stream', req_id);
-        store.dispatch(execute({ req_id, payload }));
+        handlePacket(req_id, payload);
       }
     );
 
