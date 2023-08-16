@@ -80,6 +80,8 @@ function CustomApp({
           store.dispatch(setSessions(activeSessions));
           console.log('Active sessions', activeSessions);
           break;
+        case 'Register':
+          const x = 1;
         default:
           console.log('default');
           break;

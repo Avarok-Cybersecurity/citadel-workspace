@@ -4,6 +4,7 @@ import { ServiceRegisterAccepted } from '@common/types/c2s';
 import { UseRegister } from '@common/c2s/useRegister_c2s';
 import store from 'framework/redux/store';
 import { addToContext } from 'framework/redux/slices/streamHandler.slice';
+import { invoke } from '@tauri-apps/api/tauri';
 export default useRegister_c2s as UseRegister<typeof handler>;
 
 export type RegisterHookDescriptor = {
@@ -30,15 +31,23 @@ export const handler: MutationHook<RegisterHookDescriptor> = {
     return data;
   },
   useHook:
-    ({ invoke }) =>
+    ({ invoke: inv }) =>
     () => {
       return async (input) => {
-        const response = await invoke(input);
+        const response = await inv(input);
         store.dispatch(
           addToContext({
             req_id: response,
-            data: null,
             context_type: 'Register',
+          })
+        );
+        const req_id = await invoke('get_session', {
+          uuid: input.uuid,
+        });
+        store.dispatch(
+          addToContext({
+            req_id,
+            context_type: 'GetSession',
           })
         );
         return response;

@@ -1,7 +1,13 @@
 import { invoke } from '@tauri-apps/api/tauri';
 import { addToContext } from 'framework/redux/slices/streamHandler.slice';
 import { RootState, useAppSelector } from 'framework/redux/store';
-import React, { Dispatch, SetStateAction, useEffect } from 'react';
+import React, {
+  Dispatch,
+  SetStateAction,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
 import { useDispatch } from 'react-redux';
 
 function WorkspaceBar({
@@ -13,18 +19,7 @@ function WorkspaceBar({
   const dispatch = useDispatch();
   const { uuid } = useAppSelector((state: RootState) => state.uuid);
   const context = useAppSelector((state: RootState) => state.context);
-  useEffect(() => {
-    invoke('get_session', {
-      uuid,
-    }).then((res) =>
-      dispatch(
-        addToContext({
-          req_id: res as string,
-          context_type: 'GetSession',
-        })
-      )
-    );
-  }, [context]);
+
   return (
     <div
       id="workspace"
