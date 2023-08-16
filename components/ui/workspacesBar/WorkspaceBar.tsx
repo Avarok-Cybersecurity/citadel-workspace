@@ -4,7 +4,6 @@ import React, { Dispatch, SetStateAction } from 'react';
 function WorkspaceBar({
   onOpen,
 }: {
-  arrayOfItems: Array<any>;
   onOpen: Dispatch<SetStateAction<boolean>>;
 }) {
   const sessions = useAppSelector((state: RootState) => state.context.sessions);

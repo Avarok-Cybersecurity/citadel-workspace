@@ -271,7 +271,7 @@ export const Layout = ({ children }: Props) => {
                   <ul role="list" className="-mx-2 space-y-1">
                     {navigation.map((item) => (
                       <li key={item.name}>
-                        <a
+                        <Link
                           href={item.href}
                           className={classNames(
                             item.current
@@ -285,7 +285,7 @@ export const Layout = ({ children }: Props) => {
                             aria-hidden="true"
                           />
                           {item.name}
-                        </a>
+                        </Link>
                       </li>
                     ))}
                   </ul>
@@ -385,7 +385,10 @@ export const Layout = ({ children }: Props) => {
             />
 
             <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
-              <form className="relative flex flex-1 " action="#" method="GET">
+              <form
+                className="relative flex flex-1 "
+                onSubmit={(e) => e.preventDefault()}
+              >
                 <label
                   htmlFor="search-field text-white color-white"
                   className="sr-only"
