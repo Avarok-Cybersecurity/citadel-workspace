@@ -4,16 +4,16 @@ import {
 } from '@common/types/c2s';
 import { createSlice, current } from '@reduxjs/toolkit';
 
-interface ContextAction {
-  context_data: { [key: string]: any };
-  context_type: ContextType;
-}
-
 type Data = ServiceRegisterAccepted | ServiceTCPConnectionAccepted;
 
 export type ContextType = 'Register' | 'GetSession';
 
-const initialState: { [key: string]: ContextAction | null } = {};
+const initialState: {
+  context: {
+    [key: string]: ContextType;
+  };
+  sessions: Array<number | string>;
+} = { context: {}, sessions: [] };
 
 const streamExecSlice = createSlice({
   name: 'stram_handler',
@@ -24,9 +24,10 @@ const streamExecSlice = createSlice({
       console.log('Action', action);
       const req_id = action.payload.req_id;
 
-      const context_type =
-        action.payload.context_type ?? state[req_id]?.context_type;
-
+      const context_type: ContextType =
+        action.payload.context_type ?? state.context[req_id];
+      console.log('Action payload', action.payload);
+      console.log('Context Type', context_type);
       const payload: { [key: string]: string | number } =
         action.payload.payload;
 
@@ -38,17 +39,24 @@ const streamExecSlice = createSlice({
         }
       }
 
-      const context: ContextAction = {
-        context_data: updatedObject,
-        context_type: context_type,
-      };
-
-      state[req_id] = context;
+      state.context[req_id] = context_type;
       console.log('After', current(state));
+    },
+    setSessions: (state, action) => {
+      const activeSessions: Array<any> = action.payload;
+
+      const inactiveSession = state.sessions.filter((item) => {
+        return !activeSessions.includes(item);
+      });
+
+      state.sessions = activeSessions;
+
+      console.log('inactiveSession', inactiveSession);
+      console.log('active sessions', activeSessions);
     },
   },
 });
 
 const { reducer, actions } = streamExecSlice;
-export const { addToContext } = actions;
+export const { addToContext, setSessions } = actions;
 export default reducer;

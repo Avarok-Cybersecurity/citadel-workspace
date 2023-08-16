@@ -9,10 +9,10 @@ import { invoke } from '@tauri-apps/api/tauri';
 import { Provider } from 'react-redux';
 import store from 'framework/redux/store';
 import { setUuid } from 'framework/redux/slices/uuid.slice';
-import { addToContext } from 'framework/redux/slices/streamHandler.slice';
-import { uuid } from 'uuidv4';
-import { setSessions } from 'framework/redux/slices/session.slice';
-// import { useGetSession_c2s } from '@framework/c2s';
+import {
+  addToContext,
+  setSessions,
+} from 'framework/redux/slices/streamHandler.slice';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 
@@ -36,7 +36,7 @@ function CustomApp({
         store.dispatch(
           addToContext({
             req_id: session_req_id,
-            context: { context_type: 'GetSession', context_data: null },
+            context_type: 'GetSession',
           })
         );
       } catch (error) {
@@ -45,26 +45,6 @@ function CustomApp({
       }
     };
     connect();
-
-    const handlePacket = (req_id: string, payload: { [key: string]: any }) => {
-      console.log('ReqID', req_id);
-      console.log('Payload', payload);
-      const map = store.getState();
-      const context = map.context[req_id];
-
-      if (context) {
-        switch (context.context_type) {
-          case 'GetSession':
-            console.log('GetSession');
-            const activeSessions = payload.sessions as Array<number | string>;
-            store.dispatch(setSessions(activeSessions));
-            break;
-          default:
-            console.log('default');
-            break;
-        }
-      }
-    };
 
     const listen_packet_stream = listen(
       'packet_stream',
@@ -84,6 +64,28 @@ function CustomApp({
       listen_packet_stream.then((unlisten) => unlisten());
     };
   }, []);
+
+  const handlePacket = (req_id: string, payload: { [key: string]: any }) => {
+    console.log('ReqID', req_id);
+    console.log('Payload', payload);
+    const { context: map } = store.getState();
+    console.log('Map', map);
+    const context = map.context[req_id];
+    console.log('Context', context);
+
+    if (context) {
+      switch (context) {
+        case 'GetSession':
+          const activeSessions = payload.sessions as Array<number | string>;
+          store.dispatch(setSessions(activeSessions));
+          console.log('Active sessions', activeSessions);
+          break;
+        default:
+          console.log('default');
+          break;
+      }
+    }
+  };
 
   const Layout = Component.Layout ?? Noop;
   return (
