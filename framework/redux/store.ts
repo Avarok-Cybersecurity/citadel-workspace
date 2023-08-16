@@ -1,6 +1,11 @@
 import { configureStore } from '@reduxjs/toolkit';
 import uuid from './slices/uuid.slice';
 import executor from './slices/streamHandler.slice';
+import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
+import {
+  ServiceRegisterAccepted,
+  ServiceTCPConnectionAccepted,
+} from '@common/types/c2s';
 const stringMiddleware =
   () =>
   (next: any) =>
@@ -20,6 +25,16 @@ const store = configureStore({
 
 export default store;
 
-export interface State {
-  [key: string]: { uuid: string };
-}
+export type RootState = ReturnType<typeof store.getState>;
+export type AppDispatch = typeof store.dispatch;
+
+export const useAppDispatch: () => AppDispatch = useDispatch;
+export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;
+
+type Data = ServiceRegisterAccepted | ServiceTCPConnectionAccepted;
+
+export type ContextType =
+  | 'RegisterAndConnect'
+  | 'GetSession'
+  | 'ADD_TO_CONTEXT'
+  | 'HANDLE_PACKET';

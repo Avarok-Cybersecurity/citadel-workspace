@@ -1,14 +1,30 @@
-import React, { Dispatch, SetStateAction } from 'react';
-
-const arr = [1, 2, 7];
+import { invoke } from '@tauri-apps/api/tauri';
+import { addToContext } from 'framework/redux/slices/streamHandler.slice';
+import { RootState, useAppSelector } from 'framework/redux/store';
+import React, { Dispatch, SetStateAction, useEffect } from 'react';
+import { useDispatch } from 'react-redux';
 
 function WorkspaceBar({
-  arrayOfItems,
   onOpen,
 }: {
-  arrayOfItems: [any];
+  arrayOfItems: Array<any>;
   onOpen: Dispatch<SetStateAction<boolean>>;
 }) {
+  const dispatch = useDispatch();
+  const { uuid } = useAppSelector((state: RootState) => state.uuid);
+  const context = useAppSelector((state: RootState) => state.context);
+  useEffect(() => {
+    invoke('get_session', {
+      uuid,
+    }).then((res) =>
+      dispatch(
+        addToContext({
+          req_id: res as string,
+          context_type: 'GetSession',
+        })
+      )
+    );
+  }, [context]);
   return (
     <div
       id="workspace"
@@ -21,7 +37,7 @@ function WorkspaceBar({
         >
           <span className="text-xl font-medium leading-none text-white">+</span>
         </span>
-        {arr.map((el, i) => {
+        {context.sessions.map((el, i) => {
           return (
             <img
               key={i}
