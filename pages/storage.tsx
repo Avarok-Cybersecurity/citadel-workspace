@@ -1,7 +1,7 @@
 import { Layout } from '@components/common/Layout';
 import React from 'react';
 import { useSelector } from 'react-redux';
-import { State } from 'framework/redux/store';
+import { State } from 'framework/redux';
 
 export default function Storage() {
   const { uuid } = useSelector((state: State) => state.uuid);

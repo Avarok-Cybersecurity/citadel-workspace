@@ -3,18 +3,14 @@ import React from 'react';
 import Chat from '@components/chat';
 import { useRegister_c2s } from '@framework/c2s';
 import { useDispatch, useSelector } from 'react-redux';
-import { State } from 'framework/redux/store';
+import { RootState, useAppSelector } from 'framework/redux';
 import genUuid from '@lib/utils';
-import {
-  ContextType,
-  addToContext,
-} from 'framework/redux/slices/streamHandler.slice';
 
 export default function Home({ connErr }: { connErr: string }) {
   const registerC2s = useRegister_c2s();
 
   const dispatch = useDispatch();
-  const { uuid } = useSelector((state: State) => {
+  const { uuid } = useAppSelector((state: RootState) => {
     return state.uuid;
   });
 

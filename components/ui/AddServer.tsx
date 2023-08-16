@@ -1,5 +1,5 @@
 import { useRegister_c2s } from '@framework/c2s';
-import { State } from 'framework/redux/store';
+import { State } from 'framework/redux';
 import { Dispatch, SetStateAction, useState } from 'react';
 import { useSelector } from 'react-redux';
 
