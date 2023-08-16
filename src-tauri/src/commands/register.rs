@@ -26,7 +26,7 @@ pub async fn register(
                 full_name,
                 username: username.clone(),
                 proposed_password: proposed_password.into_bytes().into(),
-                connect_after_register: false,
+                connect_after_register: true,
                 default_security_settings: Default::default(),
                 request_id,
             };
