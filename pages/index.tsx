@@ -3,7 +3,7 @@ import React from 'react';
 import Chat from '@components/chat';
 import { useRegister_c2s } from '@framework/c2s';
 import { useDispatch, useSelector } from 'react-redux';
-import { State } from 'framework/redux/store';
+import { RootState } from 'framework/redux/store';
 import genUuid from '@lib/utils';
 import {
   ContextType,
@@ -14,7 +14,7 @@ export default function Home({ connErr }: { connErr: string }) {
   const registerC2s = useRegister_c2s();
 
   const dispatch = useDispatch();
-  const { uuid } = useSelector((state: State) => {
+  const { uuid } = useSelector((state: RootState) => {
     return state.uuid;
   });
 
@@ -41,7 +41,6 @@ export default function Home({ connErr }: { connErr: string }) {
         </button>
 
         <main className="pt-10 h-full w-full flex flex-col justify-between">
-          {/* <span className="text-yellow-400">{uuid.to_string()}</span> */}
           <Chat />
         </main>
       </div>

@@ -1,12 +1,13 @@
 import { Layout } from '@components/common/Layout';
+import Link from 'next/link';
 import React from 'react';
 
 const Settings = () => {
   const secondaryNavigation = [
     { name: 'Account', href: '#', current: true },
-    { name: 'Notifications', href: '#', current: false },
-    { name: 'Billing', href: '#', current: false },
-    { name: 'Teams', href: '#', current: false },
+    { name: 'Notifications', href: '/settings/notifications', current: false },
+    { name: 'Plans', href: '/settings/plans', current: false },
+    { name: 'Teams', href: '/dsa', current: false },
     { name: 'Integrations', href: '#', current: false },
   ];
 
@@ -21,12 +22,12 @@ const Settings = () => {
           >
             {secondaryNavigation.map((item) => (
               <li key={item.name}>
-                <a
+                <Link
                   href={item.href}
                   className={item.current ? 'text-indigo-400' : ''}
                 >
                   {item.name}
-                </a>
+                </Link>
               </li>
             ))}
           </ul>
