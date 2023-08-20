@@ -12,7 +12,7 @@ const initialState: {
   context: {
     [key: string]: ContextType;
   };
-  sessions: Array<number | string>;
+  sessions: Array<{ cid: string; peer_connections: { [key: string]: string } }>;
 } = { context: {}, sessions: [] };
 
 const streamExecSlice = createSlice({

@@ -42,6 +42,7 @@ fn send_response(
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn open_tcp_conn(
     conn_state: State<'_, ConnectionState>,
     window: tauri::Window,

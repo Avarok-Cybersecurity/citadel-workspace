@@ -1,5 +1,5 @@
 import { useRegister_c2s } from '@framework/c2s';
-import { State } from 'framework/redux/store';
+import { RootState } from 'framework/redux/store';
 import { Dispatch, SetStateAction, useState } from 'react';
 import { useSelector } from 'react-redux';
 
@@ -11,7 +11,7 @@ export default function AddServerModal({
   onClose: Dispatch<SetStateAction<boolean>>;
 }) {
   onCloseNavbar(false);
-  const { uuid } = useSelector((state: State) => state.uuid);
+  const { uuid } = useSelector((state: RootState) => state.uuid);
   const register = useRegister_c2s();
 
   const [fullName, setFullName] = useState('');
@@ -42,9 +42,9 @@ export default function AddServerModal({
               >
                 <path
                   stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
                   d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"
                 />
               </svg>

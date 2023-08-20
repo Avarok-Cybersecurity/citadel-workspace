@@ -1,4 +1,5 @@
 import { RootState, useAppSelector } from 'framework/redux/store';
+import Link from 'next/link';
 import React, { Dispatch, SetStateAction } from 'react';
 
 function WorkspaceBar({
@@ -21,13 +22,21 @@ function WorkspaceBar({
           <span className="text-xl font-medium leading-none text-white">+</span>
         </span>
         {sessions.map((el, i) => {
+          console.log(el);
           return (
-            <img
-              key={i}
-              className="inline-block h-12 w-12 rounded-full"
-              src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-              alt=""
-            />
+            <Link
+              key={el.cid}
+              href={{
+                pathname: `/server/${el.cid}`,
+              }}
+            >
+              <img
+                key={i}
+                className="inline-block h-12 w-12 rounded-full"
+                src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
+                alt=""
+              />
+            </Link>
           );
         })}
       </div>
