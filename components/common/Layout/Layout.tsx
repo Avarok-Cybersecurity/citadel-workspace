@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ApiProvider } from '@framework/index';
 import { Fragment, useState } from 'react';
 import { Dialog, Menu, Transition } from '@headlessui/react';
@@ -10,7 +10,6 @@ import {
   Cog6ToothIcon,
   DocumentDuplicateIcon,
   FolderIcon,
-  HomeIcon,
   UsersIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
@@ -22,6 +21,7 @@ import classNames from 'classnames';
 import WorkspaceBar from '@components/ui/workspacesBar/WorkspaceBar';
 import Link from 'next/link';
 import AddServerModal from '@components/ui/AddServer';
+import { useAppSelector } from 'framework/redux/store';
 
 const navigation = [
   { name: 'Team', href: '#', icon: UsersIcon, current: false },
@@ -34,11 +34,7 @@ const navigation = [
     current: false,
   },
 ];
-const teams = [
-  { id: 1, name: 'Radu Cazacu', href: '#', initial: 'R', current: false },
-  { id: 2, name: 'Thomas Braun', href: '#', initial: 'T', current: false },
-  { id: 3, name: 'Jiahang Li', href: '#', initial: 'J', current: false },
-];
+
 const userNavigation = [
   { name: 'Your profile', href: '#' },
   { name: 'Sign out', href: '#' },
@@ -50,10 +46,13 @@ type Props = {
 export const Layout = ({ children }: Props) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [addServerOpen, setAddServerOpen] = useState(false);
+  const currentUsedSessionCid: string = useAppSelector(
+    (state) => state.context.sessions.current_used_session_server
+  );
 
-  const [peers, setPeers] = useState<
-    Array<{ id: string; name: string; initial: string; current: boolean }>
-  >([]);
+  const current_sessions = useAppSelector(
+    (state) => state.context.sessions.current_sessions
+  );
 
   return (
     <ApiProvider>
@@ -115,13 +114,16 @@ export const Layout = ({ children }: Props) => {
                     <WorkspaceBar onOpen={setAddServerOpen} />
 
                     <div className="flex grow w-72 flex-col gap-y-5 overflow-y-auto bg-gray-900 px-6 pb-4 ring-1 ring-white/10">
-                      <div className="flex h-16 shrink-0 items-center">
+                      <Link
+                        href={'/'}
+                        className="flex h-16 shrink-0 items-center"
+                      >
                         <img
                           className="h-8 w-auto"
                           src="https://github.com/Avarok-Cybersecurity/Citadel-Protocol/raw/master/resources/logo.png"
                           alt="Citadel Workspace"
                         />
-                      </div>
+                      </Link>
                       <nav className="flex flex-1 flex-col">
                         <ul
                           role="list"
@@ -157,12 +159,12 @@ export const Layout = ({ children }: Props) => {
                               Your Peers
                             </div>
                             <ul role="list" className="-mx-2 mt-2 space-y-1">
-                              {teams.map((team) => (
-                                <li key={team.name}>
+                              {Object.keys(current_sessions).map((key) => (
+                                <li key={key}>
                                   <a
-                                    href={team.href}
+                                    href={`/server/${currentUsedSessionCid}/${current_sessions[key]}`}
                                     className={classNames(
-                                      team.current
+                                      key
                                         ? 'bg-gray-800 text-white'
                                         : 'text-gray-400 hover:text-white hover:bg-gray-800',
                                       'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
@@ -176,9 +178,7 @@ export const Layout = ({ children }: Props) => {
                                       />
                                       <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
                                     </span>
-                                    <span className="truncate">
-                                      {team.name}
-                                    </span>
+                                    <span className="truncate">{key}</span>
                                   </a>
                                 </li>
                               ))}
@@ -255,13 +255,13 @@ export const Layout = ({ children }: Props) => {
           <WorkspaceBar onOpen={setAddServerOpen} />
           {/* Sidebar component, swap this element with another sidebar if you like */}
           <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-gray-900 px-6 pb-4">
-            <div className="flex h-16 shrink-0 items-center">
+            <Link href={'/'} className="flex h-16 shrink-0 items-center">
               <img
                 className="h-8 mt-5 w-auto"
                 src="https://github.com/Avarok-Cybersecurity/Citadel-Protocol/raw/master/resources/logo.png"
                 alt="Citadel Workspace"
               />
-            </div>
+            </Link>
             <nav className="flex flex-1 flex-col">
               <ul role="list" className="flex flex-1 flex-col gap-y-7">
                 <li>
@@ -292,22 +292,22 @@ export const Layout = ({ children }: Props) => {
                     Your Peers
                   </div>
                   <ul role="list" className="-mx-2 mt-2 space-y-1">
-                    {teams.map((team) => (
-                      <li key={team.name}>
-                        <a
-                          href={team.href}
+                    {Object.keys(current_sessions).map((key) => (
+                      <li key={key}>
+                        <Link
+                          href={`/server/${currentUsedSessionCid}/${current_sessions[key]}`}
                           className={classNames(
-                            team.current
+                            key
                               ? 'bg-gray-800 text-white'
                               : 'text-gray-400 hover:text-white hover:bg-gray-800',
                             'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
                           )}
                         >
                           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-gray-700 bg-gray-800 text-[0.625rem] font-medium text-gray-400 group-hover:text-white">
-                            {team.initial}
+                            {key[0]}
                           </span>
-                          <span className="truncate">{team.name}</span>
-                        </a>
+                          <span className="truncate">{key}</span>
+                        </Link>
                       </li>
                     ))}
                   </ul>

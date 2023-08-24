@@ -1,13 +1,31 @@
-import { RootState, useAppSelector } from 'framework/redux/store';
+import {
+  RootState,
+  useAppDispatch,
+  useAppSelector,
+} from 'framework/redux/store';
 import Link from 'next/link';
-import React, { Dispatch, SetStateAction } from 'react';
-
+import React, { Dispatch, SetStateAction, useEffect, useState } from 'react';
+import { setCurrentServer } from 'framework/redux/slices/streamHandler.slice';
 function WorkspaceBar({
   onOpen,
 }: {
   onOpen: Dispatch<SetStateAction<boolean>>;
 }) {
-  const sessions = useAppSelector((state: RootState) => state.context.sessions);
+  const sessions = useAppSelector(
+    (state: RootState) => state.context.sessions.current_sessions
+  );
+
+  const dispatch = useAppDispatch();
+  const [sessionsArr, setSessions] = useState<Array<any>>([]);
+
+  useEffect(() => {
+    for (const session in sessions) {
+      setSessions((prev) => {
+        if (prev.includes(session)) return prev; // if session already exists, don't add it
+        return [...prev, session];
+      });
+    }
+  }, [sessions]);
 
   return (
     <div
@@ -21,14 +39,15 @@ function WorkspaceBar({
         >
           <span className="text-xl font-medium leading-none text-white">+</span>
         </span>
-        {sessions.map((el, i) => {
-          console.log(el);
+        {Object.keys(sessions).map((key, i) => {
+          const el = sessions[key];
           return (
             <Link
               key={el.cid}
               href={{
-                pathname: `/server/${el.cid}`,
+                pathname: `/server/${el}`,
               }}
+              onClick={() => dispatch(setCurrentServer(el))}
             >
               <img
                 key={i}

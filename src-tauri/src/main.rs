@@ -23,7 +23,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use structs::ConnectionState;
 use tauri::{Manager, State};
-use tauri_specta::ts;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use uuid::Uuid;
@@ -42,12 +41,10 @@ fn send_response(
 }
 
 #[tauri::command]
-#[specta::specta]
 async fn open_tcp_conn(
     conn_state: State<'_, ConnectionState>,
     window: tauri::Window,
     addr: String,
-    db: DbState<'_>,
 ) -> Result<Uuid, String> {
     let connection = TcpStream::connect(addr);
 

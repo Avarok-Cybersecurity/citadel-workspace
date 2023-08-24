@@ -53,9 +53,7 @@ function CustomApp({
         const key = Object.keys(data).at(0)!;
         const payload = data[key];
 
-        console.log('Stream_packet', payload);
         const req_id = payload.request_id;
-        console.log('ReqID stream', req_id);
         handlePacket(req_id, payload);
       }
     );
@@ -66,19 +64,14 @@ function CustomApp({
   }, []);
 
   const handlePacket = (req_id: string, payload: { [key: string]: any }) => {
-    console.log('ReqID', req_id);
-    console.log('Payload', payload);
     const { context: map } = store.getState();
-    console.log('Map', map);
     const context = map.context[req_id];
-    console.log('Context', context);
 
     if (context) {
       switch (context) {
         case 'GetSession':
           const activeSessions = payload.sessions as Array<number | string>;
           store.dispatch(setSessions(activeSessions));
-          console.log('Active sessions', activeSessions);
           break;
         case 'Register':
           const x = 1;
