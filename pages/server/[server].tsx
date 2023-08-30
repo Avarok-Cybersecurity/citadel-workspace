@@ -1,15 +1,16 @@
 import { Layout } from '@components/common/Layout';
-import React, { useEffect } from 'react';
+import React from 'react';
 import Chat from '@components/chat';
 import { useRouter } from 'next/router';
 import { useAppSelector } from 'framework/redux/store';
 
 export default function SpecificServer({ connErr }: { connErr: string }) {
   const router = useRouter();
+  const serverCid = router.query.server;
 
-  const current_used_session_server = useAppSelector(
-    (state) => state.context.sessions.current_used_session_server
-  );
+  // const current_used_session_server = useAppSelector(
+  //   (state) => state.context.sessions.current_used_session_server
+  // );
 
   return (
     <>

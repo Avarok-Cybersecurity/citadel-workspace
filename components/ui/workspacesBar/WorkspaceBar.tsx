@@ -6,6 +6,7 @@ import {
 import Link from 'next/link';
 import React, { Dispatch, SetStateAction, useEffect, useState } from 'react';
 import { setCurrentServer } from 'framework/redux/slices/streamHandler.slice';
+
 function WorkspaceBar({
   onOpen,
 }: {
@@ -16,16 +17,6 @@ function WorkspaceBar({
   );
 
   const dispatch = useAppDispatch();
-  const [sessionsArr, setSessions] = useState<Array<any>>([]);
-
-  useEffect(() => {
-    for (const session in sessions) {
-      setSessions((prev) => {
-        if (prev.includes(session)) return prev; // if session already exists, don't add it
-        return [...prev, session];
-      });
-    }
-  }, [sessions]);
 
   return (
     <div
@@ -40,14 +31,15 @@ function WorkspaceBar({
           <span className="text-xl font-medium leading-none text-white">+</span>
         </span>
         {Object.keys(sessions).map((key, i) => {
-          const el = sessions[key];
           return (
             <Link
-              key={el.cid}
+              key={key}
               href={{
-                pathname: `/server/${el}`,
+                pathname: `/server/${key}`,
               }}
-              onClick={() => dispatch(setCurrentServer(el))}
+              onClick={() => {
+                dispatch(setCurrentServer(key));
+              }}
             >
               <img
                 key={i}

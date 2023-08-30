@@ -53,6 +53,13 @@ export const Layout = ({ children }: Props) => {
   const current_sessions = useAppSelector(
     (state) => state.context.sessions.current_sessions
   );
+  const current_server_cid = useAppSelector(
+    (state) => state.context.sessions.current_used_session_server
+  );
+
+  console.log(current_sessions);
+
+  const peers = Object.keys(current_sessions[current_server_cid] ?? {}).length;
 
   return (
     <ApiProvider>
@@ -159,29 +166,33 @@ export const Layout = ({ children }: Props) => {
                               Your Peers
                             </div>
                             <ul role="list" className="-mx-2 mt-2 space-y-1">
-                              {Object.keys(current_sessions).map((key) => (
-                                <li key={key}>
-                                  <a
-                                    href={`/server/${currentUsedSessionCid}/${current_sessions[key]}`}
-                                    className={classNames(
-                                      key
-                                        ? 'bg-gray-800 text-white'
-                                        : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                                      'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
-                                    )}
-                                  >
-                                    <span className="relative inline-block">
-                                      <img
-                                        className="h-6 w-6 rounded-full"
-                                        src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-                                        alt=""
-                                      />
-                                      <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
-                                    </span>
-                                    <span className="truncate">{key}</span>
-                                  </a>
-                                </li>
-                              ))}
+                              {peers === 0 ? (
+                                <></>
+                              ) : (
+                                Object.keys(current_sessions).map((key) => (
+                                  <li key={key}>
+                                    <a
+                                      href={`/server/${currentUsedSessionCid}/${current_sessions[key]}`}
+                                      className={classNames(
+                                        key
+                                          ? 'bg-gray-800 text-white'
+                                          : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                                        'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                                      )}
+                                    >
+                                      <span className="relative inline-block">
+                                        <img
+                                          className="h-6 w-6 rounded-full"
+                                          src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
+                                          alt=""
+                                        />
+                                        <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
+                                      </span>
+                                      <span className="truncate">{key}</span>
+                                    </a>
+                                  </li>
+                                ))
+                              )}
                             </ul>
                           </li>
                           <li>
@@ -292,24 +303,33 @@ export const Layout = ({ children }: Props) => {
                     Your Peers
                   </div>
                   <ul role="list" className="-mx-2 mt-2 space-y-1">
-                    {Object.keys(current_sessions).map((key) => (
-                      <li key={key}>
-                        <Link
-                          href={`/server/${currentUsedSessionCid}/${current_sessions[key]}`}
-                          className={classNames(
-                            key
-                              ? 'bg-gray-800 text-white'
-                              : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                            'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
-                          )}
-                        >
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-gray-700 bg-gray-800 text-[0.625rem] font-medium text-gray-400 group-hover:text-white">
-                            {key[0]}
-                          </span>
-                          <span className="truncate">{key}</span>
-                        </Link>
-                      </li>
-                    ))}
+                    {peers === 0 ? (
+                      <></>
+                    ) : (
+                      Object.keys(current_sessions).map((key) => (
+                        <li key={key}>
+                          <a
+                            href={`/server/${currentUsedSessionCid}/${current_sessions[key]}`}
+                            className={classNames(
+                              key
+                                ? 'bg-gray-800 text-white'
+                                : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                              'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                            )}
+                          >
+                            <span className="relative inline-block">
+                              <img
+                                className="h-6 w-6 rounded-full"
+                                src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
+                                alt=""
+                              />
+                              <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
+                            </span>
+                            <span className="truncate">{key}</span>
+                          </a>
+                        </li>
+                      ))
+                    )}
                   </ul>
                 </li>
                 {/* {sec type} */}

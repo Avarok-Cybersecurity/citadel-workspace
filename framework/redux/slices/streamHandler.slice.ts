@@ -60,6 +60,7 @@ const streamExecSlice = createSlice({
         peer_connections: {};
       }> = action.payload;
 
+      console.log('Before', activeSessions);
       for (const session of activeSessions) {
         const cid = session.cid;
         const peer_connections = session.peer_connections;
