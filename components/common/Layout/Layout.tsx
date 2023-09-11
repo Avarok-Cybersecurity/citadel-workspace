@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { ApiProvider } from '@framework/index';
 import { Fragment, useState } from 'react';
 import { Dialog, Menu, Transition } from '@headlessui/react';
@@ -6,10 +6,8 @@ import { Button, Tooltip } from 'flowbite-react';
 import {
   Bars3Icon,
   BellIcon,
-  CalendarIcon,
   Cog6ToothIcon,
   DocumentDuplicateIcon,
-  FolderIcon,
   UsersIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
@@ -23,18 +21,6 @@ import Link from 'next/link';
 import AddServerModal from '@components/ui/AddServer';
 import { useAppSelector } from 'framework/redux/store';
 
-const navigation = [
-  { name: 'Team', href: '#', icon: UsersIcon, current: false },
-  { name: 'Projects', href: '#', icon: FolderIcon, current: false },
-  { name: 'Calendar', href: '#', icon: CalendarIcon, current: false },
-  {
-    name: 'Storage',
-    href: '/storage',
-    icon: DocumentDuplicateIcon,
-    current: false,
-  },
-];
-
 const userNavigation = [
   { name: 'Your profile', href: '#' },
   { name: 'Sign out', href: '#' },
@@ -43,23 +29,36 @@ const userNavigation = [
 type Props = {
   children: React.ReactNode | React.ReactNode[];
 };
+// const navigation = ;
 export const Layout = ({ children }: Props) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [addServerOpen, setAddServerOpen] = useState(false);
   const currentUsedSessionCid: string = useAppSelector(
     (state) => state.context.sessions.current_used_session_server
   );
+  console.log('Cid', currentUsedSessionCid);
+  const [navigation, setNavigation] = useState([
+    {
+      name: 'Discussions',
+      href: `/server/discussions/${currentUsedSessionCid}`,
+      icon: UsersIcon,
+      current: false,
+    },
+    {
+      name: 'Storage',
+      href: '/storage',
+      icon: DocumentDuplicateIcon,
+      current: false,
+    },
+  ]);
 
   const current_sessions = useAppSelector(
     (state) => state.context.sessions.current_sessions
   );
-  const current_server_cid = useAppSelector(
-    (state) => state.context.sessions.current_used_session_server
-  );
 
-  console.log(current_sessions);
-
-  const peers = Object.keys(current_sessions[current_server_cid] ?? {}).length;
+  const peers = Object.keys(
+    current_sessions[currentUsedSessionCid] ?? {}
+  ).length;
 
   return (
     <ApiProvider>
@@ -141,10 +140,19 @@ export const Layout = ({ children }: Props) => {
                               {navigation.map((item) => (
                                 <li key={item.name}>
                                   <Link
-                                    onClick={() => setSidebarOpen(false)}
+                                    onClick={() => {
+                                      navigation.forEach((e) => {
+                                        if (e.current === true)
+                                          e.current = false;
+                                        if (e.name === item.name) {
+                                          e.current = true;
+                                        }
+                                      });
+                                      setSidebarOpen(false);
+                                    }}
                                     href={item.href}
                                     className={classNames(
-                                      item.current
+                                      item.current === true
                                         ? 'bg-gray-800 text-white'
                                         : 'text-gray-400 hover:text-white hover:bg-gray-800',
                                       'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
@@ -171,7 +179,7 @@ export const Layout = ({ children }: Props) => {
                               ) : (
                                 Object.keys(current_sessions).map((key) => (
                                   <li key={key}>
-                                    <a
+                                    <Link
                                       href={`/server/${currentUsedSessionCid}/${current_sessions[key]}`}
                                       className={classNames(
                                         key
@@ -189,7 +197,7 @@ export const Layout = ({ children }: Props) => {
                                         <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
                                       </span>
                                       <span className="truncate">{key}</span>
-                                    </a>
+                                    </Link>
                                   </li>
                                 ))
                               )}
@@ -280,6 +288,15 @@ export const Layout = ({ children }: Props) => {
                     {navigation.map((item) => (
                       <li key={item.name}>
                         <Link
+                          onClick={() => {
+                            navigation.forEach((e) => {
+                              if (e.current === true) e.current = false;
+                              if (e.name === item.name) {
+                                e.current = true;
+                              }
+                              setSidebarOpen(false);
+                            });
+                          }}
                           href={item.href}
                           className={classNames(
                             item.current
@@ -308,7 +325,7 @@ export const Layout = ({ children }: Props) => {
                     ) : (
                       Object.keys(current_sessions).map((key) => (
                         <li key={key}>
-                          <a
+                          <Link
                             href={`/server/${currentUsedSessionCid}/${current_sessions[key]}`}
                             className={classNames(
                               key
@@ -326,7 +343,7 @@ export const Layout = ({ children }: Props) => {
                               <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
                             </span>
                             <span className="truncate">{key}</span>
-                          </a>
+                          </Link>
                         </li>
                       ))
                     )}
@@ -474,7 +491,7 @@ export const Layout = ({ children }: Props) => {
                       {userNavigation.map((item) => (
                         <Menu.Item key={item.name}>
                           {({ active }) => (
-                            <a
+                            <Link
                               href={item.href}
                               className={classNames(
                                 active ? 'bg-gray-50' : '',
@@ -482,7 +499,7 @@ export const Layout = ({ children }: Props) => {
                               )}
                             >
                               {item.name}
-                            </a>
+                            </Link>
                           )}
                         </Menu.Item>
                       ))}

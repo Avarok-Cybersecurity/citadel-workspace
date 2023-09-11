@@ -1,20 +1,13 @@
 import { Layout } from '@components/common/Layout';
 import React from 'react';
-import Chat from '@components/chat';
 import { useRegister_c2s } from '@framework/c2s';
-import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from 'framework/redux/store';
+import { useAppSelector } from 'framework/redux/store';
 import genUuid from '@lib/utils';
-import {
-  ContextType,
-  addToContext,
-} from 'framework/redux/slices/streamHandler.slice';
 
 export default function Home({ connErr }: { connErr: string }) {
   const registerC2s = useRegister_c2s();
 
-  const dispatch = useDispatch();
-  const { uuid } = useSelector((state: RootState) => {
+  const { uuid } = useAppSelector((state) => {
     return state.uuid;
   });
 
@@ -40,9 +33,7 @@ export default function Home({ connErr }: { connErr: string }) {
           Register
         </button>
 
-        <main className="pt-10 h-full w-full flex flex-col justify-between">
-          <Chat />
-        </main>
+        <main className="pt-10 h-full w-full flex flex-col justify-between"></main>
       </div>
     </>
   );

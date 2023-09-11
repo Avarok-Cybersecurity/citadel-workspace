@@ -7,6 +7,7 @@ import { useAppSelector } from 'framework/redux/store';
 export default function SpecificServer({ connErr }: { connErr: string }) {
   const router = useRouter();
   const serverCid = router.query.server;
+  // console.log(router.asPath);
 
   // const current_used_session_server = useAppSelector(
   //   (state) => state.context.sessions.current_used_session_server
