@@ -39,6 +39,7 @@ function WorkspaceBar({
           console.log(key);
           return (
             <div
+              key={key}
               className={clsx(
                 currentSessionInUse === key && 'bg-slate-300',
                 'rounded'
@@ -47,7 +48,7 @@ function WorkspaceBar({
               <Link
                 key={key}
                 href={{
-                  pathname: `/server/discussions/${key}`,
+                  pathname: `/server/${key}`,
                 }}
                 onClick={() => {
                   dispatch(setCurrentServer(key));
