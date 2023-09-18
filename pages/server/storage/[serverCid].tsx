@@ -1,10 +1,9 @@
 import { Layout } from '@components/common/Layout';
+import { useAppSelector } from 'framework/redux/store';
 import React from 'react';
-import { useSelector } from 'react-redux';
-import { State } from 'framework/redux/store';
 
 export default function Storage() {
-  const { uuid } = useSelector((state: State) => state.uuid);
+  const { uuid } = useAppSelector((state) => state.uuid);
   // const upload = (e: any) => {
   //   const arr: string[] = [];
   //   Array.from(e.target.files).forEach((file: any) => {
