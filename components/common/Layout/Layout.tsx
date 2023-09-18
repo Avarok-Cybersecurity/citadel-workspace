@@ -6,12 +6,8 @@ import { Button, Tooltip } from 'flowbite-react';
 import {
   Bars3Icon,
   BellIcon,
-  CalendarIcon,
-  ChartPieIcon,
   Cog6ToothIcon,
   DocumentDuplicateIcon,
-  FolderIcon,
-  HomeIcon,
   UsersIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
@@ -23,26 +19,8 @@ import classNames from 'classnames';
 import WorkspaceBar from '@components/ui/workspacesBar/WorkspaceBar';
 import Link from 'next/link';
 import AddServerModal from '@components/ui/AddServer';
-import { useSelector } from 'react-redux';
-
-const navigation = [
-  { name: 'Dashboard', href: '/', icon: HomeIcon, current: true },
-  { name: 'Team', href: '#', icon: UsersIcon, current: false },
-  { name: 'Projects', href: '#', icon: FolderIcon, current: false },
-  { name: 'Calendar', href: '#', icon: CalendarIcon, current: false },
-  {
-    name: 'Storage',
-    href: '/storage',
-    icon: DocumentDuplicateIcon,
-    current: false,
-  },
-  { name: 'Security', href: '#', icon: ChartPieIcon, current: false },
-];
-const teams = [
-  { id: 1, name: 'Radu Cazacu', href: '#', initial: 'R', current: false },
-  { id: 2, name: 'Thomas Braun', href: '#', initial: 'T', current: false },
-  { id: 3, name: 'Jiahang Li', href: '#', initial: 'J', current: false },
-];
+import { useAppSelector } from 'framework/redux/store';
+import { usePathname } from 'next/navigation';
 const userNavigation = [
   { name: 'Your profile', href: '#' },
   { name: 'Sign out', href: '#' },
@@ -51,9 +29,37 @@ const userNavigation = [
 type Props = {
   children: React.ReactNode | React.ReactNode[];
 };
+// const navigation = ;
 export const Layout = ({ children }: Props) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [addServerOpen, setAddServerOpen] = useState(false);
+  const currentUsedSessionCid: string = useAppSelector(
+    (state) => state.context.sessions.current_used_session_server
+  );
+  const pathname = usePathname();
+  console.log(pathname);
+  const [navigation, _] = useState([
+    {
+      name: 'Find Peers',
+      href: `/server/findPeers/`,
+      icon: UsersIcon,
+      current: false,
+    },
+    // {
+    //   name: 'Storage',
+    //   href: '/server/storage/',
+    //   icon: DocumentDuplicateIcon,
+    //   current: false,
+    // },
+  ]);
+
+  const current_sessions = useAppSelector(
+    (state) => state.context.sessions.current_sessions
+  );
+
+  const peers = Object.keys(
+    current_sessions[currentUsedSessionCid] ?? {}
+  ).length;
 
   return (
     <ApiProvider>
@@ -112,79 +118,92 @@ export const Layout = ({ children }: Props) => {
                   </Transition.Child>
                   {/* Sidebar component, swap this element with another sidebar if you like */}
                   <div className="flex">
-                    <WorkspaceBar
-                      onOpen={setAddServerOpen}
-                      // arrayOfItems={[1, 2, 3]}
-                    />
+                    <WorkspaceBar onOpen={setAddServerOpen} />
 
                     <div className="flex grow w-72 flex-col gap-y-5 overflow-y-auto bg-gray-900 px-6 pb-4 ring-1 ring-white/10">
-                      <div className="flex h-16 shrink-0 items-center">
+                      <Link
+                        href={'/'}
+                        className="flex h-16 shrink-0 items-center"
+                      >
                         <img
                           className="h-8 w-auto"
                           src="https://github.com/Avarok-Cybersecurity/Citadel-Protocol/raw/master/resources/logo.png"
                           alt="Citadel Workspace"
                         />
-                      </div>
+                      </Link>
                       <nav className="flex flex-1 flex-col">
                         <ul
                           role="list"
                           className="flex flex-1 flex-col gap-y-7"
                         >
-                          <li>
-                            <ul role="list" className="-mx-2 space-y-1">
-                              {navigation.map((item) => (
-                                <li key={item.name}>
-                                  <Link
-                                    onClick={() => setSidebarOpen(false)}
-                                    href={item.href}
-                                    className={classNames(
-                                      item.current
-                                        ? 'bg-gray-800 text-white'
-                                        : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                                      'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
-                                    )}
-                                  >
-                                    <item.icon
-                                      className="h-6 w-6 shrink-0"
-                                      aria-hidden="true"
-                                    />
-                                    {item.name}
-                                  </Link>
-                                </li>
-                              ))}
-                            </ul>
-                          </li>
+                          {pathname !== '/' && (
+                            <li>
+                              <ul role="list" className="-mx-2 space-y-1">
+                                {navigation.map((item) => (
+                                  <li key={item.name}>
+                                    <Link
+                                      onClick={() => {
+                                        navigation.forEach((e) => {
+                                          if (e.current === true)
+                                            e.current = false;
+                                          if (e.name === item.name) {
+                                            e.current = true;
+                                          }
+                                        });
+                                        setSidebarOpen(false);
+                                      }}
+                                      href={item.href + currentUsedSessionCid}
+                                      className={classNames(
+                                        item.current === true
+                                          ? 'bg-gray-800 text-white'
+                                          : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                                        'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                                      )}
+                                    >
+                                      <item.icon
+                                        className="h-6 w-6 shrink-0"
+                                        aria-hidden="true"
+                                      />
+                                      {item.name}
+                                    </Link>
+                                  </li>
+                                ))}
+                              </ul>
+                            </li>
+                          )}
 
                           <li>
                             <div className="text-xs font-semibold leading-6 text-gray-400">
                               Your Peers
                             </div>
                             <ul role="list" className="-mx-2 mt-2 space-y-1">
-                              {teams.map((team) => (
-                                <li key={team.name}>
-                                  <a
-                                    href={team.href}
-                                    className={classNames(
-                                      team.current
-                                        ? 'bg-gray-800 text-white'
-                                        : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                                      'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
-                                    )}
-                                  >
-                                    <span className="relative inline-block">
-                                      <img
-                                        className="h-6 w-6 rounded-full"
-                                        src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-                                        alt=""
-                                      />
-                                      <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
-                                    </span>
-                                    <span className="truncate">
-                                      {team.name}
-                                    </span>
-                                  </a>
-                                </li>
-                              ))}
+                              {peers === 0 ? (
+                                <></>
+                              ) : (
+                                Object.keys(current_sessions).map((key) => (
+                                  <li key={key}>
+                                    <Link
+                                      href={`/server/${currentUsedSessionCid}/${current_sessions[key]}`}
+                                      className={classNames(
+                                        key
+                                          ? 'bg-gray-800 text-white'
+                                          : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                                        'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                                      )}
+                                    >
+                                      <span className="relative inline-block">
+                                        <img
+                                          className="h-6 w-6 rounded-full"
+                                          src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
+                                          alt=""
+                                        />
+                                        <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
+                                      </span>
+                                      <span className="truncate">{key}</span>
+                                    </Link>
+                                  </li>
+                                ))
+                              )}
                             </ul>
                           </li>
                           <li>
@@ -258,61 +277,81 @@ export const Layout = ({ children }: Props) => {
           <WorkspaceBar onOpen={setAddServerOpen} />
           {/* Sidebar component, swap this element with another sidebar if you like */}
           <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-gray-900 px-6 pb-4">
-            <div className="flex h-16 shrink-0 items-center">
+            <Link href={'/'} className="flex h-16 shrink-0 items-center">
               <img
                 className="h-8 mt-5 w-auto"
                 src="https://github.com/Avarok-Cybersecurity/Citadel-Protocol/raw/master/resources/logo.png"
                 alt="Citadel Workspace"
               />
-            </div>
+            </Link>
             <nav className="flex flex-1 flex-col">
               <ul role="list" className="flex flex-1 flex-col gap-y-7">
-                <li>
-                  <ul role="list" className="-mx-2 space-y-1">
-                    {navigation.map((item) => (
-                      <li key={item.name}>
-                        <Link
-                          href={item.href}
-                          className={classNames(
-                            item.current
-                              ? 'bg-gray-800 text-white'
-                              : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                            'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
-                          )}
-                        >
-                          <item.icon
-                            className="h-6 w-6 shrink-0"
-                            aria-hidden="true"
-                          />
-                          {item.name}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
+                {pathname !== '/' && (
+                  <li>
+                    <ul role="list" className="-mx-2 space-y-1">
+                      {navigation.map((item) => (
+                        <li key={item.name}>
+                          <Link
+                            onClick={() => {
+                              navigation.forEach((e) => {
+                                if (e.current === true) e.current = false;
+                                if (e.name === item.name) {
+                                  e.current = true;
+                                }
+                                setSidebarOpen(false);
+                              });
+                            }}
+                            href={item.href + currentUsedSessionCid}
+                            className={classNames(
+                              item.current
+                                ? 'bg-gray-800 text-white'
+                                : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                              'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                            )}
+                          >
+                            <item.icon
+                              className="h-6 w-6 shrink-0"
+                              aria-hidden="true"
+                            />
+                            {item.name}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                )}
                 <li>
                   <div className="text-xs font-semibold leading-6 text-gray-400">
                     Your Peers
                   </div>
                   <ul role="list" className="-mx-2 mt-2 space-y-1">
-                    {teams.map((team) => (
-                      <li key={team.name}>
-                        <a
-                          href={team.href}
-                          className={classNames(
-                            team.current
-                              ? 'bg-gray-800 text-white'
-                              : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                            'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
-                          )}
-                        >
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-gray-700 bg-gray-800 text-[0.625rem] font-medium text-gray-400 group-hover:text-white">
-                            {team.initial}
-                          </span>
-                          <span className="truncate">{team.name}</span>
-                        </a>
-                      </li>
-                    ))}
+                    {peers === 0 ? (
+                      <></>
+                    ) : (
+                      Object.keys(current_sessions).map((key) => (
+                        <li key={key}>
+                          <Link
+                            href={`/server/${currentUsedSessionCid}/${current_sessions[key]}`}
+                            className={classNames(
+                              key
+                                ? 'bg-gray-800 text-white'
+                                : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                              'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                            )}
+                          >
+                            <span className="relative inline-block">
+                              <img
+                                className="h-6 w-6 rounded-full"
+                                src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
+                                alt=""
+                              />
+                              <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
+                            </span>
+                            <span className="truncate">{key}</span>
+                          </Link>
+                        </li>
+                      ))
+                    )}
                   </ul>
                 </li>
                 {/* {sec type} */}
@@ -457,7 +496,7 @@ export const Layout = ({ children }: Props) => {
                       {userNavigation.map((item) => (
                         <Menu.Item key={item.name}>
                           {({ active }) => (
-                            <a
+                            <Link
                               href={item.href}
                               className={classNames(
                                 active ? 'bg-gray-50' : '',
@@ -465,7 +504,7 @@ export const Layout = ({ children }: Props) => {
                               )}
                             >
                               {item.name}
-                            </a>
+                            </Link>
                           )}
                         </Menu.Item>
                       ))}

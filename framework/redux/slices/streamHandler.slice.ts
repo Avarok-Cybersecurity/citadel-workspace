@@ -6,14 +6,26 @@ import { createSlice, current } from '@reduxjs/toolkit';
 
 type Data = ServiceRegisterAccepted | ServiceTCPConnectionAccepted;
 
+type Sessions = {
+  current_used_session_server: string;
+  current_sessions: {
+    [key: string]: { [key: string]: string };
+  };
+};
 export type ContextType = 'Register' | 'GetSession';
 
 const initialState: {
   context: {
     [key: string]: ContextType;
   };
-  sessions: Array<number | string>;
-} = { context: {}, sessions: [] };
+  sessions: Sessions;
+} = {
+  context: {},
+  sessions: {
+    current_used_session_server: '',
+    current_sessions: {},
+  },
+};
 
 const streamExecSlice = createSlice({
   name: 'stram_handler',
@@ -43,20 +55,26 @@ const streamExecSlice = createSlice({
       console.log('After', current(state));
     },
     setSessions: (state, action) => {
-      const activeSessions: Array<any> = action.payload;
+      const activeSessions: Array<{
+        cid: string;
+        peer_connections: {};
+      }> = action.payload;
 
-      const inactiveSession = state.sessions.filter((item) => {
-        return !activeSessions.includes(item);
-      });
+      for (const session of activeSessions) {
+        const cid = session.cid;
+        const peer_connections = session.peer_connections;
+        state.sessions.current_sessions[cid] = peer_connections;
+      }
 
-      state.sessions = activeSessions;
-
-      console.log('inactiveSession', inactiveSession);
       console.log('active sessions', activeSessions);
+      console.log('Current state', current(state));
+    },
+    setCurrentServer: (state, action) => {
+      state.sessions.current_used_session_server = action.payload;
     },
   },
 });
 
 const { reducer, actions } = streamExecSlice;
-export const { addToContext, setSessions } = actions;
+export const { addToContext, setSessions, setCurrentServer } = actions;
 export default reducer;

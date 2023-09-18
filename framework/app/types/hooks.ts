@@ -5,6 +5,7 @@ export interface ApiHooks {
     useRegister: MutationHook;
     useConnect: MutationHook;
     useDisconnect: MutationHook;
+    useGetAccountInfo: MutationHook;
   };
   useMessage: MutationHook;
 }
