@@ -2,7 +2,6 @@
 // use prisma_client_rust::PrismaClient;
 use tauri_plugin_log::LogTarget;
 #[allow(warnings, unused)]
-mod db;
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 mod commands;
 mod helpers;
@@ -16,18 +15,14 @@ use commands::{
     connect::connect, disconnect::disconnect, get_session::get_session, message::message,
     register::register,
 };
-use db::*;
 use futures::StreamExt;
 use std::error::Error;
-use std::sync::Arc;
 use std::time::Duration;
 use structs::ConnectionState;
 use tauri::{Manager, State};
-use tauri_specta::ts;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use uuid::Uuid;
-type DbState<'a> = State<'a, Arc<PrismaClient>>;
 
 fn send_response(
     packet_name: &str,
@@ -46,7 +41,6 @@ async fn open_tcp_conn(
     conn_state: State<'_, ConnectionState>,
     window: tauri::Window,
     addr: String,
-    db: DbState<'_>,
 ) -> Result<Uuid, String> {
     let connection = TcpStream::connect(addr);
 
@@ -91,14 +85,11 @@ async fn open_tcp_conn(
 
 #[tokio::main]
 async fn main() {
-    let db = PrismaClient::_builder().build().await.unwrap();
-
     tauri::Builder::default()
         .manage(ConnectionState {
             sink: Default::default(),
             stream: Default::default(),
         })
-        .manage(Arc::new(db))
         .setup(|app| {
             setup_log();
             #[cfg(debug_assertions)] // only include this code on debug builds

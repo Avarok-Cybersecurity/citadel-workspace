@@ -10,7 +10,8 @@ export type ApiInvokeTypes =
   | 'register'
   | 'connect'
   | 'disconnect'
-  | 'getSession';
+  | 'getSession'
+  | 'getAccInfo';
 export interface ApiConfig {
   invoker: ApiInvoker;
 }
