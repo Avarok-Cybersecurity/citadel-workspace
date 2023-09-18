@@ -12,8 +12,8 @@ use citadel_logging::{error, setup_log};
 use citadel_workspace_lib::wrap_tcp_conn;
 use citadel_workspace_types::InternalServiceResponse;
 use commands::{
-    connect::connect, disconnect::disconnect, get_session::get_session, message::message,
-    register::register,
+    connect::connect, disconnect::disconnect, get_all_peers::get_all_peers,
+    get_session::get_session, message::message, register::register,
 };
 use futures::StreamExt;
 use std::error::Error;
@@ -106,6 +106,7 @@ async fn main() {
             connect,
             disconnect,
             get_session,
+            get_all_peers,
             message
         ])
         .plugin(
