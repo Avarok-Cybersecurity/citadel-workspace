@@ -11,6 +11,7 @@ import store from 'framework/redux/store';
 import { setUuid } from 'framework/redux/slices/uuid.slice';
 import {
   addToContext,
+  setAllPeersOfTheServer,
   setSessions,
 } from 'framework/redux/slices/streamHandler.slice';
 
@@ -53,9 +54,7 @@ function CustomApp({
         const key = Object.keys(data).at(0)!;
         const payload = data[key];
 
-        console.log('Stream_packet', payload);
         const req_id = payload.request_id;
-        console.log('ReqID stream', req_id);
         handlePacket(req_id, payload);
       }
     );
@@ -66,12 +65,9 @@ function CustomApp({
   }, []);
 
   const handlePacket = (req_id: string, payload: { [key: string]: any }) => {
-    console.log('ReqID', req_id);
-    console.log('Payload', payload);
     const { context: map } = store.getState();
-    console.log('Map', map);
     const context = map.context[req_id];
-    console.log('Context', context);
+    console.log('This', context, payload);
 
     if (context) {
       switch (context) {
@@ -80,8 +76,9 @@ function CustomApp({
           store.dispatch(setSessions(activeSessions));
           console.log('Active sessions', activeSessions);
           break;
-        case 'Register':
-          const x = 1;
+        case 'get_all_peers':
+          console.log('Getall peers', payload);
+          store.dispatch(setAllPeersOfTheServer(payload));
         default:
           console.log('default');
           break;

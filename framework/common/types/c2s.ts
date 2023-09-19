@@ -18,6 +18,8 @@ export type ServiceConnectionAccepted = {
   };
 };
 
+export type GetAllPeersSuccess = {};
+
 export type ServiceDisconnect = {
   ServiceDisconnectAccepted: {
     uuid: string;

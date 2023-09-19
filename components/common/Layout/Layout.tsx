@@ -37,7 +37,7 @@ export const Layout = ({ children }: Props) => {
     (state) => state.context.sessions.current_used_session_server
   );
   const pathname = usePathname();
-  console.log(pathname);
+
   const [navigation, _] = useState([
     {
       name: 'Find Peers',

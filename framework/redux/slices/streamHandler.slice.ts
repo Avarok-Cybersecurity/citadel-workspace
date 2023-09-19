@@ -8,19 +8,24 @@ type Data = ServiceRegisterAccepted | ServiceTCPConnectionAccepted;
 
 type Sessions = {
   current_used_session_server: string;
+
   current_sessions: {
     [key: string]: { [key: string]: string };
   };
 };
-export type ContextType = 'Register' | 'GetSession';
+export type ContextType = 'Register' | 'GetSession' | 'get_all_peers';
 
 const initialState: {
   context: {
     [key: string]: ContextType;
   };
+  peers: {
+    [key: string]: Array<any>;
+  };
   sessions: Sessions;
 } = {
   context: {},
+  peers: {},
   sessions: {
     current_used_session_server: '',
     current_sessions: {},
@@ -73,9 +78,17 @@ const streamExecSlice = createSlice({
     setCurrentServer: (state, action) => {
       state.sessions.current_used_session_server = action.payload;
     },
+    setAllPeersOfTheServer: (state, action) => {
+      state.peers[state.sessions.current_used_session_server] = action.payload;
+    },
   },
 });
 
 const { reducer, actions } = streamExecSlice;
-export const { addToContext, setSessions, setCurrentServer } = actions;
+export const {
+  addToContext,
+  setSessions,
+  setCurrentServer,
+  setAllPeersOfTheServer,
+} = actions;
 export default reducer;
