@@ -51,6 +51,7 @@ function CustomApp({
       'packet_stream',
       (event: { payload: string }) => {
         const data = JSON.parse(event.payload);
+        console.log(data);
         const key = Object.keys(data).at(0)!;
         const payload = data[key];
 
@@ -76,7 +77,7 @@ function CustomApp({
           store.dispatch(setSessions(activeSessions));
           console.log('Active sessions', activeSessions);
           break;
-        case 'get_all_peers':
+        case 'getAllPeers':
           console.log('Getall peers', payload);
           store.dispatch(setAllPeersOfTheServer(payload));
         default:
