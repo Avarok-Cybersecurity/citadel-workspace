@@ -1,4 +1,5 @@
 import { Layout } from '@components/common/Layout';
+import AddPeerCard from '@components/ui/addPeerCard';
 import { useGetAllPeers_c2s } from '@framework/c2s';
 import { useAppSelector } from 'framework/redux/store';
 import { useRouter } from 'next/router';
@@ -13,7 +14,6 @@ const FindPeers = () => {
   const { uuid } = useAppSelector((state) => state.uuid);
 
   const getAllPeers = useGetAllPeers_c2s();
-  if (!uuid) router.replace('/');
 
   const peers = useAppSelector((state) => state.context.peers);
 
@@ -24,8 +24,17 @@ const FindPeers = () => {
 
   return (
     <div className="text-4xl text-teal-50 text-center mb-[50%] select-none">
-      <h1>Welcome to the Citadel Server</h1>
-      <h2>Find Peers</h2>
+      <div className="flex gap-x-4 flex-wrap gap-y-4 ml-4 mt-4">
+        <AddPeerCard />
+        <AddPeerCard />
+        <AddPeerCard />
+        <AddPeerCard />
+        <AddPeerCard />
+        <AddPeerCard />
+        <AddPeerCard />
+        <AddPeerCard />
+        <AddPeerCard />
+      </div>
     </div>
   );
 };
