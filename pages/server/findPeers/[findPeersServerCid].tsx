@@ -15,25 +15,21 @@ const FindPeers = () => {
 
   const getAllPeers = useGetAllPeers_c2s();
 
-  const peers = useAppSelector((state) => state.context.peers);
+  const peers_state = useAppSelector(
+    (state) => state.context.peers[currentSessionInUse].online_status
+  );
 
+  console.log('dada', Object.keys(peers_state));
   useEffect(() => {
-    getAllPeers({ uuid, cid: Number(currentSessionInUse) });
-    console.log('Smth', peers);
+    getAllPeers({ uuid, cid: currentSessionInUse });
   }, []);
 
   return (
     <div className="text-4xl text-teal-50 text-center mb-[50%] select-none">
       <div className="flex gap-x-4 flex-wrap gap-y-4 ml-4 mt-4">
-        <AddPeerCard />
-        <AddPeerCard />
-        <AddPeerCard />
-        <AddPeerCard />
-        <AddPeerCard />
-        <AddPeerCard />
-        <AddPeerCard />
-        <AddPeerCard />
-        <AddPeerCard />
+        {Object.keys(peers_state).map((key) => {
+          return <AddPeerCard userId={key} online_status={peers_state[key]} />;
+        })}
       </div>
     </div>
   );

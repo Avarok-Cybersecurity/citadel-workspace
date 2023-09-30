@@ -7,7 +7,7 @@ use uuid::Uuid;
 #[tauri::command]
 pub async fn get_all_peers(
     uuid: String,
-    cid: u64,
+    cid: String,
     state: State<'_, ConnectionState>,
     _window: tauri::Window,
 ) -> Result<String, String> {
@@ -17,7 +17,7 @@ pub async fn get_all_peers(
             let payload = InternalServiceRequest::ListAllPeers {
                 uuid,
                 request_id,
-                cid,
+                cid: cid.parse::<u64>().unwrap(),
             };
             if state
                 .sink

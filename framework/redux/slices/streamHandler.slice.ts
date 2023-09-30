@@ -20,7 +20,7 @@ const initialState: {
     [key: string]: ContextType;
   };
   peers: {
-    [key: string]: Array<any>;
+    [key: string]: { online_status: { [key: string]: boolean }; cid: string };
   };
   sessions: Sessions;
 } = {
@@ -80,6 +80,7 @@ const streamExecSlice = createSlice({
     },
     setAllPeersOfTheServer: (state, action) => {
       state.peers[state.sessions.current_used_session_server] = action.payload;
+      console.log('peers state', current(state.peers));
     },
   },
 });

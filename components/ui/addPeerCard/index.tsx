@@ -1,6 +1,12 @@
 import { EnvelopeIcon, PlusIcon } from '@heroicons/react/20/solid';
 
-export default function Example() {
+export default function AddPeerCard({
+  online_status,
+  userId,
+}: {
+  userId: string;
+  online_status: boolean;
+}) {
   return (
     <div className="bg-gray-600 px-4 py-5 sm:px-6 text-white rounded-md">
       <div className="-ml-4 -mt-4 flex-wrap items-center justify-center sm:flex-nowrap ">

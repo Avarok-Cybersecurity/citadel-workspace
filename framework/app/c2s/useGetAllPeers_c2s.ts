@@ -10,7 +10,7 @@ export default useGetAllPeers_c2s as UseGetAllPeers<typeof handler>;
 export type GetAllPeersHookDescriptor = {
   invokerInput: {
     uuid: string;
-    cid: number;
+    cid: string;
   };
   dataReturn: unknown;
 };

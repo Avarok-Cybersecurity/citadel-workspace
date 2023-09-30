@@ -24,15 +24,35 @@ use tokio::net::TcpStream;
 use tokio::time::timeout;
 use uuid::Uuid;
 
+pub fn convert_all_ints_to_strings(json: &str) -> Result<String, serde_json::Error> {
+    use serde_json::Value;
+
+    fn convert_recursively(json: &mut Value) {
+        match json {
+            Value::Number(n) if n.is_u64() || n.is_i64() => {
+                *json = Value::String(n.to_string());
+            }
+            Value::Array(a) => a.iter_mut().for_each(convert_recursively),
+            Value::Object(o) => o.values_mut().for_each(convert_recursively),
+            _ => (),
+        }
+    }
+
+    serde_json::from_str(json).map(|mut v: Value| {
+        convert_recursively(&mut v);
+        v.to_string()
+    })
+}
+
 fn send_response(
     packet_name: &str,
     packet: BytesMut,
     window: &tauri::Window,
 ) -> Result<(), Box<dyn Error>> {
-    let _ = window.emit_all(
-        packet_name,
-        serde_json::to_string(&bincode2::deserialize::<InternalServiceResponse>(&packet)?)?,
-    );
+    let payload =
+        serde_json::to_string(&bincode2::deserialize::<InternalServiceResponse>(&packet)?)?;
+    let valid_payload = convert_all_ints_to_strings(&payload)?;
+    let _ = window.emit_all(packet_name, valid_payload);
     Ok(())
 }
 
