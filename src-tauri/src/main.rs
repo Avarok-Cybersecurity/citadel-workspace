@@ -10,7 +10,7 @@ mod structs;
 use bytes::BytesMut;
 use citadel_logging::{error, setup_log};
 use citadel_workspace_lib::wrap_tcp_conn;
-use citadel_workspace_types::InternalServiceResponse;
+use citadel_workspace_types::{InternalServiceResponse, ServiceConnectionAccepted};
 use commands::{
     connect::connect, disconnect::disconnect, get_all_peers::get_all_peers,
     get_session::get_session, message::message, register::register,
@@ -22,7 +22,6 @@ use structs::ConnectionState;
 use tauri::{Manager, State};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
-use uuid::Uuid;
 
 pub fn convert_all_ints_to_strings(json: &str) -> Result<String, serde_json::Error> {
     use serde_json::Value;
@@ -61,7 +60,7 @@ async fn open_tcp_conn(
     conn_state: State<'_, ConnectionState>,
     window: tauri::Window,
     addr: String,
-) -> Result<Uuid, String> {
+) -> Result<ServiceConnectionAccepted, String> {
     let connection = TcpStream::connect(addr);
 
     match timeout(Duration::from_millis(3000), connection)
@@ -89,7 +88,7 @@ async fn open_tcp_conn(
                     };
 
                     tauri::async_runtime::spawn(service_to_gui);
-                    Ok(accepted.id)
+                    Ok(accepted)
                 } else {
                     error!("Wrong first packet type: {:?}", packet);
                     Err(format!("Wrong first packet type: {:?}", packet))

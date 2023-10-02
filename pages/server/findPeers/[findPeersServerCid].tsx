@@ -11,25 +11,29 @@ const FindPeers = () => {
   );
 
   const router = useRouter();
-  const { uuid } = useAppSelector((state) => state.uuid);
+
+  useEffect(() => {
+    getAllPeers({ cid: currentSessionInUse });
+  }, []);
 
   const getAllPeers = useGetAllPeers_c2s();
 
   const peers_state = useAppSelector(
     (state) => state.context.peers[currentSessionInUse].online_status
   );
-
-  console.log('dada', Object.keys(peers_state));
-  useEffect(() => {
-    getAllPeers({ uuid, cid: currentSessionInUse });
-  }, []);
-
   return (
     <div className="text-4xl text-teal-50 text-center mb-[50%] select-none">
       <div className="flex gap-x-4 flex-wrap gap-y-4 ml-4 mt-4">
-        {Object.keys(peers_state).map((key) => {
-          return <AddPeerCard userId={key} online_status={peers_state[key]} />;
-        })}
+        {peers_state &&
+          currentSessionInUse &&
+          Object.keys(peers_state).map((key) => {
+            return (
+              <AddPeerCard
+                userId={key}
+                // online_status={peers_state[key] as boolean}
+              />
+            );
+          })}
       </div>
     </div>
   );

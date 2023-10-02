@@ -31,9 +31,7 @@ function CustomApp({
         });
         store.dispatch(setUuid(uuid_value));
 
-        const session_req_id = await invoke('get_session', {
-          uuid: uuid_value,
-        });
+        const session_req_id = await invoke('get_session');
         store.dispatch(
           addToContext({
             req_id: session_req_id,

@@ -26,7 +26,6 @@ export default function Home({ connErr }: { connErr: string }) {
             const username = genUuid();
             console.log('Username', username);
             await registerC2s({
-              uuid: uuid,
               fullName: 'John Doe ',
               serverAddr: '127.0.0.1:12349',
               username,

@@ -9,7 +9,6 @@ export default useRegister_c2s as UseRegister<typeof handler>;
 
 export type RegisterHookDescriptor = {
   invokerInput: {
-    uuid: string;
     fullName: string;
     serverAddr: string;
     username: string;
@@ -41,9 +40,7 @@ export const handler: MutationHook<RegisterHookDescriptor> = {
             context_type: 'Register',
           })
         );
-        const req_id = await invoke('get_session', {
-          uuid: input.uuid,
-        });
+        const req_id = await invoke('get_session', {});
         store.dispatch(
           addToContext({
             req_id,

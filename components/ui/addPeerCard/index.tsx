@@ -5,7 +5,7 @@ export default function AddPeerCard({
   userId,
 }: {
   userId: string;
-  online_status: boolean;
+  online_status?: boolean;
 }) {
   return (
     <div className="bg-gray-600 px-4 py-5 sm:px-6 text-white rounded-md">
