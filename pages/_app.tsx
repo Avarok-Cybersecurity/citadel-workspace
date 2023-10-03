@@ -32,6 +32,7 @@ function CustomApp({
         store.dispatch(setUuid(uuid_value));
 
         const session_req_id = await invoke('get_session');
+
         store.dispatch(
           addToContext({
             req_id: session_req_id,
@@ -49,9 +50,10 @@ function CustomApp({
       'packet_stream',
       (event: { payload: string }) => {
         const data = JSON.parse(event.payload);
-        console.log(data);
         const key = Object.keys(data).at(0)!;
         const payload = data[key];
+
+        console.log('Got a packet payload', payload);
 
         const req_id = payload.request_id;
         handlePacket(req_id, payload);
@@ -66,7 +68,8 @@ function CustomApp({
   const handlePacket = (req_id: string, payload: { [key: string]: any }) => {
     const { context: map } = store.getState();
     const context = map.context[req_id];
-    console.log('This', context, payload);
+
+    console.log('Context payload type', context);
 
     if (context) {
       switch (context) {
