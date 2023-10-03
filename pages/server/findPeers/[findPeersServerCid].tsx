@@ -35,7 +35,7 @@ const FindPeers = () => {
                 <AddPeerCard
                   key={key}
                   userId={key}
-                  // online_status={peers_state[key] as boolean}
+                  online_status={peers_state[key] as boolean}
                 />
               );
             })
