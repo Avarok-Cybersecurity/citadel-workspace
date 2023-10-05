@@ -12,7 +12,8 @@ export type ApiInvokeTypes =
   | 'disconnect'
   | 'getSession'
   | 'getAccInfo'
-  | 'get_all_peers';
+  | 'get_all_peers'
+  | 'peer_register';
 export interface ApiConfig {
   invoker: ApiInvoker;
 }

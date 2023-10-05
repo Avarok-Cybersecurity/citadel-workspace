@@ -81,6 +81,9 @@ function CustomApp({
         case 'getAllPeers':
           console.log('Getall peers', payload);
           store.dispatch(setAllPeersOfTheServer(payload));
+        case 'peerRegister':
+          console.log('Peer register', payload);
+          store.dispatch(setAllPeersOfTheServer(payload));
         default:
           console.log('default');
           break;

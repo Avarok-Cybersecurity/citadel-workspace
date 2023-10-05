@@ -1,4 +1,6 @@
+import { useP2PRegister } from '@framework/p2p';
 import { EnvelopeIcon, PlusIcon } from '@heroicons/react/20/solid';
+import { useAppSelector } from 'framework/redux/store';
 
 export default function AddPeerCard({
   online_status,
@@ -7,6 +9,11 @@ export default function AddPeerCard({
   userId: string;
   online_status?: boolean;
 }) {
+  const currentSessionInUse = useAppSelector(
+    (state) => state.context.sessions.current_used_session_server
+  );
+
+  const registerToPeer = useP2PRegister();
   return (
     <div className="bg-gray-600 px-4 py-5 sm:px-6 text-white rounded-md">
       <div className="-ml-4 -mt-4 flex-wrap items-center justify-center sm:flex-nowrap ">
@@ -32,6 +39,9 @@ export default function AddPeerCard({
         </div>
         <div className="ml-4 mt-4 flex flex-shrink-0">
           <button
+            onClick={() =>
+              registerToPeer({ myCid: currentSessionInUse, peerCid: userId })
+            }
             type="button"
             className="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
           >

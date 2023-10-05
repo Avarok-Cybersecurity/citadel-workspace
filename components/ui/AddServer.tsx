@@ -57,7 +57,6 @@ export default function AddServerModal({
               onSubmit={async (e) => {
                 e.preventDefault();
                 const data = await register({
-                  uuid,
                   fullName,
                   serverAddr: ipAddr,
                   username,

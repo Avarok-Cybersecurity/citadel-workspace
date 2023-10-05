@@ -13,7 +13,11 @@ type Sessions = {
     [key: string]: { [key: string]: string };
   };
 };
-export type ContextType = 'Register' | 'GetSession' | 'getAllPeers';
+export type ContextType =
+  | 'Register'
+  | 'GetSession'
+  | 'getAllPeers'
+  | 'peerRegister';
 
 const initialState: {
   context: {

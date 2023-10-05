@@ -14,15 +14,15 @@ pub async fn peer_connect(
     state: State<'_, ConnectionState>,
 ) -> Result<String, String> {
     let request_id = Uuid::new_v4();
-    let payload = PeerConnect {
-        request_id,
-        cid: my_cid.parse::<u64>().unwrap(),
-        username: my_username,
-        peer_cid: peer_cid.parse().unwrap(),
-        peer_username,
-        udp_mode: Default::default(),
-        session_security_settings: Default::default(),
-    };
+    // let payload = PeerConnect {
+    //     request_id,
+    //     cid: my_cid.parse::<u64>().unwrap(),
+    //     username: my_username,
+    //     peer_cid: peer_cid.parse().unwrap(),
+    //     peer_username:  ,
+    //     udp_mode: Default::default(),
+    //     session_security_settings: Default::default(),
+    // };
 
     if state
         .sink

@@ -13,7 +13,7 @@ use citadel_workspace_lib::wrap_tcp_conn;
 use citadel_workspace_types::{InternalServiceResponse, ServiceConnectionAccepted};
 use commands::{
     connect::connect, disconnect::disconnect, get_all_peers::get_all_peers,
-    get_session::get_session, message::message, register::register,
+    get_session::get_session, message::message, peer_register::peer_register, register::register,
 };
 use futures::StreamExt;
 use std::error::Error;
@@ -125,6 +125,7 @@ async fn main() {
             connect,
             disconnect,
             get_session,
+            peer_register,
             get_all_peers,
             message
         ])

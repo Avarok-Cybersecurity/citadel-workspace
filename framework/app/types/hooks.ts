@@ -8,5 +8,8 @@ export interface ApiHooks {
     useGetAccountInfo: MutationHook;
     useGetAllPeers: MutationHook;
   };
+  p2p: {
+    useRegister: MutationHook;
+  };
   useMessage: MutationHook;
 }
