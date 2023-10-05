@@ -26,10 +26,12 @@ const initialState: {
   peers: {
     [key: string]: { online_status: { [key: string]: boolean }; cid: string };
   };
+  connectedPeers: {};
   sessions: Sessions;
 } = {
   context: {},
   peers: {},
+  connectedPeers: {},
   sessions: {
     current_used_session_server: '',
     current_sessions: {},
@@ -86,6 +88,7 @@ const streamExecSlice = createSlice({
       state.peers[state.sessions.current_used_session_server] = action.payload;
       console.log('peers state', current(state.peers));
     },
+    setConnectedPeers: (state, action) => {},
   },
 });
 
