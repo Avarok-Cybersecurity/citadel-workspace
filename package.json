@@ -42,7 +42,7 @@
     "lucide-react": "^0.248.0",
     "next": "^13.4.1",
     "npm": "^9.7.2",
-    "postcss": "^8.4.23",
+    "postcss": "^8.4.31",
     "prettier": "^2.8.8",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
