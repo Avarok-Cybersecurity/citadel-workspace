@@ -1,0 +1,86 @@
+[config]
+default_to_workspace = false
+skip_core_tasks = true
+
+[tasks.clean]
+command = "cargo"
+args = ["clean"]
+
+[tasks.clippy]
+command = "cargo"
+args = ["clippy"]
+
+[tasks.fmt]
+command = "cargo"
+args = ["fmt", "--all"]
+
+[tasks.git_lfs_fetch]
+command = "git"
+args = ["lfs", "fetch"]
+
+[tasks.git_lfs]
+command = "git"
+args = ["lfs", "pull"]
+dependencies = ["git_lfs_fetch"]
+
+[tasks.pr]
+dependencies = ["fmt", "clippy"]
+
+[tasks.install_gui_deps]
+command = "cargo"
+args = ["install", "create-tauri-app", "tauri-cli"]
+
+[tasks.install-binstall]
+install_crate = { crate_name = "cargo-binstall", binary = "cargo", test_arg = ["binstall", "--help"] }
+
+[tasks.install-nextest]
+command = "cargo"
+args = ["binstall", "cargo-nextest", "--secure", "-y"]
+dependencies = ["install-binstall"]
+
+[tasks.install.mac]
+command = "brew"
+args = ["install", "llvm@13", "openssl", "cmake"]
+
+[tasks.install.windows]
+command = "set"
+args = ["OPENSSL_ROOT_DIR=C:/Program Files/OpenSSL-Win64"]
+dependencies = ["install_deps"]
+
+[tasks.install]
+dependencies = ["install_gui_deps"]
+
+[tasks.install_deps.windows]
+command = "choco"
+args = ["install", "-y", "llvm", "openssl", "cmake"]
+
+[tasks.publish-install-deps]
+install_crate = { crate_name = "cargo-workspaces", binary = "cargo", test_arg = ["workspaces", "--help"] }
+
+[tasks.run]
+command = "cargo"
+args = ["tauri",  "dev"]
+dependencies = ["install_gui_deps"]
+
+[tasks.run-web]
+command = "yarn"
+args = ["dev"]
+dependencies = ["install_gui_deps"]
+
+[tasks.publish-patch]
+command = "cargo"
+condition = { env_set = [ "CARGO_REGISTRY_TOKEN" ] }
+args = ["workspaces", "publish", "--token", "${CARGO_REGISTRY_TOKEN}", "patch", "--from-git", "${@}"]
+dependencies = ["publish-install-deps"]
+
+[tasks.publish-minor]
+command = "cargo"
+condition = { env_set = [ "CARGO_REGISTRY_TOKEN" ] }
+args = ["workspaces", "publish", "--token", "${CARGO_REGISTRY_TOKEN}", "minor", "--from-git", "${@}"]
+dependencies = ["publish-install-deps"]
+
+[tasks.publish-major]
+command = "cargo"
+condition = { env_set = [ "CARGO_REGISTRY_TOKEN" ] }
+args = ["workspaces", "publish", "--token", "${CARGO_REGISTRY_TOKEN}", "major", "--from-git", "${@}"]
+dependencies = ["publish-install-deps"]
