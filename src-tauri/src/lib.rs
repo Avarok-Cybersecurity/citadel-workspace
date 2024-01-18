@@ -17,7 +17,6 @@ use std::time::Duration;
 use tauri::{Manager, State};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
-use uuid::Uuid;
 
 fn send_response(
     packet_name: &str,
