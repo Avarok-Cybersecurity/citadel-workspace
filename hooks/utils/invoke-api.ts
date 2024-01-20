@@ -1,10 +1,28 @@
-import { ApiInvokeTypes, Variables } from '@common/types/api';
 import { invoke } from '@tauri-apps/api/core';
 
-const invokeApi = async (type: ApiInvokeTypes, variables: Variables) => {
+export type ApiInvokeTypes =
+  | 'message'
+  | 'register'
+  | 'connect'
+  | 'disconnect'
+  | 'get_sessions'
+  | 'list_all_peers'
+  | 'peer_connect'
+  | 'peer_disconnect'
+  | 'peer_register';
+
+const invokeApi = async <T = any, R = string>(
+  type: ApiInvokeTypes,
+  variables?: T
+): Promise<R> => {
   try {
-    const data = await invoke(type, variables);
-    return { data };
+    if (!variables) {
+      const data: R = await invoke(type);
+      return data;
+    }
+
+    const data: R = await invoke(type, variables!);
+    return data;
   } catch (error: any) {
     throw new Error(error);
   }

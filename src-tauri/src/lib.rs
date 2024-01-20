@@ -8,8 +8,9 @@ use citadel_logging::{error, setup_log};
 use citadel_workspace_lib::wrap_tcp_conn;
 use citadel_workspace_types::{InternalServiceResponse, ServiceConnectionAccepted};
 use commands::{
-    connect::connect, disconnect::disconnect, get_session::get_session, message::message,
-    register::register,
+    connect::connect, disconnect::disconnect, get_session::get_sessions,
+    list_all_peers::list_all_peers, message::message, peer_connect::peer_connect,
+    peer_disconnect::peer_disconnect, peer_register::peer_register, register::register,
 };
 use futures::StreamExt;
 use std::error::Error;
@@ -99,8 +100,12 @@ pub fn run() {
             register,
             disconnect,
             message,
-            get_session,
-            open_tcp_conn
+            get_sessions,
+            open_tcp_conn,
+            list_all_peers,
+            peer_register,
+            peer_connect,
+            peer_disconnect,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

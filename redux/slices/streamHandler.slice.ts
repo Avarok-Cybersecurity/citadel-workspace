@@ -1,18 +1,21 @@
-import {
-  ServiceRegisterAccepted,
-  ServiceTCPConnectionAccepted,
-} from '@common/types/c2s';
-import { createSlice, current } from '@reduxjs/toolkit';
-
-type Data = ServiceRegisterAccepted | ServiceTCPConnectionAccepted;
+import { ListAllPeers } from '@common/types/c2sResponses';
+import { createSlice, current, PayloadAction } from '@reduxjs/toolkit';
 
 type Sessions = {
   current_used_session_server: string;
   current_sessions: {
-    [key: string]: { [key: string]: string };
+    [key: string | number]: { [key: string]: string | boolean };
   };
 };
-export type ContextType = 'Register' | 'GetSession';
+export type ContextType =
+  | 'RegisterAndConnect'
+  | 'GetSession'
+  | 'ListAllPeers'
+  | 'Disconnect'
+  // p2p
+  | 'PeerRegister'
+  | 'PeerConnect'
+  | 'PeerDisconnect';
 
 const initialState: {
   context: {
@@ -31,17 +34,16 @@ const streamExecSlice = createSlice({
   name: 'stram_handler',
   initialState,
   reducers: {
-    addToContext: (state, action) => {
-      console.log('Before', current(state));
-      console.log('Action', action);
+    addToContext: (
+      state,
+      action: PayloadAction<{ req_id: string; context_type: ContextType }>
+    ) => {
       const req_id = action.payload.req_id;
 
       const context_type: ContextType =
         action.payload.context_type ?? state.context[req_id];
-      console.log('Action payload', action.payload);
-      console.log('Context Type', context_type);
-      const payload: { [key: string]: string | number } =
-        action.payload.payload;
+      const payload: { [key: string]: string | number } = action.payload;
+      console.log('payload', payload);
 
       let updatedObject: { [key: string]: string | number } = {};
 
@@ -52,7 +54,6 @@ const streamExecSlice = createSlice({
       }
 
       state.context[req_id] = context_type;
-      console.log('After', current(state));
     },
     setSessions: (state, action) => {
       const activeSessions: Array<{
@@ -70,6 +71,11 @@ const streamExecSlice = createSlice({
       console.log('active sessions', activeSessions);
       console.log('Current state', current(state));
     },
+    setCurrentSessionPeers: (state, action: PayloadAction<ListAllPeers>) => {
+      const cid = action.payload.cid;
+      const online_statuses = action.payload.online_status;
+      state.sessions.current_sessions[cid] = online_statuses;
+    },
     setCurrentServer: (state, action) => {
       state.sessions.current_used_session_server = action.payload;
     },
@@ -77,5 +83,10 @@ const streamExecSlice = createSlice({
 });
 
 const { reducer, actions } = streamExecSlice;
-export const { addToContext, setSessions, setCurrentServer } = actions;
+export const {
+  addToContext,
+  setSessions,
+  setCurrentServer,
+  setCurrentSessionPeers,
+} = actions;
 export default reducer;

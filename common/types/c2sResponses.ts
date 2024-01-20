@@ -1,3 +1,5 @@
+export type Payload = GetSessions | ListAllPeers;
+
 export type ServiceTCPConnectionAccepted = {
   ServiceConnectionAccepted: {
     id: string;
@@ -23,4 +25,23 @@ export type ServiceDisconnect = {
     uuid: string;
     request_id: string;
   };
+};
+
+export type ListAllPeers = {
+  cid: number;
+  online_status: { [key: number]: boolean };
+  request_id: string;
+};
+export type PeerSessionInformation = {
+  cid: number;
+  peer_cid: number;
+  peer_username: string;
+};
+
+export type GetSessions = {
+  sessions: Array<{
+    cid: string;
+    peer_connections: { [key: number]: PeerSessionInformation };
+  }>;
+  request_id: string;
 };

@@ -1,4 +1,4 @@
-use citadel_workspace_types::InternalServicePayload;
+use citadel_workspace_types::InternalServiceRequest::PeerConnect;
 use futures::SinkExt;
 use tauri::State;
 use uuid::Uuid;
@@ -7,20 +7,15 @@ use crate::structs::ConnectionState;
 
 #[tauri::command]
 pub async fn peer_connect(
-    uuid: String,
-    cid: u64,
-    username: String,
-    peer_cid: u64,
-    peer_username: String,
+    cid: String,
+    peer_cid: String,
     state: State<'_, ConnectionState>,
 ) -> Result<(), String> {
-    let uuid = Uuid::parse_str(&uuid).unwrap();
-    let payload = InternalServicePayload::PeerConnect {
-        uuid,
-        cid,
-        username,
-        peer_cid,
-        peer_username,
+    let request_id = Uuid::new_v4();
+    let payload = PeerConnect {
+        request_id,
+        cid: cid.parse::<u64>().unwrap(),
+        peer_cid: peer_cid.parse::<u64>().unwrap(),
         udp_mode: Default::default(),
         session_security_settings: Default::default(),
     };

@@ -7,12 +7,14 @@ import { UIProvider } from '@components/ui/context';
 import { listen } from '@tauri-apps/api/event';
 import { Provider } from 'react-redux';
 import { invoke } from '@tauri-apps/api/core';
-import store from 'framework/redux/store';
-import { setUuid } from 'framework/redux/slices/uuid.slice';
+import store from 'redux/store';
+import { setUuid } from 'redux/slices/uuid.slice';
 import {
   addToContext,
+  setCurrentSessionPeers,
   setSessions,
-} from 'framework/redux/slices/streamHandler.slice';
+} from 'redux/slices/streamHandler.slice';
+import { GetSessions, ListAllPeers, Payload } from '@common/types/c2sResponses';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 
@@ -26,11 +28,11 @@ function CustomApp({
     const connect = async () => {
       try {
         const uuid_value: string = await invoke('open_tcp_conn', {
-          addr: '127.0.0.1:3000',
+          addr: '127.0.0.1:12345',
         });
         store.dispatch(setUuid(uuid_value));
 
-        const session_req_id = await invoke('get_session', {
+        const session_req_id: string = await invoke('get_sessions', {
           uuid: uuid_value,
         });
         store.dispatch(
@@ -53,9 +55,7 @@ function CustomApp({
         const key = Object.keys(data).at(0)!;
         const payload = data[key];
 
-        console.log('Stream_packet', payload);
         const req_id = payload.request_id;
-        console.log('ReqID stream', req_id);
         handlePacket(req_id, payload);
       }
     );
@@ -65,23 +65,24 @@ function CustomApp({
     };
   }, []);
 
-  const handlePacket = (req_id: string, payload: { [key: string]: any }) => {
-    console.log('ReqID', req_id);
-    console.log('Payload', payload);
+  const handlePacket = (req_id: string, payload: Payload) => {
     const { context: map } = store.getState();
     console.log('Map', map);
     const context = map.context[req_id];
+    console.log('Payload', payload);
     console.log('Context', context);
 
     if (context) {
       switch (context) {
         case 'GetSession':
-          const activeSessions = payload.sessions as Array<number | string>;
+          const getSessionsPayload: Payload = payload as GetSessions;
+          const activeSessions = getSessionsPayload.sessions;
           store.dispatch(setSessions(activeSessions));
-          console.log('Active sessions', activeSessions);
           break;
-        case 'Register':
-          const x = 1;
+        case 'ListAllPeers':
+          const peers: Payload = payload as ListAllPeers;
+          setCurrentSessionPeers(peers);
+          break;
         default:
           console.log('default');
           break;

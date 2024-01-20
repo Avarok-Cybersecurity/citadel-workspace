@@ -1,5 +1,4 @@
-import { useRegister_c2s } from '@framework/c2s';
-import { RootState } from 'framework/redux/store';
+import { RootState } from 'redux/store';
 import { Dispatch, SetStateAction, useState } from 'react';
 import { useSelector } from 'react-redux';
 
@@ -12,7 +11,7 @@ export default function AddServerModal({
 }) {
   onCloseNavbar(false);
 
-  const register = useRegister_c2s();
+  // const register = useRegister_c2s();
 
   const { uuid } = useSelector((state: RootState) => state.uuid);
 
@@ -56,14 +55,14 @@ export default function AddServerModal({
               className="space-y-2"
               onSubmit={async (e) => {
                 e.preventDefault();
-                const data = await register({
-                  uuid,
-                  fullName,
-                  serverAddr: ipAddr,
-                  username,
-                  proposedPassword,
-                });
-                console.log(data);
+                // const data = await register({
+                //   uuid,
+                //   fullName,
+                //   serverAddr: ipAddr,
+                //   username,
+                //   proposedPassword,
+                // });
+                // console.log(data);
                 onClose(false);
               }}
             >

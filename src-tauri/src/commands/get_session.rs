@@ -5,7 +5,7 @@ use tauri::State;
 use uuid::Uuid;
 
 #[tauri::command]
-pub async fn get_session(
+pub async fn get_sessions(
     state: State<'_, ConnectionState>,
     _window: tauri::Window,
 ) -> Result<String, String> {

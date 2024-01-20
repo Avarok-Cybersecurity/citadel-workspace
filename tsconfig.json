@@ -22,10 +22,12 @@
     "esModuleInterop": true,
     "baseUrl": ".",
     "paths": {
-      "@common": ["framework/common"],
-      "@common/*": ["framework/common/*"],
-      "@framework": ["framework/app"],
-      "@framework/*": ["framework/app/*"],
+      "@common": ["common"],
+      "@common/*": ["common/*"],
+      "@hooks": ["hooks"],
+      "@hooks/*": ["hooks/*"],
+      "@redux": ["redux"],
+      "@redux/*": ["redux/*"],
       "@components/*": ["components/*"],
       "@assets/*": ["assets/*"],
       "@lib/*": ["lib/*"]

@@ -6,16 +6,15 @@ use uuid::Uuid;
 
 #[tauri::command]
 pub async fn peer_disconnect(
-    uuid: String,
-    cid: u64,
-    peer_cid: u64,
+    cid: String,
+    peer_cid: String,
     state: State<'_, ConnectionState>,
 ) -> Result<(), String> {
-    let uuid = Uuid::parse_str(&uuid).unwrap();
+    let request_id = Uuid::new_v4();
     let payload = PeerDisconnect {
-        uuid,
-        cid,
-        peer_cid,
+        request_id,
+        cid: cid.parse::<u64>().unwrap(),
+        peer_cid: peer_cid.parse::<u64>().unwrap(),
     };
 
     let _ = state

@@ -1,11 +1,7 @@
-import {
-  RootState,
-  useAppDispatch,
-  useAppSelector,
-} from 'framework/redux/store';
+import { RootState, useAppDispatch, useAppSelector } from 'redux/store';
 import Link from 'next/link';
-import React, { Dispatch, SetStateAction, useEffect, useState } from 'react';
-import { setCurrentServer } from 'framework/redux/slices/streamHandler.slice';
+import React, { Dispatch, SetStateAction } from 'react';
+import { setCurrentServer } from 'redux/slices/streamHandler.slice';
 import clsx from 'clsx';
 
 function WorkspaceBar({

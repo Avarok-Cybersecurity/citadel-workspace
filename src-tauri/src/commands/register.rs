@@ -8,7 +8,6 @@ use uuid::Uuid;
 
 #[tauri::command]
 pub async fn register(
-    uuid: String,
     full_name: String,
     username: String,
     proposed_password: String,
