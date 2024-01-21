@@ -14,7 +14,7 @@ const FindPeers = () => {
   useEffect(() => {
     useListAllPeers({ cid: current_selected_session });
     return () => {};
-  }, []);
+  }, [current_selected_session]);
 
   return (
     <div className="text-4xl text-teal-50 text-center mb-[50%] select-none">
