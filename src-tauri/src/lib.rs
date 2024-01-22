@@ -1,12 +1,10 @@
 mod commands;
 mod helpers;
 mod structs;
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-use crate::structs::ConnectionState;
 use bytes::BytesMut;
+use citadel_internal_service_connector::util::wrap_tcp_conn;
+use citadel_internal_service_types::{InternalServiceResponse, ServiceConnectionAccepted};
 use citadel_logging::{error, setup_log};
-use citadel_workspace_lib::wrap_tcp_conn;
-use citadel_workspace_types::{InternalServiceResponse, ServiceConnectionAccepted};
 use commands::{
     connect::connect, disconnect::disconnect, get_session::get_sessions,
     list_all_peers::list_all_peers, message::message, peer_connect::peer_connect,
@@ -15,6 +13,7 @@ use commands::{
 use futures::StreamExt;
 use std::error::Error;
 use std::time::Duration;
+use structs::ConnectionState;
 use tauri::{Manager, State};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
@@ -78,6 +77,7 @@ async fn open_tcp_conn(
     }
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(ConnectionState {

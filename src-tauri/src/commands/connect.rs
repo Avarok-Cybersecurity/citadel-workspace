@@ -1,4 +1,4 @@
-use citadel_workspace_types::InternalServiceRequest::Connect;
+use citadel_internal_service_types::InternalServiceRequest::Connect;
 use futures::SinkExt;
 use tauri::State;
 

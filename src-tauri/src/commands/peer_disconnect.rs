@@ -1,5 +1,5 @@
 use crate::structs::ConnectionState;
-use citadel_workspace_types::InternalServiceRequest::PeerDisconnect;
+use citadel_internal_service_types::InternalServiceRequest::PeerDisconnect;
 use futures::SinkExt;
 use tauri::State;
 use uuid::Uuid;

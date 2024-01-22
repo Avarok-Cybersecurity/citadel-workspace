@@ -1,5 +1,5 @@
 use crate::structs::ConnectionState;
-use citadel_workspace_types::InternalServiceRequest::Disconnect;
+use citadel_internal_service_types::InternalServiceRequest::Disconnect;
 use futures::SinkExt;
 use tauri::State;
 

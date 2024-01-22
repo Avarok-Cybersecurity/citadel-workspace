@@ -1,4 +1,4 @@
-use citadel_workspace_types::InternalServiceRequest::PeerConnect;
+use citadel_internal_service_types::InternalServiceRequest::PeerConnect;
 use futures::SinkExt;
 use tauri::State;
 use uuid::Uuid;

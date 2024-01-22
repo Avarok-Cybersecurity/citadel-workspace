@@ -1,4 +1,4 @@
-use citadel_workspace_types::InternalServiceRequest::ListAllPeers;
+use citadel_internal_service_types::InternalServiceRequest::ListAllPeers;
 use futures::SinkExt;
 use tauri::State;
 use uuid::Uuid;

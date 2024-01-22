@@ -4,11 +4,7 @@ import React, { Dispatch, SetStateAction } from 'react';
 import { setCurrentServer } from 'redux/slices/streamHandler.slice';
 import clsx from 'clsx';
 
-function WorkspaceBar({
-  onOpen,
-}: {
-  onOpen: Dispatch<SetStateAction<boolean>>;
-}) {
+function WorkspaceBar({}: {}) {
   const sessions = useAppSelector(
     (state: RootState) => state.context.sessions.current_sessions
   );
@@ -22,11 +18,11 @@ function WorkspaceBar({
   return (
     <div
       id="workspace"
-      className="overflow-scroll h-screen w-20 px-2 bg-gray-900 border-r-[1px] border-r-[#8aa29e] pt-5 grid "
+      className="overflow-scroll  px-2 bg-[#2A2A2C] border-r-[1px] border-r-[#8aa29e] pt-5 grid "
     >
-      <div className="mx-auto flex flex-col gap-y-[12px]">
+      <div className="mx-auto flex gap-y-[12px]">
         <span
-          onClick={() => onOpen(true)}
+          // onClick={() => onOpen(true)}
           className="inline-flex h-12 w-12 items-center cursor-pointer justify-center rounded-full bg-[#8aa29e] text-center"
         >
           <span className="text-xl font-medium leading-none text-white">+</span>

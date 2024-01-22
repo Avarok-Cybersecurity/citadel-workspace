@@ -1,5 +1,5 @@
 use crate::structs::ConnectionState;
-use citadel_workspace_types::InternalServiceRequest;
+use citadel_internal_service_types::InternalServiceRequest;
 use futures::SinkExt;
 use std::net::SocketAddr;
 use std::str::FromStr;
