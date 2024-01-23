@@ -1,0 +1,61 @@
+name: Validate PR
+on:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  # 40 MiB stack
+  RUST_MIN_STACK: 40971520
+  RUST_LOG: "citadel=warn"
+
+jobs:
+    fmt:
+        name: Cargo Fmt
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v2
+        - uses: Avarok-Cybersecurity/gh-actions-deps@master
+        - run: cargo fmt --check
+    clippy:
+        name: Cargo Clippy
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v2
+        - uses: Avarok-Cybersecurity/gh-actions-deps@master
+        - run: cargo clippy --all -- -D warnings
+    test:
+        name: Cargo Test
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+              os: [ubuntu-latest, macos-latest, windows-latest]
+        steps:
+        - uses: actions/checkout@v2
+        - uses: Avarok-Cybersecurity/gh-actions-deps@master
+        - run: cargo test
+    tauri-build:
+      name: Tauri Build
+      runs-on: ${{ matrix.os }}
+      strategy:
+        matrix:
+          os: [ ubuntu-latest, macos-latest, windows-latest ]
+      steps:
+        - uses: actions/checkout@v2
+        - uses: Avarok-Cybersecurity/gh-actions-deps@master
+        - name: setup node
+          uses: actions/setup-node@v4
+          with:
+            node-version: 20
+        - uses: oven-sh/setup-bun@v1
+        - run: cargo install create-tauri-app
+        - run: cargo install tauri-cli
+        - run: bun install
+        - uses: tauri-apps/tauri-action@v0
+          with:
+            projectPath: "./src-tauri"
+
