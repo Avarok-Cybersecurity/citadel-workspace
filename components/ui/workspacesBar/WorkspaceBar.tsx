@@ -1,10 +1,14 @@
 import { RootState, useAppDispatch, useAppSelector } from 'redux/store';
 import Link from 'next/link';
-import React, { Dispatch, SetStateAction } from 'react';
+import React from 'react';
 import { setCurrentServer } from 'redux/slices/streamHandler.slice';
 import clsx from 'clsx';
 
-function WorkspaceBar({}: {}) {
+function WorkspaceBar({
+  setAddServerOpener,
+}: {
+  setAddServerOpener: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
   const sessions = useAppSelector(
     (state: RootState) => state.context.sessions.current_sessions
   );
@@ -16,14 +20,13 @@ function WorkspaceBar({}: {}) {
   const dispatch = useAppDispatch();
 
   return (
-    <div
-      id="workspace"
-      className="overflow-scroll  px-2 bg-[#2A2A2C] border-r-[1px] border-r-[#8aa29e] pt-5 grid "
-    >
-      <div className="mx-auto flex gap-y-[12px]">
+    <div id="workspace" className="items-center px-2 bg-gray-800 py-5 ">
+      <div className="flex gap-x-5">
         <span
-          // onClick={() => onOpen(true)}
           className="inline-flex h-12 w-12 items-center cursor-pointer justify-center rounded-full bg-[#8aa29e] text-center"
+          onClick={() => {
+            setAddServerOpener(true);
+          }}
         >
           <span className="text-xl font-medium leading-none text-white">+</span>
         </span>
@@ -40,7 +43,7 @@ function WorkspaceBar({}: {}) {
               <Link
                 key={key}
                 href={{
-                  pathname: `/server/findPeers/${key}`,
+                  pathname: `/server/${key}`,
                 }}
                 onClick={() => {
                   dispatch(setCurrentServer(key));

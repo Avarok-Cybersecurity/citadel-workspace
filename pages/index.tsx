@@ -9,7 +9,7 @@ import { addToContext } from '@redux/slices/streamHandler.slice';
 export default function Home({ connErr }: { connErr: string }) {
   return (
     <>
-      <div className="flex flex-col justify-between">
+      <div className="flex flex-col justify-between no-">
         <button
           className="text-red-500"
           onClick={async () => {
@@ -31,7 +31,7 @@ export default function Home({ connErr }: { connErr: string }) {
           Register
         </button>
 
-        <main className="pt-10 h-full w-full flex flex-col justify-between">
+        <main className="pt-10 h-[calc(100vh-7rem)] w-full flex flex-col justify-between no-scrollbar">
           <Chat />
         </main>
       </div>

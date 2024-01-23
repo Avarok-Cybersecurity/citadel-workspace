@@ -92,20 +92,23 @@ function CustomApp({
 
   const Layout = Component.Layout ?? Noop;
   return (
-    <div className="select-none">
+    <div className="select-none h-screen">
       <Head>
         <title>Citadel</title>
       </Head>
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen h-screen flex flex-col " id="workspace">
         <Script
           id="flowbite"
           src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/1.6.6/flowbite.min.js"
         />
-        <main className="flex-grow bg-gray-100 shadow-inner">
+        <main
+          className="flex-grow bg-gray-100 shadow-inner h-screen"
+          id="workspace"
+        >
           <Provider store={store}>
             <UIProvider>
               <Layout>
-                <Component {...pageProps} />
+                <Component id="workspace" {...pageProps} />
               </Layout>
             </UIProvider>
           </Provider>

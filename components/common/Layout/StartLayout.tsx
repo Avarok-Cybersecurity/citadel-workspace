@@ -1,11 +1,17 @@
 import React from 'react';
 import { Fragment, useState } from 'react';
-import { Dialog, Transition } from '@headlessui/react';
+import { Dialog, Menu, Transition } from '@headlessui/react';
 import {
   Bars3Icon,
+  BellIcon,
+  CalendarIcon,
+  ChartPieIcon,
+  ChevronDownIcon,
+  Cog6ToothIcon,
   DocumentDuplicateIcon,
   FolderIcon,
   HomeIcon,
+  MagnifyingGlassIcon,
   UsersIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
@@ -14,8 +20,15 @@ import { useAppSelector } from 'redux/store';
 import { usePathname } from 'next/navigation';
 import WorkspacesBar from '@components/ui/workspacesBar';
 import AddServerModal from '@components/ui/AddServer';
-import Link from 'next/link';
 
+const navigation = [
+  { name: 'Dashboard', href: '#', icon: HomeIcon, current: true },
+  { name: 'Team', href: '#', icon: UsersIcon, current: false },
+  { name: 'Projects', href: '#', icon: FolderIcon, current: false },
+  { name: 'Calendar', href: '#', icon: CalendarIcon, current: false },
+  { name: 'Documents', href: '#', icon: DocumentDuplicateIcon, current: false },
+  { name: 'Reports', href: '#', icon: ChartPieIcon, current: false },
+];
 const teams = [
   { id: 1, name: 'Heroicons', href: '#', initial: 'H', current: false },
   { id: 2, name: 'Tailwind Labs', href: '#', initial: 'T', current: false },
@@ -41,9 +54,15 @@ export const Layout = ({ children }: Props) => {
   console.log(pathname);
   const [navigation, _] = useState([
     {
-      name: 'Register Requests',
-      href: '/requests',
+      name: 'Find Peers',
+      href: `/server/findPeers/`,
       icon: UsersIcon,
+      current: true,
+    },
+    {
+      name: 'Storage',
+      href: '/server/storage/',
+      icon: DocumentDuplicateIcon,
       current: false,
     },
   ]);
@@ -58,6 +77,14 @@ export const Layout = ({ children }: Props) => {
 
   return (
     <>
+      {/*
+        This example requires updating your template:
+
+        ```
+        <html class="h-full bg-white">
+        <body class="h-full">
+        ```
+      */}
       <div>
         <Transition.Root show={sidebarOpen} as={Fragment}>
           <Dialog
@@ -193,13 +220,11 @@ export const Layout = ({ children }: Props) => {
           {/* Sidebar component, swap this element with another sidebar if you like */}
           <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-gray-900 px-6">
             <div className="flex h-16 shrink-0 items-center">
-              <Link href="/">
-                <img
-                  className="h-8 w-auto"
-                  src="/assets/logo_citadel.jpg"
-                  alt="Your Company"
-                />
-              </Link>
+              <img
+                className="h-8 w-auto"
+                src="/assets/logo_citadel.jpg"
+                alt="Your Company"
+              />
             </div>
             <nav className="flex flex-1 flex-col">
               <ul role="list" className="flex flex-1 flex-col gap-y-7">

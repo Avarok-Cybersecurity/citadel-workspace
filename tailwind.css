@@ -12,12 +12,12 @@
   padding: 0;
 }
 
-#workspace::-webkit-scrollbar {
+*::-webkit-scrollbar {
   display: none;
 }
 
 /* Hiding scrollbar for IE, Edge and Firefox */
-#workspace {
+* {
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE and Edge */
 }
