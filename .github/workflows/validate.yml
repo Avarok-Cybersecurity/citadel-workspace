@@ -54,7 +54,7 @@ jobs:
             node-version: 20
         - uses: oven-sh/setup-bun@v1
         - run: cargo install create-tauri-app
-        - run: cargo install tauri-cli
+        - run: cargo install tauri-cli --version 2.0.0-alpha.21
         - run: bun install
         - uses: tauri-apps/tauri-action@v0
           with:
