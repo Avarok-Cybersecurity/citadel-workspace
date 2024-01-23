@@ -28,10 +28,16 @@ jobs:
         steps:
         - uses: actions/checkout@v2
         - uses: Avarok-Cybersecurity/gh-actions-deps@master
+        - name: setup node
+          uses: actions/setup-node@v4
+          with:
+            node-version: 20
         - name: install dependencies (ubuntu only)
           run: |
             sudo apt-get update
             sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+        - name: install frontend dependencies
+          run: yarn install # change this to npm or pnpm depending on which one you use
         - run: cargo clippy --all -- -D warnings
     test:
         name: Cargo Test
@@ -42,11 +48,17 @@ jobs:
         steps:
         - uses: actions/checkout@v2
         - uses: Avarok-Cybersecurity/gh-actions-deps@master
+        - name: setup node
+          uses: actions/setup-node@v4
+          with:
+            node-version: 20
         - name: install dependencies (ubuntu only)
           if: matrix.platform == 'ubuntu-20.04'
           run: |
             sudo apt-get update
             sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+        - name: install frontend dependencies
+          run: yarn install # change this to npm or pnpm depending on which one you use
         - run: cargo test
     tauri-build:
       name: Tauri Build
@@ -71,4 +83,18 @@ jobs:
         - run: cargo install tauri-cli --version 2.0.0-alpha.21
         - run: bun install
         - run: cargo tauri build
-
+    eslint:
+      name: eslint
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v1
+        - name: install node v20
+          uses: actions/setup-node@v1
+          with:
+            node-version: 20
+        - name: yarn install
+          run: yarn install
+        - name: eslint
+          uses: icrawl/action-eslint@v1
+          with:
+            custom-glob: '**/*.{js,ts,tsx}'
