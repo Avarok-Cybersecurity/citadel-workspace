@@ -6,7 +6,7 @@ import genUuid from '@lib/utils';
 import store from '@redux/store';
 import { addToContext } from '@redux/slices/streamHandler.slice';
 
-export default function Home({ connErr }: { connErr: string }) {
+export default function Home() {
   return (
     <>
       <div className="flex flex-col justify-between no-">

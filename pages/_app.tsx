@@ -22,7 +22,7 @@ function CustomApp({
   Component,
   pageProps,
 }: AppProps & { Component: { Layout: FC<{ children: ReactNode }> } }) {
-  const [connErr, setErr] = useState('');
+  const [_connErr, setErr] = useState('');
 
   useEffect(() => {
     const connect = async () => {

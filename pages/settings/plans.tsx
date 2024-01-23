@@ -1,5 +1,4 @@
 import { Fragment } from 'react';
-import { CheckIcon, MinusIcon } from '@heroicons/react/20/solid';
 import Link from 'next/link';
 
 const tiers = [
@@ -154,7 +153,7 @@ export default function Example() {
                 {sections.map((section) => (
                   <li key={section.name}>
                     <ul role="list" className="space-y-4">
-                      {section.features.map((feature) =>
+                      {/* {section.features.map((feature) =>
                         feature.tiers[tier.name] ? (
                           <li key={feature.name} className="flex gap-x-3">
                             <CheckIcon
@@ -171,7 +170,7 @@ export default function Example() {
                             </span>
                           </li>
                         ) : null
-                      )}
+                      )} */}
                     </ul>
                   </li>
                 ))}
@@ -277,7 +276,7 @@ export default function Example() {
                         </th>
                         {tiers.map((tier) => (
                           <td key={tier.id} className="px-6 py-4 xl:px-8">
-                            {typeof feature.tiers[tier.name] === 'string' ? (
+                            {/* {typeof feature.tiers[tier.name] === 'string' ? (
                               <div className="text-center text-sm leading-6 text-gray-300">
                                 {feature.tiers[tier.name]}
                               </div>
@@ -302,7 +301,7 @@ export default function Example() {
                                   in {tier.name}
                                 </span>
                               </>
-                            )}
+                            )} */}
                           </td>
                         ))}
                       </tr>

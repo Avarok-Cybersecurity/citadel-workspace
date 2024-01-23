@@ -1,6 +1,4 @@
-import { RootState } from 'redux/store';
 import { Dispatch, SetStateAction, useState } from 'react';
-import { useSelector } from 'react-redux';
 
 export default function AddServerModal({
   onCloseNavbar,
@@ -13,7 +11,7 @@ export default function AddServerModal({
 
   // const register = useRegister_c2s();
 
-  const { uuid } = useSelector((state: RootState) => state.uuid);
+  // const { uuid } = useSelector((state: RootState) => state.uuid);
 
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
