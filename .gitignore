@@ -36,3 +36,5 @@ Cargo.lock
 *.njsproj
 *.sln
 *.sw?
+src-tauri/gen
+src-tauri/target
