@@ -17,4 +17,4 @@ jobs:
       - name: eslint
         uses: icrawl/action-eslint@v1
         with:
-          args: --ext .js,.ts,.tsx .
+          custom-glob: '**/*.{js,ts,tsx}'
