@@ -1,16 +1,8 @@
 import React from 'react';
 import { Fragment, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import {
-  Bars3Icon,
-  DocumentDuplicateIcon,
-  FolderIcon,
-  HomeIcon,
-  UsersIcon,
-  XMarkIcon,
-} from '@heroicons/react/24/outline';
+import { Bars3Icon, UsersIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
-import { useAppSelector } from 'redux/store';
 import { usePathname } from 'next/navigation';
 import WorkspacesBar from '@components/ui/workspacesBar';
 import AddServerModal from '@components/ui/AddServer';
@@ -33,9 +25,9 @@ function classNames(...classes: any) {
 export const Layout = ({ children }: Props) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [addServerOpen, setAddServerOpen] = useState(false);
-  const currentUsedSessionCid: string = useAppSelector(
-    (state) => state.context.sessions.current_used_session_server
-  );
+  // const currentUsedSessionCid: string = useAppSelector(
+  //   (state) => state.context.sessions.current_used_session_server
+  // );
 
   const pathname = usePathname();
   console.log(pathname);
@@ -48,13 +40,13 @@ export const Layout = ({ children }: Props) => {
     },
   ]);
 
-  const current_sessions = useAppSelector(
-    (state) => state.context.sessions.current_sessions
-  );
+  // const current_sessions = useAppSelector(
+  //   (state) => state.context.sessions.current_sessions
+  // );
 
-  const peers = Object.keys(
-    current_sessions[currentUsedSessionCid] ?? {}
-  ).length;
+  // const peers = Object.keys(
+  //   current_sessions[currentUsedSessionCid] ?? {}
+  // ).length;
 
   return (
     <>
