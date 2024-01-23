@@ -30,6 +30,6 @@ pub async fn list_all_peers(
                 Err("Unable to connect".to_string())
             }
         }
-        Err(_) => return Err("Invalid CID".to_string()),
+        Err(_) => Err("Invalid CID".to_string()),
     }
 }
