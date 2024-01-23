@@ -38,3 +38,4 @@ Cargo.lock
 *.sw?
 src-tauri/gen
 src-tauri/target
+package-lock.json
