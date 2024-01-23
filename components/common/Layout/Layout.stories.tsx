@@ -1,5 +1,4 @@
 import { Meta, StoryFn } from '@storybook/react';
-import { Fragment } from 'react';
 import { Layout as Lay } from './Layout';
 
 export default {

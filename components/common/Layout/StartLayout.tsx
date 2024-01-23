@@ -1,34 +1,16 @@
 import React from 'react';
 import { Fragment, useState } from 'react';
-import { Dialog, Menu, Transition } from '@headlessui/react';
+import { Dialog, Transition } from '@headlessui/react';
 import {
   Bars3Icon,
-  BellIcon,
-  CalendarIcon,
-  ChartPieIcon,
-  ChevronDownIcon,
-  Cog6ToothIcon,
   DocumentDuplicateIcon,
-  FolderIcon,
-  HomeIcon,
-  MagnifyingGlassIcon,
-  UsersIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 
-import { useAppSelector } from 'redux/store';
 import { usePathname } from 'next/navigation';
 import WorkspacesBar from '@components/ui/workspacesBar';
 import AddServerModal from '@components/ui/AddServer';
 
-const navigation = [
-  { name: 'Dashboard', href: '#', icon: HomeIcon, current: true },
-  { name: 'Team', href: '#', icon: UsersIcon, current: false },
-  { name: 'Projects', href: '#', icon: FolderIcon, current: false },
-  { name: 'Calendar', href: '#', icon: CalendarIcon, current: false },
-  { name: 'Documents', href: '#', icon: DocumentDuplicateIcon, current: false },
-  { name: 'Reports', href: '#', icon: ChartPieIcon, current: false },
-];
 const teams = [
   { id: 1, name: 'Heroicons', href: '#', initial: 'H', current: false },
   { id: 2, name: 'Tailwind Labs', href: '#', initial: 'T', current: false },
@@ -46,19 +28,19 @@ function classNames(...classes: any) {
 export const Layout = ({ children }: Props) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [addServerOpen, setAddServerOpen] = useState(false);
-  const currentUsedSessionCid: string = useAppSelector(
-    (state) => state.context.sessions.current_used_session_server
-  );
+  // const currentUsedSessionCid: string = useAppSelector(
+  //   (state) => state.context.sessions.current_used_session_server
+  // );
 
   const pathname = usePathname();
   console.log(pathname);
   const [navigation, _] = useState([
-    {
-      name: 'Find Peers',
-      href: `/server/findPeers/`,
-      icon: UsersIcon,
-      current: true,
-    },
+    // {
+    //   name: 'Find Peers',
+    //   href: `/server/findPeers/`,
+    //   icon: UsersIcon,
+    //   current: true,
+    // },
     {
       name: 'Storage',
       href: '/server/storage/',
@@ -67,13 +49,13 @@ export const Layout = ({ children }: Props) => {
     },
   ]);
 
-  const current_sessions = useAppSelector(
-    (state) => state.context.sessions.current_sessions
-  );
+  // const current_sessions = useAppSelector(
+  //   (state) => state.context.sessions.current_sessions
+  // );
 
-  const peers = Object.keys(
-    current_sessions[currentUsedSessionCid] ?? {}
-  ).length;
+  // const peers = Object.keys(
+  //   current_sessions[currentUsedSessionCid] ?? {}
+  // ).length;
 
   return (
     <>

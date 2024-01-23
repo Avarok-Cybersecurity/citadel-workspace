@@ -16,7 +16,7 @@ export interface StateValues {
 }
 
 const stateModifiers = {
-  setUuid: (payload: string) => {},
+  setUuid: (_payload: string) => {},
 };
 
 const initialState = { uuid: '' };
