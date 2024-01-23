@@ -82,7 +82,7 @@ jobs:
         - run: cargo install create-tauri-app
         - run: cargo install tauri-cli --version 2.0.0-alpha.21
         - run: bun install
-        - run: cargo tauri build
+        - uses: tauri-apps/tauri-action@v0
     eslint:
       name: eslint
       runs-on: ubuntu-latest
