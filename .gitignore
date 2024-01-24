@@ -7,13 +7,12 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
+node_modules/
+out/
+dist/
 dist-ssr
 *.local
-
-/target/
-
+target/
 debug/
 
 # Remove Cargo.lock from gitignore if creating an executable, leave it for libraries
@@ -29,7 +28,7 @@ Cargo.lock
 /.next/
 ./next-env.d.ts
 # Editor directories and files
-.vscode/*
+.vscode/
 !.vscode/extensions.json
 .idea
 .DS_Store
@@ -38,3 +37,8 @@ Cargo.lock
 *.njsproj
 *.sln
 *.sw?
+src-tauri/gen
+src-tauri/target
+package-lock.json
+yarn.lock
+src-tauri/Cargo.lock

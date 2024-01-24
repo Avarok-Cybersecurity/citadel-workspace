@@ -31,6 +31,6 @@ pub async fn message(
     {
         Ok(request_id.to_string())
     } else {
-        return Err("Unable to message".to_string());
+        Err("Unable to message".to_string())
     }
 }
