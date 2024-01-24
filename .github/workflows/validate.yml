@@ -63,6 +63,7 @@ jobs:
       - name: PKG config
         run: |
           sudo apt-get install --reinstall pkg-config
+          sudo apt install --reinstall libgtk-3-dev
           sudo /usr/share/pkg-config-dpkghook update
           pkg-config --cflags gtk+-3.0
       - run: cargo test
