@@ -62,10 +62,9 @@ jobs:
         run: bun install # change this to npm or pnpm depending on which one you use
       - name: PKG config
         run: |
-          echo $PKG_CONFIG_PATH
-          unset PKG_CONFIG_PATH
-          pkg-config --debug --modversion gtk+-3.0
-          echo $PKG_CONFIG_PATH
+          sudo apt-get install --reinstall pkg-config
+          sudo /usr/share/pkg-config-dpkghook update
+          pkg-config --cflags gtk+-3.0
       - run: cargo test
   tauri-build:
     name: Tauri Build
