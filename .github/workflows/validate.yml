@@ -52,7 +52,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - uses: oven-sh/setup-bun@v1
+      - uses: antongolub/action-setup-bun@v1
       - name: install dependencies (ubuntu only)
         if: startsWith(matrix.os, 'ubuntu')
         run: |
@@ -74,7 +74,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - uses: oven-sh/setup-bun@v1
+      - uses: antongolub/action-setup-bun@v1
       - name: install dependencies (ubuntu only)
         if: startsWith(matrix.os, 'ubuntu')
         run: |
