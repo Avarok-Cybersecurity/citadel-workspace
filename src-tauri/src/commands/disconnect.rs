@@ -2,16 +2,14 @@ use crate::structs::ConnectionState;
 use citadel_internal_service_types::InternalServiceRequest::Disconnect;
 use futures::SinkExt;
 use tauri::State;
+use uuid::Uuid;
 
 #[tauri::command]
-pub async fn disconnect(
-    cid: u64,
-    request_id: String,
-    state: State<'_, ConnectionState>,
-) -> Result<String, String> {
+pub async fn disconnect(cid: String, state: State<'_, ConnectionState>) -> Result<String, String> {
+    let request_id = Uuid::new_v4();
     let payload = Disconnect {
-        cid,
-        request_id: request_id.parse().unwrap(),
+        cid: cid.parse().unwrap(),
+        request_id,
     };
 
     if state

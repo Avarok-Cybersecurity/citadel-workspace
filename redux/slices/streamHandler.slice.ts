@@ -71,6 +71,12 @@ const streamExecSlice = createSlice({
       console.log('active sessions', activeSessions);
       console.log('Current state', current(state));
     },
+    removeServerSession: (state, action) => {
+      const cid = action.payload;
+      console.log('removeServerSession', cid);
+      delete state.sessions.current_sessions[cid];
+      console.log('removeServerSession', current(state.sessions));
+    },
     setCurrentSessionPeers: (state, action: PayloadAction<ListAllPeers>) => {
       const cid = action.payload.cid;
       const online_statuses = action.payload.online_status;
@@ -88,5 +94,6 @@ export const {
   setSessions,
   setCurrentServer,
   setCurrentSessionPeers,
+  removeServerSession,
 } = actions;
 export default reducer;

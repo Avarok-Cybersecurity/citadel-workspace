@@ -7,14 +7,22 @@ import { UIProvider } from '@components/ui/context';
 import { listen } from '@tauri-apps/api/event';
 import { Provider } from 'react-redux';
 import { invoke } from '@tauri-apps/api/core';
-import store from 'redux/store';
+import store, { useAppSelector } from 'redux/store';
 import { setUuid } from 'redux/slices/uuid.slice';
 import {
   addToContext,
+  removeServerSession,
+  setCurrentServer,
   setCurrentSessionPeers,
   setSessions,
 } from 'redux/slices/streamHandler.slice';
-import { GetSessions, ListAllPeers, Payload } from '@common/types/c2sResponses';
+import {
+  Disconnect,
+  GetSessions,
+  ListAllPeers,
+  Payload,
+} from '@common/types/c2sResponses';
+import { useRouter } from 'next/navigation';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 
@@ -23,6 +31,7 @@ function CustomApp({
   pageProps,
 }: AppProps & { Component: { Layout: FC<{ children: ReactNode }> } }) {
   const [_connErr, setErr] = useState('');
+  const router = useRouter();
 
   useEffect(() => {
     const connect = async () => {
@@ -78,10 +87,20 @@ function CustomApp({
           const getSessionsPayload: Payload = payload as GetSessions;
           const activeSessions = getSessionsPayload.sessions;
           store.dispatch(setSessions(activeSessions));
+          console.log('got a getSessions req ', getSessionsPayload);
+          console.log('GetSessions', getSessionsPayload);
+          console.log('activeSessions', store.getState().context.sessions);
           break;
         case 'ListAllPeers':
           const peers: Payload = payload as ListAllPeers;
           setCurrentSessionPeers(peers);
+          break;
+        case 'Disconnect':
+          const disconnect: Payload = payload as Disconnect;
+          console.log('Disconnect', disconnect);
+          router.push('/');
+          store.dispatch(removeServerSession(disconnect.cid));
+          store.dispatch(setCurrentServer(''));
           break;
         default:
           console.log('default');
@@ -119,3 +138,9 @@ function CustomApp({
 }
 
 export default CustomApp;
+function dispatch(arg0: {
+  payload: any;
+  type: 'stram_handler/setCurrentServer';
+}) {
+  throw new Error('Function not implemented.');
+}
