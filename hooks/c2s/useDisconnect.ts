@@ -17,14 +17,6 @@ export default async function useDisconnect(
       context_type: 'Disconnect',
     })
   );
-  const req_id = await invoke<{ uuid: string }, string>('get_sessions', {
-    uuid: input.cid,
-  });
-  store.dispatch(
-    addToContext({
-      req_id,
-      context_type: 'GetSession',
-    })
-  );
+
   return response;
 }
