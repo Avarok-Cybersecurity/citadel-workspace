@@ -13,7 +13,7 @@ use commands::{
 use futures::StreamExt;
 use std::error::Error;
 use std::time::Duration;
-use structs::ConnectionState;
+use structs::{ConnectionState, Payload};
 use tauri::{Manager, State};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
@@ -23,10 +23,12 @@ fn send_response(
     packet: BytesMut,
     window: &tauri::Window,
 ) -> Result<(), Box<dyn Error>> {
-    let _ = window.emit(
-        packet_name,
-        serde_json::to_string(&bincode2::deserialize::<InternalServiceResponse>(&packet)?)?,
-    );
+    let packet = bincode2::deserialize::<InternalServiceResponse>(&packet)?;
+    let error = packet.is_error();
+
+    let payload = Payload { packet, error };
+
+    let _ = window.emit(packet_name, serde_json::to_string(&payload)?);
     Ok(())
 }
 

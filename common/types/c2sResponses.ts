@@ -1,4 +1,7 @@
-export type Payload = GetSessions | ListAllPeers | Disconnect;
+export type Payload = {
+  payload: GetSessions | ListAllPeers | Disconnect;
+  error: boolean;
+};
 
 export type ServiceTCPConnectionAccepted = {
   ServiceConnectionAccepted: {

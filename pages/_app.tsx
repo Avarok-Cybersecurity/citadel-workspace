@@ -7,7 +7,7 @@ import { UIProvider } from '@components/ui/context';
 import { listen } from '@tauri-apps/api/event';
 import { Provider } from 'react-redux';
 import { invoke } from '@tauri-apps/api/core';
-import store, { useAppSelector } from 'redux/store';
+import store from 'redux/store';
 import { setUuid } from 'redux/slices/uuid.slice';
 import {
   addToContext,
@@ -60,12 +60,12 @@ function CustomApp({
     const listen_packet_stream = listen(
       'packet_stream',
       (event: { payload: string }) => {
-        const data = JSON.parse(event.payload);
-        const key = Object.keys(data).at(0)!;
-        const payload = data[key];
+        const response = JSON.parse(event.payload);
+        const key = Object.keys(response.packet).at(0)!;
+        const data = { payload: response.packet[key], error: response.error };
 
-        const req_id = payload.request_id;
-        handlePacket(req_id, payload);
+        const req_id = data.payload.request_id;
+        handlePacket(req_id, data);
       }
     );
 
@@ -84,19 +84,20 @@ function CustomApp({
     if (context) {
       switch (context) {
         case 'GetSession':
-          const getSessionsPayload: Payload = payload as GetSessions;
+          const getSessionsPayload = payload.payload as GetSessions;
           const activeSessions = getSessionsPayload.sessions;
+          console.log('activeSessions', activeSessions);
           store.dispatch(setSessions(activeSessions));
           console.log('got a getSessions req ', getSessionsPayload);
           console.log('GetSessions', getSessionsPayload);
           console.log('activeSessions', store.getState().context.sessions);
           break;
         case 'ListAllPeers':
-          const peers: Payload = payload as ListAllPeers;
+          const peers = payload.payload as ListAllPeers;
           setCurrentSessionPeers(peers);
           break;
         case 'Disconnect':
-          const disconnect: Payload = payload as Disconnect;
+          const disconnect = payload.payload as Disconnect;
           console.log('Disconnect', disconnect);
           router.push('/');
           store.dispatch(removeServerSession(disconnect.cid));
