@@ -1,6 +1,7 @@
 use citadel_internal_service_types::InternalServiceRequest::PeerRegister;
 use futures::SinkExt;
 use tauri::State;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::structs::ConnectionState;
@@ -10,7 +11,7 @@ pub async fn peer_register(
     cid: String,
     peer_cid: String,
     state: State<'_, ConnectionState>,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let request_id = Uuid::new_v4();
     let payload = PeerRegister {
         request_id,
@@ -20,14 +21,18 @@ pub async fn peer_register(
         peer_cid: peer_cid.parse::<u64>().unwrap(),
     };
 
-    let _ = state
+    if state
         .sink
         .lock()
         .await
         .as_mut()
         .unwrap()
         .send(payload)
-        .await;
-
-    Ok(())
+        .await
+        .is_ok()
+    {
+        Ok(request_id.to_string())
+    } else {
+        Err("Unable to register to the peer".to_string())
+    }
 }

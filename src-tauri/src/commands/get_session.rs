@@ -7,11 +7,12 @@ use crate::structs::ConnectionState;
 
 #[tauri::command]
 pub async fn get_sessions(
-    state: State<'_, ConnectionState>,
     _window: tauri::Window,
+    state: State<'_, ConnectionState>,
 ) -> Result<String, String> {
     let request_id = Uuid::new_v4();
     let payload = InternalServiceRequest::GetSessions { request_id };
+
     if state
         .sink
         .lock()

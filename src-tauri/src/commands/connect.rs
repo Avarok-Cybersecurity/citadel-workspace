@@ -20,6 +20,7 @@ pub async fn connect(
         session_security_settings: Default::default(),
         request_id: request_id.parse().unwrap(),
     };
+
     if state
         .sink
         .lock()

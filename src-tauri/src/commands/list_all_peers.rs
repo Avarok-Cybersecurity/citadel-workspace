@@ -11,24 +11,23 @@ pub async fn list_all_peers(
     state: State<'_, ConnectionState>,
 ) -> Result<String, String> {
     let request_id = Uuid::new_v4();
-    match cid.parse::<u64>() {
-        Ok(cid) => {
-            let payload = ListAllPeers { cid, request_id };
-            if state
-                .sink
-                .lock()
-                .await
-                .as_mut()
-                .unwrap()
-                .send(payload)
-                .await
-                .is_ok()
-            {
-                Ok(request_id.to_string())
-            } else {
-                Err("Unable to connect".to_string())
-            }
-        }
-        Err(_) => Err("Invalid CID".to_string()),
+    let payload = ListAllPeers {
+        cid: cid.parse().unwrap(),
+        request_id,
+    };
+
+    if state
+        .sink
+        .lock()
+        .await
+        .as_mut()
+        .unwrap()
+        .send(payload)
+        .await
+        .is_ok()
+    {
+        Ok(request_id.to_string())
+    } else {
+        Err("Unable to get_session".to_string())
     }
 }

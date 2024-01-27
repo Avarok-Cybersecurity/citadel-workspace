@@ -3,6 +3,7 @@ use futures::SinkExt;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use tauri::State;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::structs::ConnectionState;
@@ -13,8 +14,8 @@ pub async fn register(
     username: String,
     proposed_password: String,
     server_addr: String,
-    state: State<'_, ConnectionState>,
     _window: tauri::Window,
+    state: State<'_, ConnectionState>,
 ) -> Result<String, String> {
     let server_addr = SocketAddr::from_str(&server_addr).map_err(|_| "Invalid server address")?;
     let request_id = Uuid::new_v4();
@@ -27,6 +28,7 @@ pub async fn register(
         connect_after_register: true,
         session_security_settings: Default::default(),
     };
+
     if state
         .sink
         .lock()
@@ -39,6 +41,6 @@ pub async fn register(
     {
         Ok(request_id.to_string())
     } else {
-        Err("Unable to register".to_string())
+        Err("Unable to connect".to_string())
     }
 }

@@ -5,6 +5,7 @@ use citadel_logging::error;
 use futures::StreamExt;
 use std::error::Error;
 use tauri::{Manager, State};
+use tokio::sync::Mutex;
 
 fn send_response(
     packet_name: &str,
@@ -21,17 +22,14 @@ fn send_response(
 
 #[tauri::command]
 pub async fn open_connection(
-    state: State<'_, ConnectionState>,
     window: tauri::Window,
     addr: String,
+    state: State<'_, ConnectionState>,
 ) -> Result<(), String> {
-    let mut state_modifier_sink = &state.sink;
-    let mut state_modifier_stream = &state.stream;
     let connector = InternalServiceConnector::connect(addr).await.unwrap();
     let (sink, mut stream) = connector.split();
-    let conn_state = ConnectionState::new(&sink, &stream);
-    state_modifier_sink = &conn_state.sink;
-    state_modifier_stream = &conn_state.stream;
+    *state.sink.lock().await = Some(sink);
+
     let service_to_gui = async move {
         while let Some(packet) = stream.next().await {
             if let Err(e) = send_response("packet_stream", packet, &window) {

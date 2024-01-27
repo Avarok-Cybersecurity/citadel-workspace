@@ -1,7 +1,5 @@
 mod commands;
 mod structs;
-use bytes::BytesMut;
-use citadel_internal_service_types::InternalServiceResponse;
 use citadel_logging::setup_log;
 use commands::{
     connect::connect, disconnect::disconnect, get_session::get_sessions,
@@ -9,30 +7,15 @@ use commands::{
     peer_connect::peer_connect, peer_disconnect::peer_disconnect, peer_register::peer_register,
     register::register,
 };
-use std::error::Error;
-use structs::{ConnectionState, Payload};
+use structs::ConnectionState;
 use tauri::Manager;
-
-fn send_response(
-    packet_name: &str,
-    packet: BytesMut,
-    window: &tauri::Window,
-) -> Result<(), Box<dyn Error>> {
-    let packet = bincode2::deserialize::<InternalServiceResponse>(&packet)?;
-    let error = packet.is_error();
-
-    let payload = Payload { packet, error };
-
-    let _ = window.emit(packet_name, serde_json::to_string(&payload)?);
-    Ok(())
-}
+use tokio::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(ConnectionState {
-            sink: Default::default(),
-            stream: Default::default(),
+            sink: Mutex::new(None),
         })
         .setup(|app| {
             setup_log();

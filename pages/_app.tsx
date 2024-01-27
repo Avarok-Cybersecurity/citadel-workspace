@@ -64,6 +64,7 @@ function CustomApp({
         const response = JSONbig.parse(event.payload);
         const key = Object.keys(response.packet).at(0)!;
         const data = { payload: response.packet[key], error: response.error };
+        console.log('response dataaaaaaaaa', data.payload.cid);
 
         const req_id = data.payload.request_id;
         handlePacket(req_id, data);

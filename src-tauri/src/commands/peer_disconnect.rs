@@ -10,7 +10,7 @@ pub async fn peer_disconnect(
     cid: String,
     peer_cid: String,
     state: State<'_, ConnectionState>,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let request_id = Uuid::new_v4();
     let payload = PeerDisconnect {
         request_id,
@@ -18,14 +18,18 @@ pub async fn peer_disconnect(
         peer_cid: peer_cid.parse::<u64>().unwrap(),
     };
 
-    let _ = state
+    if state
         .sink
         .lock()
         .await
         .as_mut()
         .unwrap()
         .send(payload)
-        .await;
-
-    Ok(())
+        .await
+        .is_ok()
+    {
+        Ok(request_id.to_string())
+    } else {
+        Err("Unable to connect".to_string())
+    }
 }
