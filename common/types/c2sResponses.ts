@@ -1,3 +1,5 @@
+import { LosslessNumber } from 'lossless-json';
+
 export type Payload = {
   payload: GetSessions | ListAllPeers | Disconnect;
   error: boolean;
@@ -31,8 +33,8 @@ export type ServiceDisconnect = {
 };
 
 export type ListAllPeers = {
-  cid: bigint;
-  online_status: { [key: bigint]: boolean };
+  cid: LosslessNumber;
+  online_status: { [key: string]: boolean };
   request_id: string;
 };
 export type PeerSessionInformation = {
@@ -50,7 +52,7 @@ export type Disconnect = {
 export type GetSessions = {
   sessions: Array<{
     cid: string;
-    peer_connections: { [key: bigint]: PeerSessionInformation };
+    peer_connections: { [key: string]: PeerSessionInformation };
   }>;
   request_id: string;
 };

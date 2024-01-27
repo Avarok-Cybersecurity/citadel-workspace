@@ -60,7 +60,6 @@ export default function AddServerModal({
                 //   username,
                 //   proposedPassword,
                 // });
-                // console.log(data);
                 onClose(false);
               }}
             >

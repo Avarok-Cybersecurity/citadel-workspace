@@ -9,6 +9,7 @@ import { Provider } from 'react-redux';
 import { invoke } from '@tauri-apps/api/core';
 import store from 'redux/store';
 import { setUuid } from 'redux/slices/uuid.slice';
+import { parse, stringify } from 'lossless-json';
 import {
   addToContext,
   removeServerSession,
@@ -23,7 +24,6 @@ import {
   Payload,
 } from '@common/types/c2sResponses';
 import { useRouter } from 'next/navigation';
-import JSONbig from 'json-bigint';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 
@@ -61,10 +61,12 @@ function CustomApp({
     const listen_packet_stream = listen(
       'packet_stream',
       (event: { payload: string }) => {
-        const response = JSONbig.parse(event.payload);
+        const response: any = parse(event.payload);
         const key = Object.keys(response.packet).at(0)!;
-        const data = { payload: response.packet[key], error: response.error };
-        console.log('response dataaaaaaaaa', data.payload.cid);
+        const data: any = {
+          payload: response.packet[key] as any,
+          error: response.error,
+        };
 
         const req_id = data.payload.request_id;
         handlePacket(req_id, data);
@@ -78,29 +80,21 @@ function CustomApp({
 
   const handlePacket = (req_id: string, payload: Payload) => {
     const { context: map } = store.getState();
-    console.log('Map', map);
     const context = map.context[req_id];
-    console.log('Payload', payload);
-    console.log('Context', context);
 
     if (context) {
       switch (context) {
         case 'GetSession':
           const getSessionsPayload = payload.payload as GetSessions;
           const activeSessions = getSessionsPayload.sessions;
-          console.log('activeSessions', activeSessions);
           store.dispatch(setSessions(activeSessions));
-          console.log('got a getSessions req ', getSessionsPayload);
-          console.log('GetSessions', getSessionsPayload);
-          console.log('activeSessions', store.getState().context.sessions);
           break;
         case 'ListAllPeers':
           const peers = payload.payload as ListAllPeers;
-          setCurrentSessionPeers(peers);
+          store.dispatch(setCurrentSessionPeers(peers));
           break;
         case 'Disconnect':
           const disconnect = payload.payload as Disconnect;
-          console.log('Disconnect', disconnect);
           router.push('/');
           store.dispatch(removeServerSession(disconnect.cid));
           store.dispatch(setCurrentServer(''));

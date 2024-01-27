@@ -30,7 +30,6 @@ export const Layout = ({ children }: Props) => {
   // );
 
   const pathname = usePathname();
-  console.log(pathname);
   const [navigation, _] = useState([
     {
       name: 'Register Requests',

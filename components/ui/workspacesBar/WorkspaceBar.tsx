@@ -31,7 +31,6 @@ function WorkspaceBar({
           <span className="text-xl font-medium leading-none text-white">+</span>
         </span>
         {Object.keys(sessions).map((key, i) => {
-          console.log(key);
           return (
             <div
               key={key}

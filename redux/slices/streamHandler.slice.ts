@@ -1,10 +1,11 @@
 import { ListAllPeers } from '@common/types/c2sResponses';
 import { createSlice, current, PayloadAction } from '@reduxjs/toolkit';
+import { LosslessNumber } from 'lossless-json';
 
 type Sessions = {
   current_used_session_server: string;
   current_sessions: {
-    [key: string | bigint]: { [key: string]: string | boolean };
+    [key: string]: { [key: string]: string | boolean };
   };
 };
 export type ContextType =
@@ -42,10 +43,9 @@ const streamExecSlice = createSlice({
 
       const context_type: ContextType =
         action.payload.context_type ?? state.context[req_id];
-      const payload: { [key: string]: string | bigint } = action.payload;
-      console.log('payload', payload);
+      const payload: { [key: string]: string } = action.payload;
 
-      let updatedObject: { [key: string]: string | bigint } = {};
+      let updatedObject: { [key: string]: string } = {};
 
       for (const key in payload) {
         if (key != 'request_id') {
@@ -57,30 +57,25 @@ const streamExecSlice = createSlice({
     },
     setSessions: (state, action) => {
       const activeSessions: Array<{
-        cid: string;
+        cid: LosslessNumber;
         peer_connections: {};
       }> = action.payload;
 
-      console.log('Before', activeSessions);
       for (const session of activeSessions) {
         const cid = session.cid;
         const peer_connections = session.peer_connections;
-        state.sessions.current_sessions[cid] = peer_connections;
+        state.sessions.current_sessions[cid.value] = peer_connections;
       }
-
-      console.log('active sessions', activeSessions);
-      console.log('Current state', current(state));
     },
     removeServerSession: (state, action) => {
       const cid = action.payload;
-      console.log('removeServerSession', cid);
       delete state.sessions.current_sessions[cid];
-      console.log('removeServerSession', current(state.sessions));
     },
     setCurrentSessionPeers: (state, action: PayloadAction<ListAllPeers>) => {
       const cid = action.payload.cid;
       const online_statuses = action.payload.online_status;
-      state.sessions.current_sessions[cid] = online_statuses;
+      state.sessions.current_sessions[cid.value] = online_statuses;
+      console.log(current(state));
     },
     setCurrentServer: (state, action) => {
       state.sessions.current_used_session_server = action.payload;

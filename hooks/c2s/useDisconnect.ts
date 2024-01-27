@@ -8,8 +8,6 @@ export type DisconnectInput = {
 export default async function useDisconnect(
   input: DisconnectInput
 ): Promise<string> {
-  console.log('useDisconnect');
-  console.log(input);
   const response = await invoke<{ cid: string }, string>('disconnect', input);
   store.dispatch(
     addToContext({
