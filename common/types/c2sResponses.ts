@@ -38,14 +38,14 @@ export type ListAllPeers = {
   request_id: string;
 };
 export type PeerSessionInformation = {
-  cid: bigint;
-  peer_cid: bigint;
+  cid: LosslessNumber;
+  peer_cid: LosslessNumber;
   peer_username: string;
 };
 
 export type Disconnect = {
-  cid: bigint;
-  peer_cid: bigint;
+  cid: LosslessNumber;
+  peer_cid: LosslessNumber;
   request_id: string;
 };
 
