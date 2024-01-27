@@ -1,8 +1,9 @@
-use crate::structs::ConnectionState;
 use citadel_internal_service_types::InternalServiceRequest::PeerDisconnect;
 use futures::SinkExt;
 use tauri::State;
 use uuid::Uuid;
+
+use crate::structs::ConnectionState;
 
 #[tauri::command]
 pub async fn peer_disconnect(
@@ -23,7 +24,7 @@ pub async fn peer_disconnect(
         .await
         .as_mut()
         .unwrap()
-        .send(bincode2::serialize(&payload).unwrap().into())
+        .send(payload)
         .await;
 
     Ok(())

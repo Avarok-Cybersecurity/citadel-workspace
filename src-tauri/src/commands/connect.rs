@@ -26,7 +26,7 @@ pub async fn connect(
         .await
         .as_mut()
         .unwrap()
-        .send(bincode2::serialize(&payload).unwrap().into())
+        .send(payload)
         .await
         .is_ok()
     {

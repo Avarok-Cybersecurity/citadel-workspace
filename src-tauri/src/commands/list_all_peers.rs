@@ -13,7 +13,6 @@ pub async fn list_all_peers(
     let request_id = Uuid::new_v4();
     match cid.parse::<u64>() {
         Ok(cid) => {
-            println!("Hiiiiiiiiiiii");
             let payload = ListAllPeers { cid, request_id };
             if state
                 .sink
@@ -21,7 +20,7 @@ pub async fn list_all_peers(
                 .await
                 .as_mut()
                 .unwrap()
-                .send(bincode2::serialize(&payload).unwrap().into())
+                .send(payload)
                 .await
                 .is_ok()
             {

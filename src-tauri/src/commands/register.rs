@@ -1,10 +1,11 @@
-use crate::structs::ConnectionState;
 use citadel_internal_service_types::InternalServiceRequest;
 use futures::SinkExt;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use tauri::State;
 use uuid::Uuid;
+
+use crate::structs::ConnectionState;
 
 #[tauri::command]
 pub async fn register(
@@ -32,7 +33,7 @@ pub async fn register(
         .await
         .as_mut()
         .unwrap()
-        .send(bincode2::serialize(&payload).unwrap().into())
+        .send(payload)
         .await
         .is_ok()
     {

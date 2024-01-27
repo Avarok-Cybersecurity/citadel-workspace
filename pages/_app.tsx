@@ -36,7 +36,7 @@ function CustomApp({
   useEffect(() => {
     const connect = async () => {
       try {
-        const uuid_value: string = await invoke('open_tcp_conn', {
+        const uuid_value: string = await invoke('open_connection', {
           addr: '127.0.0.1:12345',
         });
         store.dispatch(setUuid(uuid_value));
@@ -139,9 +139,3 @@ function CustomApp({
 }
 
 export default CustomApp;
-function dispatch(arg0: {
-  payload: any;
-  type: 'stram_handler/setCurrentServer';
-}) {
-  throw new Error('Function not implemented.');
-}
