@@ -1,16 +1,16 @@
 export type PeerConnectSuccess = {
-  cid: number;
+  cid: bigint;
   request_id: string;
 };
 
 export type PeerDisconnectSuccess = {
-  cid: number;
+  cid: bigint;
   request_id: string;
 };
 
 export type PeerRegisterSuccess = {
-  cid: number;
-  peer_cid: number;
+  cid: bigint;
+  peer_cid: bigint;
   peer_username: string;
   request_id: string;
 };

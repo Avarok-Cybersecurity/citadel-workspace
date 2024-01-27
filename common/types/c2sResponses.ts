@@ -31,26 +31,26 @@ export type ServiceDisconnect = {
 };
 
 export type ListAllPeers = {
-  cid: number;
-  online_status: { [key: number]: boolean };
+  cid: bigint;
+  online_status: { [key: bigint]: boolean };
   request_id: string;
 };
 export type PeerSessionInformation = {
-  cid: number;
-  peer_cid: number;
+  cid: bigint;
+  peer_cid: bigint;
   peer_username: string;
 };
 
 export type Disconnect = {
-  cid: number;
-  peer_cid: number;
+  cid: bigint;
+  peer_cid: bigint;
   request_id: string;
 };
 
 export type GetSessions = {
   sessions: Array<{
     cid: string;
-    peer_connections: { [key: number]: PeerSessionInformation };
+    peer_connections: { [key: bigint]: PeerSessionInformation };
   }>;
   request_id: string;
 };

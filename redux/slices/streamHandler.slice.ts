@@ -4,7 +4,7 @@ import { createSlice, current, PayloadAction } from '@reduxjs/toolkit';
 type Sessions = {
   current_used_session_server: string;
   current_sessions: {
-    [key: string | number]: { [key: string]: string | boolean };
+    [key: string | bigint]: { [key: string]: string | boolean };
   };
 };
 export type ContextType =
@@ -31,7 +31,7 @@ const initialState: {
 };
 
 const streamExecSlice = createSlice({
-  name: 'stram_handler',
+  name: 'stream_handler',
   initialState,
   reducers: {
     addToContext: (
@@ -42,10 +42,10 @@ const streamExecSlice = createSlice({
 
       const context_type: ContextType =
         action.payload.context_type ?? state.context[req_id];
-      const payload: { [key: string]: string | number } = action.payload;
+      const payload: { [key: string]: string | bigint } = action.payload;
       console.log('payload', payload);
 
-      let updatedObject: { [key: string]: string | number } = {};
+      let updatedObject: { [key: string]: string | bigint } = {};
 
       for (const key in payload) {
         if (key != 'request_id') {

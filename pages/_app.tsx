@@ -23,6 +23,7 @@ import {
   Payload,
 } from '@common/types/c2sResponses';
 import { useRouter } from 'next/navigation';
+import JSONbig from 'json-bigint';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 
@@ -60,7 +61,7 @@ function CustomApp({
     const listen_packet_stream = listen(
       'packet_stream',
       (event: { payload: string }) => {
-        const response = JSON.parse(event.payload);
+        const response = JSONbig.parse(event.payload);
         const key = Object.keys(response.packet).at(0)!;
         const data = { payload: response.packet[key], error: response.error };
 
