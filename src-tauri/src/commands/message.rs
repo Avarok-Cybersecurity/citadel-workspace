@@ -1,3 +1,4 @@
+use crate::structs::ConnectionState;
 use citadel_internal_service_types::InternalServiceRequest::Message;
 use futures::SinkExt;
 use tauri::State;
@@ -8,6 +9,7 @@ pub async fn message(
     cid: u64,
     peer_cid: Option<u64>,
     request_id: String,
+    state: State<'_, ConnectionState>,
 ) -> Result<String, String> {
     let payload = Message {
         message: message.into_bytes(),
@@ -16,6 +18,18 @@ pub async fn message(
         security_level: Default::default(),
         request_id: request_id.parse().unwrap(),
     };
-
-    Ok(request_id.to_string())
+    if state
+        .sink
+        .lock()
+        .await
+        .as_mut()
+        .unwrap()
+        .send(payload)
+        .await
+        .is_ok()
+    {
+        Ok(request_id.to_string())
+    } else {
+        Err("Unable to connect".to_string())
+    }
 }

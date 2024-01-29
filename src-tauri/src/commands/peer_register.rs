@@ -1,7 +1,6 @@
 use citadel_internal_service_types::InternalServiceRequest::PeerRegister;
 use futures::SinkExt;
 use tauri::State;
-use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::structs::ConnectionState;

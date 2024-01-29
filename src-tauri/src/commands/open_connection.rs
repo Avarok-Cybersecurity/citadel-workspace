@@ -5,7 +5,6 @@ use citadel_logging::error;
 use futures::StreamExt;
 use std::error::Error;
 use tauri::{Manager, State};
-use tokio::sync::Mutex;
 
 fn send_response(
     packet_name: &str,

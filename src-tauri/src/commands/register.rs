@@ -3,7 +3,6 @@ use futures::SinkExt;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use tauri::State;
-use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::structs::ConnectionState;
