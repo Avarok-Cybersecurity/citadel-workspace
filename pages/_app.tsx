@@ -9,7 +9,7 @@ import { Provider } from 'react-redux';
 import { invoke } from '@tauri-apps/api/core';
 import store from 'redux/store';
 import { setUuid } from 'redux/slices/uuid.slice';
-import { parse, stringify } from 'lossless-json';
+import { parse } from 'lossless-json';
 import {
   addToContext,
   removeServerSession,

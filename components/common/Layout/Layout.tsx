@@ -3,7 +3,6 @@ import { Fragment, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { Bars3Icon, UsersIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
-import { usePathname } from 'next/navigation';
 import WorkspacesBar from '@components/ui/workspacesBar';
 import AddServerModal from '@components/ui/AddServer';
 import Link from 'next/link';
@@ -22,7 +21,6 @@ type Props = {
 function classNames(...classes: any) {
   return classes.filter(Boolean).join(' ');
 }
-// const navigation = ;
 export const Layout = ({ children }: Props) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [addServerOpen, setAddServerOpen] = useState(false);
