@@ -3,10 +3,10 @@ import { Fragment, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { Bars3Icon, UsersIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
-import { usePathname } from 'next/navigation';
 import WorkspacesBar from '@components/ui/workspacesBar';
 import AddServerModal from '@components/ui/AddServer';
 import Link from 'next/link';
+import { useAppSelector } from '@redux/store';
 
 const teams = [
   { id: 1, name: 'Heroicons', href: '#', initial: 'H', current: false },
@@ -21,16 +21,13 @@ type Props = {
 function classNames(...classes: any) {
   return classes.filter(Boolean).join(' ');
 }
-// const navigation = ;
 export const Layout = ({ children }: Props) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [addServerOpen, setAddServerOpen] = useState(false);
-  // const currentUsedSessionCid: string = useAppSelector(
-  //   (state) => state.context.sessions.current_used_session_server
-  // );
+  const currentUsedSessionCid: string = useAppSelector(
+    (state) => state.context.sessions.current_used_session_server
+  );
 
-  const pathname = usePathname();
-  console.log(pathname);
   const [navigation, _] = useState([
     {
       name: 'Register Requests',
@@ -40,13 +37,11 @@ export const Layout = ({ children }: Props) => {
     },
   ]);
 
-  // const current_sessions = useAppSelector(
-  //   (state) => state.context.sessions.current_sessions
-  // );
+  const current_sessions = useAppSelector(
+    (state) => state.context.sessions.current_sessions
+  );
 
-  // const peers = Object.keys(
-  //   current_sessions[currentUsedSessionCid] ?? {}
-  // ).length;
+  const peers = current_sessions[currentUsedSessionCid] ?? {};
 
   return (
     <>
@@ -162,6 +157,36 @@ export const Layout = ({ children }: Props) => {
                             ))}
                           </ul>
                         </li>
+                        <li>
+                          <div className="text-xs font-semibold leading-6 text-gray-400">
+                            Your Peers
+                          </div>
+                          <ul role="list" className="-mx-2 mt-2 space-y-1">
+                            {Object.keys(peers).map((key) => (
+                              <li key={key}>
+                                <Link
+                                  href={`/server/${currentUsedSessionCid}/${current_sessions[key]}`}
+                                  className={classNames(
+                                    key
+                                      ? 'bg-gray-800 text-white'
+                                      : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                                    'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                                  )}
+                                >
+                                  <span className="relative inline-block">
+                                    <img
+                                      className="h-6 w-6 rounded-full"
+                                      src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
+                                      alt=""
+                                    />
+                                    <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
+                                  </span>
+                                  <span className="truncate">{key}</span>
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
                       </ul>
                     </nav>
                   </div>
@@ -251,6 +276,36 @@ export const Layout = ({ children }: Props) => {
                     <li className="py-2 text-xs font-semibold text-white cursor-pointer hover:bg-slate-800">
                       Connected peers
                     </li>
+                  </ul>
+                </li>
+                <li>
+                  <div className="text-xs font-semibold leading-6 text-gray-400">
+                    Your Peers
+                  </div>
+                  <ul role="list" className="-mx-2 mt-2 space-y-1">
+                    {Object.keys(peers).map((key) => (
+                      <li key={key}>
+                        <Link
+                          href={`/server/${currentUsedSessionCid}/${current_sessions[key]}`}
+                          className={classNames(
+                            key
+                              ? 'bg-gray-800 text-white'
+                              : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                            'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                          )}
+                        >
+                          <span className="relative inline-block">
+                            <img
+                              className="h-6 w-6 rounded-full"
+                              src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
+                              alt=""
+                            />
+                            <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
+                          </span>
+                          <span className="truncate">{key}</span>
+                        </Link>
+                      </li>
+                    ))}
                   </ul>
                 </li>
                 <li className="-mx-6 mt-auto">

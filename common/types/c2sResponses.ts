@@ -1,4 +1,9 @@
-export type Payload = GetSessions | ListAllPeers;
+import { LosslessNumber } from 'lossless-json';
+
+export type Payload = {
+  payload: GetSessions | ListAllPeers | Disconnect;
+  error: boolean;
+};
 
 export type ServiceTCPConnectionAccepted = {
   ServiceConnectionAccepted: {
@@ -28,20 +33,26 @@ export type ServiceDisconnect = {
 };
 
 export type ListAllPeers = {
-  cid: number;
-  online_status: { [key: number]: boolean };
+  cid: LosslessNumber;
+  online_status: { [key: string]: boolean };
   request_id: string;
 };
 export type PeerSessionInformation = {
-  cid: number;
-  peer_cid: number;
+  cid: LosslessNumber;
+  peer_cid: LosslessNumber;
   peer_username: string;
+};
+
+export type Disconnect = {
+  cid: LosslessNumber;
+  peer_cid: LosslessNumber;
+  request_id: string;
 };
 
 export type GetSessions = {
   sessions: Array<{
     cid: string;
-    peer_connections: { [key: number]: PeerSessionInformation };
+    peer_connections: { [key: string]: PeerSessionInformation };
   }>;
   request_id: string;
 };

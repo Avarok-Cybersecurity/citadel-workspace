@@ -20,13 +20,14 @@ pub async fn connect(
         session_security_settings: Default::default(),
         request_id: request_id.parse().unwrap(),
     };
+
     if state
         .sink
         .lock()
         .await
         .as_mut()
         .unwrap()
-        .send(bincode2::serialize(&payload).unwrap().into())
+        .send(payload)
         .await
         .is_ok()
     {

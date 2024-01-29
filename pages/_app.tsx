@@ -9,12 +9,21 @@ import { Provider } from 'react-redux';
 import { invoke } from '@tauri-apps/api/core';
 import store from 'redux/store';
 import { setUuid } from 'redux/slices/uuid.slice';
+import { parse } from 'lossless-json';
 import {
   addToContext,
+  removeServerSession,
+  setCurrentServer,
   setCurrentSessionPeers,
   setSessions,
 } from 'redux/slices/streamHandler.slice';
-import { GetSessions, ListAllPeers, Payload } from '@common/types/c2sResponses';
+import {
+  Disconnect,
+  GetSessions,
+  ListAllPeers,
+  Payload,
+} from '@common/types/c2sResponses';
+import { useRouter } from 'next/navigation';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 
@@ -23,11 +32,12 @@ function CustomApp({
   pageProps,
 }: AppProps & { Component: { Layout: FC<{ children: ReactNode }> } }) {
   const [_connErr, setErr] = useState('');
+  const router = useRouter();
 
   useEffect(() => {
     const connect = async () => {
       try {
-        const uuid_value: string = await invoke('open_tcp_conn', {
+        const uuid_value: string = await invoke('open_connection', {
           addr: '127.0.0.1:12345',
         });
         store.dispatch(setUuid(uuid_value));
@@ -51,12 +61,15 @@ function CustomApp({
     const listen_packet_stream = listen(
       'packet_stream',
       (event: { payload: string }) => {
-        const data = JSON.parse(event.payload);
-        const key = Object.keys(data).at(0)!;
-        const payload = data[key];
+        const response: any = parse(event.payload);
+        const key = Object.keys(response.packet).at(0)!;
+        const data: any = {
+          payload: response.packet[key] as any,
+          error: response.error,
+        };
 
-        const req_id = payload.request_id;
-        handlePacket(req_id, payload);
+        const req_id = data.payload.request_id;
+        handlePacket(req_id, data);
       }
     );
 
@@ -67,21 +80,24 @@ function CustomApp({
 
   const handlePacket = (req_id: string, payload: Payload) => {
     const { context: map } = store.getState();
-    console.log('Map', map);
     const context = map.context[req_id];
-    console.log('Payload', payload);
-    console.log('Context', context);
 
     if (context) {
       switch (context) {
         case 'GetSession':
-          const getSessionsPayload: Payload = payload as GetSessions;
+          const getSessionsPayload = payload.payload as GetSessions;
           const activeSessions = getSessionsPayload.sessions;
           store.dispatch(setSessions(activeSessions));
           break;
         case 'ListAllPeers':
-          const peers: Payload = payload as ListAllPeers;
-          setCurrentSessionPeers(peers);
+          const peers = payload.payload as ListAllPeers;
+          store.dispatch(setCurrentSessionPeers(peers));
+          break;
+        case 'Disconnect':
+          const disconnect = payload.payload as Disconnect;
+          router.push('/');
+          store.dispatch(removeServerSession(disconnect.cid));
+          store.dispatch(setCurrentServer(''));
           break;
         default:
           console.log('default');

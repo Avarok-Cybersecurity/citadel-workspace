@@ -1,16 +1,18 @@
+import { LosslessNumber } from 'lossless-json';
+
 export type PeerConnectSuccess = {
-  cid: number;
+  cid: LosslessNumber;
   request_id: string;
 };
 
 export type PeerDisconnectSuccess = {
-  cid: number;
+  cid: LosslessNumber;
   request_id: string;
 };
 
 export type PeerRegisterSuccess = {
-  cid: number;
-  peer_cid: number;
+  cid: LosslessNumber;
+  peer_cid: LosslessNumber;
   peer_username: string;
   request_id: string;
 };

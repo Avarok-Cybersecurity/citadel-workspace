@@ -1,8 +1,7 @@
+use crate::structs::ConnectionState;
 use citadel_internal_service_types::InternalServiceRequest::Message;
 use futures::SinkExt;
 use tauri::State;
-
-use crate::structs::ConnectionState;
 
 #[tauri::command]
 pub async fn message(
@@ -25,12 +24,12 @@ pub async fn message(
         .await
         .as_mut()
         .unwrap()
-        .send(bincode2::serialize(&payload).unwrap().into())
+        .send(payload)
         .await
         .is_ok()
     {
         Ok(request_id.to_string())
     } else {
-        Err("Unable to message".to_string())
+        Err("Unable to connect".to_string())
     }
 }

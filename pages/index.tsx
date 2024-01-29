@@ -25,7 +25,6 @@ export default function Home() {
                 context_type: 'RegisterAndConnect',
               })
             );
-            console.log(data);
           }}
         >
           Register

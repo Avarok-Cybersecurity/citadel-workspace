@@ -5,24 +5,16 @@ import invoke from 'hooks/utils/invoke-api';
 export type DisconnectInput = {
   cid: string;
 };
-export const handler = async (input: DisconnectInput): Promise<string> => {
-  const response = await invoke<undefined, string>('disconnect');
+export default async function useDisconnect(
+  input: DisconnectInput
+): Promise<string> {
+  const response = await invoke<{ cid: string }, string>('disconnect', input);
   store.dispatch(
     addToContext({
       req_id: response,
       context_type: 'Disconnect',
     })
   );
-  const req_id = await invoke<{ uuid: string }, string>('get_sessions', {
-    uuid: input.cid,
-  });
-  store.dispatch(
-    addToContext({
-      req_id,
-      context_type: 'GetSession',
-    })
-  );
-  return response;
-};
 
-export default handler;
+  return response;
+}
