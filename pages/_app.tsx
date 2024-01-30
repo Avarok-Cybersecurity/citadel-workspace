@@ -99,6 +99,12 @@ function CustomApp({
           store.dispatch(removeServerSession(disconnect.cid));
           store.dispatch(setCurrentServer(''));
           break;
+        case 'PeerRegister':
+          const p2pRegPayload = payload.payload as any;
+          console.log(p2pRegPayload);
+          // store.dispatch(removeServerSession(disconnect.cid));
+          // store.dispatch(setCurrentServer(''));
+          break;
         default:
           console.log('default');
           break;
