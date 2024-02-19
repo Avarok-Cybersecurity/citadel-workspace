@@ -14,10 +14,10 @@ name = "citadel_workspace_ui_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.0.0-alpha", features = [] }
+tauri-build = { version = "2.0.0-beta", features = [] }
 
 [dependencies]
-tauri = { version = "2.0.0-alpha", features = [] }
+tauri = { version = "2.0.0-beta", features = [] }
 tauri-plugin-shell = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v2" }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
