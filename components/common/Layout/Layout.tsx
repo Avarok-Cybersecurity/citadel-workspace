@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Fragment, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { Bars3Icon, UsersIcon, XMarkIcon } from '@heroicons/react/24/outline';
@@ -8,6 +8,7 @@ import AddServerModal from '@components/ui/AddServer';
 import Link from 'next/link';
 import { useAppSelector } from '@redux/store';
 import usePeerRegister from '@hooks/p2p/usePeerRegister';
+import listAllPeers from '@hooks/c2s/useListAllPeers';
 
 const teams = [
   { id: 1, name: 'Heroicons', href: '#', initial: 'H', current: false },

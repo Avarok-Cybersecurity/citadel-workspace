@@ -3,6 +3,7 @@ import Link from 'next/link';
 import React from 'react';
 import { setCurrentServer } from 'redux/slices/streamHandler.slice';
 import clsx from 'clsx';
+import listAllPeers from '@hooks/c2s/useListAllPeers';
 
 function WorkspaceBar({
   setAddServerOpener,
@@ -45,6 +46,9 @@ function WorkspaceBar({
                   pathname: `/server/${key}`,
                 }}
                 onClick={() => {
+                  listAllPeers({
+                    cid: key,
+                  });
                   dispatch(setCurrentServer(key));
                 }}
               >

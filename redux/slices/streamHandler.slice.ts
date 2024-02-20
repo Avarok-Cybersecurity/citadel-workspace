@@ -72,6 +72,7 @@ const streamExecSlice = createSlice({
       delete state.sessions.current_sessions[cid];
     },
     setCurrentSessionPeers: (state, action: PayloadAction<ListAllPeers>) => {
+      console.log(action.payload);
       const cid = action.payload.cid;
       const online_statuses = action.payload.online_status;
       state.sessions.current_sessions[cid.value] = online_statuses;
