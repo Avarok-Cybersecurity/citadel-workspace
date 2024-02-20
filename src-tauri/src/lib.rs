@@ -27,7 +27,6 @@ pub fn run() {
             }
             Ok(())
         })
-        .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             open_connection,
             connect,

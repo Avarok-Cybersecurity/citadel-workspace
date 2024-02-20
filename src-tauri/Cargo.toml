@@ -14,11 +14,10 @@ name = "citadel_workspace_ui_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.0.0-beta", features = [] }
+tauri-build = { version = "2.0.0-beta.2", features = [] }
 
 [dependencies]
-tauri = { version = "2.0.0-beta", features = [] }
-tauri-plugin-shell = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v2" }
+tauri = { version = "2.0.0-beta.3", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.28.2", features = ["net", "rt", "macros"] }
@@ -30,7 +29,7 @@ citadel-internal-service-connector= {version="0.1.0", git="https://github.com/Av
 futures = "0.3.28"
 tokio-util = { version = "0.7.8", default-features = false }
 citadel_logging = { version = "0.7.0", default-features = false }
-# tauri-plugin-log = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
+tauri-plugin-log = "2.0.0-beta.0"
 log = "^0.4"
 
 [features]
