@@ -2,15 +2,11 @@
 
 Graphical User Interface for interfacing with Citadel Workspace, a highly cryptographically post-quantum secure work environment for individuals, businesses, and government.
 
-### Automatic Install
-
-After installing cargo make, run: `cargo make install`
-
 ### Manual Install
 
 Install `cargo install create-tauri-app`
 
-Install `cargo install tauri-cli`
+Run `cargo install tauri-cli --version 2.0.0-beta.1`
 
 Install Bun JS runtime dependencies `curl -fsSL https://bun.sh/install | bash`
 

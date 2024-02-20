@@ -2,7 +2,12 @@
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable", "esnext"],
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable",
+      "esnext"
+    ],
     "module": "ESNext",
     "skipLibCheck": true,
     /* Bundler mode */
@@ -22,16 +27,35 @@
     "esModuleInterop": true,
     "baseUrl": ".",
     "paths": {
-      "@common": ["common"],
-      "@common/*": ["common/*"],
-      "@hooks": ["hooks"],
-      "@hooks/*": ["hooks/*"],
-      "@redux": ["redux"],
-      "@redux/*": ["redux/*"],
-      "@components/*": ["components/*"],
-      "@assets/*": ["assets/*"],
-      "@lib/*": ["lib/*"]
-    }
+      "@common": [
+        "common"
+      ],
+      "@common/*": [
+        "common/*"
+      ],
+      "@hooks": [
+        "hooks"
+      ],
+      "@hooks/*": [
+        "hooks/*"
+      ],
+      "@redux": [
+        "redux"
+      ],
+      "@redux/*": [
+        "redux/*"
+      ],
+      "@components/*": [
+        "components/*"
+      ],
+      "@assets/*": [
+        "assets/*"
+      ],
+      "@lib/*": [
+        "lib/*"
+      ]
+    },
+    "forceConsistentCasingInFileNames": true
   },
   "plugins": [
     {
@@ -45,5 +69,7 @@
     ".next/types/**/*.ts",
     "next.config.mjs"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }

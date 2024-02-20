@@ -12,9 +12,7 @@ fn send_response(
     window: &tauri::Window,
 ) -> Result<(), Box<dyn Error>> {
     let error = packet.is_error();
-
     let payload = Payload { packet, error };
-
     let _ = window.emit(packet_name, serde_json::to_string(&payload)?);
     Ok(())
 }
