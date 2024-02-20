@@ -1,4 +1,7 @@
 {
+  "productName": "citadel_workspace",
+  "version": "0.0.0",
+  "identifier": "citadel.workspace",
   "app": {
     "macOSPrivateApi": false,
     "security": {
