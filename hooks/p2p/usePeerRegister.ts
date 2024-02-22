@@ -21,7 +21,7 @@ export const peerRegister = async (input: Peer2PeerRegisterInput) => {
   store.dispatch(
     addToContext({ req_id: response, context_type: 'PeerRegister' })
   );
-  console.log('peerRegister', response);
+  return response;
 };
 
 export default peerRegister;

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Fragment, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { Bars3Icon, UsersIcon, XMarkIcon } from '@heroicons/react/24/outline';
@@ -8,7 +8,6 @@ import AddServerModal from '@components/ui/AddServer';
 import Link from 'next/link';
 import { useAppSelector } from '@redux/store';
 import usePeerRegister from '@hooks/p2p/usePeerRegister';
-import listAllPeers from '@hooks/c2s/useListAllPeers';
 
 const teams = [
   { id: 1, name: 'Heroicons', href: '#', initial: 'H', current: false },
@@ -48,7 +47,10 @@ export const Layout = ({ children }: Props) => {
   const peers = current_sessions[currentUsedSessionCid] ?? {};
 
   const handleP2pRegister = () => {
-    usePeerRegister({ cid: currentUsedSessionCid, peerCid: peerToConnect });
+    usePeerRegister({
+      cid: currentUsedSessionCid,
+      peerCid: peerToConnect,
+    });
   };
   return (
     <div className="relative">
@@ -424,6 +426,7 @@ export const Layout = ({ children }: Props) => {
                         <button
                           onClick={() => {
                             handleP2pRegister();
+                            setIsModalOpen(false);
                           }}
                           data-modal-hide="popup-modal"
                           type="button"

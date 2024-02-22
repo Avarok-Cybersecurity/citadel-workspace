@@ -10,9 +10,6 @@ pub async fn list_all_peers(
     cid: String,
     state: State<'_, ConnectionState>,
 ) -> Result<String, String> {
-    if let Ok(cid) = cid.parse::<u64>() {
-        println!("CID: {:?}", cid);
-    }
     let request_id = Uuid::new_v4();
     let request = ListAllPeers {
         cid: cid.parse().unwrap(),

@@ -66,6 +66,7 @@ function CustomApp({
         const data: any = {
           payload: response.packet[key] as any,
           error: response.error,
+          Notification: response.notification,
         };
 
         const req_id = data.payload.request_id;
@@ -104,7 +105,7 @@ function CustomApp({
           console.log(p2pRegPayload);
           break;
         default:
-          console.log('default');
+          console.log('Unknown packet type', payload.payload);
           break;
       }
     }
