@@ -24,6 +24,7 @@ import {
   Payload,
 } from '@common/types/c2sResponses';
 import { useRouter } from 'next/navigation';
+import handleNotificationPacket from 'packetHandlers/notificationHandler';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 
@@ -66,7 +67,7 @@ function CustomApp({
         const data: any = {
           payload: response.packet[key] as any,
           error: response.error,
-          Notification: response.notification,
+          notification: response.notification,
         };
 
         const req_id = data.payload.request_id;
@@ -74,8 +75,27 @@ function CustomApp({
       }
     );
 
+    const listen_notification_stream = listen(
+      'notification_stream',
+      (event: { payload: string }) => {
+        const response: any = parse(event.payload);
+        const key = Object.keys(response.packet).at(0)!;
+        console.log('key is', key, response.packet[key]);
+        const data: any = {
+          payload: response.packet[key] as any,
+          error: response.error,
+          notification: response.notification,
+        };
+
+        const req_id = data.payload.request_id;
+        console.log('Packet received', req_id, data);
+        handleNotificationPacket(data, key);
+      }
+    );
+
     return () => {
       listen_packet_stream.then((unlisten) => unlisten());
+      listen_notification_stream.then((unlisten) => unlisten());
     };
   }, []);
 

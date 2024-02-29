@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { setCurrentServer } from 'redux/slices/streamHandler.slice';
 import clsx from 'clsx';
 import listAllPeers from '@hooks/c2s/useListAllPeers';
+import peerRegister from '@hooks/p2p/usePeerRegister';
 
 function WorkspaceBar({
   setAddServerOpener,
@@ -17,6 +18,11 @@ function WorkspaceBar({
   const currentSessionInUse = useAppSelector(
     (state) => state.context.sessions.current_used_session_server
   );
+
+  const currentNotification = useAppSelector(
+    (state) => state.notificationsContext
+  );
+  console.log('Current notifications', currentNotification);
 
   const dispatch = useAppDispatch();
   const [openedNotification, setOpenedNotification] = useState(false);
@@ -104,45 +110,55 @@ function WorkspaceBar({
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
-                    stroke-width="1.5"
+                    strokeWidth="1.5"
                     stroke="currentColor"
                     className="w-6 h-6"
                   >
                     <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                       d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z"
                     />
                   </svg>
 
                   <span className="sr-only">Refresh icon</span>
                 </div>
-                <div className="ms-3 text-sm font-normal">
-                  <span className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
-                    Friend request
-                  </span>
-                  <div className="mb-2 text-sm font-normal">
-                    User 321132112312413124 wants to be friends with you
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <button
-                        onClick={() => {}}
-                        className="inline-flex justify-center w-full px-2 py-1.5 text-xs font-medium text-center text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-300 dark:bg-blue-500 dark:hover:bg-blue-600 dark:focus:ring-blue-800"
-                      >
-                        Accept
-                      </button>
-                    </div>
-                    <div>
-                      <a
-                        href="#"
-                        className="inline-flex justify-center w-full px-2 py-1.5 text-xs font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 dark:bg-gray-600 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:border-gray-700 dark:focus:ring-gray-700"
-                      >
-                        Not now
-                      </a>
-                    </div>
-                  </div>
-                </div>
+                {currentNotification[currentSessionInUse] &&
+                  currentNotification[currentSessionInUse].map(
+                    (notification) => {
+                      return (
+                        <div className="ms-3 text-sm font-normal">
+                          <span className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
+                            Friend request
+                          </span>
+                          <div className="mb-2 text-sm font-normal">
+                            User {notification.cid.value} wants to be friends
+                            with you
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <button
+                                onClick={() => {
+                                  peerRegister({
+                                    cid: currentSessionInUse,
+                                    peerCid: notification.cid.value,
+                                  });
+                                }}
+                                className="inline-flex justify-center w-full px-2 py-1.5 text-xs font-medium text-center text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-300 dark:bg-blue-500 dark:hover:bg-blue-600 dark:focus:ring-blue-800"
+                              >
+                                Accept
+                              </button>
+                            </div>
+                            <div>
+                              <span className="inline-flex justify-center w-full px-2 py-1.5 text-xs font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 dark:bg-gray-600 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:border-gray-700 dark:focus:ring-gray-700">
+                                Not now
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                  )}
               </div>
             </div>
             <a

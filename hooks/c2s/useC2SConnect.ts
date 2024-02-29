@@ -8,26 +8,28 @@ export type RegisterAndConnectInput = {
   proposedPassword: string;
   serverAddr: string;
 };
-export const serverConnect = async (
-  input: RegisterAndConnectInput
-): Promise<string> => {
-  const response = await invoke<RegisterAndConnectInput, string>(
+export const serverConnect = async (input: RegisterAndConnectInput) => {
+  const response = invoke<RegisterAndConnectInput, string>(
     'register',
     input
-  );
-  store.dispatch(
-    addToContext({
-      req_id: response,
-      context_type: 'RegisterAndConnect',
-    })
-  );
-  const req_id = await invoke('get_sessions');
-  store.dispatch(
-    addToContext({
-      req_id,
-      context_type: 'GetSession',
-    })
-  );
+  ).then((response) => {
+    store.dispatch(
+      addToContext({
+        req_id: response,
+        context_type: 'RegisterAndConnect',
+      })
+    );
+    setTimeout(() => {
+      invoke('get_sessions').then((req_id) => {
+        store.dispatch(
+          addToContext({
+            req_id,
+            context_type: 'GetSession',
+          })
+        );
+      });
+    }, 520);
+  });
   return response;
 };
 
