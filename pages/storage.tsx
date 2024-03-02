@@ -2,19 +2,6 @@ import { Layout } from '@components/common/Layout';
 import React from 'react';
 
 export default function Storage() {
-  // const { uuid } = useSelector((state: RootState) => state.uuid);
-  // const upload = (e: any) => {
-  //   const arr: string[] = [];
-  //   Array.from(e.target.files).forEach((file: any) => {
-  //     let img = URL.createObjectURL(file);
-  //     console.log(img);
-  //     arr.push(img);
-  //     // context.addImgToState({ id: uuid(), bytes: img });
-  //   });
-  //   // arr.forEach((item) => {
-  //   //   context.addImgToState({ id: uuid(), bytes: item });
-  //   // });
-  // };
   return (
     <>
       <div className="flex justify-center items-start h-full">

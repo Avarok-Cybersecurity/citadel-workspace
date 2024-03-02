@@ -6,7 +6,6 @@ const handleNotificationPacket = ({ payload }: Payload, key: string) => {
   if (key) {
     switch (key) {
       case 'PeerRegisterNotification':
-        console.log('Noticiation packet', payload);
         store.dispatch(
           addToNotificationsContext({
             key: 'PeerRegisterNotification',

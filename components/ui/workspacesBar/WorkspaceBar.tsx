@@ -159,8 +159,6 @@ function WorkspaceBar({
                             <div>
                               <span
                                 onClick={() => {
-                                  console.log('Not now');
-                                  console.log(notifications);
                                   dispatch(
                                     deleteFromNotificationsContext({
                                       cid: currentSessionInUse,

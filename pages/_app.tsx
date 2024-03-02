@@ -87,7 +87,6 @@ function CustomApp({
         };
 
         const req_id = data.payload.request_id;
-        console.log('Packet received', req_id, data);
         handleNotificationPacket(data, key);
       }
     );
@@ -121,14 +120,8 @@ function CustomApp({
           break;
         case 'PeerRegister':
           const p2pRegPayload = payload.payload as any;
-          console.log('p2p register accepted? ', p2pRegPayload);
           break;
         default:
-          if (key === 'PeerRegisterSuccess') {
-            console.log('Peer register success', payload.payload);
-          } else {
-            console.log('Unknown packet type', payload.payload);
-          }
           break;
       }
     }
