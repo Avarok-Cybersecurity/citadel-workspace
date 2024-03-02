@@ -6,7 +6,7 @@ export type Payload = {
   notofication: boolean;
 };
 export type PeerRegisterNotification = {
-  cid: string;
+  cid: LosslessNumber;
   peer_cid: LosslessNumber;
   peer_username: string;
   request_id?: string;

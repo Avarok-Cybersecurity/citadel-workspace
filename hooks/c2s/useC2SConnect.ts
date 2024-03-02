@@ -28,7 +28,7 @@ export const serverConnect = async (input: RegisterAndConnectInput) => {
           })
         );
       });
-    }, 520);
+    }, 1000);
   });
   return response;
 };

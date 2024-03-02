@@ -5,6 +5,7 @@ import { setCurrentServer } from 'redux/slices/streamHandler.slice';
 import clsx from 'clsx';
 import listAllPeers from '@hooks/c2s/useListAllPeers';
 import peerRegister from '@hooks/p2p/usePeerRegister';
+import { deleteFromNotificationsContext } from '@redux/slices/notificationsHandler.slice';
 
 function WorkspaceBar({
   setAddServerOpener,
@@ -22,8 +23,8 @@ function WorkspaceBar({
   const currentNotification = useAppSelector(
     (state) => state.notificationsContext
   );
-  console.log('Current notifications', currentNotification);
 
+  const notifications = useAppSelector((state) => state.notificationsContext);
   const dispatch = useAppDispatch();
   const [openedNotification, setOpenedNotification] = useState(false);
 
@@ -132,8 +133,8 @@ function WorkspaceBar({
                             Friend request
                           </span>
                           <div className="mb-2 text-sm font-normal">
-                            User {notification.cid.value} wants to be friends
-                            with you
+                            User {notification.peer_cid.value} wants to be
+                            friends with you
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
@@ -141,8 +142,14 @@ function WorkspaceBar({
                                 onClick={() => {
                                   peerRegister({
                                     cid: currentSessionInUse,
-                                    peerCid: notification.cid.value,
+                                    peerCid: notification.peer_cid.value,
                                   });
+                                  dispatch(
+                                    deleteFromNotificationsContext({
+                                      cid: currentSessionInUse,
+                                      peerCid: notification.peer_cid.value,
+                                    })
+                                  );
                                 }}
                                 className="inline-flex justify-center w-full px-2 py-1.5 text-xs font-medium text-center text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-300 dark:bg-blue-500 dark:hover:bg-blue-600 dark:focus:ring-blue-800"
                               >
@@ -150,7 +157,19 @@ function WorkspaceBar({
                               </button>
                             </div>
                             <div>
-                              <span className="inline-flex justify-center w-full px-2 py-1.5 text-xs font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 dark:bg-gray-600 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:border-gray-700 dark:focus:ring-gray-700">
+                              <span
+                                onClick={() => {
+                                  console.log('Not now');
+                                  console.log(notifications);
+                                  dispatch(
+                                    deleteFromNotificationsContext({
+                                      cid: currentSessionInUse,
+                                      peerCid: notification.peer_cid.value,
+                                    })
+                                  );
+                                }}
+                                className="inline-flex cursor-pointer justify-center w-full px-2 py-1.5 text-xs font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 dark:bg-gray-600 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:border-gray-700 dark:focus:ring-gray-700"
+                              >
                                 Not now
                               </span>
                             </div>

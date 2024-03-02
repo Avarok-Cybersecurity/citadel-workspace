@@ -71,7 +71,7 @@ function CustomApp({
         };
 
         const req_id = data.payload.request_id;
-        handlePacket(req_id, data);
+        handlePacket(req_id, data, key);
       }
     );
 
@@ -80,7 +80,6 @@ function CustomApp({
       (event: { payload: string }) => {
         const response: any = parse(event.payload);
         const key = Object.keys(response.packet).at(0)!;
-        console.log('key is', key, response.packet[key]);
         const data: any = {
           payload: response.packet[key] as any,
           error: response.error,
@@ -99,7 +98,7 @@ function CustomApp({
     };
   }, []);
 
-  const handlePacket = (req_id: string, payload: Payload) => {
+  const handlePacket = (req_id: string, payload: Payload, key?: string) => {
     const { context: map } = store.getState();
     const context = map.context[req_id];
 
@@ -122,10 +121,14 @@ function CustomApp({
           break;
         case 'PeerRegister':
           const p2pRegPayload = payload.payload as any;
-          console.log(p2pRegPayload);
+          console.log('p2p register accepted? ', p2pRegPayload);
           break;
         default:
-          console.log('Unknown packet type', payload.payload);
+          if (key === 'PeerRegisterSuccess') {
+            console.log('Peer register success', payload.payload);
+          } else {
+            console.log('Unknown packet type', payload.payload);
+          }
           break;
       }
     }
