@@ -3,8 +3,6 @@ import { addToNotificationsContext } from '@redux/slices/notificationsHandler.sl
 import store from '@redux/store';
 
 const handleNotificationPacket = ({ payload }: Payload, key: string) => {
-  const { notificationsContext } = store.getState();
-
   if (key) {
     switch (key) {
       case 'PeerRegisterNotification':
