@@ -24,7 +24,6 @@ function WorkspaceBar({
     (state) => state.notificationsContext
   );
 
-  const notifications = useAppSelector((state) => state.notificationsContext);
   const dispatch = useAppDispatch();
   const [openedNotification, setOpenedNotification] = useState(false);
 
