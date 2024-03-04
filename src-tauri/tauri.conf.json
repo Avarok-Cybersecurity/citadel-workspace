@@ -38,7 +38,7 @@
       "minSdkVersion": 24
     },
     "iOS": {},
-    "icon": ["icons/image.ico"],
+    "icon": ["icons/icon.ico"],
     "linux": {
       "appimage": {
         "bundleMediaFramework": false,
