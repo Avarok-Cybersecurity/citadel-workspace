@@ -1,5 +1,5 @@
 import { PeerRegisterNotification } from '@common/types/c2sResponses';
-import { createSlice, current, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 const initialState: {
   [key: string]: Array<any>;

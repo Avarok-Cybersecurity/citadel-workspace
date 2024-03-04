@@ -71,7 +71,7 @@ function CustomApp({
         };
 
         const req_id = data.payload.request_id;
-        handlePacket(req_id, data, key);
+        handlePacket(req_id, data);
       }
     );
 
@@ -86,7 +86,6 @@ function CustomApp({
           notification: response.notification,
         };
 
-        const req_id = data.payload.request_id;
         handleNotificationPacket(data, key);
       }
     );
@@ -97,7 +96,7 @@ function CustomApp({
     };
   }, []);
 
-  const handlePacket = (req_id: string, payload: Payload, key?: string) => {
+  const handlePacket = (req_id: string, payload: Payload) => {
     const { context: map } = store.getState();
     const context = map.context[req_id];
 
@@ -119,7 +118,6 @@ function CustomApp({
           store.dispatch(setCurrentServer(''));
           break;
         case 'PeerRegister':
-          const p2pRegPayload = payload.payload as any;
           break;
         default:
           break;
