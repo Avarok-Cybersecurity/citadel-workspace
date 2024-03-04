@@ -1,5 +1,5 @@
+use crate::commands::send_to_internal_service;
 use citadel_internal_service_types::InternalServiceRequest::PeerConnect;
-use futures::SinkExt;
 use tauri::State;
 use uuid::Uuid;
 
@@ -20,18 +20,6 @@ pub async fn peer_connect(
         session_security_settings: Default::default(),
     };
 
-    if state
-        .sink
-        .lock()
-        .await
-        .as_mut()
-        .unwrap()
-        .send(payload)
-        .await
-        .is_ok()
-    {
-        Ok(request_id.to_string())
-    } else {
-        Err("Unable to connect".to_string())
-    }
+    send_to_internal_service(payload, state).await?;
+    Ok(request_id.to_string())
 }

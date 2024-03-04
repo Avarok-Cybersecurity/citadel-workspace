@@ -1,5 +1,5 @@
+use crate::commands::send_to_internal_service;
 use citadel_internal_service_types::InternalServiceRequest::Connect;
-use futures::SinkExt;
 use tauri::State;
 
 use crate::structs::ConnectionState;
@@ -11,7 +11,7 @@ pub async fn connect(
     request_id: String,
     state: State<'_, ConnectionState>,
 ) -> Result<String, String> {
-    let payload = Connect {
+    let request = Connect {
         username,
         password: password.into_bytes().into(),
         connect_mode: Default::default(),
@@ -21,18 +21,6 @@ pub async fn connect(
         request_id: request_id.parse().unwrap(),
     };
 
-    if state
-        .sink
-        .lock()
-        .await
-        .as_mut()
-        .unwrap()
-        .send(payload)
-        .await
-        .is_ok()
-    {
-        Ok(request_id.to_string())
-    } else {
-        Err("Unable to connect".to_string())
-    }
+    send_to_internal_service(request, state).await?;
+    Ok(request_id)
 }

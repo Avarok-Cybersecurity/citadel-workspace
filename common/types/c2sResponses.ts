@@ -1,10 +1,16 @@
 import { LosslessNumber } from 'lossless-json';
 
 export type Payload = {
-  payload: GetSessions | ListAllPeers | Disconnect;
+  payload: GetSessions | ListAllPeers | Disconnect | PeerRegisterNotification;
   error: boolean;
+  notofication: boolean;
 };
-
+export type PeerRegisterNotification = {
+  cid: LosslessNumber;
+  peer_cid: LosslessNumber;
+  peer_username: string;
+  request_id?: string;
+};
 export type ServiceTCPConnectionAccepted = {
   ServiceConnectionAccepted: {
     id: string;

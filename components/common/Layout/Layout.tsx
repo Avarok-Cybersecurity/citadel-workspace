@@ -7,6 +7,7 @@ import WorkspacesBar from '@components/ui/workspacesBar';
 import AddServerModal from '@components/ui/AddServer';
 import Link from 'next/link';
 import { useAppSelector } from '@redux/store';
+import usePeerRegister from '@hooks/p2p/usePeerRegister';
 
 const teams = [
   { id: 1, name: 'Heroicons', href: '#', initial: 'H', current: false },
@@ -23,7 +24,9 @@ function classNames(...classes: any) {
 }
 export const Layout = ({ children }: Props) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [addServerOpen, setAddServerOpen] = useState(false);
+  const [peerToConnect, setPeerToConnect] = useState('');
   const currentUsedSessionCid: string = useAppSelector(
     (state) => state.context.sessions.current_used_session_server
   );
@@ -43,8 +46,14 @@ export const Layout = ({ children }: Props) => {
 
   const peers = current_sessions[currentUsedSessionCid] ?? {};
 
+  const handleP2pRegister = () => {
+    usePeerRegister({
+      cid: currentUsedSessionCid,
+      peerCid: peerToConnect,
+    });
+  };
   return (
-    <>
+    <div className="relative">
       <div>
         <Transition.Root show={sidebarOpen} as={Fragment}>
           <Dialog
@@ -163,9 +172,14 @@ export const Layout = ({ children }: Props) => {
                           </div>
                           <ul role="list" className="-mx-2 mt-2 space-y-1">
                             {Object.keys(peers).map((key) => (
-                              <li key={key}>
-                                <Link
-                                  href={`/server/${currentUsedSessionCid}/${current_sessions[key]}`}
+                              <li
+                                key={key}
+                                onClick={() => {
+                                  setPeerToConnect(key);
+                                  setIsModalOpen(true);
+                                }}
+                              >
+                                <div
                                   className={classNames(
                                     key
                                       ? 'bg-gray-800 text-white'
@@ -182,7 +196,7 @@ export const Layout = ({ children }: Props) => {
                                     <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
                                   </span>
                                   <span className="truncate">{key}</span>
-                                </Link>
+                                </div>
                               </li>
                             ))}
                           </ul>
@@ -284,9 +298,15 @@ export const Layout = ({ children }: Props) => {
                   </div>
                   <ul role="list" className="-mx-2 mt-2 space-y-1">
                     {Object.keys(peers).map((key) => (
-                      <li key={key}>
-                        <Link
-                          href={`/server/${currentUsedSessionCid}/${current_sessions[key]}`}
+                      <li
+                        className="cursor-pointer"
+                        key={key}
+                        onClick={() => {
+                          setPeerToConnect(key);
+                          setIsModalOpen(true);
+                        }}
+                      >
+                        <div
                           className={classNames(
                             key
                               ? 'bg-gray-800 text-white'
@@ -303,7 +323,7 @@ export const Layout = ({ children }: Props) => {
                             <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
                           </span>
                           <span className="truncate">{key}</span>
-                        </Link>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -354,10 +374,84 @@ export const Layout = ({ children }: Props) => {
         </div>
         <div className="lg:pl-72 h-full" id="workspace">
           <main className="bg-gray-900/95 h-[100%]" id="workspace">
+            {isModalOpen && (
+              <div className="absolute z-[100] top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                <div
+                  id="popup-modal"
+                  tabIndex={-1}
+                  className="overflow-y-auto overflow-x-hidden top-0 right-0 left-0 z-50 justify-center items-center w-full md:inset-0 h-[calc(100%-1rem)] max-h-full"
+                >
+                  <div className="relative p-4 w-full max-w-md max-h-full">
+                    <div className="relative bg-white rounded-lg shadow dark:bg-gray-700">
+                      <button
+                        onClick={() => setIsModalOpen(false)}
+                        type="button"
+                        className="absolute top-3 end-2.5 text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 ms-auto inline-flex justify-center items-center dark:hover:bg-gray-600 dark:hover:text-white"
+                        data-modal-hide="popup-modal"
+                      >
+                        <svg
+                          className="w-3 h-3"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 14 14"
+                        >
+                          <path
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"
+                          />
+                        </svg>
+                        <span className="sr-only">Close modal</span>
+                      </button>
+                      <div className="p-4 md:p-5 text-center">
+                        <svg
+                          className="mx-auto mb-4 text-gray-400 w-12 h-12 dark:text-gray-200"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M10 11V6m0 8h.01M19 10a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                          />
+                        </svg>
+                        <h3 className="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
+                          Are you sure you want to register to {peerToConnect}?
+                        </h3>
+                        <button
+                          onClick={() => {
+                            handleP2pRegister();
+                            setIsModalOpen(false);
+                          }}
+                          data-modal-hide="popup-modal"
+                          type="button"
+                          className="text-white bg-green-600 hover:bg-green-800 focus:ring-4 focus:outline-none focus:ring-green-300 dark:focus:ring-green-800 font-medium rounded-lg text-sm inline-flex items-center px-5 py-2.5 text-center me-2"
+                        >
+                          Yes, I'm sure
+                        </button>
+                        <button
+                          onClick={() => setIsModalOpen(false)}
+                          data-modal-hide="popup-modal"
+                          type="button"
+                          className="text-gray-500 bg-white hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 rounded-lg border border-gray-200 text-sm font-medium px-5 py-2.5 hover:text-gray-900 focus:z-10 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-500 dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-600"
+                        >
+                          No, cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {children}
           </main>
         </div>
       </div>
-    </>
+    </div>
   );
 };

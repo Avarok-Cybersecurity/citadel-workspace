@@ -2,7 +2,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import uuid from './slices/uuid.slice';
 import executor from './slices/streamHandler.slice';
 import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
-
+import notificationsContext from './slices/notificationsHandler.slice';
 const stringMiddleware =
   () =>
   (next: any) =>
@@ -14,7 +14,7 @@ const stringMiddleware =
   };
 
 const store = configureStore({
-  reducer: { uuid, context: executor },
+  reducer: { uuid, context: executor, notificationsContext },
   devTools: process.env.NODE_ENV !== 'production',
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().concat(stringMiddleware),

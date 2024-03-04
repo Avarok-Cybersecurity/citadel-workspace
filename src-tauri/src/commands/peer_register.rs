@@ -1,5 +1,5 @@
+use crate::commands::send_to_internal_service;
 use citadel_internal_service_types::InternalServiceRequest::PeerRegister;
-use futures::SinkExt;
 use tauri::State;
 use uuid::Uuid;
 
@@ -12,7 +12,7 @@ pub async fn peer_register(
     state: State<'_, ConnectionState>,
 ) -> Result<String, String> {
     let request_id = Uuid::new_v4();
-    let payload = PeerRegister {
+    let request = PeerRegister {
         request_id,
         cid: cid.parse::<u64>().unwrap(),
         connect_after_register: false,
@@ -20,18 +20,6 @@ pub async fn peer_register(
         peer_cid: peer_cid.parse::<u64>().unwrap(),
     };
 
-    if state
-        .sink
-        .lock()
-        .await
-        .as_mut()
-        .unwrap()
-        .send(payload)
-        .await
-        .is_ok()
-    {
-        Ok(request_id.to_string())
-    } else {
-        Err("Unable to register to the peer".to_string())
-    }
+    send_to_internal_service(request, state).await?;
+    Ok(request_id.to_string())
 }

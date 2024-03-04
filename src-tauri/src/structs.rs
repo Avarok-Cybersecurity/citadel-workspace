@@ -10,4 +10,5 @@ pub struct ConnectionState {
 pub struct Payload {
     pub packet: InternalServiceResponse,
     pub error: bool,
+    pub notification: bool,
 }

@@ -1,5 +1,5 @@
 import { ListAllPeers } from '@common/types/c2sResponses';
-import { createSlice, current, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { LosslessNumber } from 'lossless-json';
 
 type Sessions = {
@@ -75,7 +75,6 @@ const streamExecSlice = createSlice({
       const cid = action.payload.cid;
       const online_statuses = action.payload.online_status;
       state.sessions.current_sessions[cid.value] = online_statuses;
-      console.log(current(state));
     },
     setCurrentServer: (state, action) => {
       state.sessions.current_used_session_server = action.payload;

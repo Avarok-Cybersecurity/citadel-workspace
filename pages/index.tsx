@@ -3,8 +3,6 @@ import React from 'react';
 import Chat from '@components/chat';
 import serverConnect from '@hooks/c2s/useC2SConnect';
 import genUuid from '@lib/utils';
-import store from '@redux/store';
-import { addToContext } from '@redux/slices/streamHandler.slice';
 
 export default function Home() {
   return (
@@ -13,18 +11,12 @@ export default function Home() {
         <button
           className="text-red-500"
           onClick={async () => {
-            const data: string = await serverConnect({
+            await serverConnect({
               fullName: 'test',
               username: genUuid(),
               proposedPassword: 'test',
               serverAddr: '127.0.0.1:12349',
             });
-            store.dispatch(
-              addToContext({
-                req_id: data,
-                context_type: 'RegisterAndConnect',
-              })
-            );
           }}
         >
           Register
