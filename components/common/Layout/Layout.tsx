@@ -370,35 +370,38 @@ export const Layout = ({ children }: Props) => {
                   ) : null}
                   {peersTypeSelected === 'All Peers' && (
                     <ul role="list" className="-mx-2 mt-2 space-y-1">
-                      {Object.keys(peers).map((key) => (
-                        <li
-                          className="cursor-pointer"
-                          key={key}
-                          onClick={() => {
-                            setPeerToConnect(key);
-                            setIsModalOpen(true);
-                          }}
-                        >
-                          <div
-                            className={classNames(
-                              key
-                                ? 'bg-gray-800 text-white'
-                                : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                              'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
-                            )}
+                      {Object.keys(peers).map((key) => {
+                        if (key === 'registeredPeers') return;
+                        return (
+                          <li
+                            className="cursor-pointer"
+                            key={key}
+                            onClick={() => {
+                              setPeerToConnect(key);
+                              setIsModalOpen(true);
+                            }}
                           >
-                            <span className="relative inline-block">
-                              <img
-                                className="h-6 w-6 rounded-full"
-                                src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-                                alt=""
-                              />
-                              <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
-                            </span>
-                            <span className="truncate">{key}</span>
-                          </div>
-                        </li>
-                      ))}
+                            <div
+                              className={classNames(
+                                key
+                                  ? 'bg-gray-800 text-white'
+                                  : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                                'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                              )}
+                            >
+                              <span className="relative inline-block">
+                                <img
+                                  className="h-6 w-6 rounded-full"
+                                  src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
+                                  alt=""
+                                />
+                                <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
+                              </span>
+                              <span className="truncate">{key}</span>
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </li>
