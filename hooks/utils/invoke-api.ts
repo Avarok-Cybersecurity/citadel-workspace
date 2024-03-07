@@ -9,7 +9,8 @@ export type ApiInvokeTypes =
   | 'list_all_peers'
   | 'peer_connect'
   | 'peer_disconnect'
-  | 'peer_register';
+  | 'peer_register'
+  | 'list_registered_peers';
 
 const invokeApi = async <T = any, R = string>(
   type: ApiInvokeTypes,

@@ -6,6 +6,7 @@ import clsx from 'clsx';
 import listAllPeers from '@hooks/c2s/useListAllPeers';
 import peerRegister from '@hooks/p2p/usePeerRegister';
 import { deleteFromNotificationsContext } from '@redux/slices/notificationsHandler.slice';
+import useListRegisteredPeers from '@hooks/p2p/useListRegisteredPeers';
 
 function WorkspaceBar({
   setAddServerOpener,
@@ -59,6 +60,7 @@ function WorkspaceBar({
                   listAllPeers({
                     cid: key,
                   });
+                  useListRegisteredPeers({ cid: key });
                   dispatch(setCurrentServer(key));
                 }}
               >

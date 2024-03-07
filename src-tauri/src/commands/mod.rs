@@ -7,6 +7,7 @@ pub mod connect;
 pub mod disconnect;
 pub mod get_session;
 pub mod list_all_peers;
+pub mod list_registered_peers;
 pub mod message;
 pub mod open_connection;
 pub mod peer_connect;

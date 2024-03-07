@@ -16,7 +16,8 @@ export type ContextType =
   // p2p
   | 'PeerRegister'
   | 'PeerConnect'
-  | 'PeerDisconnect';
+  | 'PeerDisconnect'
+  | 'ListRegisteredPeers';
 
 const initialState: {
   context: {
@@ -79,6 +80,11 @@ const streamExecSlice = createSlice({
     setCurrentServer: (state, action) => {
       state.sessions.current_used_session_server = action.payload;
     },
+    setRegisteredPeers: (state, action) => {
+      const cid = action.payload.cid;
+      const peers = action.payload.peers;
+      state.sessions.current_sessions[cid.value].registeredPeers = peers;
+    },
   },
 });
 
@@ -89,5 +95,6 @@ export const {
   setCurrentServer,
   setCurrentSessionPeers,
   removeServerSession,
+  setRegisteredPeers,
 } = actions;
 export default reducer;

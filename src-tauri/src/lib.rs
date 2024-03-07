@@ -3,9 +3,9 @@ mod structs;
 use citadel_logging::setup_log;
 use commands::{
     connect::connect, disconnect::disconnect, get_session::get_sessions,
-    list_all_peers::list_all_peers, message::message, open_connection::open_connection,
-    peer_connect::peer_connect, peer_disconnect::peer_disconnect, peer_register::peer_register,
-    register::register,
+    list_all_peers::list_all_peers, list_registered_peers::list_registered_peers, message::message,
+    open_connection::open_connection, peer_connect::peer_connect, peer_disconnect::peer_disconnect,
+    peer_register::peer_register, register::register,
 };
 use structs::ConnectionState;
 use tauri::Manager;
@@ -38,6 +38,7 @@ pub fn run() {
             peer_register,
             peer_connect,
             peer_disconnect,
+            list_registered_peers
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

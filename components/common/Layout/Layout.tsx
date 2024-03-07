@@ -8,6 +8,7 @@ import AddServerModal from '@components/ui/AddServer';
 import Link from 'next/link';
 import { useAppSelector } from '@redux/store';
 import usePeerRegister from '@hooks/p2p/usePeerRegister';
+import clsx from 'clsx';
 
 const teams = [
   { id: 1, name: 'Heroicons', href: '#', initial: 'H', current: false },
@@ -46,12 +47,16 @@ export const Layout = ({ children }: Props) => {
 
   const peers = current_sessions[currentUsedSessionCid] ?? {};
 
+  console.log('peers', peers);
+
   const handleP2pRegister = () => {
     usePeerRegister({
       cid: currentUsedSessionCid,
       peerCid: peerToConnect,
     });
   };
+
+  const [peersTypeSelected, setPeersTypeSelected] = useState('All Peers');
   return (
     <div className="relative">
       <div>
@@ -169,6 +174,10 @@ export const Layout = ({ children }: Props) => {
                         <li>
                           <div className="text-xs font-semibold leading-6 text-gray-400">
                             Your Peers
+                          </div>
+                          <div>
+                            <span>Unregistered</span>
+                            <span>registered</span>
                           </div>
                           <ul role="list" className="-mx-2 mt-2 space-y-1">
                             {Object.keys(peers).map((key) => (
@@ -296,37 +305,102 @@ export const Layout = ({ children }: Props) => {
                   <div className="text-xs font-semibold leading-6 text-gray-400">
                     Your Peers
                   </div>
-                  <ul role="list" className="-mx-2 mt-2 space-y-1">
-                    {Object.keys(peers).map((key) => (
-                      <li
-                        className="cursor-pointer"
-                        key={key}
-                        onClick={() => {
-                          setPeerToConnect(key);
-                          setIsModalOpen(true);
-                        }}
+                  <div className="text-white w-full flex justify-between">
+                    <button
+                      onClick={() => {
+                        setPeersTypeSelected('All Peers');
+                      }}
+                    >
+                      <span
+                        className={clsx(
+                          peersTypeSelected === 'All Peers' && 'text-blue-800'
+                        )}
                       >
-                        <div
-                          className={classNames(
-                            key
-                              ? 'bg-gray-800 text-white'
-                              : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                            'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
-                          )}
+                        All Peers
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPeersTypeSelected('Registered');
+                      }}
+                    >
+                      <span
+                        className={clsx(
+                          peersTypeSelected === 'Registered' && 'text-blue-800'
+                        )}
+                      >
+                        Registered
+                      </span>
+                    </button>
+                  </div>
+                  <ul className="-mx-2 mt-2 space-y-1"></ul>
+                  {peersTypeSelected === 'Registered' &&
+                  peers.registeredPeers ? (
+                    <ul role="list" className="-mx-2 mt-2 space-y-1">
+                      {Object.keys(peers.registeredPeers).map((key) => (
+                        <li
+                          className="cursor-pointer"
+                          key={key}
+                          onClick={() => {
+                            setPeerToConnect(key);
+                            setIsModalOpen(true);
+                          }}
                         >
-                          <span className="relative inline-block">
-                            <img
-                              className="h-6 w-6 rounded-full"
-                              src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-                              alt=""
-                            />
-                            <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
-                          </span>
-                          <span className="truncate">{key}</span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                          <div
+                            className={classNames(
+                              key
+                                ? 'bg-gray-800 text-white'
+                                : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                              'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                            )}
+                          >
+                            <span className="relative inline-block">
+                              <img
+                                className="h-6 w-6 rounded-full"
+                                src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
+                                alt=""
+                              />
+                              <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
+                            </span>
+                            <span className="truncate">{key}</span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {peersTypeSelected === 'All Peers' && (
+                    <ul role="list" className="-mx-2 mt-2 space-y-1">
+                      {Object.keys(peers).map((key) => (
+                        <li
+                          className="cursor-pointer"
+                          key={key}
+                          onClick={() => {
+                            setPeerToConnect(key);
+                            setIsModalOpen(true);
+                          }}
+                        >
+                          <div
+                            className={classNames(
+                              key
+                                ? 'bg-gray-800 text-white'
+                                : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                              'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                            )}
+                          >
+                            <span className="relative inline-block">
+                              <img
+                                className="h-6 w-6 rounded-full"
+                                src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
+                                alt=""
+                              />
+                              <span className="absolute bottom-0 right-0 block h-1.5 w-1.5 rounded-full bg-gray-300 ring-2 ring-white" />
+                            </span>
+                            <span className="truncate">{key}</span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
                 <li className="-mx-6 mt-auto">
                   <a

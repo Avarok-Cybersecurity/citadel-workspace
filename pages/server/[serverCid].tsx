@@ -1,6 +1,7 @@
 import { Layout } from '@components/common/Layout';
 import useDisconnect from '@hooks/c2s/useDisconnect';
 import useListAllPeers from '@hooks/c2s/useListAllPeers';
+import useListRegisteredPeers from '@hooks/p2p/useListRegisteredPeers';
 import { useAppSelector } from '@redux/store';
 import { useEffect } from 'react';
 const Server = () => {
@@ -20,6 +21,15 @@ const Server = () => {
         className="bg-red-500 rounded-lg px-4 py-2 mt-4"
         onClick={() => {
           useDisconnect({ cid: current_selected_session });
+        }}
+      >
+        Disconnect from the server
+      </button>
+      <button
+        className="bg-blue-500 rounded-lg px-4 py-2 mt-4"
+        onClick={() => {
+          useListRegisteredPeers({ cid: current_selected_session });
+          // ({ cid: current_selected_session });
         }}
       >
         Disconnect from the server
