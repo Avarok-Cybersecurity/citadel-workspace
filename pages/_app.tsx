@@ -15,6 +15,7 @@ import {
   removeServerSession,
   setCurrentServer,
   setCurrentSessionPeers,
+  setRegisteredPeers,
   setSessions,
 } from 'redux/slices/streamHandler.slice';
 import {
@@ -118,6 +119,11 @@ function CustomApp({
           store.dispatch(setCurrentServer(''));
           break;
         case 'PeerRegister':
+          break;
+        case 'ListRegisteredPeers':
+          const listRegisteredPeers = payload.payload as any;
+          store.dispatch(setRegisteredPeers(listRegisteredPeers));
+          console.log(listRegisteredPeers);
           break;
         default:
           break;
