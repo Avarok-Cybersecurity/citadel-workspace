@@ -1,9 +1,10 @@
 import { ListAllPeers } from '@common/types/c2sResponses';
-import { createSlice, current, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { LosslessNumber } from 'lossless-json';
 
 type Sessions = {
   current_used_session_server: string;
+  current_user_connected: string;
   current_sessions: {
     [key: string]: { [key: string]: string | boolean | Array<string> };
   };
@@ -33,6 +34,7 @@ const initialState: {
 
   sessions: {
     current_used_session_server: '',
+    current_user_connected: '',
     current_sessions: {},
     connectedPeers: {},
   },

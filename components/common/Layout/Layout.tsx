@@ -9,7 +9,6 @@ import Link from 'next/link';
 import { useAppSelector } from '@redux/store';
 import usePeerRegister from '@hooks/p2p/usePeerRegister';
 import clsx from 'clsx';
-import { useRouter } from 'next/router';
 import usePeerConnect from '@hooks/p2p/usePeerConnect';
 
 const teams = [
@@ -34,8 +33,6 @@ export const Layout = ({ children }: Props) => {
     (state) => state.context.sessions.current_used_session_server
   );
 
-  const router = useRouter();
-
   const [navigation, _] = useState([
     {
       name: 'Register Requests',
@@ -47,6 +44,10 @@ export const Layout = ({ children }: Props) => {
 
   const current_sessions = useAppSelector(
     (state) => state.context.sessions.current_sessions
+  );
+
+  const connectedPeers = useAppSelector(
+    (state) => state.context.sessions.connectedPeers
   );
 
   const peers = current_sessions[currentUsedSessionCid] ?? {};
@@ -251,23 +252,25 @@ export const Layout = ({ children }: Props) => {
                   <div className="text-xs font-semibold leading-6 text-gray-400">
                     Chat now with
                   </div>
-                  <ul role="list" className="-mx-2 mt-2 space-y-1">
-                    <li>
-                      <a
-                        href={''}
-                        className={classNames(
-                          // team.current
-                          //   ? 'bg-gray-800 text-white'
-                          //   : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                          'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
-                        )}
-                      >
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-gray-700 bg-gray-800 text-[0.625rem] font-medium text-gray-400 group-hover:text-white">
-                          {/* {team.initial} */}
-                        </span>
-                        <span className="truncate">{''}</span>
-                      </a>
-                    </li>
+                  <ul role="list" className=" mt-2 space-y-1">
+                    {connectedPeers[currentUsedSessionCid]?.map((peer) => {
+                      console.log('peer', peer);
+                      return (
+                        <li>
+                          <Link
+                            href={`/peer/${peer}`}
+                            className={classNames(
+                              'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                            )}
+                          >
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-gray-700 bg-gray-800 text-[0.625rem] font-medium text-gray-400 group-hover:text-white">
+                              {peer[0]}
+                            </span>
+                            <span className="truncate text-white">{peer}</span>
+                          </Link>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </li>
                 <li className="border-y-[1px] border-gray-500">
