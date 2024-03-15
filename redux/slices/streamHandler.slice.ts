@@ -22,7 +22,12 @@ export type ContextType =
   | 'PeerConnect'
   | 'PeerDisconnect'
   | 'ListRegisteredPeers'
-  | 'PeerConnectNotification';
+  | 'PeerConnectNotification'
+  | 'LocalDBClearAllKV'
+  | 'LocalDBGetKV'
+  | 'LocalDBSetKV'
+  | 'LocalDBGetAllKV'
+  | 'LocalDBDeleteKV';
 
 const initialState: {
   context: {
