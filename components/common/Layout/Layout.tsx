@@ -132,7 +132,7 @@ export const Layout = ({ children }: Props) => {
                           <ul role="list" className="-mx-2 space-y-1">
                             {navigation.map((item) => (
                               <li key={item.name}>
-                                <a
+                                <Link
                                   href={item.href}
                                   className={classNames(
                                     item.current
@@ -146,7 +146,7 @@ export const Layout = ({ children }: Props) => {
                                     aria-hidden="true"
                                   />
                                   {item.name}
-                                </a>
+                                </Link>
                               </li>
                             ))}
                           </ul>
@@ -158,7 +158,7 @@ export const Layout = ({ children }: Props) => {
                           <ul role="list" className="-mx-2 mt-2 space-y-1">
                             {teams.map((team) => (
                               <li key={team.name}>
-                                <a
+                                <Link
                                   href={team.href}
                                   className={classNames(
                                     team.current
@@ -171,7 +171,7 @@ export const Layout = ({ children }: Props) => {
                                     {team.initial}
                                   </span>
                                   <span className="truncate">{team.name}</span>
-                                </a>
+                                </Link>
                               </li>
                             ))}
                           </ul>
@@ -391,7 +391,7 @@ export const Layout = ({ children }: Props) => {
                   )}
                 </li>
                 <li className="-mx-6 mt-auto">
-                  <a
+                  <Link
                     href="#"
                     className="flex items-center gap-x-4 px-6 py-3 text-sm font-semibold leading-6 text-white hover:bg-gray-800"
                   >
@@ -402,7 +402,7 @@ export const Layout = ({ children }: Props) => {
                     />
                     <span className="sr-only">Your profile</span>
                     <span aria-hidden="true">Tom Cook</span>
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </nav>
@@ -421,14 +421,14 @@ export const Layout = ({ children }: Props) => {
           <div className="flex-1 text-sm font-semibold leading-6 text-white">
             Dashboard
           </div>
-          <a href="#">
+          <Link href="#">
             <span className="sr-only">Your profile</span>
             <img
               className="h-8 w-8 rounded-full bg-gray-800"
               src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
               alt=""
             />
-          </a>
+          </Link>
         </div>
 
         <div className="lg:pl-72">
