@@ -13,6 +13,7 @@ import { parse } from 'lossless-json';
 import {
   addToContext,
   removeServerSession,
+  setConnectedPeers,
   setCurrentServer,
   setCurrentSessionPeers,
   setRegisteredPeers,
@@ -119,6 +120,10 @@ function CustomApp({
           store.dispatch(setCurrentServer(''));
           break;
         case 'PeerRegister':
+          break;
+        case 'PeerConnectNotification':
+          const peerConnect = payload.payload as any;
+          store.dispatch(setConnectedPeers(peerConnect));
           break;
         case 'ListRegisteredPeers':
           const listRegisteredPeers = payload.payload as any;

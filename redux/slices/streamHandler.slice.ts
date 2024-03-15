@@ -4,8 +4,12 @@ import { LosslessNumber } from 'lossless-json';
 
 type Sessions = {
   current_used_session_server: string;
+  current_user_connected: string;
   current_sessions: {
-    [key: string]: { [key: string]: string | boolean };
+    [key: string]: { [key: string]: string | boolean | Array<string> };
+  };
+  connectedPeers: {
+    [key: string]: Array<string>;
   };
 };
 export type ContextType =
@@ -17,7 +21,8 @@ export type ContextType =
   | 'PeerRegister'
   | 'PeerConnect'
   | 'PeerDisconnect'
-  | 'ListRegisteredPeers';
+  | 'ListRegisteredPeers'
+  | 'PeerConnectNotification';
 
 const initialState: {
   context: {
@@ -26,9 +31,12 @@ const initialState: {
   sessions: Sessions;
 } = {
   context: {},
+
   sessions: {
     current_used_session_server: '',
+    current_user_connected: '',
     current_sessions: {},
+    connectedPeers: {},
   },
 };
 
@@ -85,6 +93,15 @@ const streamExecSlice = createSlice({
       const peers = action.payload.peers;
       state.sessions.current_sessions[cid.value].registeredPeers = peers;
     },
+    setConnectedPeers: (state, action) => {
+      console.log('setConnectedPeers', action.payload);
+      const cid = action.payload.cid.value;
+      const peers: string = action.payload.peer_cid.value;
+      console.log('setConnectedPeers', cid, peers);
+      if (!state.sessions.connectedPeers[cid])
+        state.sessions.connectedPeers[cid] = [];
+      state.sessions.connectedPeers[cid].push(peers);
+    },
   },
 });
 
@@ -96,5 +113,6 @@ export const {
   setCurrentSessionPeers,
   removeServerSession,
   setRegisteredPeers,
+  setConnectedPeers,
 } = actions;
 export default reducer;

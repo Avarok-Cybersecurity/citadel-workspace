@@ -134,7 +134,7 @@ export default function Example() {
                   /month
                 </span>
               </p>
-              <a
+              <Link
                 href={tier.href}
                 aria-describedby={tier.id}
                 className={classNames(
@@ -145,7 +145,7 @@ export default function Example() {
                 )}
               >
                 Buy plan
-              </a>
+              </Link>
               <ul
                 role="list"
                 className="mt-10 space-y-4 text-sm leading-6 text-white"
