@@ -10,7 +10,12 @@ export type ApiInvokeTypes =
   | 'peer_connect'
   | 'peer_disconnect'
   | 'peer_register'
-  | 'list_registered_peers';
+  | 'list_registered_peers'
+  | 'local_db_get_kv'
+  | 'local_db_get_all_kv'
+  | 'local_db_set_kv'
+  | 'local_db_delete_kv'
+  | 'local_db_clear_all_kv';
 
 const invokeApi = async <T = any, R = string>(
   type: ApiInvokeTypes,
