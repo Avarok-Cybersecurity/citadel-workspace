@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #[allow(warnings, unused)]
 mod commands;
+mod db;
 mod structs;
 
 fn main() {

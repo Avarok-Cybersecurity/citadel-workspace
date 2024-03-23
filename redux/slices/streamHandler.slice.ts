@@ -27,7 +27,9 @@ export type ContextType =
   | 'LocalDBGetKV'
   | 'LocalDBSetKV'
   | 'LocalDBGetAllKV'
-  | 'LocalDBDeleteKV';
+  | 'LocalDBDeleteKV'
+  | 'PeerMessage'
+  | 'ServerMessage';
 
 const initialState: {
   context: {

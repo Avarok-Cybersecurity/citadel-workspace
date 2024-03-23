@@ -1,4 +1,5 @@
 mod commands;
+mod db;
 mod structs;
 use citadel_logging::setup_log;
 use commands::{
@@ -21,6 +22,7 @@ pub fn run() {
             sink: Mutex::new(None),
         })
         .setup(|app| {
+            db::init();
             setup_log();
             #[cfg(debug_assertions)] // only include this code on debug builds
             {
