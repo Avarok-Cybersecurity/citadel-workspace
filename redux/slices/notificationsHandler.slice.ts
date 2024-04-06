@@ -1,12 +1,12 @@
 import { PeerRegisterNotification } from '@common/types/c2sResponses';
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, current, PayloadAction } from '@reduxjs/toolkit';
 
 const initialState: {
   [key: string]: Array<any>;
 } = {};
 
 const notificationsContext = createSlice({
-  name: 'stream_handler',
+  name: 'notifications_handler',
   initialState,
   reducers: {
     addToNotificationsContext: (
@@ -16,10 +16,14 @@ const notificationsContext = createSlice({
         payload: PeerRegisterNotification;
       }>
     ) => {
-      state[action.payload.payload.cid.value] = [];
-      state[action.payload.payload.cid.value].push(
-        action.payload.payload as PeerRegisterNotification
+      console.log('Payload', action.payload.payload.payload.cid.value);
+      if (!state[action.payload.payload.payload.cid.value])
+        state[action.payload.payload.payload.cid.value] = [];
+
+      state[action.payload.payload.payload.cid.value].push(
+        action.payload.payload.payload as PeerRegisterNotification
       );
+      console.log('State', current(state));
     },
     deleteFromNotificationsContext: (
       state,

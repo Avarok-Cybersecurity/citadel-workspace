@@ -1,10 +1,12 @@
-use citadel_internal_service_connector::util::WrappedSink;
+use citadel_internal_service_connector::{
+    connector::WrappedSink, io_interface::tcp::TcpIOInterface,
+};
 use citadel_internal_service_types::InternalServiceResponse;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 pub struct ConnectionState {
-    pub sink: Mutex<Option<WrappedSink>>,
+    pub sink: Mutex<Option<WrappedSink<TcpIOInterface>>>,
 }
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Payload {

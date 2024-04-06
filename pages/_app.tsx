@@ -7,7 +7,7 @@ import { UIProvider } from '@components/ui/context';
 import { listen } from '@tauri-apps/api/event';
 import { Provider } from 'react-redux';
 import { invoke } from '@tauri-apps/api/core';
-import store from 'redux/store';
+import store, { useAppDispatch } from 'redux/store';
 import { setUuid } from 'redux/slices/uuid.slice';
 import { parse } from 'lossless-json';
 import {
@@ -27,6 +27,7 @@ import {
 } from '@common/types/c2sResponses';
 import { useRouter } from 'next/navigation';
 import handleNotificationPacket from 'packetHandlers/notificationHandler';
+import { addToNotificationsContext } from '@redux/slices/notificationsHandler.slice';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 
@@ -36,6 +37,7 @@ function CustomApp({
 }: AppProps & { Component: { Layout: FC<{ children: ReactNode }> } }) {
   const [_connErr, setErr] = useState('');
   const router = useRouter();
+  const dispatch = store.dispatch;
 
   useEffect(() => {
     const connect = async () => {
@@ -66,35 +68,30 @@ function CustomApp({
       (event: { payload: string }) => {
         const response: any = parse(event.payload);
         const key = Object.keys(response.packet).at(0)!;
+        console.log('Key', key);
         const data: any = {
           payload: response.packet[key] as any,
           error: response.error,
           notification: response.notification,
         };
+        if (key === 'PeerRegisterNotification' && data.notification) {
+          console.log('PeerRegisterNotification', data);
+          dispatch(
+            addToNotificationsContext({
+              key: 'PeerRegisterNotification',
+              payload: data,
+            })
+          );
+          return;
+        }
 
         const req_id = data.payload.request_id;
         handlePacket(req_id, data);
       }
     );
 
-    const listen_notification_stream = listen(
-      'notification_stream',
-      (event: { payload: string }) => {
-        const response: any = parse(event.payload);
-        const key = Object.keys(response.packet).at(0)!;
-        const data: any = {
-          payload: response.packet[key] as any,
-          error: response.error,
-          notification: response.notification,
-        };
-
-        handleNotificationPacket(data, key);
-      }
-    );
-
     return () => {
       listen_packet_stream.then((unlisten) => unlisten());
-      listen_notification_stream.then((unlisten) => unlisten());
     };
   }, []);
 
@@ -121,8 +118,12 @@ function CustomApp({
           break;
         case 'PeerRegister':
           break;
+        case 'PeerRegisterNotification':
+          console.log('PeerRegisterNotification', payload);
+          break;
         case 'PeerConnectNotification':
           const peerConnect = payload.payload as any;
+          console.log(peerConnect);
           store.dispatch(setConnectedPeers(peerConnect));
           break;
         case 'ListRegisteredPeers':
