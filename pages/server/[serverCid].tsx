@@ -1,3 +1,4 @@
+import Chat from '@components/chat';
 import { Layout } from '@components/common/Layout';
 import useDisconnect from '@hooks/c2s/useDisconnect';
 import useListAllPeers from '@hooks/c2s/useListAllPeers';
@@ -34,6 +35,10 @@ const Server = () => {
       >
         Disconnect from the server
       </button>
+
+      <main className="pt-10 h-[calc(100vh-7rem)] w-full flex flex-col justify-between no-scrollbar">
+        <Chat />
+      </main>
     </div>
   );
 };

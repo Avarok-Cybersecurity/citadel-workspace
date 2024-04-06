@@ -52,7 +52,7 @@ export const Layout = ({ children }: Props) => {
 
   const peers = current_sessions[currentUsedSessionCid] ?? {};
 
-  console.log('peers', peers);
+  // console.log('peers', connectedPeers);
 
   const handleP2pRegister = () => {
     usePeerRegister({
@@ -273,16 +273,7 @@ export const Layout = ({ children }: Props) => {
                     })}
                   </ul>
                 </li>
-                <li className="border-y-[1px] border-gray-500">
-                  <ul className=" flex justify-between items-center ">
-                    <li className="py-2 text-xs font-semibold cursor-pointer text-white hover:bg-slate-800">
-                      All members
-                    </li>
-                    <li className="py-2 text-xs font-semibold text-white cursor-pointer hover:bg-slate-800">
-                      Connected peers
-                    </li>
-                  </ul>
-                </li>
+
                 <li>
                   <div className="text-xs font-semibold leading-6 text-gray-400">
                     Your Peers

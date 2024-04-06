@@ -12,22 +12,11 @@ export default async function useSendMessage(
 ): Promise<string> {
   const response = await invoke<{ cid: string }, string>('message', input);
 
-  if (input.peerCid) {
-    store.dispatch(
-      addToContext({
-        req_id: response,
-        context_type: 'PeerMessage',
-      })
-    );
-    return response;
-  } else {
-    store.dispatch(
-      addToContext({
-        req_id: response,
-        context_type: 'ServerMessage',
-      })
-    );
-
-    return response;
-  }
+  store.dispatch(
+    addToContext({
+      req_id: response,
+      context_type: 'PeerMessage',
+    })
+  );
+  return response;
 }

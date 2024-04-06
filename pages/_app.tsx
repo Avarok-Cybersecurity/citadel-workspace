@@ -123,7 +123,7 @@ function CustomApp({
           break;
         case 'PeerConnectNotification':
           const peerConnect = payload.payload as any;
-          console.log(peerConnect);
+          console.log('HI peer conn noti', peerConnect);
           store.dispatch(setConnectedPeers(peerConnect));
           break;
         case 'ListRegisteredPeers':

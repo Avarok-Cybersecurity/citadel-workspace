@@ -13,15 +13,15 @@ const Server = () => {
   const { peerId } = router.query;
 
   useEffect(() => {
-    useListAllPeers({ cid: current_selected_session });
-    useListRegisteredPeers({ cid: current_selected_session });
+    // useListAllPeers({ cid: current_selected_session });
+    // useListRegisteredPeers({ cid: current_selected_session });
 
     return () => {};
   }, []);
 
   return (
     <div className="text-4xl flex flex-col justify-end text-teal-50 text-center h-[calc(100vh-5.5rem)] select-none">
-      <Chat peer_cid={peerId} />
+      <Chat peer_cid={peerId!} />
     </div>
   );
 };

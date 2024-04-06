@@ -29,6 +29,7 @@ const notificationsContext = createSlice({
       state,
       action: PayloadAction<{ peerCid: string; cid: string }>
     ) => {
+      console.log('hi');
       const { cid, peerCid } = action.payload;
 
       state[cid] = state[cid].filter(

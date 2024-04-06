@@ -1,5 +1,5 @@
 import { ListAllPeers } from '@common/types/c2sResponses';
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, current, PayloadAction } from '@reduxjs/toolkit';
 import { LosslessNumber } from 'lossless-json';
 
 type Sessions = {
@@ -56,6 +56,7 @@ const streamExecSlice = createSlice({
       state,
       action: PayloadAction<{ req_id: string; context_type: ContextType }>
     ) => {
+      console.log('hi');
       const req_id = action.payload.req_id;
 
       const context_type: ContextType =
@@ -73,6 +74,7 @@ const streamExecSlice = createSlice({
       state.context[req_id] = context_type;
     },
     setSessions: (state, action) => {
+      console.log('hi');
       const activeSessions: Array<{
         cid: LosslessNumber;
         peer_connections: {};
@@ -85,30 +87,50 @@ const streamExecSlice = createSlice({
       }
     },
     removeServerSession: (state, action) => {
+      console.log('hi');
       const cid = action.payload;
       delete state.sessions.current_sessions[cid];
     },
     setCurrentSessionPeers: (state, action: PayloadAction<ListAllPeers>) => {
+      console.log('hi');
       const cid = action.payload.cid;
       const online_statuses = action.payload.online_status;
       state.sessions.current_sessions[cid.value] = online_statuses;
     },
     setCurrentServer: (state, action) => {
       state.sessions.current_used_session_server = action.payload;
+      console.log('hi');
     },
     setRegisteredPeers: (state, action) => {
+      console.log('hi');
       const cid = action.payload.cid;
       const peers = action.payload.peers;
       state.sessions.current_sessions[cid.value].registeredPeers = peers;
     },
     setConnectedPeers: (state, action) => {
-      console.log('setConnectedPeers', action.payload);
-      const cid = action.payload.cid.value;
-      const peers: string = action.payload.peer_cid.value;
-      console.log('setConnectedPeers', cid, peers);
+      const cid: string = action.payload.cid.value;
+      const peerCid: string = action.payload.peer_cid.value;
       if (!state.sessions.connectedPeers[cid])
         state.sessions.connectedPeers[cid] = [];
-      state.sessions.connectedPeers[cid].push(peers);
+
+      if (!state.sessions.connectedPeers[peerCid])
+        state.sessions.connectedPeers[peerCid] = [];
+
+      if (!state.sessions.connectedPeers[peerCid].includes(cid)) {
+        state.sessions.connectedPeers[peerCid].push(cid);
+      }
+
+      if (!state.sessions.connectedPeers[cid].includes(peerCid))
+        state.sessions.connectedPeers[cid].push(peerCid);
+
+      console.log('setConnectedPeers', current(state));
+      if (
+        state.sessions.connectedPeers[peerCid].length > 1 &&
+        state.sessions.connectedPeers[peerCid]
+      ) {
+        state.sessions.connectedPeers[cid] as string[];
+        state.sessions.connectedPeers[cid].pop();
+      }
     },
   },
 });
