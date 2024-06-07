@@ -26,6 +26,7 @@ pub async fn register(
         proposed_password: proposed_password.into_bytes().into(),
         connect_after_register: true,
         session_security_settings: Default::default(),
+        server_password: None,
     };
 
     send_to_internal_service(request, state).await?;

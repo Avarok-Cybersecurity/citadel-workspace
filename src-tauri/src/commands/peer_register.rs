@@ -18,6 +18,7 @@ pub async fn peer_register(
         connect_after_register: false,
         session_security_settings: Default::default(),
         peer_cid: peer_cid.parse::<u64>().unwrap(),
+        peer_session_password: None,
     };
 
     send_to_internal_service(request, state).await?;
