@@ -14,12 +14,13 @@ name = "citadel_workspace_ui_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "=2.0.0-beta.9", features = [] }
+tauri-build = { version = "2.0.0-beta", features = [] }
 
 [dependencies]
 lazy_static = "1.4.0"
 parking_lot = {version = "0.12.1", features = ["deadlock_detection"] }
-tauri = { version = "2.0.0-beta.11", features = [] }
+tauri = { version = "2.0.0-beta", features = [] }
+tauri-plugin-shell = "2.0.0-beta"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.28.2", features = ["net", "rt", "macros"] }
@@ -31,7 +32,7 @@ citadel-internal-service-connector= {version="0.1.0", git="https://github.com/Av
 futures = "0.3.28"
 tokio-util = { version = "0.7.8", default-features = false }
 citadel_logging = { version = "0.7.0", default-features = false }
-tauri-plugin-log = "2.0.0-beta.1"
+# tauri-plugin-log = "2.0.0-beta.1"
 log = "^0.4"
 
 [features]
