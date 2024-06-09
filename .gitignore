@@ -38,3 +38,4 @@ src-tauri/target
 package-lock.json
 yarn.lock
 src-tauri/Cargo.lock
+bun.lockb
