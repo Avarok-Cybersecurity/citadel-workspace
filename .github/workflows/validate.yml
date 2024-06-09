@@ -73,8 +73,8 @@ jobs:
         uses: actions/setup-node@v1
         with:
           node-version: 20
-      - name: bun install
-        run: bun i
+      - name: yarn install
+        run: yarn install
       - name: eslint
         uses: icrawl/action-eslint@v1
         with:
