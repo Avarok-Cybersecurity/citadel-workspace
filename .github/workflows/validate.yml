@@ -60,7 +60,7 @@ jobs:
       - run: npm install -g bun
       - run: cargo install create-tauri-app
       - run: cargo install tauri-cli --version 2.0.0-beta.20
-      - run: yarn install
+      - run: bun i
       - uses: tauri-apps/tauri-action@v0
         with:
           args: --verbose
@@ -73,8 +73,8 @@ jobs:
         uses: actions/setup-node@v1
         with:
           node-version: 20
-      - name: yarn install
-        run: yarn install
+      - name: bun install
+        run: bun i
       - name: eslint
         uses: icrawl/action-eslint@v1
         with:
