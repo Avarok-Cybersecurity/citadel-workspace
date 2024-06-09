@@ -1,5 +1,5 @@
 use crate::structs::{ConnectionState, Payload};
-use citadel_internal_service_connector::util::InternalServiceConnector;
+use citadel_internal_service_connector::connector::InternalServiceConnector;
 use citadel_internal_service_types::InternalServiceResponse;
 use citadel_logging::error;
 use futures::StreamExt;

@@ -1,90 +1,34 @@
 {
-  "productName": "citadel_workspace",
+  "productName": "Citadel Workspace",
   "version": "0.0.0",
   "identifier": "citadel.workspace",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "../out"
+  },
   "app": {
-    "macOSPrivateApi": false,
-    "security": {
-      "assetProtocol": {
-        "enable": false,
-        "scope": []
-      },
-      "dangerousDisableAssetCspModification": false,
-      "freezePrototype": false,
-      "pattern": {
-        "use": "brownfield"
-      }
-    },
     "windows": [
       {
-        "fullscreen": false,
-        "height": 600,
-        "resizable": true,
         "title": "Citadel Workspace",
-        "width": 800
+        "width": 800,
+        "height": 600
       }
     ],
-    "withGlobalTauri": false
-  },
-  "build": {
-    "beforeBuildCommand": "yarn build",
-    "beforeDevCommand": "yarn dev",
-    "devUrl": "http://localhost:1420",
-    "frontendDist": "../out"
+    "security": {
+      "csp": null
+    }
   },
   "bundle": {
     "active": true,
-    "android": {
-      "minSdkVersion": 24
-    },
-    "iOS": {},
-    "icon": ["icons/icon.ico"],
-    "linux": {
-      "appimage": {
-        "bundleMediaFramework": false,
-        "files": {}
-      },
-      "deb": {
-        "files": {}
-      },
-      "rpm": {
-        "epoch": 0,
-        "files": {},
-        "release": "1"
-      }
-    },
-    "macOS": {
-      "dmg": {
-        "appPosition": {
-          "x": 180,
-          "y": 170
-        },
-        "applicationFolderPosition": {
-          "x": 480,
-          "y": 170
-        },
-        "windowSize": {
-          "height": 400,
-          "width": 660
-        }
-      },
-      "files": {},
-      "minimumSystemVersion": "10.13"
-    },
     "targets": "all",
-    "windows": {
-      "allowDowngrades": true,
-      "certificateThumbprint": null,
-      "digestAlgorithm": null,
-      "nsis": null,
-      "timestampUrl": null,
-      "tsp": false,
-      "webviewFixedRuntimePath": null,
-      "webviewInstallMode": {
-        "silent": true,
-        "type": "downloadBootstrapper"
-      },
-      "wix": null
-    }
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
   }
 }

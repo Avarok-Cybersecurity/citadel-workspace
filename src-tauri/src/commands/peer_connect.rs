@@ -18,6 +18,7 @@ pub async fn peer_connect(
         peer_cid: peer_cid.parse::<u64>().unwrap(),
         udp_mode: Default::default(),
         session_security_settings: Default::default(),
+        peer_session_password: None,
     };
 
     send_to_internal_service(payload, state).await?;

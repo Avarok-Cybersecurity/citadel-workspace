@@ -19,6 +19,7 @@ pub async fn connect(
         keep_alive_timeout: Default::default(),
         session_security_settings: Default::default(),
         request_id: request_id.parse().unwrap(),
+        server_password: None,
     };
 
     send_to_internal_service(request, state).await?;
