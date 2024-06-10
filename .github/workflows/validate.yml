@@ -50,6 +50,10 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
+      - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+        if: startsWith(matrix.os, 'windows')
+      - run: vcpkg install openssl:x64-windows-static-md
+        if: startsWith(matrix.os, 'windows')
       - name: setup node
         uses: actions/setup-node@v4
         with:
