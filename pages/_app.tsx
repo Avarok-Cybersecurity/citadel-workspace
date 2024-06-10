@@ -27,6 +27,7 @@ import {
 } from '@common/types/c2sResponses';
 import { useRouter } from 'next/navigation';
 import handleNotificationPacket from 'packetHandlers/notificationHandler';
+import ErrorPopup from '@components/ui/errorPopup';
 
 const Noop: FC<{ children: ReactNode }> = ({ children }) => <>{children}</>;
 
@@ -35,14 +36,29 @@ function CustomApp({
   pageProps,
 }: AppProps & { Component: { Layout: FC<{ children: ReactNode }> } }) {
   const [_connErr, setErr] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessageVisibility, setErrorMessageVisibility] = useState(false);
+
+  function showError(message: string) {
+    setErrorMessage(message);
+    setErrorMessageVisibility(true)
+  }
+
   const router = useRouter();
 
+  let unlisten_handles: (() => void)|null = null;
+
   useEffect(() => {
+
+    // Connect to server & attach listeners
     const connect = async () => {
+
+      // Connect to local server
       try {
         const uuid_value: string = await invoke('open_connection', {
           addr: '127.0.0.1:12345',
         });
+        console.debug(`Opened connection with server; connection id ${uuid_value}`)
         store.dispatch(setUuid(uuid_value));
 
         const session_req_id: string = await invoke('get_sessions', {
@@ -58,49 +74,69 @@ function CustomApp({
         console.log(error);
         setErr(error as string);
       }
+
+      // Attach listening functions
+      const unlisten_packet_stream = await listen(
+        'packet_stream',
+        (event: { payload: string }) => {
+          const response: any = parse(event.payload);
+          const key = Object.keys(response.packet).at(0)!;
+          const data: any = {
+            payload: response.packet[key] as any,
+            error: response.error,
+            notification: response.notification,
+          };
+  
+          const req_id = data.payload.request_id;
+          handlePacket(req_id, data);
+        }
+      );
+  
+      const unlisten_notification_stream = await listen(
+        'notification_stream',
+        (event: { payload: string }) => {
+          const response: any = parse(event.payload);
+          const key = Object.keys(response.packet).at(0)!;
+          const data: any = {
+            payload: response.packet[key] as any,
+            error: response.error,
+            notification: response.notification,
+          };
+  
+          handleNotificationPacket(data, key);
+        }
+      );
+
+      // Define detach function
+      unlisten_handles = () => {
+        unlisten_packet_stream();
+        unlisten_notification_stream();
+      }
+
     };
     connect();
 
-    const listen_packet_stream = listen(
-      'packet_stream',
-      (event: { payload: string }) => {
-        const response: any = parse(event.payload);
-        const key = Object.keys(response.packet).at(0)!;
-        const data: any = {
-          payload: response.packet[key] as any,
-          error: response.error,
-          notification: response.notification,
-        };
-
-        const req_id = data.payload.request_id;
-        handlePacket(req_id, data);
-      }
-    );
-
-    const listen_notification_stream = listen(
-      'notification_stream',
-      (event: { payload: string }) => {
-        const response: any = parse(event.payload);
-        const key = Object.keys(response.packet).at(0)!;
-        const data: any = {
-          payload: response.packet[key] as any,
-          error: response.error,
-          notification: response.notification,
-        };
-
-        handleNotificationPacket(data, key);
-      }
-    );
-
-    return () => {
-      listen_packet_stream.then((unlisten) => unlisten());
-      listen_notification_stream.then((unlisten) => unlisten());
-    };
+    // return () => {
+    //   listen_packet_stream.then((unlisten) => unlisten());
+    //   listen_notification_stream.then((unlisten) => unlisten());
+    // };
+  
   }, []);
 
   const handlePacket = (req_id: string, payload: Payload) => {
     const { context: map } = store.getState();
     const context = map.context[req_id];
+
+    console.log(`Got payload:`);
+    console.log(payload);
+
+    // Attach error display 
+    if (payload.error){
+      const error_msg = `Internal Error [${context}]: ` + JSON.stringify(payload.payload);
+      showError(error_msg);
+      console.error(error_msg);
+    }
+    
 
     if (context) {
       switch (context) {
@@ -139,6 +175,7 @@ function CustomApp({
   const Layout = Component.Layout ?? Noop;
   return (
     <div className="select-none h-screen">
+      <ErrorPopup message={errorMessage} visible={errorMessageVisibility} setVisibility={setErrorMessageVisibility} />
       <Head>
         <title>Citadel</title>
       </Head>
