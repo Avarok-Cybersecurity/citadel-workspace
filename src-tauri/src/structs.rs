@@ -1,4 +1,4 @@
-use citadel_internal_service_connector::connector::WrappedSink;
+use citadel_internal_service_connector::connector::{WrappedSink, WrappedStream};
 use citadel_internal_service_connector::io_interface::tcp::TcpIOInterface;
 use citadel_internal_service_types::InternalServiceResponse;
 use serde::{Deserialize, Serialize};

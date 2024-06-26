@@ -2,6 +2,7 @@ import { Layout } from '@components/common/Layout';
 import useDisconnect from '@hooks/c2s/useDisconnect';
 import useListAllPeers from '@hooks/c2s/useListAllPeers';
 import useListRegisteredPeers from '@hooks/p2p/useListRegisteredPeers';
+import peerRegister, { Peer2PeerRegisterInput } from '@hooks/p2p/usePeerRegister';
 import { useAppSelector } from '@redux/store';
 import { useEffect } from 'react';
 const Server = () => {
@@ -27,12 +28,21 @@ const Server = () => {
       </button>
       <button
         className="bg-blue-500 rounded-lg px-4 py-2 mt-4"
-        onClick={() => {
-          useListRegisteredPeers({ cid: current_selected_session });
+        onClick={async () => {
+          const peers = await useListRegisteredPeers({ cid: current_selected_session });
+
+          console.log(`Registered peers is: ${peers}`)
+          
+          // const register_input: Peer2PeerRegisterInput = {
+          //   cid: current_selected_session,
+          //   peerCid: peer_id
+          // }
+
+          // peerRegister()
           // ({ cid: current_selected_session });
         }}
       >
-        Disconnect from the server
+        Start Chat
       </button>
     </div>
   );

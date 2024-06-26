@@ -18,7 +18,7 @@ fn send_response(
         error,
         notification,
     };
-    println!("send_response: {:?}", payload);
+    println!("send_response [{}]: {:?}", packet_name, payload);
     let _ = window.emit(packet_name, serde_json::to_string(&payload)?);
     Ok(())
 }

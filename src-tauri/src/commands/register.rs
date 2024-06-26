@@ -1,4 +1,6 @@
 use crate::commands::send_to_internal_service;
+use citadel_internal_service_connector::connector::WrappedSink;
+use citadel_internal_service_connector::io_interface::tcp::TcpIOInterface;
 use citadel_internal_service_types::InternalServiceRequest;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -28,6 +30,9 @@ pub async fn register(
         session_security_settings: Default::default(),
         server_password: None,
     };
+
+    
+
 
     send_to_internal_service(request, state).await?;
     Ok(request_id.to_string())
