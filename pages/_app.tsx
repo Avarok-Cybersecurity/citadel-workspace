@@ -48,129 +48,129 @@ function CustomApp({
 
   let unlisten_handles: (() => void)|null = null;
 
-  useEffect(() => {
+  // useEffect(() => {
 
-    // Connect to server & attach listeners
-    const connect = async () => {
+  //   // Connect to server & attach listeners
+  //   const connect = async () => {
 
-      // Connect to local server
-      try {
-        const uuid_value: string = await invoke('open_connection', {
-          addr: '127.0.0.1:12345',
-        });
-        console.debug(`Opened connection with server; connection id ${uuid_value}`)
-        store.dispatch(setUuid(uuid_value));
+  //     // Connect to local server
+  //     try {
+  //       const uuid_value: string = await invoke('open_connection', {
+  //         addr: '127.0.0.1:12345',
+  //       });
+  //       console.debug(`Opened connection with server; connection id ${uuid_value}`)
+  //       store.dispatch(setUuid(uuid_value));
 
-        const session_req_id: string = await invoke('get_sessions', {
-          uuid: uuid_value,
-        });
-        store.dispatch(
-          addToContext({
-            req_id: session_req_id,
-            context_type: 'GetSession',
-          })
-        );
-      } catch (error) {
-        console.log(error);
-        setErr(error as string);
-      }
+  //       const session_req_id: string = await invoke('get_sessions', {
+  //         uuid: uuid_value,
+  //       });
+  //       store.dispatch(
+  //         addToContext({
+  //           req_id: session_req_id,
+  //           context_type: 'GetSession',
+  //         })
+  //       );
+  //     } catch (error) {
+  //       console.log(error);
+  //       setErr(error as string);
+  //     }
 
-      // Attach listening functions
-      const unlisten_packet_stream = await listen(
-        'packet_stream',
-        (event: { payload: string }) => {
-          const response: any = parse(event.payload);
-          const key = Object.keys(response.packet).at(0)!;
-          const data: any = {
-            payload: response.packet[key] as any,
-            error: response.error,
-            notification: response.notification,
-          };
+  //     // Attach listening functions
+  //     const unlisten_packet_stream = await listen(
+  //       'packet_stream',
+  //       (event: { payload: string }) => {
+  //         const response: any = parse(event.payload);
+  //         const key = Object.keys(response.packet).at(0)!;
+  //         const data: any = {
+  //           payload: response.packet[key] as any,
+  //           error: response.error,
+  //           notification: response.notification,
+  //         };
   
-          const req_id = data.payload.request_id;
-          handlePacket(req_id, data);
-        }
-      );
+  //         const req_id = data.payload.request_id;
+  //         handlePacket(req_id, data);
+  //       }
+  //     );
   
-      const unlisten_notification_stream = await listen(
-        'notification_stream',
-        (event: { payload: string }) => {
-          const response: any = parse(event.payload);
-          const key = Object.keys(response.packet).at(0)!;
-          const data: any = {
-            payload: response.packet[key] as any,
-            error: response.error,
-            notification: response.notification,
-          };
+  //     const unlisten_notification_stream = await listen(
+  //       'notification_stream',
+  //       (event: { payload: string }) => {
+  //         const response: any = parse(event.payload);
+  //         const key = Object.keys(response.packet).at(0)!;
+  //         const data: any = {
+  //           payload: response.packet[key] as any,
+  //           error: response.error,
+  //           notification: response.notification,
+  //         };
   
-          handleNotificationPacket(data, key);
-        }
-      );
+  //         handleNotificationPacket(data, key);
+  //       }
+  //     );
 
-      // Define detach function
-      unlisten_handles = () => {
-        unlisten_packet_stream();
-        unlisten_notification_stream();
-      }
+  //     // Define detach function
+  //     unlisten_handles = () => {
+  //       unlisten_packet_stream();
+  //       unlisten_notification_stream();
+  //     }
 
-    };
-    connect();
+  //   };
+  //   connect();
 
-    // return () => {
-    //   listen_packet_stream.then((unlisten) => unlisten());
-    //   listen_notification_stream.then((unlisten) => unlisten());
-    // };
+  //   // return () => {
+  //   //   listen_packet_stream.then((unlisten) => unlisten());
+  //   //   listen_notification_stream.then((unlisten) => unlisten());
+  //   // };
   
-  }, []);
+  // }, []);
 
-  const handlePacket = (req_id: string, payload: Payload) => {
-    const { context: map } = store.getState();
-    const context = map.context[req_id];
+  // const handlePacket = (req_id: string, payload: Payload) => {
+  //   const { context: map } = store.getState();
+  //   const context = map.context[req_id];
 
-    console.log(`Got payload:`);
-    console.log(payload);
+  //   console.log(`Got payload:`);
+  //   console.log(payload);
 
-    // Attach error display 
-    if (payload.error){
-      const error_msg = `Internal Error [${context}]: ` + JSON.stringify(payload.payload);
-      showError(error_msg);
-      console.error(error_msg);
-    }
+  //   // Attach error display 
+  //   if (payload.error){
+  //     const error_msg = `Internal Error [${context}]: ` + JSON.stringify(payload.payload);
+  //     showError(error_msg);
+  //     console.error(error_msg);
+  //   }
     
 
-    if (context) {
-      switch (context) {
-        case 'GetSession':
-          const getSessionsPayload = payload.payload as GetSessions;
-          const activeSessions = getSessionsPayload.sessions;
-          store.dispatch(setSessions(activeSessions));
-          break;
-        case 'ListAllPeers':
-          const peers = payload.payload as ListAllPeers;
-          store.dispatch(setCurrentSessionPeers(peers));
-          break;
-        case 'Disconnect':
-          const disconnect = payload.payload as Disconnect;
-          router.push('/');
-          store.dispatch(removeServerSession(disconnect.cid));
-          store.dispatch(setCurrentServer(''));
-          break;
-        case 'PeerRegister':
-          break;
-        case 'PeerConnectNotification':
-          const peerConnect = payload.payload as any;
-          store.dispatch(setConnectedPeers(peerConnect));
-          break;
-        case 'ListRegisteredPeers':
-          const listRegisteredPeers = payload.payload as any;
-          store.dispatch(setRegisteredPeers(listRegisteredPeers));
-          console.log(listRegisteredPeers);
-          break;
-        default:
-          break;
-      }
-    }
-  };
+  //   if (context) {
+  //     switch (context) {
+  //       case 'GetSession':
+  //         const getSessionsPayload = payload.payload as GetSessions;
+  //         const activeSessions = getSessionsPayload.sessions;
+  //         store.dispatch(setSessions(activeSessions));
+  //         break;
+  //       case 'ListAllPeers':
+  //         const peers = payload.payload as ListAllPeers;
+  //         store.dispatch(setCurrentSessionPeers(peers));
+  //         break;
+  //       case 'Disconnect':
+  //         const disconnect = payload.payload as Disconnect;
+  //         router.push('/');
+  //         store.dispatch(removeServerSession(disconnect.cid));
+  //         store.dispatch(setCurrentServer(''));
+  //         break;
+  //       case 'PeerRegister':
+  //         break;
+  //       case 'PeerConnectNotification':
+  //         const peerConnect = payload.payload as any;
+  //         store.dispatch(setConnectedPeers(peerConnect));
+  //         break;
+  //       case 'ListRegisteredPeers':
+  //         const listRegisteredPeers = payload.payload as any;
+  //         store.dispatch(setRegisteredPeers(listRegisteredPeers));
+  //         console.log(listRegisteredPeers);
+  //         break;
+  //       default:
+  //         break;
+  //     }
+  //   }
+  // };
 
   const Layout = Component.Layout ?? Noop;
   return (

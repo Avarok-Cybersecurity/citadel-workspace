@@ -1,4 +1,4 @@
-
+set dotenv-load
 set shell := ["zsh", "-cu"]
 
 dev:
@@ -13,8 +13,8 @@ dev-browser:
 stop-servers:
     @echo "Killing existing servers"
 
-    [ ! -f "${INTERNAL_SERVICE_PATH}/.server-pid" ] || { kill $(cat "${INTERNAL_SERVICE_PATH}/.server-pid") && rm "${INTERNAL_SERVICE_PATH}/.server-pid"; };
-    [ ! -f "${INTERNAL_SERVICE_PATH}/.service-pid" ] || { kill $(cat "${INTERNAL_SERVICE_PATH}/.service-pid") && rm "${INTERNAL_SERVICE_PATH}/.service-pid"; };
+    [ ! -f "${INTERNAL_SERVICE_PATH}/.server-pid" ] || { kill $(cat "${INTERNAL_SERVICE_PATH}/.server-pid") && rm "${INTERNAL_SERVICE_PATH}/.server-pid"; } &
+    [ ! -f "${INTERNAL_SERVICE_PATH}/.service-pid" ] || { kill $(cat "${INTERNAL_SERVICE_PATH}/.service-pid") && rm "${INTERNAL_SERVICE_PATH}/.service-pid"; } &
 
 
 start-servers:
