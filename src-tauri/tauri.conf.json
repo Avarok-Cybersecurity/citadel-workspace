@@ -1,5 +1,5 @@
 {
-  "productName": "test",
+  "productName": "citadel_workspace",
   "version": "0.0.0",
   "identifier": "com.tauri.dev",
   "build": {
@@ -11,9 +11,10 @@
   "app": {
     "windows": [
       {
-        "title": "test",
+        "title": "Citadel Workspace",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "resizable": true
       }
     ],
     "security": {
