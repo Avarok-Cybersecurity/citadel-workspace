@@ -1,4 +1,74 @@
 #sidebar {
+    margin-top: 30px;
+    margin-left: auto;
+    margin-right: auto;
+    width: 90%;
+}
+
+#sidebar .sidebar-section {
+    color: #B9B4C7;
+    font-family: 'Roboto Flex';
     width: 100%;
-    height: 100%;
+    margin-top: 20px;
+}
+
+#sidebar .sidebar-section .header{
+    border-bottom: 1px solid #B9B4C7;
+    padding: 10px 0px 10px 0px;
+}
+
+
+#sidebar .sidebar-section .header h1 {
+    font-weight: 700;
+    font-size: 15px;
+    margin: 0;
+    display: inline-block;
+}
+#sidebar .sidebar-section .header button {
+    aspect-ratio: 1;
+    position: relative;
+    bottom: 8px;
+    float: right;
+    background-color: transparent;
+    color: #B9B4C7;
+    border: none;
+    border-radius: 50%;
+    transition: 0.2s;
+}
+#sidebar .sidebar-section .header button:hover {
+    cursor: pointer;
+    background-color: #B9B4C71A;
+}
+#sidebar .sidebar-section .header i {
+    font-size: 20px;
+}
+
+#sidebar .sidebar-section .user-card {
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+    padding-right: 5px;
+    gap: 10px;
+}
+
+#sidebar .sidebar-section .user-card h2 {
+    margin: 0;
+    font-weight: 500;
+    font-size: 13px;
+}
+#sidebar .sidebar-section .user-card p {
+    margin: 0;
+    font-weight: 500;
+    font-size: 13px;
+    opacity: 50%;
+    flex-grow: 1;
+    text-align: right;
+
+}
+
+
+#sidebar .sidebar-section .user-card img {
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
 }
