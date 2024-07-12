@@ -4,3 +4,9 @@
     background-color: #444A6C;
 }
 
+#chat-window .chat-input-container {
+    position: absolute;
+    bottom: 20px;
+    left: 3%;
+    width: 94%;
+}
