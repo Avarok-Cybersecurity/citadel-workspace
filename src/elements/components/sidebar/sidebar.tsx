@@ -1,8 +1,9 @@
 
 import SidebarSection from "./sidebar-section"
 import {User} from "../../../api/user"
-import { defaultPfp, notepadSvg } from "../../../assets/assets"
+import { placeholderPfp, notepadSvg, placeholderGroup } from "../../../assets/assets"
 import "./sidebar.css"
+import { Group } from "../../../api/group"
 
 function getPinnedUsers(): User[]{
     
@@ -16,7 +17,7 @@ function getPinnedUsers(): User[]{
      names.forEach((name: string)=>{
 
         (async () => {
-            const user = new User(name, defaultPfp);
+            const user = new User(name, placeholderPfp);
             people.push(user);
             await new Promise(res => setTimeout(res, 1000))
         })()
@@ -25,9 +26,7 @@ function getPinnedUsers(): User[]{
     return people;
 }
 function getContacts(): User[]{
-    
     const names = []
-
     for (var i = 0; i<5; i++){
         names.push("Placeholder User")
     }
@@ -36,7 +35,7 @@ function getContacts(): User[]{
      names.forEach((name: string)=>{
 
         (async () => {
-            const user = new User(name, defaultPfp);
+            const user = new User(name, placeholderPfp);
             people.push(user);
             await new Promise(res => setTimeout(res, 1000))
         })()
@@ -44,12 +43,16 @@ function getContacts(): User[]{
 
     return people;
 }
+function getGroupChats(): Group[]{
+    return [new Group("Placeholder Chat", placeholderGroup)]
+}
 
 export default function Sidebar(){
     return <div id="sidebar">
 
     <SidebarSection title="PINNED" icon={<i className="bi bi-plus"></i>} items={getPinnedUsers()}/>
     <SidebarSection title="CONTACTS" icon={notepadSvg} items={getContacts()}/>
+    <SidebarSection title="ROOMS" icon={null} items={getGroupChats()}/>
 
 
     </div>
