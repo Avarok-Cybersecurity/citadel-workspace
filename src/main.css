@@ -9,9 +9,15 @@ Global CSS module
 
 body {
     margin: 0;
+    font-family: 'Roboto Flex';
 }
 
 .horiz-split{
     display: flex;
     
+}
+
+.divider-horiz {
+    border-right: 1px solid #B9B4C7;
+    height: 70%;
 }

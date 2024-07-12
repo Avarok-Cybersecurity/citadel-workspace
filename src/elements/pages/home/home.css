@@ -24,6 +24,8 @@
 }
 
 #home-page .left-panel{
+    position: relative;
+    left: 5px;
     width: 257px;
 }
 #home-page .right-panel{
