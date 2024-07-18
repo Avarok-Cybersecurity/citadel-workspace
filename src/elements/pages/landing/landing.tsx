@@ -4,14 +4,32 @@ Landing page for users who are first logging in
 
 */
 
-import "./landing.css"
+import { useState } from "react";
+import RegistrationPopup from "../../popups/registration/registration";
+import "./landing.css";
 
 export default function Landing() {
-    
-    return <div id="landing">
-        <h1>Registration</h1>
-        <p>This page is a placeholder for a more sophisticated registration page</p>
+  const [registrationPopupOpen, setRegistrationPopupOpen] = useState(false);
 
-        <button>Add Workspace</button>
+  return (
+    <div id="landing">
+      <h1>Registration</h1>
+      <p>
+        This page is a placeholder for a more sophisticated registration page
+      </p>
+
+      <button
+        onClick={() => {
+          setRegistrationPopupOpen(true);
+        }}
+      >
+        Add Workspace
+      </button>
+
+      <RegistrationPopup
+        isOpen={registrationPopupOpen}
+        setIsOpen={setRegistrationPopupOpen}
+      />
     </div>
+  );
 }

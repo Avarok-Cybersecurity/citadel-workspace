@@ -6,7 +6,7 @@ import { useAppSelector } from '@redux/store';
 import { useEffect } from 'react';
 const Server = () => {
   const current_selected_session = useAppSelector(
-    (state) => state.context.sessions.current_used_session_server
+    (state) => state.context.sessions.current_used_session_server,
   );
 
   useEffect(() => {

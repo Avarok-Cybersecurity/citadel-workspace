@@ -51,7 +51,7 @@ const streamExecSlice = createSlice({
   reducers: {
     addToContext: (
       state,
-      action: PayloadAction<{ req_id: string; context_type: ContextType }>
+      action: PayloadAction<{ req_id: string; context_type: ContextType }>,
     ) => {
       const req_id = action.payload.req_id;
 

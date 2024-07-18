@@ -6,17 +6,17 @@ export type ListAllPeersInput = {
   cid: string;
 };
 export const listAllPeers = async (
-  input: ListAllPeersInput
+  input: ListAllPeersInput,
 ): Promise<string> => {
   const response = await invoke<ListAllPeersInput, string>(
     'list_all_peers',
-    input
+    input,
   );
   store.dispatch(
     addToContext({
       req_id: response,
       context_type: 'ListAllPeers',
-    })
+    }),
   );
 
   return response;

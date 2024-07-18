@@ -9,17 +9,17 @@ export type LocalDBDeleteKVInput = {
 };
 
 export const useLocalDBDeleteKV = async (
-  input: LocalDBDeleteKVInput
+  input: LocalDBDeleteKVInput,
 ): Promise<string> => {
   const response = await invoke<LocalDBDeleteKVInput, string>(
     'local_db_delete_kv',
-    input
+    input,
   );
   store.dispatch(
     addToContext({
       req_id: response,
       context_type: 'LocalDBDeleteKV',
-    })
+    }),
   );
 
   return response;

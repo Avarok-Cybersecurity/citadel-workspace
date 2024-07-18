@@ -1,25 +1,25 @@
 #landing {
-    display: flex;
-    margin: 20px;
-    align-items: center;
-    flex-direction: column;
+  display: flex;
+  margin: 20px;
+  align-items: center;
+  flex-direction: column;
 }
 
 #landing button {
-    position: relative;
-    top: 50px;
-    padding: 10px 20px 10px 20px;
-    border: 1px solid #444A6C;
-    border-radius: 7px;
-    overflow: hidden;
-    background-color: #444A6C;
-    font-size: 16px;
-    color: white;
-    transition: 0.3s;
+  position: relative;
+  top: 50px;
+  padding: 10px 20px 10px 20px;
+  border: 1px solid #444a6c;
+  border-radius: 7px;
+  overflow: hidden;
+  background-color: #444a6c;
+  font-size: 16px;
+  color: white;
+  transition: 0.3s;
 }
 
-#landing button:hover{
-    cursor: pointer;
-    color: #444A6C;
-    background-color: transparent;
+#landing button:hover {
+  cursor: pointer;
+  color: #444a6c;
+  background-color: transparent;
 }

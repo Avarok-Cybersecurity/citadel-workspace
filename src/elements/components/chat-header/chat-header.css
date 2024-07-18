@@ -1,43 +1,43 @@
 #chat-header {
-    width: 100%;
-    background-color: #343A5C;
-    height: 61px;
-    box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.4);
-    display: flex;
-    align-items: center;
+  width: 100%;
+  background-color: #343a5c;
+  height: 61px;
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
 }
 
 #chat-header #chat-user {
-    margin-left: 20px;
-    display: flex;
-    align-items: center;
-    gap: 17px;
+  margin-left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 17px;
 }
 
-#chat-header #chat-user img{
-    height: 32px;
-    width: 32px;
-    border-radius: 10px;
+#chat-header #chat-user img {
+  height: 32px;
+  width: 32px;
+  border-radius: 10px;
 }
-#chat-header #chat-user h3{
-    color: white;
-    font-size: 16px;
-    font-weight: 600;
+#chat-header #chat-user h3 {
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
 }
-#chat-header #chat-user i{
-    color: #B9B4C7;
-    font-size: 20px;
+#chat-header #chat-user i {
+  color: #b9b4c7;
+  font-size: 20px;
 }
 
 #chat-header #chat-tools {
-    display: flex;
-    flex-grow: 1;
-    justify-content: flex-end;
-    gap: 23px;
-    margin-right: 20px;
+  display: flex;
+  flex-grow: 1;
+  justify-content: flex-end;
+  gap: 23px;
+  margin-right: 20px;
 }
 
 #chat-header #chat-tools i {
-    color: #B9B4C7;
-    font-size: 20px;
+  color: #b9b4c7;
+  font-size: 20px;
 }

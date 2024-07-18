@@ -6,17 +6,17 @@ export type ListRegisteredPeersInput = {
   cid: string;
 };
 export const useListRegisteredPeers = async (
-  input: ListRegisteredPeersInput
+  input: ListRegisteredPeersInput,
 ): Promise<string> => {
   const response = await invoke<ListRegisteredPeersInput, string>(
     'list_registered_peers',
-    input
+    input,
   );
   store.dispatch(
     addToContext({
       req_id: response,
       context_type: 'ListRegisteredPeers',
-    })
+    }),
   );
 
   return response;

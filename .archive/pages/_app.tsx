@@ -52,7 +52,7 @@ function CustomApp({
           addToContext({
             req_id: session_req_id,
             context_type: 'GetSession',
-          })
+          }),
         );
       } catch (error) {
         console.log(error);
@@ -74,7 +74,7 @@ function CustomApp({
 
         const req_id = data.payload.request_id;
         handlePacket(req_id, data);
-      }
+      },
     );
 
     const listen_notification_stream = listen(
@@ -89,7 +89,7 @@ function CustomApp({
         };
 
         handleNotificationPacket(data, key);
-      }
+      },
     );
 
     return () => {

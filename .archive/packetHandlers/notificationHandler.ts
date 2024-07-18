@@ -10,7 +10,7 @@ const handleNotificationPacket = ({ payload }: Payload, key: string) => {
           addToNotificationsContext({
             key: 'PeerRegisterNotification',
             payload: payload as unknown as PeerRegisterNotification,
-          })
+          }),
         );
         break;
 

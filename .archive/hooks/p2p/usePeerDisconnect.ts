@@ -9,17 +9,17 @@ export type Peer2PeerDisconnectInput = {
   serverAddr: string;
 };
 export const peerDisconnect = async (
-  input: Peer2PeerDisconnectInput
+  input: Peer2PeerDisconnectInput,
 ): Promise<string> => {
   const response = await invoke<Peer2PeerDisconnectInput, string>(
     'peer_disconnect',
-    input
+    input,
   );
   store.dispatch(
     addToContext({
       req_id: response,
       context_type: 'PeerDisconnect',
-    })
+    }),
   );
 
   return response;

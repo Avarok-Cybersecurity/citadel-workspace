@@ -10,17 +10,17 @@ export type LocalDBSetKVInput = {
 };
 
 export const useLocalDBSetKV = async (
-  input: LocalDBSetKVInput
+  input: LocalDBSetKVInput,
 ): Promise<string> => {
   const response = await invoke<LocalDBSetKVInput, string>(
     'local_db_set_kv',
-    input
+    input,
   );
   store.dispatch(
     addToContext({
       req_id: response,
       context_type: 'LocalDBSetKV',
-    })
+    }),
   );
 
   return response;

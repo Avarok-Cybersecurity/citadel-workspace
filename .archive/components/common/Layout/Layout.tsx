@@ -30,7 +30,7 @@ export const Layout = ({ children }: Props) => {
   const [addServerOpen, setAddServerOpen] = useState(false);
   const [peerToConnect, setPeerToConnect] = useState('');
   const currentUsedSessionCid: string = useAppSelector(
-    (state) => state.context.sessions.current_used_session_server
+    (state) => state.context.sessions.current_used_session_server,
   );
 
   const [navigation, _] = useState([
@@ -43,11 +43,11 @@ export const Layout = ({ children }: Props) => {
   ]);
 
   const current_sessions = useAppSelector(
-    (state) => state.context.sessions.current_sessions
+    (state) => state.context.sessions.current_sessions,
   );
 
   const connectedPeers = useAppSelector(
-    (state) => state.context.sessions.connectedPeers
+    (state) => state.context.sessions.connectedPeers,
   );
 
   const peers = current_sessions[currentUsedSessionCid] ?? {};
@@ -138,7 +138,7 @@ export const Layout = ({ children }: Props) => {
                                     item.current
                                       ? 'bg-gray-800 text-white'
                                       : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                                    'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                                    'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold',
                                   )}
                                 >
                                   <item.icon
@@ -164,7 +164,7 @@ export const Layout = ({ children }: Props) => {
                                     team.current
                                       ? 'bg-gray-800 text-white'
                                       : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                                    'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                                    'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold',
                                   )}
                                 >
                                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-gray-700 bg-gray-800 text-[0.625rem] font-medium text-gray-400 group-hover:text-white">
@@ -198,7 +198,7 @@ export const Layout = ({ children }: Props) => {
                                     key
                                       ? 'bg-gray-800 text-white'
                                       : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                                    'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                                    'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold',
                                   )}
                                 >
                                   <span className="relative inline-block">
@@ -260,7 +260,7 @@ export const Layout = ({ children }: Props) => {
                           <Link
                             href={`/peer/${peer}`}
                             className={classNames(
-                              'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                              'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold',
                             )}
                           >
                             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-gray-700 bg-gray-800 text-[0.625rem] font-medium text-gray-400 group-hover:text-white">
@@ -295,7 +295,7 @@ export const Layout = ({ children }: Props) => {
                     >
                       <span
                         className={clsx(
-                          peersTypeSelected === 'All Peers' && 'text-blue-800'
+                          peersTypeSelected === 'All Peers' && 'text-blue-800',
                         )}
                       >
                         All Peers
@@ -308,7 +308,7 @@ export const Layout = ({ children }: Props) => {
                     >
                       <span
                         className={clsx(
-                          peersTypeSelected === 'Registered' && 'text-blue-800'
+                          peersTypeSelected === 'Registered' && 'text-blue-800',
                         )}
                       >
                         Registered
@@ -336,7 +336,7 @@ export const Layout = ({ children }: Props) => {
                               key
                                 ? 'bg-gray-800 text-white'
                                 : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                              'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                              'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold',
                             )}
                           >
                             <span className="relative inline-block">
@@ -371,7 +371,7 @@ export const Layout = ({ children }: Props) => {
                                 key
                                   ? 'bg-gray-800 text-white'
                                   : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                                'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                                'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold',
                               )}
                             >
                               <span className="relative inline-block">

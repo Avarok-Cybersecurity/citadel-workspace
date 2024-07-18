@@ -9,17 +9,17 @@ export type Peer2PeerRegisterInput = {
 export const peerRegister = async (input: Peer2PeerRegisterInput) => {
   const response = await invoke<Peer2PeerRegisterInput, string>(
     'peer_register',
-    input
+    input,
   );
   store.dispatch(
     addToContext({
       req_id: response,
       context_type: 'PeerRegister',
-    })
+    }),
   );
 
   store.dispatch(
-    addToContext({ req_id: response, context_type: 'PeerRegister' })
+    addToContext({ req_id: response, context_type: 'PeerRegister' }),
   );
   return response;
 };

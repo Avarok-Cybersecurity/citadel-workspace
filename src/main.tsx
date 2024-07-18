@@ -1,8 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 
-import Home from "./elements/pages/home/home"
-import "./main.css"
+import Home from "./elements/pages/home/home";
+import "./main.css";
 
 import {
   createBrowserRouter,
@@ -15,11 +15,11 @@ import Landing from "./elements/pages/landing/landing";
 const router = createBrowserRouter([
   {
     path: "/",
-    element: <Landing />
+    element: <Landing />,
   },
   {
     path: "/home",
-    element: <Home />
+    element: <Home />,
   },
 ]);
 

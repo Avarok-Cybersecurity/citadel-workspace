@@ -117,7 +117,7 @@ export default function Example() {
                 tier.mostPopular
                   ? 'rounded-xl bg-white/5 ring-1 ring-inset ring-white/10'
                   : '',
-                'p-8'
+                'p-8',
               )}
             >
               <h3
@@ -141,7 +141,7 @@ export default function Example() {
                   tier.mostPopular
                     ? 'bg-indigo-500 text-white hover:bg-indigo-400 focus-visible:outline-indigo-500'
                     : 'bg-white/10 text-white hover:bg-white/20 focus-visible:outline-white',
-                  'mt-8 block rounded-md py-2 px-3 text-center text-sm font-semibold leading-6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2'
+                  'mt-8 block rounded-md py-2 px-3 text-center text-sm font-semibold leading-6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
                 )}
               >
                 Buy plan
@@ -242,7 +242,7 @@ export default function Example() {
                           tier.mostPopular
                             ? 'bg-indigo-500 hover:bg-indigo-400 focus-visible:outline-indigo-600'
                             : 'bg-white/10 hover:bg-white/20 focus-visible:outline-white',
-                          'mt-8 block rounded-md py-2 px-3 text-center text-sm font-semibold leading-6 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2'
+                          'mt-8 block rounded-md py-2 px-3 text-center text-sm font-semibold leading-6 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
                         )}
                       >
                         Buy plan
@@ -258,7 +258,7 @@ export default function Example() {
                         colSpan={4}
                         className={classNames(
                           sectionIdx === 0 ? 'pt-8' : 'pt-16',
-                          'pb-4 text-sm font-semibold leading-6 text-white'
+                          'pb-4 text-sm font-semibold leading-6 text-white',
                         )}
                       >
                         {section.name}

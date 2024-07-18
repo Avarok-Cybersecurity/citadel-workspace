@@ -19,7 +19,7 @@ export type ApiInvokeTypes =
 
 const invokeApi = async <T = any, R = string>(
   type: ApiInvokeTypes,
-  variables?: T
+  variables?: T,
 ): Promise<R> => {
   try {
     if (!variables) {

@@ -7,18 +7,18 @@ export type Peer2PeerConnectInput = {
   peerCid: string;
 };
 export const usePeerConnect = async (
-  input: Peer2PeerConnectInput
+  input: Peer2PeerConnectInput,
 ): Promise<string> => {
   const response = await invoke<Peer2PeerConnectInput, string>(
     'peer_connect',
-    input
+    input,
   );
   console.log('peer_connect response', response);
   store.dispatch(
     addToContext({
       req_id: response,
       context_type: 'PeerConnectNotification',
-    })
+    }),
   );
 
   return response;

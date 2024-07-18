@@ -3,7 +3,7 @@ on:
   workflow_call:
   pull_request:
   push:
-    branches: ["master"]
+    branches: ['master']
 
 concurrency:
   group: ${{ github.head_ref || github.run_id }}

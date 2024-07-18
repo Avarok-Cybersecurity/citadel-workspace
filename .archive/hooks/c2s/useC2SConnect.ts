@@ -11,13 +11,13 @@ export type RegisterAndConnectInput = {
 export const serverConnect = async (input: RegisterAndConnectInput) => {
   const response = invoke<RegisterAndConnectInput, string>(
     'register',
-    input
+    input,
   ).then((response) => {
     store.dispatch(
       addToContext({
         req_id: response,
         context_type: 'RegisterAndConnect',
-      })
+      }),
     );
     setTimeout(() => {
       invoke('get_sessions').then((req_id) => {
@@ -25,7 +25,7 @@ export const serverConnect = async (input: RegisterAndConnectInput) => {
           addToContext({
             req_id,
             context_type: 'GetSession',
-          })
+          }),
         );
       });
     }, 1000);

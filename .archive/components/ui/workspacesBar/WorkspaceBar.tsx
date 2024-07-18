@@ -14,15 +14,15 @@ function WorkspaceBar({
   setAddServerOpener: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const sessions = useAppSelector(
-    (state: RootState) => state.context.sessions.current_sessions
+    (state: RootState) => state.context.sessions.current_sessions,
   );
 
   const currentSessionInUse = useAppSelector(
-    (state) => state.context.sessions.current_used_session_server
+    (state) => state.context.sessions.current_used_session_server,
   );
 
   const currentNotification = useAppSelector(
-    (state) => state.notificationsContext
+    (state) => state.notificationsContext,
   );
 
   const dispatch = useAppDispatch();
@@ -48,7 +48,7 @@ function WorkspaceBar({
               key={key}
               className={clsx(
                 currentSessionInUse === key && 'bg-slate-300',
-                'rounded'
+                'rounded',
               )}
             >
               <Link
@@ -149,7 +149,7 @@ function WorkspaceBar({
                                     deleteFromNotificationsContext({
                                       cid: currentSessionInUse,
                                       peerCid: notification.peer_cid.value,
-                                    })
+                                    }),
                                   );
                                 }}
                                 className="inline-flex justify-center w-full px-2 py-1.5 text-xs font-medium text-center text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-300 dark:bg-blue-500 dark:hover:bg-blue-600 dark:focus:ring-blue-800"
@@ -164,7 +164,7 @@ function WorkspaceBar({
                                     deleteFromNotificationsContext({
                                       cid: currentSessionInUse,
                                       peerCid: notification.peer_cid.value,
-                                    })
+                                    }),
                                   );
                                 }}
                                 className="inline-flex cursor-pointer justify-center w-full px-2 py-1.5 text-xs font-medium text-center text-gray-900 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-gray-200 dark:bg-gray-600 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:border-gray-700 dark:focus:ring-gray-700"
@@ -175,7 +175,7 @@ function WorkspaceBar({
                           </div>
                         </div>
                       );
-                    }
+                    },
                   )}
               </div>
             </div>

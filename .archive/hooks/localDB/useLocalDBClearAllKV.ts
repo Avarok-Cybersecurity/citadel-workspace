@@ -8,17 +8,17 @@ export type LocalDBClearAllKVInput = {
 };
 
 export const useLocalDBClearAllKV = async (
-  input: LocalDBClearAllKVInput
+  input: LocalDBClearAllKVInput,
 ): Promise<string> => {
   const response = await invoke<LocalDBClearAllKVInput, string>(
     'local_db_clear_all_kv',
-    input
+    input,
   );
   store.dispatch(
     addToContext({
       req_id: response,
       context_type: 'LocalDBClearAllKV',
-    })
+    }),
   );
 
   return response;

@@ -1,0 +1,124 @@
+#registration-content {
+  position: relative;
+  background-color: #4f5889;
+  width: 437px;
+  max-height: 397px;
+  padding: 25px;
+  border-radius: 10px;
+}
+
+#registration-content .header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+#registration-content .header i {
+  font-size: 20px;
+  color: white;
+}
+#registration-content .header h1 {
+  font-size: 20px;
+  color: white;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+#registration-content h2 {
+  color: white;
+  font-size: 16px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+#registration-content h3 {
+  color: #b9b4c7;
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+#registration-content .input-icon-pair {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0px 10px 0px 10px;
+}
+
+#registration-content input {
+  flex-grow: 1;
+  color: #b9b4c779;
+  font-size: 14px;
+  font-weight: 300;
+  background-color: #444a6c;
+  border: none;
+  border-radius: 7px;
+  padding: 10px;
+}
+
+#registration-content .select {
+    flex-grow: 1;
+    background-color: #444a6c;
+    color: #b9b4c7;
+    font-size: 14px;
+    font-weight: 300;
+    border: none;
+    border-radius: 7px;
+    padding: 0px 10px 0px 10px;
+}
+#registration-content .select [role="listbox"]{
+    position: relative;
+    top: 5px;
+    right: 5px;
+    background-color: #444a6c;
+    border-radius: 7px;
+    padding: 5px 0px 5px 0px;
+}
+#registration-content .select [role="option"]{
+    padding: 10px;
+    transition: 0.2s;
+}
+#registration-content .select [role="option"]:hover{
+    background-color: #565d83;
+    cursor: pointer;
+}
+
+#registration-content i {
+  color: #b9b4c7;
+  font-size: 18px;
+}
+
+#registration-content .bottom-buttons {
+  margin-top: 30px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+#registration-content .bottom-buttons button {
+  padding: 10px;
+  border-radius: 7px;
+  font-size: 15px;
+  text-transform: uppercase;
+  font-weight: 500;
+  border: none;
+  transition: 0.3s;
+}
+#registration-content .bottom-buttons #next-btn {
+  background-color: #444a6c;
+  color: white;
+  margin-left: 12px;
+  width: 109px;
+}
+#registration-content .bottom-buttons #next-btn:hover {
+  background-color: white;
+  color: #444a6c;
+  cursor: pointer;
+}
+
+#registration-content .bottom-buttons #cancel-btn {
+  background-color: transparent;
+  color: white;
+  width: 92px;
+}
+#registration-content .bottom-buttons #cancel-btn:hover {
+  background-color: #444a6c98;
+  cursor: pointer;
+}

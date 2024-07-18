@@ -1,4 +1,4 @@
 export interface WorkspaceInfo {
-    iconPath: string 
-    name: string
+  iconPath: string;
+  name: string;
 }

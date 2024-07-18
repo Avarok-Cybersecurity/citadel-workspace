@@ -6,14 +6,14 @@ export type DisconnectInput = {
   cid: string;
 };
 export default async function useDisconnect(
-  input: DisconnectInput
+  input: DisconnectInput,
 ): Promise<string> {
   const response = await invoke<{ cid: string }, string>('disconnect', input);
   store.dispatch(
     addToContext({
       req_id: response,
       context_type: 'Disconnect',
-    })
+    }),
   );
 
   return response;

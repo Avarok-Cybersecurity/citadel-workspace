@@ -9,17 +9,17 @@ export type LocalDBGetKVInput = {
 };
 
 export const useLocalDBGetKV = async (
-  input: LocalDBGetKVInput
+  input: LocalDBGetKVInput,
 ): Promise<string> => {
   const response = await invoke<LocalDBGetKVInput, string>(
     'local_db_get_kv',
-    input
+    input,
   );
   store.dispatch(
     addToContext({
       req_id: response,
       context_type: 'LocalDBGetKV',
-    })
+    }),
   );
 
   return response;
