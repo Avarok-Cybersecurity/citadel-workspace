@@ -1,8 +1,9 @@
 #registration-content {
+  transform: scale(0.9);
   position: relative;
   background-color: #4f5889;
   width: 437px;
-  max-height: 397px;
+  /* max-height: 397px; */
   padding: 25px;
   border-radius: 10px;
 }
@@ -45,13 +46,16 @@
 
 #registration-content input {
   flex-grow: 1;
-  color: #b9b4c779;
+  color: #b9b4c7;
   font-size: 14px;
   font-weight: 300;
   background-color: #444a6c;
   border: none;
   border-radius: 7px;
   padding: 10px;
+}
+#registration-content input::placeholder {
+  color: #b9b4c768;
 }
 
 #registration-content .select {
@@ -68,7 +72,7 @@
     position: relative;
     top: 5px;
     right: 5px;
-    background-color: #444a6c;
+    background-color: #3f456b;
     border-radius: 7px;
     padding: 5px 0px 5px 0px;
 }
@@ -120,5 +124,29 @@
 }
 #registration-content .bottom-buttons #cancel-btn:hover {
   background-color: #444a6c98;
+  cursor: pointer;
+}
+
+#registration-content .advanced-settings-header {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#registration-content .advanced-settings-header button {
+  border: none;
+  background-color: transparent;
+  height: 29px;
+  width: 29px;
+  padding: 4px;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+#registration-content .advanced-settings-header i {
+  font-size: 18px;
+}
+#registration-content .advanced-settings-header button:hover {
+  background-color: #b9b4c71A;
   cursor: pointer;
 }
