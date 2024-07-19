@@ -59,30 +59,30 @@
 }
 
 #registration-content .select {
-    flex-grow: 1;
-    background-color: #444a6c;
-    color: #b9b4c7;
-    font-size: 14px;
-    font-weight: 300;
-    border: none;
-    border-radius: 7px;
-    padding: 0px 10px 0px 10px;
+  flex-grow: 1;
+  background-color: #444a6c;
+  color: #b9b4c7;
+  font-size: 14px;
+  font-weight: 300;
+  border: none;
+  border-radius: 7px;
+  padding: 0px 10px 0px 10px;
 }
-#registration-content .select [role="listbox"]{
-    position: relative;
-    top: 5px;
-    right: 5px;
-    background-color: #3f456b;
-    border-radius: 7px;
-    padding: 5px 0px 5px 0px;
+#registration-content .select [role="listbox"] {
+  position: relative;
+  top: 5px;
+  right: 5px;
+  background-color: #3f456b;
+  border-radius: 7px;
+  padding: 5px 0px 5px 0px;
 }
-#registration-content .select [role="option"]{
-    padding: 10px;
-    transition: 0.2s;
+#registration-content .select [role="option"] {
+  padding: 10px;
+  transition: 0.2s;
 }
-#registration-content .select [role="option"]:hover{
-    background-color: #565d83;
-    cursor: pointer;
+#registration-content .select [role="option"]:hover {
+  background-color: #565d83;
+  cursor: pointer;
 }
 
 #registration-content i {
@@ -147,6 +147,6 @@
   font-size: 18px;
 }
 #registration-content .advanced-settings-header button:hover {
-  background-color: #b9b4c71A;
+  background-color: #b9b4c71a;
   cursor: pointer;
 }
