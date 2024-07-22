@@ -3,38 +3,79 @@ mod structs;
 use citadel_internal_service_connector::connector::InternalServiceConnector;
 use citadel_logging::setup_log;
 use commands::{
-//     connect::connect, disconnect::disconnect, get_session::get_sessions,
-//     list_all_peers::list_all_peers, list_registered_peers::list_registered_peers,
-//     local_db_clear_all_kv::local_db_clear_all_kv, local_db_delete_kv::local_db_delete_kv,
-//     local_db_get_all_kv::local_db_get_all_kv, local_db_get_kv::local_db_get_kv,
-//     local_db_set_kv::local_db_set_kv, message::message, open_connection::open_connection,
-//     peer_connect::peer_connect, peer_disconnect::peer_disconnect, peer_register::peer_register,
+    //     connect::connect, disconnect::disconnect, get_session::get_sessions,
+    //     list_all_peers::list_all_peers, list_registered_peers::list_registered_peers,
+    //     local_db_clear_all_kv::local_db_clear_all_kv, local_db_delete_kv::local_db_delete_kv,
+    //     local_db_get_all_kv::local_db_get_all_kv, local_db_get_kv::local_db_get_kv,
+    //     local_db_set_kv::local_db_set_kv, message::message, open_connection::open_connection,
+    //     peer_connect::peer_connect, peer_disconnect::peer_disconnect, peer_register::peer_register,
     register::register,
 };
-use structs::ConnectionState;
+use futures::StreamExt;
+use std::sync::Arc;
+use structs::{ConnectionState, PacketHandle};
 use tauri::Manager;
 use tokio::sync::Mutex;
 
-
-const INTERNAL_SERVICE_ADDR: &str = "";
+const INTERNAL_SERVICE_ADDR: &str = "127.0.0.1:12345";
 
 #[tokio::main]
-async fn main(){
+async fn main() {
     run().await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 async fn run() {
-
-    let connector = InternalServiceConnector::connect(INTERNAL_SERVICE_ADDR).await.unwrap();
-    let (sink, stream) = connector.split();
+    let connector = InternalServiceConnector::connect(INTERNAL_SERVICE_ADDR)
+        .await
+        .expect("Invalid socket address");
+    let (sink, mut stream) = connector.split();
 
     println!("Connected to internal service.");
+
+    let listeners: Arc<Mutex<Vec<PacketHandle>>> = Arc::new(Mutex::new(Vec::new()));
+
+    // Background TCP listener
+    let listeners_ref = Arc::clone(&listeners);
+    tokio::spawn(async move {
+        let listeners = listeners_ref;
+        println!("Spawned background TCP dispatcher.");
+
+        while let Some(packet) = stream.next().await {
+            println!("Incoming packet:\n{:#?}", &packet);
+
+            let mut guard = listeners.lock().await;
+            let mut targeted_handles: Vec<&mut PacketHandle> = guard
+                .iter_mut()
+                .filter(|h| packet.request_id().is_some_and(|id| id == h.request_id))
+                .collect();
+
+            if targeted_handles.len() == 1 {
+                let channel = &mut targeted_handles[0].channel;
+                let _ = channel
+                    .send(packet)
+                    .await
+                    .map_err(|err| eprintln!("Error when dispatching packet: {}", err));
+            } else {
+                for handle in targeted_handles {
+                    let _ = handle
+                        .channel
+                        .send(packet.clone())
+                        .await
+                        .map_err(|err| eprintln!("Error when dispatching packet: {}", err));
+                }
+                // TODO @kyle-tennison: You could theoretically make this more efficient by not cloning on the last iteration
+            }
+            drop(guard);
+        }
+
+        ()
+    });
 
     tauri::Builder::default()
         .manage(ConnectionState {
             sink: Mutex::new(sink),
-            stream: Mutex::new(stream)
+            listeners: Arc::clone(&listeners),
         })
         .setup(|app| {
             setup_log();
