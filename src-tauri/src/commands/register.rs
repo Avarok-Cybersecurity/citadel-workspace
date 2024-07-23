@@ -35,6 +35,7 @@ pub struct RegistrationRequestTS {
 pub struct RegistrationResponseTS {
     message: String,
     success: bool,
+    cid: Option<String>
 }
 
 #[tauri::command]
@@ -59,6 +60,11 @@ pub async fn register(
         crypto_params,
     };
 
+    let server_password: Option<_> = match request.workspacePassword.trim().len() {
+        0 => None,
+        _ => Some(request.workspacePassword.into())
+    };
+
     let internal_request = InternalServiceRequest::Register {
         request_id,
         server_addr,
@@ -67,17 +73,18 @@ pub async fn register(
         proposed_password: SecBuffer::empty(), // TODO @kyle-tennison: Proposed password is not prompted in current UI
         connect_after_register: true,
         session_security_settings: security_settings,
-        server_password: Some(request.workspacePassword.into()),
+        server_password: server_password.into()
     };
 
     let response = send_and_recv(internal_request, request_id, state).await?;
 
     Ok(match response {
         InternalServiceResponse::RegisterSuccess(_) => {
-            println!("Registration was successful.");
+            println!("Registration was successful, but no connection was made");
             RegistrationResponseTS {
-                message: "success".to_owned(),
-                success: true,
+                message: "Successful registration, but no connection".to_owned(),
+                success: false,
+                cid: None,
             }
         }
         InternalServiceResponse::RegisterFailure(err) => {
@@ -85,16 +92,35 @@ pub async fn register(
             RegistrationResponseTS {
                 message: err.message,
                 success: false,
+                cid: None,
+            }
+        },
+        InternalServiceResponse::ConnectSuccess(r) => {
+            println!("Connection successful");
+            RegistrationResponseTS {
+                message: "Connected".to_owned(),
+                success: true,
+                cid: Some(r.cid.to_string())
+            }
+        },
+        InternalServiceResponse::ConnectFailure(err) => {
+            println!("Connection failed: {}", err.message);
+            RegistrationResponseTS{
+                message: err.message,
+                success: false,
+                cid: None
             }
         }
         unknown => {
             eprintln!(
-                "Internal service responded with an illegal response type: {}",
-                std::any::type_name_of_val(&unknown)
+                "Internal service responded with an illegal response type <{}>:\n{:#?}",
+                std::any::type_name_of_val(&unknown),
+                unknown
             );
             RegistrationResponseTS {
                 message: "Internal Error".to_owned(),
-                success: true,
+                success: false,
+                cid: None,
             }
         }
     })

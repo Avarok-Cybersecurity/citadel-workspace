@@ -150,3 +150,7 @@
   background-color: #b9b4c71a;
   cursor: pointer;
 }
+
+#registration-content .console {
+  font-weight: 500;
+}

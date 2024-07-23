@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import "./registration.css";
 import Modal from "react-modal";
 import Select from "react-select";
-import { kemOptions, secrecyOptions, securityLevels, encryptionOptions, sigOptions, RegistrationRequest } from "../../../api/registration";
+import { kemOptions, secrecyOptions, securityLevels, encryptionOptions, sigOptions, RegistrationRequest, register } from "../../../api/registration";
 
 // Styles to pass to modal
 const customStyles = {
@@ -26,7 +26,7 @@ Modal.setAppElement("#root");
 function Step1(props: { onNext: () => void, onBack: () => void, registrationRequest: RegistrationRequest }) {
 
 
-  const [workspaceIdentifier, setWorkspaceIdentifier] = useState<string>(props.registrationRequest.workspaceIdentifier || "")
+  const [workspaceIdentifier, setWorkspaceIdentifier] = useState<string>(props.registrationRequest.workspaceIdentifier || "127.0.0.1:12349") // Address for debugging
   const [workspacePassword, setWorkspacePassword] = useState<string>(props.registrationRequest.workspacePassword || "")
 
   return <>
@@ -243,6 +243,16 @@ function Step3(props: { onNext: () => void, onBack: () => void, registrationRequ
               return;
             }
 
+            if (username.length < 3 || username.length > 37){
+              console.error("Username must be between 3 and 37 characters");
+              return;
+            }
+
+            if (fullName.length < 2 || fullName.length > 77){
+              console.error("Full name must be between 2 and 77 characters");
+              return;
+            }
+
             props.registrationRequest.fullName = fullName
             props.registrationRequest.username = username
             props.registrationRequest.profilePassword = profilePassword
@@ -260,10 +270,28 @@ function Step3(props: { onNext: () => void, onBack: () => void, registrationRequ
 
 function Step4(props: { onNext: () => void, onBack: () => void, registrationRequest: RegistrationRequest }) {
 
+  const [success, setSuccess] = useState<boolean|null>(null);
+  const [message, setMessage] = useState<string>("");
+
+
+  useEffect(()=>{
+
+    const inner = async () => {
+      const response = await register(props.registrationRequest);
+      setSuccess(response?.success||null)
+      const message = (response?.success ? "Success: " : "Error: ") + (response?.message||"Unknown");
+      setMessage(message)
+    }
+
+    inner()
+
+  }, [])
 
   return <>
   <h2>Registering to server</h2>
   <h3>Please wait...</h3>
+
+  <p className="console" style={{color: success ? "white" : "#f1707c"}}>{message}</p>
 
   <div className="bottom-buttons">
       <button id="cancel-btn" onClick={props.onBack}>
