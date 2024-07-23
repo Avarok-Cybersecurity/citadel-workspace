@@ -25,7 +25,7 @@ pub mod register;
 pub(crate) async fn send_and_recv(
     payload: InternalServiceRequest,
     request_id: Uuid,
-    state: State<'_, ConnectionState>,
+    state: &State<'_, ConnectionState>,
 ) -> Result<InternalServiceResponse, String> {
     // Send message to internal service
     println!(

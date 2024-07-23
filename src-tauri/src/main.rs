@@ -1,5 +1,6 @@
 mod commands;
 mod structs;
+mod util;
 use citadel_internal_service_connector::connector::InternalServiceConnector;
 use citadel_logging::setup_log;
 use commands::{

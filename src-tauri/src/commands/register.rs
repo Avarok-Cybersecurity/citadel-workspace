@@ -6,28 +6,32 @@ use citadel_types::crypto::{
     AlgorithmsExt, CryptoParameters, EncryptionAlgorithm, KemAlgorithm, SigAlgorithm,
 };
 use serde::{Deserialize, Serialize};
+use tauri::http::response;
+use tauri::utils::acl::resolved;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use tauri::State;
 use uuid::Uuid;
 
 use crate::structs::ConnectionState;
+use crate::util::local_db::LocalDb;
+use crate::util::RegistrationInfo;
 
 use super::send_and_recv;
 
 #[allow(non_snake_case)]
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RegistrationRequestTS {
-    workspaceIdentifier: String,
-    workspacePassword: String,
-    securityLevel: u8,
-    securityMode: u8,
-    encryptionAlgorithm: u8,
-    kemAlgorithm: u8,
-    sigAlgorithm: u8,
-    fullName: String,
-    username: String,
-    profilePassword: String,
+    pub workspaceIdentifier: String,
+    pub workspacePassword: String,
+    pub securityLevel: u8,
+    pub securityMode: u8,
+    pub encryptionAlgorithm: u8,
+    pub kemAlgorithm: u8,
+    pub sigAlgorithm: u8,
+    pub fullName: String,
+    pub username: String,
+    pub profilePassword: String,
 }
 
 #[allow(non_snake_case)]
@@ -47,6 +51,7 @@ pub async fn register(
     let server_addr =
         SocketAddr::from_str(&request.workspaceIdentifier).expect("Invalid server address");
     let request_id = Uuid::new_v4();
+    let request_copy = request.clone();
 
     let crypto_params = CryptoParameters {
         encryption_algorithm: EncryptionAlgorithm::from_u8(request.encryptionAlgorithm).unwrap(),
@@ -76,9 +81,8 @@ pub async fn register(
         server_password: server_password.into()
     };
 
-    let response = send_and_recv(internal_request, request_id, state).await?;
 
-    Ok(match response {
+    let response = match send_and_recv(internal_request, request_id, &state).await? {
         InternalServiceResponse::RegisterSuccess(_) => {
             println!("Registration was successful, but no connection was made");
             RegistrationResponseTS {
@@ -123,5 +127,13 @@ pub async fn register(
                 cid: None,
             }
         }
-    })
+    };
+
+    if response.success {
+        let db = LocalDb::connect(response.cid.clone().unwrap(), &state);
+        let registration_info = RegistrationInfo::from_request(request_copy, response.cid.as_ref().unwrap().parse::<u64>().unwrap());
+        db.save_registration(&registration_info).await?;
+    }
+
+    Ok(response)
 }
