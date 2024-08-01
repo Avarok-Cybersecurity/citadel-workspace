@@ -12,8 +12,8 @@
     "windows": [
       {
         "title": "Citadel Workspace",
-        "width": 1300,
-        "height": 800
+        "width": 1500,
+        "height": 1200
       }
     ],
     "security": {

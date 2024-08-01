@@ -21,6 +21,7 @@ use uuid::Uuid;
 // pub mod peer_disconnect;
 // pub mod peer_register;
 pub mod register;
+pub mod list_known_servers;
 
 pub(crate) async fn send_and_recv(
     payload: InternalServiceRequest,

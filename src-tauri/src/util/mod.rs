@@ -45,29 +45,27 @@ pub struct RegistrationInfo {
     full_name: String,
     username: String,
     profile_password: String,
-    cid: u64,
 }
 
-impl RegistrationInfo {
-    pub fn from_request(request: RegistrationRequestTS, cid: u64) -> Self {
+impl From<RegistrationRequestTS> for RegistrationInfo {
+    fn from(value: RegistrationRequestTS) -> Self {
 
-        let server_password = match request.workspacePassword.trim().len() {
+        let server_password = match value.workspacePassword.trim().len() {
             0 => None,
-            _ => Some(request.workspacePassword)
+            _ => Some(value.workspacePassword)
         };
 
-        RegistrationInfo{
-            server_address: request.workspaceIdentifier,
+        Self{
+            server_address: value.workspaceIdentifier,
             server_password,
-            security_level: request.securityLevel,
-            security_mode: request.securityMode,
-            encryption_algorithm: request.encryptionAlgorithm,
-            kem_algorithm: request.kemAlgorithm,
-            sig_algorithm: request.sigAlgorithm,
-            full_name: request.fullName,
-            username: request.username,
-            profile_password: request.profilePassword,
-            cid
+            security_level: value.securityLevel,
+            security_mode: value.securityMode,
+            encryption_algorithm: value.encryptionAlgorithm,
+            kem_algorithm: value.kemAlgorithm,
+            sig_algorithm: value.sigAlgorithm,
+            full_name: value.fullName,
+            username: value.username,
+            profile_password: value.profilePassword,
         }
     }
 }

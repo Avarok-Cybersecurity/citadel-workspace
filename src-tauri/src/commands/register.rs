@@ -6,8 +6,6 @@ use citadel_types::crypto::{
     AlgorithmsExt, CryptoParameters, EncryptionAlgorithm, KemAlgorithm, SigAlgorithm,
 };
 use serde::{Deserialize, Serialize};
-use tauri::http::response;
-use tauri::utils::acl::resolved;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use tauri::State;
@@ -39,7 +37,6 @@ pub struct RegistrationRequestTS {
 pub struct RegistrationResponseTS {
     message: String,
     success: bool,
-    cid: Option<String>
 }
 
 #[tauri::command]
@@ -76,7 +73,7 @@ pub async fn register(
         full_name: request.fullName,
         username: request.username,
         proposed_password: SecBuffer::empty(), // TODO @kyle-tennison: Proposed password is not prompted in current UI
-        connect_after_register: true,
+        connect_after_register: false,
         session_security_settings: security_settings,
         server_password: server_password.into()
     };
@@ -84,11 +81,10 @@ pub async fn register(
 
     let response = match send_and_recv(internal_request, request_id, &state).await? {
         InternalServiceResponse::RegisterSuccess(_) => {
-            println!("Registration was successful, but no connection was made");
+            println!("Registration was successful");
             RegistrationResponseTS {
-                message: "Successful registration, but no connection".to_owned(),
-                success: false,
-                cid: None,
+                message: "Successful registration".to_owned(),
+                success: true,
             }
         }
         InternalServiceResponse::RegisterFailure(err) => {
@@ -96,25 +92,8 @@ pub async fn register(
             RegistrationResponseTS {
                 message: err.message,
                 success: false,
-                cid: None,
             }
         },
-        InternalServiceResponse::ConnectSuccess(r) => {
-            println!("Connection successful");
-            RegistrationResponseTS {
-                message: "Connected".to_owned(),
-                success: true,
-                cid: Some(r.cid.to_string())
-            }
-        },
-        InternalServiceResponse::ConnectFailure(err) => {
-            println!("Connection failed: {}", err.message);
-            RegistrationResponseTS{
-                message: err.message,
-                success: false,
-                cid: None
-            }
-        }
         unknown => {
             eprintln!(
                 "Internal service responded with an illegal response type <{}>:\n{:#?}",
@@ -124,14 +103,13 @@ pub async fn register(
             RegistrationResponseTS {
                 message: "Internal Error".to_owned(),
                 success: false,
-                cid: None,
             }
         }
     };
 
     if response.success {
-        let db = LocalDb::connect(response.cid.clone().unwrap(), &state);
-        let registration_info = RegistrationInfo::from_request(request_copy, response.cid.as_ref().unwrap().parse::<u64>().unwrap());
+        let db = LocalDb::connect_global(&state);
+        let registration_info = request_copy.into();
         db.save_registration(&registration_info).await?;
     }
 

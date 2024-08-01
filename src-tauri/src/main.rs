@@ -13,7 +13,7 @@ use commands::{
     register::register,
 };
 use futures::StreamExt;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use structs::{ConnectionState, PacketHandle};
 use tauri::Manager;
 use tokio::sync::Mutex;
@@ -77,6 +77,7 @@ async fn run() {
         .manage(ConnectionState {
             sink: Mutex::new(sink),
             listeners: Arc::clone(&listeners),
+            tmp_db: Arc::new(Mutex::new(HashMap::new()))
         })
         .setup(|app| {
             setup_log();

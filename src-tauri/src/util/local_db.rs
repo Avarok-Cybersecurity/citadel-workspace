@@ -16,71 +16,98 @@ pub struct LocalDb<'a> {
 
 impl<'a> LocalDb<'a> {    
 
+
+    pub fn connect_global(state: &'a State<'a, ConnectionState>) -> Self{
+        LocalDb{cid: 0, state}
+    }
+
     pub fn connect(cid: String, state: &'a State<'a, ConnectionState>) -> Self{
         LocalDb{cid: cid.parse::<u64>().unwrap(), state}
     }
 
     async fn set_kv<T: Serialize>(&self, key: String, value: &T) -> Result<(), String>{
     
-        let request_id = Uuid::new_v4();
-        let payload = InternalServiceRequest::LocalDBSetKV { 
-            request_id, 
-            cid: self.cid, 
-            peer_cid: None, 
-            key: key, 
-            value: serde_json::to_vec(value).map_err(|e| e.to_string())?
-        };
-    
-        send_and_recv(payload, request_id, self.state).await?;
+        assert!(self.cid == 0, "CID-Specific DB not yet implemented");
 
+        let mut db = self.state.tmp_db.lock().await;
+        let value = serde_json::to_string(value).map_err(|err| err.to_string())?;
+        db.insert(key, value);
         Ok(())
+
+        // let request_id = Uuid::new_v4();
+        // let payload = InternalServiceRequest::LocalDBSetKV { 
+        //     request_id, 
+        //     cid: self.cid, 
+        //     peer_cid: None, 
+        //     key: key, 
+        //     value: serde_json::to_vec(value).map_err(|e| e.to_string())?
+        // };
+    
+        // send_and_recv(payload, request_id, self.state).await?;
+
     }
 
     async fn get_kv<T: DeserializeOwned>(&self, key: String) -> Result<T, String> {
-        let request_id = Uuid::new_v4();
-        let payload = InternalServiceRequest::LocalDBGetKV { 
-            request_id, 
-            cid: self.cid, 
-            peer_cid: None, 
-            key: key.clone() };
 
-        match send_and_recv(payload, request_id, self.state).await? {
-            InternalServiceResponse::LocalDBGetKVSuccess(data) => {
-                let deserialized: T = serde_json::from_slice(&data.value.as_slice()).map_err(|e| e.to_string())?;
-                println!("Successfully got value from key '{}'.", key);
-                Ok(deserialized)
-            },
-            InternalServiceResponse::LocalDBGetKVFailure(err) => {
-                Err(err.message)
-            },
-            unknown => {
-                println!("Unexpected get_kv response:\n{:#?}", unknown);
-                Err("Internal Error".to_owned())
-            }
-        }
+        assert!(self.cid == 0, "CID-Specific DB not yet implemented");
+
+        let db = self.state.tmp_db.lock().await;
+        let value =  db.get(&key).ok_or("Key does not exist")?;
+
+        return serde_json::from_str(value).map_err(|err| err.to_string())
+
+
+        // let request_id = Uuid::new_v4();
+        // let payload = InternalServiceRequest::LocalDBGetKV { 
+        //     request_id, 
+        //     cid: self.cid, 
+        //     peer_cid: None, 
+        //     key: key.clone() };
+
+        // match send_and_recv(payload, request_id, self.state).await? {
+        //     InternalServiceResponse::LocalDBGetKVSuccess(data) => {
+        //         let deserialized: T = serde_json::from_slice(&data.value.as_slice()).map_err(|e| e.to_string())?;
+        //         println!("Successfully got value from key '{}'.", key);
+        //         Ok(deserialized)
+        //     },
+        //     InternalServiceResponse::LocalDBGetKVFailure(err) => {
+        //         Err(err.message)
+        //     },
+        //     unknown => {
+        //         println!("Unexpected get_kv response:\n{:#?}", unknown);
+        //         Err("Internal Error".to_owned())
+        //     }
+        // }
     }
 
-    async fn list_all_kv(&self) -> Result<HashMap<String, Vec<u8>>, String>{
-        let request_id = Uuid::new_v4();
-        let payload = InternalServiceRequest::LocalDBGetAllKV {
-            request_id,
-            cid: self.cid,
-            peer_cid: None,
-        };
+    async fn list_all_kv(&self) -> Result<HashMap<String, String>, String>{
+
+        let db = self.state.tmp_db.lock().await;
+
+        let db_copy = db.clone();
+        Ok(db_copy)
+
+
+        // let request_id = Uuid::new_v4();
+        // let payload = InternalServiceRequest::LocalDBGetAllKV {
+        //     request_id,
+        //     cid: self.cid,
+        //     peer_cid: None,
+        // };
     
 
-        match send_and_recv(payload, request_id, self.state).await? {
-            InternalServiceResponse::LocalDBGetAllKVFailure(err) => {
-                Err(err.message)
-            },
-            InternalServiceResponse::LocalDBGetAllKVSuccess(data) => {
-                Ok(data.map)
-            },
-            unknown => {
-                println!("Unexpected list_all_kv response:\n{:#?}", unknown);
-                Err("Internal Error".to_owned())
-            }
-        }
+        // match send_and_recv(payload, request_id, self.state).await? {
+        //     InternalServiceResponse::LocalDBGetAllKVFailure(err) => {
+        //         Err(err.message)
+        //     },
+        //     InternalServiceResponse::LocalDBGetAllKVSuccess(data) => {
+        //         Ok(data.map)
+        //     },
+        //     unknown => {
+        //         println!("Unexpected list_all_kv response:\n{:#?}", unknown);
+        //         Err("Internal Error".to_owned())
+        //     }
+        // }
     }
 
     async fn has_key(&self, key: &str) -> Result<bool, String> {
