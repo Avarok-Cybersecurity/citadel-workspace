@@ -10,6 +10,7 @@ use commands::{
     //     local_db_get_all_kv::local_db_get_all_kv, local_db_get_kv::local_db_get_kv,
     //     local_db_set_kv::local_db_set_kv, message::message, open_connection::open_connection,
     //     peer_connect::peer_connect, peer_disconnect::peer_disconnect, peer_register::peer_register,
+    list_known_servers::list_known_servers,
     register::register,
 };
 use futures::StreamExt;
@@ -93,6 +94,7 @@ async fn run() {
             // open_connection,
             // connect,
             register,
+            list_known_servers,
             // disconnect,
             // message,
             // get_sessions,

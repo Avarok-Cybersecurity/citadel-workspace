@@ -4,6 +4,7 @@ import Modal from "react-modal";
 import Select from "react-select";
 import { kemOptions, secrecyOptions, securityLevels, encryptionOptions, sigOptions, RegistrationRequest, register } from "../../../api/registration";
 import { invoke } from "@tauri-apps/api/core";
+import { ListKnownServersRequest, ListKnownServersResponse } from "../../../api/types";
 
 // Styles to pass to modal
 const customStyles = {
@@ -283,8 +284,11 @@ function Step4(props: { onNext: () => void, onBack: () => void, registrationRequ
       const message = (response?.success ? "Success: " : "Error: ") + (response?.message||"Unknown");
       setMessage(message)
 
+
+      const request: ListKnownServersRequest = {cid: "0"}
+      const serverList = await invoke('list_known_servers', {request});
       console.log("The server list is:");
-      console.log(await invoke('list_known_servers'))
+      console.log(serverList);
     }
 
     inner()

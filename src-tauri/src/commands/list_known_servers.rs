@@ -3,19 +3,29 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct KnownServersList {
-    addresses: Vec<String>
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ListKnownServersRequestTS {
+    pub cid: String
 }
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ListKnownServersResponseTS {
+    pub addresses: Vec<String>
+}
+
 
 #[tauri::command]
 pub async fn list_known_servers(
+    _request: ListKnownServersRequestTS,
     _window: tauri::Window,
     state: State<'_, ConnectionState>,
-) -> Result<KnownServersList, String> {
+) -> Result<ListKnownServersResponseTS, String> {
 
+    println!("Listing known servers...");
     let db = LocalDb::connect("0".to_string(), &state);
-    let addresses = db.list_known_servers().await?;
+    let addresses = db.list_known_servers().await?.server_addresses;
 
-    Ok(KnownServersList{addresses})
+    println!("The addresses are: {:?}", addresses);
+
+    Ok(ListKnownServersResponseTS{addresses})
 }

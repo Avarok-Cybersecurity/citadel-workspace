@@ -54,7 +54,8 @@ impl<'a> LocalDb<'a> {
         let db = self.state.tmp_db.lock().await;
         let value =  db.get(&key).ok_or("Key does not exist")?;
 
-        return serde_json::from_str(value).map_err(|err| err.to_string())
+        return serde_json::from_str(value).map_err(|err| 
+            format!("error deserializing saved key into {}: \n{}\n\nThe raw save is:\n{}", std::any::type_name::<T>(), err, value))
 
 
         // let request_id = Uuid::new_v4();
@@ -116,6 +117,11 @@ impl<'a> LocalDb<'a> {
 
     pub async fn save_registration(&self, registration: &RegistrationInfo) -> Result<(), String>{
         self.set_kv(registration.key_name(), &registration).await?;
+        
+        let mut known_servers = self.list_known_servers().await?;
+        known_servers.server_addresses.push(registration.server_address.clone());
+        self.set_kv(KnownServers::key_name_from_identifier(None), &known_servers).await?;
+
         Ok(())
     }
 
@@ -123,7 +129,7 @@ impl<'a> LocalDb<'a> {
         self.get_kv(RegistrationInfo::key_name_from_identifier(Some(server_address))).await?
     }
 
-    pub async fn list_known_servers(&self) -> Result<Vec<String>, String>{
+    pub async fn list_known_servers(&self) -> Result<KnownServers, String>{
 
         let key = KnownServers::key_name_from_identifier(None);
         if self.has_key(&key).await? {
@@ -131,12 +137,12 @@ impl<'a> LocalDb<'a> {
         }
         else {
             self.set_kv(key, &KnownServers{server_addresses: vec![]}).await?;
-            Ok(vec![])
+            Ok(KnownServers { server_addresses: vec![] })
         }
     }
 
     pub async fn is_known_server(&self, address: &str) -> Result<bool, String>{
-        Ok(self.list_known_servers().await?.contains(&address.to_string()))
+        Ok(self.list_known_servers().await?.server_addresses.contains(&address.to_string()))
     }
 
 }

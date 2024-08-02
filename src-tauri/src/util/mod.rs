@@ -77,8 +77,8 @@ impl KeyName for RegistrationInfo {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct KnownServers{
-    server_addresses: Vec<String>
+pub struct KnownServers{
+    pub server_addresses: Vec<String>
 }
 
 impl KeyName for KnownServers{
