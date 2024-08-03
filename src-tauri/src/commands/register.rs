@@ -79,7 +79,7 @@ pub async fn register(
     };
 
 
-    let response = match send_and_recv(internal_request, request_id, &state).await? {
+    let response = match send_and_recv(internal_request, request_id, &state).await.unwrap() {
         InternalServiceResponse::RegisterSuccess(_) => {
             println!("Registration was successful");
             RegistrationResponseTS {
@@ -110,7 +110,7 @@ pub async fn register(
     if response.success {
         let db = LocalDb::connect_global(&state);
         let registration_info = request_copy.into();
-        db.save_registration(&registration_info).await?;
+        db.save_registration(&registration_info).await.expect("failed to save registration");
     }
 
     Ok(response)

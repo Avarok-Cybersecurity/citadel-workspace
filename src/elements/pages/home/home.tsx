@@ -9,8 +9,33 @@ import Sidebar from "../../components/sidebar/sidebar";
 import Chat from "../../components/chat/chat";
 
 import "./home.css";
+import { WorkspaceInfo } from "../../../api/types";
+import { useEffect } from "react";
+import { getDefaultWorkspace } from "../../../api/util";
+import { redirect } from "react-router-dom";
 
 export default function Home() {
+
+  useEffect(()=>{
+
+    async function setup(){
+      console.log("setting up home page")
+      let default_server = await getDefaultWorkspace()
+      if (default_server === null){
+        console.error("Default server is null; redirecting to landing")
+        return redirect("/")
+      }
+
+      console.log(`connecting to ${default_server.server_address}...`)
+
+
+    }
+
+    setup()
+
+  },[])
+
+
   function getMainWindow() {
     return <Chat />;
   }

@@ -5,6 +5,7 @@ import Select from "react-select";
 import { kemOptions, secrecyOptions, securityLevels, encryptionOptions, sigOptions, RegistrationRequest, register } from "../../../api/registration";
 import { invoke } from "@tauri-apps/api/core";
 import { ListKnownServersRequest, ListKnownServersResponse } from "../../../api/types";
+import { redirect, useNavigate } from "react-router-dom";
 
 // Styles to pass to modal
 const customStyles = {
@@ -274,6 +275,7 @@ function Step4(props: { onNext: () => void, onBack: () => void, registrationRequ
 
   const [success, setSuccess] = useState<boolean|null>(null);
   const [message, setMessage] = useState<string>("");
+  const navigate = useNavigate();
 
 
   useEffect(()=>{
@@ -283,12 +285,8 @@ function Step4(props: { onNext: () => void, onBack: () => void, registrationRequ
       setSuccess(response?.success||null)
       const message = (response?.success ? "Success: " : "Error: ") + (response?.message||"Unknown");
       setMessage(message)
-
-
-      const request: ListKnownServersRequest = {cid: "0"}
-      const serverList = await invoke('list_known_servers', {request});
-      console.log("The server list is:");
-      console.log(serverList);
+      console.log("redirecting to /home")
+      return navigate("/home")
     }
 
     inner()

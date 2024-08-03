@@ -33,7 +33,7 @@ pub trait KeyName {
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RegistrationInfo {
     server_address: String,
     server_password: Option<String>,

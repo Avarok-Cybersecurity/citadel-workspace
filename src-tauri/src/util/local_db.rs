@@ -126,7 +126,8 @@ impl<'a> LocalDb<'a> {
     }
 
     pub async fn get_registration(&self, server_address: String) -> Result<RegistrationInfo, String>{
-        self.get_kv(RegistrationInfo::key_name_from_identifier(Some(server_address))).await?
+        let registration: RegistrationInfo = self.get_kv(RegistrationInfo::key_name_from_identifier(Some(server_address))).await?;
+        Ok(registration)
     }
 
     pub async fn list_known_servers(&self) -> Result<KnownServers, String>{
