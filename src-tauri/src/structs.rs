@@ -17,7 +17,7 @@ pub struct PacketHandle {
 pub struct ConnectionState {
     pub sink: Mutex<WrappedSink<TcpIOInterface>>,
     pub listeners: Arc<Mutex<Vec<PacketHandle>>>,
-    pub tmp_db: Arc<Mutex<HashMap<String, String>>>
+    pub tmp_db: Arc<Mutex<HashMap<String, String>>>,
 }
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Payload {

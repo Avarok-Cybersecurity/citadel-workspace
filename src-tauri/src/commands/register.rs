@@ -1,6 +1,6 @@
 // use crate::commands::send_to_internal_service;
 use citadel_internal_service_types::{
-    InternalServiceRequest, InternalServiceResponse, SecBuffer, SessionSecuritySettings,
+    InternalServiceRequest, InternalServiceResponse, SessionSecuritySettings,
 };
 use citadel_types::crypto::{
     AlgorithmsExt, CryptoParameters, EncryptionAlgorithm, KemAlgorithm, SigAlgorithm,
@@ -13,7 +13,6 @@ use uuid::Uuid;
 
 use crate::structs::ConnectionState;
 use crate::util::local_db::LocalDb;
-use crate::util::RegistrationInfo;
 
 use super::send_and_recv;
 
@@ -67,7 +66,7 @@ pub async fn register(
 
     let server_password: Option<_> = match request.workspacePassword.trim().len() {
         0 => None,
-        _ => Some(request.workspacePassword.into())
+        _ => Some(request.workspacePassword.into()),
     };
 
     let internal_request = InternalServiceRequest::Register {
@@ -78,9 +77,8 @@ pub async fn register(
         proposed_password: request.profilePassword.into_bytes().into(),
         connect_after_register: false,
         session_security_settings: security_settings,
-        server_password: server_password.into()
+        server_password,
     };
-
 
     let response = match send_and_recv(internal_request, request_id, &state).await {
         InternalServiceResponse::RegisterSuccess(_) => {
@@ -96,16 +94,21 @@ pub async fn register(
                 message: err.message,
                 success: false,
             }
-        },
+        }
         other => {
-            panic!("Internal service returned unexpected type '{}' during registration", std::any::type_name_of_val(&other))
+            panic!(
+                "Internal service returned unexpected type '{}' during registration",
+                std::any::type_name_of_val(&other)
+            )
         }
     };
 
     if response.success {
         let db = LocalDb::connect_global(&state);
         let registration_info = request_copy.into();
-        db.save_registration(&registration_info).await.expect("failed to save registration");
+        db.save_registration(&registration_info)
+            .await
+            .expect("failed to save registration");
     }
 
     Ok(response)

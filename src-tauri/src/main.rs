@@ -4,12 +4,12 @@ mod util;
 
 use citadel_internal_service_connector::connector::InternalServiceConnector;
 use citadel_logging::setup_log;
+use commands::{connect, list_all_peers, list_known_servers, register};
 use futures::StreamExt;
 use std::{collections::HashMap, sync::Arc};
 use structs::{ConnectionState, PacketHandle};
 use tauri::Manager;
 use tokio::sync::Mutex;
-use commands::{connect, list_known_servers, list_all_peers, register};
 
 const INTERNAL_SERVICE_ADDR: &str = "127.0.0.1:12345";
 
@@ -62,15 +62,13 @@ async fn run() {
             }
             drop(guard);
         }
-
-        ()
     });
 
     tauri::Builder::default()
         .manage(ConnectionState {
             sink: Mutex::new(sink),
             listeners: Arc::clone(&listeners),
-            tmp_db: Arc::new(Mutex::new(HashMap::new()))
+            tmp_db: Arc::new(Mutex::new(HashMap::new())),
         })
         .setup(|app| {
             setup_log();

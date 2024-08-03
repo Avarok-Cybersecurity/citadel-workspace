@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from "@tauri-apps/api/core";
 
 export const secrecyOptions = [
   { label: "Best Effort", value: 0 },
@@ -37,19 +37,23 @@ export interface RegistrationRequest {
   profilePassword: string | null;
 }
 
-export interface RegistrationResponse{
-  success: boolean,
-  message: string,
-  cid: string
+export interface RegistrationResponse {
+  success: boolean;
+  message: string;
+  cid: string;
 }
 
-export async function register(request: RegistrationRequest): Promise<RegistrationResponse|null>  {
+export async function register(
+  request: RegistrationRequest,
+): Promise<RegistrationResponse | null> {
   try {
-    const response = await invoke<RegistrationResponse>('register', { request });
+    const response = await invoke<RegistrationResponse>("register", {
+      request,
+    });
     console.log(response);
     return response;
   } catch (error) {
-    console.error('Error registering user:', error);
+    console.error("Error registering user:", error);
     return null;
   }
 }

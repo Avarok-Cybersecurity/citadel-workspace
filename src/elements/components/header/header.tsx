@@ -12,8 +12,7 @@ function getActiveWorkspace(): WorkspaceInfo | null {
   };
 }
 
-export default function Header(props: {workspaceInfo: WorkspaceInfo|null}) {
-
+export default function Header(props: { workspaceInfo: WorkspaceInfo | null }) {
   return (
     <div id="header">
       <div id="workspace-selector">

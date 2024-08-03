@@ -18,7 +18,6 @@ pub mod local_db;
 // }
 
 pub trait KeyName {
-
     /// An identifier used to differentiate between different instances
     /// of the same struct in the DB. If there will only ever be one
     /// instance of a particular struct, the identifier may be None.
@@ -27,11 +26,14 @@ pub trait KeyName {
     fn key_name(&self) -> String {
         Self::key_name_from_identifier(self.identifier())
     }
-    fn key_name_from_identifier(identifier: Option<String>) -> String{
-        format!("{}({})", std::any::type_name::<Self>(), identifier.or(Some("".to_owned())).unwrap() )
+    fn key_name_from_identifier(identifier: Option<String>) -> String {
+        format!(
+            "{}({})",
+            std::any::type_name::<Self>(),
+            identifier.unwrap_or("".to_owned())
+        )
     }
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RegistrationInfo {
@@ -49,13 +51,12 @@ pub struct RegistrationInfo {
 
 impl From<RegistrationRequestTS> for RegistrationInfo {
     fn from(value: RegistrationRequestTS) -> Self {
-
         let server_password = match value.workspacePassword.trim().len() {
             0 => None,
-            _ => Some(value.workspacePassword)
+            _ => Some(value.workspacePassword),
         };
 
-        Self{
+        Self {
             server_address: value.workspaceIdentifier,
             server_password,
             security_level: value.securityLevel,
@@ -72,16 +73,16 @@ impl From<RegistrationRequestTS> for RegistrationInfo {
 
 impl KeyName for RegistrationInfo {
     fn identifier(&self) -> Option<String> {
-       Some(self.server_address.clone())
+        Some(self.server_address.clone())
     }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct KnownServers{
-    pub server_addresses: Vec<String>
+pub struct KnownServers {
+    pub server_addresses: Vec<String>,
 }
 
-impl KeyName for KnownServers{
+impl KeyName for KnownServers {
     fn identifier(&self) -> Option<String> {
         None
     }
