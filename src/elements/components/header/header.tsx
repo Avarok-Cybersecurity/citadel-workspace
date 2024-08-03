@@ -12,16 +12,13 @@ function getActiveWorkspace(): WorkspaceInfo | null {
   };
 }
 
-export default function Header() {
-  const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceInfo | null>(
-    getActiveWorkspace(),
-  );
+export default function Header(props: {workspaceInfo: WorkspaceInfo|null}) {
 
   return (
     <div id="header">
       <div id="workspace-selector">
-        <img src={activeWorkspace?.iconPath} />
-        <h3>{activeWorkspace?.name}</h3>
+        <img src={props.workspaceInfo?.iconPath} />
+        <h3>{props.workspaceInfo?.name}</h3>
         <i className="bi bi-chevron-down"></i>
       </div>
       <div id="header-selectors">

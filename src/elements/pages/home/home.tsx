@@ -8,6 +8,7 @@ import Header from "../../components/header/header";
 import Sidebar from "../../components/sidebar/sidebar";
 import Chat from "../../components/chat/chat";
 
+import sampleWorkspaceIcon from "../../../assets/sample-workspace.png";
 import "./home.css";
 import { RegistrationInfo, WorkspaceInfo } from "../../../api/types";
 import { useEffect, useState } from "react";
@@ -18,6 +19,7 @@ export default function Home() {
 
   const [cid, setCid] = useState<string|null>(null);
   const [registrationInfo, setRegistrationInfo] = useState<RegistrationInfo|null>(null);
+  const [workspaceInfo, setWorkspaceInfo] = useState<WorkspaceInfo|null>(null);
 
 
   useEffect(()=>{
@@ -43,6 +45,13 @@ export default function Home() {
       else{
         console.error("Failed to connect to server.", response.message);
       }
+
+      // Set info
+      const workspaceInfo: WorkspaceInfo = {
+        iconPath: sampleWorkspaceIcon, // TODO: store this in local db
+        name: "placeholder"
+      }
+      setWorkspaceInfo(workspaceInfo)
     }
 
     setup()
@@ -51,14 +60,14 @@ export default function Home() {
 
 
   function getMainWindow() {
-    return <Chat />;
+    return <Chat  />;
   }
 
   return (
     <div id="home-page">
       <div className="header-panel">
         {" "}
-        <Header />{" "}
+        <Header workspaceInfo={workspaceInfo } />{" "}
       </div>
 
       <div className="content-container">
