@@ -35,16 +35,16 @@ pub trait KeyName {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RegistrationInfo {
-    server_address: String,
-    server_password: Option<String>,
-    security_level: u8,
-    security_mode: u8,
-    encryption_algorithm: u8,
-    kem_algorithm: u8,
-    sig_algorithm: u8,
-    full_name: String,
-    username: String,
-    profile_password: String,
+    pub server_address: String,
+    pub server_password: Option<String>,
+    pub security_level: u8,
+    pub security_mode: u8,
+    pub encryption_algorithm: u8,
+    pub kem_algorithm: u8,
+    pub sig_algorithm: u8,
+    pub full_name: String,
+    pub username: String,
+    pub profile_password: String,
 }
 
 impl From<RegistrationRequestTS> for RegistrationInfo {

@@ -17,6 +17,7 @@ use crate::util::RegistrationInfo;
 
 use super::send_and_recv;
 
+// TODO: This should get phased out to include one RegistrationInfo field
 #[allow(non_snake_case)]
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RegistrationRequestTS {
@@ -45,6 +46,8 @@ pub async fn register(
     _window: tauri::Window,
     state: State<'_, ConnectionState>,
 ) -> Result<RegistrationResponseTS, String> {
+    println!("Registering to {}...", request.workspaceIdentifier);
+
     let server_addr =
         SocketAddr::from_str(&request.workspaceIdentifier).expect("Invalid server address");
     let request_id = Uuid::new_v4();
@@ -72,14 +75,14 @@ pub async fn register(
         server_addr,
         full_name: request.fullName,
         username: request.username,
-        proposed_password: SecBuffer::empty(), // TODO @kyle-tennison: Proposed password is not prompted in current UI
+        proposed_password: request.profilePassword.into_bytes().into(),
         connect_after_register: false,
         session_security_settings: security_settings,
         server_password: server_password.into()
     };
 
 
-    let response = match send_and_recv(internal_request, request_id, &state).await.unwrap() {
+    let response = match send_and_recv(internal_request, request_id, &state).await {
         InternalServiceResponse::RegisterSuccess(_) => {
             println!("Registration was successful");
             RegistrationResponseTS {
@@ -106,6 +109,8 @@ pub async fn register(
             }
         }
     };
+
+    println!("Setting password: {}", request_copy.profilePassword);
 
     if response.success {
         let db = LocalDb::connect_global(&state);

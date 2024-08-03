@@ -11,6 +11,16 @@ export interface ListKnownServersResponse {
   servers: RegistrationInfo[]
 }
 
+export interface ConnectRequest{
+    registrationInfo: RegistrationInfo
+}
+
+export interface ConnectResponse{
+    cid: string|null,
+    success: boolean,
+    message: string
+}
+
 
 export interface RegistrationInfo {
     server_address: string,

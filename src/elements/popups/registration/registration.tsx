@@ -6,6 +6,7 @@ import { kemOptions, secrecyOptions, securityLevels, encryptionOptions, sigOptio
 import { invoke } from "@tauri-apps/api/core";
 import { ListKnownServersRequest, ListKnownServersResponse } from "../../../api/types";
 import { redirect, useNavigate } from "react-router-dom";
+import { listKnownServers } from "../../../api/util";
 
 // Styles to pass to modal
 const customStyles = {
@@ -285,6 +286,16 @@ function Step4(props: { onNext: () => void, onBack: () => void, registrationRequ
       setSuccess(response?.success||null)
       const message = (response?.success ? "Success: " : "Error: ") + (response?.message||"Unknown");
       setMessage(message)
+
+      // Verify the server is in the db before redirecting
+      while ((await listKnownServers()).map((item)=>{item.server_address == props.registrationRequest.workspaceIdentifier}).length === 0 ) {
+
+        console.log("waiting for server to register in db...")
+        await new Promise((resolve) => setTimeout(resolve, 100))
+
+      }
+
+
       console.log("redirecting to /home")
       return navigate("/home")
     }

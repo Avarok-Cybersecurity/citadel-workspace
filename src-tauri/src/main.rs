@@ -1,23 +1,15 @@
 mod commands;
 mod structs;
 mod util;
+
 use citadel_internal_service_connector::connector::InternalServiceConnector;
 use citadel_logging::setup_log;
-use commands::{
-    //     connect::connect, disconnect::disconnect, get_session::get_sessions,
-    //     list_all_peers::list_all_peers, list_registered_peers::list_registered_peers,
-    //     local_db_clear_all_kv::local_db_clear_all_kv, local_db_delete_kv::local_db_delete_kv,
-    //     local_db_get_all_kv::local_db_get_all_kv, local_db_get_kv::local_db_get_kv,
-    //     local_db_set_kv::local_db_set_kv, message::message, open_connection::open_connection,
-    //     peer_connect::peer_connect, peer_disconnect::peer_disconnect, peer_register::peer_register,
-    list_known_servers::list_known_servers,
-    register::register,
-};
 use futures::StreamExt;
 use std::{collections::HashMap, sync::Arc};
 use structs::{ConnectionState, PacketHandle};
 use tauri::Manager;
 use tokio::sync::Mutex;
+use commands::{connect, list_known_servers, register};
 
 const INTERNAL_SERVICE_ADDR: &str = "127.0.0.1:12345";
 
@@ -92,7 +84,7 @@ async fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             // open_connection,
-            // connect,
+            connect,
             register,
             list_known_servers,
             // disconnect,

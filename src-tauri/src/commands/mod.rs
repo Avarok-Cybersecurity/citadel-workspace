@@ -5,7 +5,7 @@ use tauri::State;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-// pub mod connect;
+mod connect;
 // pub mod disconnect;
 // pub mod get_session;
 // pub mod list_all_peers;
@@ -20,21 +20,26 @@ use uuid::Uuid;
 // pub mod peer_connect;
 // pub mod peer_disconnect;
 // pub mod peer_register;
-pub mod register;
-pub mod list_known_servers;
+pub mod register; // this can go private again after RegistrationRequestTS is reformatted
+mod list_known_servers;
+
+pub use connect::connect;
+pub use register::register;
+pub use list_known_servers::list_known_servers;
+
 
 pub(crate) async fn send_and_recv(
     payload: InternalServiceRequest,
     request_id: Uuid,
     state: &State<'_, ConnectionState>,
-) -> Result<InternalServiceResponse, String> {
+) -> InternalServiceResponse {
     // Send message to internal service
     println!(
         "Sending message with request_id {}:\n{:#?}",
         request_id, payload
     );
     let mut guard = state.sink.lock().await;
-    guard.send(payload).await.map_err(|err| err.to_string())?;
+    guard.send(payload).await.map_err(|err| err.to_string()).expect("error sending payload to stream");
     drop(guard);
 
     // Create a new mpsc channel and attach the request id to it
@@ -53,7 +58,7 @@ pub(crate) async fn send_and_recv(
     // Wait for the background TCP listener (main.rs) to dispatch the message
     let incoming = match rx.recv().await {
         Some(v) => v,
-        None => return Err("Channel closed before response.".to_owned()),
+        None => panic!("Channel unexpectedly closed before response."),
     };
 
     // Remove channel from handles
@@ -61,11 +66,11 @@ pub(crate) async fn send_and_recv(
     if let Some(index) = guard.iter().position(|h| h.request_id == request_id) {
         guard.remove(index);
     } else {
-        return Err("PacketHandle was unexpectedly dropped by a third party.".to_owned());
+        panic!("PacketHandle was unexpectedly dropped by a third party, likely due to a UUID crash.");
     }
     drop(guard);
 
-    Ok(incoming)
+    incoming
 }
 
 // pub(crate) async fn send_to_internal_service(
