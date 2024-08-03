@@ -97,20 +97,10 @@ pub async fn register(
                 success: false,
             }
         },
-        unknown => {
-            eprintln!(
-                "Internal service responded with an illegal response type <{}>:\n{:#?}",
-                std::any::type_name_of_val(&unknown),
-                unknown
-            );
-            RegistrationResponseTS {
-                message: "Internal Error".to_owned(),
-                success: false,
-            }
+        other => {
+            panic!("Internal service returned unexpected type '{}' during registration", std::any::type_name_of_val(&other))
         }
     };
-
-    println!("Setting password: {}", request_copy.profilePassword);
 
     if response.success {
         let db = LocalDb::connect_global(&state);

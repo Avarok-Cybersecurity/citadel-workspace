@@ -36,9 +36,6 @@ pub async fn connect(
 ) -> Result<ConnectResponseTS, String> {
     println!("Connecting to {}...", request.registrationInfo.server_address);
 
-
-    println!("Using password {}", request.registrationInfo.profile_password);
-
     let registration_info = request.registrationInfo;
     let request_id = Uuid::new_v4();
 

@@ -641,7 +641,7 @@ dependencies = [
 [[package]]
 name = "citadel-internal-service-connector"
 version = "0.1.0"
-source = "git+https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git?branch=tmp-dep-KT#64d6065ff3b7a4c5c41ebe2ddc12a44494e22434"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git?branch=new-temp-KT#9ccd1980a5b49aecd4ebaa7e5b70848e51df28be"
 dependencies = [
  "async-trait",
  "bincode2",
@@ -657,7 +657,7 @@ dependencies = [
 [[package]]
 name = "citadel-internal-service-macros"
 version = "0.1.0"
-source = "git+https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git?branch=tmp-dep-KT#64d6065ff3b7a4c5c41ebe2ddc12a44494e22434"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git?branch=new-temp-KT#9ccd1980a5b49aecd4ebaa7e5b70848e51df28be"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -667,7 +667,7 @@ dependencies = [
 [[package]]
 name = "citadel-internal-service-types"
 version = "0.1.0"
-source = "git+https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git?branch=tmp-dep-KT#64d6065ff3b7a4c5c41ebe2ddc12a44494e22434"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git?branch=new-temp-KT#9ccd1980a5b49aecd4ebaa7e5b70848e51df28be"
 dependencies = [
  "bytes",
  "citadel-internal-service-macros",

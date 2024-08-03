@@ -21,6 +21,16 @@ export interface ConnectResponse{
     message: string
 }
 
+export interface ListAllPeersRequest{
+  cid: string
+}
+
+export interface ListAllPeersResponse{
+  peers: Record<string, PeerInformation> | null,
+  success: boolean,
+  message: string
+}
+
 
 export interface RegistrationInfo {
     server_address: string,
@@ -33,4 +43,11 @@ export interface RegistrationInfo {
     full_name: string,
     username: string,
     profile_password: string,
+}
+
+export interface PeerInformation {
+    cid: number,
+    online_status: boolean,
+    name: string|null,
+    username: string|null,
 }

@@ -8,7 +8,7 @@ use uuid::Uuid;
 mod connect;
 // pub mod disconnect;
 // pub mod get_session;
-// pub mod list_all_peers;
+mod list_all_peers;
 // pub mod list_registered_peers;
 // pub mod local_db_clear_all_kv;
 // pub mod local_db_delete_kv;
@@ -24,6 +24,7 @@ pub mod register; // this can go private again after RegistrationRequestTS is re
 mod list_known_servers;
 
 pub use connect::connect;
+pub use list_all_peers::list_all_peers;
 pub use register::register;
 pub use list_known_servers::list_known_servers;
 

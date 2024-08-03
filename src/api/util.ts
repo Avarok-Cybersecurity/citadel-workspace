@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ConnectRequest, ConnectResponse, ListKnownServersRequest, ListKnownServersResponse, RegistrationInfo, WorkspaceInfo } from "./types";
+import { ConnectRequest, ConnectResponse, ListAllPeersRequest, ListAllPeersResponse, ListKnownServersRequest, ListKnownServersResponse, RegistrationInfo, WorkspaceInfo } from "./types";
 
 
 export async function listKnownServers(): Promise<RegistrationInfo[]>{
@@ -35,4 +35,14 @@ export async function connect(info: RegistrationInfo): Promise<ConnectResponse>{
 
     return response
 
+}
+
+export async function list_all_peers(cid: string): Promise<ListAllPeersResponse>{
+
+    console.log(`listing all peers...`)
+    let request: ListAllPeersRequest = {cid: cid};
+    let response = await invoke<ListAllPeersResponse>('list_all_peers', {request});
+    console.log("got list all peers response:", response);
+
+    return response;
 }

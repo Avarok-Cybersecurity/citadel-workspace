@@ -9,7 +9,7 @@ use std::{collections::HashMap, sync::Arc};
 use structs::{ConnectionState, PacketHandle};
 use tauri::Manager;
 use tokio::sync::Mutex;
-use commands::{connect, list_known_servers, register};
+use commands::{connect, list_known_servers, list_all_peers, register};
 
 const INTERNAL_SERVICE_ADDR: &str = "127.0.0.1:12345";
 
@@ -90,7 +90,7 @@ async fn run() {
             // disconnect,
             // message,
             // get_sessions,
-            // list_all_peers,
+            list_all_peers,
             // peer_register,
             // peer_connect,
             // peer_disconnect,
