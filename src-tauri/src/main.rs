@@ -4,7 +4,7 @@ mod util;
 
 use citadel_internal_service_connector::connector::InternalServiceConnector;
 use citadel_logging::setup_log;
-use commands::{connect, list_all_peers, list_known_servers, register};
+use commands::{connect, list_all_peers, list_known_servers, register, peer_connect};
 use futures::StreamExt;
 use std::{collections::HashMap, sync::Arc};
 use structs::{ConnectionState, PacketHandle};
@@ -90,7 +90,7 @@ async fn run() {
             // get_sessions,
             list_all_peers,
             // peer_register,
-            // peer_connect,
+            peer_connect,
             // peer_disconnect,
             // list_registered_peers,
             // local_db_set_kv,

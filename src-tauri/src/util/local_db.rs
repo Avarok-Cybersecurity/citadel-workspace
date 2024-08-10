@@ -27,6 +27,7 @@ impl<'a> LocalDb<'a> {
     async fn set_kv<T: Serialize>(&self, key: String, value: &T) -> Result<(), String> {
         assert!(self.cid == 0, "CID-Specific DB not yet implemented");
 
+        // NOTE: Temporary in-memory db as hash map
         let mut db = self.state.tmp_db.lock().await;
         let value = serde_json::to_string(value).map_err(|err| err.to_string())?;
         db.insert(key, value);
@@ -47,6 +48,7 @@ impl<'a> LocalDb<'a> {
     async fn get_kv<T: DeserializeOwned>(&self, key: String) -> Result<T, String> {
         assert!(self.cid == 0, "CID-Specific DB not yet implemented");
 
+        // NOTE: Temporary in-memory db as hash map
         let db = self.state.tmp_db.lock().await;
         let value = db.get(&key).ok_or("Key does not exist")?;
 
@@ -83,8 +85,9 @@ impl<'a> LocalDb<'a> {
     }
 
     async fn list_all_kv(&self) -> Result<HashMap<String, String>, String> {
-        let db = self.state.tmp_db.lock().await;
 
+        // NOTE: Temporary in-memory db as hash map
+        let db = self.state.tmp_db.lock().await;
         let db_copy = db.clone();
         Ok(db_copy)
 
@@ -164,18 +167,3 @@ impl<'a> LocalDb<'a> {
             .contains(&address.to_string()))
     }
 }
-
-//     cid: String,
-// peer_cid: Option<String>,
-// key: String,
-// value: Vec<u8>,
-// state: State<'_, ConnectionState>,
-// ) -> Result<String, String> {
-// let request_id = Uuid::new_v4();
-// let payload = LocalDBSetKV {
-//     request_id,
-//     cid: cid.parse::<u64>().unwrap(),
-//     peer_cid: peer_cid.map(|pid| pid.parse::<u64>().unwrap()),
-//     key,
-//     value,
-// };
