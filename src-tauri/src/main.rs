@@ -4,7 +4,7 @@ mod util;
 
 use citadel_internal_service_connector::connector::InternalServiceConnector;
 use citadel_logging::setup_log;
-use commands::{connect, list_all_peers, list_known_servers, register, peer_connect};
+use commands::{connect, list_all_peers, list_known_servers, peer_connect, register};
 use futures::StreamExt;
 use std::{collections::HashMap, sync::Arc};
 use structs::{ConnectionState, PacketHandle};

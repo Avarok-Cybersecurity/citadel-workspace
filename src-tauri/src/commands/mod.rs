@@ -26,8 +26,8 @@ pub mod register; // this can go private again after RegistrationRequestTS is re
 pub use connect::connect;
 pub use list_all_peers::list_all_peers;
 pub use list_known_servers::list_known_servers;
-pub use register::register;
 pub use peer_connect::peer_connect;
+pub use register::register;
 
 pub(crate) async fn send_and_recv(
     payload: InternalServiceRequest,

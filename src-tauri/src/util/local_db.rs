@@ -85,7 +85,6 @@ impl<'a> LocalDb<'a> {
     }
 
     async fn list_all_kv(&self) -> Result<HashMap<String, String>, String> {
-
         // NOTE: Temporary in-memory db as hash map
         let db = self.state.tmp_db.lock().await;
         let db_copy = db.clone();
