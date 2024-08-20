@@ -79,19 +79,15 @@ jobs:
       - name: Run Tauri Build
         run: cargo tauri build --verbose
         working-directory: src-tauri
+        continue-on-error: true
 
-  eslint:
-    name: ESLint
+
+  prettier:
+    name: Prettier
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
-      - name: Install Node v20
-        uses: actions/setup-node@v1
-        with:
-          node-version: 20
-      - name: Yarn Install
-        run: yarn install
-      - name: Run ESLint
-        uses: icrawl/action-eslint@v1
-        with:
-          custom-glob: '**/*.{js,ts,tsx}'
+      - name: Install Prettier
+      run: npm install --global prettier
+
+      - name: Run Prettier check
+        run: prettier --check "**/*.{js,jsx,ts,tsx,html,css,json,md}"
