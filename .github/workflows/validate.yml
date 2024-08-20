@@ -24,8 +24,8 @@ jobs:
       - uses: actions/checkout@v2
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
       - name: Run Cargo Fmt
-        working-directory: src-tauri
         run: cargo fmt --check
+        working-directory: src-tauri
 
   clippy:
     name: Cargo Clippy
@@ -44,8 +44,8 @@ jobs:
       - name: Install Frontend Dependencies
         run: yarn install # change this to npm or pnpm depending on which one you use
       - name: Run Cargo Clippy
-        working-directory: src-tauri
         run: cargo clippy --all -- -D warnings
+        working-directory: src-tauri
 
   tauri-build:
     name: Tauri Build
@@ -75,11 +75,10 @@ jobs:
         run: npm install -g bun
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version 2.0.0-beta.20
-      - name: Run Tauri Build
         working-directory: src-tauri
-        uses: tauri-apps/tauri-action@v0
-        with:
-          args: --verbose
+      - name: Run Tauri Build
+        run: cargo tauri build --verbose
+        working-directory: src-tauri
 
   eslint:
     name: ESLint
