@@ -1,44 +1,87 @@
-name: CI Pipeline
-
+name: Validate PR
 on:
-  push:
-    branches:
-      - main
+  workflow_call:
   pull_request:
-    branches:
-      - main
+  push:
+    branches: ["master"]
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  # 40 MiB stack
+  RUST_MIN_STACK: 40971520
+  RUST_LOG: 'citadel=warn'
 
 jobs:
-  build:
+  fmt:
+    name: Cargo Fmt
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v2
+      - uses: Avarok-Cybersecurity/gh-actions-deps@master
+      - run: cargo fmt --check
+  clippy:
+    name: Cargo Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: Avarok-Cybersecurity/gh-actions-deps@master
+      - name: setup node
+        uses: actions/setup-node@v4
         with:
-          toolchain: stable
-          override: true
-          profile: minimal
-
-      - name: Run Clippy in src-tarui/
-        run: cargo clippy --all-targets -- -D warnings
-        working-directory: src-tarui/
-
-      - name: Run Cargo fmt in src-tarui/
-        run: cargo fmt -- --check
-        working-directory: src-tarui/
-
-      - name: Run Cargo test in src-tarui/
-        run: cargo test
-        working-directory: src-tarui/
-
-      - name: Install Node.js
-        uses: actions/setup-node@v3
+          node-version: 20
+      - name: install dependencies (ubuntu only)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+      - name: install frontend dependencies
+        run: yarn install # change this to npm or pnpm depending on which one you use
+      - run: cargo clippy --all -- -D warnings
+  tauri-build:
+    name: Tauri Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: Avarok-Cybersecurity/gh-actions-deps@master
+      - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+        if: startsWith(matrix.os, 'windows')
+      - run: vcpkg install openssl:x64-windows-static-md
+        if: startsWith(matrix.os, 'windows')
+      - name: setup node
+        uses: actions/setup-node@v4
         with:
-          node-version: "18.x"
-
-      - name: Run Prettier
-        run: npx prettier --check "**/*.{js,jsx,ts,tsx,css,scss,md,json,yml,yaml}"
+          node-version: 20
+      - name: install dependencies (ubuntu only)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglvnd-dev libwebkit2gtk-4.1-dev build-essential curl wget libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+      - run: npm install -g bun
+      - run: cargo install create-tauri-app
+      - run: cargo install tauri-cli --version 2.0.0-beta.20
+      - run: bun i
+      - uses: tauri-apps/tauri-action@v0
+        with:
+          args: --verbose
+  eslint:
+    name: eslint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: install node v20
+        uses: actions/setup-node@v1
+        with:
+          node-version: 20
+      - name: yarn install
+        run: yarn install
+      - name: eslint
+        uses: icrawl/action-eslint@v1
+        with:
+          custom-glob: '**/*.{js,ts,tsx}'
