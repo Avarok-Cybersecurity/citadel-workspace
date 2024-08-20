@@ -34,19 +34,6 @@ pub(crate) async fn send_and_recv(
     request_id: Uuid,
     state: &State<'_, ConnectionState>,
 ) -> InternalServiceResponse {
-    // Send message to internal service
-    println!(
-        "Sending message with request_id {}:\n{:#?}",
-        request_id, payload
-    );
-    let mut guard = state.sink.lock().await;
-    guard
-        .send(payload)
-        .await
-        .map_err(|err| err.to_string())
-        .expect("error sending payload to stream");
-    drop(guard);
-
     // Create a new mpsc channel and attach the request id to it
     let (tx, mut rx) = mpsc::channel::<InternalServiceResponse>(1024);
     let packet_handle = PacketHandle {
@@ -58,6 +45,19 @@ pub(crate) async fn send_and_recv(
     // NOTE: be careful touching this; very easy to end up in a deadlock
     let mut guard = state.listeners.lock().await;
     guard.push(packet_handle);
+    drop(guard);
+
+    // Send message to internal service
+    println!(
+        "Sending message with request_id {}:\n{:#?}",
+        request_id, payload
+    );
+    let mut guard = state.sink.lock().await;
+    guard
+        .send(payload)
+        .await
+        .map_err(|err| err.to_string())
+        .expect("error sending payload to stream");
     drop(guard);
 
     // Wait for the background TCP listener (main.rs) to dispatch the message
