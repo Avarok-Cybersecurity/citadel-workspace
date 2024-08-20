@@ -1,0 +1,44 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+        profile: minimal
+
+    - name: Run Clippy in src-tarui/
+      run: cargo clippy --all-targets -- -D warnings
+      working-directory: src-tarui/
+
+    - name: Run Cargo fmt in src-tarui/
+      run: cargo fmt -- --check
+      working-directory: src-tarui/
+
+    - name: Run Cargo test in src-tarui/
+      run: cargo test
+      working-directory: src-tarui/
+
+    - name: Install Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+
+    - name: Run Prettier
+      run: npx prettier --check "**/*.{js,jsx,ts,tsx,css,scss,md,json,yml,yaml}"
