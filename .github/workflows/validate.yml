@@ -24,13 +24,15 @@ jobs:
       - uses: actions/checkout@v2
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
       - run: cargo fmt --check
+      - working-directory: src-tarui/
   clippy:
     name: Cargo Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
-      - name: setup node
+      - name: setup nodec
+      - working-directory: src-tarui/
         uses: actions/setup-node@v4
         with:
           node-version: 20
