@@ -3,10 +3,10 @@ name: CI Pipeline
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
     branches:
-      - master
+      - main
 
 jobs:
   build:
@@ -23,22 +23,25 @@ jobs:
         override: true
         profile: minimal
 
-    - name: Run Clippy in src-tarui/
+    - name: Run Clippy in src-tauri
+      working-directory: src-tauri
       run: cargo clippy --all-targets -- -D warnings
-      working-directory: src-tarui/
 
-    - name: Run Cargo fmt in src-tarui/
+    - name: Run Cargo fmt in src-tauri
+      working-directory: src-tauri
       run: cargo fmt -- --check
-      working-directory: src-tarui/
 
-    - name: Run Cargo test in src-tarui/
+    - name: Run Cargo test in src-tauri
+      working-directory: src-tauri
       run: cargo test
-      working-directory: src-tarui/
 
     - name: Install Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: '18.x'
+        node-version: '16'
 
-    - name: Run Prettier
-      run: npx prettier --check "**/*.{js,jsx,ts,tsx,css,scss,md,json,yml,yaml}"
+    - name: Install Prettier
+      run: npm install --global prettier
+
+    - name: Run Prettier check
+      run: prettier --check "**/*.{js,jsx,ts,tsx,html,css,json,md}"
