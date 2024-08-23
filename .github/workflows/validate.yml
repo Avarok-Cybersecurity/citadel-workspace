@@ -7,7 +7,7 @@ on:
 
 concurrency:
   group: ${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -89,7 +89,7 @@ jobs:
           npm install --global eslint
 
       - name: Run Prettier check
-        run: prettier --check "**/*.{js,jsx,ts,tsx,html,css,json,md}"
+        run: prettier --check .
 
       - name: Run ESLint check
         run: eslint "**/*.{js,jsx,ts,tsx}"
