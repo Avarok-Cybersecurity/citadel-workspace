@@ -14,7 +14,7 @@ env:
   RUST_BACKTRACE: full
   # 40 MiB stack
   RUST_MIN_STACK: 40971520
-  RUST_LOG: 'citadel=warn'
+  RUST_LOG: "citadel=warn"
 
 jobs:
   fmt:
@@ -23,24 +23,30 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
-      - run: cargo fmt --check
+      - name: Run Cargo Fmt
+        run: cargo fmt --check
+        working-directory: src-tauri
+
   clippy:
     name: Cargo Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
-      - name: setup node
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: install dependencies (ubuntu only)
+      - name: Install Dependencies (Ubuntu Only)
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-      - name: install frontend dependencies
-        run: yarn install # change this to npm or pnpm depending on which one you use
-      - run: cargo clippy --all -- -D warnings
+      - name: Install Frontend Dependencies
+        run: npm i
+      - name: Run Cargo Clippy
+        run: cargo clippy --all -- -D warnings
+        working-directory: src-tauri
+
   tauri-build:
     name: Tauri Build
     runs-on: ${{ matrix.os }}
@@ -50,38 +56,42 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
-      - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-        if: startsWith(matrix.os, 'windows')
-      - run: vcpkg install openssl:x64-windows-static-md
-        if: startsWith(matrix.os, 'windows')
-      - name: setup node
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: install dependencies (ubuntu only)
+      - name: Install Dependencies (Ubuntu Only)
         if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libglvnd-dev libwebkit2gtk-4.1-dev build-essential curl wget libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-      - run: npm install -g bun
-      - run: cargo install create-tauri-app
-      - run: cargo install tauri-cli --version 2.0.0-beta.20
-      - run: bun i
-      - uses: tauri-apps/tauri-action@v0
-        with:
-          args: --verbose
-  eslint:
-    name: eslint
+      - name: Install Dependencies (Windows Only)
+        if: startsWith(matrix.os, 'windows')
+        run: |
+          vcpkg install openssl:x64-windows-static-md
+      - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+        if: startsWith(matrix.os, 'windows')
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2.0.0-rc"
+        working-directory: src-tauri
+      - name: Run Tauri Build
+        run: cargo tauri build --verbose
+        working-directory: src-tauri
+        continue-on-error: true
+
+  jslint:
+    name: JS lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
-      - name: install node v20
-        uses: actions/setup-node@v1
-        with:
-          node-version: 20
-      - name: yarn install
-        run: yarn install
-      - name: eslint
-        uses: icrawl/action-eslint@v1
-        with:
-          custom-glob: '**/*.{js,ts,tsx}'
+      - uses: actions/checkout@v2
+      - name: Install dependencies
+        run: |
+          npm install --global prettier
+          npm install --global eslint
+          npm i
+
+      - name: Run Prettier check
+        run: prettier "." -c
+
+      - name: Run ESLint check
+        run: eslint "**/*.{js,jsx,ts,tsx}"

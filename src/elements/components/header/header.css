@@ -1,0 +1,50 @@
+#header {
+  width: 100%;
+  height: 100%;
+  background-color: #2524249a;
+  display: flex;
+}
+
+#header #workspace-selector {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-left: 20px;
+}
+#header #workspace-selector img {
+  display: flex;
+  width: 37px;
+  height: 37px;
+  border-radius: 7px;
+}
+
+#header #workspace-selector h3 {
+  color: white;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 16px;
+}
+
+#header #workspace-selector i {
+  color: #b9b4c7;
+  font-size: 16px;
+}
+
+#header #header-selectors {
+  display: flex;
+  align-items: center;
+  flex-grow: 1;
+  justify-content: flex-end;
+  gap: 22px;
+  margin-right: 20px;
+}
+
+#header #header-selectors i {
+  color: #b9b4c7;
+  font-size: 22px;
+}
+#header #header-selectors img {
+  width: 37px;
+  height: 37px;
+  border-radius: 5px;
+}

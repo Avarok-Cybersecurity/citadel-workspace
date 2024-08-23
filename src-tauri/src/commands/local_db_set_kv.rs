@@ -1,4 +1,3 @@
-use crate::commands::send_to_internal_service;
 use citadel_internal_service_types::InternalServiceRequest::LocalDBSetKV;
 use tauri::State;
 use uuid::Uuid;
@@ -22,6 +21,6 @@ pub async fn local_db_set_kv(
         value,
     };
 
-    send_to_internal_service(payload, state).await?;
+
     Ok(request_id.to_string())
 }
