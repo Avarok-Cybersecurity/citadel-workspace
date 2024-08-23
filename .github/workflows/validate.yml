@@ -71,10 +71,8 @@ jobs:
           vcpkg install openssl:x64-windows-static-md
       - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
         if: startsWith(matrix.os, 'windows')
-      - name: Install Bun
-        run: npm install -g bun
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --version 2.0.0-beta.20
+        run: cargo install tauri-cli --version "^2.0.0-rc"
         working-directory: src-tauri
       - name: Run Tauri Build
         run: cargo tauri build --verbose
