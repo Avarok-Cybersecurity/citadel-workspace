@@ -1,16 +1,7 @@
 import "./header.css";
-
+import React from "react";
 import { WorkspaceInfo } from "../../../api/types";
-import sampleWorkspaceIcon from "../../../assets/sample-workspace.png";
-import { useState } from "react";
 import { placeholderPfp } from "../../../assets/assets";
-
-function getActiveWorkspace(): WorkspaceInfo | null {
-  return {
-    iconPath: sampleWorkspaceIcon,
-    name: "Citadel Workspace",
-  };
-}
 
 export default function Header(props: { workspaceInfo: WorkspaceInfo | null }) {
   return (

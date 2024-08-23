@@ -1,0 +1,3 @@
+src-tauri/
+.archive/
+node_modules/

@@ -4,6 +4,7 @@ Landing page for users who are first logging in
 
 */
 
+import React from "react";
 import { useState } from "react";
 import RegistrationPopup from "../../popups/registration/registration";
 import "./landing.css";

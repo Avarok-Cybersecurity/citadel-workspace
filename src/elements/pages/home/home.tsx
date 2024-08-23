@@ -4,6 +4,7 @@ Entry point to the main Citadel Workspace window
 
 */
 
+import React from "react";
 import Header from "../../components/header/header";
 import Sidebar from "../../components/sidebar/sidebar";
 import Chat from "../../components/chat/chat";
@@ -24,13 +25,14 @@ import {
 import { redirect } from "react-router-dom";
 
 export default function Home() {
-  const [cid, setCid] = useState<string | null>(null);
-  const [registrationInfo, setRegistrationInfo] =
+  const [_cid, setCid] = useState<string | null>(null);
+  const [_registrationInfo, setRegistrationInfo] =
     useState<RegistrationInfo | null>(null);
+
   const [workspaceInfo, setWorkspaceInfo] = useState<WorkspaceInfo | null>(
     null,
   );
-  const [allPeers, setAllPeers] = useState<Record<
+  const [_allPeers, setAllPeers] = useState<Record<
     string,
     PeerInformation
   > | null>(null);
@@ -40,7 +42,7 @@ export default function Home() {
       console.log("setting up home page");
 
       // Get the default server
-      let default_server = await getDefaultWorkspace();
+      const default_server = await getDefaultWorkspace();
       if (default_server === null) {
         console.error("Default server is null; redirecting to landing");
         return redirect("/");
@@ -49,7 +51,7 @@ export default function Home() {
 
       // Connect to the server
       console.log(`connecting to ${default_server.server_address}...`);
-      let connection_response = await connect(default_server);
+      const connection_response = await connect(default_server);
       let cid: string;
       if (connection_response.success && connection_response.cid !== null) {
         cid = connection_response.cid;
@@ -72,7 +74,7 @@ export default function Home() {
 
       // Discover peers
       console.log(`fetching peer information`);
-      let response = await list_all_peers(cid);
+      const response = await list_all_peers(cid);
       if (response.success) {
         console.log(`successfully discovered peers:`, response.peers);
         setAllPeers(response.peers);

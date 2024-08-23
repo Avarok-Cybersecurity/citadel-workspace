@@ -3,7 +3,7 @@
 API For loading assets
 
 */
-
+import React from "react";
 // Placeholder items
 export const placeholderPfp =
   "https://braverplayers.org/wp-content/uploads/2022/09/blank-pfp.png";

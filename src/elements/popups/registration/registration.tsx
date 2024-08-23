@@ -11,12 +11,7 @@ import {
   RegistrationRequest,
   register,
 } from "../../../api/registration";
-import { invoke } from "@tauri-apps/api/core";
-import {
-  ListKnownServersRequest,
-  ListKnownServersResponse,
-} from "../../../api/types";
-import { redirect, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { listKnownServers } from "../../../api/util";
 
 // Styles to pass to modal
@@ -394,7 +389,9 @@ function Step4(props: {
       // Verify the server is in the db before redirecting
       while (
         (await listKnownServers()).map((item) => {
-          item.server_address == props.registrationRequest.workspaceIdentifier;
+          return (
+            item.server_address == props.registrationRequest.workspaceIdentifier
+          );
         }).length === 0
       ) {
         console.log("waiting for server to register in db...");
@@ -434,7 +431,7 @@ export default function RegistrationPopup(props: {
   const pageName = useRef<string | null>(null);
 
   // Empty registration request to fill
-  var registrationRequest: RegistrationRequest = {
+  const registrationRequest: RegistrationRequest = {
     workspaceIdentifier: null,
     workspacePassword: null,
     securityLevel: null,
@@ -521,10 +518,6 @@ export default function RegistrationPopup(props: {
       default:
         break;
     }
-  }
-
-  function openModal() {
-    props.setIsOpen(true);
   }
 
   function afterOpenModal() {

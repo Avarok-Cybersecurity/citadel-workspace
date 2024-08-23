@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./chat-input.css";
+import React from "react";
 
 const MIN_INPUT_HEIGHT = 16; //px
 const MAX_INPUT_HEIGHT = 300; //px
@@ -11,7 +12,7 @@ export default function ChatInput() {
   useEffect(() => {
     if (textboxRef.current !== null) {
       textboxRef.current.style.height = `${MIN_INPUT_HEIGHT}px`;
-      var desiredHeight = textboxRef.current.scrollHeight - 22;
+      let desiredHeight = textboxRef.current.scrollHeight - 22;
       console.log(`Scroll height is ${desiredHeight}`);
       if (desiredHeight < MIN_INPUT_HEIGHT) {
         desiredHeight = MIN_INPUT_HEIGHT;

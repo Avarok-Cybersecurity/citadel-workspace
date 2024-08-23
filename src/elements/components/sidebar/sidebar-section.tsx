@@ -1,3 +1,4 @@
+import React from "react";
 import { useEffect, useState } from "react";
 import { User } from "../../../api/user";
 import "./sidebar.css";
@@ -41,7 +42,7 @@ export default function SidebarSection(props: {
   useEffect(() => {
     console.log(`updating ${props.title} sidebar`);
 
-    var cards: JSX.Element[] = [];
+    const cards: JSX.Element[] = [];
     props.items.forEach((item) => {
       if (item instanceof User) {
         cards.push(buildUserCard(item, "Now"));
@@ -62,7 +63,7 @@ export default function SidebarSection(props: {
     <div className="sidebar-section">
       <div className="header">
         <h1>{props.title}</h1>
-        <button style={{ display: !!props.icon ? "block" : "none" }}>
+        <button style={{ display: props.icon ? "block" : "none" }}>
           {props.icon}
         </button>
       </div>

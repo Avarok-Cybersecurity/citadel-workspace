@@ -1,3 +1,4 @@
+import React from "react";
 import SidebarSection from "./sidebar-section";
 import { User } from "../../../api/user";
 import {
@@ -11,11 +12,11 @@ import { Group } from "../../../api/group";
 function getPinnedUsers(): User[] {
   const names = [];
 
-  for (var i = 0; i < 2; i++) {
+  for (let i = 0; i < 2; i++) {
     names.push("Placeholder User");
   }
 
-  var people: User[] = [];
+  const people: User[] = [];
   names.forEach((name: string) => {
     (async () => {
       const user = new User(name, placeholderPfp);
@@ -28,11 +29,11 @@ function getPinnedUsers(): User[] {
 }
 function getContacts(): User[] {
   const names = [];
-  for (var i = 0; i < 5; i++) {
+  for (let i = 0; i < 5; i++) {
     names.push("Placeholder User");
   }
 
-  var people: User[] = [];
+  const people: User[] = [];
   names.forEach((name: string) => {
     (async () => {
       const user = new User(name, placeholderPfp);

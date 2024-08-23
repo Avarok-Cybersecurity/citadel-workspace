@@ -59,7 +59,7 @@ const streamExecSlice = createSlice({
         action.payload.context_type ?? state.context[req_id];
       const payload: { [key: string]: string } = action.payload;
 
-      let updatedObject: { [key: string]: string } = {};
+      const updatedObject: { [key: string]: string } = {};
 
       for (const key in payload) {
         if (key != 'request_id') {

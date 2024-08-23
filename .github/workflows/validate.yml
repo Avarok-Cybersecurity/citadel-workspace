@@ -14,7 +14,7 @@ env:
   RUST_BACKTRACE: full
   # 40 MiB stack
   RUST_MIN_STACK: 40971520
-  RUST_LOG: 'citadel=warn'
+  RUST_LOG: "citadel=warn"
 
 jobs:
   fmt:
@@ -79,13 +79,17 @@ jobs:
         working-directory: src-tauri
         continue-on-error: true
 
-
-  prettier:
-    name: Prettier
+  jslint:
+    name: JS lint
     runs-on: ubuntu-latest
     steps:
-      - name: Install Prettier
-        run: npm install --global prettier
+      - name: Install dependencies
+        run: |
+          npm install --global prettier
+          npm install --global eslint
 
       - name: Run Prettier check
         run: prettier --check "**/*.{js,jsx,ts,tsx,html,css,json,md}"
+
+      - name: Run ESLint check
+        run: eslint "**/*.{js,jsx,ts,tsx}"

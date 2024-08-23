@@ -7,7 +7,6 @@ import {
   ListKnownServersRequest,
   ListKnownServersResponse,
   RegistrationInfo,
-  WorkspaceInfo,
 } from "./types";
 
 export async function listKnownServers(): Promise<RegistrationInfo[]> {
@@ -37,7 +36,7 @@ export async function connect(
   info: RegistrationInfo,
 ): Promise<ConnectResponse> {
   console.log(`connecting to server ${info.server_address}...`);
-  let request: ConnectRequest = { registrationInfo: info };
+  const request: ConnectRequest = { registrationInfo: info };
   const response = await invoke<ConnectResponse>("connect", { request });
   console.log("got connection response:");
   console.log(response);
@@ -49,8 +48,8 @@ export async function list_all_peers(
   cid: string,
 ): Promise<ListAllPeersResponse> {
   console.log(`listing all peers...`);
-  let request: ListAllPeersRequest = { cid: cid };
-  let response = await invoke<ListAllPeersResponse>("list_all_peers", {
+  const request: ListAllPeersRequest = { cid: cid };
+  const response = await invoke<ListAllPeersResponse>("list_all_peers", {
     request,
   });
   console.log("got list all peers response:", response);

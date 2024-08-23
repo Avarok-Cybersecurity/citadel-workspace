@@ -1,5 +1,6 @@
 import "./chat-header.css";
 import { placeholderPfp } from "../../../assets/assets";
+import React from "react";
 
 export default function ChatHeader() {
   return (
