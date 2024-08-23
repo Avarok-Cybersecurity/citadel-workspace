@@ -88,6 +88,10 @@ jobs:
           npm install --global prettier
           npm install --global eslint
 
+
+      - name: wip
+        run: ls -la
+
       - name: Run Prettier check
         run: prettier "." -c
 
