@@ -89,7 +89,7 @@ jobs:
           npm install --global eslint
 
       - name: Run Prettier check
-        run: prettier "." -c 
+        run: prettier "." -c
 
       - name: Run ESLint check
         run: eslint "**/*.{js,jsx,ts,tsx}"
