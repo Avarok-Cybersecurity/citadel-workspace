@@ -87,7 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Prettier
-      run: npm install --global prettier
+        run: npm install --global prettier
 
       - name: Run Prettier check
         run: prettier --check "**/*.{js,jsx,ts,tsx,html,css,json,md}"
