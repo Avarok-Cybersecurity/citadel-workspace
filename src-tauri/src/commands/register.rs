@@ -3,7 +3,7 @@ use citadel_internal_service_types::{
     InternalServiceRequest, InternalServiceResponse, SessionSecuritySettings,
 };
 use citadel_types::crypto::{
-    AlgorithmsExt, CryptoParameters, EncryptionAlgorithm, KemAlgorithm, SigAlgorithm,
+    AlgorithmsExt, CryptoParameters, EncryptionAlgorithm, KemAlgorithm, SecrecyMode, SigAlgorithm
 };
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -60,7 +60,8 @@ pub async fn register(
 
     let security_settings = SessionSecuritySettings {
         security_level: request.securityLevel.into(),
-        secrecy_mode: request.securityMode.into(),
+        // secrecy_mode: request.securityMode.into(),
+        secrecy_mode: SecrecyMode::try_from(request.securityMode).unwrap(),  
         crypto_params,
     };
 

@@ -7,7 +7,7 @@ use super::send_and_recv;
 use crate::structs::ConnectionState;
 use citadel_internal_service_types::{InternalServiceResponse, SessionSecuritySettings};
 use citadel_types::crypto::{
-    AlgorithmsExt, CryptoParameters, EncryptionAlgorithm, KemAlgorithm, SigAlgorithm,
+    AlgorithmsExt, CryptoParameters, EncryptionAlgorithm, KemAlgorithm, SecrecyMode, SigAlgorithm
 };
 use uuid::Uuid;
 
@@ -46,7 +46,7 @@ pub async fn connect(
 
     let security_settings = SessionSecuritySettings {
         security_level: registration_info.security_level.into(),
-        secrecy_mode: registration_info.security_mode.into(),
+        secrecy_mode: SecrecyMode::try_from(registration_info.security_mode).unwrap(),
         crypto_params,
     };
 
