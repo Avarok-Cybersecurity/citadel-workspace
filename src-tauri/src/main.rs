@@ -41,7 +41,7 @@ async fn run() {
             let mut guard = listeners.lock().await;
             let mut targeted_handles: Vec<&mut PacketHandle> = guard
                 .iter_mut()
-                .filter(|h| packet.request_id().is_some_and(|id| id == h.request_id))
+                .filter(|h| packet.request_id().is_some_and(|id| id.to_owned() == h.request_id))
                 .collect();
 
             if targeted_handles.len() == 1 {
