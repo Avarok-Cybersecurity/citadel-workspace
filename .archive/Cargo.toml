@@ -1,8 +1,0 @@
-[workspace]
-resolver = "2"
-members = [
-    "src-tauri"
-]
-
-[workspace.dependencies]
-citadel_workspace = { path = "../src-tauri" }

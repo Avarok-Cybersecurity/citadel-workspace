@@ -81,23 +81,11 @@ async fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            // open_connection,
             connect,
             register,
             list_known_servers,
-            // disconnect,
-            // message,
-            // get_sessions,
             list_all_peers,
-            // peer_register,
             peer_connect,
-            // peer_disconnect,
-            // list_registered_peers,
-            // local_db_set_kv,
-            // local_db_delete_kv,
-            // local_db_clear_all_kv,
-            // local_db_get_all_kv,
-            // local_db_get_kv
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
