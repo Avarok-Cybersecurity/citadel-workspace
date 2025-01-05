@@ -7,6 +7,9 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+vendored = ["citadel-internal-service-connector/vendored"]
+
 [build-dependencies]
 tauri-build = { version = "2.0.0-beta", features = [] }
 
@@ -15,9 +18,9 @@ tauri = { version = "2.0.0-beta", features = [] }
 tauri-plugin-shell = "2.0.0-beta"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-citadel-internal-service-types = { version = "0.1.0", git = "https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git", branch = "new-temp-KT", package = "citadel-internal-service-types" }
-citadel-internal-service-connector = { version = "0.1.0", git = "https://github.com/Avarok-Cybersecurity/citadel-workspace-core.git", branch = "new-temp-KT", package = "citadel-internal-service-connector" }
-citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "utils-for-citadel-workspace" }
+citadel-internal-service-types = { version = "0.1.0", git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service.git", branch = "reliable-ordered-message-protocol" }
+citadel-internal-service-connector = { version = "0.1.0", git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service.git", branch = "reliable-ordered-message-protocol" }
+citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol" }
 tokio = { version = "1.28.2", features = ["net", "rt", "macros"] }
 tokio-util = { version = "0.7.8", default-features = false }
 citadel_logging = { version = "0.7.0", default-features = false }
