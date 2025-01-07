@@ -1,9 +1,9 @@
 import React from "react";
 import { useEffect, useState } from "react";
-import { User } from "../../../api/user";
+import { User } from "../../api/user";
 import "./sidebar.css";
-import { Group } from "../../../api/group";
-import { File } from "../../../api/file";
+import { Group } from "../../api/group";
+import { File } from "../../api/file";
 import { SidebarProps } from "./sidebar";
 
 interface SidebarSectionProps extends SidebarProps {

@@ -1,7 +1,7 @@
 import "./header.css";
 import React from "react";
-import { WorkspaceInfo } from "../../../api/types";
-import { placeholderPfp } from "../../../assets/assets";
+import { WorkspaceInfo } from "../../api/types";
+import { placeholderPfp } from "../../assets/assets";
 
 export default function Header(props: { workspaceInfo: WorkspaceInfo | null }) {
   return (

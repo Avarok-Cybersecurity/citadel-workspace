@@ -10,9 +10,9 @@ import {
   sigOptions,
   RegistrationRequest,
   register,
-} from "../../../api/registration";
+} from "../../api/registration";
 import { useNavigate } from "react-router-dom";
-import { listKnownServers } from "../../../api/util";
+import { listKnownServers } from "../../api/util";
 
 // Styles to pass to modal
 const customStyles = {

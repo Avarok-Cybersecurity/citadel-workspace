@@ -9,19 +9,19 @@ import Header from "../../components/header/header";
 import Sidebar from "../../components/sidebar/sidebar";
 import Chat from "../../components/chat/chat";
 
-import sampleWorkspaceIcon from "../../../assets/sample-workspace.png";
+import sampleWorkspaceIcon from "../../assets/sample-workspace.png";
 import "./home.css";
 import {
   PeerInformation,
   RegistrationInfo,
   WorkspaceInfo,
-} from "../../../api/types";
+} from "../../api/types";
 import { useEffect, useState } from "react";
 import {
   connect,
   getDefaultWorkspace,
   list_all_peers,
-} from "../../../api/util";
+} from "../../api/util";
 import { redirect } from "react-router-dom";
 
 export default function Home() {

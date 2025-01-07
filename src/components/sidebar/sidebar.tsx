@@ -1,13 +1,13 @@
 import React from "react";
 import SidebarSection from "./sidebar-section";
-import { User } from "../../../api/user";
+import { User } from "../../api/user";
 import {
   placeholderPfp,
   notepadSvg,
   placeholderGroup,
-} from "../../../assets/assets";
+} from "../../assets/assets";
 import "./sidebar.css";
-import { Group } from "../../../api/group";
+import { Group } from "../../api/group";
 
 function getPinnedUsers(): User[] {
   const names = [];

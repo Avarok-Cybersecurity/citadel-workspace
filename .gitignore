@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 bun.lockb
 .env
+
+*storybook.log
