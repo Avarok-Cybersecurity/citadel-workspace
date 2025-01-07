@@ -32,7 +32,7 @@ export default function Home() {
   const [workspaceInfo, setWorkspaceInfo] = useState<WorkspaceInfo | null>(
     null,
   );
-  const [_allPeers, setAllPeers] = useState<Record<
+  const [allPeers, setAllPeers] = useState<Record<
     string,
     PeerInformation
   > | null>(null);
@@ -99,7 +99,7 @@ export default function Home() {
 
       <div className="content-container">
         <div className="left-panel">
-          <Sidebar />
+          <Sidebar peers={allPeers} />
         </div>
         <div className="right-panel">
           <div className="content">{getMainWindow()}</div>

@@ -50,7 +50,6 @@ export async function register(
     const response = await invoke<RegistrationResponse>("register", {
       request,
     });
-    console.log(response);
     return response;
   } catch (error) {
     console.error("Error registering user:", error);

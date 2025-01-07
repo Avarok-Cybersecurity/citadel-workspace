@@ -15,56 +15,56 @@ const INTERNAL_SERVICE_ADDR: &str = "127.0.0.1:12345";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
-    // let connector = InternalServiceConnector::connect(INTERNAL_SERVICE_ADDR)
-    //     .await
-    //     .expect("Invalid socket address");
-    // let (sink, mut stream) = connector.split();
+    let connector = InternalServiceConnector::connect(INTERNAL_SERVICE_ADDR)
+        .await
+        .expect("Invalid socket address");
+    let (sink, mut stream) = connector.split();
 
-    // println!("Connected to internal service.");
+    println!("Connected to internal service.");
 
-    // let listeners: Arc<Mutex<Vec<PacketHandle>>> = Arc::new(Mutex::new(Vec::new()));
+    let listeners: Arc<Mutex<Vec<PacketHandle>>> = Arc::new(Mutex::new(Vec::new()));
 
-    // // Background TCP listener
-    // let listeners_ref = Arc::clone(&listeners);
-    // tokio::spawn(async move {
-    //     let listeners = listeners_ref;
-    //     println!("Spawned background TCP dispatcher.");
+    // Background TCP listener
+    let listeners_ref = Arc::clone(&listeners);
+    tokio::spawn(async move {
+        let listeners = listeners_ref;
+        println!("Spawned background TCP dispatcher.");
 
-    //     while let Some(packet) = stream.next().await {
-    //         println!("Incoming packet:\n{:#?}", &packet);
+        while let Some(packet) = stream.next().await {
+            println!("Incoming packet:\n{:#?}", &packet);
 
-    //         let mut guard = listeners.lock().await;
-    //         let mut targeted_handles: Vec<&mut PacketHandle> = guard
-    //             .iter_mut()
-    //             .filter(|h| packet.request_id().is_some_and(|id| id.to_owned() == h.request_id))
-    //             .collect();
+            let mut guard = listeners.lock().await;
+            let mut targeted_handles: Vec<&mut PacketHandle> = guard
+                .iter_mut()
+                .filter(|h| packet.request_id().is_some_and(|id| id.to_owned() == h.request_id))
+                .collect();
 
-    //         if targeted_handles.len() == 1 {
-    //             let channel = &mut targeted_handles[0].channel;
-    //             let _ = channel
-    //                 .send(packet)
-    //                 .await
-    //                 .map_err(|err| eprintln!("Error when dispatching packet: {}", err));
-    //         } else {
-    //             for handle in targeted_handles {
-    //                 let _ = handle
-    //                     .channel
-    //                     .send(packet.clone())
-    //                     .await
-    //                     .map_err(|err| eprintln!("Error when dispatching packet: {}", err));
-    //             }
-    //             // TODO @kyle-tennison: You could theoretically make this more efficient by not cloning on the last iteration
-    //         }
-    //         drop(guard);
-    //     }
-    // });
+            if targeted_handles.len() == 1 {
+                let channel = &mut targeted_handles[0].channel;
+                let _ = channel
+                    .send(packet)
+                    .await
+                    .map_err(|err| eprintln!("Error when dispatching packet: {}", err));
+            } else {
+                for handle in targeted_handles {
+                    let _ = handle
+                        .channel
+                        .send(packet.clone())
+                        .await
+                        .map_err(|err| eprintln!("Error when dispatching packet: {}", err));
+                }
+                // TODO @kyle-tennison: You could theoretically make this more efficient by not cloning on the last iteration
+            }
+            drop(guard);
+        }
+    });
 
     tauri::Builder::default()
-        // .manage(ConnectionState {
-        //     sink: Mutex::new(sink),
-        //     listeners: Arc::clone(&listeners),
-        //     tmp_db: Arc::new(Mutex::new(HashMap::new())),
-        // })
+        .manage(ConnectionState {
+            sink: Mutex::new(sink),
+            listeners: Arc::clone(&listeners),
+            tmp_db: Arc::new(Mutex::new(HashMap::new())),
+        })
         .setup(|app| {
             setup_log();
             #[cfg(debug_assertions)] // only include this code on debug builds
@@ -76,11 +76,11 @@ pub async fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            // connect,
-            // register,
-            // list_known_servers,
-            // list_all_peers,
-            // peer_connect,
+            connect,
+            register,
+            list_known_servers,
+            list_all_peers,
+            peer_connect,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -44,24 +44,23 @@ function getContacts(): User[] {
 
   return people;
 }
-function getGroupChats(): Group[] {
-  return [new Group("Placeholder Chat", placeholderGroup)];
+export interface SidebarProps {
+  peers: Array<{
+    name: string;
+    username: string;
+    online_status: boolean;
+    cid: number
+  }>
 }
 
-export default function Sidebar() {
+export default function Sidebar(props: SidebarProps) {
   return (
     <div id="sidebar">
       <SidebarSection
-        title="PINNED"
-        icon={<i className="bi bi-plus"></i>}
-        items={getPinnedUsers()}
-      />
-      <SidebarSection
         title="CONTACTS"
         icon={notepadSvg}
-        items={getContacts()}
+        peers={props.peers}
       />
-      <SidebarSection title="ROOMS" icon={null} items={getGroupChats()} />
     </div>
   );
 }

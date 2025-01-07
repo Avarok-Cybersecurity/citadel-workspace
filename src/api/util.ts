@@ -56,3 +56,14 @@ export async function list_all_peers(
 
   return response;
 }
+
+export function flattenObjects(items: {
+  [key: string]: {
+    cid: string;
+    name: string;
+    username: string;
+    online_status: string;
+  };
+}) {
+  return Object.keys(items).map((el) => items[el]);
+}
