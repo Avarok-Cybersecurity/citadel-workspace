@@ -47,6 +47,7 @@ pub async fn connect(
     let security_settings = SessionSecuritySettings {
         security_level: registration_info.security_level.into(),
         secrecy_mode: SecrecyMode::try_from(registration_info.security_mode).unwrap(),
+        header_obfuscator_settings: Default::default(),
         crypto_params,
     };
 

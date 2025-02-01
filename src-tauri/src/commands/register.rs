@@ -61,8 +61,9 @@ pub async fn register(
     let security_settings = SessionSecuritySettings {
         security_level: request.securityLevel.into(),
         // secrecy_mode: request.securityMode.into(),
-        secrecy_mode: SecrecyMode::try_from(request.securityMode).unwrap(),  
+        secrecy_mode: SecrecyMode::try_from(request.securityMode).unwrap(),
         crypto_params,
+        header_obfuscator_settings: Default::default(),
     };
 
     let server_password: Option<_> = match request.workspacePassword.trim().len() {
