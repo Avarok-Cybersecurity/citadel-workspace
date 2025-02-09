@@ -19,7 +19,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' https://cdn.gpteng.co; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.gpteng.co; style-src 'self' 'unsafe-inline'; connect-src 'self' https://cdn.gpteng.co http://localhost:1420 ws://localhost:1420 ws://localhost:1421 'self' ws://localhost:1421?* wss://localhost:1421?*; frame-src 'self' https://cdn.gpteng.co; img-src 'self' data: https://cdn.gpteng.co https://images.unsplash.com"
+      "csp": "default-src 'self' https://cdn.gpteng.co; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.gpteng.co; style-src 'self' 'unsafe-inline'; connect-src 'self' https://cdn.gpteng.co ws://localhost:1420 ws://localhost:1421 ws://localhost:8080; frame-src 'self' https://cdn.gpteng.co; img-src 'self' data: https://cdn.gpteng.co https://images.unsplash.com"
     }
   },
   "bundle": {

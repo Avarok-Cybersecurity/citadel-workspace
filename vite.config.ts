@@ -5,8 +5,6 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  const host = process.env.TAURI_DEV_HOST;
-  
   return {
     plugins: [
       react(),
@@ -18,22 +16,20 @@ export default defineConfig(({ mode }) => {
     
     server: {
       // Tauri requires a fixed port
-      port: process.env.TAURI_DEV_HOST ? 1420 : 8080,
-      strictPort: !!process.env.TAURI_DEV_HOST,
-      host: process.env.TAURI_DEV_HOST || "::",
+      port: 1420,
+      strictPort: true,
+      host: 'localhost',
       
       // Only use Tauri-specific HMR if we're in Tauri dev mode
-      hmr: host
-        ? {
-            protocol: "ws",
-            host,
-            port: 1421,
-          }
-        : undefined,
+      hmr: {
+        protocol: "ws",
+        host: 'localhost',
+        port: 1421
+      },
       
       // Custom headers for your web app
       headers: {
-        'Content-Security-Policy': "default-src 'self' https://cdn.gpteng.co; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.gpteng.co; style-src 'self' 'unsafe-inline'; connect-src 'self' https://cdn.gpteng.co http://localhost:1420 ws://localhost:1420 ws://localhost:1421 'self' ws://localhost:1421?* wss://localhost:1421?*; frame-src 'self' https://cdn.gpteng.co; img-src 'self' data: https://cdn.gpteng.co https://images.unsplash.com;"
+        'Content-Security-Policy': "default-src 'self' https://cdn.gpteng.co; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.gpteng.co; style-src 'self' 'unsafe-inline'; connect-src 'self' https://cdn.gpteng.co ws://localhost:1420 ws://localhost:1421 ws://localhost:8080; frame-src 'self' https://cdn.gpteng.co; img-src 'self' data: https://cdn.gpteng.co https://images.unsplash.com;"
       },
       
       watch: {
