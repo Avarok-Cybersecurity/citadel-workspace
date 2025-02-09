@@ -1,4 +1,6 @@
 set dotenv-load
+
+set windows-shell := ["powershell.exe", "-c"]
 set shell := ["sh", "-cu"]
 
 [linux]
@@ -45,10 +47,10 @@ start-servers:
 [unix]
 update-gui:
      # Update submodule
-    cd citadel-workspaces && git fetch && git pull && cd ..
+     cd citadel-workspaces && git fetch && git pull && cd ..
 
-    # Copy all contents from submodule to current directory
-    cp -R citadel-workspaces/* ./
+     # Copy all contents from submodule to current directory
+     cp -R citadel-workspaces/* ./
 
 [windows]
 stop-servers:
