@@ -20,16 +20,11 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       host: 'localhost',
       
-      // Only use Tauri-specific HMR if we're in Tauri dev mode
-      hmr: {
-        protocol: "ws",
-        host: 'localhost',
-        port: 1421
-      },
+      hmr: false,
       
       // Custom headers for your web app
       headers: {
-        'Content-Security-Policy': "default-src 'self' https://cdn.gpteng.co; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.gpteng.co; style-src 'self' 'unsafe-inline'; connect-src 'self' https://cdn.gpteng.co ws://localhost:1420 ws://localhost:1421 ws://localhost:8080; frame-src 'self' https://cdn.gpteng.co; img-src 'self' data: https://cdn.gpteng.co https://images.unsplash.com;"
+        'Content-Security-Policy': "default-src 'self' https://cdn.gpteng.co; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.gpteng.co; style-src 'self' 'unsafe-inline'; connect-src 'self' https://cdn.gpteng.co; frame-src 'self' https://cdn.gpteng.co; img-src 'self' data: https://cdn.gpteng.co https://images.unsplash.com;"
       },
       
       watch: {

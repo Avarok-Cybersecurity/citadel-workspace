@@ -77,3 +77,12 @@ gui-update:
 
     Get-ChildItem -Path "citadel-workspaces\*" -Recurse | Copy-Item -Destination "." -Force -Recurse
 
+[linux]
+[macos]
+[unix]
+gui-push commit-message:
+    cd citadel-workspaces && git commit -am "{{commit-message}}" && git push
+
+[windows]
+gui-push commit-message:
+    Push-Location citadel-workspaces; git commit -am "{{commit-message}}" && git push; Pop-Location
