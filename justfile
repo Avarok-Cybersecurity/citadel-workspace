@@ -2,9 +2,8 @@ set dotenv-load
 set shell := ["sh", "-cu"]
 
 dev:
-    just update-gui
+    TAURI_DEV_HOST=localhost cargo tauri dev
     just start-servers
-    cargo tauri dev
 
 dev-browser:
     just start-servers
