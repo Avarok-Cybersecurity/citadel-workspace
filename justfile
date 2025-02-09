@@ -1,7 +1,8 @@
 set dotenv-load
-set shell := ["zsh", "-cu"]
+set shell := ["sh", "-cu"]
 
 dev:
+    just update-gui
     just start-servers
     cargo tauri dev
 
@@ -23,7 +24,15 @@ start-servers:
     @echo "Starting new servers"
 
     # Start internal service
-    cd $INTERNAL_SERVICE_PATH; nohup cargo run --bin internal-service -- --bind 127.0.0.1:12345 > internal-service.log 2>&1 &; echo $! > .service-pid
+    cd $INTERNAL_SERVICE_PATH; nohup cargo run --bin internal-service -- --bind 127.0.0.1:12345 > internal-service.log 2>&1 & echo $! > .service-pid
 
     # Start citadel server
-    cd $INTERNAL_SERVICE_PATH; nohup cargo run --bin citadel_server -- --bind 127.0.0.1:12349 > citadel-server.log 2>&1 &; echo $! > .server-pid
+    cd $INTERNAL_SERVICE_PATH; nohup cargo run --bin citadel_server -- --bind 127.0.0.1:12349 > citadel-server.log 2>&1 & echo $! > .server-pid
+
+
+update-gui:
+    # Update submodule
+    cd citadel-workspaces && git fetch && git pull && cd ..
+    
+    # Copy all contents from submodule to current directory
+    cp -R citadel-workspaces/* ./

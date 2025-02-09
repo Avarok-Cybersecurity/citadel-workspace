@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "identifier": "com.tauri.dev",
   "build": {
-    "beforeDevCommand": "bun run dev",
+    "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run build",
+    "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -19,7 +19,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' data: https://cdn.gpteng.co https://images.unsplash.com"
     }
   },
   "bundle": {

@@ -82,6 +82,7 @@ pub async fn run() {
             list_all_peers,
             peer_connect,
         ])
+        .on_window_event(util::window_event_handler::on_window_event)
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

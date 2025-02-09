@@ -1,0 +1,3 @@
+[submodule "citadel-workspaces"]
+	path = citadel-workspaces
+	url = https://github.com/Avarok-Cybersecurity/citadel-workspaces

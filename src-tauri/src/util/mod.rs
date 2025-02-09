@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::commands::register::RegistrationRequestTS;
 
 pub mod local_db;
+pub mod window_event_handler;
 
 // pub struct RegistrationRequestTS {
 //     workspaceIdentifier: String,
