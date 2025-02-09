@@ -26,3 +26,4 @@ bun.lockb
 .env
 
 *storybook.log
+/target_ide/
