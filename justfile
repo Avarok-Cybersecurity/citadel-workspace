@@ -42,16 +42,6 @@ start-servers:
     # Start citadel server
     cd $INTERNAL_SERVICE_PATH; nohup cargo run --bin citadel_server -- --bind 127.0.0.1:12349 > citadel-server.log 2>&1 & echo $! > .server-pid
 
-[linux]
-[macos]
-[unix]
-update-gui:
-     # Update submodule
-     cd citadel-workspaces && git fetch && git pull && cd ..
-
-     # Copy all contents from submodule to current directory
-     cp -R citadel-workspaces/* ./
-
 [windows]
 stop-servers:
     @echo "Killing existing servers"
@@ -71,8 +61,19 @@ start-servers:
     # Start citadel server
     Push-Location $env:INTERNAL_SERVICE_PATH; $process = Start-Process cargo -ArgumentList "run","--bin","citadel_server","--", "--dangerous", "true", "--bind", "127.0.0.1:12349" -NoNewWindow -PassThru -RedirectStandardOutput "citadel-server.log" -RedirectStandardError "citadel-server-error.log"; $process.Id | Set-Content ".server-pid"; $process | Out-Null; Pop-Location
 
+[linux]
+[macos]
+[unix]
+gui-update:
+     # Update submodule
+     cd citadel-workspaces && git fetch && git pull && cd ..
+
+     # Copy all contents from submodule to current directory
+     cp -R citadel-workspaces/* ./
+
 [windows]
-update-gui:
+gui-update:
     Push-Location citadel-workspaces; git fetch; git pull; Pop-Location
 
     Get-ChildItem -Path "citadel-workspaces\*" -Recurse | Copy-Item -Destination "." -Force -Recurse
+
