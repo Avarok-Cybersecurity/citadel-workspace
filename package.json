@@ -4,11 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "build:dev": "vite build --mode development",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "dev": "npm run dev --prefix citadel-workspaces",
+    "build": "npm run build --prefix citadel-workspaces",
+    "build:dev": "npm run build:dev --prefix citadel-workspaces",
+    "lint": "npm run lint --prefix citadel-workspaces",
+    "preview": "npm run preview --prefix citadel-workspaces"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

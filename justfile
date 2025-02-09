@@ -61,21 +61,23 @@ start-servers:
     # Start citadel server
     Push-Location $env:INTERNAL_SERVICE_PATH; $process = Start-Process cargo -ArgumentList "run","--bin","citadel_server","--", "--dangerous", "true", "--bind", "127.0.0.1:12349" -NoNewWindow -PassThru -RedirectStandardOutput "citadel-server.log" -RedirectStandardError "citadel-server-error.log"; $process.Id | Set-Content ".server-pid"; $process | Out-Null; Pop-Location
 
+submodules:
+    # Initialize and update all submodules recursively
+    git submodule update --init --recursive
+
 [linux]
 [macos]
 [unix]
 gui-update:
-     # Update submodule
-     cd citadel-workspaces && git fetch && git pull && cd ..
-
-     # Copy all contents from submodule to current directory
-     cp -R citadel-workspaces/* ./
+    just submodules
+    # Update submodule
+    cd citadel-workspaces && git fetch && git pull && cd ..
 
 [windows]
 gui-update:
+    just submodules
+    # Update submodule
     Push-Location citadel-workspaces; git fetch; git pull; Pop-Location
-
-    Get-ChildItem -Path "citadel-workspaces\*" -Recurse | Copy-Item -Destination "." -Force -Recurse
 
 [linux]
 [macos]

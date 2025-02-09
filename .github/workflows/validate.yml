@@ -21,7 +21,9 @@ jobs:
     name: Cargo Fmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
       - name: Run Cargo Fmt
         run: cargo fmt --check
@@ -31,7 +33,9 @@ jobs:
     name: Cargo Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -54,7 +58,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -83,7 +89,9 @@ jobs:
     name: JS lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Install dependencies
         run: |
           npm install --global prettier
