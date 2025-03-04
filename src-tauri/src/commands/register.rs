@@ -11,7 +11,7 @@ use std::str::FromStr;
 use tauri::State;
 use uuid::Uuid;
 
-use crate::structs::ConnectionState;
+use crate::structs::ConnectionRouterState;
 use crate::util::local_db::LocalDb;
 
 use super::send_and_recv;
@@ -43,7 +43,7 @@ pub struct RegistrationResponseTS {
 pub async fn register(
     request: RegistrationRequestTS,
     _window: tauri::Window,
-    state: State<'_, ConnectionState>,
+    state: State<'_, ConnectionRouterState>,
 ) -> Result<RegistrationResponseTS, String> {
     println!("Registering to {}...", request.workspaceIdentifier);
 

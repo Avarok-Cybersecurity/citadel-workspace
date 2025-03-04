@@ -3,13 +3,14 @@ mod structs;
 mod util;
 
 use citadel_internal_service_connector::connector::InternalServiceConnector;
+use citadel_internal_service_connector::messenger::CitadelWorkspaceMessenger;
 use citadel_logging::setup_log;
 use commands::{connect, list_all_peers, list_known_servers, peer_connect, register};
-use futures::StreamExt;
+use uuid::Uuid;
 use std::{collections::HashMap, sync::Arc};
-use structs::{ConnectionState, PacketHandle};
+use structs::{ConnectionRouterState, PacketHandle};
 use tauri::Manager;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 
 const INTERNAL_SERVICE_ADDR: &str = "127.0.0.1:12345";
 
@@ -17,53 +18,48 @@ const INTERNAL_SERVICE_ADDR: &str = "127.0.0.1:12345";
 pub async fn run() {
     let connector = InternalServiceConnector::connect(INTERNAL_SERVICE_ADDR)
         .await
-        .expect("Invalid socket address");
-    let (sink, mut stream) = connector.split();
+        .expect("Unable to connect to the internal service");
 
-    println!("Connected to internal service.");
+    let (multiplexer, mut stream) = CitadelWorkspaceMessenger::new(connector);
+    let default_mux = multiplexer.multiplex(0).await.expect("Failed to create default multiplexer");
 
-    let listeners: Arc<Mutex<Vec<PacketHandle>>> = Arc::new(Mutex::new(Vec::new()));
+    citadel_logging::info!(target: "citadel", "Connected to internal service.");
+
+    let listeners: Arc<RwLock<HashMap<Uuid, PacketHandle>>> = Arc::new(RwLock::new(HashMap::new()));
 
     // Background TCP listener
-    let listeners_ref = Arc::clone(&listeners);
+    let listeners_ref = listeners.clone();
+
     tokio::spawn(async move {
         let listeners = listeners_ref;
-        println!("Spawned background TCP dispatcher.");
+        citadel_logging::info!(target: "citadel", "Spawned background TCP dispatcher.");
 
-        while let Some(packet) = stream.next().await {
-            println!("Incoming packet:\n{:#?}", &packet);
-
-            let mut guard = listeners.lock().await;
-            let mut targeted_handles: Vec<&mut PacketHandle> = guard
-                .iter_mut()
-                .filter(|h| packet.request_id().is_some_and(|id| id.to_owned() == h.request_id))
-                .collect();
-
-            if targeted_handles.len() == 1 {
-                let channel = &mut targeted_handles[0].channel;
-                let _ = channel
-                    .send(packet)
-                    .await
-                    .map_err(|err| eprintln!("Error when dispatching packet: {}", err));
+        while let Some(packet) = stream.recv().await {
+            citadel_logging::info!(target: "citadel", "Incoming packet:\n{:#?}", &packet);
+            if let Some(request_id) = packet.request_id().copied() {
+                let mut guard = listeners.write().await;
+                if let Some(handle) = guard.get(&request_id) {
+                    if let Err(err) = handle.channel.send(packet) {
+                        citadel_logging::error!(target: "citadel", "Error sending packet to channel: {err:?}");
+                        guard.remove(&request_id);
+                    } else {
+                        citadel_logging::info!(target: "citadel", "Successfully sent packet w/ID {:?}", request_id);
+                    }
+                } else {
+                    citadel_logging::warn!(target: "citadel", "No route found for message {packet:?}")
+                }   
             } else {
-                for handle in targeted_handles {
-                    let _ = handle
-                        .channel
-                        .send(packet.clone())
-                        .await
-                        .map_err(|err| eprintln!("Error when dispatching packet: {}", err));
-                }
-                // TODO @kyle-tennison: You could theoretically make this more efficient by not cloning on the last iteration
+                citadel_logging::warn!(target: "citadel", "No request ID found in message {packet:?}");
+                // TODO: Handle spurious events
             }
-            drop(guard);
         }
     });
 
     tauri::Builder::default()
-        .manage(ConnectionState {
-            sink: Mutex::new(sink),
-            listeners: Arc::clone(&listeners),
-            tmp_db: Arc::new(Mutex::new(HashMap::new())),
+        .manage(ConnectionRouterState {
+            messenger_mux: multiplexer,
+            to_subscribers: listeners,
+            default_mux,
         })
         .setup(|app| {
             setup_log();

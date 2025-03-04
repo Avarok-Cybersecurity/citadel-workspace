@@ -1,6 +1,5 @@
-use crate::structs::{ConnectionState, PacketHandle};
+use crate::structs::{ConnectionRouterState, PacketHandle};
 use citadel_internal_service_types::{InternalServiceRequest, InternalServiceResponse};
-use futures::SinkExt;
 use tauri::State;
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -29,68 +28,69 @@ pub use list_known_servers::list_known_servers;
 pub use peer_connect::peer_connect;
 pub use register::register;
 
+/// Note: this is a oneshot type of function. One send, one receive only. This is useful for only specific types of commands
+/// that don't need to observe multiple responses
 pub(crate) async fn send_and_recv(
     payload: InternalServiceRequest,
     request_id: Uuid,
-    state: &State<'_, ConnectionState>,
+    state: &State<'_, ConnectionRouterState>,
 ) -> InternalServiceResponse {
+    send_and_recv_with_inspector(payload, request_id, state, |resp| InspectionResult::Done(resp)).await
+}
+
+pub enum InspectionResult<T> {
+    Done(T),
+    Continue,
+}
+
+/// This can be used to stream potentially many possible responses
+pub(crate) async fn send_and_recv_with_inspector<F, T>(
+    payload: InternalServiceRequest,
+    request_id: Uuid,
+    state: &State<'_, ConnectionRouterState>,
+    mut inspector: F,
+) -> T where F: FnMut(InternalServiceResponse) -> InspectionResult<T> {
     // Create a new mpsc channel and attach the request id to it
-    let (tx, mut rx) = mpsc::channel::<InternalServiceResponse>(1024);
+    let (tx, mut rx) = mpsc::unbounded_channel::<InternalServiceResponse>();
     let packet_handle = PacketHandle {
-        request_id,
         channel: tx,
     };
 
     // Attach the mpsc channel to the vector of listeners
     // NOTE: be careful touching this; very easy to end up in a deadlock
-    let mut guard = state.listeners.lock().await;
-    guard.push(packet_handle);
+    let mut guard = state.to_subscribers.write().await;
+    guard.insert(request_id, packet_handle);
     drop(guard);
 
     // Send message to internal service
-    println!(
-        "Sending message with request_id {}:\n{:#?}",
+    citadel_logging::debug!(
+        target: "citadel",
+        "Sending message with request_id {}:\n{:?}",
         request_id, payload
     );
-    let mut guard = state.sink.lock().await;
-    guard
-        .send(payload)
-        .await
-        .map_err(|err| err.to_string())
-        .expect("error sending payload to stream");
-    drop(guard);
 
-    // Wait for the background TCP listener (main.rs) to dispatch the message
-    let incoming = match rx.recv().await {
-        Some(v) => v,
-        None => panic!("Channel unexpectedly closed before response."),
-    };
+    state.default_mux.send_request(payload).await.expect("error sending payload to stream");
 
-    // Remove channel from handles
-    let mut guard = state.listeners.lock().await;
-    if let Some(index) = guard.iter().position(|h| h.request_id == request_id) {
-        guard.remove(index);
-    } else {
-        panic!(
-            "PacketHandle was unexpectedly dropped by a third party, likely due to a UUID crash."
-        );
+    loop {
+         // Wait for the background TCP listener (main.rs) to dispatch the message   
+        let incoming = match rx.recv().await {
+            Some(v) => v,
+            None => panic!("Channel unexpectedly closed before response."),
+        };
+
+        match inspector(incoming) {
+            InspectionResult::Done(v) => {
+                // Remove channel from handles
+                let mut guard = state.to_subscribers.write().await;
+                if guard.remove(&request_id).is_none() {
+                    panic!(
+                        "PacketHandle was unexpectedly dropped by a third party, likely due to a UUID collision?"
+                    );
+                }
+
+                return v
+            },
+            InspectionResult::Continue => continue,
+        }
     }
-    drop(guard);
-
-    incoming
 }
-
-// pub(crate) async fn send_to_internal_service(
-//     request: InternalServiceRequest,
-//     state: State<'_, ConnectionState>,
-// ) -> Result<(), String> {
-//     state
-//         .sink
-//         .lock()
-//         .await
-//         .as_mut()
-//         .ok_or("No connection to the internal service set")?
-//         .send(request)
-//         .await
-//         .map_err(|err| err.to_string())
-// }

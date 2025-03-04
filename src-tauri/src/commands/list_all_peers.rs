@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 use uuid::Uuid;
 
-use crate::structs::ConnectionState;
+use crate::structs::ConnectionRouterState;
 
 use super::send_and_recv;
 
@@ -26,7 +26,7 @@ pub struct ListAllPeersResponseTS {
 #[tauri::command]
 pub async fn list_all_peers(
     request: ListAllPeersRequestTS,
-    state: State<'_, ConnectionState>,
+    state: State<'_, ConnectionRouterState>,
 ) -> Result<ListAllPeersResponseTS, String> {
     println!("Listing all peers...");
     let request_id = Uuid::new_v4();

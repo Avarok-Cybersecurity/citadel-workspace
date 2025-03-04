@@ -4,10 +4,10 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use super::send_and_recv;
-use crate::structs::ConnectionState;
+use crate::structs::ConnectionRouterState;
 use citadel_internal_service_types::{InternalServiceResponse, SessionSecuritySettings};
 use citadel_types::crypto::{
-    AlgorithmsExt, CryptoParameters, EncryptionAlgorithm, KemAlgorithm, SecrecyMode, SigAlgorithm
+    AlgorithmsExt, CryptoParameters, EncryptionAlgorithm, KemAlgorithm, SecrecyMode, SigAlgorithm,
 };
 use uuid::Uuid;
 
@@ -27,7 +27,7 @@ pub struct ConnectResponseTS {
 #[tauri::command]
 pub async fn connect(
     request: ConnectRequestTS,
-    state: State<'_, ConnectionState>,
+    state: State<'_, ConnectionRouterState>,
 ) -> Result<ConnectResponseTS, String> {
     println!(
         "Connecting to {}...",
