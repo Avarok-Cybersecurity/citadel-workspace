@@ -5,19 +5,6 @@ use crate::commands::register::RegistrationRequestTS;
 pub mod local_db;
 pub mod window_event_handler;
 
-// pub struct RegistrationRequestTS {
-//     workspaceIdentifier: String,
-//     workspacePassword: String,
-//     securityLevel: u8,
-//     securityMode: u8,
-//     encryptionAlgorithm: u8,
-//     kemAlgorithm: u8,
-//     sigAlgorithm: u8,
-//     fullName: String,
-//     username: String,
-//     profilePassword: String,
-// }
-
 pub trait KeyName {
     /// An identifier used to differentiate between different instances
     /// of the same struct in the DB. If there will only ever be one
@@ -31,7 +18,7 @@ pub trait KeyName {
         format!(
             "{}({})",
             std::any::type_name::<Self>(),
-            identifier.unwrap_or("".to_owned())
+            identifier.unwrap_or("-no-unique-id".to_owned())
         )
     }
 }
@@ -74,7 +61,7 @@ impl From<RegistrationRequestTS> for RegistrationInfo {
 
 impl KeyName for RegistrationInfo {
     fn identifier(&self) -> Option<String> {
-        Some(self.server_address.clone())
+        Some(self.server_address.clone() + &self.username)
     }
 }
 

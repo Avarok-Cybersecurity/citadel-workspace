@@ -35,7 +35,7 @@ pub(crate) async fn send_and_recv(
     request_id: Uuid,
     state: &State<'_, ConnectionRouterState>,
 ) -> InternalServiceResponse {
-    send_and_recv_with_inspector(payload, request_id, state, |resp| InspectionResult::Done(resp)).await
+    send_and_recv_with_inspector(payload, request_id, state, InspectionResult::Done).await
 }
 
 pub enum InspectionResult<T> {

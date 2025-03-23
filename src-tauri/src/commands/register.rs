@@ -48,7 +48,8 @@ pub async fn register(
     println!("Registering to {}...", request.workspaceIdentifier);
 
     let server_addr =
-        SocketAddr::from_str(&request.workspaceIdentifier).expect("Invalid server address");
+        SocketAddr::from_str(&request.workspaceIdentifier)
+        .map_err(|_| format!("Invalid server address: {}", &request.workspaceIdentifier))?;
     let request_id = Uuid::new_v4();
     let request_copy = request.clone();
 
@@ -77,13 +78,14 @@ pub async fn register(
         full_name: request.fullName,
         username: request.username,
         proposed_password: request.profilePassword.into_bytes().into(),
-        connect_after_register: false,
+        connect_after_register: true,
         session_security_settings: security_settings,
         server_password,
     };
 
+    // Support all 4 types of responses to accomudate connect_after_register as true/false
     let response = match send_and_recv(internal_request, request_id, &state).await {
-        InternalServiceResponse::RegisterSuccess(_) => {
+        InternalServiceResponse::RegisterSuccess(..) | InternalServiceResponse::ConnectSuccess(..) => {
             println!("Registration was successful");
             RegistrationResponseTS {
                 message: "Successful registration".to_owned(),
@@ -91,6 +93,13 @@ pub async fn register(
             }
         }
         InternalServiceResponse::RegisterFailure(err) => {
+            println!("Registration failed: {}", err.message);
+            RegistrationResponseTS {
+                message: err.message,
+                success: false,
+            }
+        }
+        InternalServiceResponse::ConnectFailure(err) => {
             println!("Registration failed: {}", err.message);
             RegistrationResponseTS {
                 message: err.message,

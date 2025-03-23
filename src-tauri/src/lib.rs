@@ -1,6 +1,8 @@
 mod commands;
 mod structs;
 mod util;
+#[cfg(test)]
+mod tests;
 
 use citadel_internal_service_connector::connector::InternalServiceConnector;
 use citadel_internal_service_connector::messenger::CitadelWorkspaceMessenger;

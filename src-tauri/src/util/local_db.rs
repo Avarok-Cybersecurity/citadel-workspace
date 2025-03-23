@@ -51,7 +51,7 @@ impl<'a> LocalDb<'a> {
 
          match send_and_recv(payload, request_id, self.state).await {
              InternalServiceResponse::LocalDBGetKVSuccess(data) => {
-                 let deserialized: T = serde_json::from_slice(&data.value.as_slice()).map_err(|e| e.to_string())?;
+                 let deserialized: T = serde_json::from_slice(data.value.as_slice()).map_err(|e| e.to_string())?;
                  println!("Successfully got value from key '{}'.", key);
                  Ok(deserialized)
              },
