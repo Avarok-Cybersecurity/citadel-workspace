@@ -27,3 +27,5 @@ bun.lockb
 
 *storybook.log
 /target_ide/
+.archive
+target
