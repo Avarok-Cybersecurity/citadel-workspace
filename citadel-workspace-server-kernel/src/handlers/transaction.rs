@@ -83,7 +83,7 @@ impl<'a> ReadTransaction<'a> {
     }
 }
 
-impl<'a> Deref for ReadTransaction<'a> {
+impl Deref for ReadTransaction<'_> {
     type Target = HashMap<String, Domain>;
     
     fn deref(&self) -> &Self::Target {
@@ -216,7 +216,7 @@ impl<'a> WriteTransaction<'a> {
     }
 }
 
-impl<'a> Deref for WriteTransaction<'a> {
+impl Deref for WriteTransaction<'_> {
     type Target = HashMap<String, Domain>;
     
     fn deref(&self) -> &Self::Target {
@@ -224,7 +224,7 @@ impl<'a> Deref for WriteTransaction<'a> {
     }
 }
 
-impl<'a> DerefMut for WriteTransaction<'a> {
+impl DerefMut for WriteTransaction<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.domains
     }

@@ -130,7 +130,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 office_id,
                 name,
                 description,
-            } => match self.update_office(user_id, &office_id, name.as_ref().map(|s| s.as_str()), description.as_ref().map(|s| s.as_str())) {
+            } => match self.update_office(user_id, &office_id, name.as_deref(), description.as_deref()) {
                 Ok(()) => {
                     // After updating, get the latest office data to return
                     if let Some(updated_office) = self.get_office(&office_id) {
@@ -193,7 +193,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 office_id,
                 room_id,
                 role,
-            } => match self.add_member(user_id, &member_id, office_id.as_ref().map(|s| s.as_str()), room_id.as_ref().map(|s| s.as_str()), role) {
+            } => match self.add_member(user_id, &member_id, office_id.as_deref(), room_id.as_deref(), role) {
                 Ok(_) => Ok(WorkspaceResponse::Success),
                 Err(e) => Ok(WorkspaceResponse::Error(format!(
                     "Failed to add member: {}",
@@ -235,7 +235,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 user_id: member_id,
                 office_id,
                 room_id,
-            } => match self.remove_member(user_id, &member_id, office_id.as_ref().map(|s| s.as_str()), room_id.as_ref().map(|s| s.as_str())) {
+            } => match self.remove_member(user_id, &member_id, office_id.as_deref(), room_id.as_deref()) {
                 Ok(_) => Ok(WorkspaceResponse::Success),
                 Err(e) => Ok(WorkspaceResponse::Error(format!(
                     "Failed to remove member: {}",
@@ -249,7 +249,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 Ok(WorkspaceResponse::Offices(offices))
             }
             WorkspaceCommand::ListRooms { office_id } => {
-                let rooms = self.list_rooms(&user_id, &office_id)?;
+                let rooms = self.list_rooms(user_id, &office_id)?;
                 Ok(WorkspaceResponse::Rooms(rooms))
             }
             WorkspaceCommand::ListMembers { office_id, room_id } => {
@@ -506,7 +506,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         
         // Execute in a write transaction to remove the entity
         self.with_write_transaction(|tx| {
-            if let Some(_) = tx.get_domain(entity_id) {
+            if tx.get_domain(entity_id).is_some() {
                 tx.remove(entity_id)?;
                 Ok(())
             } else {

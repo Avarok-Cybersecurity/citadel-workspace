@@ -476,9 +476,9 @@ impl<R: citadel_sdk::prelude::Ratchet> WorkspaceServerKernel<R> {
                         
                         Ok(room.owner_id == user_id || is_admin || is_member)
                     },
-                    _ => return Err(NetworkError::Generic("Entity not found or type mismatch".into())),
+                    _ => Err(NetworkError::Generic("Entity not found or type mismatch".into())),
                 },
-                None => return Err(NetworkError::Generic("Entity not found".into())),
+                None => Err(NetworkError::Generic("Entity not found".into())),
             }
         })?;
         
@@ -525,9 +525,9 @@ impl<R: citadel_sdk::prelude::Ratchet> WorkspaceServerKernel<R> {
                         
                         Ok(room.owner_id == user_id || is_admin || is_member)
                     },
-                    _ => return Err(NetworkError::Generic("Entity not found or type mismatch".into())),
+                    _ => Err(NetworkError::Generic("Entity not found or type mismatch".into())),
                 },
-                None => return Err(NetworkError::Generic("Entity not found".into())),
+                None => Err(NetworkError::Generic("Entity not found".into())),
             }
         })?;
         
@@ -612,7 +612,7 @@ impl<R: citadel_sdk::prelude::Ratchet> WorkspaceServerKernel<R> {
                     let entity = T::from_domain(domain.clone());
                     if let Some(entity) = entity {
                         // Check if the parent ID matches (for rooms, this would be the office_id)
-                        if let Some(entity_parent_id) = self.get_parent_id::<T>(&domain) {
+                        if let Some(entity_parent_id) = self.get_parent_id::<T>(domain) {
                             if entity_parent_id == parent_id {
                                 return Some(entity);
                             }
