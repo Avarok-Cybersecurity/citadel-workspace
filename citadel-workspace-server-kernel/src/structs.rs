@@ -79,11 +79,21 @@ impl User {
             .insert(permission);
     }
 
+    /// Add a permission to the user for a specific domain (alias for grant_permission)
+    pub fn add_permission<T: AsRef<str>>(&mut self, domain_id: T, permission: Permission) {
+        self.grant_permission(domain_id, permission);
+    }
+
     /// Revoke a permission from the user for a specific domain
     pub fn revoke_permission<T: AsRef<str>>(&mut self, domain_id: T, permission: Permission) {
         if let Some(perms) = self.permissions.get_mut(domain_id.as_ref()) {
             perms.remove(&permission);
         }
+    }
+
+    /// Clear all permissions for a specific domain
+    pub fn clear_permissions<T: AsRef<str>>(&mut self, domain_id: T) {
+        self.permissions.remove(domain_id.as_ref());
     }
 
     /// Set all permissions for a domain based on the user's role

@@ -37,11 +37,11 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         let role_for_log = role.clone(); // Clone role for logging later
         let new_user = User::new(user_id.clone(), username.to_string(), role);
 
-        // Add user to system
-        {
-            let mut users = self.users.write();
-            users.insert(user_id.clone(), new_user);
-        }
+        // Add user to system using transaction manager
+        self.with_write_transaction(|tx| {
+            tx.insert_user(user_id.clone(), new_user)?;
+            Ok(())
+        })?;
 
         // Add user to roles
         {
@@ -132,15 +132,21 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         let role_for_roles = role.clone(); // Clone for roles update
         let role_for_log = role.clone(); // Clone for logging
 
-        // Update user in the system
-        {
-            let mut users = self.users.write();
-            if let Some(user) = users.get_mut(user_id) {
-                user.role = role_for_user;
-            } else {
-                return Err(NetworkError::msg("User not found"));
-            }
-        }
+        // Update user in the system using transaction manager
+        self.with_write_transaction(|tx| {
+            // First get the existing user
+            let mut existing_user = tx
+                .get_user(user_id)
+                .cloned()
+                .ok_or_else(|| NetworkError::msg("User not found"))?;
+
+            // Update the role
+            existing_user.role = role_for_user;
+
+            // Save the updated user
+            tx.update_user(user_id, existing_user)?;
+            Ok(())
+        })?;
 
         // Update user in roles
         {
@@ -159,50 +165,48 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         user_id: &str,
         action: MemberAction,
     ) -> Result<(), NetworkError> {
-        let mut domains = self.domains.write();
-        let domain = domains.get_mut(domain_id);
+        self.with_write_transaction(|tx| {
+            let domain = tx
+                .get_domain(domain_id)
+                .cloned()
+                .ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
 
-        match domain {
-            Some(domain) => match action {
+            let updated_domain = match action {
                 MemberAction::Add => {
                     // Implement proper member addition logic here based on domain implementation
                     match domain {
-                        Domain::Office { office } => {
-                            let mut members = office.members.clone();
-                            if !members.contains(&user_id.to_string()) {
-                                members.push(user_id.to_string());
-                                office.members = members;
+                        Domain::Office { mut office } => {
+                            if !office.members.contains(&user_id.to_string()) {
+                                office.members.push(user_id.to_string());
                             }
+                            Domain::Office { office }
                         }
-                        Domain::Room { room } => {
-                            let mut members = room.members.clone();
-                            if !members.contains(&user_id.to_string()) {
-                                members.push(user_id.to_string());
-                                room.members = members;
+                        Domain::Room { mut room } => {
+                            if !room.members.contains(&user_id.to_string()) {
+                                room.members.push(user_id.to_string());
                             }
+                            Domain::Room { room }
                         }
                     }
                 }
                 MemberAction::Remove => {
                     // Implement proper member removal logic here
                     match domain {
-                        Domain::Office { office } => {
-                            let mut members = office.members.clone();
-                            members.retain(|id| id != user_id);
-                            office.members = members;
+                        Domain::Office { mut office } => {
+                            office.members.retain(|id| id != user_id);
+                            Domain::Office { office }
                         }
-                        Domain::Room { room } => {
-                            let mut members = room.members.clone();
-                            members.retain(|id| id != user_id);
-                            room.members = members;
+                        Domain::Room { mut room } => {
+                            room.members.retain(|id| id != user_id);
+                            Domain::Room { room }
                         }
                     }
                 }
-            },
-            None => return Err(NetworkError::msg(format!("Domain {} not found", domain_id))),
-        }
+            };
 
-        Ok(())
+            tx.update_domain(domain_id, updated_domain)?;
+            Ok(())
+        })
     }
 
     pub fn delete_entity<T: DomainEntity + 'static>(
@@ -228,7 +232,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         // Execute in a write transaction to remove the entity
         self.with_write_transaction(|tx| {
             if tx.get_domain(entity_id).is_some() {
-                tx.remove(entity_id)?;
+                tx.remove_domain(entity_id)?;
                 Ok(())
             } else {
                 Err(NetworkError::Generic("Entity not found".into()))
@@ -245,25 +249,25 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         // Check permission
         self.check_permission(user_id, Some(domain_id), UserRole::Member)?;
 
-        // Get domain
-        let domains = self.domains.read();
-        let domain = domains
-            .get(domain_id)
-            .ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
+        // Get domain and members using transaction
+        self.with_read_transaction(|tx| {
+            let domain = tx
+                .get_domain(domain_id)
+                .ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
 
-        // Get members from domain
-        let member_ids = domain.members().clone();
-        let users = self.users.read();
+            // Get members from domain
+            let member_ids = domain.members().clone();
 
-        // Collect users
-        let mut members = Vec::new();
-        for id in member_ids {
-            if let Some(user) = users.get(&id) {
-                members.push(user.clone());
+            // Collect users
+            let mut members = Vec::new();
+            for id in member_ids {
+                if let Some(user) = tx.get_user(&id) {
+                    members.push(user.clone());
+                }
             }
-        }
 
-        Ok(members)
+            Ok(members)
+        })
     }
 
     // Helper method to check if a user is a member of a domain (office or room)
@@ -272,14 +276,12 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         user_id: &str,
         domain_id: &str,
     ) -> Result<bool, NetworkError> {
-        let domains = self.domains.read();
-
-        match domains.get(domain_id) {
+        self.with_read_transaction(|tx| match tx.get_domain(domain_id) {
             Some(domain) => match domain {
                 Domain::Office { office } => Ok(office.members.contains(&user_id.to_string())),
                 Domain::Room { room } => Ok(room.members.contains(&user_id.to_string())),
             },
             None => Err(NetworkError::msg(format!("Domain {} not found", domain_id))),
-        }
+        })
     }
 }

@@ -122,7 +122,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 user_id: member_id,
                 role,
             } => match self.update_member_role(user_id, &member_id, role) {
-                Ok(member) => Ok(WorkspaceResponse::Member(member)),
+                Ok(_) => Ok(WorkspaceResponse::Success),
                 Err(e) => Ok(WorkspaceResponse::Error(format!(
                     "Failed to update member role: {}",
                     e
@@ -153,12 +153,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 user_id: member_id,
                 office_id,
                 room_id,
-            } => match self.remove_member(
-                user_id,
-                &member_id,
-                office_id.as_deref(),
-                room_id.as_deref(),
-            ) {
+            } => match self.remove_member(&member_id) {
                 Ok(_) => Ok(WorkspaceResponse::Success),
                 Err(e) => Ok(WorkspaceResponse::Error(format!(
                     "Failed to remove member: {}",

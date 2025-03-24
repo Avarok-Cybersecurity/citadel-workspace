@@ -20,32 +20,22 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
     }
 
     fn get_user(&self, user_id: &str) -> Option<User> {
-        let users = self.users.read();
-        users.get(user_id).cloned()
+        self.with_read_transaction(|tx| Ok(tx.get_user(user_id).cloned()))
+            .unwrap_or(None)
     }
 
     fn with_read_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
     where
         F: FnOnce(&dyn Transaction) -> Result<T, NetworkError>,
     {
-        let tx = self.domains.read();
-        let read_tx = ReadTransaction::new(tx);
-        f(&read_tx)
+        self.transaction_manager.with_read_transaction(f)
     }
 
     fn with_write_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
     where
         F: FnOnce(&mut dyn Transaction) -> Result<T, NetworkError>,
     {
-        let tx = self.domains.write();
-        let mut write_tx = WriteTransaction::new(tx);
-        let result = f(&mut write_tx);
-        if result.is_ok() {
-            write_tx.commit()?;
-        } else {
-            write_tx.rollback();
-        }
-        result
+        self.transaction_manager.with_write_transaction(f)
     }
 
     fn check_entity_permission(
@@ -163,8 +153,9 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
     }
 
     fn get_domain(&self, domain_id: &str) -> Option<Domain> {
-        let domains = self.domains.read();
-        domains.get(domain_id).cloned()
+        // Need to handle the Result -> Option conversion
+        self.with_read_transaction(|tx| Ok(tx.get_domain(domain_id).cloned()))
+            .unwrap_or(None)
     }
 
     fn add_user_to_domain(
@@ -252,7 +243,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
 
         // Store domain in a write transaction
         self.with_write_transaction(|tx| {
-            tx.insert(entity_id.clone(), domain)?;
+            tx.insert_domain(entity_id.clone(), domain)?;
             debug!(target: "citadel", "Audit log: User {} created entity {} of type {}", user_id, entity_id, std::any::type_name::<T>());
             Ok(entity)
         })
@@ -283,7 +274,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
 
         // Remove the entity
         self.with_write_transaction(|tx| {
-            tx.remove(entity_id)?;
+            tx.remove_domain(entity_id)?;
             Ok(entity)
         })
     }
@@ -324,7 +315,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
 
                 // Save the updated domain
                 let domain_clone = domain.clone();
-                tx.update(entity_id, domain)?;
+                tx.update_domain(entity_id, domain)?;
                 let updated_domain = T::from_domain(domain_clone)
                     .ok_or_else(|| NetworkError::msg("Failed to convert domain"))?;
                 debug!(target: "citadel", "Audit log: User {} completed update of entity {}", user_id, entity_id);

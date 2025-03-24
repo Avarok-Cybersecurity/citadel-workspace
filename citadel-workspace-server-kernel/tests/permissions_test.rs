@@ -63,8 +63,13 @@ mod tests {
 
         // Add the user to the kernel
         {
-            let mut users = kernel.users.write();
-            users.insert(user_id.to_string(), user.clone());
+            kernel
+                .transaction_manager
+                .with_write_transaction(|tx| {
+                    tx.insert_user(user_id.to_string(), user.clone())?;
+                    Ok(())
+                })
+                .unwrap();
         }
 
         // Create an office
@@ -86,7 +91,8 @@ mod tests {
                 if let Domain::Office { ref mut office } = domain {
                     office.members.push(user_id.to_string());
                 }
-                tx.update(&office.id, domain)
+                tx.update_domain(&office.id, domain)?;
+                Ok(())
             })
             .unwrap();
 
@@ -133,8 +139,13 @@ mod tests {
 
         // Add the user to the kernel
         {
-            let mut users = kernel.users.write();
-            users.insert(second_admin_id.to_string(), admin2);
+            kernel
+                .transaction_manager
+                .with_write_transaction(|tx| {
+                    tx.insert_user(second_admin_id.to_string(), admin2)?;
+                    Ok(())
+                })
+                .unwrap();
         }
 
         // Verify that the second admin is recognized
@@ -157,10 +168,15 @@ mod tests {
 
         // Add users to the kernel
         {
-            let mut users = kernel.users.write();
-            users.insert(owner_user.id.clone(), owner_user.clone());
-            users.insert(member_user.id.clone(), member_user.clone());
-            users.insert(guest_user.id.clone(), guest_user.clone());
+            kernel
+                .transaction_manager
+                .with_write_transaction(|tx| {
+                    tx.insert_user(owner_user.id.clone(), owner_user.clone())?;
+                    tx.insert_user(member_user.id.clone(), member_user.clone())?;
+                    tx.insert_user(guest_user.id.clone(), guest_user.clone())?;
+                    Ok(())
+                })
+                .unwrap();
         }
 
         // Create an office
@@ -199,7 +215,8 @@ mod tests {
                 if let Domain::Office { ref mut office } = domain {
                     office.members.push(member_user.id.clone());
                 }
-                tx.update(&office.id, domain)
+                tx.update_domain(&office.id, domain)?;
+                Ok(())
             })
             .unwrap();
 

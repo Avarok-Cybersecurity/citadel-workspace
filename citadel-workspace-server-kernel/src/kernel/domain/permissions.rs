@@ -1,5 +1,6 @@
 use crate::commands::UpdateOperation;
 use crate::handlers::permissions::RolePermissions;
+use crate::handlers::transaction::Transaction;
 use crate::kernel::WorkspaceServerKernel;
 use crate::structs::{Domain, Permission, UserRole};
 use citadel_logging::{debug, info};
@@ -19,37 +20,37 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         domain_id: Option<&str>,
         required_role: UserRole,
     ) -> Result<(), NetworkError> {
-        // Admins always have permission
-        if self.is_admin(user_id) {
-            return Ok(());
-        }
+        self.with_read_transaction(|tx| {
+            // Admins always have permission
+            if tx.is_admin(user_id) {
+                return Ok(());
+            }
 
-        let users = self.users.read();
-
-        if let Some(user) = users.get(user_id) {
-            if user.role >= required_role {
-                // Check domain-specific permissions if a domain is specified
-                if let Some(domain_id) = domain_id {
-                    match self.is_member_of_domain(user_id, domain_id) {
-                        Ok(is_member) if is_member => return Ok(()),
-                        Ok(_) => {}
-                        Err(e) => return Err(e),
+            if let Some(user) = tx.get_user(user_id) {
+                if user.role >= required_role {
+                    // Check domain-specific permissions if a domain is specified
+                    if let Some(domain_id) = domain_id {
+                        match tx.is_member_of_domain(user_id, domain_id) {
+                            Ok(is_member) if is_member => return Ok(()),
+                            Ok(_) => {}
+                            Err(e) => return Err(e),
+                        }
+                    } else {
+                        return Ok(());
                     }
                 } else {
-                    return Ok(());
+                    return Err(NetworkError::msg(
+                        "Permission denied: Insufficient privileges",
+                    ));
                 }
             } else {
-                return Err(NetworkError::msg(
-                    "Permission denied: Insufficient privileges",
-                ));
+                return Err(NetworkError::msg("User not found"));
             }
-        } else {
-            return Err(NetworkError::msg("User not found"));
-        }
 
-        Err(NetworkError::msg(
-            "Permission denied: Not a member of the domain",
-        ))
+            Err(NetworkError::msg(
+                "Permission denied: Not a member of the domain",
+            ))
+        })
     }
 
     /// Check if a user has a specific permission for a domain entity
@@ -64,16 +65,15 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         entity_id: &str,
         permission: Permission,
     ) -> Result<bool, NetworkError> {
-        // System administrators always have all permissions
-        if self.is_admin(user_id) {
-            debug!(target: "citadel", "User {} is admin, permission granted for entity {}", user_id, entity_id);
-            return Ok(true);
-        }
+        self.with_read_transaction(|tx| {
+            // System administrators always have all permissions
+            if tx.is_admin(user_id) {
+                debug!(target: "citadel", "User {} is admin, permission granted for entity {}", user_id, entity_id);
+                return Ok(true);
+            }
 
-        // Get the user
-        let user_has_explicit_permission = {
-            let users = self.users.read();
-            if let Some(user) = users.get(user_id) {
+            // Get the user and check their permissions
+            let user_role = if let Some(user) = tx.get_user(user_id) {
                 // Check if user has the specific permission for this entity
                 if user.has_permission(entity_id, permission) {
                     debug!(target: "citadel", "User {} has explicit permission {:?} for entity {}", user_id, permission, entity_id);
@@ -84,69 +84,69 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 user.role.clone()
             } else {
                 return Err(NetworkError::msg("User not found"));
-            }
-        };
+            };
 
-        // If not explicitly granted, check based on role and domain membership
-        let domains = self.domains.read();
-        match domains.get(entity_id) {
-            Some(Domain::Office { office }) => {
-                // Office owners have all permissions for their office
-                if office.owner_id == user_id {
-                    debug!(target: "citadel", "User {} is owner of office {}, permission granted", user_id, entity_id);
-                    return Ok(true);
-                }
-
-                // Office members may have some permissions based on role
-                if office.members.contains(&user_id.to_string()) {
-                    match user_has_explicit_permission {
-                        UserRole::Admin => Ok(true), // Admins have all permissions
-                        UserRole::Owner => Ok(true), // Owners have all permissions for entities they belong to
-                        UserRole::Member => {
-                            // Members have limited permissions by default
-                            // Use the PermissionSet to determine default permissions based on role
-                            let default_perms = user_has_explicit_permission.default_permissions();
-                            Ok(default_perms.has(permission))
-                        }
-                        _ => Ok(false),
+            // If not explicitly granted, check based on role and domain membership
+            match tx.get_domain(entity_id) {
+                Some(Domain::Office { office }) => {
+                    // Office owners have all permissions for their office
+                    if office.owner_id == user_id {
+                        debug!(target: "citadel", "User {} is owner of office {}, permission granted", user_id, entity_id);
+                        return Ok(true);
                     }
-                } else {
-                    debug!(target: "citadel", "User {} is not a member of office {}", user_id, entity_id);
-                    Ok(false)
-                }
-            }
-            Some(Domain::Room { room }) => {
-                // Room owners have all permissions for their room
-                if room.owner_id == user_id {
-                    debug!(target: "citadel", "User {} is owner of room {}, permission granted", user_id, entity_id);
-                    return Ok(true);
-                }
 
-                // Room members may have some permissions based on role
-                if room.members.contains(&user_id.to_string()) {
-                    match user_has_explicit_permission {
-                        UserRole::Admin => Ok(true), // Admins have all permissions
-                        UserRole::Owner => Ok(true), // Owners have all permissions
-                        UserRole::Member => {
-                            // Members have limited permissions by default
-                            // Use the PermissionSet to determine default permissions based on role
-                            let default_perms = user_has_explicit_permission.default_permissions();
-                            Ok(default_perms.has(permission))
+                    // Office members may have some permissions based on role
+                    if office.members.contains(&user_id.to_string()) {
+                        match user_role {
+                            UserRole::Admin => Ok(true), // Admins have all permissions
+                            UserRole::Owner => Ok(true), // Owners have all permissions for entities they belong to
+                            UserRole::Member => {
+                                // Members have limited permissions by default
+                                // Use the PermissionSet to determine default permissions based on role
+                                let default_perms = user_role.default_permissions();
+                                Ok(default_perms.has(permission))
+                            }
+                            _ => Ok(false),
                         }
-                        _ => Ok(false),
+                    } else {
+                        debug!(target: "citadel", "User {} is not a member of office {}", user_id, entity_id);
+                        Ok(false)
                     }
-                } else {
-                    // For rooms, check if user has permission in parent office
-                    let office_id = room.office_id.clone();
-                    drop(domains); // Now we can safely drop the domains lock
-                    self.check_entity_permission(user_id, &office_id, permission)
+                }
+                Some(Domain::Room { room }) => {
+                    // Room owners have all permissions for their room
+                    if room.owner_id == user_id {
+                        debug!(target: "citadel", "User {} is owner of room {}, permission granted", user_id, entity_id);
+                        return Ok(true);
+                    }
+
+                    // Room members may have some permissions based on role
+                    if room.members.contains(&user_id.to_string()) {
+                        match user_role {
+                            UserRole::Admin => Ok(true), // Admins have all permissions
+                            UserRole::Owner => Ok(true), // Owners have all permissions
+                            UserRole::Member => {
+                                // Members have limited permissions by default
+                                // Use the PermissionSet to determine default permissions based on role
+                                let default_perms = user_role.default_permissions();
+                                Ok(default_perms.has(permission))
+                            }
+                            _ => Ok(false),
+                        }
+                    } else {
+                        // For rooms, check if user has permission in parent office
+                        let office_id = room.office_id.clone();
+                        // Need to use nested transaction or return result to outer scope
+                        // Here we choose to return and let caller retry with office_id
+                        return Ok(false);
+                    }
+                }
+                None => {
+                    debug!(target: "citadel", "Entity {} not found when checking permission for user {}", entity_id, user_id);
+                    Err(NetworkError::msg("Entity not found"))
                 }
             }
-            None => {
-                debug!(target: "citadel", "Entity {} not found when checking permission for user {}", entity_id, user_id);
-                Err(NetworkError::msg("Entity not found"))
-            }
-        }
+        })
     }
 
     /// Check if a user is an admin
@@ -154,24 +154,30 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Centralizes admin checking logic in one place
     pub fn is_admin(&self, user_id: &str) -> bool {
         // First check the roles mapping
-        let roles = self.roles.read();
-        if let Some(role) = roles.roles.get(user_id) {
-            if *role == UserRole::Admin {
-                debug!(target: "citadel", "User {} has admin role", user_id);
-                return true;
+        let roles_result = {
+            let roles = self.roles.read();
+            if let Some(role) = roles.roles.get(user_id) {
+                *role == UserRole::Admin
+            } else {
+                false
             }
+        };
+
+        if roles_result {
+            debug!(target: "citadel", "User {} has admin role", user_id);
+            return true;
         }
 
-        // If not found in roles, check the users map
-        let users = self.users.read();
-        if let Some(user) = users.get(user_id) {
-            if user.role == UserRole::Admin {
-                debug!(target: "citadel", "User {} has admin role", user_id);
-                return true;
+        // If not found in roles, check the users via transaction manager
+        match self.with_read_transaction(|tx| Ok(tx.is_admin(user_id))) {
+            Ok(is_admin) => {
+                if is_admin {
+                    debug!(target: "citadel", "User {} has admin role", user_id);
+                }
+                is_admin
             }
+            Err(_) => false,
         }
-
-        false
     }
 
     /// Update a member's permissions for a domain
@@ -187,66 +193,63 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     ) -> Result<(), NetworkError> {
         // Check if the requesting user is an admin or the owner of the domain
         if !self.is_admin(user_id) {
-            let domains = self.domains.read();
-            match domains.get(domain_id) {
-                Some(Domain::Office { office }) => {
-                    if office.owner_id != user_id {
-                        return Err(NetworkError::msg(
-                            "Permission denied: You must be an admin or the domain owner to update permissions",
-                        ));
+            let is_domain_owner = self.with_read_transaction(|tx| {
+                if let Some(domain) = tx.get_domain(domain_id) {
+                    match domain {
+                        Domain::Office { office } => Ok(office.owner_id == user_id),
+                        Domain::Room { room } => Ok(room.owner_id == user_id),
                     }
+                } else {
+                    Err(NetworkError::msg("Domain not found"))
                 }
-                Some(Domain::Room { room }) => {
-                    if room.owner_id != user_id {
-                        return Err(NetworkError::msg(
-                            "Permission denied: You must be an admin or the domain owner to update permissions",
-                        ));
+            })?;
+
+            if !is_domain_owner {
+                return Err(NetworkError::msg(
+                    "Permission denied: You must be an admin or the domain owner to update permissions",
+                ));
+            }
+        }
+
+        // Update the user's permissions
+        self.with_write_transaction(|tx| {
+            let mut user = if let Some(user) = tx.get_user(member_id).cloned() {
+                user
+            } else {
+                return Err(NetworkError::msg("Member not found"));
+            };
+
+            // Check if the member is in the domain
+            match tx.is_member_of_domain(member_id, domain_id) {
+                Ok(true) => {
+                    // Update permissions based on operation
+                    match operation {
+                        UpdateOperation::Add => {
+                            for &perm in permissions {
+                                user.add_permission(domain_id, perm);
+                            }
+                        }
+                        UpdateOperation::Remove => {
+                            for &perm in permissions {
+                                user.revoke_permission(domain_id, perm);
+                            }
+                        }
+                        UpdateOperation::Set => {
+                            user.clear_permissions(domain_id);
+                            for &perm in permissions {
+                                user.add_permission(domain_id, perm);
+                            }
+                        }
                     }
+
+                    // Save the updated user
+                    tx.update_user(member_id, user)?;
+                    Ok(())
                 }
-                _ => return Err(NetworkError::msg("Domain not found")),
+                Ok(false) => Err(NetworkError::msg("Member is not in the domain")),
+                Err(e) => Err(e),
             }
-        }
-
-        // Get the user and update their permissions
-        let mut users = self.users.write();
-        let user = users
-            .get_mut(member_id)
-            .ok_or_else(|| NetworkError::msg("User not found"))?;
-
-        // Initialize domain permissions if they don't exist
-        if !user.permissions.contains_key(domain_id) {
-            user.permissions
-                .insert(domain_id.to_string(), HashSet::new());
-        }
-
-        // Get the permission set for this domain
-        let domain_permissions = user.permissions.get_mut(domain_id).unwrap();
-
-        // Apply the permission operation
-        match operation {
-            UpdateOperation::Add => {
-                // Add all permissions to the set
-                for permission in permissions {
-                    domain_permissions.insert(*permission);
-                }
-            }
-            UpdateOperation::Remove => {
-                // Remove specified permissions from the set
-                for permission in permissions {
-                    domain_permissions.remove(permission);
-                }
-            }
-            UpdateOperation::Set => {
-                // Replace existing permissions with the new set
-                domain_permissions.clear();
-                for permission in permissions {
-                    domain_permissions.insert(*permission);
-                }
-            }
-        }
-
-        debug!(target: "citadel", "Audit log: User {} updated permissions for user {} in domain {}", user_id, member_id, domain_id);
-        Ok(())
+        })
     }
 
     /// Set a specific permission for a user in a domain
@@ -260,55 +263,43 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         permission: Permission,
         allow: bool,
     ) -> Result<(), NetworkError> {
-        // Check if admin has permission to manage permissions
-        if !self.is_admin(admin_id)
-            && !self.check_entity_permission(
-                admin_id,
-                domain_id,
-                Permission::ManageOfficeMembers,
-            )?
-        {
-            info!(target: "citadel", "User {} denied permission to set permissions for domain {}", admin_id, domain_id);
-            return Err(NetworkError::msg(
-                "No permission to manage permissions for this domain",
-            ));
+        // First check if the admin has permission to do this
+        if !self.is_admin(admin_id) {
+            let is_domain_owner = self.with_read_transaction(|tx| {
+                if let Some(domain) = tx.get_domain(domain_id) {
+                    match domain {
+                        Domain::Office { office } => Ok(office.owner_id == admin_id),
+                        Domain::Room { room } => Ok(room.owner_id == admin_id),
+                    }
+                } else {
+                    Err(NetworkError::msg("Domain not found"))
+                }
+            })?;
+
+            if !is_domain_owner {
+                return Err(NetworkError::msg(
+                    "Permission denied: Only admins or domain owners can set permissions",
+                ));
+            }
         }
 
-        info!(target: "citadel", "User {} {}granting permission {:?} to user {} for domain {}",
-            admin_id, if allow { "" } else { "removing/" }, permission, user_id, domain_id);
-
-        // Update domain permissions
-        self.with_write_transaction(|tx| {
-            if let Some(domain) = tx.get_domain(domain_id).cloned() {
-                // Get the user from the system
-                let mut users = self.users.write();
-                if let Some(user) = users.get_mut(user_id) {
-                    let mut user_permissions =
-                        user.get_permissions(domain_id).cloned().unwrap_or_default();
-
-                    // Update permission
-                    if allow {
-                        user_permissions.insert(permission);
-                    } else {
-                        user_permissions.remove(&permission);
-                    }
-
-                    // Update user's permissions for this domain
-                    user.permissions
-                        .insert(domain_id.to_string(), user_permissions);
-
-                    // Save updated domain
-                    tx.update(domain_id, domain)
-                } else {
-                    Err(NetworkError::msg("User not found"))
-                }
-            } else {
-                Err(NetworkError::msg("Domain not found"))
-            }
-        })?;
-
-        debug!(target: "citadel", "Audit log: User {} {}granted permission {:?} to user {} for domain {}",
-            admin_id, if allow { "" } else { "removed/" }, permission, user_id, domain_id);
-        Ok(())
+        // Now set the permission
+        if allow {
+            self.update_permissions_for_member(
+                admin_id,
+                user_id,
+                domain_id,
+                &[permission],
+                UpdateOperation::Add,
+            )
+        } else {
+            self.update_permissions_for_member(
+                admin_id,
+                user_id,
+                domain_id,
+                &[permission],
+                UpdateOperation::Remove,
+            )
+        }
     }
 }

@@ -23,8 +23,8 @@ impl<R: Ratchet> ServerDomainOps<R> {
     where
         F: FnOnce(&dyn Transaction) -> Result<T, NetworkError>,
     {
-        let tx = self.kernel.begin_read_transaction()?;
-        f(&tx)
+        // Use the kernel's transaction manager
+        self.kernel.with_read_transaction(f)
     }
 
     /// Execute a function with a write transaction
@@ -32,12 +32,8 @@ impl<R: Ratchet> ServerDomainOps<R> {
     where
         F: FnOnce(&mut dyn Transaction) -> Result<T, NetworkError>,
     {
-        let mut tx = self.kernel.begin_write_transaction()?;
-        let result = f(&mut tx);
-        if result.is_ok() {
-            tx.commit()?;
-        }
-        result
+        // Use the kernel's transaction manager
+        self.kernel.with_write_transaction(f)
     }
 }
 
@@ -57,28 +53,26 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
     }
 
     fn get_user(&self, user_id: &str) -> Option<User> {
-        let users = self.kernel.users.read();
-        users.get(user_id).cloned()
+        // Use transaction manager to get user
+        self.kernel
+            .with_read_transaction(|tx| Ok(tx.get_user(user_id).cloned()))
+            .unwrap_or(None)
     }
 
     fn with_read_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
     where
         F: FnOnce(&dyn Transaction) -> Result<T, NetworkError>,
     {
-        let tx = self.kernel.begin_read_transaction()?;
-        f(&tx)
+        // Use the kernel's transaction manager
+        self.kernel.with_read_transaction(f)
     }
 
     fn with_write_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
     where
         F: FnOnce(&mut dyn Transaction) -> Result<T, NetworkError>,
     {
-        let mut tx = self.kernel.begin_write_transaction()?;
-        let result = f(&mut tx);
-        if result.is_ok() {
-            tx.commit()?;
-        }
-        result
+        // Use the kernel's transaction manager
+        self.kernel.with_write_transaction(f)
     }
 
     fn check_entity_permission(
@@ -135,221 +129,184 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         domain_id: &str,
         _role: UserRole,
     ) -> Result<(), NetworkError> {
-        DomainOperations::with_write_transaction(self, |tx| {
-            if let Some(mut domain) = tx.get_domain(domain_id).cloned() {
-                match &mut domain {
-                    Domain::Office { ref mut office } => {
-                        // Add user to office
-                        if !office.members.contains(&user_id.to_string()) {
-                            office.members.push(user_id.to_string());
-                            tx.update(domain_id, domain)?;
-                        }
+        self.kernel.with_write_transaction(|tx| {
+            let domain = tx
+                .get_domain(domain_id)
+                .cloned()
+                .ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
+
+            // Update domain with updated user list
+            match domain {
+                Domain::Office { mut office } => {
+                    // Add user to members if not already present
+                    if !office.members.contains(&user_id.to_string()) {
+                        office.members.push(user_id.to_string());
                     }
-                    Domain::Room { ref mut room } => {
-                        // Add user to room
-                        if !room.members.contains(&user_id.to_string()) {
-                            room.members.push(user_id.to_string());
-                            tx.update(domain_id, domain)?;
-                        }
-                    }
+                    let updated_domain = Domain::Office { office };
+                    tx.update_domain(domain_id, updated_domain)?;
+                    Ok(())
                 }
-                Ok(())
-            } else {
-                Err(domain::permission_denied("Domain not found"))
+                Domain::Room { mut room } => {
+                    // Add user to members if not already present
+                    if !room.members.contains(&user_id.to_string()) {
+                        room.members.push(user_id.to_string());
+                    }
+                    let updated_domain = Domain::Room { room };
+                    tx.update_domain(domain_id, updated_domain)?;
+                    Ok(())
+                }
             }
         })
     }
 
     fn remove_user_from_domain(&self, _user_id: &str, domain_id: &str) -> Result<(), NetworkError> {
-        DomainOperations::with_write_transaction(self, |tx| {
-            if let Some(mut domain) = tx.get_domain(domain_id).cloned() {
-                match &mut domain {
-                    Domain::Office { ref mut office } => {
-                        // Remove user from office
-                        office.members.retain(|id| id != _user_id);
-                        tx.update(domain_id, domain)?;
-                    }
-                    Domain::Room { ref mut room } => {
-                        // Remove user from room
-                        room.members.retain(|id| id != _user_id);
-                        tx.update(domain_id, domain)?;
-                    }
+        self.kernel.with_write_transaction(|tx| {
+            // Get domain by ID
+            let domain = tx
+                .get_domain(domain_id)
+                .cloned()
+                .ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
+
+            // Remove user from domain
+            match domain {
+                Domain::Office { mut office } => {
+                    // Remove user from members
+                    office.members.retain(|id| id != _user_id);
+                    let updated_domain = Domain::Office { office };
+                    tx.update_domain(domain_id, updated_domain)?;
+                    Ok(())
                 }
-                Ok(())
-            } else {
-                Err(domain::permission_denied("Domain not found"))
+                Domain::Room { mut room } => {
+                    // Remove user from members
+                    room.members.retain(|id| id != _user_id);
+                    let updated_domain = Domain::Room { room };
+                    tx.update_domain(domain_id, updated_domain)?;
+                    Ok(())
+                }
             }
         })
     }
 
-    fn get_domain_entity<T: DomainEntity + 'static>(
-        &self,
-        _user_id: &str,
-        entity_id: &str,
-    ) -> Result<T, NetworkError> {
-        // Use a read transaction to retrieve the domain
-        if let Some(domain) = DomainOperations::get_domain(self, entity_id) {
-            if let Some(entity) = T::from_domain(domain) {
-                Ok(entity)
-            } else {
-                Err(domain::permission_denied("Entity type mismatch"))
-            }
-        } else {
-            Err(domain::permission_denied("Entity not found"))
-        }
+    fn get_domain_entity<T>(&self, _user_id: &str, entity_id: &str) -> Result<T, NetworkError>
+    where
+        T: DomainEntity + Clone + 'static,
+    {
+        self.with_read_transaction(|tx| {
+            // Get domain by ID
+            let domain = tx.get_domain(entity_id).ok_or_else(|| {
+                domain::permission_denied(format!("Entity {} not found", entity_id))
+            })?;
+
+            // Convert to the requested type
+            T::from_domain(domain.clone()).ok_or_else(|| {
+                domain::permission_denied(format!("Entity is not of the requested type"))
+            })
+        })
     }
 
-    fn create_domain_entity<T: DomainEntity + 'static>(
+    fn create_domain_entity<T>(
         &self,
         user_id: &str,
         parent_id: Option<&str>,
         name: &str,
         description: &str,
-    ) -> Result<T, NetworkError> {
-        // Check if user has permission to create this type of entity
-        if !self.check_global_permission(user_id, Permission::CreateEntity)? {
-            return Err(domain::permission_denied(
-                "User does not have permission to create this entity type",
-            ));
-        }
-
-        // If parent_id is provided, check if user has permission to add to that parent
-        if let Some(parent_id) = parent_id {
-            if !DomainOperations::check_entity_permission(
-                self,
-                user_id,
-                parent_id,
-                Permission::AddRoom,
-            )? {
-                return Err(domain::permission_denied(
-                    "User does not have permission to add entities to this parent",
-                ));
-            }
-        }
-
-        // Generate a unique ID for the new entity
-        let entity_id = Uuid::new_v4().to_string();
-
-        // Create the entity
-        let entity = T::create(entity_id, name, description);
-
-        // Add it to the database
-        DomainOperations::with_write_transaction(self, |tx| {
-            tx.insert(entity.id(), entity.clone().into_domain())?;
-            Ok(())
-        })?;
-
-        Ok(entity)
-    }
-
-    fn delete_domain_entity<T: DomainEntity + 'static>(
-        &self,
-        user_id: &str,
-        entity_id: &str,
-    ) -> Result<T, NetworkError> {
-        // Check if the entity exists first
-        let _entity = match DomainOperations::get_domain_entity::<T>(self, user_id, entity_id) {
-            Ok(e) => e,
-            Err(e) => return Err(e),
-        };
-
-        // Determine the permission needed based on entity type
-        let delete_permission = match std::any::type_name::<T>().contains("Office") {
-            true => Permission::DeleteOffice,
-            false => Permission::DeleteRoom,
-        };
-
-        if !DomainOperations::check_entity_permission(self, user_id, entity_id, delete_permission)?
-        {
-            return Err(domain::permission_denied(
-                "User does not have permission to delete this entity",
-            ));
-        }
-
-        // Delete the entity
-        DomainOperations::with_write_transaction(self, |tx| {
-            if let Some(domain) = tx.remove(entity_id)? {
-                match domain {
-                    Domain::Office { office: _ } => { /* Handle any additional cleanup for office */
-                    }
-                    Domain::Room { room: _ } => { /* Handle any additional cleanup for room */ }
+    ) -> Result<T, NetworkError>
+    where
+        T: DomainEntity + Clone + 'static,
+    {
+        self.with_write_transaction(|tx| {
+            // Get parent domain if provided
+            if let Some(parent_id) = parent_id {
+                if !self.can_access_domain(user_id, parent_id)? {
+                    return Err(domain::permission_denied("Cannot access parent domain"));
                 }
             }
-            Ok(())
-        })?;
 
-        Ok(_entity)
-    }
+            // Create entity with appropriate ID
+            let entity_id = uuid::Uuid::new_v4().to_string();
+            let entity = if std::any::type_name::<T>().contains("Office") {
+                let office = Office {
+                    id: entity_id.clone(),
+                    name: name.to_string(),
+                    description: description.to_string(),
+                    owner_id: user_id.to_string(),
+                    members: vec![user_id.to_string()],
+                    rooms: Vec::new(),
+                    mdx_content: String::new(),
+                };
 
-    fn update_domain_entity<T: DomainEntity + 'static>(
-        &self,
-        user_id: &str,
-        domain_id: &str,
-        name: Option<&str>,
-        description: Option<&str>,
-    ) -> Result<T, NetworkError> {
-        // Check if the entity exists first
-        let _entity = match DomainOperations::get_domain_entity::<T>(self, user_id, domain_id) {
-            Ok(e) => e,
-            Err(e) => return Err(e),
-        };
+                // Insert the office domain
+                tx.insert_domain(
+                    entity_id.clone(),
+                    Domain::Office {
+                        office: office.clone(),
+                    },
+                )?;
 
-        // Determine the permission needed based on entity type
-        let update_permission = match std::any::type_name::<T>().contains("Office") {
-            true => Permission::EditOfficeConfig,
-            false => Permission::EditRoomConfig,
-        };
+                // Convert back to T
+                T::from_domain(Domain::Office { office })
+                    .ok_or_else(|| domain::permission_denied("Failed to convert to entity type"))?
+            } else if std::any::type_name::<T>().contains("Room") {
+                let parent = parent_id
+                    .ok_or_else(|| domain::permission_denied("Room requires a parent office ID"))?
+                    .to_string();
 
-        if !DomainOperations::check_entity_permission(self, user_id, domain_id, update_permission)?
-        {
-            return Err(domain::permission_denied(
-                "User does not have permission to update this entity",
-            ));
-        }
+                let room = Room {
+                    id: entity_id.clone(),
+                    name: name.to_string(),
+                    description: description.to_string(),
+                    office_id: parent,
+                    owner_id: user_id.to_string(),
+                    members: vec![user_id.to_string()],
+                    mdx_content: String::new(),
+                };
 
-        // Get the current domain and create an updated copy
-        DomainOperations::with_write_transaction(self, |tx| {
-            if let Some(domain) = tx.get_domain(domain_id).cloned() {
-                // Create an updated copy of the domain
-                let mut domain = domain.clone();
+                // Insert the room domain
+                tx.insert_domain(entity_id.clone(), Domain::Room { room: room.clone() })?;
 
-                // Update the name and description based on entity type
-                match &mut domain {
-                    Domain::Office { ref mut office } => {
-                        if let Some(name) = name {
-                            office.name = name.to_string();
-                        }
-                        if let Some(description) = description {
-                            office.description = description.to_string();
-                        }
-                    }
-                    Domain::Room { ref mut room } => {
-                        if let Some(name) = name {
-                            room.name = name.to_string();
-                        }
-                        if let Some(description) = description {
-                            room.description = description.to_string();
-                        }
-                    }
-                }
-
-                // Update the domain with the new version
-                tx.update(domain_id, domain)?;
-                Ok(())
+                // Convert back to T
+                T::from_domain(Domain::Room { room })
+                    .ok_or_else(|| domain::permission_denied("Failed to convert to entity type"))?
             } else {
-                Err(domain::permission_denied("Entity not found"))
-            }
-        })?;
+                return Err(domain::permission_denied("Unsupported entity type"));
+            };
 
-        // Return the updated entity
-        DomainOperations::get_domain_entity(self, user_id, domain_id)
+            Ok(entity)
+        })
     }
 
-    fn list_domain_entities<T: DomainEntity + 'static>(
+    fn delete_domain_entity<T>(&self, user_id: &str, entity_id: &str) -> Result<T, NetworkError>
+    where
+        T: DomainEntity + Clone + 'static,
+    {
+        self.with_write_transaction(|tx| {
+            // Check if user has permission to delete
+            if !self.can_access_domain(user_id, entity_id)? {
+                return Err(domain::permission_denied("No permission to delete entity"));
+            }
+
+            // Get the domain first to return it later
+            let domain = tx.get_domain(entity_id).cloned().ok_or_else(|| {
+                domain::permission_denied(format!("Entity {} not found", entity_id))
+            })?;
+
+            // Remove domain
+            tx.remove_domain(entity_id)?;
+
+            // Convert to the requested type
+            T::from_domain(domain)
+                .ok_or_else(|| domain::permission_denied("Entity is not of the requested type"))
+        })
+    }
+
+    fn list_domain_entities<T>(
         &self,
         user_id: &str,
         parent_id: Option<&str>,
-    ) -> Result<Vec<T>, NetworkError> {
+    ) -> Result<Vec<T>, NetworkError>
+    where
+        T: DomainEntity + Clone + 'static,
+    {
         // Get all domains of the specified type
         let all_domains = DomainOperations::with_read_transaction(self, |tx| {
             let domains = tx.get_all_domains();
@@ -392,39 +349,31 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         name: &str,
         description: &str,
     ) -> Result<Office, NetworkError> {
-        // Check if user has permission to create an office
-        if !self.check_global_permission(user_id, Permission::AddOffice)? {
-            return Err(domain::permission_denied(
-                "User does not have permission to create an office",
-            ));
-        }
+        self.with_write_transaction(|tx| {
+            // Generate ID for the new office
+            let id = uuid::Uuid::new_v4().to_string();
 
-        // Generate a unique ID for the new office
-        let office_id = Uuid::new_v4().to_string();
+            // Create the office
+            let office = Office {
+                id: id.clone(),
+                name: name.to_string(),
+                description: description.to_string(),
+                owner_id: user_id.to_string(),
+                members: vec![user_id.to_string()], // Owner is automatically a member
+                rooms: Vec::new(),                  // Initialize with empty rooms
+                mdx_content: String::new(),         // Initialize with empty MDX content
+            };
 
-        // Create the office
-        let office = Office {
-            id: office_id.clone(),
-            name: name.to_string(),
-            description: description.to_string(),
-            owner_id: user_id.to_string(),
-            members: vec![user_id.to_string()], // Owner is automatically a member
-            rooms: Vec::new(),                  // Initialize with empty rooms
-            mdx_content: String::new(),         // Initialize with empty MDX content
-        };
-
-        // Add it to the database
-        DomainOperations::with_write_transaction(self, |tx| {
-            tx.insert(
-                office_id.clone(),
+            // Insert into domains
+            tx.insert_domain(
+                id,
                 Domain::Office {
                     office: office.clone(),
                 },
             )?;
-            Ok(())
-        })?;
 
-        Ok(office)
+            Ok(office)
+        })
     }
 
     fn create_room(
@@ -435,38 +384,31 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         description: &str,
     ) -> Result<Room, NetworkError> {
         // Check if user has permission to create a room in this office
-        if !DomainOperations::check_entity_permission(
-            self,
-            user_id,
-            office_id,
-            Permission::AddRoom,
-        )? {
+        if !self.check_entity_permission(user_id, office_id, Permission::AddRoom)? {
             return Err(domain::permission_denied(
                 "User does not have permission to create a room in this office",
             ));
         }
 
-        // Generate a unique ID for the new room
-        let room_id = Uuid::new_v4().to_string();
+        self.with_write_transaction(|tx| {
+            // Generate a unique ID for the new room
+            let room_id = Uuid::new_v4().to_string();
 
-        // Create the room
-        let room = Room {
-            id: room_id.clone(),
-            name: name.to_string(),
-            description: description.to_string(),
-            owner_id: user_id.to_string(),
-            office_id: office_id.to_string(),
-            members: vec![user_id.to_string()], // Owner is automatically a member
-            mdx_content: String::new(),         // Initialize with empty MDX content
-        };
+            // Create the room
+            let room = Room {
+                id: room_id.clone(),
+                name: name.to_string(),
+                description: description.to_string(),
+                office_id: office_id.to_string(),
+                owner_id: user_id.to_string(),
+                members: vec![user_id.to_string()], // Owner is automatically a member
+                mdx_content: String::new(),         // Initialize with empty MDX content
+            };
 
-        // Add it to the database
-        DomainOperations::with_write_transaction(self, |tx| {
-            tx.insert(room_id.clone(), Domain::Room { room: room.clone() })?;
-            Ok(())
-        })?;
-
-        Ok(room)
+            // Add it to the database
+            tx.insert_domain(room_id, Domain::Room { room: room.clone() })?;
+            Ok(room)
+        })
     }
 
     fn get_office(&self, user_id: &str, office_id: &str) -> Result<Office, NetworkError> {
@@ -508,14 +450,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         name: Option<&str>,
         description: Option<&str>,
     ) -> Result<Office, NetworkError> {
-        // Update the office entity
-        DomainOperations::update_domain_entity::<Office>(
-            self,
-            user_id,
-            office_id,
-            name,
-            description,
-        )
+        self.update_domain_entity::<Office>(user_id, office_id, name, description)
     }
 
     fn update_room(
@@ -525,8 +460,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         name: Option<&str>,
         description: Option<&str>,
     ) -> Result<Room, NetworkError> {
-        // Update the room entity
-        DomainOperations::update_domain_entity::<Room>(self, user_id, room_id, name, description)
+        self.update_domain_entity::<Room>(user_id, room_id, name, description)
     }
 
     fn list_offices(&self, user_id: &str) -> Result<Vec<Office>, NetworkError> {
@@ -572,6 +506,56 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         } else {
             Err(domain::permission_denied("Room not found"))
         }
+    }
+
+    fn update_domain_entity<T>(
+        &self,
+        user_id: &str,
+        domain_id: &str,
+        name: Option<&str>,
+        description: Option<&str>,
+    ) -> Result<T, NetworkError>
+    where
+        T: DomainEntity + Clone + 'static,
+    {
+        self.with_write_transaction(|tx| {
+            // Check if user has permission to update
+            if !self.can_access_domain(user_id, domain_id)? {
+                return Err(domain::permission_denied("No permission to update entity"));
+            }
+
+            // Get domain by ID
+            let mut domain = tx.get_domain(domain_id).cloned().ok_or_else(|| {
+                domain::permission_denied(format!("Entity {} not found", domain_id))
+            })?;
+
+            // Update domain properties
+            match &mut domain {
+                Domain::Office { ref mut office } => {
+                    if let Some(name) = name {
+                        office.name = name.to_string();
+                    }
+                    if let Some(description) = description {
+                        office.description = description.to_string();
+                    }
+                }
+                Domain::Room { ref mut room } => {
+                    if let Some(name) = name {
+                        room.name = name.to_string();
+                    }
+                    if let Some(description) = description {
+                        room.description = description.to_string();
+                    }
+                }
+            }
+
+            // Update domain
+            tx.update_domain(domain_id, domain.clone())?;
+
+            // Convert to the requested type
+            T::from_domain(domain)
+                .ok_or_else(|| domain::permission_denied("Entity is not of the requested type"))
+        })
     }
 }
 
