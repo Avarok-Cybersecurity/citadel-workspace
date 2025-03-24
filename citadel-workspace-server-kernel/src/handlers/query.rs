@@ -70,7 +70,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 }
                 (None, None) => {
                     // Get all members
-                    for (_, user) in tx.get_all_users() {
+                    for user in tx.get_all_users().values() {
                         members.push(user.clone());
                     }
                 }
@@ -78,6 +78,5 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
             Ok(members)
         })
-        .map_err(|e| e)
     }
 }

@@ -183,7 +183,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
 
             // Convert to the requested type
             T::from_domain(domain.clone()).ok_or_else(|| {
-                domain::permission_denied(format!("Entity is not of the requested type"))
+                domain::permission_denied("Entity is not of the requested type".to_string())
             })
         })
     }

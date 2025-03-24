@@ -27,5 +27,4 @@ uuid = { workspace = true, features = ["v4"] }
 async-trait = "0.1.88"
 
 [dev-dependencies]
-parking_lot = { workspace = true, features = ["deadlock_detection"]}
-lazy_static = { workspace = true }
+citadel_sdk = { workspace = true, features = ["localhost-testing"] }

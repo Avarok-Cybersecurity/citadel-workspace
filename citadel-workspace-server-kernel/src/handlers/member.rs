@@ -1,6 +1,7 @@
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use std::collections::{HashMap, HashSet};
 
+use crate::handlers::transaction::Transaction;
 use crate::kernel::WorkspaceServerKernel;
 use crate::structs::{Domain, Permission, User, UserRole};
 
@@ -67,12 +68,12 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
             // Add relevant permissions for the office
             if let Some(office_id) = office_id {
-                self.grant_domain_permissions(user_id, office_id)?;
+                self.grant_domain_permissions_internal(user_id, office_id, tx)?;
             }
 
             // Add relevant permissions for the room
             if let Some(room_id) = room_id {
-                self.grant_domain_permissions(user_id, room_id)?;
+                self.grant_domain_permissions_internal(user_id, room_id, tx)?;
             }
 
             Ok(())
@@ -104,7 +105,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 }
 
                 // Add permissions for the domain
-                self.grant_domain_permissions(user_id, domain_id)?;
+                self.grant_domain_permissions_internal(user_id, domain_id, tx)?;
 
                 Ok(())
             } else {
@@ -118,7 +119,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             // First collect all domains that need updating
             let domains_to_update: Vec<(String, Domain)> = tx
                 .get_all_domains()
-                .into_iter()
+                .iter()
                 .filter_map(|(domain_id, domain)| match &domain {
                     Domain::Office { office } if office.members.contains(&user_id.to_string()) => {
                         let mut office_clone = office.clone();
@@ -156,21 +157,30 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         domain_id: &str,
     ) -> Result<(), NetworkError> {
         self.with_write_transaction(|tx| {
-            // Check if domain exists and remove user
+            // Check if the domain exists
             if let Some(domain) = tx.get_domain(domain_id).cloned() {
-                match domain {
+                // Check if the user exists
+                if tx.get_user(user_id).is_none() {
+                    return Err(NetworkError::msg(format!("User {} not found", user_id)));
+                }
+
+                // Update domain to remove user
+                let updated_domain = match domain {
                     Domain::Office { mut office } => {
                         office.members.retain(|id| id != user_id);
-                        tx.update_domain(domain_id, Domain::Office { office })?;
+                        Domain::Office { office }
                     }
                     Domain::Room { mut room } => {
                         room.members.retain(|id| id != user_id);
-                        tx.update_domain(domain_id, Domain::Room { room })?;
+                        Domain::Room { room }
                     }
-                }
+                };
 
-                // Revoke permissions for the domain
-                self.revoke_domain_permissions(user_id, domain_id)?;
+                // Update the domain
+                tx.update_domain(domain_id, updated_domain)?;
+
+                // Remove permissions for this domain
+                self.revoke_domain_permissions_internal(user_id, domain_id, tx)?;
 
                 Ok(())
             } else {
@@ -222,11 +232,11 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             // Update user permissions
             if let Some(mut user) = tx.get_user(user_id).cloned() {
                 // Clear existing permissions for this domain
-                user.clear_permissions(domain_id.to_string());
+                user.clear_permissions(domain_id);
 
                 // Add new permissions
                 for permission in permissions {
-                    user.add_permission(domain_id.to_string(), permission);
+                    user.add_permission(domain_id, permission);
                 }
 
                 // Update the user
@@ -246,7 +256,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     pub fn get_all_members(&self) -> Result<Vec<User>, NetworkError> {
         self.with_read_transaction(|tx| {
             let mut members = Vec::new();
-            for (_, user) in tx.get_all_users() {
+            for user in tx.get_all_users().values() {
                 members.push(user.clone());
             }
             Ok(members)
@@ -256,36 +266,42 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     // Helper methods for permission management
     fn grant_domain_permissions(&self, user_id: &str, domain_id: &str) -> Result<(), NetworkError> {
         self.with_write_transaction(|tx| {
-            // Fetch the domain to determine what permissions to grant
-            if let Some(domain) = tx.get_domain(domain_id) {
-                // Fetch the user to update permissions
-                if let Some(mut user) = tx.get_user(user_id).cloned() {
-                    match domain {
-                        Domain::Office { office: _ } => {
-                            // Grant office-specific permissions
-                            user.add_permission(domain_id.to_string(), Permission::ViewContent);
-                            user.add_permission(domain_id.to_string(), Permission::EditMdx);
-                            user.add_permission(
-                                domain_id.to_string(),
-                                Permission::EditOfficeConfig,
-                            );
-                            tx.update_user(user_id, user)?;
-                        }
-                        Domain::Room { room: _ } => {
-                            // Grant room-specific permissions
-                            user.add_permission(domain_id.to_string(), Permission::ViewContent);
-                            user.add_permission(domain_id.to_string(), Permission::EditMdx);
-                            tx.update_user(user_id, user)?;
-                        }
-                    }
-                    Ok(())
-                } else {
-                    Err(NetworkError::msg(format!("User {} not found", user_id)))
-                }
-            } else {
-                Err(NetworkError::msg(format!("Domain {} not found", domain_id)))
-            }
+            self.grant_domain_permissions_internal(user_id, domain_id, tx)
         })
+    }
+
+    fn grant_domain_permissions_internal(
+        &self,
+        user_id: &str,
+        domain_id: &str,
+        tx: &mut dyn Transaction,
+    ) -> Result<(), NetworkError> {
+        // Fetch the domain to determine what permissions to grant
+        if let Some(domain) = tx.get_domain(domain_id) {
+            // Fetch the user to update permissions
+            if let Some(mut user) = tx.get_user(user_id).cloned() {
+                match domain {
+                    Domain::Office { office: _ } => {
+                        // Grant office-specific permissions
+                        user.add_permission(domain_id, Permission::ViewContent);
+                        user.add_permission(domain_id, Permission::EditMdx);
+                        user.add_permission(domain_id, Permission::EditOfficeConfig);
+                        tx.update_user(user_id, user)?;
+                    }
+                    Domain::Room { room: _ } => {
+                        // Grant room-specific permissions
+                        user.add_permission(domain_id, Permission::ViewContent);
+                        user.add_permission(domain_id, Permission::EditMdx);
+                        tx.update_user(user_id, user)?;
+                    }
+                }
+                Ok(())
+            } else {
+                Err(NetworkError::msg(format!("User {} not found", user_id)))
+            }
+        } else {
+            Err(NetworkError::msg(format!("Domain {} not found", domain_id)))
+        }
     }
 
     fn revoke_domain_permissions(
@@ -294,16 +310,25 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         domain_id: &str,
     ) -> Result<(), NetworkError> {
         self.with_write_transaction(|tx| {
-            // Fetch the user to update permissions
-            if let Some(mut user) = tx.get_user(user_id).cloned() {
-                // Clear all permissions for this domain
-                user.clear_permissions(domain_id.to_string());
-                tx.update_user(user_id, user)?;
-                Ok(())
-            } else {
-                Err(NetworkError::msg(format!("User {} not found", user_id)))
-            }
+            self.revoke_domain_permissions_internal(user_id, domain_id, tx)
         })
+    }
+
+    fn revoke_domain_permissions_internal(
+        &self,
+        user_id: &str,
+        domain_id: &str,
+        tx: &mut dyn Transaction,
+    ) -> Result<(), NetworkError> {
+        // Fetch the user to update permissions
+        if let Some(mut user) = tx.get_user(user_id).cloned() {
+            // Clear all permissions for this domain
+            user.clear_permissions(domain_id);
+            tx.update_user(user_id, user)?;
+            Ok(())
+        } else {
+            Err(NetworkError::msg(format!("User {} not found", user_id)))
+        }
     }
 
     // Use the existing is_admin method from permissions.rs instead of duplicating
