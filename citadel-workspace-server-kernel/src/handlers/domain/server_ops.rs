@@ -176,88 +176,8 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         entity_id: &str,
         permission: Permission,
     ) -> Result<bool, NetworkError> {
-        // System administrators always have all permissions
-        if DomainOperations::is_admin(self, user_id) {
-            return Ok(true);
-        }
-
-        // Get the user
-        if let Some(user) = self.get_user(user_id) {
-            // Check if user has the specific permission for this entity
-            if user.has_permission(entity_id, permission) {
-                return Ok(true);
-            }
-
-            // If not explicitly granted, check based on role
-            // First get the domain entity
-            DomainOperations::with_read_transaction(self, |tx| {
-                if let Some(domain) = tx.get_domain(entity_id) {
-                    match domain {
-                        Domain::Office { ref office } => {
-                            // Office owners have all permissions for their office
-                            if office.owner_id == user_id {
-                                return Ok(true);
-                            }
-
-                            // Office members may have some permissions based on role
-                            if office.members.contains(&user_id.to_string()) {
-                                match user.role {
-                                    UserRole::Admin => Ok(true), // Admins have all permissions
-                                    UserRole::Owner => Ok(true), // Owners have all permissions for entities they belong to
-                                    UserRole::Member => {
-                                        match permission {
-                                            Permission::ViewContent => Ok(true), // Members can view content
-                                            _ => Ok(false),
-                                        }
-                                    }
-                                    _ => Ok(false),
-                                }
-                            } else {
-                                Ok(false)
-                            }
-                        }
-                        Domain::Room { ref room } => {
-                            // Room owners have all permissions for their room
-                            if room.owner_id == user_id {
-                                return Ok(true);
-                            }
-
-                            // Room members may have some permissions based on role
-                            if room.members.contains(&user_id.to_string()) {
-                                match user.role {
-                                    UserRole::Admin => Ok(true), // Admins have all permissions
-                                    UserRole::Owner => Ok(true), // Owners have all permissions for entities they belong to
-                                    UserRole::Member => {
-                                        match permission {
-                                            Permission::ViewContent => Ok(true), // Members can view content
-                                            _ => Ok(false),
-                                        }
-                                    }
-                                    _ => Ok(false),
-                                }
-                            } else {
-                                // For rooms, check if user has permission in parent office
-                                if let Domain::Room { room } = &domain {
-                                    let office_id = &room.office_id;
-                                    return DomainOperations::check_entity_permission(
-                                        self, user_id, office_id, permission,
-                                    );
-                                }
-
-                                Ok(false)
-                            }
-                        }
-                    }
-                } else {
-                    Err(domain::permission_denied("Entity not found"))
-                }
-            })
-        } else {
-            Err(domain::permission_denied(format!(
-                "User with ID {} not found",
-                user_id
-            )))
-        }
+        // Delegate to the centralized permission checking system in the kernel
+        self.kernel.check_entity_permission(user_id, entity_id, permission)
     }
 
     fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
@@ -270,7 +190,8 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         entity_id: &str,
         permission: Permission,
     ) -> Result<bool, NetworkError> {
-        self.check_entity_permission(user_id, entity_id, permission)
+        // Delegate to the centralized permission checking system in the kernel
+        self.kernel.check_entity_permission(user_id, entity_id, permission)
     }
 
     fn check_room_access(&self, user_id: &str, room_id: &str) -> Result<bool, NetworkError> {

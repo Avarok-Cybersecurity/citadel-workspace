@@ -3,7 +3,7 @@ use crate::kernel::WorkspaceServerKernel;
 use crate::structs::{Domain, Permission, User, UserRole};
 use citadel_logging::{debug, info};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use crate::handlers::domain::{DomainEntity, DomainOperations};
+use crate::handlers::domain::DomainEntity;
 
 pub mod ops;
 pub mod permissions;

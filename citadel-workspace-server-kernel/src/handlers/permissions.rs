@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
-use crate::structs::Permission;
+use crate::structs::{Permission, UserRole};
 
-/// Permission set for a user, containing their permissions
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// A set of permissions that can be assigned to a user or role
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct PermissionSet {
     pub permissions: HashSet<Permission>,
 }
@@ -11,136 +11,121 @@ pub struct PermissionSet {
 impl PermissionSet {
     /// Create a new empty permission set
     pub fn new() -> Self {
-        Self {
-            permissions: HashSet::new(),
-        }
+        Self::default()
     }
 
-    /// Create a permission set with all capabilities
-    pub fn all() -> Self {
+    /// Create a permission set with a single permission
+    pub fn with_permission(permission: Permission) -> Self {
         let mut set = Self::new();
-        set.add(Permission::All);
+        set.add(permission);
         set
+    }
+
+    /// Create a permission set with the given permissions
+    pub fn with_permissions(permissions: &[Permission]) -> Self {
+        let mut set = Self::new();
+        for &permission in permissions {
+            set.add(permission);
+        }
+        set
+    }
+
+    /// Add a permission to the set
+    pub fn add(&mut self, permission: Permission) -> &mut Self {
+        self.permissions.insert(permission);
+        self
+    }
+
+    /// Remove a permission from the set
+    pub fn remove(&mut self, permission: Permission) -> &mut Self {
+        self.permissions.remove(&permission);
+        self
+    }
+
+    /// Check if the set has the given permission
+    pub fn has(&self, permission: Permission) -> bool {
+        self.permissions.contains(&permission)
+    }
+
+    /// Create a permission set for a system admin
+    pub fn for_admin() -> Self {
+        Self::with_permissions(&[
+            Permission::ViewContent,
+            Permission::EditMdx,
+            Permission::EditRoomConfig,
+            Permission::EditOfficeConfig,
+            Permission::AddOffice,
+            Permission::AddRoom,
+            Permission::ManageOfficeMembers,
+            Permission::ManageRoomMembers,
+        ])
     }
 
     /// Create a permission set for a domain owner
     pub fn for_owner() -> Self {
-        let mut set = Self::new();
-        // Office capabilities
-        set.add(Permission::CreateRoom);
-        set.add(Permission::ManageOfficeMembers);
-        set.add(Permission::UpdateOfficeSettings);
-        set.add(Permission::DeleteOffice);
-        set.add(Permission::ViewOfficeMetrics);
-        
-        // Room capabilities
-        set.add(Permission::ManageRoomMembers);
-        set.add(Permission::UpdateRoomSettings);
-        set.add(Permission::DeleteRoom);
-        set.add(Permission::SendMessages);
-        set.add(Permission::ReadMessages);
-        set.add(Permission::UploadFiles);
-        set.add(Permission::DownloadFiles);
-        
-        set
+        Self::with_permissions(&[
+            Permission::ViewContent,
+            Permission::EditMdx,
+            Permission::EditRoomConfig,
+            Permission::EditOfficeConfig,
+            Permission::CreateRoom,
+            Permission::ManageOfficeMembers,
+        ])
     }
 
-    /// Create a permission set for a regular member
+    /// Create a permission set for a domain member
     pub fn for_member() -> Self {
-        let mut set = Self::new();
-        // Regular member permissions
-        set.add(Permission::SendMessages);
-        set.add(Permission::ReadMessages);
-        set.add(Permission::UploadFiles);
-        set.add(Permission::DownloadFiles);
-        
-        set
+        Self::with_permissions(&[
+            Permission::ViewContent,
+            Permission::EditMdx,
+        ])
     }
 
-    /// Create a permission set for a moderator
-    pub fn for_moderator() -> Self {
-        let mut set = Self::for_member();
-        set.add(Permission::ManageRoomMembers);
-        set.add(Permission::UpdateRoomSettings);
-        set
+    /// Create a permission set for a guest
+    pub fn for_guest() -> Self {
+        Self::with_permissions(&[Permission::ViewContent])
     }
 
-    /// Create a permission set for an admin
-    pub fn for_admin() -> Self {
-        Self::all()
+    /// Get all permissions in this set
+    pub fn all(&self) -> &HashSet<Permission> {
+        &self.permissions
     }
 
-    /// Add a capability to this permission set
-    pub fn add(&mut self, permission: Permission) {
-        self.permissions.insert(permission);
+    /// Count the number of permissions in this set
+    pub fn count(&self) -> usize {
+        self.permissions.len()
     }
 
-    /// Remove a capability from this permission set
-    pub fn remove(&mut self, permission: Permission) {
-        self.permissions.remove(&permission);
+    /// Check if this set is empty
+    pub fn is_empty(&self) -> bool {
+        self.permissions.is_empty()
     }
-
-    /// Check if this permission set has a specific capability
-    pub fn has(&self, permission: Permission) -> bool {
-        self.permissions.contains(&Permission::All) || self.permissions.contains(&permission)
-    }
-
+    
     /// Check if this permission set has any of the given capabilities
     pub fn has_any(&self, permissions: &[Permission]) -> bool {
-        if self.permissions.contains(&Permission::All) {
-            return true;
-        }
-        
         permissions.iter().any(|c| self.permissions.contains(c))
     }
 
     /// Check if this permission set has all of the given capabilities
     pub fn has_all(&self, permissions: &[Permission]) -> bool {
-        if self.permissions.contains(&Permission::All) {
-            return true;
-        }
-        
         permissions.iter().all(|c| self.permissions.contains(c))
     }
-
-    /// Merge another permission set into this one
-    pub fn merge(&mut self, other: &Self) {
-        if other.permissions.contains(&Permission::All) {
-            self.add(Permission::All);
-            return;
-        }
-        
-        for permission in &other.permissions {
-            self.permissions.insert(*permission);
-        }
-    }
 }
 
-impl Default for PermissionSet {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Role of a user in the system, determining their default permissions
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum UserRole {
-    Admin,
-    Owner,
-    Moderator,
-    Member,
-    Guest,
-}
-
-impl UserRole {
+/// Extension trait to get default permissions for a role
+pub trait RolePermissions {
     /// Get the default permission set for this role
-    pub fn default_permissions(&self) -> PermissionSet {
+    fn default_permissions(&self) -> PermissionSet;
+}
+
+impl RolePermissions for UserRole {
+    fn default_permissions(&self) -> PermissionSet {
         match self {
             UserRole::Admin => PermissionSet::for_admin(),
             UserRole::Owner => PermissionSet::for_owner(),
-            UserRole::Moderator => PermissionSet::for_moderator(),
             UserRole::Member => PermissionSet::for_member(),
-            UserRole::Guest => PermissionSet::new(),
+            UserRole::Guest => PermissionSet::for_guest(),
+            _ => PermissionSet::new(), // Unknown roles get no permissions by default
         }
     }
 }
@@ -149,40 +134,34 @@ impl UserRole {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Membership {
     pub user_id: String,
+    pub domain_id: String,
     pub role: UserRole,
     pub permissions: PermissionSet,
 }
 
 impl Membership {
     /// Create a new membership with default permissions based on role
-    pub fn new(user_id: String, role: UserRole) -> Self {
+    pub fn new(user_id: String, domain_id: String, role: UserRole) -> Self {
+        let permissions = role.default_permissions();
         Self {
             user_id,
-            role,
-            permissions: role.default_permissions(),
-        }
-    }
-
-    /// Create a custom membership with specific permissions
-    pub fn with_permissions(user_id: String, role: UserRole, permissions: PermissionSet) -> Self {
-        Self {
-            user_id,
+            domain_id,
             role,
             permissions,
         }
     }
 
-    /// Check if this membership has a specific capability
+    /// Check if this membership has a specific permission
     pub fn has_permission(&self, permission: Permission) -> bool {
         self.permissions.has(permission)
     }
 
-    /// Check if this membership has any of the given capabilities
+    /// Check if this membership has any of the given permissions
     pub fn has_any_permission(&self, permissions: &[Permission]) -> bool {
         self.permissions.has_any(permissions)
     }
 
-    /// Check if this membership has all of the given capabilities
+    /// Check if this membership has all of the given permissions
     pub fn has_all_permissions(&self, permissions: &[Permission]) -> bool {
         self.permissions.has_all(permissions)
     }

@@ -1,23 +1,33 @@
 use crate::commands::UpdateOperation;
-use crate::handlers::domain::DomainOperations;
+use crate::handlers::permissions::RolePermissions;
 use crate::kernel::WorkspaceServerKernel;
 use crate::structs::{Domain, Permission, UserRole};
 use citadel_logging::{debug, info};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use std::collections::HashSet;
 
+/// Core permission-related functionality for the workspace server
 impl<R: Ratchet> WorkspaceServerKernel<R> {
-    // Helper methods for permission checking
+    /// Check if a user has the required role and domain membership (if applicable)
+    /// 
+    /// This is a basic role-based access control check that verifies:
+    /// 1. If the user has at least the required role (Admin > Owner > Member)
+    /// 2. If the user is a member of the specified domain (when a domain is provided)
     pub fn check_permission(
         &self,
         user_id: &str,
         domain_id: Option<&str>,
         required_role: UserRole,
     ) -> Result<(), NetworkError> {
+        // Admins always have permission
+        if self.is_admin(user_id) {
+            return Ok(());
+        }
+
         let users = self.users.read().unwrap();
 
         if let Some(user) = users.get(user_id) {
-            if user.role == UserRole::Admin || user.role >= required_role {
+            if user.role >= required_role {
                 // Check domain-specific permissions if a domain is specified
                 if let Some(domain_id) = domain_id {
                     match self.is_member_of_domain(user_id, domain_id) {
@@ -42,18 +52,131 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         ))
     }
 
-    pub fn is_admin(&self, user_id: &str) -> bool {
-        let roles = self.roles.read().unwrap();
-        match roles.roles.get(user_id) {
-            Some(role) if *role == UserRole::Admin => {
-                debug!(target: "citadel", "User {} has admin role", user_id);
-                true
+    /// Check if a user has a specific permission for a domain entity
+    /// 
+    /// This is a more granular permission check that verifies:
+    /// 1. If the user is an admin (admins have all permissions)
+    /// 2. If the user has the specific permission granted for the entity
+    /// 3. If the user's role in the entity grants the permission implicitly
+    pub fn check_entity_permission(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        permission: Permission,
+    ) -> Result<bool, NetworkError> {
+        // System administrators always have all permissions
+        if self.is_admin(user_id) {
+            debug!(target: "citadel", "User {} is admin, permission granted for entity {}", user_id, entity_id);
+            return Ok(true);
+        }
+
+        // Get the user
+        let user_has_explicit_permission = {
+            let users = self.users.read().unwrap();
+            if let Some(user) = users.get(user_id) {
+                // Check if user has the specific permission for this entity
+                if user.has_permission(entity_id, permission) {
+                    debug!(target: "citadel", "User {} has explicit permission {:?} for entity {}", user_id, permission, entity_id);
+                    return Ok(true);
+                }
+                
+                // Store the user role for later use
+                user.role.clone()
+            } else {
+                return Err(NetworkError::msg("User not found"));
             }
-            _ => false,
+        };
+        
+        // If not explicitly granted, check based on role and domain membership
+        let domains = self.domains.read().unwrap();
+        match domains.get(entity_id) {
+            Some(Domain::Office { office }) => {
+                // Office owners have all permissions for their office
+                if office.owner_id == user_id {
+                    debug!(target: "citadel", "User {} is owner of office {}, permission granted", user_id, entity_id);
+                    return Ok(true);
+                }
+
+                // Office members may have some permissions based on role
+                if office.members.contains(&user_id.to_string()) {
+                    match user_has_explicit_permission {
+                        UserRole::Admin => Ok(true), // Admins have all permissions
+                        UserRole::Owner => Ok(true), // Owners have all permissions for entities they belong to
+                        UserRole::Member => {
+                            // Members have limited permissions by default
+                            // Use the PermissionSet to determine default permissions based on role
+                            let default_perms = user_has_explicit_permission.default_permissions();
+                            Ok(default_perms.has(permission))
+                        }
+                        _ => Ok(false),
+                    }
+                } else {
+                    debug!(target: "citadel", "User {} is not a member of office {}", user_id, entity_id);
+                    Ok(false)
+                }
+            }
+            Some(Domain::Room { room }) => {
+                // Room owners have all permissions for their room
+                if room.owner_id == user_id {
+                    debug!(target: "citadel", "User {} is owner of room {}, permission granted", user_id, entity_id);
+                    return Ok(true);
+                }
+
+                // Room members may have some permissions based on role
+                if room.members.contains(&user_id.to_string()) {
+                    match user_has_explicit_permission {
+                        UserRole::Admin => Ok(true), // Admins have all permissions
+                        UserRole::Owner => Ok(true), // Owners have all permissions
+                        UserRole::Member => {
+                            // Members have limited permissions by default
+                            // Use the PermissionSet to determine default permissions based on role
+                            let default_perms = user_has_explicit_permission.default_permissions();
+                            Ok(default_perms.has(permission))
+                        }
+                        _ => Ok(false),
+                    }
+                } else {
+                    // For rooms, check if user has permission in parent office
+                    let office_id = room.office_id.clone();
+                    drop(domains); // Now we can safely drop the domains lock
+                    self.check_entity_permission(user_id, &office_id, permission)
+                }
+            }
+            None => {
+                debug!(target: "citadel", "Entity {} not found when checking permission for user {}", entity_id, user_id);
+                Err(NetworkError::msg("Entity not found"))
+            }
         }
     }
 
-    // Update a member's permissions for a domain (kernel implementation)
+    /// Check if a user is an admin
+    /// 
+    /// Centralizes admin checking logic in one place
+    pub fn is_admin(&self, user_id: &str) -> bool {
+        // First check the roles mapping
+        let roles = self.roles.read().unwrap();
+        if let Some(role) = roles.roles.get(user_id) {
+            if *role == UserRole::Admin {
+                debug!(target: "citadel", "User {} has admin role", user_id);
+                return true;
+            }
+        }
+        
+        // If not found in roles, check the users map
+        let users = self.users.read().unwrap();
+        if let Some(user) = users.get(user_id) {
+            if user.role == UserRole::Admin {
+                debug!(target: "citadel", "User {} has admin role", user_id);
+                return true;
+            }
+        }
+        
+        false
+    }
+
+    /// Update a member's permissions for a domain
+    /// 
+    /// This method handles adding, removing, or replacing permissions for a user in a domain
     pub fn update_permissions_for_member(
         &self,
         user_id: &str,
@@ -126,6 +249,9 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         Ok(())
     }
 
+    /// Set a specific permission for a user in a domain
+    /// 
+    /// This is a simplified version of update_permissions_for_member that handles a single permission
     pub fn set_domain_permission(
         &self,
         admin_id: &str,
@@ -136,7 +262,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     ) -> Result<(), NetworkError> {
         // Check if admin has permission to manage permissions
         if !self.is_admin(admin_id)
-            && !self.check_entity_permission(admin_id, domain_id, Permission::ManageUsers)?
+            && !self.check_entity_permission(admin_id, domain_id, Permission::ManageOfficeMembers)?
         {
             info!(target: "citadel", "User {} denied permission to set permissions for domain {}", admin_id, domain_id);
             return Err(NetworkError::msg(
