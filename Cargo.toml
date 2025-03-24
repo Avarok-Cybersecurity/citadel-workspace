@@ -13,6 +13,6 @@ citadel-internal-service = { git = "https://github.com/Avarok-Cybersecurity/cita
 citadel_sdk = { version = "^0.13.0" }
 citadel_types = { version = "^0.13.0" }
 citadel_logging = { version = "^0.13.0" }
-parking_lot = { version = "0.12", features = ["send_guard"] }
+parking_lot = { version = "0.12" }
 lazy_static = { version = "1.4.0" }
 uuid = { version = "1.15" }

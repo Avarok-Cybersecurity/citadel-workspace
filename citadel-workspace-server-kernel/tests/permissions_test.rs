@@ -6,6 +6,35 @@ use citadel_workspace_server::structs::{Domain, Permission, User, UserRole};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+lazy_static::lazy_static! {
+    static ref DEADLOCK_INIT: bool = {
+        let _ = std::thread::spawn(move || {
+            citadel_logging::trace!(target: "citadel", "Executing deadlock detector ...");
+            use std::time::Duration;
+            use parking_lot::deadlock;
+            loop {
+                std::thread::sleep(Duration::from_secs(5));
+                let deadlocks = deadlock::check_deadlock();
+                if deadlocks.is_empty() {
+                    citadel_logging::info!(target: "citadel", "No deadlocks detected");
+                    continue;
+                }
+
+                citadel_logging::error!(target: "citadel", "{} deadlocks detected", deadlocks.len());
+                for (i, threads) in deadlocks.iter().enumerate() {
+                    citadel_logging::error!(target: "citadel", "Deadlock #{}", i);
+                    for t in threads {
+                        citadel_logging::error!(target: "citadel", "Thread Id {:#?}", t.thread_id());
+                        citadel_logging::error!(target: "citadel", "{:#?}", t.backtrace());
+                    }
+                }
+            }
+        });
+
+        true
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
