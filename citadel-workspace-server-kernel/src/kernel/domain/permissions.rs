@@ -9,7 +9,7 @@ use std::collections::HashSet;
 /// Core permission-related functionality for the workspace server
 impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Check if a user has the required role and domain membership (if applicable)
-    /// 
+    ///
     /// This is a basic role-based access control check that verifies:
     /// 1. If the user has at least the required role (Admin > Owner > Member)
     /// 2. If the user is a member of the specified domain (when a domain is provided)
@@ -53,7 +53,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     }
 
     /// Check if a user has a specific permission for a domain entity
-    /// 
+    ///
     /// This is a more granular permission check that verifies:
     /// 1. If the user is an admin (admins have all permissions)
     /// 2. If the user has the specific permission granted for the entity
@@ -79,14 +79,14 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     debug!(target: "citadel", "User {} has explicit permission {:?} for entity {}", user_id, permission, entity_id);
                     return Ok(true);
                 }
-                
+
                 // Store the user role for later use
                 user.role.clone()
             } else {
                 return Err(NetworkError::msg("User not found"));
             }
         };
-        
+
         // If not explicitly granted, check based on role and domain membership
         let domains = self.domains.read().unwrap();
         match domains.get(entity_id) {
@@ -150,7 +150,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     }
 
     /// Check if a user is an admin
-    /// 
+    ///
     /// Centralizes admin checking logic in one place
     pub fn is_admin(&self, user_id: &str) -> bool {
         // First check the roles mapping
@@ -161,7 +161,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 return true;
             }
         }
-        
+
         // If not found in roles, check the users map
         let users = self.users.read().unwrap();
         if let Some(user) = users.get(user_id) {
@@ -170,12 +170,12 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 return true;
             }
         }
-        
+
         false
     }
 
     /// Update a member's permissions for a domain
-    /// 
+    ///
     /// This method handles adding, removing, or replacing permissions for a user in a domain
     pub fn update_permissions_for_member(
         &self,
@@ -250,7 +250,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     }
 
     /// Set a specific permission for a user in a domain
-    /// 
+    ///
     /// This is a simplified version of update_permissions_for_member that handles a single permission
     pub fn set_domain_permission(
         &self,
@@ -262,7 +262,11 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     ) -> Result<(), NetworkError> {
         // Check if admin has permission to manage permissions
         if !self.is_admin(admin_id)
-            && !self.check_entity_permission(admin_id, domain_id, Permission::ManageOfficeMembers)?
+            && !self.check_entity_permission(
+                admin_id,
+                domain_id,
+                Permission::ManageOfficeMembers,
+            )?
         {
             info!(target: "citadel", "User {} denied permission to set permissions for domain {}", admin_id, domain_id);
             return Err(NetworkError::msg(

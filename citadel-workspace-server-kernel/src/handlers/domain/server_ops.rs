@@ -1,11 +1,11 @@
-use citadel_sdk::prelude::{NetworkError, Ratchet};
-use std::sync::Arc;
-use uuid::Uuid;
 use crate::handlers::domain;
 use crate::handlers::domain::{DomainEntity, DomainOperations};
 use crate::handlers::transaction::Transaction;
 use crate::structs::{Domain, Office, Permission, Room, User, UserRole};
 use crate::WorkspaceServerKernel;
+use citadel_sdk::prelude::{NetworkError, Ratchet};
+use std::sync::Arc;
+use uuid::Uuid;
 
 /// Server-side implementation of domain operations
 pub struct ServerDomainOps<R: Ratchet> {
@@ -38,95 +38,6 @@ impl<R: Ratchet> ServerDomainOps<R> {
             tx.commit()?;
         }
         result
-    }
-
-    // Helper method to check if user is member of a domain
-    fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
-        if self.is_admin(user_id) {
-            return Ok(true);
-        }
-
-        self.with_read_transaction(|tx| {
-            if let Some(domain) = tx.get_domain(domain_id) {
-                match domain {
-                    Domain::Office { office } => {
-                        Ok(office.owner_id == user_id
-                            || office.members.contains(&user_id.to_string()))
-                    }
-                    Domain::Room { room } => {
-                        // Check if user is a direct member of the room
-                        if room.owner_id == user_id || room.members.contains(&user_id.to_string()) {
-                            return Ok(true);
-                        }
-
-                        // Check if user is a member of the office that contains this room
-                        if let Some(Domain::Office { office }) = tx.get_domain(&room.office_id) {
-                            return Ok(office.owner_id == user_id
-                                || office.members.contains(&user_id.to_string()));
-                        }
-
-                        Ok(false)
-                    }
-                }
-            } else {
-                Err(domain::permission_denied("Domain not found"))
-            }
-        })
-    }
-
-    // Helper method to check if user can access a domain
-    fn can_access_domain(&self, user_id: &str, entity_id: &str) -> Result<bool, NetworkError> {
-        // Admins can access all domains
-        if self.is_admin(user_id) {
-            return Ok(true);
-        }
-
-        // Check if user is a member of the domain
-        self.is_member_of_domain(user_id, entity_id)
-    }
-
-    // Helper method to check global permission
-    fn check_global_permission(
-        &self,
-        user_id: &str,
-        permission: Permission,
-    ) -> Result<bool, NetworkError> {
-        // System administrators always have all global permissions
-        if self.is_admin(user_id) {
-            return Ok(true);
-        }
-
-        // Check if user has the specific global permission
-        if let Some(user) = self.get_user(user_id) {
-            if user.has_permission("global", permission) {
-                return Ok(true);
-            }
-
-            // Check if the user's role grants this permission
-            match user.role {
-                UserRole::Admin => Ok(true), // Admins have all permissions
-                UserRole::Owner => {
-                    // Owners can manage their domains but not system-wide settings
-                    match permission {
-                        Permission::CreateEntity => Ok(true),
-                        Permission::AddOffice => Ok(true),
-                        Permission::AddRoom => Ok(true),
-                        Permission::ViewContent => Ok(true),
-                        Permission::EditOfficeConfig => Ok(true),
-                        Permission::EditRoomConfig => Ok(true),
-                        Permission::DeleteOffice => Ok(true),
-                        Permission::DeleteRoom => Ok(true),
-                        _ => Ok(false),
-                    }
-                }
-                _ => Ok(false), // Other roles don't have global permissions by default
-            }
-        } else {
-            Err(domain::permission_denied(format!(
-                "User with ID {} not found",
-                user_id
-            )))
-        }
     }
 }
 
@@ -177,11 +88,29 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         permission: Permission,
     ) -> Result<bool, NetworkError> {
         // Delegate to the centralized permission checking system in the kernel
-        self.kernel.check_entity_permission(user_id, entity_id, permission)
+        self.kernel
+            .check_entity_permission(user_id, entity_id, permission)
     }
 
     fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
-        self.is_member_of_domain(user_id, domain_id)
+        // Fix recursive call - use kernel method directly
+        self.kernel.with_read_transaction(|tx| {
+            if let Some(domain) = tx.get_domain(domain_id) {
+                match domain {
+                    Domain::Office { office } => Ok(office.members.contains(&user_id.to_string())),
+                    Domain::Room { room } => {
+                        if room.members.contains(&user_id.to_string()) {
+                            Ok(true)
+                        } else {
+                            // Check if the user is a member of the parent office
+                            self.is_member_of_domain(user_id, &room.office_id)
+                        }
+                    }
+                }
+            } else {
+                Err(NetworkError::msg("Domain not found"))
+            }
+        })
     }
 
     fn check_permission<T: DomainEntity + 'static>(
@@ -190,37 +119,8 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         entity_id: &str,
         permission: Permission,
     ) -> Result<bool, NetworkError> {
-        // Delegate to the centralized permission checking system in the kernel
-        self.kernel.check_entity_permission(user_id, entity_id, permission)
-    }
-
-    fn check_room_access(&self, user_id: &str, room_id: &str) -> Result<bool, NetworkError> {
-        // First check if user is room member or has explicit permissions
-        if let Some(user) = self.get_user(user_id) {
-            if user.is_member_of_domain(room_id) {
-                return Ok(true);
-            }
-
-            // Check if admin
-            if DomainOperations::is_admin(self, user_id) {
-                return Ok(true);
-            }
-
-            // Get the room
-            DomainOperations::with_read_transaction(self, |tx| {
-                if let Some(Domain::Room { room }) = tx.get_domain(room_id) {
-                    // Check if user is a member of the parent office
-                    if let Some(Domain::Office { office }) = tx.get_domain(&room.office_id) {
-                        return Ok(office.owner_id == user_id
-                            || office.members.contains(&user_id.to_string()));
-                    }
-                }
-
-                Ok(false)
-            })
-        } else {
-            Err(domain::permission_denied("Room not found"))
-        }
+        // Since this is identical to check_entity_permission, just call that
+        self.check_entity_permission(user_id, entity_id, permission)
     }
 
     fn get_domain(&self, domain_id: &str) -> Option<Domain> {
@@ -284,7 +184,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
 
     fn get_domain_entity<T: DomainEntity + 'static>(
         &self,
-        user_id: &str,
+        _user_id: &str,
         entity_id: &str,
     ) -> Result<T, NetworkError> {
         // Use a read transaction to retrieve the domain
@@ -643,5 +543,91 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
 
         // List rooms in this office
         DomainOperations::list_domain_entities::<Room>(self, user_id, Some(office_id))
+    }
+
+    fn check_room_access(&self, user_id: &str, room_id: &str) -> Result<bool, NetworkError> {
+        // First check if user is room member or has explicit permissions
+        if let Some(user) = self.get_user(user_id) {
+            if user.is_member_of_domain(room_id) {
+                return Ok(true);
+            }
+
+            // Check if admin
+            if DomainOperations::is_admin(self, user_id) {
+                return Ok(true);
+            }
+
+            // Get the room
+            DomainOperations::with_read_transaction(self, |tx| {
+                if let Some(Domain::Room { room }) = tx.get_domain(room_id) {
+                    // Check if user is a member of the parent office
+                    if let Some(Domain::Office { office }) = tx.get_domain(&room.office_id) {
+                        return Ok(office.owner_id == user_id
+                            || office.members.contains(&user_id.to_string()));
+                    }
+                }
+
+                Ok(false)
+            })
+        } else {
+            Err(domain::permission_denied("Room not found"))
+        }
+    }
+}
+
+impl<R: Ratchet> ServerDomainOps<R> {
+    /// Helper method to check if user can access a domain
+    pub fn can_access_domain(&self, user_id: &str, entity_id: &str) -> Result<bool, NetworkError> {
+        // Admins can access all domains
+        if self.is_admin(user_id) {
+            return Ok(true);
+        }
+
+        // Check if user is a member of the domain
+        self.is_member_of_domain(user_id, entity_id)
+    }
+
+    /// Helper method to check global permission
+    pub fn check_global_permission(
+        &self,
+        user_id: &str,
+        permission: Permission,
+    ) -> Result<bool, NetworkError> {
+        // System administrators always have all global permissions
+        if self.is_admin(user_id) {
+            return Ok(true);
+        }
+
+        // Check if user has the specific global permission
+        if let Some(user) = self.get_user(user_id) {
+            if user.has_permission("global", permission) {
+                return Ok(true);
+            }
+
+            // Check if the user's role grants this permission
+            match user.role {
+                UserRole::Admin => Ok(true), // Admins have all permissions
+                UserRole::Owner => {
+                    // Owners can manage their domains but not system-wide settings
+                    match permission {
+                        Permission::CreateEntity => Ok(true),
+                        Permission::AddOffice => Ok(true),
+                        Permission::AddRoom => Ok(true),
+                        Permission::ViewContent => Ok(true),
+                        Permission::EditOfficeConfig => Ok(true),
+                        Permission::EditRoomConfig => Ok(true),
+                        Permission::DeleteOffice => Ok(true),
+                        Permission::DeleteRoom => Ok(true),
+                        _ => Ok(false),
+                    }
+                }
+                _ => Ok(false), // Other roles don't have global permissions by default
+            }
+        } else {
+            Err(domain::permission_denied(format!(
+                "User with ID {} not found",
+                user_id
+            )))
+        }
     }
 }

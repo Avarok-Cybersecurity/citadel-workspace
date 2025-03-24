@@ -1,6 +1,6 @@
-use std::collections::HashSet;
-use serde::{Deserialize, Serialize};
 use crate::structs::{Permission, UserRole};
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 /// A set of permissions that can be assigned to a user or role
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -75,10 +75,7 @@ impl PermissionSet {
 
     /// Create a permission set for a domain member
     pub fn for_member() -> Self {
-        Self::with_permissions(&[
-            Permission::ViewContent,
-            Permission::EditMdx,
-        ])
+        Self::with_permissions(&[Permission::ViewContent, Permission::EditMdx])
     }
 
     /// Create a permission set for a guest
@@ -100,7 +97,7 @@ impl PermissionSet {
     pub fn is_empty(&self) -> bool {
         self.permissions.is_empty()
     }
-    
+
     /// Check if this permission set has any of the given capabilities
     pub fn has_any(&self, permissions: &[Permission]) -> bool {
         permissions.iter().any(|c| self.permissions.contains(c))

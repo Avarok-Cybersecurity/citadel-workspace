@@ -1,10 +1,10 @@
-use citadel_sdk::prelude::{NetworkError, Ratchet};
 use crate::handlers::transaction::Transaction;
 use crate::structs::{Domain, Office, Permission, Room, User, UserRole};
 use crate::WorkspaceServerKernel;
+use citadel_sdk::prelude::{NetworkError, Ratchet};
 
-pub mod server_ops;
 pub mod entity;
+pub mod server_ops;
 
 // NetworkError helpers (using functions instead of impl extension)
 pub fn permission_denied<S: std::fmt::Display>(msg: S) -> NetworkError {

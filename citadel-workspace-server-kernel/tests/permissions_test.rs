@@ -1,9 +1,9 @@
 use citadel_workspace_server::handlers::domain::server_ops::ServerDomainOps;
+use citadel_workspace_server::handlers::domain::DomainOperations;
 use citadel_workspace_server::kernel::WorkspaceServerKernel;
 use citadel_workspace_server::structs::{Office, Permission, Room, User, UserRole};
 use std::sync::Arc;
 use uuid::Uuid;
-use citadel_workspace_server::handlers::domain::DomainOperations;
 
 #[cfg(test)]
 mod tests {
