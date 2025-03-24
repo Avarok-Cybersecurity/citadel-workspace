@@ -9,7 +9,6 @@ pub mod domain;
 pub mod transaction;
 
 /// Server kernel implementation
-#[allow(dead_code)]
 pub struct WorkspaceServerKernel<R: Ratchet> {
     pub roles: Arc<RwLock<WorkspaceRoles>>,
     pub users: Arc<RwLock<HashMap<String, User>>>,
@@ -39,7 +38,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
 
     async fn on_node_event_received<'a>(
         &'a self,
-        event: NodeResult<R>,
+        _event: NodeResult<R>,
     ) -> Result<(), NetworkError> {
         // TODO! Handle node events or this implementation is useless
         Ok(())
@@ -53,15 +52,30 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
 
 impl<R: Ratchet> Default for WorkspaceServerKernel<R> {
     fn default() -> Self {
-        // Initialize with a default admin user
+        Self {
+            roles: Arc::new(RwLock::new(WorkspaceRoles::new())),
+            users: Arc::new(RwLock::new(HashMap::new())),
+            domains: Arc::new(RwLock::new(HashMap::new())),
+            node_remote: None,
+        }
+    }
+}
+
+impl<R: Ratchet> WorkspaceServerKernel<R> {
+    /// Create a new WorkspaceServerKernel without any default users
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// Create a new WorkspaceServerKernel with a specified admin user
+    pub fn with_admin(admin_id: &str, admin_name: &str) -> Self {
         let mut users = HashMap::new();
         let permissions = HashMap::new();
 
         users.insert(
-            "admin".to_string(),
+            admin_id.to_string(),
             User {
-                id: "admin".to_string(),
-                name: "Administrator".to_string(),
+                id: admin_id.to_string(),
+                name: admin_name.to_string(),
                 role: UserRole::Admin,
                 permissions,
             },

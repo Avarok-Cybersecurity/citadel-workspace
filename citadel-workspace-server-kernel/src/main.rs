@@ -9,7 +9,8 @@ use citadel_workspace_server::kernel::WorkspaceServerKernel;
 async fn main() -> Result<(), Box<dyn Error>> {
     citadel_logging::setup_log();
     let opts: Options = Options::from_args();
-    let service = WorkspaceServerKernel::<StackedRatchet>::default();
+    // Create the workspace server kernel with an admin user
+    let service = WorkspaceServerKernel::<StackedRatchet>::with_admin("admin", "Administrator");
     let mut builder = NodeBuilder::default();
     let mut builder = builder
         .with_backend(BackendType::new("sqlite:./citadel.db")?)

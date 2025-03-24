@@ -52,8 +52,8 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
     }
 
     fn is_admin(&self, user_id: &str) -> bool {
-        // Admin check logic - can be enhanced with more sophisticated role checks
-        user_id == "admin"
+        // Delegate to the kernel's admin check
+        self.kernel.is_admin(user_id)
     }
 
     fn get_user(&self, user_id: &str) -> Option<User> {

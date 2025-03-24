@@ -1,206 +1,127 @@
+use citadel_sdk::prelude::StackedRatchet;
 use citadel_workspace_server::handlers::domain::server_ops::ServerDomainOps;
 use citadel_workspace_server::handlers::domain::DomainOperations;
 use citadel_workspace_server::kernel::WorkspaceServerKernel;
-use citadel_workspace_server::structs::{Office, Permission, Room, User, UserRole};
+use citadel_workspace_server::structs::{Domain, Permission, User, UserRole};
+use std::collections::HashMap;
 use std::sync::Arc;
-use uuid::Uuid;
 
 #[cfg(test)]
 mod tests {
-    use citadel_sdk::prelude::StackedRatchet;
-
     use super::*;
 
-    fn create_test_kernel() -> Arc<WorkspaceServerKernel<StackedRatchet>> {
-        let kernel = WorkspaceServerKernel::default();
-        Arc::new(kernel)
-    }
-
+    // Helper function to create a test user
     fn create_test_user(id: &str, role: UserRole) -> User {
-        let mut user = User {
+        User {
             id: id.to_string(),
-            name: format!("Test User {}", id),
-            email: format!("user{}@example.com", id),
+            name: format!("Test {}", id),
             role,
-            domains: vec![],
-            permissions: Default::default(),
-        };
-
-        // Set role-based permissions
-        user.set_role_permissions();
-
-        user
-    }
-
-    fn create_test_office(owner_id: &str) -> Office {
-        Office {
-            id: Uuid::new_v4().to_string(),
-            name: "Test Office".to_string(),
-            description: "Test Office Description".to_string(),
-            owner_id: owner_id.to_string(),
-            members: vec![owner_id.to_string()],
-        }
-    }
-
-    fn create_test_room(owner_id: &str, office_id: &str) -> Room {
-        Room {
-            id: Uuid::new_v4().to_string(),
-            name: "Test Room".to_string(),
-            description: "Test Room Description".to_string(),
-            owner_id: owner_id.to_string(),
-            office_id: office_id.to_string(),
-            members: vec![owner_id.to_string()],
+            permissions: HashMap::new(),
         }
     }
 
     #[test]
-    fn test_user_permission_management() {
-        // Create a test user
-        let mut user = create_test_user("user1", UserRole::Member);
-
-        // Test granting a permission
-        user.grant_permission("domain1", Permission::ReadMessages);
-        assert!(user.has_permission("domain1", Permission::ReadMessages));
-
-        // Test checking for a permission that doesn't exist
-        assert!(!user.has_permission("domain1", Permission::UpdateOfficeSettings));
-
-        // Test granting multiple permissions
-        user.grant_permission("domain1", Permission::SendMessages);
-        user.grant_permission("domain1", Permission::UpdateRoomSettings);
-
-        // Test has_any_permission
-        assert!(user.has_any_permission(
-            "domain1",
-            &[Permission::UpdateOfficeSettings, Permission::ReadMessages]
+    fn test_permission_set() {
+        // Create a kernel with an admin user for testing
+        let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
+            "admin",
+            "Administrator",
         ));
 
-        // Test has_all_permissions
-        assert!(user.has_all_permissions(
-            "domain1",
-            &[Permission::ReadMessages, Permission::SendMessages]
-        ));
-        assert!(!user.has_all_permissions(
-            "domain1",
-            &[Permission::ReadMessages, Permission::ManageOfficeMembers]
-        ));
+        // Add a test user with explicit permissions
+        let user_id = "test_user";
+        let user = create_test_user(user_id, UserRole::Member);
 
-        // Test revoking a permission
-        user.revoke_permission("domain1", Permission::SendMessages);
-        assert!(!user.has_permission("domain1", Permission::SendMessages));
+        // Add the user to the kernel
+        {
+            let mut users = kernel.users.write().unwrap();
+            users.insert(user_id.to_string(), user.clone());
+        }
+
+        // Create an office
+        let domain_ops = ServerDomainOps::new(kernel.clone());
+        let office = domain_ops
+            .create_office("admin", "Test Office", "Test Description")
+            .unwrap();
+
+        // Check that the user doesn't have permissions yet
+        let result =
+            domain_ops.check_entity_permission(user_id, &office.id, Permission::ViewContent);
+        assert!(result.is_ok());
+        assert!(!result.unwrap()); // User isn't a member yet, so should be false
+
+        // Manually add the user's ID to the office members list via a write transaction
+        domain_ops
+            .with_write_transaction(|tx| {
+                let mut domain = tx.get_domain(&office.id).unwrap().clone();
+                if let Domain::Office { ref mut office } = domain {
+                    office.members.push(user_id.to_string());
+                }
+                tx.update(&office.id, domain)
+            })
+            .unwrap();
+
+        // Verify the user is now in the members list
+        {
+            let domain = domain_ops.get_domain(&office.id).unwrap();
+            match domain {
+                Domain::Office { office } => {
+                    assert!(
+                        office.members.contains(&user_id.to_string()),
+                        "User should be in the members list"
+                    );
+                }
+                _ => panic!("Expected office domain"),
+            }
+        }
+
+        // Now check again - user should have permission
+        let result =
+            domain_ops.check_entity_permission(user_id, &office.id, Permission::ViewContent);
+        assert!(result.is_ok());
+        assert!(result.unwrap(), "Member should have ViewContent permission");
+    }
+
+    #[test]
+    fn test_admin_check() {
+        // Create a kernel with a custom admin user
+        let admin_id = "custom_admin";
+        let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
+            admin_id,
+            "Custom Administrator",
+        ));
+        let domain_ops = ServerDomainOps::new(kernel.clone());
+
+        // Verify that the admin check works with custom admin ID
+        assert!(domain_ops.is_admin(admin_id));
+
+        // Verify that non-admin users are recognized as such
+        assert!(!domain_ops.is_admin("non_admin_user"));
+
+        // Create another user with admin role
+        let second_admin_id = "second_admin";
+        let admin2 = create_test_user(second_admin_id, UserRole::Admin);
+
+        // Add the user to the kernel
+        {
+            let mut users = kernel.users.write().unwrap();
+            users.insert(second_admin_id.to_string(), admin2);
+        }
+
+        // Verify that the second admin is recognized
+        assert!(domain_ops.is_admin(second_admin_id));
     }
 
     #[test]
     fn test_role_based_permissions() {
-        // Create users with different roles
-        let admin = create_test_user("admin", UserRole::Admin);
-        let owner = create_test_user("owner", UserRole::Owner);
-        let member = create_test_user("member", UserRole::Member);
-        let guest = create_test_user("guest", UserRole::Guest);
-
-        // Admin should have all permissions
-        assert!(admin.has_permission("global", Permission::ManageOfficeMembers));
-        assert!(admin.has_permission("global", Permission::UpdateOfficeSettings));
-        assert!(admin.has_permission("global", Permission::CreateOffice));
-
-        // Owner should have office management permissions
-        assert!(owner.has_permission("global", Permission::ManageOfficeMembers));
-        assert!(owner.has_permission("global", Permission::UpdateOfficeSettings));
-
-        // Member should have basic messaging permissions
-        assert!(member.has_permission("global", Permission::ReadMessages));
-        assert!(member.has_permission("global", Permission::SendMessages));
-
-        // Guest should have limited permissions
-        assert!(guest.has_permission("global", Permission::ReadMessages));
-        assert!(!guest.has_permission("global", Permission::SendMessages));
-    }
-
-    #[test]
-    fn test_domain_operations_permissions() {
-        // Create a kernel and domain operations instance
-        let kernel = create_test_kernel();
+        // Create a kernel with an admin user for testing
+        let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
+            "admin",
+            "Administrator",
+        ));
         let domain_ops = ServerDomainOps::new(kernel.clone());
 
-        // Create test users
-        let admin_user = create_test_user("admin", UserRole::Admin);
-        let owner_user = create_test_user("owner", UserRole::Owner);
-        let member_user = create_test_user("member", UserRole::Member);
-
-        // Add users to the kernel
-        {
-            let mut users = kernel.users.write().unwrap();
-            users.insert(admin_user.id.clone(), admin_user.clone());
-            users.insert(owner_user.id.clone(), owner_user.clone());
-            users.insert(member_user.id.clone(), member_user.clone());
-        }
-
-        // Test creating an office
-        let office_id = domain_ops
-            .create_office(
-                &owner_user.id,
-                "Test Office".to_string(),
-                "Test Description".to_string(),
-                vec![owner_user.id.clone(), member_user.id.clone()],
-                UserRole::Owner,
-            )
-            .unwrap();
-
-        // Test admin can access office
-        assert!(domain_ops
-            .can_access_domain::<Office>(&admin_user.id, &office_id)
-            .unwrap());
-
-        // Test owner can access office
-        assert!(domain_ops
-            .can_access_domain::<Office>(&owner_user.id, &office_id)
-            .unwrap());
-
-        // Test creating a room
-        let room_id = domain_ops
-            .create_room(
-                &owner_user.id,
-                &office_id,
-                "Test Room".to_string(),
-                "Test Room Description".to_string(),
-                vec![owner_user.id.clone(), member_user.id.clone()],
-                UserRole::Member,
-            )
-            .unwrap();
-
-        // Test admin can access room
-        assert!(domain_ops
-            .can_access_domain::<Room>(&admin_user.id, &room_id)
-            .unwrap());
-
-        // Test owner can access room
-        assert!(domain_ops
-            .can_access_domain::<Room>(&owner_user.id, &room_id)
-            .unwrap());
-
-        // Test member can access room
-        assert!(domain_ops
-            .can_access_domain::<Room>(&member_user.id, &room_id)
-            .unwrap());
-
-        // Test entity permission checking
-        assert!(domain_ops
-            .check_entity_permission(&owner_user.id, &room_id, Permission::UpdateRoomSettings)
-            .unwrap());
-
-        // Test global permission checking
-        assert!(domain_ops
-            .check_global_permission(&admin_user.id, Permission::CreateOffice)
-            .unwrap());
-    }
-
-    #[test]
-    fn test_permission_denial() {
-        // Create a kernel and domain operations instance
-        let kernel = create_test_kernel();
-        let domain_ops = ServerDomainOps::new(kernel.clone());
-
-        // Create test users
+        // Create test users with different roles
         let owner_user = create_test_user("owner", UserRole::Owner);
         let member_user = create_test_user("member", UserRole::Member);
         let guest_user = create_test_user("guest", UserRole::Guest);
@@ -213,51 +134,87 @@ mod tests {
             users.insert(guest_user.id.clone(), guest_user.clone());
         }
 
-        // Create an office owned by the owner
-        let office_id = domain_ops
-            .create_office(
-                &owner_user.id,
-                "Test Office".to_string(),
-                "Test Description".to_string(),
-                vec![owner_user.id.clone()],
-                UserRole::Owner,
-            )
+        // Create an office
+        let office = domain_ops
+            .create_office(&owner_user.id, "Test Office", "Test Description")
             .unwrap();
 
-        // Create a room in the office
-        let room_id = domain_ops
-            .create_room(
-                &owner_user.id,
-                &office_id,
-                "Test Room".to_string(),
-                "Test Room Description".to_string(),
-                vec![owner_user.id.clone()],
-                UserRole::Member,
-            )
-            .unwrap();
-
-        // Test that guest cannot modify room settings
+        // First check if the creator (owner) has permissions
         let result = domain_ops.check_entity_permission(
-            &guest_user.id,
-            &room_id,
-            Permission::UpdateRoomSettings,
+            &owner_user.id,
+            &office.id,
+            Permission::EditOfficeConfig,
         );
         assert!(result.is_ok());
-        assert!(!result.unwrap());
+        assert!(
+            result.unwrap(),
+            "Owner should have EditOfficeConfig permission"
+        );
 
-        // Test that member cannot create a room without explicit permission
-        let mut member = member_user.clone();
-        // Remove CreateRoom permission if any
-        member.revoke_permission(&office_id, Permission::CreateRoom);
+        // Member should not have permission until added
+        let result = domain_ops.check_entity_permission(
+            &member_user.id,
+            &office.id,
+            Permission::ViewContent,
+        );
+        assert!(result.is_ok());
+        assert!(
+            !result.unwrap(),
+            "Member shouldn't have permission before being added"
+        );
 
+        // Manually add the member to the office via a write transaction
+        domain_ops
+            .with_write_transaction(|tx| {
+                let mut domain = tx.get_domain(&office.id).unwrap().clone();
+                if let Domain::Office { ref mut office } = domain {
+                    office.members.push(member_user.id.clone());
+                }
+                tx.update(&office.id, domain)
+            })
+            .unwrap();
+
+        // Verify member was actually added to the office
         {
-            let mut users = kernel.users.write().unwrap();
-            users.insert(member.id.clone(), member.clone());
+            let domain = domain_ops.get_domain(&office.id).unwrap();
+            match domain {
+                Domain::Office { office } => {
+                    assert!(
+                        office.members.contains(&member_user.id),
+                        "Member should be in the office members list"
+                    );
+                }
+                _ => panic!("Expected office domain"),
+            }
         }
 
-        let result =
-            domain_ops.check_entity_permission(&member.id, &office_id, Permission::CreateRoom);
+        // Now member should have basic permissions but not admin permissions
+        let result = domain_ops.check_entity_permission(
+            &member_user.id,
+            &office.id,
+            Permission::ViewContent,
+        );
         assert!(result.is_ok());
-        assert!(!result.unwrap());
+        assert!(
+            result.unwrap(),
+            "Member should have ViewContent permission after being added"
+        );
+
+        let result = domain_ops.check_entity_permission(
+            &member_user.id,
+            &office.id,
+            Permission::EditOfficeConfig,
+        );
+        assert!(result.is_ok());
+        assert!(
+            !result.unwrap(),
+            "Member should not have EditOfficeConfig permission"
+        );
+
+        // Guest should not have permissions without explicit addition
+        let result =
+            domain_ops.check_entity_permission(&guest_user.id, &office.id, Permission::ViewContent);
+        assert!(result.is_ok());
+        assert!(!result.unwrap(), "Guest should not have permissions");
     }
 }
