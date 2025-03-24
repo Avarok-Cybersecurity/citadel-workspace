@@ -14,12 +14,79 @@ pub struct User {
 }
 
 impl User {
+    /// Create a new user with the given role
+    pub fn new(id: String, name: String, role: UserRole) -> Self {
+        Self {
+            id,
+            name,
+            role,
+            permissions: HashMap::new(),
+        }
+    }
+
+    /// Get permissions for a specific domain
     pub fn get_permissions<T: AsRef<str>>(&self, domain_id: T) -> Option<&HashSet<Permission>> {
         self.permissions.get(domain_id.as_ref())
     }
 
+    /// Check if user is a member of a domain
     pub fn is_member_of_domain<T: AsRef<str>>(&self, domain_id: T) -> bool {
         self.permissions.contains_key(domain_id.as_ref())
+    }
+    
+    /// Check if user has a specific permission in a domain
+    pub fn has_permission<T: AsRef<str>>(&self, domain_id: T, permission: Permission) -> bool {
+        if let Some(perms) = self.get_permissions(domain_id) {
+            Permission::has_permission(perms, &permission)
+        } else {
+            false
+        }
+    }
+    
+    /// Check if user has all of the required permissions in a domain
+    pub fn has_all_permissions<T: AsRef<str>>(&self, domain_id: T, required: &[Permission]) -> bool {
+        if let Some(perms) = self.get_permissions(domain_id) {
+            Permission::has_all_permissions(perms, required)
+        } else {
+            false
+        }
+    }
+    
+    /// Check if user has any of the specified permissions in a domain
+    pub fn has_any_permission<T: AsRef<str>>(&self, domain_id: T, required: &[Permission]) -> bool {
+        if let Some(perms) = self.get_permissions(domain_id) {
+            Permission::has_any_permission(perms, required)
+        } else {
+            false
+        }
+    }
+    
+    /// Check if user has administrator role
+    pub fn is_administrator(&self) -> bool {
+        matches!(self.role, UserRole::Admin)
+    }
+    
+    /// Grant a permission to the user for a specific domain
+    pub fn grant_permission<T: AsRef<str>>(&mut self, domain_id: T, permission: Permission) {
+        let domain_id = domain_id.as_ref().to_string();
+        self.permissions
+            .entry(domain_id)
+            .or_insert_with(HashSet::new)
+            .insert(permission);
+    }
+    
+    /// Revoke a permission from the user for a specific domain
+    pub fn revoke_permission<T: AsRef<str>>(&mut self, domain_id: T, permission: Permission) {
+        if let Some(perms) = self.permissions.get_mut(domain_id.as_ref()) {
+            perms.remove(&permission);
+        }
+    }
+    
+    /// Set all permissions for a domain based on the user's role
+    pub fn set_role_permissions<T: AsRef<str>>(&mut self, domain_id: T) {
+        let domain_id = domain_id.as_ref().to_string();
+        let role_permissions = Permission::for_role(&self.role);
+        self.permissions.insert(domain_id, role_permissions);
     }
 }
 
@@ -109,14 +176,135 @@ impl PartialOrd for UserRole {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum Permission {
+    // Basic permissions (existing)
     EditMdx,
     EditRoomConfig,
     EditOfficeConfig,
     EditMemberConfig,
     AddOffice,
     AddRoom,
+    
+    // Domain entity permissions
+    CreateEntity,          // Can create entities (general permission)
+    ViewContent,           // Can view content of rooms and offices
+    
+    // Office-specific permissions
+    CreateRoom,             // Can create rooms within an office
+    ManageOfficeMembers,    // Can add/remove members to/from an office
+    UpdateOfficeSettings,   // Can update office settings (name, description, etc.)
+    DeleteOffice,           // Can delete the office
+    ViewOfficeMetrics,      // Can view office usage metrics
+    
+    // Room-specific permissions
+    ManageRoomMembers,      // Can add/remove members to/from a room
+    UpdateRoomSettings,     // Can update room settings (name, description, etc.)
+    DeleteRoom,             // Can delete the room
+    SendMessages,           // Can send messages in the room
+    ReadMessages,           // Can read messages in the room
+    UploadFiles,            // Can upload files to the room
+    DownloadFiles,          // Can download files from the room
+    
+    // Administrative permissions
+    ManageDomains,          // Can create/delete domains
+    ManageUsers,            // Can manage users across all domains
+    ViewSystemLogs,         // Can view system logs
+    ConfigureSystem,        // Can configure system settings
+    
+    // Special permissions
+    All,                    // Has all permissions
+}
+
+impl Permission {
+    /// Get a set of permissions for a specific role
+    pub fn for_role(role: &UserRole) -> HashSet<Self> {
+        let mut permissions = HashSet::new();
+        
+        match role {
+            UserRole::Admin => {
+                permissions.insert(Self::All);
+            },
+            UserRole::Owner => {
+                // Office permissions
+                permissions.insert(Self::EditOfficeConfig);
+                permissions.insert(Self::EditMemberConfig);
+                permissions.insert(Self::AddRoom);
+                permissions.insert(Self::CreateRoom);
+                permissions.insert(Self::ManageOfficeMembers);
+                permissions.insert(Self::UpdateOfficeSettings);
+                permissions.insert(Self::DeleteOffice);
+                permissions.insert(Self::ViewOfficeMetrics);
+                
+                // Room permissions
+                permissions.insert(Self::EditRoomConfig);
+                permissions.insert(Self::EditMdx);
+                permissions.insert(Self::ManageRoomMembers);
+                permissions.insert(Self::UpdateRoomSettings);
+                permissions.insert(Self::DeleteRoom);
+                permissions.insert(Self::SendMessages);
+                permissions.insert(Self::ReadMessages);
+                permissions.insert(Self::UploadFiles);
+                permissions.insert(Self::DownloadFiles);
+            },
+            UserRole::Member => {
+                // Basic member permissions
+                permissions.insert(Self::SendMessages);
+                permissions.insert(Self::ReadMessages);
+                permissions.insert(Self::UploadFiles);
+                permissions.insert(Self::DownloadFiles);
+            },
+            UserRole::Guest => {
+                // Guest permissions - read-only access
+                permissions.insert(Self::ReadMessages);
+                permissions.insert(Self::DownloadFiles);
+            },
+            UserRole::Banned => {
+                // No permissions for banned users
+            },
+            UserRole::Custom { rank, .. } => {
+                // Custom role permissions based on rank
+                // Basic permissions for all custom roles
+                permissions.insert(Self::ReadMessages);
+                
+                // Additional permissions based on rank
+                if *rank > 10 {
+                    permissions.insert(Self::SendMessages);
+                    permissions.insert(Self::UploadFiles);
+                    permissions.insert(Self::DownloadFiles);
+                }
+                
+                if *rank > 15 {
+                    permissions.insert(Self::EditMdx);
+                }
+            },
+        }
+        
+        permissions
+    }
+    
+    /// Check if a permission set has a specific permission
+    pub fn has_permission(permissions: &HashSet<Self>, permission: &Self) -> bool {
+        permissions.contains(&Self::All) || permissions.contains(permission)
+    }
+    
+    /// Check if a permission set has all of the specified permissions
+    pub fn has_all_permissions(permissions: &HashSet<Self>, required: &[Self]) -> bool {
+        if permissions.contains(&Self::All) {
+            return true;
+        }
+        
+        required.iter().all(|p| permissions.contains(p))
+    }
+    
+    /// Check if a permission set has any of the specified permissions
+    pub fn has_any_permission(permissions: &HashSet<Self>, required: &[Self]) -> bool {
+        if permissions.contains(&Self::All) {
+            return true;
+        }
+        
+        required.iter().any(|p| permissions.contains(p))
+    }
 }
 
 // Workspace entity structures
@@ -131,6 +319,20 @@ pub struct Office {
     pub mdx_content: String,
 }
 
+impl Default for Office {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            description: String::new(),
+            owner_id: String::new(),
+            members: Vec::new(),
+            rooms: Vec::new(),
+            mdx_content: String::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Room {
     pub id: String,
@@ -140,6 +342,20 @@ pub struct Room {
     pub description: String,
     pub members: Vec<String>, // User IDs
     pub mdx_content: String,
+}
+
+impl Default for Room {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            description: String::new(),
+            owner_id: String::new(),
+            office_id: String::new(),
+            members: Vec::new(),
+            mdx_content: String::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

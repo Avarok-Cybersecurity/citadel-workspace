@@ -1,13 +1,13 @@
-use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, Ratchet};
+use citadel_sdk::prelude::{NetworkError, Ratchet, NodeRemote, NodeResult};
 use citadel_logging::debug;
 
-use std::collections::HashMap;
+use std::collections::{HashSet, HashMap};
 use std::sync::{Arc, RwLock};
 
 use crate::handlers::domain_ops::{DomainEntity, DomainOperations};
-use crate::handlers::transaction::{ReadTransaction, TransactionManager, WriteTransaction};
+use crate::handlers::transaction::{ReadTransaction, Transaction, WriteTransaction};
 use crate::commands::{WorkspaceCommand, WorkspaceResponse, UpdateOperation};
-use crate::structs::{Domain, Office, Room, User, UserRole, WorkspaceRoles, Permission};
+use crate::structs::{Domain, Permission, User, UserRole, Office, Room, WorkspaceRoles};
 
 /// Server kernel implementation
 #[allow(dead_code)]
@@ -113,9 +113,9 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     ))),
                 }
             }
-            WorkspaceCommand::GetOffice { office_id } => match self.get_office(&office_id) {
-                Some(office) => Ok(WorkspaceResponse::Office(office)),
-                None => Ok(WorkspaceResponse::Error("Office not found".to_string())),
+            WorkspaceCommand::GetOffice { office_id } => match self.get_office(user_id, &office_id) {
+                Ok(office) => Ok(WorkspaceResponse::Office(office)),
+                Err(e) => Ok(WorkspaceResponse::Error(format!("Failed to get office: {}", e))),
             },
             WorkspaceCommand::DeleteOffice { office_id } => {
                 match self.delete_office(user_id, &office_id) {
@@ -131,14 +131,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 name,
                 description,
             } => match self.update_office(user_id, &office_id, name.as_deref(), description.as_deref()) {
-                Ok(()) => {
-                    // After updating, get the latest office data to return
-                    if let Some(updated_office) = self.get_office(&office_id) {
-                        Ok(WorkspaceResponse::Office(updated_office))
-                    } else {
-                        Ok(WorkspaceResponse::Error("Office not found after update".into()))
-                    }
-                }
+                Ok(updated_office) => Ok(WorkspaceResponse::Office(updated_office)),
                 Err(e) => Ok(WorkspaceResponse::Error(format!(
                     "Failed to update office: {}",
                     e
@@ -157,9 +150,9 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     e
                 ))),
             },
-            WorkspaceCommand::GetRoom { room_id } => match self.get_room(&room_id) {
-                Some(room) => Ok(WorkspaceResponse::Room(room)),
-                None => Ok(WorkspaceResponse::Error("Room not found".to_string())),
+            WorkspaceCommand::GetRoom { room_id } => match self.get_room(user_id, &room_id) {
+                Ok(room) => Ok(WorkspaceResponse::Room(room)),
+                Err(e) => Ok(WorkspaceResponse::Error(format!("Failed to get room: {}", e))),
             },
             WorkspaceCommand::DeleteRoom { room_id } => match self.delete_room(user_id, &room_id) {
                 Ok(_) => Ok(WorkspaceResponse::Success),
@@ -173,14 +166,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 name,
                 description,
             } => match self.update_room(user_id, &room_id, name.as_deref(), description.as_deref()) {
-                Ok(()) => {
-                    // After updating, get the latest room data to return
-                    if let Some(updated_room) = self.get_room(&room_id) {
-                        Ok(WorkspaceResponse::Room(updated_room))
-                    } else {
-                        Ok(WorkspaceResponse::Error("Room not found after update".into()))
-                    }
-                }
+                Ok(updated_room) => Ok(WorkspaceResponse::Room(updated_room)),
                 Err(e) => Ok(WorkspaceResponse::Error(format!(
                     "Failed to update room: {}",
                     e
@@ -245,7 +231,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
             // Query commands
             WorkspaceCommand::ListOffices => {
-                let offices = self.list_offices()?;
+                let offices = self.list_offices(user_id, None)?;
                 Ok(WorkspaceResponse::Offices(offices))
             }
             WorkspaceCommand::ListRooms { office_id } => {
@@ -315,7 +301,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
         // Initialize domain permissions if they don't exist
         if !user.permissions.contains_key(domain_id) {
-            user.permissions.insert(domain_id.to_string(), std::collections::HashSet::new());
+            user.permissions.insert(domain_id.to_string(), HashSet::new());
         }
 
         // Get the permission set for this domain
@@ -370,43 +356,43 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         
         Ok(members)
     }
-}
 
-// Transaction manager implementation
-impl<R: Ratchet> TransactionManager for WorkspaceServerKernel<R> {
-    fn begin_read_transaction(&self) -> Result<ReadTransaction, NetworkError> {
+    pub fn begin_read_transaction(&self) -> Result<ReadTransaction, NetworkError> {
         match self.domains.read() {
             Ok(guard) => Ok(ReadTransaction::new(guard)),
             Err(_) => Err(NetworkError::msg("Failed to acquire read lock for transaction"))
         }
     }
     
-    fn begin_write_transaction(&self) -> Result<WriteTransaction, NetworkError> {
+    pub fn begin_write_transaction(&self) -> Result<WriteTransaction, NetworkError> {
         match self.domains.write() {
             Ok(guard) => Ok(WriteTransaction::new(guard)),
             Err(_) => Err(NetworkError::msg("Failed to acquire write lock for transaction"))
         }
     }
     
-    fn with_read_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
+    pub fn with_read_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
     where
-        F: FnOnce(ReadTransaction) -> Result<T, NetworkError>
+        F: FnOnce(&dyn Transaction) -> Result<T, NetworkError>
     {
         let tx = self.begin_read_transaction()?;
-        f(tx)
+        let result = f(&tx);
+        // Read transaction auto-drops
+        result
     }
     
-    fn with_write_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
+    pub fn with_write_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
     where
-        F: FnOnce(&mut WriteTransaction) -> Result<T, NetworkError>
+        F: FnOnce(&mut dyn Transaction) -> Result<T, NetworkError>
     {
         let mut tx = self.begin_write_transaction()?;
         match f(&mut tx) {
             Ok(result) => {
-                tx.commit();
+                tx.commit()?;
                 Ok(result)
             },
             Err(e) => {
+                // Automatically roll back on error
                 tx.rollback();
                 Err(e)
             }
@@ -440,7 +426,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     // Process node events received from the network
     async fn process_node_event(&self, _event: NodeResult<R>) -> Result<(), NetworkError> {
         // Here you would handle the event based on its type and content
-        // For now we just return Ok as a placeholder
+        // This is a placeholder implementation
         Ok(())
     }
     
@@ -516,133 +502,480 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     }
 }
 
-// Helper enum for member operations
+/// Actions for updating domain members
 enum MemberAction {
     Add,
     Remove,
 }
 
-impl<R: Ratchet> DomainOperations<R> for WorkspaceServerKernel<R> {
+impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServerKernel<R> {
+    fn init(&self) -> Result<(), NetworkError> {
+        // Initialize any required resources
+        Ok(())
+    }
+    
+    fn kernel(&self) -> &WorkspaceServerKernel<R> {
+        self
+    }
+    
     fn is_admin(&self, user_id: &str) -> bool {
-        let users = self.users.read().unwrap();
-        let user = users.get(user_id);
-
-        match user {
-            Some(user) => user.role == UserRole::Admin,
-            None => false,
-        }
+        self.is_admin(user_id)
     }
-
-    fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
-        self.with_read_transaction(|tx| {
-            // Check if user exists
-            let users = self.users.read().unwrap();
-            if users.get(user_id).is_none() {
-                return Ok(false);
-            }
-            
-            // Check if domain exists and user is a member
-            match tx.get_domain(domain_id) {
-                Some(domain) => {
-                    match domain {
-                        Domain::Office { office } => {
-                            // Convert &str to String for comparison
-                            let user_id_string = user_id.to_string();
-                            Ok(office.members.contains(&user_id_string) || office.owner_id == user_id)
-                        },
-                        Domain::Room { room } => {
-                            // Convert &str to String for comparison
-                            let user_id_string = user_id.to_string();
-                            Ok(room.members.contains(&user_id_string) || room.owner_id == user_id)
-                        },
-                    }
-                },
-                None => Ok(false),
-            }
-        })
-    }
-
-    fn check_permission<T: DomainEntity + 'static>(
-        &self,
-        user_id: &str,
-        entity_id: &str,
-    ) -> Result<bool, NetworkError> {
-        // Clone the domain ID to avoid lifetime issues
-        let entity_id_owned = entity_id.to_string();
-        
-        // Get the domain from the transaction
-        match self.with_read_transaction(|tx| {
-            // Convert domain reference to owned value to avoid lifetime issues
-            match tx.get_domain(&entity_id_owned) {
-                Some(domain) => Ok(Some(domain.clone())),
-                None => Ok(None),
-            }
-        })? {
-            Some(domain) => match domain {
-                Domain::Office { office } if std::any::TypeId::of::<T>() == std::any::TypeId::of::<Office>() => {
-                    // Check if user is owner or admin
-                    let is_admin = self.is_admin(user_id);
-                    
-                    Ok(office.owner_id == user_id || is_admin)
-                },
-                Domain::Room { room } if std::any::TypeId::of::<T>() == std::any::TypeId::of::<Room>() => {
-                    // Check if user is owner or admin or office member
-                    let is_admin = self.is_admin(user_id);
-                    
-                    // Check if user is a member of the parent office
-                    let is_member = self.is_member_of_domain(user_id, &room.office_id)?;
-                    
-                    Ok(room.owner_id == user_id || is_admin || is_member)
-                },
-                _ => Err(NetworkError::Generic("Entity not found or type mismatch".into())),
-            },
-            None => Err(NetworkError::Generic("Entity not found".into())),
-        }
-    }
-
+    
     fn get_user(&self, user_id: &str) -> Option<User> {
         let users = self.users.read().unwrap();
         users.get(user_id).cloned()
     }
-
+    
+    fn with_read_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
+    where
+        F: FnOnce(&dyn Transaction) -> Result<T, NetworkError>
+    {
+        let tx = self.domains.read().unwrap();
+        let read_tx = ReadTransaction::new(tx);
+        f(&read_tx)
+    }
+    
+    fn with_write_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
+    where
+        F: FnOnce(&mut dyn Transaction) -> Result<T, NetworkError>
+    {
+        let tx = self.domains.write().unwrap();
+        let mut write_tx = WriteTransaction::new(tx);
+        let result = f(&mut write_tx);
+        if result.is_ok() {
+            write_tx.commit()?;
+        } else {
+            write_tx.rollback();
+        }
+        result
+    }
+    
+    fn check_entity_permission(&self, user_id: &str, entity_id: &str, permission: Permission) -> Result<bool, NetworkError> {
+        // First check if user is admin (admins have all permissions)
+        if self.is_admin(user_id) {
+            return Ok(true);
+        }
+        
+        // Get the user
+        let user = match self.get_user(user_id) {
+            Some(user) => user,
+            None => return Err(NetworkError::msg("User not found")),
+        };
+        
+        // Check if user has the permission for this entity
+        self.with_read_transaction(|tx| {
+            if let Some(domain) = tx.get_domain(entity_id) {
+                match domain {
+                    Domain::Office { ref office } => {
+                        // Office owners have all permissions for their office
+                        if office.owner_id == user_id {
+                            return Ok(true);
+                        }
+                        
+                        // Office members may have some permissions based on role
+                        if office.members.contains(&user_id.to_string()) {
+                            match user.role {
+                                UserRole::Admin => Ok(true), // Admins have all permissions
+                                UserRole::Owner => Ok(true), // Owners have all permissions for entities they belong to
+                                UserRole::Member => {
+                                    match permission {
+                                        Permission::ViewContent => Ok(true), // Members can view content
+                                        _ => Ok(false)
+                                    }
+                                },
+                                _ => Ok(false)
+                            }
+                        } else {
+                            Ok(false)
+                        }
+                    },
+                    Domain::Room { ref room } => {
+                        // Room owners have all permissions for their room
+                        if room.owner_id == user_id {
+                            return Ok(true);
+                        }
+                        
+                        // Room members may have some permissions based on role
+                        if room.members.contains(&user_id.to_string()) {
+                            match user.role {
+                                UserRole::Admin => Ok(true), // Admins have all permissions
+                                UserRole::Owner => Ok(true), // Owners have all permissions for entities they belong to
+                                UserRole::Member => {
+                                    match permission {
+                                        Permission::ViewContent => Ok(true), // Members can view content
+                                        Permission::SendMessages => Ok(true), // Members can send messages
+                                        Permission::ReadMessages => Ok(true), // Members can read messages
+                                        _ => Ok(false)
+                                    }
+                                },
+                                _ => Ok(false)
+                            }
+                        } else {
+                            Ok(false)
+                        }
+                    },
+                }
+            } else {
+                Err(NetworkError::msg("Entity not found"))
+            }
+        })
+    }
+    
+    fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
+        self.with_read_transaction(|tx| tx.is_member_of_domain(user_id, domain_id))
+    }
+    
+    fn check_permission<T: DomainEntity + 'static>(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        permission: Permission
+    ) -> Result<bool, NetworkError> {
+        self.check_entity_permission(user_id, entity_id, permission)
+    }
+    
+    fn check_room_access(&self, user_id: &str, room_id: &str) -> Result<bool, NetworkError> {
+        // Check if user is an admin
+        if self.is_admin(user_id) {
+            return Ok(true);
+        }
+        
+        // Check if user is member of the room
+        self.with_read_transaction(|tx| {
+            if let Some(domain) = tx.get_domain(room_id) {
+                match domain {
+                    Domain::Room { room } => {
+                        Ok(room.owner_id == user_id || room.members.contains(&user_id.to_string()))
+                    },
+                    _ => Err(NetworkError::msg("Not a room"))
+                }
+            } else {
+                Err(NetworkError::msg("Room not found"))
+            }
+        })
+    }
+    
     fn get_domain(&self, domain_id: &str) -> Option<Domain> {
         let domains = self.domains.read().unwrap();
         domains.get(domain_id).cloned()
     }
-
-    fn add_user_to_domain(
+    
+    fn add_user_to_domain(&self, user_id: &str, domain_id: &str, role: UserRole) -> Result<(), NetworkError> {
+        self.with_write_transaction(|tx| tx.add_user_to_domain(user_id, domain_id, role))
+    }
+    
+    fn remove_user_from_domain(&self, user_id: &str, domain_id: &str) -> Result<(), NetworkError> {
+        self.with_write_transaction(|tx| tx.remove_user_from_domain(user_id, domain_id))
+    }
+    
+    fn get_domain_entity<T: DomainEntity + 'static>(
         &self,
         user_id: &str,
-        domain_id: &str,
-        target_user_id: &str,
-    ) -> Result<(), NetworkError> {
-        // First check if the user has permission
-        self.check_permission(user_id, Some(domain_id), UserRole::Admin)?;
-        
-        // Check if target user exists
-        let users = self.users.read().unwrap();
-        if !users.contains_key(target_user_id) {
-            return Err(NetworkError::msg(format!("Target user {} not found", target_user_id)));
+        entity_id: &str,
+    ) -> Result<T, NetworkError> {
+        // Check permission first
+        let read_permission = Permission::ReadMessages;
+        if !self.check_entity_permission(user_id, entity_id, read_permission)? {
+            return Err(NetworkError::msg("No permission to get this entity"));
         }
         
-        // Add user to domain
-        self.update_domain_members(domain_id, target_user_id, MemberAction::Add)?;
-        
-        Ok(())
+        // Get the domain
+        if let Some(domain) = self.get_domain(entity_id) {
+            // Convert domain to the requested entity type
+            if let Some(entity) = T::from_domain(domain) {
+                Ok(entity)
+            } else {
+                Err(NetworkError::msg("Domain is not of the requested entity type"))
+            }
+        } else {
+            Err(NetworkError::msg("Entity not found"))
+        }
     }
-
-    fn remove_user_from_domain(
+    
+    fn create_domain_entity<T: DomainEntity + 'static>(
         &self,
         user_id: &str,
-        domain_id: &str,
-        target_user_id: &str,
-    ) -> Result<(), NetworkError> {
-        // Check if the user has permission to remove members
-        self.check_permission(user_id, Some(domain_id), UserRole::Admin)?;
-
-        // Remove target user from domain
-        self.update_domain_members(domain_id, target_user_id, MemberAction::Remove)?;
+        parent_id: Option<&str>,
+        name: &str,
+        description: &str,
+    ) -> Result<T, NetworkError> {
+        // Check if user has permission to create this entity type
+        if !self.is_admin(user_id) {
+            if let Some(_parent_id) = parent_id {
+                // Check parent permissions if applicable
+                let create_permission = Permission::CreateRoom;
+                if !self.check_entity_permission(user_id, _parent_id, create_permission)? {
+                    return Err(NetworkError::msg("No permission to create entity in this parent"));
+                }
+            } else {
+                // Creating a top-level entity requires admin privileges
+                return Err(NetworkError::msg("No permission to create top-level entity"));
+            }
+        }
         
-        Ok(())
+        // Generate a new ID
+        let entity_id = uuid::Uuid::new_v4().to_string();
+        
+        // Create the entity
+        let entity = T::create(entity_id.clone(), name, description);
+        
+        // Convert to domain and insert
+        let domain = entity.clone().into_domain();
+        
+        self.with_write_transaction(|tx| {
+            // Clone domain before inserting to keep ownership
+            let domain_clone = domain.clone();
+            tx.insert(domain.id().to_string(), domain)?;
+            
+            // If there's a parent, add this entity as a child
+            if let Some(_parent_id) = parent_id {
+                // Logic to add child relationship if needed
+            }
+            
+            let updated_domain = T::from_domain(domain_clone)
+                .ok_or_else(|| NetworkError::msg("Failed to convert domain"))?;
+            Ok(updated_domain)
+        })
+    }
+    
+    fn delete_domain_entity<T: DomainEntity + 'static>(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+    ) -> Result<T, NetworkError> {
+        // Check if user has permission to delete this entity
+        let delete_permission = match std::any::type_name::<T>() {
+            "Office" => Permission::DeleteOffice,
+            "Room" => Permission::DeleteRoom,
+            _ => Permission::All
+        };
+        
+        if !self.check_entity_permission(user_id, entity_id, delete_permission)? {
+            return Err(NetworkError::msg("No permission to delete this entity"));
+        }
+        
+        // Get entity before deleting it
+        let entity = self.get_domain_entity::<T>(user_id, entity_id)?;
+        
+        // Remove the entity
+        self.with_write_transaction(|tx| {
+            tx.remove(entity_id)?;
+            Ok(entity)
+        })
+    }
+    
+    fn update_domain_entity<T: DomainEntity + 'static>(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+        name: Option<&str>,
+        description: Option<&str>,
+    ) -> Result<T, NetworkError> {
+        // Check if user has permission to update this entity
+        let update_permission = match std::any::type_name::<T>() {
+            "Office" => Permission::UpdateOfficeSettings,
+            "Room" => Permission::UpdateRoomSettings,
+            _ => Permission::All
+        };
+        
+        if !self.check_entity_permission(user_id, entity_id, update_permission)? {
+            return Err(NetworkError::msg("No permission to update this entity"));
+        }
+        
+        // Update the entity
+        self.with_write_transaction(|tx| {
+            if let Some(mut domain) = tx.get_domain(entity_id).cloned() {
+                // Update domain properties
+                if let Some(name) = name {
+                    domain.update_name(name.to_string());
+                }
+                
+                if let Some(description) = description {
+                    domain.update_description(description.to_string());
+                }
+                
+                // Save the updated domain
+                let domain_clone = domain.clone();
+                tx.update(&entity_id, domain)?;
+                let updated_domain = T::from_domain(domain_clone)
+                    .ok_or_else(|| NetworkError::msg("Failed to convert domain"))?;
+                Ok(updated_domain)
+            } else {
+                Err(NetworkError::msg("Entity not found"))
+            }
+        })
+    }
+    
+    fn list_domain_entities<T: DomainEntity + 'static>(
+        &self,
+        user_id: &str,
+        parent_id: Option<&str>,
+    ) -> Result<Vec<T>, NetworkError> {
+        // Check if user is admin or has appropriate permissions
+        if !self.is_admin(user_id) {
+            if let Some(_parent_id) = parent_id {
+                // Check if user has access to the parent domain
+                if !self.is_member_of_domain(user_id, _parent_id)? {
+                    return Err(NetworkError::msg("No permission to list entities in this parent"));
+                }
+            }
+        }
+        
+        // List entities
+        self.with_read_transaction(|tx| {
+            let mut entities = Vec::new();
+            
+            for (_, domain) in tx.get_domains().iter() {
+                // Check if domain has the expected parent
+                let domain_parent_matches = match domain {
+                    Domain::Office { .. } => {
+                        if let Some(_parent) = &parent_id {
+                            false // Offices don't have parents
+                        } else {
+                            true // Offices are always top-level entities
+                        }
+                    },
+                    Domain::Room { room } => {
+                        if let Some(_parent) = &parent_id {
+                            room.office_id == *_parent
+                        } else {
+                            false // Rooms always have a parent office
+                        }
+                    },
+                };
+                
+                if domain_parent_matches {
+                    if let Some(entity) = T::from_domain(domain.clone()) {
+                        entities.push(entity);
+                    }
+                }
+            }
+            
+            Ok(entities)
+        })
+    }
+    
+    fn create_office(
+        &self,
+        user_id: &str,
+        name: &str,
+        description: &str,
+    ) -> Result<Office, NetworkError> {
+        // Use the generic method with Office type
+        self.create_domain_entity::<Office>(user_id, None, name, description)
+    }
+    
+    fn create_room(
+        &self,
+        user_id: &str,
+        office_id: &str,
+        name: &str,
+        description: &str,
+    ) -> Result<Room, NetworkError> {
+        // Use the generic method with Room type
+        self.create_domain_entity::<Room>(user_id, Some(office_id), name, description)
+    }
+    
+    fn get_office(
+        &self,
+        user_id: &str,
+        office_id: &str,
+    ) -> Result<Office, NetworkError> {
+        // Use the generic method with Office type
+        self.get_domain_entity::<Office>(user_id, office_id)
+    }
+    
+    fn get_room(
+        &self,
+        user_id: &str,
+        room_id: &str,
+    ) -> Result<Room, NetworkError> {
+        // Use the generic method with Room type
+        self.get_domain_entity::<Room>(user_id, room_id)
+    }
+    
+    fn delete_office(
+        &self,
+        user_id: &str,
+        office_id: &str,
+    ) -> Result<Office, NetworkError> {
+        let _office = self.get_office(user_id, office_id)?;
+        self.delete_domain_entity::<Office>(user_id, office_id)
+    }
+    
+    fn delete_room(
+        &self,
+        user_id: &str,
+        room_id: &str,
+    ) -> Result<Room, NetworkError> {
+        let _room = self.get_room(user_id, room_id)?;
+        self.delete_domain_entity::<Room>(user_id, room_id)
+    }
+    
+    fn update_office(
+        &self,
+        user_id: &str,
+        office_id: &str,
+        name: Option<&str>,
+        description: Option<&str>,
+    ) -> Result<Office, NetworkError> {
+        // Get the office before updating to check if it exists
+        let _office = self.get_office(user_id, office_id)?;
+        
+        // Update the office
+        self.update_domain_entity::<Office>(user_id, office_id, name, description)
+    }
+    
+    fn update_room(
+        &self,
+        user_id: &str,
+        room_id: &str,
+        name: Option<&str>,
+        description: Option<&str>,
+    ) -> Result<Room, NetworkError> {
+        // Get the room before updating to check if it exists
+        let _room = self.get_room(user_id, room_id)?;
+        
+        // Update the room
+        self.update_domain_entity::<Room>(user_id, room_id, name, description)
+    }
+    
+    fn list_offices(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<Office>, NetworkError> {
+        // Use the generic method with Office type
+        self.list_domain_entities::<Office>(user_id, None)
+    }
+    
+    fn list_rooms(
+        &self,
+        user_id: &str,
+        office_id: &str,
+    ) -> Result<Vec<Room>, NetworkError> {
+        // Use the generic method with Room type
+        self.list_domain_entities::<Room>(user_id, Some(office_id))
+    }
+}
+
+impl<R: Ratchet> WorkspaceServerKernel<R> {
+    fn can_access_domain<T: DomainEntity + 'static>(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+    ) -> Result<bool, NetworkError> {
+        // Get user permissions
+        let user = self.get_user(user_id).ok_or_else(|| NetworkError::msg("User not found"))?;
+        
+        // Administrators can access any domain
+        if user.is_administrator() {
+            return Ok(true);
+        }
+        
+        // Check if user is a member of the domain
+        self.with_read_transaction(|tx| {
+            tx.is_member_of_domain(user_id, entity_id)
+        })
     }
 }
