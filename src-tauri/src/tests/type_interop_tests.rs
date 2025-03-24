@@ -2,7 +2,7 @@
 mod tests {
     use crate::commands::register::RegistrationRequestTS;
     use crate::util::RegistrationInfo;
-    use serde_json::{json, to_string, from_str};
+    use serde_json::{from_str, json, to_string};
 
     // Define test versions of the types to avoid accessing private modules
     #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -34,8 +34,9 @@ mod tests {
         };
 
         // Serialize to JSON
-        let json_str = to_string(&registration_request).expect("Failed to serialize RegistrationRequestTS");
-        
+        let json_str =
+            to_string(&registration_request).expect("Failed to serialize RegistrationRequestTS");
+
         // Define the expected JSON structure (matching TypeScript format)
         let expected_json = json!({
             "workspaceIdentifier": "127.0.0.1:12345",
@@ -49,23 +50,43 @@ mod tests {
             "username": "testuser",
             "profilePassword": "test-profile-password"
         });
-        
+
         // Compare serialized JSON with expected JSON
-        let actual_json: serde_json::Value = serde_json::from_str(&json_str).expect("Failed to parse JSON");
-        assert_eq!(actual_json, expected_json, "JSON serialization mismatch for RegistrationRequestTS");
-        
+        let actual_json: serde_json::Value =
+            serde_json::from_str(&json_str).expect("Failed to parse JSON");
+        assert_eq!(
+            actual_json, expected_json,
+            "JSON serialization mismatch for RegistrationRequestTS"
+        );
+
         // Test deserialization from JSON
-        let deserialized: RegistrationRequestTS = from_str(&json_str).expect("Failed to deserialize RegistrationRequestTS");
-        assert_eq!(deserialized.workspaceIdentifier, registration_request.workspaceIdentifier);
-        assert_eq!(deserialized.workspacePassword, registration_request.workspacePassword);
-        assert_eq!(deserialized.securityLevel, registration_request.securityLevel);
+        let deserialized: RegistrationRequestTS =
+            from_str(&json_str).expect("Failed to deserialize RegistrationRequestTS");
+        assert_eq!(
+            deserialized.workspaceIdentifier,
+            registration_request.workspaceIdentifier
+        );
+        assert_eq!(
+            deserialized.workspacePassword,
+            registration_request.workspacePassword
+        );
+        assert_eq!(
+            deserialized.securityLevel,
+            registration_request.securityLevel
+        );
         assert_eq!(deserialized.securityMode, registration_request.securityMode);
-        assert_eq!(deserialized.encryptionAlgorithm, registration_request.encryptionAlgorithm);
+        assert_eq!(
+            deserialized.encryptionAlgorithm,
+            registration_request.encryptionAlgorithm
+        );
         assert_eq!(deserialized.kemAlgorithm, registration_request.kemAlgorithm);
         assert_eq!(deserialized.sigAlgorithm, registration_request.sigAlgorithm);
         assert_eq!(deserialized.fullName, registration_request.fullName);
         assert_eq!(deserialized.username, registration_request.username);
-        assert_eq!(deserialized.profilePassword, registration_request.profilePassword);
+        assert_eq!(
+            deserialized.profilePassword,
+            registration_request.profilePassword
+        );
     }
 
     #[test]
@@ -90,8 +111,9 @@ mod tests {
         };
 
         // Serialize to JSON
-        let json_str = to_string(&connect_request).expect("Failed to serialize TestConnectRequestTS");
-        
+        let json_str =
+            to_string(&connect_request).expect("Failed to serialize TestConnectRequestTS");
+
         // Define the expected JSON structure (matching TypeScript format)
         let expected_json = json!({
             "registrationInfo": {
@@ -107,23 +129,58 @@ mod tests {
                 "profile_password": "test-profile-password"
             }
         });
-        
+
         // Compare serialized JSON with expected JSON
-        let actual_json: serde_json::Value = serde_json::from_str(&json_str).expect("Failed to parse JSON");
-        assert_eq!(actual_json, expected_json, "JSON serialization mismatch for TestConnectRequestTS");
-        
+        let actual_json: serde_json::Value =
+            serde_json::from_str(&json_str).expect("Failed to parse JSON");
+        assert_eq!(
+            actual_json, expected_json,
+            "JSON serialization mismatch for TestConnectRequestTS"
+        );
+
         // Test deserialization from JSON
-        let deserialized: TestConnectRequestTS = from_str(&json_str).expect("Failed to deserialize TestConnectRequestTS");
-        assert_eq!(deserialized.registrationInfo.server_address, registration_info.server_address);
-        assert_eq!(deserialized.registrationInfo.server_password, registration_info.server_password);
-        assert_eq!(deserialized.registrationInfo.security_level, registration_info.security_level);
-        assert_eq!(deserialized.registrationInfo.security_mode, registration_info.security_mode);
-        assert_eq!(deserialized.registrationInfo.encryption_algorithm, registration_info.encryption_algorithm);
-        assert_eq!(deserialized.registrationInfo.kem_algorithm, registration_info.kem_algorithm);
-        assert_eq!(deserialized.registrationInfo.sig_algorithm, registration_info.sig_algorithm);
-        assert_eq!(deserialized.registrationInfo.full_name, registration_info.full_name);
-        assert_eq!(deserialized.registrationInfo.username, registration_info.username);
-        assert_eq!(deserialized.registrationInfo.profile_password, registration_info.profile_password);
+        let deserialized: TestConnectRequestTS =
+            from_str(&json_str).expect("Failed to deserialize TestConnectRequestTS");
+        assert_eq!(
+            deserialized.registrationInfo.server_address,
+            registration_info.server_address
+        );
+        assert_eq!(
+            deserialized.registrationInfo.server_password,
+            registration_info.server_password
+        );
+        assert_eq!(
+            deserialized.registrationInfo.security_level,
+            registration_info.security_level
+        );
+        assert_eq!(
+            deserialized.registrationInfo.security_mode,
+            registration_info.security_mode
+        );
+        assert_eq!(
+            deserialized.registrationInfo.encryption_algorithm,
+            registration_info.encryption_algorithm
+        );
+        assert_eq!(
+            deserialized.registrationInfo.kem_algorithm,
+            registration_info.kem_algorithm
+        );
+        assert_eq!(
+            deserialized.registrationInfo.sig_algorithm,
+            registration_info.sig_algorithm
+        );
+        assert_eq!(
+            deserialized.registrationInfo.full_name,
+            registration_info.full_name
+        );
+        assert_eq!(
+            deserialized.registrationInfo.username,
+            registration_info.username
+        );
+        assert_eq!(
+            deserialized.registrationInfo.profile_password,
+            registration_info.profile_password
+        );
     }
 
     #[test]
@@ -136,21 +193,27 @@ mod tests {
         };
 
         // Serialize to JSON
-        let json_str = to_string(&connect_response).expect("Failed to serialize TestConnectResponseTS");
-        
+        let json_str =
+            to_string(&connect_response).expect("Failed to serialize TestConnectResponseTS");
+
         // Define the expected JSON structure (matching TypeScript format)
         let expected_json = json!({
             "cid": "12345",
             "success": true,
             "message": "Connection successful"
         });
-        
+
         // Compare serialized JSON with expected JSON
-        let actual_json: serde_json::Value = serde_json::from_str(&json_str).expect("Failed to parse JSON");
-        assert_eq!(actual_json, expected_json, "JSON serialization mismatch for TestConnectResponseTS");
-        
+        let actual_json: serde_json::Value =
+            serde_json::from_str(&json_str).expect("Failed to parse JSON");
+        assert_eq!(
+            actual_json, expected_json,
+            "JSON serialization mismatch for TestConnectResponseTS"
+        );
+
         // Test deserialization from JSON
-        let deserialized: TestConnectResponseTS = from_str(&json_str).expect("Failed to deserialize TestConnectResponseTS");
+        let deserialized: TestConnectResponseTS =
+            from_str(&json_str).expect("Failed to deserialize TestConnectResponseTS");
         assert_eq!(deserialized.cid, connect_response.cid);
         assert_eq!(deserialized.success, connect_response.success);
         assert_eq!(deserialized.message, connect_response.message);
@@ -174,17 +237,41 @@ mod tests {
 
         // Convert to RegistrationInfo
         let registration_info: RegistrationInfo = registration_request.clone().into();
-        
+
         // Verify conversion
-        assert_eq!(registration_info.server_address, registration_request.workspaceIdentifier);
-        assert_eq!(registration_info.server_password, Some(registration_request.workspacePassword));
-        assert_eq!(registration_info.security_level, registration_request.securityLevel);
-        assert_eq!(registration_info.security_mode, registration_request.securityMode);
-        assert_eq!(registration_info.encryption_algorithm, registration_request.encryptionAlgorithm);
-        assert_eq!(registration_info.kem_algorithm, registration_request.kemAlgorithm);
-        assert_eq!(registration_info.sig_algorithm, registration_request.sigAlgorithm);
+        assert_eq!(
+            registration_info.server_address,
+            registration_request.workspaceIdentifier
+        );
+        assert_eq!(
+            registration_info.server_password,
+            Some(registration_request.workspacePassword)
+        );
+        assert_eq!(
+            registration_info.security_level,
+            registration_request.securityLevel
+        );
+        assert_eq!(
+            registration_info.security_mode,
+            registration_request.securityMode
+        );
+        assert_eq!(
+            registration_info.encryption_algorithm,
+            registration_request.encryptionAlgorithm
+        );
+        assert_eq!(
+            registration_info.kem_algorithm,
+            registration_request.kemAlgorithm
+        );
+        assert_eq!(
+            registration_info.sig_algorithm,
+            registration_request.sigAlgorithm
+        );
         assert_eq!(registration_info.full_name, registration_request.fullName);
         assert_eq!(registration_info.username, registration_request.username);
-        assert_eq!(registration_info.profile_password, registration_request.profilePassword);
+        assert_eq!(
+            registration_info.profile_password,
+            registration_request.profilePassword
+        );
     }
 }

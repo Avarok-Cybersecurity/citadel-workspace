@@ -3,7 +3,7 @@ use citadel_internal_service_types::{
     InternalServiceRequest, InternalServiceResponse, SessionSecuritySettings,
 };
 use citadel_types::crypto::{
-    AlgorithmsExt, CryptoParameters, EncryptionAlgorithm, KemAlgorithm, SecrecyMode, SigAlgorithm
+    AlgorithmsExt, CryptoParameters, EncryptionAlgorithm, KemAlgorithm, SecrecyMode, SigAlgorithm,
 };
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -47,8 +47,7 @@ pub async fn register(
 ) -> Result<RegistrationResponseTS, String> {
     println!("Registering to {}...", request.workspaceIdentifier);
 
-    let server_addr =
-        SocketAddr::from_str(&request.workspaceIdentifier)
+    let server_addr = SocketAddr::from_str(&request.workspaceIdentifier)
         .map_err(|_| format!("Invalid server address: {}", &request.workspaceIdentifier))?;
     let request_id = Uuid::new_v4();
     let request_copy = request.clone();
@@ -85,7 +84,8 @@ pub async fn register(
 
     // Support all 4 types of responses to accomudate connect_after_register as true/false
     let response = match send_and_recv(internal_request, request_id, &state).await {
-        InternalServiceResponse::RegisterSuccess(..) | InternalServiceResponse::ConnectSuccess(..) => {
+        InternalServiceResponse::RegisterSuccess(..)
+        | InternalServiceResponse::ConnectSuccess(..) => {
             println!("Registration was successful");
             RegistrationResponseTS {
                 message: "Successful registration".to_owned(),

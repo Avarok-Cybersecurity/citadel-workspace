@@ -1,7 +1,7 @@
-use citadel_sdk::prelude::{NetworkError, Ratchet};
-use crate::structs::Office;
-use crate::kernel::WorkspaceServerKernel;
 use crate::handlers::domain_ops::DomainOperations;
+use crate::kernel::WorkspaceServerKernel;
+use crate::structs::Office;
+use citadel_sdk::prelude::{NetworkError, Ratchet};
 
 // Office-related command handlers using the domain abstraction
 // Office handlers - functions for creating, updating, and querying workspace offices
@@ -22,11 +22,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         )
     }
 
-    pub fn delete_office(
-        &self,
-        user_id: &str,
-        office_id: &str,
-    ) -> Result<Office, NetworkError> {
+    pub fn delete_office(&self, user_id: &str, office_id: &str) -> Result<Office, NetworkError> {
         // Use the domain abstraction for deleting an office
         self.delete_domain_entity::<Office>(user_id, office_id)
     }
@@ -48,7 +44,11 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     }
 
     /// List all offices
-    pub fn list_offices(&self, user_id: &str, parent_id: Option<&str>) -> Result<Vec<Office>, NetworkError> {
+    pub fn list_offices(
+        &self,
+        user_id: &str,
+        parent_id: Option<&str>,
+    ) -> Result<Vec<Office>, NetworkError> {
         // Use the domain abstraction for listing all offices
         self.list_domain_entities::<Office>(user_id, parent_id)
     }

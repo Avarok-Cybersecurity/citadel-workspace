@@ -1,18 +1,18 @@
 mod commands;
 mod structs;
-mod util;
 #[cfg(test)]
 mod tests;
+mod util;
 
 use citadel_internal_service_connector::connector::InternalServiceConnector;
 use citadel_internal_service_connector::messenger::CitadelWorkspaceMessenger;
 use citadel_logging::setup_log;
 use commands::{connect, list_all_peers, list_known_servers, peer_connect, register};
-use uuid::Uuid;
 use std::{collections::HashMap, sync::Arc};
 use structs::{ConnectionRouterState, PacketHandle};
 use tauri::Manager;
 use tokio::sync::{Mutex, RwLock};
+use uuid::Uuid;
 
 const INTERNAL_SERVICE_ADDR: &str = "127.0.0.1:12345";
 
@@ -23,7 +23,10 @@ pub async fn run() {
         .expect("Unable to connect to the internal service");
 
     let (multiplexer, mut stream) = CitadelWorkspaceMessenger::new(connector);
-    let default_mux = multiplexer.multiplex(0).await.expect("Failed to create default multiplexer");
+    let default_mux = multiplexer
+        .multiplex(0)
+        .await
+        .expect("Failed to create default multiplexer");
 
     citadel_logging::info!(target: "citadel", "Connected to internal service.");
 
@@ -49,7 +52,7 @@ pub async fn run() {
                     }
                 } else {
                     citadel_logging::warn!(target: "citadel", "No route found for message {packet:?}")
-                }   
+                }
             } else {
                 citadel_logging::warn!(target: "citadel", "No request ID found in message {packet:?}");
                 // TODO: Handle spurious events

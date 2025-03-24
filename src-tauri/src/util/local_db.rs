@@ -33,7 +33,7 @@ impl<'a> LocalDb<'a> {
             cid: self.cid,
             peer_cid: None,
             key,
-            value: serde_json::to_vec(value).map_err(|e| e.to_string())?
+            value: serde_json::to_vec(value).map_err(|e| e.to_string())?,
         };
 
         send_and_recv(payload, request_id, self.state).await;
@@ -49,41 +49,45 @@ impl<'a> LocalDb<'a> {
             key: key.clone(),
         };
 
-         match send_and_recv(payload, request_id, self.state).await {
-             InternalServiceResponse::LocalDBGetKVSuccess(data) => {
-                 let deserialized: T = serde_json::from_slice(data.value.as_slice()).map_err(|e| e.to_string())?;
-                 println!("Successfully got value from key '{}'.", key);
-                 Ok(deserialized)
-             },
-             InternalServiceResponse::LocalDBGetKVFailure(err) => {
-                 Err(err.message)
-             },
-             unknown => {
-                 println!("Unexpected get_kv response:\n{:#?}", unknown);
-                 Err("Internal Error".to_owned())
-             }
-         }
+        match send_and_recv(payload, request_id, self.state).await {
+            InternalServiceResponse::LocalDBGetKVSuccess(data) => {
+                let deserialized: T =
+                    serde_json::from_slice(data.value.as_slice()).map_err(|e| e.to_string())?;
+                println!("Successfully got value from key '{}'.", key);
+                Ok(deserialized)
+            }
+            InternalServiceResponse::LocalDBGetKVFailure(err) => Err(err.message),
+            unknown => {
+                println!("Unexpected get_kv response:\n{:#?}", unknown);
+                Err("Internal Error".to_owned())
+            }
+        }
     }
 
     async fn list_all_kv(&self) -> Result<HashMap<String, String>, String> {
-         let request_id = Uuid::new_v4();
-         let payload = InternalServiceRequest::LocalDBGetAllKV {
-             request_id,
-             cid: self.cid,
-             peer_cid: None,
-         };
+        let request_id = Uuid::new_v4();
+        let payload = InternalServiceRequest::LocalDBGetAllKV {
+            request_id,
+            cid: self.cid,
+            peer_cid: None,
+        };
 
-         match send_and_recv(payload, request_id, self.state).await {
-             InternalServiceResponse::LocalDBGetAllKVFailure(err) => {
-                 Err(err.message)
-             },
-             InternalServiceResponse::LocalDBGetAllKVSuccess(data) => {
-                 Ok(data.map.into_iter().map(|(k, v)| (k, serde_json::from_slice(&v).unwrap_or_else(|_| "#BAD DECODING!".to_owned()))).collect())
-             },
-             unknown => {
-                 println!("Unexpected list_all_kv response:\n{:#?}", unknown);
-                 Err("Internal Error".to_owned())
-             }
+        match send_and_recv(payload, request_id, self.state).await {
+            InternalServiceResponse::LocalDBGetAllKVFailure(err) => Err(err.message),
+            InternalServiceResponse::LocalDBGetAllKVSuccess(data) => Ok(data
+                .map
+                .into_iter()
+                .map(|(k, v)| {
+                    (
+                        k,
+                        serde_json::from_slice(&v).unwrap_or_else(|_| "#BAD DECODING!".to_owned()),
+                    )
+                })
+                .collect()),
+            unknown => {
+                println!("Unexpected list_all_kv response:\n{:#?}", unknown);
+                Err("Internal Error".to_owned())
+            }
         }
     }
 
@@ -115,9 +119,7 @@ impl<'a> LocalDb<'a> {
     pub async fn list_known_servers(&self) -> Result<KnownServers, String> {
         let key = KnownServers::key_name_from_identifier(None);
         match self.get_kv(key.clone()).await {
-            Ok(data) => {
-                Ok(data)
-            }
+            Ok(data) => Ok(data),
 
             Err(err) => {
                 citadel_logging::error!(target: "citadel", "Error getting known servers: {err}");

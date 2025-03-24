@@ -1,4 +1,4 @@
-use tauri::{WindowEvent, Window};
+use tauri::{Window, WindowEvent};
 
 // In an event handler:
 pub(crate) fn on_window_event(_window: &Window, _event: &WindowEvent) {

@@ -1,7 +1,7 @@
-use citadel_sdk::prelude::{NetworkError, Ratchet};
-use crate::structs::Room;
-use crate::kernel::WorkspaceServerKernel;
 use crate::handlers::domain_ops::DomainOperations;
+use crate::kernel::WorkspaceServerKernel;
+use crate::structs::Room;
+use citadel_sdk::prelude::{NetworkError, Ratchet};
 
 /// Room-related command handlers using the domain abstraction
 impl<R: Ratchet> WorkspaceServerKernel<R> {
@@ -20,21 +20,12 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             }
 
             // Use the domain abstraction for creating a room
-            self.create_domain_entity::<Room>(
-                user_id,
-                Some(office_id),
-                name,
-                description,
-            )
+            self.create_domain_entity::<Room>(user_id, Some(office_id), name, description)
         })
     }
 
     /// Delete a room
-    pub fn delete_room(
-        &self,
-        user_id: &str,
-        room_id: &str,
-    ) -> Result<Room, NetworkError> {
+    pub fn delete_room(&self, user_id: &str, room_id: &str) -> Result<Room, NetworkError> {
         self.delete_domain_entity::<Room>(user_id, room_id)
     }
 
@@ -51,21 +42,13 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     }
 
     /// Get a room by ID
-    pub fn get_room(
-        &self,
-        user_id: &str,
-        room_id: &str,
-    ) -> Result<Room, NetworkError> {
+    pub fn get_room(&self, user_id: &str, room_id: &str) -> Result<Room, NetworkError> {
         // Use the domain abstraction for getting a room
         self.get_domain_entity::<Room>(user_id, room_id)
     }
 
     /// List all rooms in a specific office
-    pub fn list_rooms(
-        &self,
-        user_id: &str,
-        office_id: &str,
-    ) -> Result<Vec<Room>, NetworkError> {
+    pub fn list_rooms(&self, user_id: &str, office_id: &str) -> Result<Vec<Room>, NetworkError> {
         // Verify the user is a member of the office first
         if !self.is_member_of_domain(user_id, office_id)? {
             return Err(NetworkError::msg("User is not a member of the office"));

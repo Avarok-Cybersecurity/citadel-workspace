@@ -1,5 +1,5 @@
+use crate::structs::{Office, Permission, Room, User, UserRole};
 use serde::{Deserialize, Serialize};
-use crate::structs::{Office, Room, User, UserRole, Permission};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PermissionEndowOperation {

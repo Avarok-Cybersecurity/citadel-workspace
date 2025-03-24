@@ -1,6 +1,6 @@
-use citadel_sdk::prelude::Ratchet;
 use crate::kernel::WorkspaceServerKernel;
-use crate::structs::{User, Domain};
+use crate::structs::{Domain, User};
+use citadel_sdk::prelude::Ratchet;
 
 // Query handlers - functions for retrieving workspace information
 

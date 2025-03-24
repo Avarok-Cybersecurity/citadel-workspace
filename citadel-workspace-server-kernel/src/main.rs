@@ -1,7 +1,5 @@
 use citadel_logging::info;
-use citadel_sdk::prelude::{
-    BackendType, NodeBuilder, NodeType, StackedRatchet,
-};
+use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
 use std::error::Error;
 use std::net::SocketAddr;
 use structopt::StructOpt;

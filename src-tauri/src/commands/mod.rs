@@ -49,12 +49,13 @@ pub(crate) async fn send_and_recv_with_inspector<F, T>(
     request_id: Uuid,
     state: &State<'_, ConnectionRouterState>,
     mut inspector: F,
-) -> T where F: FnMut(InternalServiceResponse) -> InspectionResult<T> {
+) -> T
+where
+    F: FnMut(InternalServiceResponse) -> InspectionResult<T>,
+{
     // Create a new mpsc channel and attach the request id to it
     let (tx, mut rx) = mpsc::unbounded_channel::<InternalServiceResponse>();
-    let packet_handle = PacketHandle {
-        channel: tx,
-    };
+    let packet_handle = PacketHandle { channel: tx };
 
     // Attach the mpsc channel to the vector of listeners
     // NOTE: be careful touching this; very easy to end up in a deadlock
@@ -69,10 +70,14 @@ pub(crate) async fn send_and_recv_with_inspector<F, T>(
         request_id, payload
     );
 
-    state.default_mux.send_request(payload).await.expect("error sending payload to stream");
+    state
+        .default_mux
+        .send_request(payload)
+        .await
+        .expect("error sending payload to stream");
 
     loop {
-         // Wait for the background TCP listener (main.rs) to dispatch the message   
+        // Wait for the background TCP listener (main.rs) to dispatch the message
         let incoming = match rx.recv().await {
             Some(v) => v,
             None => panic!("Channel unexpectedly closed before response."),
@@ -88,8 +93,8 @@ pub(crate) async fn send_and_recv_with_inspector<F, T>(
                     );
                 }
 
-                return v
-            },
+                return v;
+            }
             InspectionResult::Continue => continue,
         }
     }

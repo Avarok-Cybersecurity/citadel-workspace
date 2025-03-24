@@ -93,12 +93,8 @@ impl<'a> Transaction for ReadTransaction<'a> {
     fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
         if let Some(domain) = self.get_domain(domain_id) {
             match domain {
-                Domain::Office { office } => {
-                    Ok(office.members.contains(&user_id.to_string()))
-                }
-                Domain::Room { room } => {
-                    Ok(room.members.contains(&user_id.to_string()))
-                }
+                Domain::Office { office } => Ok(office.members.contains(&user_id.to_string())),
+                Domain::Room { room } => Ok(room.members.contains(&user_id.to_string())),
             }
         } else {
             Err(NetworkError::msg("Domain not found"))
@@ -160,12 +156,8 @@ impl<'a> Transaction for WriteTransaction<'a> {
     fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
         if let Some(domain) = self.get_domain(domain_id) {
             match domain {
-                Domain::Office { office } => {
-                    Ok(office.owner_id == user_id)
-                }
-                Domain::Room { room } => {
-                    Ok(room.owner_id == user_id)
-                }
+                Domain::Office { office } => Ok(office.owner_id == user_id),
+                Domain::Room { room } => Ok(room.owner_id == user_id),
             }
         } else {
             Err(NetworkError::msg("Domain not found"))
@@ -214,12 +206,17 @@ impl<'a> Transaction for WriteTransaction<'a> {
         }
 
         // Clone the domain first to avoid borrow issues
-        let mut domain_clone = self.domains.get(domain_id)
+        let mut domain_clone = self
+            .domains
+            .get(domain_id)
             .cloned()
             .ok_or_else(|| NetworkError::msg("Domain not found"))?;
-        
+
         // Record the change for rollback
-        self.changes.push(TransactionChange::Update(domain_id.to_string(), domain_clone.clone()));
+        self.changes.push(TransactionChange::Update(
+            domain_id.to_string(),
+            domain_clone.clone(),
+        ));
 
         // Add user to domain based on its type
         match &mut domain_clone {
@@ -254,12 +251,17 @@ impl<'a> Transaction for WriteTransaction<'a> {
         }
 
         // Clone the domain first to avoid borrow issues
-        let mut domain_clone = self.domains.get(domain_id)
+        let mut domain_clone = self
+            .domains
+            .get(domain_id)
             .cloned()
             .ok_or_else(|| NetworkError::msg("Domain not found"))?;
-        
+
         // Record the change for rollback
-        self.changes.push(TransactionChange::Update(domain_id.to_string(), domain_clone.clone()));
+        self.changes.push(TransactionChange::Update(
+            domain_id.to_string(),
+            domain_clone.clone(),
+        ));
 
         // Remove user from domain based on its type
         match &mut domain_clone {
