@@ -71,16 +71,16 @@ impl User {
     }
 
     /// Grant a permission to the user for a specific domain
-    pub fn grant_permission<T: AsRef<str>>(&mut self, domain_id: T, permission: Permission) {
-        let domain_id = domain_id.as_ref().to_string();
+    pub fn grant_permission<T: Into<String>>(&mut self, domain_id: T, permission: Permission) {
+        // Use into() which is more efficient for owned strings and only clones when necessary
         self.permissions
-            .entry(domain_id)
+            .entry(domain_id.into())
             .or_default()
             .insert(permission);
     }
 
     /// Add a permission to the user for a specific domain (alias for grant_permission)
-    pub fn add_permission<T: AsRef<str>>(&mut self, domain_id: T, permission: Permission) {
+    pub fn add_permission<T: Into<String>>(&mut self, domain_id: T, permission: Permission) {
         self.grant_permission(domain_id, permission);
     }
 
@@ -97,10 +97,9 @@ impl User {
     }
 
     /// Set all permissions for a domain based on the user's role
-    pub fn set_role_permissions<T: AsRef<str>>(&mut self, domain_id: T) {
-        let domain_id = domain_id.as_ref().to_string();
+    pub fn set_role_permissions<T: AsRef<str> + Into<String>>(&mut self, domain_id: T) {
         let role_permissions = Permission::for_role(&self.role);
-        self.permissions.insert(domain_id, role_permissions);
+        self.permissions.insert(domain_id.into(), role_permissions);
     }
 }
 
@@ -133,6 +132,10 @@ const OWNER_RANK: u8 = 20;
 const MEMBER_RANK: u8 = 10;
 const GUEST_RANK: u8 = 5;
 const BANNED_RANK: u8 = 0;
+
+// Custom role thresholds
+const CUSTOM_BASIC_THRESHOLD: u8 = 10;
+const CUSTOM_EDITOR_THRESHOLD: u8 = 15;
 
 pub struct WorkspaceRoles {
     // Mapping from the name to the user role
@@ -293,13 +296,13 @@ impl Permission {
                 permissions.insert(Self::ReadMessages);
 
                 // Additional permissions based on rank
-                if *rank > 10 {
+                if *rank > CUSTOM_BASIC_THRESHOLD {
                     permissions.insert(Self::SendMessages);
                     permissions.insert(Self::UploadFiles);
                     permissions.insert(Self::DownloadFiles);
                 }
 
-                if *rank > 15 {
+                if *rank > CUSTOM_EDITOR_THRESHOLD {
                     permissions.insert(Self::EditMdx);
                 }
             }
