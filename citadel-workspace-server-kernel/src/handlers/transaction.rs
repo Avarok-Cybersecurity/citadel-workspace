@@ -318,7 +318,13 @@ impl Transaction for WriteTransaction<'_> {
             .clone();
 
         // Check if user exists
-        if self.get_user(user_id).is_none() {
+        if let Some(mut user) = self.get_user(user_id).cloned() {
+            // Update user's role if it differs
+            if user.role != role {
+                user.role = role;
+                self.update_user(user_id, user)?;
+            }
+        } else {
             return Err(NetworkError::msg(format!("User {} not found", user_id)));
         }
 

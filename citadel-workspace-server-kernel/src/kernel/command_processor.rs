@@ -153,13 +153,28 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 user_id: member_id,
                 office_id,
                 room_id,
-            } => match self.remove_member(&member_id) {
-                Ok(_) => Ok(WorkspaceResponse::Success),
-                Err(e) => Ok(WorkspaceResponse::Error(format!(
-                    "Failed to remove member: {}",
-                    e
-                ))),
-            },
+            } => {
+                // If office_id or room_id is provided, only remove from that domain
+                // Otherwise, completely remove the user
+                if let Some(domain_id) = office_id.or(room_id) {
+                    match self.remove_member_from_domain(&member_id, &domain_id) {
+                        Ok(_) => Ok(WorkspaceResponse::Success),
+                        Err(e) => Ok(WorkspaceResponse::Error(format!(
+                            "Failed to remove member from domain: {}",
+                            e
+                        ))),
+                    }
+                } else {
+                    // No domain specified, completely remove the user
+                    match self.remove_member(&member_id) {
+                        Ok(_) => Ok(WorkspaceResponse::Success),
+                        Err(e) => Ok(WorkspaceResponse::Error(format!(
+                            "Failed to remove member: {}",
+                            e
+                        ))),
+                    }
+                }
+            }
 
             // Query commands
             WorkspaceCommand::ListOffices => {
