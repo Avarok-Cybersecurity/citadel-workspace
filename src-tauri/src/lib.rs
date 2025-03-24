@@ -11,7 +11,7 @@ use commands::{connect, list_all_peers, list_known_servers, peer_connect, regist
 use std::{collections::HashMap, sync::Arc};
 use structs::{ConnectionRouterState, PacketHandle};
 use tauri::Manager;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 const INTERNAL_SERVICE_ADDR: &str = "127.0.0.1:12345";

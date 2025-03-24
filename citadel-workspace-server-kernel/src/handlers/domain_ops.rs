@@ -240,11 +240,9 @@ impl<R: Ratchet> ServerDomainOps<R> {
                         }
 
                         // Check if user is a member of the office that contains this room
-                        if let Some(office_domain) = tx.get_domain(&room.office_id) {
-                            if let Domain::Office { office } = office_domain {
-                                return Ok(office.owner_id == user_id
-                                    || office.members.contains(&user_id.to_string()));
-                            }
+                        if let Some(Domain::Office { office }) = tx.get_domain(&room.office_id) {
+                            return Ok(office.owner_id == user_id
+                                || office.members.contains(&user_id.to_string()));
                         }
 
                         Ok(false)
@@ -257,11 +255,7 @@ impl<R: Ratchet> ServerDomainOps<R> {
     }
 
     // Helper method to check if user can access a domain
-    fn can_access_domain<T: DomainEntity + 'static>(
-        &self,
-        user_id: &str,
-        entity_id: &str,
-    ) -> Result<bool, NetworkError> {
+    fn can_access_domain(&self, user_id: &str, entity_id: &str) -> Result<bool, NetworkError> {
         // Admins can access all domains
         if self.is_admin(user_id) {
             return Ok(true);
@@ -473,15 +467,11 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
 
             // Get the room
             DomainOperations::with_read_transaction(self, |tx| {
-                if let Some(domain) = tx.get_domain(room_id) {
-                    if let Domain::Room { room } = domain {
-                        // Check if user is a member of the parent office
-                        if let Some(office_domain) = tx.get_domain(&room.office_id) {
-                            if let Domain::Office { office } = office_domain {
-                                return Ok(office.owner_id == user_id
-                                    || office.members.contains(&user_id.to_string()));
-                            }
-                        }
+                if let Some(Domain::Room { room }) = tx.get_domain(room_id) {
+                    // Check if user is a member of the parent office
+                    if let Some(Domain::Office { office }) = tx.get_domain(&room.office_id) {
+                        return Ok(office.owner_id == user_id
+                            || office.members.contains(&user_id.to_string()));
                     }
                 }
 
@@ -577,9 +567,9 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
     ) -> Result<T, NetworkError> {
         // Check if user has permission to create this type of entity
         if !self.check_global_permission(user_id, Permission::CreateEntity)? {
-            return Err(permission_denied(format!(
-                "User does not have permission to create this entity type"
-            )));
+            return Err(permission_denied(
+                "User does not have permission to create this entity type",
+            ));
         }
 
         // If parent_id is provided, check if user has permission to add to that parent
@@ -590,9 +580,9 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
                 parent_id,
                 Permission::AddRoom,
             )? {
-                return Err(permission_denied(format!(
-                    "User does not have permission to add entities to this parent"
-                )));
+                return Err(permission_denied(
+                    "User does not have permission to add entities to this parent",
+                ));
             }
         }
 
@@ -604,7 +594,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
 
         // Add it to the database
         DomainOperations::with_write_transaction(self, |tx| {
-            tx.insert(entity.id(), entity.clone().into_domain());
+            tx.insert(entity.id(), entity.clone().into_domain())?;
             Ok(())
         })?;
 
@@ -630,9 +620,9 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
 
         if !DomainOperations::check_entity_permission(self, user_id, entity_id, delete_permission)?
         {
-            return Err(permission_denied(format!(
-                "User does not have permission to delete this entity"
-            )));
+            return Err(permission_denied(
+                "User does not have permission to delete this entity",
+            ));
         }
 
         // Delete the entity
@@ -671,9 +661,9 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
 
         if !DomainOperations::check_entity_permission(self, user_id, domain_id, update_permission)?
         {
-            return Err(permission_denied(format!(
-                "User does not have permission to update this entity"
-            )));
+            return Err(permission_denied(
+                "User does not have permission to update this entity",
+            ));
         }
 
         // Get the current domain and create an updated copy
@@ -735,21 +725,15 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
 
             // Filter by parent ID if specified
             if let Some(parent_id) = parent_id {
-                match &domain {
-                    Domain::Room { room } => {
-                        if room.office_id != parent_id {
-                            continue;
-                        }
+                if let Domain::Room { room } = &domain {
+                    if room.office_id != parent_id {
+                        continue;
                     }
-                    // Offices don't have parents in the simplified model
-                    _ => {}
                 }
             }
 
             // Check if user has access to this domain
-            if let Ok(has_access) =
-                ServerDomainOps::can_access_domain::<T>(self, user_id, domain.id())
-            {
+            if let Ok(has_access) = ServerDomainOps::can_access_domain(self, user_id, domain.id()) {
                 if has_access {
                     if let Some(entity) = T::from_domain(domain) {
                         filtered_domains.push(entity);
@@ -795,7 +779,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
                 Domain::Office {
                     office: office.clone(),
                 },
-            );
+            )?;
             Ok(())
         })?;
 
@@ -837,7 +821,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
 
         // Add it to the database
         DomainOperations::with_write_transaction(self, |tx| {
-            tx.insert(room_id.clone(), Domain::Room { room: room.clone() });
+            tx.insert(room_id.clone(), Domain::Room { room: room.clone() })?;
             Ok(())
         })?;
 
@@ -846,7 +830,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
 
     fn get_office(&self, user_id: &str, office_id: &str) -> Result<Office, NetworkError> {
         // Check if user can access this office
-        if !ServerDomainOps::can_access_domain::<Office>(self, user_id, office_id)? {
+        if !ServerDomainOps::can_access_domain(self, user_id, office_id)? {
             return Err(permission_denied(
                 "User does not have permission to access this office",
             ));
@@ -905,12 +889,12 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
     }
 
     fn list_offices(&self, user_id: &str) -> Result<Vec<Office>, NetworkError> {
-        DomainOperations::list_domain_entities::<Office>(self, user_id, None)
+        DomainOperations::list_domain_entities(self, user_id, None)
     }
 
     fn list_rooms(&self, user_id: &str, office_id: &str) -> Result<Vec<Room>, NetworkError> {
         // Check if user can access this office
-        if !ServerDomainOps::can_access_domain::<Office>(self, user_id, office_id)? {
+        if !ServerDomainOps::can_access_domain(self, user_id, office_id)? {
             return Err(permission_denied(
                 "User does not have permission to access this office",
             ));

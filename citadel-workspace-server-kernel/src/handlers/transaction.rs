@@ -72,11 +72,12 @@ pub enum TransactionChange {
 }
 
 /// Transaction manager for creating read and write transactions
+#[derive(Default)]
 pub struct TransactionManager {
     pub domains: RwLock<HashMap<String, Domain>>,
 }
 
-impl<'a> Transaction for ReadTransaction<'a> {
+impl Transaction for ReadTransaction<'_> {
     fn get_domain(&self, domain_id: &str) -> Option<&Domain> {
         self.domains.get(domain_id)
     }
@@ -140,7 +141,7 @@ impl<'a> ReadTransaction<'a> {
     }
 }
 
-impl<'a> Transaction for WriteTransaction<'a> {
+impl Transaction for WriteTransaction<'_> {
     fn get_domain(&self, domain_id: &str) -> Option<&Domain> {
         self.domains.get(domain_id)
     }
@@ -327,7 +328,7 @@ impl DerefMut for WriteTransaction<'_> {
     }
 }
 
-impl<'a> Deref for ReadTransaction<'a> {
+impl Deref for ReadTransaction<'_> {
     type Target = HashMap<String, Domain>;
 
     fn deref(&self) -> &Self::Target {
@@ -336,13 +337,6 @@ impl<'a> Deref for ReadTransaction<'a> {
 }
 
 impl TransactionManager {
-    /// Create a new transaction manager
-    pub fn new() -> Self {
-        TransactionManager {
-            domains: RwLock::new(HashMap::new()),
-        }
-    }
-
     /// Create a new read transaction
     pub fn read_transaction(&self) -> ReadTransaction {
         ReadTransaction::new(self.domains.read().unwrap())
@@ -358,10 +352,7 @@ impl TransactionManager {
     where
         F: FnOnce(&dyn Transaction) -> Result<T, NetworkError>,
     {
-        let tx = self.read_transaction();
-        let result = f(&tx);
-        // Read transaction auto-drops
-        result
+        f(&self.read_transaction())
     }
 
     /// Execute a function with a write transaction

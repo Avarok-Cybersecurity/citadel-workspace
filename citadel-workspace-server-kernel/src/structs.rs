@@ -75,7 +75,7 @@ impl User {
         let domain_id = domain_id.as_ref().to_string();
         self.permissions
             .entry(domain_id)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(permission);
     }
 
@@ -334,20 +334,6 @@ pub struct Office {
     pub mdx_content: String,
 }
 
-impl Default for Office {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            name: String::new(),
-            description: String::new(),
-            owner_id: String::new(),
-            members: Vec::new(),
-            rooms: Vec::new(),
-            mdx_content: String::new(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Room {
     pub id: String,
@@ -357,20 +343,6 @@ pub struct Room {
     pub description: String,
     pub members: Vec<String>, // User IDs
     pub mdx_content: String,
-}
-
-impl Default for Room {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            name: String::new(),
-            description: String::new(),
-            owner_id: String::new(),
-            office_id: String::new(),
-            members: Vec::new(),
-            mdx_content: String::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

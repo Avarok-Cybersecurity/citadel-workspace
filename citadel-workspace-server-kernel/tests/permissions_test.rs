@@ -1,5 +1,5 @@
 use citadel_workspace_server::handlers::domain_ops::{DomainOperations, ServerDomainOps};
-use citadel_workspace_server::kernel::Kernel;
+use citadel_workspace_server::kernelx::Kernel;
 use citadel_workspace_server::structs::{Domain, Office, Permission, Room, User, UserRole};
 use std::sync::Arc;
 use uuid::Uuid;

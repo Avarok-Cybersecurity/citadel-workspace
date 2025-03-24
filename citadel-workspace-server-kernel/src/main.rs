@@ -1,16 +1,9 @@
-use citadel_logging::info;
 use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
 use std::error::Error;
 use std::net::SocketAddr;
 use structopt::StructOpt;
 
-// Import the refactored modules
-mod commands;
-mod handlers;
-mod kernel;
-mod structs;
-
-use kernel::WorkspaceServerKernel;
+use citadel_workspace_server::kernel::WorkspaceServerKernel;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
