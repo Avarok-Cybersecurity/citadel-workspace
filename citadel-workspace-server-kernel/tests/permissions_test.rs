@@ -1,15 +1,18 @@
-use citadel_workspace_server::handlers::domain_ops::{DomainOperations, ServerDomainOps};
-use citadel_workspace_server::kernelx::Kernel;
-use citadel_workspace_server::structs::{Domain, Office, Permission, Room, User, UserRole};
+use citadel_workspace_server::handlers::domain::server_ops::ServerDomainOps;
+use citadel_workspace_server::kernel::WorkspaceServerKernel;
+use citadel_workspace_server::structs::{Office, Permission, Room, User, UserRole};
 use std::sync::Arc;
 use uuid::Uuid;
+use citadel_workspace_server::handlers::domain::DomainOperations;
 
 #[cfg(test)]
 mod tests {
+    use citadel_sdk::prelude::StackedRatchet;
+
     use super::*;
 
-    fn create_test_kernel() -> Arc<Kernel> {
-        let kernel = Kernel::new();
+    fn create_test_kernel() -> Arc<WorkspaceServerKernel<StackedRatchet>> {
+        let kernel = WorkspaceServerKernel::default();
         Arc::new(kernel)
     }
 

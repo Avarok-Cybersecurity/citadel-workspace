@@ -1,5 +1,5 @@
 use crate::commands::UpdateOperation;
-use crate::handlers::domain_ops::DomainOperations;
+use crate::handlers::domain::DomainOperations;
 use crate::kernel::WorkspaceServerKernel;
 use crate::structs::{Domain, Permission, UserRole};
 use citadel_logging::{debug, info};

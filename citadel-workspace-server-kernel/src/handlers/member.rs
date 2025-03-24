@@ -5,8 +5,6 @@ use crate::kernel::WorkspaceServerKernel;
 use crate::structs::{Domain, Permission, User, UserRole};
 
 // Member handlers - functions for adding, removing, and updating workspace members
-
-#[allow(dead_code)]
 impl<R: Ratchet> WorkspaceServerKernel<R> {
     pub fn add_member(
         &self,
