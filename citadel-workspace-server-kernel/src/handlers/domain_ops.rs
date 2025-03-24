@@ -222,36 +222,8 @@ impl<R: Ratchet> ServerDomainOps<R> {
 
     // Helper method to check if user is member of a domain
     fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
-        if self.is_admin(user_id) {
-            return Ok(true);
-        }
-
-        self.with_read_transaction(|tx| {
-            if let Some(domain) = tx.get_domain(domain_id) {
-                match domain {
-                    Domain::Office { office } => {
-                        Ok(office.owner_id == user_id
-                            || office.members.contains(&user_id.to_string()))
-                    }
-                    Domain::Room { room } => {
-                        // Check if user is a direct member of the room
-                        if room.owner_id == user_id || room.members.contains(&user_id.to_string()) {
-                            return Ok(true);
-                        }
-
-                        // Check if user is a member of the office that contains this room
-                        if let Some(Domain::Office { office }) = tx.get_domain(&room.office_id) {
-                            return Ok(office.owner_id == user_id
-                                || office.members.contains(&user_id.to_string()));
-                        }
-
-                        Ok(false)
-                    }
-                }
-            } else {
-                Err(permission_denied("Domain not found"))
-            }
-        })
+        // Delegate to the kernel's centralized implementation
+        self.kernel().is_member_of_domain(user_id, domain_id)
     }
 
     // Helper method to check if user can access a domain
@@ -441,7 +413,8 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
     }
 
     fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
-        self.is_member_of_domain(user_id, domain_id)
+        // Delegate to the helper implementation above
+        DomainOperations::kernel(self).is_member_of_domain(user_id, domain_id)
     }
 
     fn check_permission<T: DomainEntity + 'static>(

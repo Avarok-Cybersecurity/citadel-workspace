@@ -127,7 +127,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
         entity_id: &str,
         permission: Permission,
     ) -> Result<bool, NetworkError> {
-        info!(target: "citadel", "Checking permission for user {} on entity {}", user_id, entity_id);
+        // Delegate to the centralized check_entity_permission for consistency
         self.check_entity_permission(user_id, entity_id, permission)
     }
 

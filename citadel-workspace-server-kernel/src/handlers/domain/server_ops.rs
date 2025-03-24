@@ -87,24 +87,8 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
     }
 
     fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
-        // Fix recursive call - use kernel method directly
-        self.kernel.with_read_transaction(|tx| {
-            if let Some(domain) = tx.get_domain(domain_id) {
-                match domain {
-                    Domain::Office { office } => Ok(office.members.contains(&user_id.to_string())),
-                    Domain::Room { room } => {
-                        if room.members.contains(&user_id.to_string()) {
-                            Ok(true)
-                        } else {
-                            // Check if the user is a member of the parent office
-                            self.is_member_of_domain(user_id, &room.office_id)
-                        }
-                    }
-                }
-            } else {
-                Err(NetworkError::msg("Domain not found"))
-            }
-        })
+        // Delegate to the kernel's implementation
+        self.kernel.is_member_of_domain(user_id, domain_id)
     }
 
     fn check_permission<T: DomainEntity + 'static>(
@@ -480,32 +464,8 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
     }
 
     fn check_room_access(&self, user_id: &str, room_id: &str) -> Result<bool, NetworkError> {
-        // First check if user is room member or has explicit permissions
-        if let Some(user) = self.get_user(user_id) {
-            if user.is_member_of_domain(room_id) {
-                return Ok(true);
-            }
-
-            // Check if admin
-            if DomainOperations::is_admin(self, user_id) {
-                return Ok(true);
-            }
-
-            // Get the room
-            DomainOperations::with_read_transaction(self, |tx| {
-                if let Some(Domain::Room { room }) = tx.get_domain(room_id) {
-                    // Check if user is a member of the parent office
-                    if let Some(Domain::Office { office }) = tx.get_domain(&room.office_id) {
-                        return Ok(office.owner_id == user_id
-                            || office.members.contains(&user_id.to_string()));
-                    }
-                }
-
-                Ok(false)
-            })
-        } else {
-            Err(domain::permission_denied("Room not found"))
-        }
+        // Delegate to the kernel's implementation for consistent behavior
+        self.kernel.check_room_access(user_id, room_id)
     }
 
     fn update_domain_entity<T>(
