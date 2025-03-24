@@ -2,7 +2,6 @@ use crate::structs::{Domain, User, UserRole};
 use citadel_sdk::prelude::NetworkError;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
 
 /// Transaction trait defines common functionality for both read and write transactions
 pub trait Transaction {

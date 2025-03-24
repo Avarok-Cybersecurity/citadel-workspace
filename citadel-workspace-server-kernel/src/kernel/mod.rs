@@ -1,5 +1,5 @@
 use crate::handlers::transaction::TransactionManager;
-use crate::structs::{Domain, User, UserRole, WorkspaceRoles};
+use crate::structs::{User, UserRole, WorkspaceRoles};
 use citadel_logging::debug;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, Ratchet};
 use parking_lot::RwLock;
@@ -71,7 +71,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
     /// Create a new WorkspaceServerKernel with a specified admin user
     pub fn with_admin(admin_id: &str, admin_name: &str) -> Self {
-        let mut kernel = Self::default();
+        let kernel = Self::default();
 
         // Use transaction manager to add the admin user
         let permissions = HashMap::new();

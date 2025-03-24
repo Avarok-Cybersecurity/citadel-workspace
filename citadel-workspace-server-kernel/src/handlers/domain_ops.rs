@@ -417,14 +417,14 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
                                 }
                             } else {
                                 // For rooms, check if user has permission in parent office
-                                if let Domain::Room { room } = &domain {
-                                    let office_id = &room.office_id;
-                                    return DomainOperations::check_entity_permission(
-                                        self, user_id, office_id, permission,
-                                    );
-                                }
-
-                                Ok(false)
+                                let office_id = &room.office_id;
+                                debug!(target: "citadel", "User {} is not a direct member of room {}, checking parent office {}", 
+                                    user_id, entity_id, office_id);
+                                
+                                // Check permission in the parent office
+                                return DomainOperations::check_entity_permission(
+                                    self, user_id, office_id, permission,
+                                );
                             }
                         }
                     }
@@ -469,12 +469,21 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
             DomainOperations::with_read_transaction(self, |tx| {
                 if let Some(Domain::Room { room }) = tx.get_domain(room_id) {
                     // Check if user is a member of the parent office
-                    if let Some(Domain::Office { office }) = tx.get_domain(&room.office_id) {
-                        return Ok(office.owner_id == user_id
-                            || office.members.contains(&user_id.to_string()));
+                    let office_id = &room.office_id;
+                    debug!(target: "citadel", "User {} is not a direct member of room {}, checking parent office {}", 
+                        user_id, room_id, office_id);
+                        
+                    if let Some(Domain::Office { office }) = tx.get_domain(office_id) {
+                        let has_access = office.owner_id == user_id || office.members.contains(&user_id.to_string());
+                        if has_access {
+                            debug!(target: "citadel", "User {} has access to room {} through parent office {}", 
+                                user_id, room_id, office_id);
+                        }
+                        return Ok(has_access);
                     }
                 }
 
+                debug!(target: "citadel", "User {} does not have access to room {}", user_id, room_id);
                 Ok(false)
             })
         } else {

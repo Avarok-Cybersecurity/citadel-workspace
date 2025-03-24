@@ -1,5 +1,5 @@
 use crate::handlers::domain::{DomainEntity, DomainOperations};
-use crate::handlers::transaction::{ReadTransaction, Transaction, WriteTransaction};
+use crate::handlers::transaction::Transaction;
 use crate::kernel::WorkspaceServerKernel;
 use crate::structs::{Domain, Office, Permission, Room, User, UserRole};
 use citadel_logging::{debug, info};

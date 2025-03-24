@@ -1,11 +1,9 @@
 use crate::commands::UpdateOperation;
 use crate::handlers::permissions::RolePermissions;
-use crate::handlers::transaction::Transaction;
 use crate::kernel::WorkspaceServerKernel;
 use crate::structs::{Domain, Permission, UserRole};
-use citadel_logging::{debug, info};
+use citadel_logging::debug;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use std::collections::HashSet;
 
 /// Core permission-related functionality for the workspace server
 impl<R: Ratchet> WorkspaceServerKernel<R> {
@@ -136,9 +134,9 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     } else {
                         // For rooms, check if user has permission in parent office
                         let office_id = room.office_id.clone();
-                        // Need to use nested transaction or return result to outer scope
-                        // Here we choose to return and let caller retry with office_id
-                        return Ok(false);
+                        debug!(target: "citadel", "User {} is not a direct member of room {}, checking parent office {}", user_id, entity_id, office_id);
+                        // Recursively check permission in the parent office
+                        self.check_entity_permission(user_id, &office_id, permission)
                     }
                 }
                 None => {
