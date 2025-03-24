@@ -39,13 +39,13 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
         // Add user to system
         {
-            let mut users = self.users.write().unwrap();
+            let mut users = self.users.write();
             users.insert(user_id.clone(), new_user);
         }
 
         // Add user to roles
         {
-            let mut roles = self.roles.write().unwrap();
+            let mut roles = self.roles.write();
             roles.roles.insert(user_id, role_for_log.clone());
         }
 
@@ -134,7 +134,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
         // Update user in the system
         {
-            let mut users = self.users.write().unwrap();
+            let mut users = self.users.write();
             if let Some(user) = users.get_mut(user_id) {
                 user.role = role_for_user;
             } else {
@@ -144,7 +144,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
         // Update user in roles
         {
-            let mut roles = self.roles.write().unwrap();
+            let mut roles = self.roles.write();
             roles.roles.insert(user_id.to_string(), role_for_roles);
         }
 
@@ -159,7 +159,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         user_id: &str,
         action: MemberAction,
     ) -> Result<(), NetworkError> {
-        let mut domains = self.domains.write().unwrap();
+        let mut domains = self.domains.write();
         let domain = domains.get_mut(domain_id);
 
         match domain {
@@ -246,14 +246,14 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         self.check_permission(user_id, Some(domain_id), UserRole::Member)?;
 
         // Get domain
-        let domains = self.domains.read().unwrap();
+        let domains = self.domains.read();
         let domain = domains
             .get(domain_id)
             .ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
 
         // Get members from domain
         let member_ids = domain.members().clone();
-        let users = self.users.read().unwrap();
+        let users = self.users.read();
 
         // Collect users
         let mut members = Vec::new();
@@ -272,7 +272,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         user_id: &str,
         domain_id: &str,
     ) -> Result<bool, NetworkError> {
-        let domains = self.domains.read().unwrap();
+        let domains = self.domains.read();
 
         match domains.get(domain_id) {
             Some(domain) => match domain {

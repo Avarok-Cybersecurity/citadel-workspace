@@ -34,7 +34,7 @@ mod tests {
 
         // Add the user to the kernel
         {
-            let mut users = kernel.users.write().unwrap();
+            let mut users = kernel.users.write();
             users.insert(user_id.to_string(), user.clone());
         }
 
@@ -104,7 +104,7 @@ mod tests {
 
         // Add the user to the kernel
         {
-            let mut users = kernel.users.write().unwrap();
+            let mut users = kernel.users.write();
             users.insert(second_admin_id.to_string(), admin2);
         }
 
@@ -128,7 +128,7 @@ mod tests {
 
         // Add users to the kernel
         {
-            let mut users = kernel.users.write().unwrap();
+            let mut users = kernel.users.write();
             users.insert(owner_user.id.clone(), owner_user.clone());
             users.insert(member_user.id.clone(), member_user.clone());
             users.insert(guest_user.id.clone(), guest_user.clone());

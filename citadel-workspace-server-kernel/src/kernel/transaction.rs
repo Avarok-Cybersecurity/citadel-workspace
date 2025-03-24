@@ -4,21 +4,11 @@ use citadel_sdk::prelude::{NetworkError, Ratchet};
 
 impl<R: Ratchet> WorkspaceServerKernel<R> {
     pub fn begin_read_transaction(&self) -> Result<ReadTransaction, NetworkError> {
-        match self.domains.read() {
-            Ok(guard) => Ok(ReadTransaction::new(guard)),
-            Err(_) => Err(NetworkError::msg(
-                "Failed to acquire read lock for transaction",
-            )),
-        }
+        Ok(ReadTransaction::new(self.domains.read()))
     }
 
     pub fn begin_write_transaction(&self) -> Result<WriteTransaction, NetworkError> {
-        match self.domains.write() {
-            Ok(guard) => Ok(WriteTransaction::new(guard)),
-            Err(_) => Err(NetworkError::msg(
-                "Failed to acquire write lock for transaction",
-            )),
-        }
+        Ok(WriteTransaction::new(self.domains.write()))
     }
 
     pub fn with_read_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>

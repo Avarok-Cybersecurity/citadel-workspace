@@ -12,8 +12,8 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         office_id: Option<&String>,
         room_id: Option<&String>,
     ) -> Result<Vec<User>, String> {
-        let users = self.users.read().unwrap();
-        let domains = self.domains.read().unwrap();
+        let users = self.users.read();
+        let domains = self.domains.read();
         let mut members = Vec::new();
 
         match (office_id, room_id) {

@@ -57,7 +57,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
     }
 
     fn get_user(&self, user_id: &str) -> Option<User> {
-        let users = self.kernel.users.read().unwrap();
+        let users = self.kernel.users.read();
         users.get(user_id).cloned()
     }
 

@@ -1,8 +1,8 @@
 use crate::structs::{Domain, UserRole};
 use citadel_sdk::prelude::NetworkError;
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
-use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// Transaction trait defines common functionality for both read and write transactions
 pub trait Transaction {
@@ -339,12 +339,12 @@ impl Deref for ReadTransaction<'_> {
 impl TransactionManager {
     /// Create a new read transaction
     pub fn read_transaction(&self) -> ReadTransaction {
-        ReadTransaction::new(self.domains.read().unwrap())
+        ReadTransaction::new(self.domains.read())
     }
 
     /// Create a new write transaction
     pub fn write_transaction(&self) -> WriteTransaction {
-        WriteTransaction::new(self.domains.write().unwrap())
+        WriteTransaction::new(self.domains.write())
     }
 
     /// Execute a function with a read transaction

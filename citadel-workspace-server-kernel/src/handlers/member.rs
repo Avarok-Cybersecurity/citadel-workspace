@@ -22,7 +22,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         }
 
         // Check if user exists, if not create a new user
-        let mut users = self.users.write().unwrap();
+        let mut users = self.users.write();
         if !users.contains_key(user_id) {
             users.insert(
                 user_id.to_string(),
@@ -41,7 +41,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         }
         drop(users);
 
-        let mut domains = self.domains.write().unwrap();
+        let mut domains = self.domains.write();
 
         // Add to office if specified
         if let Some(office_id) = office_id {
@@ -90,7 +90,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             ));
         }
 
-        let mut domains = self.domains.write().unwrap();
+        let mut domains = self.domains.write();
 
         // Remove from office if specified
         if let Some(office_id) = office_id {
@@ -134,7 +134,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             ));
         }
 
-        let mut users = self.users.write().unwrap();
+        let mut users = self.users.write();
 
         match users.get_mut(user_id) {
             Some(user) => {
@@ -162,13 +162,13 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
         // Check if domain exists
         {
-            let domains = self.domains.read().unwrap();
+            let domains = self.domains.read();
             if !domains.contains_key(domain_id) {
                 return Err(NetworkError::msg("Domain not found"));
             }
         }
 
-        let mut users = self.users.write().unwrap();
+        let mut users = self.users.write();
 
         match users.get_mut(user_id) {
             Some(user) => {
@@ -211,17 +211,17 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     }
 
     pub fn get_member(&self, user_id: &str) -> Option<User> {
-        let users = self.users.read().unwrap();
+        let users = self.users.read();
         users.get(user_id).cloned()
     }
 
     // Helper methods for permission management
     fn grant_domain_permissions(&self, user_id: &str, domain_id: &str) -> Result<(), NetworkError> {
-        let mut users = self.users.write().unwrap();
+        let mut users = self.users.write();
 
         if let Some(user) = users.get_mut(user_id) {
             // Grant basic permissions based on the domain type
-            let domains = self.domains.read().unwrap();
+            let domains = self.domains.read();
 
             match domains.get(domain_id) {
                 Some(Domain::Office { .. }) => {
@@ -256,7 +256,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         user_id: &str,
         domain_id: &str,
     ) -> Result<(), NetworkError> {
-        let mut users = self.users.write().unwrap();
+        let mut users = self.users.write();
 
         if let Some(user) = users.get_mut(user_id) {
             // Remove all permissions for this domain

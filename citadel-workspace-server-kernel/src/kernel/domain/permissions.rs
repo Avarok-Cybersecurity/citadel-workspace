@@ -24,7 +24,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             return Ok(());
         }
 
-        let users = self.users.read().unwrap();
+        let users = self.users.read();
 
         if let Some(user) = users.get(user_id) {
             if user.role >= required_role {
@@ -72,7 +72,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
         // Get the user
         let user_has_explicit_permission = {
-            let users = self.users.read().unwrap();
+            let users = self.users.read();
             if let Some(user) = users.get(user_id) {
                 // Check if user has the specific permission for this entity
                 if user.has_permission(entity_id, permission) {
@@ -88,7 +88,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         };
 
         // If not explicitly granted, check based on role and domain membership
-        let domains = self.domains.read().unwrap();
+        let domains = self.domains.read();
         match domains.get(entity_id) {
             Some(Domain::Office { office }) => {
                 // Office owners have all permissions for their office
@@ -154,7 +154,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Centralizes admin checking logic in one place
     pub fn is_admin(&self, user_id: &str) -> bool {
         // First check the roles mapping
-        let roles = self.roles.read().unwrap();
+        let roles = self.roles.read();
         if let Some(role) = roles.roles.get(user_id) {
             if *role == UserRole::Admin {
                 debug!(target: "citadel", "User {} has admin role", user_id);
@@ -163,7 +163,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         }
 
         // If not found in roles, check the users map
-        let users = self.users.read().unwrap();
+        let users = self.users.read();
         if let Some(user) = users.get(user_id) {
             if user.role == UserRole::Admin {
                 debug!(target: "citadel", "User {} has admin role", user_id);
@@ -187,7 +187,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     ) -> Result<(), NetworkError> {
         // Check if the requesting user is an admin or the owner of the domain
         if !self.is_admin(user_id) {
-            let domains = self.domains.read().unwrap();
+            let domains = self.domains.read();
             match domains.get(domain_id) {
                 Some(Domain::Office { office }) => {
                     if office.owner_id != user_id {
@@ -208,7 +208,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         }
 
         // Get the user and update their permissions
-        let mut users = self.users.write().unwrap();
+        let mut users = self.users.write();
         let user = users
             .get_mut(member_id)
             .ok_or_else(|| NetworkError::msg("User not found"))?;
@@ -281,7 +281,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         self.with_write_transaction(|tx| {
             if let Some(domain) = tx.get_domain(domain_id).cloned() {
                 // Get the user from the system
-                let mut users = self.users.write().unwrap();
+                let mut users = self.users.write();
                 if let Some(user) = users.get_mut(user_id) {
                     let mut user_permissions =
                         user.get_permissions(domain_id).cloned().unwrap_or_default();

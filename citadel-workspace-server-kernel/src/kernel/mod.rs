@@ -1,8 +1,9 @@
 use crate::structs::{Domain, User, UserRole, WorkspaceRoles};
 use citadel_logging::debug;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, Ratchet};
+use parking_lot::RwLock;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 pub mod command_processor;
 pub mod domain;

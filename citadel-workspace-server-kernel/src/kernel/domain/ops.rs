@@ -20,7 +20,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
     }
 
     fn get_user(&self, user_id: &str) -> Option<User> {
-        let users = self.users.read().unwrap();
+        let users = self.users.read();
         users.get(user_id).cloned()
     }
 
@@ -28,7 +28,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
     where
         F: FnOnce(&dyn Transaction) -> Result<T, NetworkError>,
     {
-        let tx = self.domains.read().unwrap();
+        let tx = self.domains.read();
         let read_tx = ReadTransaction::new(tx);
         f(&read_tx)
     }
@@ -37,7 +37,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
     where
         F: FnOnce(&mut dyn Transaction) -> Result<T, NetworkError>,
     {
-        let tx = self.domains.write().unwrap();
+        let tx = self.domains.write();
         let mut write_tx = WriteTransaction::new(tx);
         let result = f(&mut write_tx);
         if result.is_ok() {
@@ -163,7 +163,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
     }
 
     fn get_domain(&self, domain_id: &str) -> Option<Domain> {
-        let domains = self.domains.read().unwrap();
+        let domains = self.domains.read();
         domains.get(domain_id).cloned()
     }
 

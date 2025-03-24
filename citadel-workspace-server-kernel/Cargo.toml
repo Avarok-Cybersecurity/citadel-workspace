@@ -8,7 +8,7 @@ edition = "2021"
 [features]
 # localhost-testing = ["citadel_sdk/localhost-testing"]
 # vendored = ["citadel-internal-service/vendored"]
-deadlock-detection = ["parking_lot/deadlock_detection", "parking_lot", "lazy_static"]
+deadlock-detection = ["parking_lot/deadlock_detection", "lazy_static"]
 
 [[bin]]
 name = "citadel_workspace_server"
@@ -21,7 +21,7 @@ citadel-internal-service = { workspace = true }
 citadel_sdk = { workspace = true }
 citadel_types = { workspace = true }
 citadel_logging = { workspace = true }
-parking_lot = { workspace = true, optional = true }
+parking_lot = { workspace = true }
 lazy_static = { workspace = true, optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
