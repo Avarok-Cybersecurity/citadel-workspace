@@ -263,13 +263,6 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         })
     }
 
-    // Helper methods for permission management
-    fn grant_domain_permissions(&self, user_id: &str, domain_id: &str) -> Result<(), NetworkError> {
-        self.with_write_transaction(|tx| {
-            self.grant_domain_permissions_internal(user_id, domain_id, tx)
-        })
-    }
-
     fn grant_domain_permissions_internal(
         &self,
         user_id: &str,
@@ -302,16 +295,6 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         } else {
             Err(NetworkError::msg(format!("Domain {} not found", domain_id)))
         }
-    }
-
-    fn revoke_domain_permissions(
-        &self,
-        user_id: &str,
-        domain_id: &str,
-    ) -> Result<(), NetworkError> {
-        self.with_write_transaction(|tx| {
-            self.revoke_domain_permissions_internal(user_id, domain_id, tx)
-        })
     }
 
     fn revoke_domain_permissions_internal(
