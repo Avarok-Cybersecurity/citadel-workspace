@@ -151,21 +151,6 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     ///
     /// Centralizes admin checking logic in one place
     pub fn is_admin(&self, user_id: &str) -> bool {
-        // First check the roles mapping
-        let roles_result = {
-            let roles = self.roles.read();
-            if let Some(role) = roles.roles.get(user_id) {
-                *role == UserRole::Admin
-            } else {
-                false
-            }
-        };
-
-        if roles_result {
-            debug!(target: "citadel", "User {} has admin role", user_id);
-            return true;
-        }
-
         // If not found in roles, check the users via transaction manager
         match self.with_read_transaction(|tx| Ok(tx.is_admin(user_id))) {
             Ok(is_admin) => {

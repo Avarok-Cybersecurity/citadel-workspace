@@ -1,7 +1,9 @@
 use crate::handlers::transaction::TransactionManager;
 use crate::structs::{User, UserRole, WorkspaceRoles};
+use crate::WorkspaceResponse;
 use citadel_logging::debug;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, Ratchet};
+use futures::StreamExt;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -16,7 +18,17 @@ pub struct WorkspaceServerKernel<R: Ratchet> {
     pub transaction_manager: Arc<TransactionManager>,
     // Keep roles separately for now, but might be integrated into transaction manager in the future
     pub roles: Arc<RwLock<WorkspaceRoles>>,
-    pub node_remote: Option<NodeRemote<R>>,
+    pub node_remote: Arc<RwLock<Option<NodeRemote<R>>>>,
+}
+
+impl<R: Ratchet> Clone for WorkspaceServerKernel<R> {
+    fn clone(&self) -> Self {
+        Self {
+            transaction_manager: self.transaction_manager.clone(),
+            roles: self.roles.clone(),
+            node_remote: self.node_remote.clone(),
+        }
+    }
 }
 
 /// Actions for updating domain members
@@ -30,24 +42,56 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
     for WorkspaceServerKernel<R>
 {
     fn load_remote(&mut self, server_remote: NodeRemote<R>) -> Result<(), NetworkError> {
-        self.node_remote = Some(server_remote);
+        *self.node_remote.write() = Some(server_remote);
         Ok(())
     }
 
-    async fn on_start<'a>(&'a self) -> Result<(), NetworkError> {
+    async fn on_start(&self) -> Result<(), NetworkError> {
         debug!("NetKernel started");
         Ok(())
     }
 
-    async fn on_node_event_received<'a>(
-        &'a self,
-        _event: NodeResult<R>,
-    ) -> Result<(), NetworkError> {
-        // TODO! Handle node events or this implementation is useless
+    async fn on_node_event_received(&self, event: NodeResult<R>) -> Result<(), NetworkError> {
+        debug!("NetKernel received event: {event:?}");
+        match event {
+            NodeResult::PeerChannelCreated(peer_channel) => {
+                let this = self.clone();
+                let peer_command_handler = async move {
+                    let user_id = peer_channel.channel.get_session_cid().to_string();
+                    let (mut tx, mut rx) = peer_channel.channel.split();
+
+                    while let Some(msg) = rx.next().await {
+                        if let Ok(command) = serde_json::from_slice(msg.as_ref()) {
+                            let response = this.process_command(&user_id, command);
+                            let response = response
+                                .unwrap_or_else(|e| WorkspaceResponse::Error(e.to_string()));
+                            let serialized_response = serde_json::to_vec(&response).unwrap();
+                            tx.send(serialized_response).await?;
+                        } else {
+                            let serialized_response =
+                                serde_json::to_vec(&WorkspaceResponse::Error(
+                                    "Invalid command. Failed deserialization".to_string(),
+                                ))
+                                .unwrap();
+                            tx.send(serialized_response).await?;
+                        }
+                    }
+
+                    Ok::<(), NetworkError>(())
+                };
+
+                drop(tokio::task::spawn(peer_command_handler));
+            }
+
+            evt => {
+                debug!("Unhandled event: {evt:?}");
+            }
+        }
+        // TODO: Handle node events or this implementation is useless
         Ok(())
     }
 
-    async fn on_stop<'a>(&'a mut self) -> Result<(), NetworkError> {
+    async fn on_stop(&mut self) -> Result<(), NetworkError> {
         debug!("NetKernel stopped");
         Ok(())
     }
@@ -58,7 +102,7 @@ impl<R: Ratchet> Default for WorkspaceServerKernel<R> {
         Self {
             transaction_manager: Arc::new(TransactionManager::default()),
             roles: Arc::new(RwLock::new(WorkspaceRoles::new())),
-            node_remote: None,
+            node_remote: Arc::new(RwLock::new(None)),
         }
     }
 }
