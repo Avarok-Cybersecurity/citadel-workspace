@@ -55,6 +55,8 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
         debug!("NetKernel received event: {event:?}");
         match event {
             NodeResult::PeerChannelCreated(peer_channel) => {
+                println!("Peer channel created");
+                panic!("TESTING CHECKPOINT");
                 let this = self.clone();
                 let peer_command_handler = async move {
                     let user_id = peer_channel.channel.get_session_cid().to_string();
