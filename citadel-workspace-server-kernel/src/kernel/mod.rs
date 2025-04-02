@@ -116,7 +116,11 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Create a new WorkspaceServerKernel with a specified admin user
     pub fn with_admin(admin_id: &str, admin_name: &str) -> Self {
         let kernel = Self::default();
+        kernel.inject_admin_user(admin_id, admin_name).unwrap();
+        kernel
+    }
 
+    pub fn inject_admin_user(&self, admin_id: &str, admin_name: &str) -> Result<(), NetworkError> {
         // Use transaction manager to add the admin user
         let permissions = HashMap::new();
         let admin_user = User {
@@ -127,11 +131,11 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         };
 
         // Add admin user through transaction manager
-        let _ = kernel
+        let _ = self
             .transaction_manager
             .with_write_transaction(|tx| tx.insert_user(admin_id.to_string(), admin_user));
 
-        kernel
+        Ok(())
     }
 
     /// Get a reference to the transaction manager
