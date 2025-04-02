@@ -1046,6 +1046,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "citadel-internal-service",
+ "citadel-internal-service-connector 0.1.0 (git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/)",
  "citadel-internal-service-test-common",
  "citadel-internal-service-types 0.1.0 (git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/)",
  "citadel_logging",

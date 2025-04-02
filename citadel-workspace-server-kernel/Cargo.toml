@@ -32,3 +32,4 @@ futures = "0.3.31"
 citadel_sdk = { workspace = true, features = ["localhost-testing"] }
 citadel-internal-service-test-common = { workspace = true }
 citadel-internal-service-types = { workspace = true }
+citadel-internal-service-connector = { workspace = true }

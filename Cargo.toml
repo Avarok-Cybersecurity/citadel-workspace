@@ -12,6 +12,7 @@ tokio = { version = "1.28.1", features = ["full"] }
 citadel-internal-service = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/" }
 citadel-internal-service-test-common = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/" }
 citadel-internal-service-types = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/" }
+citadel-internal-service-connector = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/" }
 citadel_sdk = { version = "^0.13.0" }
 citadel_types = { version = "^0.13.0" }
 citadel_logging = { version = "^0.13.0" }
