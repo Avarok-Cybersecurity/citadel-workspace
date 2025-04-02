@@ -6,6 +6,7 @@ use citadel_internal_service_test_common::{
 use citadel_sdk::prelude::*;
 use citadel_workspace_server::commands::{WorkspaceCommand, WorkspaceResponse};
 use citadel_workspace_server::kernel::WorkspaceServerKernel;
+use citadel_workspace_server::structs::UserRole;
 use futures::{sink, StreamExt};
 use std::error::Error;
 use std::net::SocketAddr;
@@ -23,7 +24,7 @@ async fn setup_test_environment() -> Result<(SocketAddr, SocketAddr), Box<dyn Er
 
     // Create a client to connect to the server, which will trigger the connection handler
     let workspace_kernel =
-        WorkspaceServerKernel::<StackedRatchet>::with_admin("admin", "Administrator");
+        WorkspaceServerKernel::<StackedRatchet>::with_admin("8888", "Administrator");
 
     // TCP client (GUI, CLI) -> internal service -> empty kernel server(s)
     let (server, server_bind_address) =
@@ -139,15 +140,32 @@ async fn test_office_operations() -> Result<(), Box<dyn Error>> {
     println!("Test environment setup complete.");
 
     println!("Registering and connecting test user...");
-    let (to_service, mut from_service, cid) = register_and_connect_user(
-        internal_service_addr,
-        server_addr,
-        "test_user",
-        "Test User",
-    )
-    .await
-    .unwrap();
+    let (to_service, mut from_service, cid) =
+        register_and_connect_user(internal_service_addr, server_addr, "test_user", "Test User")
+            .await
+            .unwrap();
     println!("Test user registered and connected.");
+
+    let admin_upgrade_cmd = WorkspaceCommand::UpdateMemberRole {
+        user_id: cid.to_string(),
+        role: UserRole::Admin,
+    };
+
+    println!("Upgrading user to admin...");
+    let admin_upgrade_response =
+        send_workspace_command(&to_service, &mut from_service, cid, admin_upgrade_cmd).await?;
+    println!("User upgraded to admin");
+
+    println!("Admin upgrade response: {admin_upgrade_response:?}");
+
+    let get_member_cmd = WorkspaceCommand::GetMember {
+        user_id: cid.to_string(),
+    };
+
+    println!("Getting user info...");
+    let get_member_response =
+        send_workspace_command(&to_service, &mut from_service, cid, get_member_cmd).await?;
+    println!("User info retrieved: {get_member_response:?}");
 
     println!("Creating test office...");
     let create_office_cmd = WorkspaceCommand::CreateOffice {
