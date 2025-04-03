@@ -275,6 +275,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
         )
         .unwrap();
 
+    println!("Creating test room directly with kernel...");
     // Create a room in the office
     let room_id = create_test_room(
         &admin_to_service,
@@ -284,6 +285,8 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     )
     .await?;
 
+    println!("Test room created with ID: {}", room_id);
+
     // Add the test user to the office
     let add_member_cmd = WorkspaceCommand::AddMember {
         user_id: "test_user".to_string(),
@@ -292,6 +295,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
         role: UserRole::Member,
     };
 
+    println!("Adding test user to office...");
     let response = send_workspace_command(
         &admin_to_service,
         &mut admin_from_service,
@@ -301,7 +305,9 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => {}
+        WorkspaceResponse::Success => {
+            println!("Test user added to office");
+        }
         _ => return Err("Expected Success response".into()),
     }
 
@@ -320,6 +326,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
 
     match response {
         WorkspaceResponse::Member(member) => {
+            println!("Verified test user is in office");
             assert_eq!(member.id, "test_user");
             assert!(member.is_member_of_domain(office_id.clone()));
             assert_eq!(member.role, UserRole::Member);
@@ -335,6 +342,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
         role: UserRole::Member,
     };
 
+    println!("Adding test user to room...");
     let response = send_workspace_command(
         &admin_to_service,
         &mut admin_from_service,
@@ -344,7 +352,9 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => {}
+        WorkspaceResponse::Success => {
+            println!("Test user added to room");
+        }
         _ => return Err("Expected Success response".into()),
     }
 
@@ -363,6 +373,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
 
     match response {
         WorkspaceResponse::Room(room) => {
+            println!("Verified test user is in room");
             assert!(room.members.contains(&"test_user".to_string()));
         }
         _ => return Err("Expected Room response".into()),
@@ -375,6 +386,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
         room_id: Some(room_id.clone()),
     };
 
+    println!("Removing test user from room...");
     let response = send_workspace_command(
         &admin_to_service,
         &mut admin_from_service,
@@ -384,7 +396,9 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => {}
+        WorkspaceResponse::Success => {
+            println!("Test user removed from room");
+        }
         _ => return Err("Expected Success response".into()),
     }
 
@@ -403,6 +417,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
 
     match response {
         WorkspaceResponse::Room(room) => {
+            println!("Verified test user is not in room");
             assert!(!room.members.contains(&"test_user".to_string()));
         }
         _ => return Err("Expected Room response".into()),
@@ -415,6 +430,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
         room_id: None,
     };
 
+    println!("Removing test user from office...");
     let response = send_workspace_command(
         &admin_to_service,
         &mut admin_from_service,
@@ -424,7 +440,9 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => {}
+        WorkspaceResponse::Success => {
+            println!("Test user removed from office");
+        }
         _ => return Err("Expected Success response".into()),
     }
 
@@ -443,6 +461,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
 
     match response {
         WorkspaceResponse::Member(member) => {
+            println!("Verified test user is not in office");
             assert_eq!(member.id, "test_user");
             assert!(!member.is_member_of_domain(office_id));
         }
@@ -489,7 +508,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
         )
         .unwrap();
 
-    // Add the test user to the office with specific permissions
+    println!("Adding test user to office with specific permissions...");
     let add_member_cmd = WorkspaceCommand::AddMember {
         user_id: "test_user".to_string(),
         office_id: Some(office_id.clone()),
@@ -506,11 +525,11 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => {}
+        WorkspaceResponse::Success => println!("Test user added to office"),
         _ => return Err("Expected Success response".into()),
     }
 
-    // Get member to verify default permissions
+    println!("Getting member to verify default permissions...");
     let get_member_cmd = WorkspaceCommand::GetMember {
         user_id: "test_user".to_string(),
     };
@@ -540,7 +559,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
         _ => return Err("Expected Member response".into()),
     }
 
-    // Add a specific permission to the user
+    println!("Adding specific permission to the user...");
     let add_permission_cmd = WorkspaceCommand::UpdateMemberPermissions {
         user_id: "test_user".to_string(),
         domain_id: office_id.clone(),
@@ -557,11 +576,11 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => {}
+        WorkspaceResponse::Success => println!("Permission added"),
         _ => return Err("Expected Success response".into()),
     }
 
-    // Get member to verify permission addition
+    println!("Getting member to verify permission addition...");
     let get_member_cmd = WorkspaceCommand::GetMember {
         user_id: "test_user".to_string(),
     };
@@ -588,7 +607,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
         _ => return Err("Expected Member response".into()),
     }
 
-    // Remove a specific permission from the user
+    println!("Removing specific permission from the user...");
     let remove_permission_cmd = WorkspaceCommand::UpdateMemberPermissions {
         user_id: "test_user".to_string(),
         domain_id: office_id.clone(),
@@ -605,11 +624,11 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => {}
+        WorkspaceResponse::Success => println!("Permission removed"),
         _ => return Err("Expected Success response".into()),
     }
 
-    // Get member to verify permission removal
+    println!("Getting member to verify permission removal...");
     let get_member_cmd = WorkspaceCommand::GetMember {
         user_id: "test_user".to_string(),
     };
@@ -636,7 +655,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
         _ => return Err("Expected Member response".into()),
     }
 
-    // Replace all permissions for the user
+    println!("Replacing all permissions for the user...");
     let replace_permissions_cmd = WorkspaceCommand::UpdateMemberPermissions {
         user_id: "test_user".to_string(),
         domain_id: office_id.clone(),
@@ -653,11 +672,11 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => {}
+        WorkspaceResponse::Success => println!("Permissions replaced"),
         _ => return Err("Expected Success response".into()),
     }
 
-    // Get member to verify permissions update
+    println!("Getting member to verify permissions update...");
     let get_member_cmd = WorkspaceCommand::GetMember {
         user_id: "test_user".to_string(),
     };
@@ -733,6 +752,7 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
         rank: 16,
     };
 
+    println!("Adding test_user as Editor to the office...");
     // Add the regular user to the office with custom role
     let add_member_cmd = WorkspaceCommand::AddMember {
         user_id: "test_user".to_string(),
@@ -750,10 +770,11 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => {}
+        WorkspaceResponse::Success => println!("User added successfully"),
         _ => return Err("Expected Success response".into()),
     }
 
+    println!("Getting member to verify custom role...");
     // Get member to verify custom role
     let get_member_cmd = WorkspaceCommand::GetMember {
         user_id: "test_user".to_string(),
