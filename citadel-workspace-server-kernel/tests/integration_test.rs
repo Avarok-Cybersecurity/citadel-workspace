@@ -1,24 +1,16 @@
 use citadel_internal_service::kernel::CitadelWorkspaceService;
-use citadel_internal_service_connector::connector::InternalServiceConnector;
 use citadel_internal_service_test_common::get_free_port;
 use citadel_internal_service_test_common::{
-    self as common, server_info_reactive_skip_cert_verification,
-    server_test_node_skip_cert_verification,
+    self as common, server_test_node_skip_cert_verification,
 };
-use citadel_internal_service_types::{InternalServiceRequest, InternalServiceResponse};
-use citadel_logging::info;
 use citadel_sdk::prelude::*;
 use citadel_workspace_server::commands::{WorkspaceCommand, WorkspaceResponse};
 use citadel_workspace_server::kernel::WorkspaceServerKernel;
-use citadel_workspace_server::structs::{Domain, Room, UserRole};
-use futures::{sink, SinkExt, StreamExt};
-use std::default;
+use citadel_workspace_server::structs::UserRole;
 use std::error::Error;
 use std::net::SocketAddr;
-use std::ops::Deref;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
@@ -391,29 +383,6 @@ async fn test_room_operations() {
             UserRole::Admin,
         )
         .unwrap();
-
-    // // For testing purposes, directly create the room in the kernel to avoid potential deadlocks
-    // println!("Creating room directly in kernel for testing...");
-    // let room_id = uuid::Uuid::new_v4().to_string();
-    // let room = Room {
-    //     id: room_id.clone(),
-    //     name: "Test Room".to_string(),
-    //     description: "A test room".to_string(),
-    //     owner_id: cid.to_string(),
-    //     office_id: office_id.clone(),
-    //     members: vec![],
-    //     mdx_content: String::new(),
-    // };
-
-    // // Store the room directly
-    // kernel.with_write_transaction(|tx| {
-    //     let domain = Domain::Room { room: room.clone() };
-    //     tx.insert_domain(room_id.clone(), domain)?;
-    //     println!("Room created directly: {}", room_id);
-    //     Ok(())
-    // }).unwrap();
-
-    // println!("Test room created with ID: {}", room_id);
 
     println!("Creating test room...");
     let create_room_cmd = WorkspaceCommand::CreateRoom {

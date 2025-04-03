@@ -13,15 +13,29 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         name: &str,
         description: &str,
     ) -> Result<Room, NetworkError> {
-        // Verify the user is a member of the office
-        self.with_read_transaction(|txn| {
-            if !txn.is_member_of_domain(user_id, office_id)? {
-                return Err(NetworkError::msg("User is not a member of the office"));
-            }
+        println!(
+            "Create room: user_id={}, office_id={}, name={}, description={}",
+            user_id, office_id, name, description
+        );
 
-            // Use the domain abstraction for creating a room
-            self.create_domain_entity::<Room>(user_id, Some(office_id), name, description)
-        })
+        // First check if the user is a member of the office using a read transaction
+        let is_member = self.with_read_transaction(|txn| {
+            let is_member = txn.is_member_of_domain(user_id, office_id)?;
+            println!("User is member of office: {}", is_member);
+            Ok(is_member)
+        })?;
+
+        // Then only proceed if the user is a member
+        if !is_member {
+            println!("User is not a member of the office");
+            return Err(NetworkError::msg("User is not a member of the office"));
+        }
+
+        println!("User is a member of the office");
+
+        // Now create the room in a separate transaction
+        // Use the domain abstraction for creating a room
+        self.create_domain_entity::<Room>(user_id, Some(office_id), name, description)
     }
 
     /// Delete a room
