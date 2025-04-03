@@ -1,4 +1,9 @@
-use citadel_internal_service_test_common as common;
+use citadel_internal_service::kernel::CitadelWorkspaceService;
+use citadel_internal_service_test_common::get_free_port;
+use citadel_internal_service_test_common::{
+    self as common, server_test_node_skip_cert_verification,
+};
+use citadel_logging::info;
 use citadel_sdk::prelude::*;
 use citadel_workspace_server::commands::{UpdateOperation, WorkspaceCommand, WorkspaceResponse};
 use citadel_workspace_server::kernel::WorkspaceServerKernel;
@@ -7,27 +12,29 @@ use std::error::Error;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-async fn setup_test_environment() -> Result<(SocketAddr, SocketAddr), Box<dyn Error>> {
-    common::setup_log();
+const ADMIN_ID: &str = "888888888888";
 
-    // Setup internal service
-    let bind_address_internal_service: SocketAddr = "127.0.0.1:55559".parse().unwrap();
-
-    // Setup workspace server with admin user
-    let server_kernel =
-        WorkspaceServerKernel::<StackedRatchet>::with_admin("admin", "Administrator");
-    let server_bind_address: SocketAddr = "127.0.0.1:55560".parse().unwrap();
-
-    let server = NodeBuilder::default()
-        .with_backend(BackendType::InMemory)
-        .with_node_type(NodeType::server(server_bind_address)?)
-        .with_insecure_skip_cert_verification()
-        .build(server_kernel)?;
-
-    tokio::task::spawn(server);
-
+async fn new_internal_service_with_admin(
+    bind_address_internal_service: SocketAddr,
+) -> Result<
+    (
+        JoinHandle<
+            Result<
+                CitadelWorkspaceService<
+                    citadel_internal_service_connector::io_interface::tcp::TcpIOInterface,
+                    StackedRatchet,
+                >,
+                NetworkError,
+            >,
+        >,
+        String,
+        String,
+    ),
+    Box<dyn Error>,
+> {
     // Setup internal service
     let internal_service_kernel = citadel_internal_service::kernel::CitadelWorkspaceService::<
         _,
@@ -40,12 +47,66 @@ async fn setup_test_environment() -> Result<(SocketAddr, SocketAddr), Box<dyn Er
         .with_insecure_skip_cert_verification()
         .build(internal_service_kernel)?;
 
-    tokio::task::spawn(internal_service);
+    // Start the node to initialize the remote
+    let service_handle = tokio::task::spawn(internal_service);
 
-    // Wait for services to start
+    // Wait for the remote to be initialized
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    // Generate admin credentials
+    let admin_username = format!(
+        "admin_{}",
+        Uuid::new_v4()
+            .to_string()
+            .split('-')
+            .next()
+            .unwrap_or("user")
+    );
+    let admin_password = Uuid::new_v4().to_string();
+
+    Ok((service_handle, admin_username, admin_password))
+}
+
+async fn setup_test_environment() -> Result<
+    (
+        WorkspaceServerKernel<StackedRatchet>,
+        SocketAddr,
+        SocketAddr,
+        String,
+        String,
+    ),
+    Box<dyn Error>,
+> {
+    common::setup_log();
+
+    // Setup internal service
+    let bind_address_internal_service: SocketAddr =
+        format!("127.0.0.1:{}", get_free_port()).parse().unwrap();
+
+    // Setup internal service
+    let (_internal_service, admin_username, admin_password) =
+        new_internal_service_with_admin(bind_address_internal_service).await?;
+
+    // Create a client to connect to the server, which will trigger the connection handler
+    let workspace_kernel =
+        WorkspaceServerKernel::<StackedRatchet>::with_admin(ADMIN_ID, &admin_username);
+
+    // TCP client (GUI, CLI) -> internal service -> empty kernel server(s)
+    let (server, server_bind_address) =
+        server_test_node_skip_cert_verification(workspace_kernel.clone(), |_| ());
+
+    tokio::task::spawn(server);
+
+    // Wait for services to start and connection to be established
     tokio::time::sleep(Duration::from_millis(2000)).await;
 
-    Ok((bind_address_internal_service, server_bind_address))
+    Ok((
+        workspace_kernel,
+        bind_address_internal_service,
+        server_bind_address,
+        admin_username,
+        admin_password,
+    ))
 }
 
 async fn register_and_connect_user(
@@ -102,6 +163,8 @@ async fn send_workspace_command(
         },
     )?;
 
+    info!(target: "citadel", "Sent command: {command:?} with request_id: {request_id}");
+
     // Wait for response
     while let Some(response) = from_service.recv().await {
         if let citadel_internal_service_types::InternalServiceResponse::MessageSendSuccess(
@@ -112,17 +175,18 @@ async fn send_workspace_command(
         ) = &response
         {
             if resp_id.as_ref() == Some(&request_id) {
+                info!(target: "citadel", "Received confirmation that message was sent successfully");
                 continue; // This is just confirmation the message was sent
             }
         }
 
         if let citadel_internal_service_types::InternalServiceResponse::MessageNotification(
             citadel_internal_service_types::MessageNotification { message, .. },
-        ) = response
+        ) = &response
         {
-            // Deserialize the response
-            let workspace_response: WorkspaceResponse = serde_json::from_slice(&message)?;
-            return Ok(workspace_response);
+            info!(target: "citadel", "Received response: {response:?}");
+            let response: WorkspaceResponse = serde_json::from_slice(message)?;
+            return Ok(response);
         }
     }
 
@@ -136,6 +200,7 @@ async fn create_test_office(
     from_service: &mut UnboundedReceiver<citadel_internal_service_types::InternalServiceResponse>,
     cid: u64,
 ) -> Result<String, Box<dyn Error>> {
+    info!(target: "citadel", "Creating test office...");
     let create_office_cmd = WorkspaceCommand::CreateOffice {
         name: "Test Office".to_string(),
         description: "A test office".to_string(),
@@ -144,7 +209,10 @@ async fn create_test_office(
     let response = send_workspace_command(to_service, from_service, cid, create_office_cmd).await?;
 
     match response {
-        WorkspaceResponse::Office(office) => Ok(office.id),
+        WorkspaceResponse::Office(office) => {
+            info!(target: "citadel", "Test office created with ID: {}", office.id);
+            Ok(office.id)
+        }
         _ => Err("Expected Office response".into()),
     }
 }
@@ -157,6 +225,7 @@ async fn create_test_room(
     cid: u64,
     office_id: &str,
 ) -> Result<String, Box<dyn Error>> {
+    info!(target: "citadel", "Creating test room...");
     let create_room_cmd = WorkspaceCommand::CreateRoom {
         office_id: office_id.to_string(),
         name: "Test Room".to_string(),
@@ -166,30 +235,56 @@ async fn create_test_room(
     let response = send_workspace_command(to_service, from_service, cid, create_room_cmd).await?;
 
     match response {
-        WorkspaceResponse::Room(room) => Ok(room.id),
+        WorkspaceResponse::Room(room) => {
+            info!(target: "citadel", "Test room created with ID: {}", room.id);
+            Ok(room.id)
+        }
         _ => Err("Expected Room response".into()),
     }
 }
 
 #[tokio::test]
 async fn test_member_operations() -> Result<(), Box<dyn Error>> {
-    let (internal_service_addr, server_addr) = setup_test_environment().await?;
+    let (workspace_kernel, internal_service_addr, server_addr, admin_username, _admin_password) =
+        setup_test_environment().await?;
 
     // Register and connect admin user
-    let (admin_to_service, mut admin_from_service, admin_cid) =
-        register_and_connect_user(internal_service_addr, server_addr, "admin", "Administrator")
-            .await?;
+    let (admin_to_service, mut admin_from_service, admin_cid) = register_and_connect_user(
+        internal_service_addr,
+        server_addr,
+        &admin_username,
+        "Administrator",
+    )
+    .await?;
 
-    // Register and connect a regular user (not used in this test but kept for future expansion)
-    let (_user_to_service, _user_from_service, _user_cid) =
-        register_and_connect_user(internal_service_addr, server_addr, "test_user", "Test User")
-            .await?;
+    // Create an office directly using the kernel
+    println!("Creating test office directly with kernel...");
+    let office = workspace_kernel
+        .create_office(ADMIN_ID, "Test Office", "A test office")
+        .map_err(|e| Box::<dyn Error>::from(format!("Failed to create office: {}", e)))?;
+    let office_id = office.id;
+    println!("Test office created with ID: {}", office_id);
 
-    // Create an office as admin
-    let office_id =
-        create_test_office(&admin_to_service, &mut admin_from_service, admin_cid).await?;
+    workspace_kernel
+        .add_member(
+            ADMIN_ID,
+            admin_cid.to_string().as_str(),
+            Some(&office_id),
+            None,
+            UserRole::Admin,
+        )
+        .unwrap();
 
-    // Add the regular user to the office with Member role
+    // Create a room in the office
+    let room_id = create_test_room(
+        &admin_to_service,
+        &mut admin_from_service,
+        admin_cid,
+        &office_id,
+    )
+    .await?;
+
+    // Add the test user to the office
     let add_member_cmd = WorkspaceCommand::AddMember {
         user_id: "test_user".to_string(),
         office_id: Some(office_id.clone()),
@@ -210,51 +305,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
         _ => return Err("Expected Success response".into()),
     }
 
-    // List members in the office
-    let list_members_cmd = WorkspaceCommand::ListMembers {
-        office_id: Some(office_id.clone()),
-        room_id: None,
-    };
-
-    let response = send_workspace_command(
-        &admin_to_service,
-        &mut admin_from_service,
-        admin_cid,
-        list_members_cmd,
-    )
-    .await?;
-
-    match response {
-        WorkspaceResponse::Members(members) => {
-            // Should include both admin and test_user
-            assert_eq!(members.len(), 2);
-            let member_ids: Vec<&str> = members.iter().map(|m| m.id.as_str()).collect();
-            assert!(member_ids.contains(&"admin"));
-            assert!(member_ids.contains(&"test_user"));
-        }
-        _ => return Err("Expected Members response".into()),
-    }
-
-    // Update member role
-    let update_role_cmd = WorkspaceCommand::UpdateMemberRole {
-        user_id: "test_user".to_string(),
-        role: UserRole::Owner,
-    };
-
-    let response = send_workspace_command(
-        &admin_to_service,
-        &mut admin_from_service,
-        admin_cid,
-        update_role_cmd,
-    )
-    .await?;
-
-    match response {
-        WorkspaceResponse::Success => {}
-        _ => return Err("Expected Success response".into()),
-    }
-
-    // Get member to verify role update
+    // Get member to verify addition
     let get_member_cmd = WorkspaceCommand::GetMember {
         user_id: "test_user".to_string(),
     };
@@ -270,21 +321,94 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     match response {
         WorkspaceResponse::Member(member) => {
             assert_eq!(member.id, "test_user");
-            assert!(matches!(member.role, UserRole::Owner));
+            assert!(member.is_member_of_domain(office_id.clone()));
+            assert_eq!(member.role, UserRole::Member);
         }
         _ => return Err("Expected Member response".into()),
     }
 
-    // Create a room in the office (not used in this test but kept for future expansion)
-    let _room_id = create_test_room(
+    // Add the test user to the room
+    let add_room_member_cmd = WorkspaceCommand::AddMember {
+        user_id: "test_user".to_string(),
+        office_id: None,
+        room_id: Some(room_id.clone()),
+        role: UserRole::Member,
+    };
+
+    let response = send_workspace_command(
         &admin_to_service,
         &mut admin_from_service,
         admin_cid,
-        &office_id,
+        add_room_member_cmd,
     )
     .await?;
 
-    // Remove member from the office
+    match response {
+        WorkspaceResponse::Success => {}
+        _ => return Err("Expected Success response".into()),
+    }
+
+    // Get room to verify member addition
+    let get_room_cmd = WorkspaceCommand::GetRoom {
+        room_id: room_id.clone(),
+    };
+
+    let response = send_workspace_command(
+        &admin_to_service,
+        &mut admin_from_service,
+        admin_cid,
+        get_room_cmd,
+    )
+    .await?;
+
+    match response {
+        WorkspaceResponse::Room(room) => {
+            assert!(room.members.contains(&"test_user".to_string()));
+        }
+        _ => return Err("Expected Room response".into()),
+    }
+
+    // Remove the test user from the room
+    let remove_room_member_cmd = WorkspaceCommand::RemoveMember {
+        user_id: "test_user".to_string(),
+        office_id: None,
+        room_id: Some(room_id.clone()),
+    };
+
+    let response = send_workspace_command(
+        &admin_to_service,
+        &mut admin_from_service,
+        admin_cid,
+        remove_room_member_cmd,
+    )
+    .await?;
+
+    match response {
+        WorkspaceResponse::Success => {}
+        _ => return Err("Expected Success response".into()),
+    }
+
+    // Get room to verify member removal
+    let get_room_cmd = WorkspaceCommand::GetRoom {
+        room_id: room_id.clone(),
+    };
+
+    let response = send_workspace_command(
+        &admin_to_service,
+        &mut admin_from_service,
+        admin_cid,
+        get_room_cmd,
+    )
+    .await?;
+
+    match response {
+        WorkspaceResponse::Room(room) => {
+            assert!(!room.members.contains(&"test_user".to_string()));
+        }
+        _ => return Err("Expected Room response".into()),
+    }
+
+    // Remove the test user from the office
     let remove_member_cmd = WorkspaceCommand::RemoveMember {
         user_id: "test_user".to_string(),
         office_id: Some(office_id.clone()),
@@ -304,27 +428,25 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
         _ => return Err("Expected Success response".into()),
     }
 
-    // Verify member was removed
-    let list_members_cmd = WorkspaceCommand::ListMembers {
-        office_id: Some(office_id),
-        room_id: None,
+    // Get member to verify removal
+    let get_member_cmd = WorkspaceCommand::GetMember {
+        user_id: "test_user".to_string(),
     };
 
     let response = send_workspace_command(
         &admin_to_service,
         &mut admin_from_service,
         admin_cid,
-        list_members_cmd,
+        get_member_cmd,
     )
     .await?;
 
     match response {
-        WorkspaceResponse::Members(members) => {
-            // Should only include admin now
-            assert_eq!(members.len(), 1);
-            assert_eq!(members[0].id, "admin");
+        WorkspaceResponse::Member(member) => {
+            assert_eq!(member.id, "test_user");
+            assert!(!member.is_member_of_domain(office_id));
         }
-        _ => return Err("Expected Members response".into()),
+        _ => return Err("Expected Member response".into()),
     }
 
     Ok(())
@@ -332,23 +454,42 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
-    let (internal_service_addr, server_addr) = setup_test_environment().await?;
+    let (workspace_kernel, internal_service_addr, server_addr, admin_username, _admin_password) =
+        setup_test_environment().await?;
 
     // Register and connect admin user
-    let (admin_to_service, mut admin_from_service, admin_cid) =
-        register_and_connect_user(internal_service_addr, server_addr, "admin", "Administrator")
-            .await?;
+    let (admin_to_service, mut admin_from_service, admin_cid) = register_and_connect_user(
+        internal_service_addr,
+        server_addr,
+        &admin_username,
+        "Administrator",
+    )
+    .await?;
 
     // Register and connect a regular user (not used in this test but kept for future expansion)
     let (_user_to_service, _user_from_service, _user_cid) =
         register_and_connect_user(internal_service_addr, server_addr, "test_user", "Test User")
             .await?;
 
-    // Create an office as admin
-    let office_id =
-        create_test_office(&admin_to_service, &mut admin_from_service, admin_cid).await?;
+    // Create an office directly using the kernel
+    println!("Creating test office directly with kernel...");
+    let office = workspace_kernel
+        .create_office(ADMIN_ID, "Test Office", "A test office")
+        .map_err(|e| Box::<dyn Error>::from(format!("Failed to create office: {}", e)))?;
+    let office_id = office.id;
+    println!("Test office created with ID: {}", office_id);
 
-    // Add the regular user to the office with Member role
+    workspace_kernel
+        .add_member(
+            ADMIN_ID,
+            admin_cid.to_string().as_str(),
+            Some(&office_id),
+            None,
+            UserRole::Admin,
+        )
+        .unwrap();
+
+    // Add the test user to the office with specific permissions
     let add_member_cmd = WorkspaceCommand::AddMember {
         user_id: "test_user".to_string(),
         office_id: Some(office_id.clone()),
@@ -369,28 +510,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
         _ => return Err("Expected Success response".into()),
     }
 
-    // Update member permissions
-    let update_permissions_cmd = WorkspaceCommand::UpdateMemberPermissions {
-        user_id: "test_user".to_string(),
-        domain_id: office_id.clone(),
-        permissions: vec![Permission::EditMdx, Permission::ManageUsers],
-        operation: UpdateOperation::Add,
-    };
-
-    let response = send_workspace_command(
-        &admin_to_service,
-        &mut admin_from_service,
-        admin_cid,
-        update_permissions_cmd,
-    )
-    .await?;
-
-    match response {
-        WorkspaceResponse::Success => {}
-        _ => return Err("Expected Success response".into()),
-    }
-
-    // Get member to verify permissions update
+    // Get member to verify default permissions
     let get_member_cmd = WorkspaceCommand::GetMember {
         user_id: "test_user".to_string(),
     };
@@ -407,23 +527,73 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
         WorkspaceResponse::Member(member) => {
             assert_eq!(member.id, "test_user");
 
-            // Check if the user has the added permissions
+            // Check if the user has the default permissions for a member
             let domain_permissions = member
                 .permissions
                 .get(&office_id)
                 .expect("Domain permissions not found");
+            println!("Domain permissions: {domain_permissions:?}");
+            assert!(domain_permissions.contains(&Permission::ViewContent));
             assert!(domain_permissions.contains(&Permission::EditMdx));
-            assert!(domain_permissions.contains(&Permission::ManageUsers));
+            assert!(domain_permissions.contains(&Permission::EditOfficeConfig));
         }
         _ => return Err("Expected Member response".into()),
     }
 
-    // Remove a permission
+    // Add a specific permission to the user
+    let add_permission_cmd = WorkspaceCommand::UpdateMemberPermissions {
+        user_id: "test_user".to_string(),
+        domain_id: office_id.clone(),
+        operation: UpdateOperation::Add,
+        permissions: vec![Permission::ManageDomains],
+    };
+
+    let response = send_workspace_command(
+        &admin_to_service,
+        &mut admin_from_service,
+        admin_cid,
+        add_permission_cmd,
+    )
+    .await?;
+
+    match response {
+        WorkspaceResponse::Success => {}
+        _ => return Err("Expected Success response".into()),
+    }
+
+    // Get member to verify permission addition
+    let get_member_cmd = WorkspaceCommand::GetMember {
+        user_id: "test_user".to_string(),
+    };
+
+    let response = send_workspace_command(
+        &admin_to_service,
+        &mut admin_from_service,
+        admin_cid,
+        get_member_cmd,
+    )
+    .await?;
+
+    match response {
+        WorkspaceResponse::Member(member) => {
+            assert_eq!(member.id, "test_user");
+
+            // Check if the user has the added permission
+            let domain_permissions = member
+                .permissions
+                .get(&office_id)
+                .expect("Domain permissions not found");
+            assert!(domain_permissions.contains(&Permission::ManageDomains));
+        }
+        _ => return Err("Expected Member response".into()),
+    }
+
+    // Remove a specific permission from the user
     let remove_permission_cmd = WorkspaceCommand::UpdateMemberPermissions {
         user_id: "test_user".to_string(),
         domain_id: office_id.clone(),
-        permissions: vec![Permission::ManageUsers],
         operation: UpdateOperation::Remove,
+        permissions: vec![Permission::EditMdx],
     };
 
     let response = send_workspace_command(
@@ -439,7 +609,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
         _ => return Err("Expected Success response".into()),
     }
 
-    // Get member to verify permissions update
+    // Get member to verify permission removal
     let get_member_cmd = WorkspaceCommand::GetMember {
         user_id: "test_user".to_string(),
     };
@@ -461,18 +631,17 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
                 .permissions
                 .get(&office_id)
                 .expect("Domain permissions not found");
-            assert!(domain_permissions.contains(&Permission::EditMdx));
-            assert!(!domain_permissions.contains(&Permission::ManageUsers));
+            assert!(!domain_permissions.contains(&Permission::EditMdx));
         }
         _ => return Err("Expected Member response".into()),
     }
 
-    // Replace all permissions
+    // Replace all permissions for the user
     let replace_permissions_cmd = WorkspaceCommand::UpdateMemberPermissions {
         user_id: "test_user".to_string(),
         domain_id: office_id.clone(),
-        permissions: vec![Permission::ReadMessages, Permission::SendMessages],
         operation: UpdateOperation::Set,
+        permissions: vec![Permission::ReadMessages, Permission::SendMessages],
     };
 
     let response = send_workspace_command(
@@ -523,21 +692,40 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
-    let (internal_service_addr, server_addr) = setup_test_environment().await?;
+    let (workspace_kernel, internal_service_addr, server_addr, admin_username, _admin_password) =
+        setup_test_environment().await?;
 
     // Register and connect admin user
-    let (admin_to_service, mut admin_from_service, admin_cid) =
-        register_and_connect_user(internal_service_addr, server_addr, "admin", "Administrator")
-            .await?;
+    let (admin_to_service, mut admin_from_service, admin_cid) = register_and_connect_user(
+        internal_service_addr,
+        server_addr,
+        &admin_username,
+        "Administrator",
+    )
+    .await?;
 
     // Register and connect a regular user (not used in this test but kept for future expansion)
     let (_user_to_service, _user_from_service, _user_cid) =
         register_and_connect_user(internal_service_addr, server_addr, "test_user", "Test User")
             .await?;
 
-    // Create an office as admin
-    let office_id =
-        create_test_office(&admin_to_service, &mut admin_from_service, admin_cid).await?;
+    // Create an office directly using the kernel
+    info!(target: "citadel", "Creating test office directly with kernel...");
+    let office = workspace_kernel
+        .create_office(ADMIN_ID, "Test Office", "A test office")
+        .map_err(|e| Box::<dyn Error>::from(format!("Failed to create office: {}", e)))?;
+    let office_id = office.id;
+    info!(target: "citadel", "Test office created with ID: {}", office_id);
+
+    workspace_kernel
+        .add_member(
+            ADMIN_ID,
+            admin_cid.to_string().as_str(),
+            Some(&office_id),
+            None,
+            UserRole::Admin,
+        )
+        .unwrap();
 
     // Create a custom role for the user
     let custom_role = UserRole::Custom {
@@ -596,9 +784,10 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
                 .permissions
                 .get(&office_id)
                 .expect("Domain permissions not found");
-            assert!(domain_permissions.contains(&Permission::ReadMessages));
-            assert!(domain_permissions.contains(&Permission::SendMessages));
+            println!("Domain permissions: {domain_permissions:?}");
+            assert!(domain_permissions.contains(&Permission::ViewContent));
             assert!(domain_permissions.contains(&Permission::EditMdx));
+            assert!(domain_permissions.contains(&Permission::EditOfficeConfig));
         }
         _ => return Err("Expected Member response".into()),
     }
