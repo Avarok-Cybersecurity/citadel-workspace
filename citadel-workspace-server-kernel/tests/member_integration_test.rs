@@ -193,30 +193,6 @@ async fn send_workspace_command(
     Err("No response received".into())
 }
 
-async fn create_test_office(
-    to_service: &tokio::sync::mpsc::UnboundedSender<
-        citadel_internal_service_types::InternalServiceRequest,
-    >,
-    from_service: &mut UnboundedReceiver<citadel_internal_service_types::InternalServiceResponse>,
-    cid: u64,
-) -> Result<String, Box<dyn Error>> {
-    info!(target: "citadel", "Creating test office...");
-    let create_office_cmd = WorkspaceCommand::CreateOffice {
-        name: "Test Office".to_string(),
-        description: "A test office".to_string(),
-    };
-
-    let response = send_workspace_command(to_service, from_service, cid, create_office_cmd).await?;
-
-    match response {
-        WorkspaceResponse::Office(office) => {
-            info!(target: "citadel", "Test office created with ID: {}", office.id);
-            Ok(office.id)
-        }
-        _ => Err("Expected Office response".into()),
-    }
-}
-
 async fn create_test_room(
     to_service: &tokio::sync::mpsc::UnboundedSender<
         citadel_internal_service_types::InternalServiceRequest,
