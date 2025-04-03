@@ -10,7 +10,7 @@ use citadel_logging::info;
 use citadel_sdk::prelude::*;
 use citadel_workspace_server::commands::{WorkspaceCommand, WorkspaceResponse};
 use citadel_workspace_server::kernel::WorkspaceServerKernel;
-use citadel_workspace_server::structs::UserRole;
+use citadel_workspace_server::structs::{Domain, Room, UserRole};
 use futures::{sink, SinkExt, StreamExt};
 use std::default;
 use std::error::Error;
@@ -77,8 +77,16 @@ async fn new_internal_service_with_admin(
     Ok((service_handle, admin_username, admin_password))
 }
 
-async fn setup_test_environment() -> Result<(WorkspaceServerKernel<StackedRatchet>, SocketAddr, SocketAddr, String, String), Box<dyn Error>>
-{
+async fn setup_test_environment() -> Result<
+    (
+        WorkspaceServerKernel<StackedRatchet>,
+        SocketAddr,
+        SocketAddr,
+        String,
+        String,
+    ),
+    Box<dyn Error>,
+> {
     common::setup_log();
 
     // Setup internal service
@@ -172,8 +180,15 @@ async fn send_workspace_command(
         },
     )?;
 
+    println!(
+        "Sent command: {:?} with request_id: {}",
+        command, request_id
+    );
+
     // Wait for response
     while let Some(response) = from_service.recv().await {
+        println!("Received response: {:?}", response);
+
         if let citadel_internal_service_types::InternalServiceResponse::MessageSendSuccess(
             citadel_internal_service_types::MessageSendSuccess {
                 request_id: resp_id,
@@ -182,6 +197,7 @@ async fn send_workspace_command(
         ) = &response
         {
             if resp_id.as_ref() == Some(&request_id) {
+                println!("Received confirmation that message was sent successfully");
                 continue; // This is just confirmation the message was sent
             }
         }
@@ -219,10 +235,20 @@ async fn test_office_operations() {
     .unwrap();
     println!("Test user registered and connected with CID: {cid}.");
 
-    let office = kernel.create_office(ADMIN_ID, "TEST OFFICE", "OFFICE DESCRIPTION").unwrap();
+    let office = kernel
+        .create_office(ADMIN_ID, "TEST OFFICE", "OFFICE DESCRIPTION")
+        .unwrap();
     let office_id = office.id;
 
-    kernel.add_member(ADMIN_ID, cid.to_string().as_str(), Some(&office_id), None, UserRole::Admin).unwrap();
+    kernel
+        .add_member(
+            ADMIN_ID,
+            cid.to_string().as_str(),
+            Some(&office_id),
+            None,
+            UserRole::Admin,
+        )
+        .unwrap();
 
     println!("Creating test office...");
     let create_office_cmd = WorkspaceCommand::CreateOffice {
@@ -351,10 +377,43 @@ async fn test_room_operations() {
     .unwrap();
     println!("Test user registered and connected with CID: {cid}.");
 
-    let office = kernel.create_office(ADMIN_ID, "TEST OFFICE", "OFFICE DESCRIPTION").unwrap();
+    let office = kernel
+        .create_office(ADMIN_ID, "TEST OFFICE", "OFFICE DESCRIPTION")
+        .unwrap();
     let office_id = office.id;
 
-    kernel.add_member(ADMIN_ID, cid.to_string().as_str(), Some(&office_id), None, UserRole::Admin).unwrap();
+    kernel
+        .add_member(
+            ADMIN_ID,
+            cid.to_string().as_str(),
+            Some(&office_id),
+            None,
+            UserRole::Admin,
+        )
+        .unwrap();
+
+    // // For testing purposes, directly create the room in the kernel to avoid potential deadlocks
+    // println!("Creating room directly in kernel for testing...");
+    // let room_id = uuid::Uuid::new_v4().to_string();
+    // let room = Room {
+    //     id: room_id.clone(),
+    //     name: "Test Room".to_string(),
+    //     description: "A test room".to_string(),
+    //     owner_id: cid.to_string(),
+    //     office_id: office_id.clone(),
+    //     members: vec![],
+    //     mdx_content: String::new(),
+    // };
+
+    // // Store the room directly
+    // kernel.with_write_transaction(|tx| {
+    //     let domain = Domain::Room { room: room.clone() };
+    //     tx.insert_domain(room_id.clone(), domain)?;
+    //     println!("Room created directly: {}", room_id);
+    //     Ok(())
+    // }).unwrap();
+
+    // println!("Test room created with ID: {}", room_id);
 
     println!("Creating test room...");
     let create_room_cmd = WorkspaceCommand::CreateRoom {

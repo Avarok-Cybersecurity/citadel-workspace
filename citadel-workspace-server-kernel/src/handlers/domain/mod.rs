@@ -25,7 +25,7 @@ pub trait DomainEntity: Clone + Send + Sync + 'static {
         Self: Sized;
 
     // Create a new entity
-    fn create(id: String, name: &str, description: &str) -> Self
+    fn create(id: String, parent_id: Option<String>, name: &str, description: &str) -> Self
     where
         Self: Sized;
 

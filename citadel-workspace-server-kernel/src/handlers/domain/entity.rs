@@ -27,7 +27,7 @@ impl DomainEntity for Office {
         Domain::Office { office: self }
     }
 
-    fn create(id: String, name: &str, description: &str) -> Self {
+    fn create(id: String, _parent_id: Option<String>, name: &str, description: &str) -> Self {
         Office {
             id,
             name: name.to_string(),
@@ -73,13 +73,13 @@ impl DomainEntity for Room {
         Domain::Room { room: self }
     }
 
-    fn create(id: String, name: &str, description: &str) -> Self {
+    fn create(id: String, parent_id: Option<String>, name: &str, description: &str) -> Self {
         Room {
             id,
             name: name.to_string(),
             description: description.to_string(),
             owner_id: "".to_string(),
-            office_id: "".to_string(),
+            office_id: parent_id.unwrap_or_default(),
             members: vec![],
             mdx_content: String::new(),
         }

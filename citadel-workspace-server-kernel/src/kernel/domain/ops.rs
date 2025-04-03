@@ -248,7 +248,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
         info!(target: "citadel", "User {} creating new entity of type {}", user_id, std::any::type_name::<T>());
 
         // Create the entity
-        let entity = T::create(entity_id.clone(), name, description);
+        let entity = T::create(
+            entity_id.clone(),
+            parent_id.map(String::from),
+            name,
+            description,
+        );
 
         // Convert to domain and store
         let domain = entity.clone().into_domain();
