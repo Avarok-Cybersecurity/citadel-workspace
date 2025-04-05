@@ -7,7 +7,7 @@ use citadel_internal_service_connector::messenger::{
 use citadel_internal_service_connector::messenger::{MessengerError, MessengerTx};
 use citadel_internal_service_types::InternalServiceResponse;
 use citadel_types::crypto::SecurityLevel;
-use citadel_workspace_types::WorkspaceProtocolRequest;
+use citadel_workspace_types::{WorkspaceProtocolPayload, WorkspaceProtocolRequest};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{OnceCell, RwLock};
@@ -42,7 +42,7 @@ impl WorkspaceStateInner {
         cid: u64,
         peer_cid: Option<u64>,
         security_level: SecurityLevel,
-        command: WorkspaceProtocolRequest,
+        command: impl Into<WorkspaceProtocolPayload>,
     ) -> Result<(), MessengerError> {
         if cid == 0 {
             Err(MessengerError::OtherError {
@@ -52,7 +52,7 @@ impl WorkspaceStateInner {
             let read = self.muxes.read().await;
             let tx = read.get(&cid).ok_or(MessengerError::OtherError { reason: format!("CID {} not found in muxes. Make sure to call open_messenger_for first before calling this function", cid) })?;
             let peer_cid = peer_cid.unwrap_or(0); // if 0, then is sent to the server
-            let serialized = serde_json::to_vec(&command).unwrap();
+            let serialized = serde_json::to_vec(&command.into()).unwrap();
             tx.send_message_to_with_security_level(peer_cid, security_level, serialized)
                 .await
         }
