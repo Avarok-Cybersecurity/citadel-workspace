@@ -1,9 +1,9 @@
-use crate::commands::UpdateOperation;
 use crate::handlers::permissions::RolePermissions;
 use crate::kernel::WorkspaceServerKernel;
-use crate::structs::{Domain, Permission, UserRole};
 use citadel_logging::debug;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
+use citadel_workspace_types::structs::{Domain, Permission, UserRole};
+use citadel_workspace_types::UpdateOperation;
 
 /// Core permission-related functionality for the workspace server
 impl<R: Ratchet> WorkspaceServerKernel<R> {

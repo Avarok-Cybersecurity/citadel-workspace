@@ -1,5 +1,5 @@
 [package]
-name = "citadel_workspace_service"
+name = "citadel-workspace-service"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,7 +9,7 @@ edition = "2021"
 deadlock-detection = ["parking_lot/deadlock_detection", "parking_lot", "lazy_static"]
 
 [[bin]]
-name = "citadel_workspace_service"
+name = "citadel-workspace-service"
 path = "src/main.rs"
 
 [dependencies]

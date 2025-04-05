@@ -4,9 +4,11 @@ use citadel_internal_service_test_common::{
     self as common, server_test_node_skip_cert_verification,
 };
 use citadel_sdk::prelude::*;
-use citadel_workspace_server::commands::{WorkspaceCommand, WorkspaceResponse};
-use citadel_workspace_server::kernel::WorkspaceServerKernel;
-use citadel_workspace_server::structs::UserRole;
+use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
+use citadel_workspace_types::structs::UserRole;
+use citadel_workspace_types::{
+    WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
+};
 use std::error::Error;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -156,10 +158,11 @@ async fn send_workspace_command(
     >,
     from_service: &mut UnboundedReceiver<citadel_internal_service_types::InternalServiceResponse>,
     cid: u64,
-    command: WorkspaceCommand,
-) -> Result<WorkspaceResponse, Box<dyn Error>> {
+    command: WorkspaceProtocolRequest,
+) -> Result<WorkspaceProtocolResponse, Box<dyn Error>> {
     let request_id = Uuid::new_v4();
-    let serialized_command = serde_json::to_vec(&command)?;
+    let payload = WorkspaceProtocolPayload::Request(command);
+    let serialized_command = serde_json::to_vec(&payload)?;
 
     // Send command to the workspace server
     to_service.send(
@@ -174,7 +177,7 @@ async fn send_workspace_command(
 
     println!(
         "Sent command: {:?} with request_id: {}",
-        command, request_id
+        payload, request_id
     );
 
     // Wait for response
@@ -199,7 +202,7 @@ async fn send_workspace_command(
         ) = response
         {
             // Deserialize the response
-            let workspace_response: WorkspaceResponse = serde_json::from_slice(&message)?;
+            let workspace_response: WorkspaceProtocolResponse = serde_json::from_slice(&message)?;
             return Ok(workspace_response);
         }
 
@@ -243,7 +246,7 @@ async fn test_office_operations() {
         .unwrap();
 
     println!("Creating test office...");
-    let create_office_cmd = WorkspaceCommand::CreateOffice {
+    let create_office_cmd = WorkspaceProtocolRequest::CreateOffice {
         name: "Test Office".to_string(),
         description: "A test office".to_string(),
     };
@@ -255,7 +258,7 @@ async fn test_office_operations() {
     println!("Test office created.");
 
     let office_id = match response {
-        WorkspaceResponse::Office(office) => {
+        WorkspaceProtocolResponse::Office(office) => {
             assert_eq!(office.name, "Test Office");
             assert_eq!(office.description, "A test office");
             office.id.clone()
@@ -264,7 +267,7 @@ async fn test_office_operations() {
     };
 
     println!("Getting test office...");
-    let get_office_cmd = WorkspaceCommand::GetOffice {
+    let get_office_cmd = WorkspaceProtocolRequest::GetOffice {
         office_id: office_id.clone(),
     };
 
@@ -273,7 +276,7 @@ async fn test_office_operations() {
         .unwrap();
 
     match response {
-        WorkspaceResponse::Office(office) => {
+        WorkspaceProtocolResponse::Office(office) => {
             assert_eq!(office.name, "Test Office");
             assert_eq!(office.description, "A test office");
         }
@@ -283,7 +286,7 @@ async fn test_office_operations() {
     println!("Test office retrieved.");
 
     println!("Updating test office...");
-    let update_office_cmd = WorkspaceCommand::UpdateOffice {
+    let update_office_cmd = WorkspaceProtocolRequest::UpdateOffice {
         office_id: office_id.clone(),
         name: Some("Updated Office".to_string()),
         description: None,
@@ -294,7 +297,7 @@ async fn test_office_operations() {
         .unwrap();
 
     match response {
-        WorkspaceResponse::Office(office) => {
+        WorkspaceProtocolResponse::Office(office) => {
             assert_eq!(office.name, "Updated Office");
             assert_eq!(office.description, "A test office");
         }
@@ -304,14 +307,14 @@ async fn test_office_operations() {
     println!("Test office updated.");
 
     println!("Listing offices...");
-    let list_offices_cmd = WorkspaceCommand::ListOffices;
+    let list_offices_cmd = WorkspaceProtocolRequest::ListOffices;
 
     let response = send_workspace_command(&to_service, &mut from_service, cid, list_offices_cmd)
         .await
         .unwrap();
 
     match response {
-        WorkspaceResponse::Offices(offices) => {
+        WorkspaceProtocolResponse::Offices(offices) => {
             assert_eq!(offices.len(), 2);
             assert_eq!(offices[1].name, "Updated Office");
         }
@@ -321,28 +324,28 @@ async fn test_office_operations() {
     println!("Offices listed.");
 
     println!("Deleting test office...");
-    let delete_office_cmd = WorkspaceCommand::DeleteOffice { office_id };
+    let delete_office_cmd = WorkspaceProtocolRequest::DeleteOffice { office_id };
 
     let response = send_workspace_command(&to_service, &mut from_service, cid, delete_office_cmd)
         .await
         .unwrap();
 
     match response {
-        WorkspaceResponse::Success => {}
+        WorkspaceProtocolResponse::Success => {}
         _ => panic!("Expected Success response"),
     }
 
     println!("Test office deleted.");
 
     println!("Verifying office was deleted...");
-    let list_offices_cmd = WorkspaceCommand::ListOffices;
+    let list_offices_cmd = WorkspaceProtocolRequest::ListOffices;
 
     let response = send_workspace_command(&to_service, &mut from_service, cid, list_offices_cmd)
         .await
         .unwrap();
 
     match response {
-        WorkspaceResponse::Offices(offices) => {
+        WorkspaceProtocolResponse::Offices(offices) => {
             assert_eq!(offices.len(), 1);
         }
         _ => panic!("Expected Offices response"),
@@ -385,7 +388,7 @@ async fn test_room_operations() {
         .unwrap();
 
     println!("Creating test room...");
-    let create_room_cmd = WorkspaceCommand::CreateRoom {
+    let create_room_cmd = WorkspaceProtocolRequest::CreateRoom {
         office_id: office_id.clone(),
         name: "Test Room".to_string(),
         description: "A test room".to_string(),
@@ -398,7 +401,7 @@ async fn test_room_operations() {
     println!("Test room creation response: {response:?}");
 
     let room_id = match response {
-        WorkspaceResponse::Room(room) => {
+        WorkspaceProtocolResponse::Room(room) => {
             assert_eq!(room.name, "Test Room");
             assert_eq!(room.description, "A test room");
             room.id.clone()
@@ -409,7 +412,7 @@ async fn test_room_operations() {
     println!("Test room created.");
 
     println!("Getting test room...");
-    let get_room_cmd = WorkspaceCommand::GetRoom {
+    let get_room_cmd = WorkspaceProtocolRequest::GetRoom {
         room_id: room_id.clone(),
     };
 
@@ -418,7 +421,7 @@ async fn test_room_operations() {
         .unwrap();
 
     match response {
-        WorkspaceResponse::Room(room) => {
+        WorkspaceProtocolResponse::Room(room) => {
             assert_eq!(room.name, "Test Room");
             assert_eq!(room.description, "A test room");
         }
@@ -428,7 +431,7 @@ async fn test_room_operations() {
     println!("Test room retrieved.");
 
     println!("Updating test room...");
-    let update_room_cmd = WorkspaceCommand::UpdateRoom {
+    let update_room_cmd = WorkspaceProtocolRequest::UpdateRoom {
         room_id: room_id.clone(),
         name: Some("Updated Room".to_string()),
         description: None,
@@ -439,7 +442,7 @@ async fn test_room_operations() {
         .unwrap();
 
     match response {
-        WorkspaceResponse::Room(room) => {
+        WorkspaceProtocolResponse::Room(room) => {
             assert_eq!(room.name, "Updated Room");
             assert_eq!(room.description, "A test room");
         }
@@ -449,7 +452,7 @@ async fn test_room_operations() {
     println!("Test room updated.");
 
     println!("Listing rooms...");
-    let list_rooms_cmd = WorkspaceCommand::ListRooms {
+    let list_rooms_cmd = WorkspaceProtocolRequest::ListRooms {
         office_id: office_id.clone(),
     };
 
@@ -458,7 +461,7 @@ async fn test_room_operations() {
         .unwrap();
 
     match response {
-        WorkspaceResponse::Rooms(rooms) => {
+        WorkspaceProtocolResponse::Rooms(rooms) => {
             assert_eq!(rooms.len(), 1);
             assert_eq!(rooms[0].name, "Updated Room");
         }
@@ -468,28 +471,28 @@ async fn test_room_operations() {
     println!("Rooms listed.");
 
     println!("Deleting test room...");
-    let delete_room_cmd = WorkspaceCommand::DeleteRoom { room_id };
+    let delete_room_cmd = WorkspaceProtocolRequest::DeleteRoom { room_id };
 
     let response = send_workspace_command(&to_service, &mut from_service, cid, delete_room_cmd)
         .await
         .unwrap();
 
     match response {
-        WorkspaceResponse::Success => {}
+        WorkspaceProtocolResponse::Success => {}
         _ => panic!("Expected Success response"),
     }
 
     println!("Test room deleted.");
 
     println!("Verifying room was deleted...");
-    let list_rooms_cmd = WorkspaceCommand::ListRooms { office_id };
+    let list_rooms_cmd = WorkspaceProtocolRequest::ListRooms { office_id };
 
     let response = send_workspace_command(&to_service, &mut from_service, cid, list_rooms_cmd)
         .await
         .unwrap();
 
     match response {
-        WorkspaceResponse::Rooms(rooms) => {
+        WorkspaceProtocolResponse::Rooms(rooms) => {
             assert_eq!(rooms.len(), 0);
         }
         _ => panic!("Expected Rooms response"),

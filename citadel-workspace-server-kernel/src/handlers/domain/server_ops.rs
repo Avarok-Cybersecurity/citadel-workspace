@@ -1,9 +1,9 @@
 use crate::handlers::domain;
 use crate::handlers::domain::{DomainEntity, DomainOperations};
 use crate::handlers::transaction::Transaction;
-use crate::structs::{Domain, Office, Permission, Room, User, UserRole};
 use crate::WorkspaceServerKernel;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
+use citadel_workspace_types::structs::{Domain, Office, Permission, Room, User, UserRole};
 use std::sync::Arc;
 use uuid::Uuid;
 

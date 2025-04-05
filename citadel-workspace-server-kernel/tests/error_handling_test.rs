@@ -1,7 +1,9 @@
 use citadel_sdk::prelude::StackedRatchet;
-use citadel_workspace_server::kernel::WorkspaceServerKernel;
-use citadel_workspace_server::structs::{Permission, User, UserRole};
-use citadel_workspace_server::{commands::UpdateOperation, WorkspaceCommand, WorkspaceResponse};
+use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
+use citadel_workspace_types::structs::{Permission, User, UserRole};
+use citadel_workspace_types::{
+    UpdateOperation, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
+};
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -46,7 +48,7 @@ mod tests {
         // Attempt to create an office (should fail due to lack of permissions)
         let result = kernel.process_command(
             user_id,
-            WorkspaceCommand::CreateOffice {
+            WorkspaceProtocolRequest::CreateOffice {
                 name: "New Office".to_string(),
                 description: "Description".to_string(),
             },
@@ -55,7 +57,7 @@ mod tests {
         // Verify we get an error response, not a panic or actual error
         assert!(result.is_ok());
         match result.unwrap() {
-            WorkspaceResponse::Error(message) => {
+            WorkspaceProtocolResponse::Error(message) => {
                 assert!(message.contains("Failed to create office"));
             }
             _ => panic!("Expected error response"),
@@ -64,7 +66,7 @@ mod tests {
         // Attempt to delete a non-existent office
         let result = kernel.process_command(
             user_id,
-            WorkspaceCommand::DeleteOffice {
+            WorkspaceProtocolRequest::DeleteOffice {
                 office_id: "non_existent_id".to_string(),
             },
         );
@@ -72,7 +74,7 @@ mod tests {
         // Verify we get an error response
         assert!(result.is_ok());
         match result.unwrap() {
-            WorkspaceResponse::Error(message) => {
+            WorkspaceProtocolResponse::Error(message) => {
                 assert!(message.contains("Failed to delete office"));
             }
             _ => panic!("Expected error response"),
@@ -86,7 +88,7 @@ mod tests {
         // Attempt to get a non-existent office (even as admin)
         let result = kernel.process_command(
             "admin",
-            WorkspaceCommand::GetOffice {
+            WorkspaceProtocolRequest::GetOffice {
                 office_id: "non_existent_id".to_string(),
             },
         );
@@ -94,7 +96,7 @@ mod tests {
         // Verify we get an error response, not a panic
         assert!(result.is_ok());
         match result.unwrap() {
-            WorkspaceResponse::Error(message) => {
+            WorkspaceProtocolResponse::Error(message) => {
                 assert!(message.contains("Failed to get office"));
             }
             _ => panic!("Expected error response"),
@@ -103,7 +105,7 @@ mod tests {
         // Attempt to get a non-existent room
         let result = kernel.process_command(
             "admin",
-            WorkspaceCommand::GetRoom {
+            WorkspaceProtocolRequest::GetRoom {
                 room_id: "non_existent_room".to_string(),
             },
         );
@@ -111,7 +113,7 @@ mod tests {
         // Verify we get an error response
         assert!(result.is_ok());
         match result.unwrap() {
-            WorkspaceResponse::Error(message) => {
+            WorkspaceProtocolResponse::Error(message) => {
                 assert!(message.contains("Failed to get room"));
             }
             _ => panic!("Expected error response"),
@@ -120,7 +122,7 @@ mod tests {
         // Attempt to get a non-existent member
         let result = kernel.process_command(
             "admin",
-            WorkspaceCommand::GetMember {
+            WorkspaceProtocolRequest::GetMember {
                 user_id: "non_existent_user".to_string(),
             },
         );
@@ -128,7 +130,7 @@ mod tests {
         // Verify we get an error response
         assert!(result.is_ok());
         match result.unwrap() {
-            WorkspaceResponse::Error(message) => {
+            WorkspaceProtocolResponse::Error(message) => {
                 assert!(message.contains("not found"));
             }
             _ => panic!("Expected error response"),
@@ -142,7 +144,7 @@ mod tests {
         // Attempt to update role for non-existent member
         let result = kernel.process_command(
             "admin",
-            WorkspaceCommand::UpdateMemberRole {
+            WorkspaceProtocolRequest::UpdateMemberRole {
                 user_id: "non_existent_user".to_string(),
                 role: UserRole::Member,
             },
@@ -151,7 +153,7 @@ mod tests {
         // Verify we get an error response
         assert!(result.is_ok());
         match result.unwrap() {
-            WorkspaceResponse::Error(message) => {
+            WorkspaceProtocolResponse::Error(message) => {
                 assert!(message.contains("Failed to update member role"));
             }
             _ => panic!("Expected error response"),
@@ -160,7 +162,7 @@ mod tests {
         // Attempt to update permissions for non-existent member
         let result = kernel.process_command(
             "admin",
-            WorkspaceCommand::UpdateMemberPermissions {
+            WorkspaceProtocolRequest::UpdateMemberPermissions {
                 user_id: "non_existent_user".to_string(),
                 domain_id: "office1".to_string(),
                 permissions: vec![Permission::ReadMessages],
@@ -171,7 +173,7 @@ mod tests {
         // Verify we get an error response
         assert!(result.is_ok());
         match result.unwrap() {
-            WorkspaceResponse::Error(message) => {
+            WorkspaceProtocolResponse::Error(message) => {
                 assert!(message.contains("Failed to update member permissions"));
             }
             _ => panic!("Expected error response"),
@@ -192,7 +194,7 @@ mod tests {
         // Now try with attempting to update a non-existent domain
         let result = kernel.process_command(
             "admin",
-            WorkspaceCommand::UpdateMemberPermissions {
+            WorkspaceProtocolRequest::UpdateMemberPermissions {
                 user_id: user_id.to_string(),
                 domain_id: "non_existent_domain".to_string(),
                 permissions: vec![Permission::ReadMessages],
@@ -203,7 +205,7 @@ mod tests {
         // Verify we get an error response
         assert!(result.is_ok());
         match result.unwrap() {
-            WorkspaceResponse::Error(message) => {
+            WorkspaceProtocolResponse::Error(message) => {
                 assert!(message.contains("Failed to update member permissions"));
             }
             _ => panic!("Expected error response"),
@@ -217,7 +219,7 @@ mod tests {
         // Test ListMembers with neither office_id nor room_id
         let result = kernel.process_command(
             "admin",
-            WorkspaceCommand::ListMembers {
+            WorkspaceProtocolRequest::ListMembers {
                 office_id: None,
                 room_id: None,
             },
@@ -226,7 +228,7 @@ mod tests {
         // Verify we get the correct error message
         assert!(result.is_ok());
         match result.unwrap() {
-            WorkspaceResponse::Error(message) => {
+            WorkspaceProtocolResponse::Error(message) => {
                 assert_eq!(message, "Must specify either office_id or room_id");
             }
             _ => panic!("Expected error response"),
@@ -235,7 +237,7 @@ mod tests {
         // Test ListMembers with both office_id and room_id
         let result = kernel.process_command(
             "admin",
-            WorkspaceCommand::ListMembers {
+            WorkspaceProtocolRequest::ListMembers {
                 office_id: Some("office1".to_string()),
                 room_id: Some("room1".to_string()),
             },
@@ -244,7 +246,7 @@ mod tests {
         // Verify we get the correct error message
         assert!(result.is_ok());
         match result.unwrap() {
-            WorkspaceResponse::Error(message) => {
+            WorkspaceProtocolResponse::Error(message) => {
                 assert_eq!(message, "Must specify either office_id or room_id");
             }
             _ => panic!("Expected error response"),

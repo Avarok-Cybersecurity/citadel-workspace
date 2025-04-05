@@ -1,9 +1,9 @@
 use citadel_sdk::prelude::StackedRatchet;
-use citadel_workspace_server::handlers::domain::server_ops::ServerDomainOps;
-use citadel_workspace_server::handlers::domain::DomainOperations;
-use citadel_workspace_server::kernel::WorkspaceServerKernel;
-use citadel_workspace_server::structs::{Domain, Office, User, UserRole};
-use citadel_workspace_server::{WorkspaceCommand, WorkspaceResponse};
+use citadel_workspace_server_kernel::handlers::domain::server_ops::ServerDomainOps;
+use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
+use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
+use citadel_workspace_server_kernel::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use citadel_workspace_types::structs::{Domain, Office, User, UserRole};
 use std::sync::Arc;
 
 // Helper function to create a test user
@@ -235,7 +235,7 @@ fn test_member_command_processing() {
     citadel_logging::trace!(target: "citadel", "About to add member via command");
     let result = kernel.process_command(
         "admin",
-        WorkspaceCommand::AddMember {
+        WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
             office_id: Some(office_id.to_string()),
             room_id: None,
@@ -246,7 +246,7 @@ fn test_member_command_processing() {
     citadel_logging::trace!(target: "citadel", "Add member command processed: {:?}", result);
 
     match result {
-        Ok(WorkspaceResponse::Success) => {
+        Ok(WorkspaceProtocolResponse::Success) => {
             citadel_logging::trace!(target: "citadel", "Add member command succeeded");
         }
         _ => panic!("Failed to add member: {:?}", result),
@@ -276,7 +276,7 @@ fn test_member_command_processing() {
     citadel_logging::trace!(target: "citadel", "About to remove member via command");
     let result = kernel.process_command(
         "admin",
-        WorkspaceCommand::RemoveMember {
+        WorkspaceProtocolRequest::RemoveMember {
             user_id: user_id.to_string(),
             office_id: Some(office_id.to_string()),
             room_id: None,
@@ -286,7 +286,7 @@ fn test_member_command_processing() {
     citadel_logging::trace!(target: "citadel", "Remove member command processed: {:?}", result);
 
     match result {
-        Ok(WorkspaceResponse::Success) => {
+        Ok(WorkspaceProtocolResponse::Success) => {
             citadel_logging::trace!(target: "citadel", "Remove member command succeeded");
         }
         _ => panic!("Failed to remove member: {:?}", result),

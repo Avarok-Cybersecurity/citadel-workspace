@@ -2,13 +2,18 @@
 members = [
     "citadel-workspace-server-kernel",
     "citadel-workspace-internal-service",
+    "citadel-workspace-types",
     "src-tauri",
 ]
 resolver = "2"
 
 [workspace.dependencies]
-structopt = { version = "0.3.26" }
-tokio = { version = "1.28.1", features = ["full"] }
+# Workspace-specific packages
+citadel-workspace-server-kernel = { path = "./citadel-workspace-server-kernel" }
+citadel-workspace-internal-service = { path = "./citadel-workspace-internal-service" }
+citadel-workspace-types = { path = "./citadel-workspace-types" }
+
+# Secondary packages
 citadel-internal-service = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/" }
 citadel-internal-service-test-common = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/" }
 citadel-internal-service-types = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/" }
@@ -16,6 +21,21 @@ citadel-internal-service-connector = { git = "https://github.com/Avarok-Cybersec
 citadel_sdk = { version = "^0.13.0" }
 citadel_types = { version = "^0.13.0" }
 citadel_logging = { version = "^0.13.0" }
+
+# Tauri plugins
+tauri = { version = "2.4.1" }
+tauri-plugin-shell = { version = "2.2.1" }
+tauri-build = { version = "2.1.1" }
+
+# Generic dependencies
+structopt = { version = "0.3.26" }
+tokio = { version = "1.44.1", features = ["full"] }
+tokio-util = { version = "0.7.14" }
 parking_lot = { version = "0.12" }
-lazy_static = { version = "1.4.0" }
-uuid = { version = "1.15" }
+lazy_static = { version = "1.5.0" }
+uuid = { version = "1.16" }
+serde = { version = "1.0.219" }
+serde_json = { version = "1.0.140" }
+futures = { version = "0.3.31" }
+async-trait = { version = "0.1.88" }
+rstest = { version = "0.25.0" }

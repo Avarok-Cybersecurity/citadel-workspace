@@ -1,8 +1,9 @@
 use crate::handlers::transaction::TransactionManager;
-use crate::structs::{User, UserRole, WorkspaceRoles};
-use crate::WorkspaceResponse;
+use crate::WorkspaceProtocolResponse;
 use citadel_logging::debug;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, Ratchet};
+use citadel_workspace_types::structs::{User, UserRole, WorkspaceRoles};
+use citadel_workspace_types::WorkspaceProtocolPayload;
 use futures::StreamExt;
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -61,15 +62,22 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     let (mut tx, mut rx) = connect_success.channel.split();
 
                     while let Some(msg) = rx.next().await {
-                        if let Ok(command) = serde_json::from_slice(msg.as_ref()) {
-                            let response = this.process_command(&user_id, command);
-                            let response = response
-                                .unwrap_or_else(|e| WorkspaceResponse::Error(e.to_string()));
-                            let serialized_response = serde_json::to_vec(&response).unwrap();
-                            tx.send(serialized_response).await?;
+                        if let Ok(command) =
+                            serde_json::from_slice::<WorkspaceProtocolPayload>(msg.as_ref())
+                        {
+                            if let WorkspaceProtocolPayload::Request(request) = command {
+                                let response = this.process_command(&user_id, request);
+                                let response = response.unwrap_or_else(|e| {
+                                    WorkspaceProtocolResponse::Error(e.to_string())
+                                });
+                                let serialized_response = serde_json::to_vec(&response).unwrap();
+                                tx.send(serialized_response).await?;
+                            } else {
+                                citadel_logging::warn!(target: "citadel", "Server received a response when it can only receive commands: {command:?}");
+                            }
                         } else {
                             let serialized_response =
-                                serde_json::to_vec(&WorkspaceResponse::Error(
+                                serde_json::to_vec(&WorkspaceProtocolResponse::Error(
                                     "Invalid command. Failed deserialization".to_string(),
                                 ))
                                 .unwrap();

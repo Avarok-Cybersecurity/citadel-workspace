@@ -1,5 +1,5 @@
-use crate::structs::{Domain, User, UserRole};
 use citadel_sdk::prelude::NetworkError;
+use citadel_workspace_types::structs::{Domain, User, UserRole};
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::collections::HashMap;
 

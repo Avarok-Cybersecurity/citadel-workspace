@@ -1,8 +1,8 @@
 use citadel_sdk::prelude::StackedRatchet;
-use citadel_workspace_server::handlers::domain::server_ops::ServerDomainOps;
-use citadel_workspace_server::handlers::domain::DomainOperations;
-use citadel_workspace_server::kernel::WorkspaceServerKernel;
-use citadel_workspace_server::structs::{Domain, Permission, User, UserRole};
+use citadel_workspace_server_kernel::handlers::domain::server_ops::ServerDomainOps;
+use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
+use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
+use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
 use std::collections::HashMap;
 use std::sync::Arc;
 

@@ -1,7 +1,9 @@
 use citadel_sdk::prelude::{NetworkError, StackedRatchet};
-use citadel_workspace_server::handlers::domain::{server_ops::ServerDomainOps, DomainOperations};
-use citadel_workspace_server::kernel::WorkspaceServerKernel;
-use citadel_workspace_server::structs::{Domain, User, UserRole};
+use citadel_workspace_server_kernel::handlers::domain::{
+    server_ops::ServerDomainOps, DomainOperations,
+};
+use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
+use citadel_workspace_types::structs::{Domain, User, UserRole};
 use rstest::rstest;
 use std::collections::HashMap;
 use std::sync::Arc;

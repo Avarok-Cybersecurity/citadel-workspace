@@ -1,15 +1,20 @@
+// For handling internal service commands
 mod commands;
-mod structs;
+// For handling workspace protocol commands
+mod server_kernel_commands;
+mod state;
 #[cfg(test)]
 mod tests;
 mod util;
 
+use crate::state::WorkspaceStateInner;
 use citadel_internal_service_connector::connector::InternalServiceConnector;
 use citadel_internal_service_connector::messenger::CitadelWorkspaceMessenger;
+use citadel_internal_service_types::InternalServiceResponse;
 use citadel_logging::setup_log;
 use commands::{connect, list_all_peers, list_known_servers, peer_connect, register};
+use state::{PacketHandle, WorkspaceState};
 use std::{collections::HashMap, sync::Arc};
-use structs::{ConnectionRouterState, PacketHandle};
 use tauri::Manager;
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -30,19 +35,23 @@ pub async fn run() {
 
     citadel_logging::info!(target: "citadel", "Connected to internal service.");
 
-    let listeners: Arc<RwLock<HashMap<Uuid, PacketHandle>>> = Arc::new(RwLock::new(HashMap::new()));
+    let state = Arc::new(WorkspaceStateInner {
+        messenger: multiplexer,
+        to_subscribers: RwLock::new(HashMap::new()),
+        default_mux,
+        muxes: RwLock::new(HashMap::new()),
+        window: Default::default(),
+    });
 
+    let program_state = state.clone();
     // Background TCP listener
-    let listeners_ref = listeners.clone();
-
     tokio::spawn(async move {
-        let listeners = listeners_ref;
         citadel_logging::info!(target: "citadel", "Spawned background TCP dispatcher.");
 
         while let Some(packet) = stream.recv().await {
             citadel_logging::info!(target: "citadel", "Incoming packet:\n{:#?}", &packet);
             if let Some(request_id) = packet.request_id().copied() {
-                let mut guard = listeners.write().await;
+                let mut guard = program_state.to_subscribers.write().await;
                 if let Some(handle) = guard.get(&request_id) {
                     if let Err(err) = handle.channel.send(packet) {
                         citadel_logging::error!(target: "citadel", "Error sending packet to channel: {err:?}");
@@ -51,7 +60,25 @@ pub async fn run() {
                         citadel_logging::info!(target: "citadel", "Successfully sent packet w/ID {:?}", request_id);
                     }
                 } else {
-                    citadel_logging::warn!(target: "citadel", "No route found for message {packet:?}")
+                    drop(guard);
+                    // Workspace protocol messages that have no handler can be sent here
+                    match packet {
+                        InternalServiceResponse::MessageNotification(message) => {
+                            if let Err(err) =
+                                server_kernel_commands::handle_workspace_protocol_command(
+                                    message,
+                                    &program_state,
+                                )
+                                .await
+                            {
+                                citadel_logging::error!(target: "citadel", "Error handling workspace protocol command: {err:?}");
+                            }
+                        }
+
+                        packet => {
+                            citadel_logging::warn!(target: "citadel", "No route found for message {packet:?}");
+                        }
+                    }
                 }
             } else {
                 citadel_logging::warn!(target: "citadel", "No request ID found in message {packet:?}");
@@ -61,13 +88,13 @@ pub async fn run() {
     });
 
     tauri::Builder::default()
-        .manage(ConnectionRouterState {
-            messenger_mux: multiplexer,
-            to_subscribers: listeners,
-            default_mux,
-        })
-        .setup(|app| {
+        .manage(state.clone())
+        .setup(move |app| {
             setup_log();
+            state
+                .window
+                .set(app.handle().clone())
+                .expect("Failed to set window inside once cell");
             #[cfg(debug_assertions)] // only include this code on debug builds
             {
                 let window = app.get_webview_window("main").unwrap();

@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::handlers::transaction::Transaction;
 use crate::kernel::WorkspaceServerKernel;
-use crate::structs::{Domain, Permission, User, UserRole};
+use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
 
 // Member handlers - functions for adding, removing, and updating workspace members
 impl<R: Ratchet> WorkspaceServerKernel<R> {

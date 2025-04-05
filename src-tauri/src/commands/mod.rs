@@ -1,4 +1,4 @@
-use crate::structs::{ConnectionRouterState, PacketHandle};
+use crate::state::{PacketHandle, WorkspaceState};
 use citadel_internal_service_types::{InternalServiceRequest, InternalServiceResponse};
 use tauri::State;
 use tokio::sync::mpsc;
@@ -33,7 +33,7 @@ pub use register::register;
 pub(crate) async fn send_and_recv(
     payload: InternalServiceRequest,
     request_id: Uuid,
-    state: &State<'_, ConnectionRouterState>,
+    state: &State<'_, WorkspaceState>,
 ) -> InternalServiceResponse {
     send_and_recv_with_inspector(payload, request_id, state, InspectionResult::Done).await
 }
@@ -47,7 +47,7 @@ pub enum InspectionResult<T> {
 pub(crate) async fn send_and_recv_with_inspector<F, T>(
     payload: InternalServiceRequest,
     request_id: Uuid,
-    state: &State<'_, ConnectionRouterState>,
+    state: &State<'_, WorkspaceState>,
     mut inspector: F,
 ) -> T
 where

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use super::send_and_recv;
-use crate::structs::ConnectionRouterState;
+use crate::state::WorkspaceState;
 use citadel_internal_service_types::{InternalServiceResponse, SessionSecuritySettings};
 use citadel_types::crypto::{
     AlgorithmsExt, CryptoParameters, EncryptionAlgorithm, KemAlgorithm, SecrecyMode, SigAlgorithm,
@@ -27,7 +27,7 @@ pub struct ConnectResponseTS {
 #[tauri::command]
 pub async fn connect(
     request: ConnectRequestTS,
-    state: State<'_, ConnectionRouterState>,
+    state: State<'_, WorkspaceState>,
 ) -> Result<ConnectResponseTS, String> {
     println!(
         "Connecting to {}...",

@@ -694,32 +694,12 @@ dependencies = [
  "async-recursion",
  "bincode2",
  "bytes",
- "citadel-internal-service-connector 0.1.0 (git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/)",
- "citadel-internal-service-types 0.1.0 (git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/)",
+ "citadel-internal-service-connector",
+ "citadel-internal-service-types",
  "citadel_logging",
  "citadel_sdk",
  "futures",
  "tokio",
- "uuid",
-]
-
-[[package]]
-name = "citadel-internal-service-connector"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bincode2",
- "bytes",
- "citadel-internal-service-types 0.1.0",
- "citadel_logging",
- "dashmap",
- "futures",
- "intersession-layer-messaging 0.2.2",
- "itertools 0.13.0",
- "parking_lot",
- "serde",
- "tokio",
- "tokio-util",
  "uuid",
 ]
 
@@ -731,26 +711,17 @@ dependencies = [
  "async-trait",
  "bincode2",
  "bytes",
- "citadel-internal-service-types 0.1.0 (git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/)",
+ "citadel-internal-service-types",
  "citadel_logging",
  "dashmap",
  "futures",
- "intersession-layer-messaging 0.2.2 (git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/)",
+ "intersession-layer-messaging",
  "itertools 0.13.0",
  "parking_lot",
  "serde",
  "tokio",
  "tokio-util",
  "uuid",
-]
-
-[[package]]
-name = "citadel-internal-service-macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -769,8 +740,8 @@ version = "0.1.0"
 source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/#3971fb4f40976bb7acd2f9d390888938852f4edf"
 dependencies = [
  "citadel-internal-service",
- "citadel-internal-service-connector 0.1.0 (git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/)",
- "citadel-internal-service-types 0.1.0 (git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/)",
+ "citadel-internal-service-connector",
+ "citadel-internal-service-types",
  "citadel_logging",
  "citadel_sdk",
  "futures",
@@ -781,9 +752,10 @@ dependencies = [
 [[package]]
 name = "citadel-internal-service-types"
 version = "0.1.0"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/#3971fb4f40976bb7acd2f9d390888938852f4edf"
 dependencies = [
  "bytes",
- "citadel-internal-service-macros 0.1.0",
+ "citadel-internal-service-macros",
  "citadel_sdk",
  "citadel_types",
  "serde",
@@ -791,16 +763,47 @@ dependencies = [
 ]
 
 [[package]]
-name = "citadel-internal-service-types"
+name = "citadel-workspace-server-kernel"
 version = "0.1.0"
-source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/#3971fb4f40976bb7acd2f9d390888938852f4edf"
 dependencies = [
- "bytes",
- "citadel-internal-service-macros 0.1.0 (git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/)",
+ "async-trait",
+ "citadel-internal-service",
+ "citadel-internal-service-connector",
+ "citadel-internal-service-test-common",
+ "citadel-internal-service-types",
+ "citadel-workspace-types",
+ "citadel_logging",
  "citadel_sdk",
  "citadel_types",
+ "futures",
+ "parking_lot",
+ "rstest",
  "serde",
+ "serde_json",
+ "structopt",
+ "tokio",
  "uuid",
+]
+
+[[package]]
+name = "citadel-workspace-service"
+version = "0.1.0"
+dependencies = [
+ "citadel-internal-service",
+ "citadel_logging",
+ "citadel_sdk",
+ "citadel_types",
+ "lazy_static",
+ "parking_lot",
+ "structopt",
+ "tokio",
+]
+
+[[package]]
+name = "citadel-workspace-types"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -1025,8 +1028,9 @@ dependencies = [
 name = "citadel_workspace"
 version = "0.0.0"
 dependencies = [
- "citadel-internal-service-connector 0.1.0",
- "citadel-internal-service-types 0.1.0",
+ "citadel-internal-service-connector",
+ "citadel-internal-service-types",
+ "citadel-workspace-types",
  "citadel_logging",
  "citadel_types",
  "futures",
@@ -1038,42 +1042,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "uuid",
-]
-
-[[package]]
-name = "citadel_workspace_server"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "citadel-internal-service",
- "citadel-internal-service-connector 0.1.0 (git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/)",
- "citadel-internal-service-test-common",
- "citadel-internal-service-types 0.1.0 (git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/)",
- "citadel_logging",
- "citadel_sdk",
- "citadel_types",
- "futures",
- "parking_lot",
- "rstest",
- "serde",
- "serde_json",
- "structopt",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "citadel_workspace_service"
-version = "0.1.0"
-dependencies = [
- "citadel-internal-service",
- "citadel_logging",
- "citadel_sdk",
- "citadel_types",
- "lazy_static",
- "parking_lot",
- "structopt",
- "tokio",
 ]
 
 [[package]]
@@ -2624,24 +2592,6 @@ dependencies = [
 [[package]]
 name = "intersession-layer-messaging"
 version = "0.2.2"
-dependencies = [
- "async-trait",
- "auto_impl",
- "bincode2",
- "citadel_logging",
- "dashmap",
- "futures",
- "itertools 0.13.0",
- "log",
- "num",
- "serde",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "intersession-layer-messaging"
-version = "0.2.2"
 source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/#3971fb4f40976bb7acd2f9d390888938852f4edf"
 dependencies = [
  "async-trait",
@@ -2926,7 +2876,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if 1.0.0",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -4777,9 +4727,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.218"
+version = "1.0.219"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8dfc9d19bdbf6d17e22319da49161d5d0108e4188e8b680aef6299eed22df60"
+checksum = "5f0e2c6ed6606019b4e29e69dbaba95b11854410e5347d525002456dbbb786b6"
 dependencies = [
  "serde_derive",
 ]
@@ -4815,9 +4765,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.218"
+version = "1.0.219"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f09503e191f4e797cb8aac08e9a4a4695c5edf6a2e70e376d961ddd5c969f82b"
+checksum = "5b0276cf7f2c73365f7157c8123c21cd9a50fbbd844757af28ca1f5925fc2a00"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4837,9 +4787,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.139"
+version = "1.0.140"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44f86c3acccc9c65b153fe1b85a3be07fe5515274ec9f0653b4a0875731c72a6"
+checksum = "20068b6e96dc6c9bd23e01df8827e6c7e1f2fddd43c21810382803c136b99373"
 dependencies = [
  "itoa 1.0.14",
  "memchr",
@@ -5360,9 +5310,9 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "tauri"
-version = "2.4.0"
+version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "511dd38065a5d3b36c33cdba4362b99a40a5103bebcd4aebb930717e7c8ba292"
+checksum = "4d08db1ff9e011e04014e737ec022610d756c0eae0b3b3a9037bccaf3003173a"
 dependencies = [
  "anyhow",
  "bytes",
@@ -5410,9 +5360,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-build"
-version = "2.1.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ffa8732a66f90903f5a585215f3cf1e87988d0359bc88c18a502efe7572c1de"
+checksum = "0fd20e4661c2cce65343319e6e8da256958f5af958cafc47c0d0af66a55dcd17"
 dependencies = [
  "anyhow",
  "cargo_toml",
@@ -5432,9 +5382,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-codegen"
-version = "2.1.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c266a247f14d63f40c6282c2653a8bac5cc3d482ca562a003a88513653ea817a"
+checksum = "458258b19032450ccf975840116ecf013e539eadbb74420bd890e8c56ab2b1a4"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -5459,9 +5409,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-macros"
-version = "2.1.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f47a1cf94b3bd6c4dc37dce1a43fc96120ff29a91757f0ab3cf713c7ad846e7c"
+checksum = "d402813d3b9c773a0fa58697c457c771f10e735498fdcb7b343264d18e5a601f"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -5490,9 +5440,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-shell"
-version = "2.2.0"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb2c50a63e60fb8925956cc5b7569f4b750ac197a4d39f13b8dd46ea8e2bad79"
+checksum = "69d5eb3368b959937ad2aeaf6ef9a8f5d11e01ffe03629d3530707bbcb27ff5d"
 dependencies = [
  "encoding_rs",
  "log",
@@ -5511,9 +5461,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-runtime"
-version = "2.5.0"
+version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e9c7bce5153f1ca7bc45eba37349b31ba50e975e28edc8b5766c5ec02b0b63a"
+checksum = "00ada7ac2f9276f09b8c3afffd3215fd5d9bff23c22df8a7c70e7ef67cacd532"
 dependencies = [
  "cookie",
  "dpi",
@@ -5531,9 +5481,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-runtime-wry"
-version = "2.5.0"
+version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "087188020fd6facb8578fe9b38e81fa0fe5fb85744c73da51a299f94a530a1e3"
+checksum = "cf2e5842c57e154af43a20a49c7efee0ce2578c20b4c2bdf266852b422d2e421"
 dependencies = [
  "gtk",
  "http 1.2.0",
@@ -5558,9 +5508,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-utils"
-version = "2.3.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82dcced4014e59af9790cc22f5d271df3be09ecd6728ec68861642553c8d01b7"
+checksum = "1f037e66c7638cc0a2213f61566932b9a06882b8346486579c90e4b019bac447"
 dependencies = [
  "anyhow",
  "brotli",
@@ -5748,9 +5698,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.43.0"
+version = "1.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d61fa4ffa3de412bfea335c6ecff681de2b609ba3c77ef3e00e521813a9ed9e"
+checksum = "f382da615b842244d4b8738c82ed1275e6c5dd90c459a30941cd07080b06c91a"
 dependencies = [
  "backtrace",
  "bytes",
@@ -5798,9 +5748,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.13"
+version = "0.7.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7fcaa8d55a2bdd6b83ace262b016eca0d79ee02818c5c1bcdf0305114081078"
+checksum = "6b9590b93e6fcc1739458317cccd391ad3955e2bde8913edf6f95f9e65a8f034"
 dependencies = [
  "bytes",
  "futures-core",
@@ -6136,9 +6086,9 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
 name = "uuid"
-version = "1.15.1"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0f540e3240398cce6128b64ba83fdbdd86129c16a3aa1a3a252efd66eb3d587"
+checksum = "458f7a779bf54acc9f347480ac654f68407d3aab21269a6e3c9f922acd9e2da9"
 dependencies = [
  "getrandom 0.3.1",
  "rand 0.9.0",
@@ -6148,9 +6098,9 @@ dependencies = [
 
 [[package]]
 name = "uuid-macro-internal"
-version = "1.15.1"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9521621447c21497fac206ffe6e9f642f977c4f82eeba9201055f64884d9cb01"
+checksum = "72dcd78c4f979627a754f5522cea6e6a25e55139056535fe6e69c506cd64a862"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6512,7 +6462,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

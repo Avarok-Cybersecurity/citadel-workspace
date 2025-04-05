@@ -1,7 +1,7 @@
 use crate::handlers::transaction::Transaction;
-use crate::structs::{Domain, Office, Permission, Room, User, UserRole};
 use crate::WorkspaceServerKernel;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
+use citadel_workspace_types::structs::{Domain, Office, Permission, Room, User, UserRole};
 
 pub mod entity;
 pub mod server_ops;

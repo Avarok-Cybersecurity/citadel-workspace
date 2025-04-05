@@ -5,9 +5,11 @@ use citadel_internal_service_test_common::{
 };
 use citadel_logging::info;
 use citadel_sdk::prelude::*;
-use citadel_workspace_server::commands::{UpdateOperation, WorkspaceCommand, WorkspaceResponse};
-use citadel_workspace_server::kernel::WorkspaceServerKernel;
-use citadel_workspace_server::structs::{Permission, UserRole};
+use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
+use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::{
+    UpdateOperation, WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
+};
 use std::error::Error;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -147,10 +149,11 @@ async fn send_workspace_command(
     >,
     from_service: &mut UnboundedReceiver<citadel_internal_service_types::InternalServiceResponse>,
     cid: u64,
-    command: WorkspaceCommand,
-) -> Result<WorkspaceResponse, Box<dyn Error>> {
+    command: WorkspaceProtocolRequest,
+) -> Result<WorkspaceProtocolResponse, Box<dyn Error>> {
     let request_id = Uuid::new_v4();
-    let serialized_command = serde_json::to_vec(&command)?;
+    let payload = WorkspaceProtocolPayload::Request(command);
+    let serialized_command = serde_json::to_vec(&payload)?;
 
     // Send command to the workspace server
     to_service.send(
@@ -163,7 +166,7 @@ async fn send_workspace_command(
         },
     )?;
 
-    info!(target: "citadel", "Sent command: {command:?} with request_id: {request_id}");
+    info!(target: "citadel", "Sent command: {payload:?} with request_id: {request_id}");
 
     // Wait for response
     while let Some(response) = from_service.recv().await {
@@ -185,7 +188,7 @@ async fn send_workspace_command(
         ) = &response
         {
             info!(target: "citadel", "Received response: {response:?}");
-            let response: WorkspaceResponse = serde_json::from_slice(message)?;
+            let response: WorkspaceProtocolResponse = serde_json::from_slice(message)?;
             return Ok(response);
         }
     }
@@ -202,7 +205,7 @@ async fn create_test_room(
     office_id: &str,
 ) -> Result<String, Box<dyn Error>> {
     info!(target: "citadel", "Creating test room...");
-    let create_room_cmd = WorkspaceCommand::CreateRoom {
+    let create_room_cmd = WorkspaceProtocolRequest::CreateRoom {
         office_id: office_id.to_string(),
         name: "Test Room".to_string(),
         description: "A test room".to_string(),
@@ -211,7 +214,7 @@ async fn create_test_room(
     let response = send_workspace_command(to_service, from_service, cid, create_room_cmd).await?;
 
     match response {
-        WorkspaceResponse::Room(room) => {
+        WorkspaceProtocolResponse::Room(room) => {
             info!(target: "citadel", "Test room created with ID: {}", room.id);
             Ok(room.id)
         }
@@ -264,7 +267,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     println!("Test room created with ID: {}", room_id);
 
     // Add the test user to the office
-    let add_member_cmd = WorkspaceCommand::AddMember {
+    let add_member_cmd = WorkspaceProtocolRequest::AddMember {
         user_id: "test_user".to_string(),
         office_id: Some(office_id.clone()),
         room_id: None,
@@ -281,14 +284,14 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => {
+        WorkspaceProtocolResponse::Success => {
             println!("Test user added to office");
         }
         _ => return Err("Expected Success response".into()),
     }
 
     // Get member to verify addition
-    let get_member_cmd = WorkspaceCommand::GetMember {
+    let get_member_cmd = WorkspaceProtocolRequest::GetMember {
         user_id: "test_user".to_string(),
     };
 
@@ -301,7 +304,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Member(member) => {
+        WorkspaceProtocolResponse::Member(member) => {
             println!("Verified test user is in office");
             assert_eq!(member.id, "test_user");
             assert!(member.is_member_of_domain(office_id.clone()));
@@ -311,7 +314,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     }
 
     // Add the test user to the room
-    let add_room_member_cmd = WorkspaceCommand::AddMember {
+    let add_room_member_cmd = WorkspaceProtocolRequest::AddMember {
         user_id: "test_user".to_string(),
         office_id: None,
         room_id: Some(room_id.clone()),
@@ -328,14 +331,14 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => {
+        WorkspaceProtocolResponse::Success => {
             println!("Test user added to room");
         }
         _ => return Err("Expected Success response".into()),
     }
 
     // Get room to verify member addition
-    let get_room_cmd = WorkspaceCommand::GetRoom {
+    let get_room_cmd = WorkspaceProtocolRequest::GetRoom {
         room_id: room_id.clone(),
     };
 
@@ -348,7 +351,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Room(room) => {
+        WorkspaceProtocolResponse::Room(room) => {
             println!("Verified test user is in room");
             assert!(room.members.contains(&"test_user".to_string()));
         }
@@ -356,7 +359,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     }
 
     // Remove the test user from the room
-    let remove_room_member_cmd = WorkspaceCommand::RemoveMember {
+    let remove_room_member_cmd = WorkspaceProtocolRequest::RemoveMember {
         user_id: "test_user".to_string(),
         office_id: None,
         room_id: Some(room_id.clone()),
@@ -372,14 +375,14 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => {
+        WorkspaceProtocolResponse::Success => {
             println!("Test user removed from room");
         }
         _ => return Err("Expected Success response".into()),
     }
 
     // Get room to verify member removal
-    let get_room_cmd = WorkspaceCommand::GetRoom {
+    let get_room_cmd = WorkspaceProtocolRequest::GetRoom {
         room_id: room_id.clone(),
     };
 
@@ -392,7 +395,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Room(room) => {
+        WorkspaceProtocolResponse::Room(room) => {
             println!("Verified test user is not in room");
             assert!(!room.members.contains(&"test_user".to_string()));
         }
@@ -400,7 +403,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     }
 
     // Remove the test user from the office
-    let remove_member_cmd = WorkspaceCommand::RemoveMember {
+    let remove_member_cmd = WorkspaceProtocolRequest::RemoveMember {
         user_id: "test_user".to_string(),
         office_id: Some(office_id.clone()),
         room_id: None,
@@ -416,14 +419,14 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => {
+        WorkspaceProtocolResponse::Success => {
             println!("Test user removed from office");
         }
         _ => return Err("Expected Success response".into()),
     }
 
     // Get member to verify removal
-    let get_member_cmd = WorkspaceCommand::GetMember {
+    let get_member_cmd = WorkspaceProtocolRequest::GetMember {
         user_id: "test_user".to_string(),
     };
 
@@ -436,7 +439,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Member(member) => {
+        WorkspaceProtocolResponse::Member(member) => {
             println!("Verified test user is not in office");
             assert_eq!(member.id, "test_user");
             assert!(!member.is_member_of_domain(office_id));
@@ -485,7 +488,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
         .unwrap();
 
     println!("Adding test user to office with specific permissions...");
-    let add_member_cmd = WorkspaceCommand::AddMember {
+    let add_member_cmd = WorkspaceProtocolRequest::AddMember {
         user_id: "test_user".to_string(),
         office_id: Some(office_id.clone()),
         room_id: None,
@@ -501,12 +504,12 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => println!("Test user added to office"),
+        WorkspaceProtocolResponse::Success => println!("Test user added to office"),
         _ => return Err("Expected Success response".into()),
     }
 
     println!("Getting member to verify default permissions...");
-    let get_member_cmd = WorkspaceCommand::GetMember {
+    let get_member_cmd = WorkspaceProtocolRequest::GetMember {
         user_id: "test_user".to_string(),
     };
 
@@ -519,7 +522,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Member(member) => {
+        WorkspaceProtocolResponse::Member(member) => {
             assert_eq!(member.id, "test_user");
 
             // Check if the user has the default permissions for a member
@@ -536,7 +539,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     }
 
     println!("Adding specific permission to the user...");
-    let add_permission_cmd = WorkspaceCommand::UpdateMemberPermissions {
+    let add_permission_cmd = WorkspaceProtocolRequest::UpdateMemberPermissions {
         user_id: "test_user".to_string(),
         domain_id: office_id.clone(),
         operation: UpdateOperation::Add,
@@ -552,12 +555,12 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => println!("Permission added"),
+        WorkspaceProtocolResponse::Success => println!("Permission added"),
         _ => return Err("Expected Success response".into()),
     }
 
     println!("Getting member to verify permission addition...");
-    let get_member_cmd = WorkspaceCommand::GetMember {
+    let get_member_cmd = WorkspaceProtocolRequest::GetMember {
         user_id: "test_user".to_string(),
     };
 
@@ -570,7 +573,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Member(member) => {
+        WorkspaceProtocolResponse::Member(member) => {
             assert_eq!(member.id, "test_user");
 
             // Check if the user has the added permission
@@ -584,7 +587,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     }
 
     println!("Removing specific permission from the user...");
-    let remove_permission_cmd = WorkspaceCommand::UpdateMemberPermissions {
+    let remove_permission_cmd = WorkspaceProtocolRequest::UpdateMemberPermissions {
         user_id: "test_user".to_string(),
         domain_id: office_id.clone(),
         operation: UpdateOperation::Remove,
@@ -600,12 +603,12 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => println!("Permission removed"),
+        WorkspaceProtocolResponse::Success => println!("Permission removed"),
         _ => return Err("Expected Success response".into()),
     }
 
     println!("Getting member to verify permission removal...");
-    let get_member_cmd = WorkspaceCommand::GetMember {
+    let get_member_cmd = WorkspaceProtocolRequest::GetMember {
         user_id: "test_user".to_string(),
     };
 
@@ -618,7 +621,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Member(member) => {
+        WorkspaceProtocolResponse::Member(member) => {
             assert_eq!(member.id, "test_user");
 
             // Check if the permission was removed
@@ -632,7 +635,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     }
 
     println!("Replacing all permissions for the user...");
-    let replace_permissions_cmd = WorkspaceCommand::UpdateMemberPermissions {
+    let replace_permissions_cmd = WorkspaceProtocolRequest::UpdateMemberPermissions {
         user_id: "test_user".to_string(),
         domain_id: office_id.clone(),
         operation: UpdateOperation::Set,
@@ -648,12 +651,12 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => println!("Permissions replaced"),
+        WorkspaceProtocolResponse::Success => println!("Permissions replaced"),
         _ => return Err("Expected Success response".into()),
     }
 
     println!("Getting member to verify permissions update...");
-    let get_member_cmd = WorkspaceCommand::GetMember {
+    let get_member_cmd = WorkspaceProtocolRequest::GetMember {
         user_id: "test_user".to_string(),
     };
 
@@ -666,7 +669,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Member(member) => {
+        WorkspaceProtocolResponse::Member(member) => {
             assert_eq!(member.id, "test_user");
 
             // Check if permissions were completely replaced
@@ -730,7 +733,7 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
 
     println!("Adding test_user as Editor to the office...");
     // Add the regular user to the office with custom role
-    let add_member_cmd = WorkspaceCommand::AddMember {
+    let add_member_cmd = WorkspaceProtocolRequest::AddMember {
         user_id: "test_user".to_string(),
         office_id: Some(office_id.clone()),
         room_id: None,
@@ -746,13 +749,13 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Success => println!("User added successfully"),
+        WorkspaceProtocolResponse::Success => println!("User added successfully"),
         _ => return Err("Expected Success response".into()),
     }
 
     println!("Getting member to verify custom role...");
     // Get member to verify custom role
-    let get_member_cmd = WorkspaceCommand::GetMember {
+    let get_member_cmd = WorkspaceProtocolRequest::GetMember {
         user_id: "test_user".to_string(),
     };
 
@@ -765,7 +768,7 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
     .await?;
 
     match response {
-        WorkspaceResponse::Member(member) => {
+        WorkspaceProtocolResponse::Member(member) => {
             assert_eq!(member.id, "test_user");
 
             // Check if the user has the custom role

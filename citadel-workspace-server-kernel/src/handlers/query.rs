@@ -1,6 +1,6 @@
 use crate::kernel::WorkspaceServerKernel;
-use crate::structs::{Domain, User};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
+use citadel_workspace_types::structs::{Domain, User};
 use std::collections::HashSet;
 
 // Query handlers - functions for retrieving workspace information

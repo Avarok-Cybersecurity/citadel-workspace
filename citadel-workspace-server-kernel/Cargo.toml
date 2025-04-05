@@ -1,5 +1,5 @@
 [package]
-name = "citadel_workspace_server"
+name = "citadel-workspace-server-kernel"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,7 +10,7 @@ edition = "2021"
 # vendored = ["citadel-internal-service/vendored"]
 
 [[bin]]
-name = "citadel_workspace_server"
+name = "citadel-workspace-server-kernel"
 path = "src/main.rs"
 
 [dependencies]
@@ -19,14 +19,15 @@ tokio = { workspace = true, features = ["macros", "rt"] }
 citadel-internal-service = { workspace = true }
 citadel_sdk = { workspace = true }
 citadel_types = { workspace = true }
+citadel-workspace-types = { workspace = true }
 citadel_logging = { workspace = true }
 parking_lot = { workspace = true }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
-async-trait = "0.1.88"
-rstest = "0.25.0"
-futures = "0.3.31"
+async-trait = { workspace = true }
+rstest = { workspace = true }
+futures = { workspace = true }
 
 [dev-dependencies]
 citadel_sdk = { workspace = true, features = ["localhost-testing"] }

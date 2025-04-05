@@ -1,7 +1,7 @@
 use crate::handlers::domain::DomainOperations;
 use crate::kernel::WorkspaceServerKernel;
-use crate::structs::Room;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
+use citadel_workspace_types::structs::Room;
 
 /// Room-related command handlers using the domain abstraction
 impl<R: Ratchet> WorkspaceServerKernel<R> {

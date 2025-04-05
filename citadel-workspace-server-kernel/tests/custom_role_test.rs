@@ -1,4 +1,4 @@
-use citadel_workspace_server::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::{Permission, UserRole};
 
 #[cfg(test)]
 mod tests {

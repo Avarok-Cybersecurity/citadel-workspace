@@ -1,5 +1,5 @@
 use crate::handlers::domain::DomainEntity;
-use crate::structs::{Domain, Office, Room};
+use citadel_workspace_types::structs::{Domain, Office, Room};
 
 /// Implement DomainEntity for Office
 impl DomainEntity for Office {

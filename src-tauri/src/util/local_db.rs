@@ -5,21 +5,21 @@ use serde::{de::DeserializeOwned, Serialize};
 use tauri::State;
 use uuid::Uuid;
 
-use crate::{commands::send_and_recv, structs::ConnectionRouterState};
+use crate::{commands::send_and_recv, state::WorkspaceState};
 
 use super::{KeyName, KnownServers, RegistrationInfo};
 
 pub struct LocalDb<'a> {
     cid: u64,
-    state: &'a State<'a, ConnectionRouterState>,
+    state: &'a State<'a, WorkspaceState>,
 }
 
 impl<'a> LocalDb<'a> {
-    pub fn connect_global(state: &'a State<'a, ConnectionRouterState>) -> Self {
+    pub fn connect_global(state: &'a State<'a, WorkspaceState>) -> Self {
         LocalDb { cid: 0, state }
     }
 
-    pub fn connect(cid: String, state: &'a State<'a, ConnectionRouterState>) -> Self {
+    pub fn connect(cid: String, state: &'a State<'a, WorkspaceState>) -> Self {
         LocalDb {
             cid: cid.parse::<u64>().unwrap(),
             state,

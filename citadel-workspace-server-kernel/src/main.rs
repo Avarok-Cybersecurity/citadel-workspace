@@ -3,7 +3,7 @@ use std::error::Error;
 use std::net::SocketAddr;
 use structopt::StructOpt;
 
-use citadel_workspace_server::kernel::WorkspaceServerKernel;
+use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {

@@ -1,4 +1,4 @@
-use crate::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::{Permission, UserRole};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 

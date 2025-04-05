@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 use uuid::Uuid;
 
-use crate::structs::ConnectionRouterState;
+use crate::state::WorkspaceState;
 
 use super::send_and_recv;
 
@@ -25,7 +25,7 @@ pub struct PeerConnectResponseTS {
 #[tauri::command]
 pub async fn peer_connect(
     request: PeerConnectRequestTS,
-    state: State<'_, ConnectionRouterState>,
+    state: State<'_, WorkspaceState>,
 ) -> Result<PeerConnectResponseTS, String> {
     let request_id = Uuid::new_v4();
     let payload = PeerConnect {

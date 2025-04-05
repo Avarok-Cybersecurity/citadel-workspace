@@ -1,5 +1,5 @@
 use citadel_internal_service::kernel::CitadelWorkspaceService;
-use citadel_sdk::prelude::{BackendType, MonoRatchet, NodeBuilder, NodeType};
+use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
 use std::error::Error;
 use std::net::SocketAddr;
 use structopt::StructOpt;
@@ -10,8 +10,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let opts: Options = Options::from_args();
     let service = CitadelWorkspaceService::new_tcp(opts.bind).await?;
 
-    // Initialize the node builder with MonoRatchet, which is a concrete implementation of the Ratchet trait
-    let mut node_builder = NodeBuilder::<MonoRatchet>::default();
+    // Initialize the node builder with StackedRatchet, which is a concrete implementation of the Ratchet trait
+    let mut node_builder = NodeBuilder::<StackedRatchet>::default();
     let mut builder = node_builder
         .with_backend(BackendType::InMemory) // TODO: parameterize this in the opts
         .with_node_type(NodeType::Peer);

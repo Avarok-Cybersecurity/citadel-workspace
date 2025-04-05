@@ -1,9 +1,9 @@
 use crate::handlers::domain::{DomainEntity, DomainOperations};
 use crate::handlers::transaction::Transaction;
 use crate::kernel::WorkspaceServerKernel;
-use crate::structs::{Domain, Office, Permission, Room, User, UserRole};
 use citadel_logging::{debug, info};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
+use citadel_workspace_types::structs::{Domain, Office, Permission, Room, User, UserRole};
 
 impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServerKernel<R> {
     fn init(&self) -> Result<(), NetworkError> {

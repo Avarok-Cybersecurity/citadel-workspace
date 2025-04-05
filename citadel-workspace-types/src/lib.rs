@@ -1,32 +1,28 @@
-use crate::structs::{Office, Permission, Room, User, UserRole};
+pub mod structs;
+
 use serde::{Deserialize, Serialize};
+use structs::{Office, Permission, Room, User, UserRole};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum PermissionEndowOperation {
-    // Adds the associated permissions to the user
-    Add,
-    // Removes the associated permissions from the user
-    Remove,
-    // Completely overwrites any existing permissions with the newly provided permissions
-    Replace,
+pub enum WorkspaceProtocolPayload {
+    Request(WorkspaceProtocolRequest),
+    Response(WorkspaceProtocolResponse),
+}
+
+impl From<WorkspaceProtocolRequest> for WorkspaceProtocolPayload {
+    fn from(request: WorkspaceProtocolRequest) -> Self {
+        WorkspaceProtocolPayload::Request(request)
+    }
+}
+
+impl From<WorkspaceProtocolResponse> for WorkspaceProtocolPayload {
+    fn from(response: WorkspaceProtocolResponse) -> Self {
+        WorkspaceProtocolPayload::Response(response)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ListType {
-    MembersInOffice { office_id: String },
-    MembersInRoom { room_id: String },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum UpdateOperation {
-    Add,
-    Remove,
-    Set,
-}
-
-// Command protocol structures
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum WorkspaceCommand {
+pub enum WorkspaceProtocolRequest {
     // Office commands
     CreateOffice {
         name: String,
@@ -95,10 +91,13 @@ pub enum WorkspaceCommand {
         office_id: Option<String>,
         room_id: Option<String>,
     },
+    Message {
+        contents: Vec<u8>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum WorkspaceResponse {
+pub enum WorkspaceProtocolResponse {
     Success,
     Error(String),
     Offices(Vec<Office>),
@@ -107,4 +106,27 @@ pub enum WorkspaceResponse {
     Office(Office),
     Room(Room),
     Member(User),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PermissionEndowOperation {
+    // Adds the associated permissions to the user
+    Add,
+    // Removes the associated permissions from the user
+    Remove,
+    // Completely overwrites any existing permissions with the newly provided permissions
+    Replace,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ListType {
+    MembersInOffice { office_id: String },
+    MembersInRoom { room_id: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum UpdateOperation {
+    Add,
+    Remove,
+    Set,
 }

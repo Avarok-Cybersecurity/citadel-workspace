@@ -1,7 +1,7 @@
 use crate::handlers::domain::DomainOperations;
 use crate::kernel::WorkspaceServerKernel;
-use crate::structs::Office;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
+use citadel_workspace_types::structs::Office;
 
 // Office-related command handlers using the domain abstraction
 // Office handlers - functions for creating, updating, and querying workspace offices
