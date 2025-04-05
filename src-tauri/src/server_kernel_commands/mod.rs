@@ -11,7 +11,11 @@ pub async fn handle_workspace_protocol_command(
 ) -> Result<(), Box<dyn Error>> {
     let command: WorkspaceProtocolPayload = serde_json::from_slice(&notification.message)?;
     match command {
-        WorkspaceProtocolPayload::Request(request) => requests::handle(request, state).await,
-        WorkspaceProtocolPayload::Response(response) => responses::handle(response, state).await,
+        WorkspaceProtocolPayload::Request(request) => {
+            requests::handle(request, state, &notification).await
+        }
+        WorkspaceProtocolPayload::Response(response) => {
+            responses::handle(response, state, &notification).await
+        }
     }
 }
