@@ -1,5 +1,5 @@
 [package]
-name = "citadel-workspace-service"
+name = "citadel-workspace-internal-service"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,14 +9,14 @@ edition = "2021"
 deadlock-detection = ["parking_lot/deadlock_detection", "parking_lot", "lazy_static"]
 
 [[bin]]
-name = "citadel-workspace-service"
+name = "citadel-workspace-internal-service"
 path = "src/main.rs"
 
 [dependencies]
 structopt = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 citadel-internal-service = { workspace = true }
-citadel_sdk = { workspace = true }
+citadel_sdk = { workspace = true, features = ["sql"]}
 citadel_types = { workspace = true }
 citadel_logging = { workspace = true }
 parking_lot = { workspace = true, optional = true }

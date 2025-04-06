@@ -1,25 +1,65 @@
-use crate::commands::send_to_internal_service;
-use citadel_internal_service_types::InternalServiceRequest::LocalDBGetKV;
+use crate::state::WorkspaceState;
+use crate::types::{
+    string_to_u64, LocalDBGetKVFailureTS, LocalDBGetKVRequestTS, LocalDBGetKVSuccessTS,
+};
+use citadel_internal_service_types::{InternalServiceRequest, InternalServiceResponse};
 use tauri::State;
 use uuid::Uuid;
 
-use crate::structs::ConnectionState;
+use super::send_and_recv;
 
 #[tauri::command]
 pub async fn local_db_get_kv(
-    cid: String,
-    peer_cid: Option<String>,
-    key: String,
-    state: State<'_, ConnectionState>,
-) -> Result<String, String> {
+    request: LocalDBGetKVRequestTS,
+    state: State<'_, WorkspaceState>,
+) -> Result<LocalDBGetKVSuccessTS, LocalDBGetKVFailureTS> {
     let request_id = Uuid::new_v4();
-    let payload = LocalDBGetKV {
+
+    // Convert string CID to u64
+    let cid = string_to_u64(&request.cid);
+    let peer_cid = request.peer_cid.as_ref().map(|s| string_to_u64(s));
+
+    let payload = InternalServiceRequest::LocalDBGetKV {
+        cid,
+        peer_cid,
         request_id,
-        cid: cid.parse::<u64>().unwrap(),
-        peer_cid: peer_cid.map(|pid| pid.parse::<u64>().unwrap()),
-        key,
+        key: request.key.clone(),
     };
 
-    send_to_internal_service(payload, state).await?;
-    Ok(request_id.to_string())
+    let response = send_and_recv(payload, request_id, &state).await;
+
+    match response {
+        InternalServiceResponse::LocalDBGetKVSuccess(success) => {
+            println!("Local DB get KV successful");
+            Ok(LocalDBGetKVSuccessTS {
+                request_id: success.request_id.map(|id| id.to_string()),
+                cid: success.cid.to_string(),
+                peer_cid: success.peer_cid.map(|id| id.to_string()),
+                key: success.key,
+                value: success.value,
+            })
+        }
+        InternalServiceResponse::LocalDBGetKVFailure(err) => {
+            println!("Local DB get KV failed: {}", err.message);
+            Err(LocalDBGetKVFailureTS {
+                request_id: err.request_id.map(|id| id.to_string()),
+                message: err.message,
+                cid: err.cid.to_string(),
+                peer_cid: err.peer_cid.map(|id| id.to_string()),
+            })
+        }
+        other => {
+            let error_msg = format!(
+                "Internal service returned unexpected type '{}' during local DB get KV",
+                std::any::type_name_of_val(&other)
+            );
+            println!("{}", error_msg);
+            Err(LocalDBGetKVFailureTS {
+                request_id: Some(request_id.to_string()),
+                message: error_msg,
+                cid: cid.to_string(),
+                peer_cid: peer_cid.map(|id| id.to_string()),
+            })
+        }
+    }
 }

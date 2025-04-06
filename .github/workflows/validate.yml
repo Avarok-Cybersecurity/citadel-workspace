@@ -15,7 +15,6 @@ env:
   # 40 MiB stack
   RUST_MIN_STACK: 40971520
   RUST_LOG: "citadel=warn"
-  INTERNAL_SERVICE_PATH: "../citadel-internal-service"
 
 jobs:
   fmt:
@@ -127,11 +126,9 @@ jobs:
         working-directory: src-tauri
       - name: Start Internal Services
         run: |
-          # Start internal service
-          cd $INTERNAL_SERVICE_PATH
-          nohup cargo run --bin internal-service -- --bind 127.0.0.1:12345 > internal-service.log 2>&1 & echo $! > .service-pid
+          nohup cargo run --bin internal-service -- --bind 127.0.0.1:12345 > internal-service.log 2>&1 & echo $! > ./.service-pid
           # Start citadel server
-          nohup cargo run --bin citadel_server -- --bind 127.0.0.1:12349 > citadel-server.log 2>&1 & echo $! > .server-pid
+          nohup cargo run --bin citadel_server -- --bind 127.0.0.1:12349 > citadel-server.log 2>&1 & echo $! > ./.server-pid
           # Wait for services to start
           sleep 5
       - name: Run TypeScript Interop Tests
@@ -139,5 +136,5 @@ jobs:
         working-directory: citadel-workspaces
       - name: Stop Internal Services
         run: |
-          [ ! -f "${INTERNAL_SERVICE_PATH}/.server-pid" ] || { kill $(cat "${INTERNAL_SERVICE_PATH}/.server-pid") && rm "${INTERNAL_SERVICE_PATH}/.server-pid"; }
-          [ ! -f "${INTERNAL_SERVICE_PATH}/.service-pid" ] || { kill $(cat "${INTERNAL_SERVICE_PATH}/.service-pid") && rm "${INTERNAL_SERVICE_PATH}/.service-pid"; }
+          [ ! -f "./.server-pid" ] || { kill $(cat ".server-pid") && rm "./.server-pid"; }
+          [ ! -f "./.service-pid" ] || { kill $(cat ".service-pid") && rm "./.service-pid"; }

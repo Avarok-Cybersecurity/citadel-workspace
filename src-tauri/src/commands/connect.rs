@@ -1,93 +1,82 @@
-use crate::util::RegistrationInfo;
-use citadel_internal_service_types::InternalServiceRequest::Connect;
-use serde::{Deserialize, Serialize};
-use tauri::State;
-
-use super::send_and_recv;
-use crate::state::WorkspaceState;
-use citadel_internal_service_types::{InternalServiceResponse, SessionSecuritySettings};
-use citadel_types::crypto::{
-    AlgorithmsExt, CryptoParameters, EncryptionAlgorithm, KemAlgorithm, SecrecyMode, SigAlgorithm,
+use crate::types::{ConnectFailureTS, ConnectRequestTS, ConnectSuccessTS};
+use citadel_internal_service_types::{
+    ConnectMode, InternalServiceRequest, InternalServiceResponse, UdpMode,
 };
+use tauri::State;
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[allow(non_snake_case)]
-pub struct ConnectRequestTS {
-    pub registrationInfo: RegistrationInfo,
-}
+use crate::state::WorkspaceState;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ConnectResponseTS {
-    pub cid: Option<String>,
-    pub success: bool,
-    pub message: String,
-}
+use super::send_and_recv;
 
 #[tauri::command]
 pub async fn connect(
     request: ConnectRequestTS,
     state: State<'_, WorkspaceState>,
-) -> Result<ConnectResponseTS, String> {
-    println!(
-        "Connecting to {}...",
-        request.registrationInfo.server_address
-    );
+) -> Result<ConnectSuccessTS, ConnectFailureTS> {
+    println!("Attempting to connect with username {}", request.username);
 
-    let registration_info = request.registrationInfo;
+    // Create a request ID for this specific invocation
     let request_id = Uuid::new_v4();
 
-    let crypto_params = CryptoParameters {
-        encryption_algorithm: EncryptionAlgorithm::from_u8(registration_info.encryption_algorithm)
-            .unwrap(),
-        kem_algorithm: KemAlgorithm::from_u8(registration_info.kem_algorithm).unwrap(),
-        sig_algorithm: SigAlgorithm::from_u8(registration_info.sig_algorithm).unwrap(),
+    // Convert u8 values to the correct enum types using pattern matching
+    let connect_mode = match request.connect_mode {
+        // Use the actual variants available in ConnectMode
+        0 => ConnectMode::default(),
+        _ => ConnectMode::default(),
     };
 
-    let security_settings = SessionSecuritySettings {
-        security_level: registration_info.security_level.into(),
-        secrecy_mode: SecrecyMode::try_from(registration_info.security_mode).unwrap(),
-        header_obfuscator_settings: Default::default(),
-        crypto_params,
+    let udp_mode = match request.udp_mode {
+        // Use the actual variants available in UdpMode
+        0 => UdpMode::default(),
+        _ => UdpMode::default(),
     };
 
-    let payload = Connect {
-        username: registration_info.username,
-        password: registration_info.profile_password.into_bytes().into(),
-        connect_mode: Default::default(),
-        udp_mode: Default::default(),
-        keep_alive_timeout: Default::default(),
-        session_security_settings: security_settings,
+    // Convert server_password to Option<Vec<u8>> before sending
+    let server_password = request.server_password.map(|vec_u8| vec_u8.into());
+
+    let payload = InternalServiceRequest::Connect {
         request_id,
-        server_password: registration_info
-            .server_password
-            .map(|pass| pass.into_bytes().into()),
+        username: request.username.clone(),
+        password: request.password.into(),
+        connect_mode,
+        udp_mode,
+        keep_alive_timeout: request
+            .keep_alive_timeout
+            .map(std::time::Duration::from_millis),
+        session_security_settings: request.session_security_settings.into(),
+        server_password,
     };
 
     let response = send_and_recv(payload, request_id, &state).await;
 
     match response {
-        InternalServiceResponse::ConnectSuccess(r) => {
-            println!("Connection successful");
-            Ok(ConnectResponseTS {
-                cid: Some(r.cid.to_string()),
-                success: true,
-                message: "Success".to_owned(),
+        InternalServiceResponse::ConnectSuccess(success) => {
+            println!("Connection was successful");
+            Ok(ConnectSuccessTS {
+                cid: success.cid.to_string(),
+                request_id: success.request_id.map(|id| id.to_string()),
             })
         }
         InternalServiceResponse::ConnectFailure(err) => {
-            println!("Connection failure: {:#?}", err);
-            Ok(ConnectResponseTS {
-                cid: None,
-                success: false,
+            println!("Connection failed: {}", err.message);
+            Err(ConnectFailureTS {
+                cid: err.cid.to_string(),
                 message: err.message,
+                request_id: err.request_id.map(|id| id.to_string()),
             })
         }
         other => {
-            panic!(
+            let error_msg = format!(
                 "Internal service returned unexpected type '{}' during connection",
                 std::any::type_name_of_val(&other)
-            )
+            );
+            println!("{}", error_msg);
+            Err(ConnectFailureTS {
+                cid: "0".to_string(),
+                message: error_msg,
+                request_id: Some(request_id.to_string()),
+            })
         }
     }
 }

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::commands::register::RegistrationRequestTS;
+use crate::types::RegistrationRequestTS;
 
 pub mod local_db;
 pub mod window_event_handler;
@@ -39,22 +39,22 @@ pub struct RegistrationInfo {
 
 impl From<RegistrationRequestTS> for RegistrationInfo {
     fn from(value: RegistrationRequestTS) -> Self {
-        let server_password = match value.workspacePassword.trim().len() {
+        let server_password = match value.workspace_password.trim().len() {
             0 => None,
-            _ => Some(value.workspacePassword),
+            _ => Some(value.workspace_password),
         };
 
         Self {
-            server_address: value.workspaceIdentifier,
+            server_address: value.workspace_identifier,
             server_password,
-            security_level: value.securityLevel,
-            security_mode: value.securityMode,
-            encryption_algorithm: value.encryptionAlgorithm,
-            kem_algorithm: value.kemAlgorithm,
-            sig_algorithm: value.sigAlgorithm,
-            full_name: value.fullName,
+            security_level: value.security_level,
+            security_mode: value.security_mode,
+            encryption_algorithm: value.encryption_algorithm,
+            kem_algorithm: value.kem_algorithm,
+            sig_algorithm: value.sig_algorithm,
+            full_name: value.full_name,
             username: value.username,
-            profile_password: value.profilePassword,
+            profile_password: value.profile_password,
         }
     }
 }

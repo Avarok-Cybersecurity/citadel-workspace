@@ -5,27 +5,37 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 mod connect;
-// pub mod disconnect;
-// pub mod get_session;
+mod disconnect;
+mod get_session;
 mod list_all_peers;
-// pub mod list_registered_peers;
-// pub mod local_db_clear_all_kv;
-// pub mod local_db_delete_kv;
-// pub mod local_db_get_all_kv;
-// pub mod local_db_get_kv;
-// pub mod local_db_set_kv;
-// pub mod message;
-// pub mod open_connection;
-pub mod peer_connect;
-// pub mod peer_disconnect;
-// pub mod peer_register;
 mod list_known_servers;
-pub mod register; // this can go private again after RegistrationRequestTS is reformatted
+mod list_registered_peers;
+mod local_db_clear_all_kv;
+mod local_db_delete_kv;
+mod local_db_get_all_kv;
+mod local_db_get_kv;
+mod local_db_set_kv;
+mod message;
+mod peer_connect;
+mod peer_disconnect;
+mod peer_register;
+mod register;
 
 pub use connect::connect;
+pub use disconnect::disconnect;
+pub use get_session::get_sessions;
 pub use list_all_peers::list_all_peers;
 pub use list_known_servers::list_known_servers;
+pub use list_registered_peers::list_registered_peers;
+pub use local_db_clear_all_kv::local_db_clear_all_kv;
+pub use local_db_delete_kv::local_db_delete_kv;
+pub use local_db_get_all_kv::local_db_get_all_kv;
+pub use local_db_get_kv::local_db_get_kv;
+pub use local_db_set_kv::local_db_set_kv;
+pub use message::message;
 pub use peer_connect::peer_connect;
+pub use peer_disconnect::peer_disconnect;
+pub use peer_register::peer_register;
 pub use register::register;
 
 /// Note: this is a oneshot type of function. One send, one receive only. This is useful for only specific types of commands

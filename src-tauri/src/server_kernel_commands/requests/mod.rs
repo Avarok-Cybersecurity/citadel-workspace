@@ -1,12 +1,11 @@
 // Workspace protocol request handlers
 use crate::state::WorkspaceState;
 use citadel_internal_service_types::MessageNotification;
-use citadel_logging::{debug, warn};
-use citadel_types::crypto::SecurityLevel;
+use citadel_logging::warn;
 use citadel_workspace_types::WorkspaceProtocolRequest;
 use serde_json::json;
 use std::error::Error;
-use tauri::{Emitter, Manager};
+use tauri::Emitter;
 use uuid::Uuid;
 
 pub async fn handle(

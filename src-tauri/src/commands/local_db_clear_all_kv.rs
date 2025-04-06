@@ -1,23 +1,57 @@
-use crate::commands::send_to_internal_service;
-use citadel_internal_service_types::InternalServiceRequest::LocalDBClearAllKV;
+use crate::state::WorkspaceState;
+use crate::types::{
+    string_to_u64, LocalDBClearAllKVFailureTS, LocalDBClearAllKVRequestTS,
+    LocalDBClearAllKVSuccessTS,
+};
+use citadel_internal_service_types::{InternalServiceRequest, InternalServiceResponse};
 use tauri::State;
 use uuid::Uuid;
 
-use crate::structs::ConnectionState;
+use super::send_and_recv;
 
 #[tauri::command]
 pub async fn local_db_clear_all_kv(
-    cid: String,
-    peer_cid: Option<String>,
-    state: State<'_, ConnectionState>,
-) -> Result<String, String> {
+    request: LocalDBClearAllKVRequestTS,
+    state: State<'_, WorkspaceState>,
+) -> Result<LocalDBClearAllKVSuccessTS, LocalDBClearAllKVFailureTS> {
     let request_id = Uuid::new_v4();
-    let payload = LocalDBClearAllKV {
+
+    // Convert string CID to u64
+    let cid = string_to_u64(&request.cid);
+    let peer_cid = request.peer_cid.as_ref().map(|s| string_to_u64(s));
+
+    let payload = InternalServiceRequest::LocalDBClearAllKV {
+        cid,
+        peer_cid,
         request_id,
-        cid: cid.parse::<u64>().unwrap(),
-        peer_cid: peer_cid.map(|pid| pid.parse::<u64>().unwrap()),
     };
 
-    send_to_internal_service(payload, state).await?;
-    Ok(request_id.to_string())
+    let response = send_and_recv(payload, request_id, &state).await;
+
+    match response {
+        InternalServiceResponse::LocalDBClearAllKVSuccess(success) => {
+            println!("Local DB clear all KV successful");
+            Ok(LocalDBClearAllKVSuccessTS {
+                request_id: success.request_id.map(|id| id.to_string()),
+            })
+        }
+        InternalServiceResponse::LocalDBClearAllKVFailure(err) => {
+            println!("Local DB clear all KV failed: {}", err.message);
+            Err(LocalDBClearAllKVFailureTS {
+                request_id: err.request_id.map(|id| id.to_string()),
+                message: err.message,
+            })
+        }
+        other => {
+            let error_msg = format!(
+                "Internal service returned unexpected type '{}' during local DB clear all KV",
+                std::any::type_name_of_val(&other)
+            );
+            println!("{}", error_msg);
+            Err(LocalDBClearAllKVFailureTS {
+                request_id: Some(request_id.to_string()),
+                message: error_msg,
+            })
+        }
+    }
 }

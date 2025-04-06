@@ -1,25 +1,57 @@
-use crate::commands::send_to_internal_service;
-use citadel_internal_service_types::InternalServiceRequest::LocalDBDeleteKV;
+use crate::state::WorkspaceState;
+use crate::types::{
+    string_to_u64, LocalDBDeleteKVFailureTS, LocalDBDeleteKVRequestTS, LocalDBDeleteKVSuccessTS,
+};
+use citadel_internal_service_types::{InternalServiceRequest, InternalServiceResponse};
 use tauri::State;
 use uuid::Uuid;
 
-use crate::structs::ConnectionState;
+use super::send_and_recv;
 
 #[tauri::command]
 pub async fn local_db_delete_kv(
-    cid: String,
-    peer_cid: Option<String>,
-    key: String,
-    state: State<'_, ConnectionState>,
-) -> Result<String, String> {
+    request: LocalDBDeleteKVRequestTS,
+    state: State<'_, WorkspaceState>,
+) -> Result<LocalDBDeleteKVSuccessTS, LocalDBDeleteKVFailureTS> {
     let request_id = Uuid::new_v4();
-    let payload = LocalDBDeleteKV {
+
+    // Convert string CID to u64
+    let cid = string_to_u64(&request.cid);
+    let peer_cid = request.peer_cid.as_ref().map(|s| string_to_u64(s));
+
+    let payload = InternalServiceRequest::LocalDBDeleteKV {
+        cid,
+        peer_cid,
         request_id,
-        cid: cid.parse::<u64>().unwrap(),
-        peer_cid: peer_cid.map(|pid| pid.parse::<u64>().unwrap()),
-        key,
+        key: request.key.clone(),
     };
 
-    send_to_internal_service(payload, state).await?;
-    Ok(request_id.to_string())
+    let response = send_and_recv(payload, request_id, &state).await;
+
+    match response {
+        InternalServiceResponse::LocalDBDeleteKVSuccess(success) => {
+            println!("Local DB delete KV successful");
+            Ok(LocalDBDeleteKVSuccessTS {
+                request_id: success.request_id.map(|id| id.to_string()),
+            })
+        }
+        InternalServiceResponse::LocalDBDeleteKVFailure(err) => {
+            println!("Local DB delete KV failed: {}", err.message);
+            Err(LocalDBDeleteKVFailureTS {
+                request_id: err.request_id.map(|id| id.to_string()),
+                message: err.message,
+            })
+        }
+        other => {
+            let error_msg = format!(
+                "Internal service returned unexpected type '{}' during local DB delete KV",
+                std::any::type_name_of_val(&other)
+            );
+            println!("{}", error_msg);
+            Err(LocalDBDeleteKVFailureTS {
+                request_id: Some(request_id.to_string()),
+                message: error_msg,
+            })
+        }
+    }
 }

@@ -1,43 +1,54 @@
-use crate::util::RegistrationInfo;
+use crate::types::{
+    string_to_u64, ListKnownServersRequestTS, ListKnownServersResponseTS, RegistrationInfoTS,
+};
 use crate::{state::WorkspaceState, util::local_db::LocalDb};
-use serde::{Deserialize, Serialize};
 use tauri::State;
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct ListKnownServersRequestTS {
-    pub cid: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct ListKnownServersResponseTS {
-    pub servers: Vec<RegistrationInfo>,
-}
 
 #[tauri::command]
 pub async fn list_known_servers(
-    _request: ListKnownServersRequestTS,
+    request: ListKnownServersRequestTS,
     _window: tauri::Window,
     state: State<'_, WorkspaceState>,
 ) -> Result<ListKnownServersResponseTS, String> {
-    println!("Listing known servers...");
-    let db = LocalDb::connect("0".to_string(), &state);
-    let addresses = db
-        .list_known_servers()
-        .await
-        .expect("failed to list known servers")
-        .server_addresses;
+    citadel_logging::info!(target: "citadel", "list_known_servers: Listing known servers...");
+    let db = LocalDb::connect_global(&state);
 
-    println!("The addresses are: {:?}", addresses);
+    // Validate CID
+    let _cid = string_to_u64(&request.cid); // Just for validation, not used in this function yet
 
-    let mut servers: Vec<RegistrationInfo> =
-        Vec::with_capacity(std::mem::size_of::<RegistrationInfo>() * addresses.len());
+    let addresses = match db.list_known_servers().await {
+        Ok(result) => result.server_addresses,
+        Err(e) => return Err(format!("Failed to list known servers: {}", e)),
+    };
+
+    citadel_logging::info!(target: "citadel", "list_known_servers: The addresses are: {:?}", addresses);
+
+    let mut servers: Vec<RegistrationInfoTS> = Vec::with_capacity(addresses.len());
 
     for addr in addresses {
-        servers.push(
-            db.get_registration(addr)
-                .await
-                .expect("failed to get registration from address"),
-        )
+        match db.get_registration(addr.clone()).await {
+            Ok(registration) => {
+                // Convert from internal RegistrationInfo to our TS-friendly RegistrationInfoTS
+                let ts_registration = RegistrationInfoTS {
+                    server_address: registration.server_address,
+                    server_password: registration.server_password,
+                    security_level: registration.security_level,
+                    security_mode: registration.security_mode,
+                    encryption_algorithm: registration.encryption_algorithm,
+                    kem_algorithm: registration.kem_algorithm,
+                    sig_algorithm: registration.sig_algorithm,
+                    full_name: registration.full_name,
+                    username: registration.username,
+                    profile_password: registration.profile_password,
+                };
+                servers.push(ts_registration);
+            }
+            Err(e) => {
+                citadel_logging::warn!(target: "citadel", "Failed to get registration for address {}: {}", addr, e);
+                // Skip this registration but continue with others
+                continue;
+            }
+        }
     }
 
     Ok(ListKnownServersResponseTS { servers })

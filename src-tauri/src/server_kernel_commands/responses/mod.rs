@@ -4,7 +4,6 @@ use citadel_workspace_types::WorkspaceProtocolResponse;
 use serde_json::json;
 use std::error::Error;
 use tauri::Emitter;
-use tauri::Manager;
 use uuid::Uuid;
 
 pub async fn handle(

@@ -9,11 +9,16 @@ use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 async fn main() -> Result<(), Box<dyn Error>> {
     citadel_logging::setup_log();
     let opts: Options = Options::from_args();
+    let backend = if let Some(backend_uri) = opts.backend.as_deref() {
+        BackendType::new(backend_uri)?
+    } else {
+        BackendType::InMemory
+    };
     // Create the workspace server kernel with an admin user
     let service = WorkspaceServerKernel::<StackedRatchet>::with_admin("admin", "Administrator");
     let mut builder = NodeBuilder::default();
     let mut builder = builder
-        .with_backend(BackendType::new("sqlite:./citadel.db")?)
+        .with_backend(backend)
         .with_node_type(NodeType::server(opts.bind)?);
 
     if opts.dangerous.unwrap_or(false) {
@@ -35,4 +40,6 @@ pub struct Options {
     bind: SocketAddr,
     #[structopt(short, long)]
     dangerous: Option<bool>,
+    #[structopt(long)]
+    backend: Option<String>,
 }

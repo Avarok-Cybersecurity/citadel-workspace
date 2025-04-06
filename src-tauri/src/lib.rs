@@ -6,18 +6,22 @@ mod state;
 #[cfg(test)]
 mod tests;
 mod util;
+// Central type definitions
+mod types;
 
 use crate::state::WorkspaceStateInner;
 use citadel_internal_service_connector::connector::InternalServiceConnector;
 use citadel_internal_service_connector::messenger::CitadelWorkspaceMessenger;
 use citadel_internal_service_types::InternalServiceResponse;
 use citadel_logging::setup_log;
-use commands::{connect, list_all_peers, list_known_servers, peer_connect, register};
-use state::{PacketHandle, WorkspaceState};
+use commands::{
+    connect, disconnect, get_sessions, list_all_peers, list_known_servers, list_registered_peers,
+    local_db_clear_all_kv, local_db_delete_kv, local_db_get_all_kv, local_db_get_kv,
+    local_db_set_kv, message, peer_connect, peer_disconnect, peer_register, register,
+};
 use std::{collections::HashMap, sync::Arc};
 use tauri::Manager;
 use tokio::sync::RwLock;
-use uuid::Uuid;
 
 const INTERNAL_SERVICE_ADDR: &str = "127.0.0.1:12345";
 
@@ -105,10 +109,21 @@ pub async fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             connect,
-            register,
-            list_known_servers,
+            disconnect,
+            get_sessions,
             list_all_peers,
+            list_known_servers,
+            list_registered_peers,
+            local_db_clear_all_kv,
+            local_db_delete_kv,
+            local_db_get_all_kv,
+            local_db_get_kv,
+            local_db_set_kv,
+            message,
             peer_connect,
+            peer_disconnect,
+            peer_register,
+            register,
         ])
         .on_window_event(util::window_event_handler::on_window_event)
         .run(tauri::generate_context!())

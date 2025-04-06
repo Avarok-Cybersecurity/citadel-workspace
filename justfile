@@ -6,6 +6,13 @@ set shell := ["sh", "-cu"]
 [linux]
 [macos]
 [unix]
+[windows]
+ui:
+    RUST_LOG=citadel=info cargo tauri dev
+
+[linux]
+[macos]
+[unix]
 dev:
     just start-servers
     cargo tauri dev
@@ -25,8 +32,8 @@ dev-browser:
 stop-servers:
     @echo "Killing existing servers"
 
-    [ ! -f "${INTERNAL_SERVICE_PATH}/.server-pid" ] || { kill $(cat "${INTERNAL_SERVICE_PATH}/.server-pid") && rm "${INTERNAL_SERVICE_PATH}/.server-pid"; } &
-    [ ! -f "${INTERNAL_SERVICE_PATH}/.service-pid" ] || { kill $(cat "${INTERNAL_SERVICE_PATH}/.service-pid") && rm "${INTERNAL_SERVICE_PATH}/.service-pid"; } &
+    [ ! -f "./.server-pid" ] || { kill $(cat "./.server-pid") && rm "./.server-pid"; } &
+    [ ! -f "./.service-pid" ] || { kill $(cat "./.service-pid") && rm "./.service-pid"; } &
 
 [linux]
 [macos]
@@ -37,17 +44,17 @@ start-servers:
     @echo "Starting new servers"
 
     # Start internal service
-    cd $INTERNAL_SERVICE_PATH; nohup cargo run --bin internal-service -- --bind 127.0.0.1:12345 > internal-service.log 2>&1 & echo $! > .service-pid
+    nohup cargo run --bin citadel-workspace-internal-service -- --bind 127.0.0.1:12345 > internal-service.log 2>&1 & echo $! > .service-pid
 
     # Start citadel server
-    cd $INTERNAL_SERVICE_PATH; nohup cargo run --bin citadel_server -- --bind 127.0.0.1:12349 > citadel-server.log 2>&1 & echo $! > .server-pid
+    nohup cargo run --bin citadel-workspace-server-kernel -- --bind 127.0.0.1:12349 > citadel-server.log 2>&1 & echo $! > .server-pid
 
 [windows]
 stop-servers:
     @echo "Killing existing servers"
 
-    if (Test-Path "$env:INTERNAL_SERVICE_PATH/.server-pid") { $processId = Get-Content "$env:INTERNAL_SERVICE_PATH/.server-pid"; taskkill /F /PID $processId 2>$null; Remove-Item "$env:INTERNAL_SERVICE_PATH/.server-pid" -ErrorAction SilentlyContinue }
-    if (Test-Path "$env:INTERNAL_SERVICE_PATH/.service-pid") { $processId = Get-Content "$env:INTERNAL_SERVICE_PATH/.service-pid"; taskkill /F /PID $processId 2>$null; Remove-Item "$env:INTERNAL_SERVICE_PATH/.service-pid" -ErrorAction SilentlyContinue }
+    if (Test-Path "./.server-pid") { $processId = Get-Content "./.server-pid"; taskkill /F /PID $processId 2>$null; Remove-Item "./.server-pid" -ErrorAction SilentlyContinue }
+    if (Test-Path "./.service-pid") { $processId = Get-Content "./.service-pid"; taskkill /F /PID $processId 2>$null; Remove-Item "./.service-pid" -ErrorAction SilentlyContinue }
 
 [windows]
 start-servers:
@@ -56,10 +63,24 @@ start-servers:
     @echo "Starting new servers"
 
     # Start internal service
-    Push-Location $env:INTERNAL_SERVICE_PATH; $process = Start-Process cargo -ArgumentList "run","--bin","internal-service","--", "--bind","127.0.0.1:12345" -NoNewWindow -PassThru -RedirectStandardOutput "internal-service.log" -RedirectStandardError "internal-service-error.log"; $process.Id | Set-Content ".service-pid"; $process | Out-Null
+    $process = Start-Process cargo -ArgumentList "run","--bin","citadel-workspace-internal-service","--", "--bind","127.0.0.1:12345" -NoNewWindow -PassThru -RedirectStandardOutput "internal-service.log" -RedirectStandardError "internal-service-error.log"; $process.Id | Set-Content ".service-pid"; $process | Out-Null
 
     # Start citadel server
-    Push-Location $env:INTERNAL_SERVICE_PATH; $process = Start-Process cargo -ArgumentList "run","--bin","citadel_server","--", "--dangerous", "true", "--bind", "127.0.0.1:12349" -NoNewWindow -PassThru -RedirectStandardOutput "citadel-server.log" -RedirectStandardError "citadel-server-error.log"; $process.Id | Set-Content ".server-pid"; $process | Out-Null; Pop-Location
+    $process = Start-Process cargo -ArgumentList "run","--bin","citadel-workspace-server-kernel","--", "--dangerous", "true", "--bind", "127.0.0.1:12349" -NoNewWindow -PassThru -RedirectStandardOutput "citadel-server.log" -RedirectStandardError "citadel-server-error.log"; $process.Id | Set-Content ".server-pid"; $process | Out-Null
+
+[linux]
+[macos]
+[unix]
+[windows]
+is:
+    RUST_LOG=citadel=info cargo run --bin citadel-workspace-internal-service -- --bind 127.0.0.1:12345
+
+[linux]
+[macos]
+[unix]
+[windows]
+server:
+    RUST_LOG=citadel=info cargo run --bin citadel-workspace-server-kernel -- --bind 127.0.0.1:12349
 
 submodules:
     # Initialize and update all submodules recursively
@@ -78,6 +99,10 @@ gui-update:
     just submodules
     # Update submodule
     Push-Location citadel-workspaces; git fetch; git pull; Pop-Location
+
+icon-updates:
+    cargo tauri icon
+
 
 [linux]
 [macos]

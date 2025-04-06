@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "citadel_workspace",
+  "productName": "Citadel Workspace",
   "version": "0.0.0",
   "identifier": "com.tauri.dev",
   "build": {
@@ -13,13 +13,13 @@
     "windows": [
       {
         "title": "Citadel Workspace",
-        "width": 800,
+        "width": 1200,
         "height": 600,
         "resizable": true
       }
     ],
     "security": {
-      "csp": "default-src 'self' https://cdn.gpteng.co; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.gpteng.co; style-src 'self' 'unsafe-inline'; connect-src 'self' https://cdn.gpteng.co; frame-src 'self' https://cdn.gpteng.co; img-src 'self' data: https://cdn.gpteng.co https://images.unsplash.com"
+      "csp": "default-src 'self' https://cdn.gpteng.co; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.gpteng.co; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: tauri:; frame-src 'self' https://cdn.gpteng.co; img-src 'self' data: https://cdn.gpteng.co https://images.unsplash.com"
     }
   },
   "bundle": {
