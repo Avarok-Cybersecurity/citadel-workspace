@@ -1,7 +1,7 @@
 pub mod structs;
 
 use serde::{Deserialize, Serialize};
-use structs::{Office, Permission, Room, User, UserRole};
+use structs::{Office, Permission, Room, User, UserRole, Workspace};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WorkspaceProtocolPayload {
@@ -23,10 +23,29 @@ impl From<WorkspaceProtocolResponse> for WorkspaceProtocolPayload {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WorkspaceProtocolRequest {
+    LoadWorkspace,
+
+    // Workspace commands
+    CreateWorkspace {
+        name: String,
+        description: String,
+        metadata: Option<Vec<u8>>,
+    },
+    GetWorkspace,
+    UpdateWorkspace {
+        name: Option<String>,
+        description: Option<String>,
+        metadata: Option<Vec<u8>>,
+    },
+    DeleteWorkspace,
+    // Removing ListWorkspaces since there's only one workspace
+
     // Office commands
     CreateOffice {
         name: String,
         description: String,
+        mdx_content: Option<String>,
+        metadata: Option<Vec<u8>>,
     },
     GetOffice {
         office_id: String,
@@ -35,6 +54,8 @@ pub enum WorkspaceProtocolRequest {
         office_id: String,
         name: Option<String>,
         description: Option<String>,
+        mdx_content: Option<String>,
+        metadata: Option<Vec<u8>>,
     },
     DeleteOffice {
         office_id: String,
@@ -46,6 +67,8 @@ pub enum WorkspaceProtocolRequest {
         office_id: String,
         name: String,
         description: String,
+        mdx_content: Option<String>,
+        metadata: Option<Vec<u8>>,
     },
     GetRoom {
         room_id: String,
@@ -54,6 +77,8 @@ pub enum WorkspaceProtocolRequest {
         room_id: String,
         name: Option<String>,
         description: Option<String>,
+        mdx_content: Option<String>,
+        metadata: Option<Vec<u8>>,
     },
     DeleteRoom {
         room_id: String,
@@ -68,6 +93,7 @@ pub enum WorkspaceProtocolRequest {
         office_id: Option<String>,
         room_id: Option<String>,
         role: UserRole,
+        metadata: Option<Vec<u8>>,
     },
     GetMember {
         user_id: String,
@@ -75,6 +101,7 @@ pub enum WorkspaceProtocolRequest {
     UpdateMemberRole {
         user_id: String,
         role: UserRole,
+        metadata: Option<Vec<u8>>,
     },
     UpdateMemberPermissions {
         user_id: String,
@@ -92,13 +119,17 @@ pub enum WorkspaceProtocolRequest {
         room_id: Option<String>,
     },
     Message {
+        // UI can inscribe whatever subprotocol it wishes on this for e.g., the actual message contents,
+        // read receipts, typing indicators, etc, likely using an enum.
         contents: Vec<u8>,
     },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WorkspaceProtocolResponse {
-    Success,
+    Workspace(Workspace),
+    // Removing Workspaces variant since there's only one workspace
+    Success(String),
     Error(String),
     Offices(Vec<Office>),
     Rooms(Vec<Room>),
@@ -120,6 +151,7 @@ pub enum PermissionEndowOperation {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ListType {
+    MembersInWorkspace,
     MembersInOffice { office_id: String },
     MembersInRoom { room_id: String },
 }

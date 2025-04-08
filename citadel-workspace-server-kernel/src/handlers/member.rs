@@ -37,6 +37,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     name: format!("User {}", user_id),
                     role,
                     permissions: HashMap::new(),
+                    metadata: Vec::new(),
                 };
                 tx.insert_user(user_id.to_string(), new_user)?;
             } else {
@@ -102,6 +103,12 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                             tx.update_domain(domain_id, Domain::Room { room })?;
                         }
                     }
+                    Domain::Workspace { mut workspace } => {
+                        if !workspace.members.contains(&user_id.to_string()) {
+                            workspace.members.push(user_id.to_string());
+                            tx.update_domain(domain_id, Domain::Workspace { workspace })?;
+                        }
+                    }
                 }
 
                 // Add permissions for the domain
@@ -135,6 +142,18 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                         let mut room_clone = room.clone();
                         room_clone.members.retain(|id| id != user_id);
                         Some((domain_id.clone(), Domain::Room { room: room_clone }))
+                    }
+                    Domain::Workspace { workspace }
+                        if workspace.members.contains(&user_id.to_string()) =>
+                    {
+                        let mut workspace_clone = workspace.clone();
+                        workspace_clone.members.retain(|id| id != user_id);
+                        Some((
+                            domain_id.clone(),
+                            Domain::Workspace {
+                                workspace: workspace_clone,
+                            },
+                        ))
                     }
                     _ => None,
                 })
@@ -173,6 +192,10 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     Domain::Room { mut room } => {
                         room.members.retain(|id| id != user_id);
                         Domain::Room { room }
+                    }
+                    Domain::Workspace { mut workspace } => {
+                        workspace.members.retain(|id| id != user_id);
+                        Domain::Workspace { workspace }
                     }
                 };
 
@@ -275,16 +298,28 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             if let Some(mut user) = tx.get_user(user_id).cloned() {
                 match domain {
                     Domain::Office { office: _ } => {
-                        // Grant office-specific permissions
+                        // Add default permissions for office owners
                         user.add_permission(domain_id, Permission::ViewContent);
-                        user.add_permission(domain_id, Permission::EditMdx);
-                        user.add_permission(domain_id, Permission::EditOfficeConfig);
+                        user.add_permission(domain_id, Permission::EditContent);
+                        user.add_permission(domain_id, Permission::AddUsers);
+                        user.add_permission(domain_id, Permission::RemoveUsers);
+                        user.add_permission(domain_id, Permission::CreateRoom);
                         tx.update_user(user_id, user)?;
                     }
                     Domain::Room { room: _ } => {
                         // Grant room-specific permissions
                         user.add_permission(domain_id, Permission::ViewContent);
-                        user.add_permission(domain_id, Permission::EditMdx);
+                        user.add_permission(domain_id, Permission::EditContent);
+                        tx.update_user(user_id, user)?;
+                    }
+                    Domain::Workspace { workspace: _ } => {
+                        // Add default permissions for workspace owners
+                        user.add_permission(domain_id, Permission::ViewContent);
+                        user.add_permission(domain_id, Permission::EditContent);
+                        user.add_permission(domain_id, Permission::AddUsers);
+                        user.add_permission(domain_id, Permission::RemoveUsers);
+                        user.add_permission(domain_id, Permission::CreateOffice);
+                        user.add_permission(domain_id, Permission::CreateWorkspace);
                         tx.update_user(user_id, user)?;
                     }
                 }
@@ -336,6 +371,9 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     //                 }
     //                 Domain::Room { room } => {
     //                     Ok(room.members.contains(&user_id.to_string()))
+    //                 }
+    //                 Domain::Workspace { workspace } => {
+    //                     Ok(workspace.members.contains(&user_id.to_string()))
     //                 }
     //             }
     //         } else {

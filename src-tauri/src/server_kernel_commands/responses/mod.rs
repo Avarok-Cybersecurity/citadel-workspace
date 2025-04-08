@@ -4,7 +4,6 @@ use citadel_workspace_types::WorkspaceProtocolResponse;
 use serde_json::json;
 use std::error::Error;
 use tauri::Emitter;
-use uuid::Uuid;
 
 pub async fn handle(
     response: WorkspaceProtocolResponse,
@@ -16,7 +15,7 @@ pub async fn handle(
     let peer_cid = notification.peer_cid;
 
     // Generate a unique request_id for tracking
-    let request_id = Uuid::new_v4().to_string();
+    let request_id = notification.request_id;
 
     // Include connection information in response events
     let connection_info = json!({
@@ -27,8 +26,27 @@ pub async fn handle(
 
     // Use pattern matching to directly handle the response
     match response {
+        // Workspace response
+        WorkspaceProtocolResponse::Workspace(workspace) => {
+            // Combine workspace data with connection info
+            let payload = json!({
+                "workspace": workspace,
+                "connection": connection_info
+            });
+
+            // Emit event to frontend with the combined data
+            state
+                .window
+                .get()
+                .expect("unset")
+                .emit("workspace:loaded", payload)
+                .map_err(|e| Box::new(e) as Box<dyn Error>)?;
+
+            Ok(())
+        }
+
         // Success response
-        WorkspaceProtocolResponse::Success => {
+        WorkspaceProtocolResponse::Success(_) => {
             // Emit a generic success event with connection info
             state
                 .window

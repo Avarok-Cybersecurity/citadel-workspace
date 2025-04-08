@@ -76,6 +76,14 @@ pub async fn register(
                 request_id: success.request_id.map(|id| id.to_string()),
             })
         }
+        InternalServiceResponse::ConnectSuccess(success) => {
+            // Also treat ConnectSuccess as a success case since connect_after_register is true
+            println!("Registration and connection successful");
+            Ok(RegisterSuccessTS {
+                cid: success.cid.to_string(),
+                request_id: success.request_id.map(|id| id.to_string()),
+            })
+        }
         InternalServiceResponse::RegisterFailure(failure) => {
             println!("Registration failed: {}", failure.message);
             Err(RegisterFailureTS {

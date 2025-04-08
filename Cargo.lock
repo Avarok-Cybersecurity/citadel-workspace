@@ -216,8 +216,7 @@ dependencies = [
 [[package]]
 name = "async_ip"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2981116f1c0d2553c694fdc06de9ee567d30396c986cc770af7d2878f2da12e8"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol#1b66a04250d7b08cc75a7052b9440e49e769f32c"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -723,14 +722,14 @@ dependencies = [
 [[package]]
 name = "citadel-internal-service"
 version = "0.1.0"
-source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/#3971fb4f40976bb7acd2f9d390888938852f4edf"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/?branch=feat%2Frequest_cids#8af56a4763a1158ba826a1eae72460e251bec4db"
 dependencies = [
  "async-recursion",
  "bincode2",
  "bytes",
  "citadel-internal-service-connector",
  "citadel-internal-service-types",
- "citadel_logging",
+ "citadel_logging 0.13.0 (git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol)",
  "citadel_sdk",
  "futures",
  "tokio",
@@ -740,13 +739,13 @@ dependencies = [
 [[package]]
 name = "citadel-internal-service-connector"
 version = "0.1.0"
-source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/#3971fb4f40976bb7acd2f9d390888938852f4edf"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/?branch=feat%2Frequest_cids#8af56a4763a1158ba826a1eae72460e251bec4db"
 dependencies = [
  "async-trait",
  "bincode2",
  "bytes",
  "citadel-internal-service-types",
- "citadel_logging",
+ "citadel_logging 0.13.0 (git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol)",
  "dashmap",
  "futures",
  "intersession-layer-messaging",
@@ -761,7 +760,7 @@ dependencies = [
 [[package]]
 name = "citadel-internal-service-macros"
 version = "0.1.0"
-source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/#3971fb4f40976bb7acd2f9d390888938852f4edf"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/?branch=feat%2Frequest_cids#8af56a4763a1158ba826a1eae72460e251bec4db"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -771,12 +770,12 @@ dependencies = [
 [[package]]
 name = "citadel-internal-service-test-common"
 version = "0.1.0"
-source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/#3971fb4f40976bb7acd2f9d390888938852f4edf"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/?branch=feat%2Frequest_cids#8af56a4763a1158ba826a1eae72460e251bec4db"
 dependencies = [
  "citadel-internal-service",
  "citadel-internal-service-connector",
  "citadel-internal-service-types",
- "citadel_logging",
+ "citadel_logging 0.13.0 (git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol)",
  "citadel_sdk",
  "futures",
  "tokio",
@@ -786,7 +785,7 @@ dependencies = [
 [[package]]
 name = "citadel-internal-service-types"
 version = "0.1.0"
-source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/#3971fb4f40976bb7acd2f9d390888938852f4edf"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/?branch=feat%2Frequest_cids#8af56a4763a1158ba826a1eae72460e251bec4db"
 dependencies = [
  "bytes",
  "citadel-internal-service-macros",
@@ -801,7 +800,7 @@ name = "citadel-workspace-internal-service"
 version = "0.1.0"
 dependencies = [
  "citadel-internal-service",
- "citadel_logging",
+ "citadel_logging 0.13.0 (git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol)",
  "citadel_sdk",
  "citadel_types",
  "lazy_static",
@@ -820,7 +819,7 @@ dependencies = [
  "citadel-internal-service-test-common",
  "citadel-internal-service-types",
  "citadel-workspace-types",
- "citadel_logging",
+ "citadel_logging 0.13.0 (git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol)",
  "citadel_sdk",
  "citadel_types",
  "futures",
@@ -843,8 +842,7 @@ dependencies = [
 [[package]]
 name = "citadel_crypt"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a233b8ee0e5668da141230297b1a4bfbe55426f9451fa9f99e2b80f0f34dc667"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol#1b66a04250d7b08cc75a7052b9440e49e769f32c"
 dependencies = [
  "arrayvec",
  "async-trait",
@@ -876,8 +874,7 @@ dependencies = [
 [[package]]
 name = "citadel_io"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e1bf1399abd4523c1ce163f0a37614a56197955b3a40b2447413a7d63904cbb"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol#1b66a04250d7b08cc75a7052b9440e49e769f32c"
 dependencies = [
  "getrandom 0.2.15",
  "parking_lot",
@@ -898,10 +895,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "citadel_logging"
+version = "0.13.0"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol#1b66a04250d7b08cc75a7052b9440e49e769f32c"
+dependencies = [
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "citadel_pqcrypto"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5c5baf3bcb38fe5f37622c4d214341b81315409e7579c136e0bf74949454b61"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol#1b66a04250d7b08cc75a7052b9440e49e769f32c"
 dependencies = [
  "aes-gcm",
  "ascon-aead",
@@ -927,8 +932,7 @@ dependencies = [
 [[package]]
 name = "citadel_proto"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3e093b45b5db7b4da6dfb4c1704de1648fa261090e4b16b71bbb40ec41e70b6"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol#1b66a04250d7b08cc75a7052b9440e49e769f32c"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -941,7 +945,7 @@ dependencies = [
  "chrono",
  "citadel_crypt",
  "citadel_io",
- "citadel_logging",
+ "citadel_logging 0.13.0 (git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol)",
  "citadel_pqcrypto",
  "citadel_types",
  "citadel_user",
@@ -964,13 +968,12 @@ dependencies = [
 [[package]]
 name = "citadel_sdk"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd913a82c15be369e8196d8fb9fcd6542b9487bb38f58b0607b5eeaa6c7a361a"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol#1b66a04250d7b08cc75a7052b9440e49e769f32c"
 dependencies = [
  "anyhow",
  "bytes",
  "citadel_io",
- "citadel_logging",
+ "citadel_logging 0.13.0 (git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol)",
  "citadel_proto",
  "citadel_types",
  "citadel_user",
@@ -986,8 +989,7 @@ dependencies = [
 [[package]]
 name = "citadel_types"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eec45f46f8e3bd5e570f0725e4f16d4ac0f443b058f132cf776a376ecb4d4763"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol#1b66a04250d7b08cc75a7052b9440e49e769f32c"
 dependencies = [
  "bincode",
  "bytes",
@@ -1003,8 +1005,7 @@ dependencies = [
 [[package]]
 name = "citadel_user"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e35d8118b5b0592b0db3efaf2241164e5ea49147947bb0f6c33dd46a98963556"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol#1b66a04250d7b08cc75a7052b9440e49e769f32c"
 dependencies = [
  "async-trait",
  "bincode",
@@ -1031,8 +1032,7 @@ dependencies = [
 [[package]]
 name = "citadel_wire"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3786800e630b6e73e12a49c6de677cb5b8e94e0d08ff81809fe1502236c2710"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol#1b66a04250d7b08cc75a7052b9440e49e769f32c"
 dependencies = [
  "anyhow",
  "async-trait-with-sync",
@@ -1067,7 +1067,7 @@ dependencies = [
  "citadel-internal-service-connector",
  "citadel-internal-service-types",
  "citadel-workspace-types",
- "citadel_logging",
+ "citadel_logging 0.13.0 (git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol)",
  "citadel_types",
  "futures",
  "serde",
@@ -2744,12 +2744,12 @@ dependencies = [
 [[package]]
 name = "intersession-layer-messaging"
 version = "0.2.2"
-source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/#3971fb4f40976bb7acd2f9d390888938852f4edf"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-internal-service/?branch=feat%2Frequest_cids#8af56a4763a1158ba826a1eae72460e251bec4db"
 dependencies = [
  "async-trait",
  "auto_impl",
  "bincode2",
- "citadel_logging",
+ "citadel_logging 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "dashmap",
  "futures",
  "itertools 0.13.0",
@@ -3272,8 +3272,7 @@ dependencies = [
 [[package]]
 name = "netbeam"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91e98d37853762d4ed603f5c83b78896a89c55136c4a6cc8663db39dec9fbcc4"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol#1b66a04250d7b08cc75a7052b9440e49e769f32c"
 dependencies = [
  "anyhow",
  "async-stream",

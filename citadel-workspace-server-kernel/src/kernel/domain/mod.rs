@@ -62,7 +62,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     ) -> Result<(), NetworkError> {
         // Check if admin has permission to add users
         if !self.is_admin(admin_id)
-            && !self.check_entity_permission(admin_id, domain_id, Permission::ManageUsers)?
+            && !self.check_entity_permission(admin_id, domain_id, Permission::AddUsers)?
         {
             info!(target: "citadel", "User {} denied permission to add user {} to domain {}", admin_id, user_id, domain_id);
             return Err(NetworkError::msg(
@@ -93,7 +93,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     ) -> Result<(), NetworkError> {
         // Check if admin has permission to remove users
         if !self.is_admin(admin_id)
-            && !self.check_entity_permission(admin_id, domain_id, Permission::ManageUsers)?
+            && !self.check_entity_permission(admin_id, domain_id, Permission::RemoveUsers)?
         {
             info!(target: "citadel", "User {} denied permission to remove user {} from domain {}", admin_id, user_id, domain_id);
             return Err(NetworkError::msg(
@@ -105,10 +105,19 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
         // Remove user from domain
         self.with_write_transaction(|tx| {
+            // First remove user from the domain members list
             tx.remove_user_from_domain(user_id, domain_id).map_err(|e| {
                 debug!(target: "citadel", "Failed to remove user {} from domain {}: {:?}", user_id, domain_id, e);
                 e
-            })
+            })?;
+
+            // Then clear all permissions for this domain
+            if let Some(mut user) = tx.get_user(user_id).cloned() {
+                user.clear_permissions(domain_id);
+                tx.update_user(user_id, user)?;
+            }
+
+            Ok(())
         })?;
 
         debug!(target: "citadel", "Audit log: User {} removed user {} from domain {}", admin_id, user_id, domain_id);
@@ -187,6 +196,12 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                             }
                             Domain::Room { room }
                         }
+                        Domain::Workspace { mut workspace } => {
+                            if !workspace.members.contains(&user_id.to_string()) {
+                                workspace.members.push(user_id.to_string());
+                            }
+                            Domain::Workspace { workspace }
+                        }
                     }
                 }
                 MemberAction::Remove => {
@@ -199,6 +214,10 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                         Domain::Room { mut room } => {
                             room.members.retain(|id| id != user_id);
                             Domain::Room { room }
+                        }
+                        Domain::Workspace { mut workspace } => {
+                            workspace.members.retain(|id| id != user_id);
+                            Domain::Workspace { workspace }
                         }
                     }
                 }
@@ -218,6 +237,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         let access_permission = match std::any::type_name::<T>() {
             "Office" => Permission::DeleteOffice,
             "Room" => Permission::DeleteRoom,
+            "Workspace" => Permission::DeleteWorkspace,
             _ => Permission::All,
         };
 
@@ -280,6 +300,9 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             Some(domain) => match domain {
                 Domain::Office { office } => Ok(office.members.contains(&user_id.to_string())),
                 Domain::Room { room } => Ok(room.members.contains(&user_id.to_string())),
+                Domain::Workspace { workspace } => {
+                    Ok(workspace.members.contains(&user_id.to_string()))
+                }
             },
             None => Err(NetworkError::msg(format!("Domain {} not found", domain_id))),
         })

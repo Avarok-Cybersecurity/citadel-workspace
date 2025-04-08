@@ -30,7 +30,7 @@ mod tests {
 
         // Create an office for testing
         let office = domain_ops
-            .create_office("admin", "Test Office", "Test office description")
+            .create_office("admin", "Test Office", "Test office description", None)
             .unwrap();
 
         (kernel, domain_ops, office.id.to_string())
@@ -43,6 +43,7 @@ mod tests {
             name: format!("Test User {}", id),
             role,
             permissions: HashMap::new(),
+            metadata: Vec::new(),
         }
     }
 
@@ -205,7 +206,7 @@ mod tests {
         // Create a test room
         println!("DEBUG: Creating test room");
         let room = domain_ops
-            .create_room("admin", &office_id, "Test Room", "Room description")
+            .create_room("admin", &office_id, "Test Room", "Room description", None)
             .unwrap();
         println!("DEBUG: Room created successfully");
 
@@ -237,7 +238,13 @@ mod tests {
         // Create a test room
         println!("DEBUG: Creating test room");
         let room = domain_ops
-            .create_room("admin", &office_id, "Initial Room Name", "Test description")
+            .create_room(
+                "admin",
+                &office_id,
+                "Initial Room Name",
+                "Test description",
+                None,
+            )
             .unwrap();
 
         let room_id = room.id.to_string();
@@ -285,6 +292,7 @@ mod tests {
                 &office_id,
                 "Description Test Room",
                 "Initial description",
+                None,
             )
             .unwrap();
 
@@ -373,7 +381,7 @@ mod tests {
         // Create a room for deletion
         println!("DEBUG: Creating room for deletion test");
         let room = domain_ops
-            .create_room("admin", &office_id, "Delete Me", "Room to be deleted")
+            .create_room("admin", &office_id, "Delete Me", "Room to be deleted", None)
             .unwrap();
 
         let room_id = room.id.to_string();
@@ -412,13 +420,13 @@ mod tests {
         // Create first room
         println!("DEBUG: Creating first room");
         let room1 = domain_ops
-            .create_room("admin", &office_id, "Room 1", "First room")
+            .create_room("admin", &office_id, "Room 1", "First room", None)
             .unwrap();
         let room_id1 = room1.id.to_string();
         println!("DEBUG: First room created with ID: {}", room_id1);
 
         println!("DEBUG: Creating second room");
-        let result = domain_ops.create_room("admin", &office_id, "Room 2", "Second room");
+        let result = domain_ops.create_room("admin", &office_id, "Room 2", "Second room", None);
         println!("DEBUG: Result (should be ok): {:?}", result.is_ok());
         assert!(result.is_ok());
         let room2 = result.unwrap();

@@ -1,5 +1,6 @@
 use crate::handlers::domain::DomainEntity;
 use citadel_workspace_types::structs::{Domain, Office, Room};
+use uuid::Uuid;
 
 /// Implement DomainEntity for Office
 impl DomainEntity for Office {
@@ -28,14 +29,22 @@ impl DomainEntity for Office {
     }
 
     fn create(id: String, _parent_id: Option<String>, name: &str, description: &str) -> Self {
+        let office_id = if id.is_empty() {
+            Uuid::new_v4().to_string()
+        } else {
+            id
+        };
+
         Office {
-            id,
+            id: office_id,
             name: name.to_string(),
             description: description.to_string(),
             owner_id: "".to_string(),
+            // workspace_id field removed - all offices belong to the single workspace
             members: vec![],
             rooms: Vec::new(),
             mdx_content: String::new(),
+            metadata: Vec::new(),
         }
     }
 
@@ -74,14 +83,23 @@ impl DomainEntity for Room {
     }
 
     fn create(id: String, parent_id: Option<String>, name: &str, description: &str) -> Self {
+        let room_id = if id.is_empty() {
+            Uuid::new_v4().to_string()
+        } else {
+            id
+        };
+
+        let office_id = parent_id.unwrap_or_default();
+
         Room {
-            id,
+            id: room_id,
             name: name.to_string(),
             description: description.to_string(),
+            office_id,
             owner_id: "".to_string(),
-            office_id: parent_id.unwrap_or_default(),
             members: vec![],
             mdx_content: String::new(),
+            metadata: Vec::new(),
         }
     }
 

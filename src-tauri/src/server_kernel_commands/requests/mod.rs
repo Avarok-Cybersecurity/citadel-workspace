@@ -6,7 +6,6 @@ use citadel_workspace_types::WorkspaceProtocolRequest;
 use serde_json::json;
 use std::error::Error;
 use tauri::Emitter;
-use uuid::Uuid;
 
 pub async fn handle(
     request: WorkspaceProtocolRequest,
@@ -18,7 +17,7 @@ pub async fn handle(
     let peer_cid = notification.peer_cid;
 
     // Generate a unique request_id for tracking
-    let request_id = Uuid::new_v4().to_string();
+    let request_id = notification.request_id;
 
     // Create a base connection info payload that will be included in all events
     let connection_info = json!({
@@ -31,6 +30,11 @@ pub async fn handle(
     if !matches!(request, WorkspaceProtocolRequest::Message { .. }) {
         // This is a non-Message request from a peer, which is unusual and likely an error
         let request_type = match request {
+            WorkspaceProtocolRequest::LoadWorkspace => "LoadWorkspace",
+            WorkspaceProtocolRequest::CreateWorkspace { .. } => "CreateWorkspace",
+            WorkspaceProtocolRequest::GetWorkspace => "GetWorkspace",
+            WorkspaceProtocolRequest::UpdateWorkspace { .. } => "UpdateWorkspace",
+            WorkspaceProtocolRequest::DeleteWorkspace => "DeleteWorkspace",
             WorkspaceProtocolRequest::CreateOffice { .. } => "CreateOffice",
             WorkspaceProtocolRequest::GetOffice { .. } => "GetOffice",
             WorkspaceProtocolRequest::UpdateOffice { .. } => "UpdateOffice",
@@ -65,6 +69,7 @@ pub async fn handle(
             .expect("unset")
             .emit("protocol:warning", warning_payload)
             .map_err(|e| Box::new(e) as Box<dyn Error>)?;
+        return Ok(());
     }
 
     if let WorkspaceProtocolRequest::Message { contents } = request {

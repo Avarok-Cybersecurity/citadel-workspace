@@ -9,6 +9,8 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::handlers::domain::server_ops::ServerDomainOps;
+
 pub mod command_processor;
 pub mod domain;
 pub mod transaction;
@@ -136,6 +138,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             name: admin_name.to_string(),
             role: UserRole::Admin,
             permissions,
+            metadata: Vec::new(),
         };
 
         // Add admin user through transaction manager
@@ -165,5 +168,10 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         F: FnOnce(&mut dyn crate::handlers::transaction::Transaction) -> Result<T, NetworkError>,
     {
         self.transaction_manager.with_write_transaction(f)
+    }
+
+    /// Get a domain operations instance
+    pub fn domain_ops(&self) -> ServerDomainOps<R> {
+        ServerDomainOps::new(Arc::new(self.clone()))
     }
 }

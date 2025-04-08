@@ -13,6 +13,7 @@ fn create_test_user(id: &str, role: UserRole) -> User {
         name: format!("Test {}", id),
         role,
         permissions: std::collections::HashMap::new(),
+        metadata: Vec::new(),
     }
 }
 
@@ -50,7 +51,7 @@ fn test_add_user_to_domain() {
 
     // Create an office
     let office = domain_ops
-        .create_office("admin", "Test Office", "For Testing")
+        .create_office("admin", "Test Office", "For Testing", None)
         .unwrap();
 
     // Add the user to the office
@@ -90,7 +91,7 @@ fn test_remove_user_from_domain() {
 
     // Create an office
     let office = domain_ops
-        .create_office("admin", "Test Office", "For Testing")
+        .create_office("admin", "Test Office", "For Testing", None)
         .unwrap();
 
     // Add the user to the office first
@@ -135,7 +136,7 @@ fn test_complete_user_removal() {
 
     // Create an office
     let office = domain_ops
-        .create_office("admin", "Test Office", "For Testing")
+        .create_office("admin", "Test Office", "For Testing", None)
         .unwrap();
 
     // Add the user to the office
@@ -216,11 +217,12 @@ fn test_member_command_processing() {
                     office: Office {
                         id: office_id.to_string(),
                         name: "Test Office".to_string(),
-                        description: "Test Description".to_string(),
+                        description: "Test Office Description".to_string(),
                         owner_id: "admin".to_string(),
                         members: Vec::new(),
                         rooms: Vec::new(),
                         mdx_content: String::new(),
+                        metadata: Vec::new(),
                     },
                 },
             )?;
@@ -240,13 +242,14 @@ fn test_member_command_processing() {
             office_id: Some(office_id.to_string()),
             room_id: None,
             role: UserRole::Member,
+            metadata: None,
         },
     );
 
     citadel_logging::trace!(target: "citadel", "Add member command processed: {:?}", result);
 
     match result {
-        Ok(WorkspaceProtocolResponse::Success) => {
+        Ok(WorkspaceProtocolResponse::Success(_)) => {
             citadel_logging::trace!(target: "citadel", "Add member command succeeded");
         }
         _ => panic!("Failed to add member: {:?}", result),
@@ -286,7 +289,7 @@ fn test_member_command_processing() {
     citadel_logging::trace!(target: "citadel", "Remove member command processed: {:?}", result);
 
     match result {
-        Ok(WorkspaceProtocolResponse::Success) => {
+        Ok(WorkspaceProtocolResponse::Success(_)) => {
             citadel_logging::trace!(target: "citadel", "Remove member command succeeded");
         }
         _ => panic!("Failed to remove member: {:?}", result),

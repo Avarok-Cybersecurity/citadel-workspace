@@ -17,6 +17,7 @@ mod tests {
             name: format!("Test {}", id),
             role,
             permissions: std::collections::HashMap::new(),
+            metadata: Vec::new(),
         }
     }
 
@@ -49,8 +50,10 @@ mod tests {
         let result = kernel.process_command(
             user_id,
             WorkspaceProtocolRequest::CreateOffice {
-                name: "New Office".to_string(),
-                description: "Description".to_string(),
+                name: "Office 1".to_string(),
+                description: "Office 1 Description".to_string(),
+                mdx_content: None,
+                metadata: None,
             },
         );
 
@@ -147,6 +150,7 @@ mod tests {
             WorkspaceProtocolRequest::UpdateMemberRole {
                 user_id: "non_existent_user".to_string(),
                 role: UserRole::Member,
+                metadata: None,
             },
         );
 
@@ -229,7 +233,7 @@ mod tests {
         assert!(result.is_ok());
         match result.unwrap() {
             WorkspaceProtocolResponse::Error(message) => {
-                assert_eq!(message, "Must specify either office_id or room_id");
+                assert_eq!(message, "Must specify exactly one of office_id or room_id");
             }
             _ => panic!("Expected error response"),
         }
@@ -247,7 +251,7 @@ mod tests {
         assert!(result.is_ok());
         match result.unwrap() {
             WorkspaceProtocolResponse::Error(message) => {
-                assert_eq!(message, "Must specify either office_id or room_id");
+                assert_eq!(message, "Must specify exactly one of office_id or room_id");
             }
             _ => panic!("Expected error response"),
         }

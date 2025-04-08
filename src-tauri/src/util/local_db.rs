@@ -136,12 +136,4 @@ impl<'a> LocalDb<'a> {
             }
         }
     }
-
-    pub async fn _is_known_server(&self, address: &str) -> Result<bool, String> {
-        Ok(self
-            .list_known_servers()
-            .await?
-            .server_addresses
-            .contains(&address.to_string()))
-    }
 }

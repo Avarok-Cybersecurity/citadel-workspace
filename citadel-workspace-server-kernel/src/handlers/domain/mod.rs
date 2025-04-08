@@ -1,10 +1,13 @@
 use crate::handlers::transaction::Transaction;
 use crate::WorkspaceServerKernel;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{Domain, Office, Permission, Room, User, UserRole};
+use citadel_workspace_types::structs::{
+    Domain, Office, Permission, Room, User, UserRole, Workspace,
+};
 
 pub mod entity;
 pub mod server_ops;
+pub mod workspace_entity;
 
 // NetworkError helpers (using functions instead of impl extension)
 pub fn permission_denied<S: std::fmt::Display>(msg: S) -> NetworkError {
@@ -109,6 +112,7 @@ pub trait DomainOperations<R: Ratchet> {
         parent_id: Option<&str>,
         name: &str,
         description: &str,
+        mdx_content: Option<&str>,
     ) -> Result<T, NetworkError>;
 
     /// Delete a domain entity
@@ -125,6 +129,7 @@ pub trait DomainOperations<R: Ratchet> {
         domain_id: &str,
         name: Option<&str>,
         description: Option<&str>,
+        mdx_content: Option<&str>,
     ) -> Result<T, NetworkError>;
 
     /// List domain entities
@@ -140,6 +145,7 @@ pub trait DomainOperations<R: Ratchet> {
         user_id: &str,
         name: &str,
         description: &str,
+        mdx_content: Option<&str>,
     ) -> Result<Office, NetworkError>;
 
     /// Create a room
@@ -149,6 +155,7 @@ pub trait DomainOperations<R: Ratchet> {
         office_id: &str,
         name: &str,
         description: &str,
+        mdx_content: Option<&str>,
     ) -> Result<Room, NetworkError>;
 
     /// Get an office
@@ -170,6 +177,7 @@ pub trait DomainOperations<R: Ratchet> {
         office_id: &str,
         name: Option<&str>,
         description: Option<&str>,
+        mdx_content: Option<&str>,
     ) -> Result<Office, NetworkError>;
 
     /// Update a room
@@ -179,6 +187,7 @@ pub trait DomainOperations<R: Ratchet> {
         room_id: &str,
         name: Option<&str>,
         description: Option<&str>,
+        mdx_content: Option<&str>,
     ) -> Result<Room, NetworkError>;
 
     /// List offices
@@ -186,4 +195,78 @@ pub trait DomainOperations<R: Ratchet> {
 
     /// List rooms
     fn list_rooms(&self, user_id: &str, office_id: &str) -> Result<Vec<Room>, NetworkError>;
+
+    /// Get a workspace
+    fn get_workspace(&self, user_id: &str, workspace_id: &str) -> Result<Workspace, NetworkError>;
+
+    /// Create a workspace
+    fn create_workspace(
+        &self,
+        user_id: &str,
+        name: &str,
+        description: &str,
+        metadata: Option<Vec<u8>>,
+    ) -> Result<Workspace, NetworkError>;
+
+    /// Delete a workspace
+    fn delete_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+    ) -> Result<Workspace, NetworkError>;
+
+    /// Update a workspace
+    fn update_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        name: Option<&str>,
+        description: Option<&str>,
+        metadata: Option<Vec<u8>>,
+    ) -> Result<Workspace, NetworkError>;
+
+    /// Add an office to a workspace
+    fn add_office_to_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        office_id: &str,
+    ) -> Result<(), NetworkError>;
+
+    /// Remove an office from a workspace
+    fn remove_office_from_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        office_id: &str,
+    ) -> Result<(), NetworkError>;
+
+    /// Add a user to a workspace
+    fn add_user_to_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        member_id: &str,
+    ) -> Result<(), NetworkError>;
+
+    /// Remove a user from a workspace
+    fn remove_user_from_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        member_id: &str,
+    ) -> Result<(), NetworkError>;
+
+    /// Load the single workspace that exists in the system
+    fn load_workspace(&self, user_id: &str) -> Result<Workspace, NetworkError>;
+
+    /// List all workspaces (should only return one workspace in this implementation)
+    fn list_workspaces(&self, user_id: &str) -> Result<Vec<Workspace>, NetworkError>;
+
+    /// List all offices in a specific workspace
+    fn list_offices_in_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+    ) -> Result<Vec<Office>, NetworkError>;
 }

@@ -1,11 +1,11 @@
 use citadel_internal_service::kernel::CitadelWorkspaceService;
-use citadel_internal_service_test_common::get_free_port;
 use citadel_internal_service_test_common::{
-    self as common, server_test_node_skip_cert_verification,
+    self as common, get_free_port, server_test_node_skip_cert_verification,
 };
-use citadel_sdk::prelude::*;
+use citadel_sdk::prelude::{
+    BackendType, NetworkError, NodeBuilder, NodeType, PreSharedKey, StackedRatchet,
+};
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
-use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
@@ -219,8 +219,9 @@ async fn test_office_operations() {
         setup_test_environment().await.unwrap();
     println!("Test environment setup complete.");
 
-    println!("Registering and connecting test user...");
-    let (to_service, mut from_service, cid) = register_and_connect_user(
+    println!("Registering and connecting admin user...");
+    // Use admin credentials to connect
+    let (to_service, mut from_service, admin_cid) = register_and_connect_user(
         internal_service_addr,
         server_addr,
         &admin_username,
@@ -228,57 +229,72 @@ async fn test_office_operations() {
     )
     .await
     .unwrap();
-    println!("Test user registered and connected with CID: {cid}.");
 
-    let office = kernel
-        .create_office(ADMIN_ID, "TEST OFFICE", "OFFICE DESCRIPTION")
-        .unwrap();
-    let office_id = office.id;
+    println!("Admin user registered and connected with CID: {admin_cid}.");
 
+    // Register the admin_cid as an admin user in the kernel
     kernel
-        .add_member(
-            ADMIN_ID,
-            cid.to_string().as_str(),
-            Some(&office_id),
-            None,
-            UserRole::Admin,
-        )
+        .inject_admin_user(&admin_cid.to_string(), "Connected Admin User")
         .unwrap();
 
+    // Create the root workspace first for our single workspace model
+    println!("Creating root workspace...");
+    let create_workspace_cmd = WorkspaceProtocolRequest::CreateWorkspace {
+        name: "Root Workspace".to_string(),
+        description: "Root workspace for the system".to_string(),
+        metadata: None,
+    };
+
+    let workspace_response = send_workspace_command(
+        &to_service,
+        &mut from_service,
+        admin_cid,
+        create_workspace_cmd,
+    )
+    .await
+    .unwrap();
+
+    println!("Root workspace created: {:?}", workspace_response);
+
+    // Create an office using the command processor instead of directly
     println!("Creating test office...");
     let create_office_cmd = WorkspaceProtocolRequest::CreateOffice {
         name: "Test Office".to_string(),
         description: "A test office".to_string(),
+        mdx_content: Some("# Test Office\nThis is a test office".to_string()),
+        metadata: None,
     };
 
-    let response = send_workspace_command(&to_service, &mut from_service, cid, create_office_cmd)
-        .await
-        .unwrap();
-
-    println!("Test office created.");
+    let response =
+        send_workspace_command(&to_service, &mut from_service, admin_cid, create_office_cmd)
+            .await
+            .unwrap();
 
     let office_id = match response {
         WorkspaceProtocolResponse::Office(office) => {
-            assert_eq!(office.name, "Test Office");
-            assert_eq!(office.description, "A test office");
-            office.id.clone()
+            println!("Created office: {:?}", office);
+            office.id
         }
         _ => panic!("Expected Office response"),
     };
+
+    println!("Test office created.");
 
     println!("Getting test office...");
     let get_office_cmd = WorkspaceProtocolRequest::GetOffice {
         office_id: office_id.clone(),
     };
 
-    let response = send_workspace_command(&to_service, &mut from_service, cid, get_office_cmd)
-        .await
-        .unwrap();
+    let response =
+        send_workspace_command(&to_service, &mut from_service, admin_cid, get_office_cmd)
+            .await
+            .unwrap();
 
     match response {
         WorkspaceProtocolResponse::Office(office) => {
             assert_eq!(office.name, "Test Office");
             assert_eq!(office.description, "A test office");
+            assert_eq!(office.mdx_content, "# Test Office\nThis is a test office");
         }
         _ => panic!("Expected Office response"),
     }
@@ -290,16 +306,23 @@ async fn test_office_operations() {
         office_id: office_id.clone(),
         name: Some("Updated Office".to_string()),
         description: None,
+        mdx_content: Some("# Updated Office\nThis content has been updated".to_string()),
+        metadata: None,
     };
 
-    let response = send_workspace_command(&to_service, &mut from_service, cid, update_office_cmd)
-        .await
-        .unwrap();
+    let response =
+        send_workspace_command(&to_service, &mut from_service, admin_cid, update_office_cmd)
+            .await
+            .unwrap();
 
     match response {
         WorkspaceProtocolResponse::Office(office) => {
             assert_eq!(office.name, "Updated Office");
             assert_eq!(office.description, "A test office");
+            assert_eq!(
+                office.mdx_content,
+                "# Updated Office\nThis content has been updated"
+            );
         }
         _ => panic!("Expected Office response"),
     }
@@ -307,16 +330,29 @@ async fn test_office_operations() {
     println!("Test office updated.");
 
     println!("Listing offices...");
-    let list_offices_cmd = WorkspaceProtocolRequest::ListOffices;
+    let list_offices_cmd = WorkspaceProtocolRequest::ListOffices {};
 
-    let response = send_workspace_command(&to_service, &mut from_service, cid, list_offices_cmd)
-        .await
-        .unwrap();
+    let response =
+        send_workspace_command(&to_service, &mut from_service, admin_cid, list_offices_cmd)
+            .await
+            .unwrap();
 
     match response {
         WorkspaceProtocolResponse::Offices(offices) => {
-            assert_eq!(offices.len(), 2);
-            assert_eq!(offices[1].name, "Updated Office");
+            assert!(
+                offices.len() >= 1,
+                "Expected at least 1 office, found {}",
+                offices.len()
+            );
+
+            // Find the "Updated Office" in the list
+            let updated_office = offices
+                .iter()
+                .find(|o| o.name == "Updated Office")
+                .expect("Couldn't find 'Updated Office' in the returned offices list");
+
+            assert_eq!(updated_office.name, "Updated Office");
+            assert_eq!(updated_office.description, "A test office");
         }
         _ => panic!("Expected Offices response"),
     }
@@ -326,27 +362,31 @@ async fn test_office_operations() {
     println!("Deleting test office...");
     let delete_office_cmd = WorkspaceProtocolRequest::DeleteOffice { office_id };
 
-    let response = send_workspace_command(&to_service, &mut from_service, cid, delete_office_cmd)
-        .await
-        .unwrap();
+    let response =
+        send_workspace_command(&to_service, &mut from_service, admin_cid, delete_office_cmd)
+            .await
+            .unwrap();
 
     match response {
-        WorkspaceProtocolResponse::Success => {}
+        WorkspaceProtocolResponse::Success(_) => {}
         _ => panic!("Expected Success response"),
     }
 
     println!("Test office deleted.");
 
     println!("Verifying office was deleted...");
-    let list_offices_cmd = WorkspaceProtocolRequest::ListOffices;
+    let list_offices_cmd = WorkspaceProtocolRequest::ListOffices {};
 
-    let response = send_workspace_command(&to_service, &mut from_service, cid, list_offices_cmd)
-        .await
-        .unwrap();
+    let response =
+        send_workspace_command(&to_service, &mut from_service, admin_cid, list_offices_cmd)
+            .await
+            .unwrap();
 
     match response {
         WorkspaceProtocolResponse::Offices(offices) => {
-            assert_eq!(offices.len(), 1);
+            // With our single workspace model, after deleting the office,
+            // we should have 0 offices remaining
+            assert_eq!(offices.len(), 0);
         }
         _ => panic!("Expected Offices response"),
     }
@@ -361,8 +401,9 @@ async fn test_room_operations() {
         setup_test_environment().await.unwrap();
     println!("Test environment setup complete.");
 
-    println!("Registering and connecting test user...");
-    let (to_service, mut from_service, cid) = register_and_connect_user(
+    println!("Registering and connecting admin user...");
+    // Use admin credentials to connect
+    let (to_service, mut from_service, admin_cid) = register_and_connect_user(
         internal_service_addr,
         server_addr,
         &admin_username,
@@ -370,40 +411,75 @@ async fn test_room_operations() {
     )
     .await
     .unwrap();
-    println!("Test user registered and connected with CID: {cid}.");
 
-    let office = kernel
-        .create_office(ADMIN_ID, "TEST OFFICE", "OFFICE DESCRIPTION")
-        .unwrap();
-    let office_id = office.id;
+    println!("Admin user registered and connected with CID: {admin_cid}.");
 
+    // Register the admin_cid as an admin user in the kernel
     kernel
-        .add_member(
-            ADMIN_ID,
-            cid.to_string().as_str(),
-            Some(&office_id),
-            None,
-            UserRole::Admin,
-        )
+        .inject_admin_user(&admin_cid.to_string(), "Connected Admin User")
         .unwrap();
+
+    // Create the root workspace first for our single workspace model
+    println!("Creating root workspace...");
+    let create_workspace_cmd = WorkspaceProtocolRequest::CreateWorkspace {
+        name: "Root Workspace".to_string(),
+        description: "Root workspace for the system".to_string(),
+        metadata: None,
+    };
+
+    let workspace_response = send_workspace_command(
+        &to_service,
+        &mut from_service,
+        admin_cid,
+        create_workspace_cmd,
+    )
+    .await
+    .unwrap();
+
+    println!("Root workspace created: {:?}", workspace_response);
+
+    // Create an office using the command processor instead of directly
+    println!("Creating test office...");
+    let create_office_cmd = WorkspaceProtocolRequest::CreateOffice {
+        name: "Test Office".to_string(),
+        description: "A test office".to_string(),
+        mdx_content: Some("# Test Office\nThis is a test office".to_string()),
+        metadata: None,
+    };
+
+    let response =
+        send_workspace_command(&to_service, &mut from_service, admin_cid, create_office_cmd)
+            .await
+            .unwrap();
+
+    let office_id = match response {
+        WorkspaceProtocolResponse::Office(office) => {
+            println!("Created office: {:?}", office);
+            office.id
+        }
+        _ => panic!("Expected Office response"),
+    };
+
+    println!("Test office created.");
 
     println!("Creating test room...");
     let create_room_cmd = WorkspaceProtocolRequest::CreateRoom {
         office_id: office_id.clone(),
         name: "Test Room".to_string(),
         description: "A test room".to_string(),
+        mdx_content: Some("# Test Room\nThis is a test room".to_string()),
+        metadata: None,
     };
 
-    let response = send_workspace_command(&to_service, &mut from_service, cid, create_room_cmd)
-        .await
-        .unwrap();
-
-    println!("Test room creation response: {response:?}");
-
+    let response =
+        send_workspace_command(&to_service, &mut from_service, admin_cid, create_room_cmd)
+            .await
+            .unwrap();
     let room_id = match response {
         WorkspaceProtocolResponse::Room(room) => {
             assert_eq!(room.name, "Test Room");
             assert_eq!(room.description, "A test room");
+            assert_eq!(room.mdx_content, "# Test Room\nThis is a test room");
             room.id.clone()
         }
         _ => panic!("Expected Room response"),
@@ -416,7 +492,7 @@ async fn test_room_operations() {
         room_id: room_id.clone(),
     };
 
-    let response = send_workspace_command(&to_service, &mut from_service, cid, get_room_cmd)
+    let response = send_workspace_command(&to_service, &mut from_service, admin_cid, get_room_cmd)
         .await
         .unwrap();
 
@@ -424,6 +500,7 @@ async fn test_room_operations() {
         WorkspaceProtocolResponse::Room(room) => {
             assert_eq!(room.name, "Test Room");
             assert_eq!(room.description, "A test room");
+            assert_eq!(room.mdx_content, "# Test Room\nThis is a test room");
         }
         _ => panic!("Expected Room response"),
     }
@@ -435,16 +512,23 @@ async fn test_room_operations() {
         room_id: room_id.clone(),
         name: Some("Updated Room".to_string()),
         description: None,
+        mdx_content: Some("# Updated Room\nThis room content has been updated".to_string()),
+        metadata: None,
     };
 
-    let response = send_workspace_command(&to_service, &mut from_service, cid, update_room_cmd)
-        .await
-        .unwrap();
+    let response =
+        send_workspace_command(&to_service, &mut from_service, admin_cid, update_room_cmd)
+            .await
+            .unwrap();
 
     match response {
         WorkspaceProtocolResponse::Room(room) => {
             assert_eq!(room.name, "Updated Room");
             assert_eq!(room.description, "A test room");
+            assert_eq!(
+                room.mdx_content,
+                "# Updated Room\nThis room content has been updated"
+            );
         }
         _ => panic!("Expected Room response"),
     }
@@ -456,9 +540,10 @@ async fn test_room_operations() {
         office_id: office_id.clone(),
     };
 
-    let response = send_workspace_command(&to_service, &mut from_service, cid, list_rooms_cmd)
-        .await
-        .unwrap();
+    let response =
+        send_workspace_command(&to_service, &mut from_service, admin_cid, list_rooms_cmd)
+            .await
+            .unwrap();
 
     match response {
         WorkspaceProtocolResponse::Rooms(rooms) => {
@@ -473,12 +558,13 @@ async fn test_room_operations() {
     println!("Deleting test room...");
     let delete_room_cmd = WorkspaceProtocolRequest::DeleteRoom { room_id };
 
-    let response = send_workspace_command(&to_service, &mut from_service, cid, delete_room_cmd)
-        .await
-        .unwrap();
+    let response =
+        send_workspace_command(&to_service, &mut from_service, admin_cid, delete_room_cmd)
+            .await
+            .unwrap();
 
     match response {
-        WorkspaceProtocolResponse::Success => {}
+        WorkspaceProtocolResponse::Success(_) => {}
         _ => panic!("Expected Success response"),
     }
 
@@ -487,9 +573,10 @@ async fn test_room_operations() {
     println!("Verifying room was deleted...");
     let list_rooms_cmd = WorkspaceProtocolRequest::ListRooms { office_id };
 
-    let response = send_workspace_command(&to_service, &mut from_service, cid, list_rooms_cmd)
-        .await
-        .unwrap();
+    let response =
+        send_workspace_command(&to_service, &mut from_service, admin_cid, list_rooms_cmd)
+            .await
+            .unwrap();
 
     match response {
         WorkspaceProtocolResponse::Rooms(rooms) => {

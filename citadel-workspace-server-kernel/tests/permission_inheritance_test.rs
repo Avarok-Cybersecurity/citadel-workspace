@@ -13,6 +13,7 @@ fn create_test_user(id: &str, role: UserRole) -> User {
         name: format!("Test {}", id),
         role,
         permissions: HashMap::new(),
+        metadata: Vec::new(),
     }
 }
 
@@ -50,12 +51,12 @@ fn test_office_room_permission_inheritance() {
 
     // Create an office
     let office = domain_ops
-        .create_office("admin", "Test Office", "For Testing")
+        .create_office("admin", "Test Office", "For Testing", None)
         .unwrap();
 
     // Create a room in the office
     let room = domain_ops
-        .create_room("admin", &office.id, "Test Room", "Room for testing")
+        .create_room("admin", &office.id, "Test Room", "Room for testing", None)
         .unwrap();
 
     // Add the user to the office but not the room
@@ -121,12 +122,12 @@ fn test_permission_escalation() {
 
     // Create an office
     let office = domain_ops
-        .create_office("admin", "Test Office", "For Testing")
+        .create_office("admin", "Test Office", "For Testing", None)
         .unwrap();
 
     // Create a room in the office
     let room = domain_ops
-        .create_room("admin", &office.id, "Test Room", "Room for testing")
+        .create_room("admin", &office.id, "Test Room", "Room for testing", None)
         .unwrap();
 
     // Add user to both office and room
@@ -189,12 +190,12 @@ fn test_is_member_of_domain_behavior() {
 
     // Create an office
     let office = domain_ops
-        .create_office("admin", "Test Office", "For Testing")
+        .create_office("admin", "Test Office", "For Testing", None)
         .unwrap();
 
     // Create a room in the office
     let room = domain_ops
-        .create_room("admin", &office.id, "Test Room", "Room for testing")
+        .create_room("admin", &office.id, "Test Room", "Room for testing", None)
         .unwrap();
 
     // Initially user is not a member of any domain

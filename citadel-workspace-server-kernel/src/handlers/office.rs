@@ -12,6 +12,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         user_id: &str,
         name: &str,
         description: &str,
+        mdx_content: Option<&str>,
     ) -> Result<Office, NetworkError> {
         // Use the domain abstraction for creating an office
         self.create_domain_entity::<Office>(
@@ -19,6 +20,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             None, // No parent for an office
             name,
             description,
+            mdx_content,
         )
     }
 
@@ -33,9 +35,10 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         office_id: &str,
         name: Option<&str>,
         description: Option<&str>,
+        mdx_content: Option<&str>,
     ) -> Result<Office, NetworkError> {
         // Use the domain abstraction for updating an office
-        self.update_domain_entity::<Office>(user_id, office_id, name, description)
+        self.update_domain_entity::<Office>(user_id, office_id, name, description, mdx_content)
     }
 
     pub fn get_office(&self, user_id: &str, office_id: &str) -> Result<Office, NetworkError> {

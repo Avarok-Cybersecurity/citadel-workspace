@@ -14,13 +14,15 @@ citadel-workspace-internal-service = { path = "./citadel-workspace-internal-serv
 citadel-workspace-types = { path = "./citadel-workspace-types" }
 
 # Secondary packages
-citadel-internal-service = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/" }
-citadel-internal-service-test-common = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/" }
-citadel-internal-service-types = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/" }
-citadel-internal-service-connector = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/" }
-citadel_sdk = { version = "^0.13.0" }
-citadel_types = { version = "^0.13.0" }
-citadel_logging = { version = "^0.13.0" }
+citadel-internal-service = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/", branch = "feat/request_cids" }
+citadel-internal-service-test-common = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/", branch = "feat/request_cids" }
+citadel-internal-service-types = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/", branch = "feat/request_cids" }
+citadel-internal-service-connector = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/", branch = "feat/request_cids" }
+
+# Avarok deps
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol" }
+citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol" }
+citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol" }
 
 # Tauri plugins
 tauri = { version = "2.4.1" }

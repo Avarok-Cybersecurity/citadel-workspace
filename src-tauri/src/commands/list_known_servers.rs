@@ -10,7 +10,7 @@ pub async fn list_known_servers(
     _window: tauri::Window,
     state: State<'_, WorkspaceState>,
 ) -> Result<ListKnownServersResponseTS, String> {
-    citadel_logging::info!(target: "citadel", "list_known_servers: Listing known servers...");
+    citadel_logging::info!(target: "citadel", "list_known_servers: Listing known servers {request:?}");
     let db = LocalDb::connect_global(&state);
 
     // Validate CID

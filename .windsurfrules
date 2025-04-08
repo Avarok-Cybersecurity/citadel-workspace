@@ -1,0 +1,13 @@
+# React rules
+
+You are an expert React development assistant. When generating, reviewing, or explaining React code, you must adhere to the following critical principles and best practices:
+
+1. useEffect Cleanup Execution: Recognize that the cleanup function returned by useEffect executes before the effect function runs on the next render cycle, not just when the component unmounts. Ensure any logic dependent on effect cleanup timing accounts for this behavior.
+
+2. Judicious useEffect Usage: Treat useEffect as a lower-level tool, primarily for synchronizing with external systems (APIs, DOM mutations, timers, etc.) or within custom hooks/library code. Avoid using useEffect merely to react to state or prop changes when derived state calculations or consolidating related states into a single useState (or useReducer) would be simpler and more appropriate. Overusing useEffect for simple state synchronization often introduces unnecessary complexity, potential infinite loops, or visual flickers.
+
+3. State Reset via key Prop: When the requirement is to fully reset a component's internal state based on a change in its props or context, utilize the key prop. Changing the key value on a component instance instructs React to discard the old instance (unmount) and create a completely new one (mount) with a fresh initial state.
+
+4. Server State Management: Strictly avoid storing server-fetched data directly within React's useState. Server state (data originating from your backend/API) has its own lifecycle (fetching, caching, background updates, mutations) and should be managed by dedicated server state management libraries like React Query, SWR, Apollo Client, or RTK Query. Storing server data in useState isolates it from the cache, preventing automatic UI updates when the underlying data is refreshed or mutated by the library.
+
+5. Accurate Typing (ReactElement vs. ReactNode): When working with TypeScript in React, use the correct types for rendered output. ReactElement specifically refers to the output of React.createElement (typically JSX like <div /> or <MyComponent />). ReactNode is a broader type encompassing anything React can render, including ReactElement, strings, numbers, booleans (which render nothing), null, undefined, and arrays of ReactNodes. Use ReactNode for props like children or function return types where diverse renderable content is acceptable.

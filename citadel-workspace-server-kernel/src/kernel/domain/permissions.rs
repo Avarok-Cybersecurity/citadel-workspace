@@ -1,8 +1,7 @@
-use crate::handlers::permissions::RolePermissions;
 use crate::kernel::WorkspaceServerKernel;
 use citadel_logging::debug;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{Domain, Permission, UserRole};
+use citadel_workspace_types::structs::{Domain, Office, Permission, Room, UserRole, Workspace};
 use citadel_workspace_types::UpdateOperation;
 
 /// Core permission-related functionality for the workspace server
@@ -57,6 +56,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// 1. If the user is an admin (admins have all permissions)
     /// 2. If the user has the specific permission granted for the entity
     /// 3. If the user's role in the entity grants the permission implicitly
+    /// 4. For hierarchical domains, checks parent domains for permissions
     pub fn check_entity_permission(
         &self,
         user_id: &str,
@@ -86,6 +86,30 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
             // If not explicitly granted, check based on role and domain membership
             match tx.get_domain(entity_id) {
+                Some(Domain::Workspace { workspace }) => {
+                    // Workspace owners have all permissions for their workspace
+                    if workspace.owner_id == user_id {
+                        debug!(target: "citadel", "User {} is owner of workspace {}, permission granted", user_id, entity_id);
+                        return Ok(true);
+                    }
+
+                    // Workspace members may have some permissions based on role
+                    if workspace.members.contains(&user_id.to_string()) {
+                        match user_role {
+                            UserRole::Admin => Ok(true), // Admins have all permissions
+                            UserRole::Owner => Ok(true), // Owners have all permissions for entities they belong to
+                            UserRole::Member => {
+                                match permission {
+                                    Permission::ViewContent => Ok(true), // Members can view content
+                                    _ => Ok(false),
+                                }
+                            }
+                            _ => Ok(false),
+                        }
+                    } else {
+                        Ok(false)
+                    }
+                },
                 Some(Domain::Office { office }) => {
                     // Office owners have all permissions for their office
                     if office.owner_id == user_id {
@@ -99,15 +123,31 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                             UserRole::Admin => Ok(true), // Admins have all permissions
                             UserRole::Owner => Ok(true), // Owners have all permissions for entities they belong to
                             UserRole::Member => {
-                                // Members have limited permissions by default
-                                // Use the PermissionSet to determine default permissions based on role
-                                let default_perms = user_role.default_permissions();
-                                Ok(default_perms.has(permission))
+                                match permission {
+                                    Permission::ViewContent => Ok(true), // Members can view content
+                                    _ => Ok(false),
+                                }
                             }
                             _ => Ok(false),
                         }
                     } else {
-                        debug!(target: "citadel", "User {} is not a member of office {}", user_id, entity_id);
+                        // Check if the user has permissions via a parent workspace
+                        // Try to find which workspace contains this office
+                        for workspace in tx.get_all_workspaces().values() {
+                            if workspace.offices.contains(&office.id) && (workspace.owner_id == user_id || workspace.members.contains(&user_id.to_string())) {
+                                // User is a member of the parent workspace - check role permissions
+                                match user_role {
+                                    UserRole::Admin | UserRole::Owner => return Ok(true),
+                                    UserRole::Member => {
+                                        return match permission {
+                                            Permission::ViewContent => Ok(true),
+                                            _ => Ok(false),
+                                        };
+                                    }
+                                    _ => return Ok(false),
+                                }
+                            }
+                        }
                         Ok(false)
                     }
                 }
@@ -122,27 +162,54 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     if room.members.contains(&user_id.to_string()) {
                         match user_role {
                             UserRole::Admin => Ok(true), // Admins have all permissions
-                            UserRole::Owner => Ok(true), // Owners have all permissions
+                            UserRole::Owner => Ok(true), // Owners have all permissions for entities they belong to
                             UserRole::Member => {
-                                // Members have limited permissions by default
-                                // Use the PermissionSet to determine default permissions based on role
-                                let default_perms = user_role.default_permissions();
-                                Ok(default_perms.has(permission))
+                                match permission {
+                                    Permission::ViewContent => Ok(true), // Members can view content
+                                    _ => Ok(false),
+                                }
                             }
                             _ => Ok(false),
                         }
                     } else {
-                        // For rooms, check if user has permission in parent office
-                        let office_id = room.office_id.clone();
-                        debug!(target: "citadel", "User {} is not a direct member of room {}, checking parent office {}", user_id, entity_id, office_id);
-                        // Recursively check permission in the parent office
-                        self.check_entity_permission(user_id, &office_id, permission)
+                        // Check if the user has permissions via the parent office
+                        // First get the parent office
+                        if let Some(Domain::Office { office }) = tx.get_domain(&room.office_id) {
+                            if office.owner_id == user_id || office.members.contains(&user_id.to_string()) {
+                                // User is a member of the parent office - check role permissions
+                                match user_role {
+                                    UserRole::Admin | UserRole::Owner => return Ok(true),
+                                    UserRole::Member => {
+                                        return match permission {
+                                            Permission::ViewContent => Ok(true),
+                                            _ => Ok(false),
+                                        };
+                                    }
+                                    _ => return Ok(false),
+                                }
+                            }
+
+                            // Check if there's a parent workspace with access
+                            for workspace in tx.get_all_workspaces().values() {
+                                if workspace.offices.contains(&office.id) && (workspace.owner_id == user_id || workspace.members.contains(&user_id.to_string())) {
+                                    // User is a member of the parent workspace - check role permissions
+                                    match user_role {
+                                        UserRole::Admin | UserRole::Owner => return Ok(true),
+                                        UserRole::Member => {
+                                            return match permission {
+                                                Permission::ViewContent => Ok(true),
+                                                _ => Ok(false),
+                                            };
+                                        }
+                                        _ => return Ok(false),
+                                    }
+                                }
+                            }
+                        }
+                        Ok(false)
                     }
                 }
-                None => {
-                    debug!(target: "citadel", "Entity {} not found when checking permission for user {}", entity_id, user_id);
-                    Err(NetworkError::msg("Entity not found"))
-                }
+                None => Err(NetworkError::msg("Domain not found")),
             }
         })
     }
@@ -163,6 +230,95 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         }
     }
 
+    /// Check if user is an admin of a domain
+    pub fn check_domain_admin(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
+        // System administrators are admins of all domains
+        if self.is_admin(user_id) {
+            return Ok(true);
+        }
+
+        // Get the domain and check if user is an admin
+        self.with_read_transaction(|tx| {
+            if let Some(domain) = tx.get_domain(domain_id) {
+                match domain {
+                    Domain::Office { office } => Ok(self.is_office_admin(office, user_id)),
+                    Domain::Room { room } => Ok(self.is_room_admin(room, user_id)),
+                    Domain::Workspace { workspace } => {
+                        Ok(self.is_workspace_admin(workspace, user_id))
+                    }
+                }
+            } else {
+                Err(NetworkError::msg(format!("Domain {} not found", domain_id)))
+            }
+        })
+    }
+
+    /// Check if a user is an admin of a workspace
+    pub fn is_workspace_admin(&self, workspace: &Workspace, user_id: &str) -> bool {
+        // System administrators are always admins
+        if self.is_admin(user_id) {
+            return true;
+        }
+
+        // Workspace owner is admin
+        if workspace.owner_id == user_id {
+            return true;
+        }
+
+        // Check if user has workspace admin permissions
+        let has_admin_permission = self
+            .with_read_transaction(|tx| {
+                if let Some(user) = tx.get_user(user_id) {
+                    Ok(user.has_permission(&workspace.id, Permission::All))
+                } else {
+                    Ok(false)
+                }
+            })
+            .unwrap_or(false);
+
+        has_admin_permission
+    }
+
+    /// Check if a user is the owner of a workspace
+    pub fn is_workspace_owner(&self, workspace: &Workspace, user_id: &str) -> bool {
+        workspace.owner_id == user_id
+    }
+
+    /// Check if a specific user is an admin of the indicated domain
+    ///
+    /// This checks if:
+    /// 1. The user is a system admin
+    /// 2. The user is the owner of the domain
+    pub fn is_domain_admin(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
+        self.with_read_transaction(|tx| {
+            // System administrators are admins of all domains
+            if tx.is_admin(user_id) {
+                return Ok(true);
+            }
+
+            let domain = tx.get_domain(domain_id);
+            match domain {
+                Some(Domain::Office { office }) => Ok(office.owner_id == user_id),
+                Some(Domain::Room { room }) => Ok(room.owner_id == user_id),
+                Some(Domain::Workspace { workspace }) => Ok(workspace.owner_id == user_id),
+                None => Err(NetworkError::msg(format!("Domain {} not found", domain_id))),
+            }
+        })
+    }
+
+    /// Check if a user is an owner of any domain
+    pub fn is_owner(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
+        self.with_read_transaction(|tx| {
+            let domain = tx.get_domain(domain_id);
+            match domain {
+                Some(Domain::Office { office }) => Ok(office.owner_id == user_id),
+                Some(Domain::Room { room }) => Ok(room.owner_id == user_id),
+                Some(Domain::Workspace { workspace }) => Ok(workspace.owner_id == user_id),
+                None => Err(NetworkError::msg(format!("Domain {} not found", domain_id))),
+            }
+        })
+    }
+
     /// Update a member's permissions for a domain
     ///
     /// This method handles adding, removing, or replacing permissions for a user in a domain
@@ -175,23 +331,10 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         operation: UpdateOperation,
     ) -> Result<(), NetworkError> {
         // Check if the requesting user is an admin or the owner of the domain
-        if !self.is_admin(user_id) {
-            let is_domain_owner = self.with_read_transaction(|tx| {
-                if let Some(domain) = tx.get_domain(domain_id) {
-                    match domain {
-                        Domain::Office { office } => Ok(office.owner_id == user_id),
-                        Domain::Room { room } => Ok(room.owner_id == user_id),
-                    }
-                } else {
-                    Err(NetworkError::msg("Domain not found"))
-                }
-            })?;
-
-            if !is_domain_owner {
-                return Err(NetworkError::msg(
-                    "Permission denied: You must be an admin or the domain owner to update permissions",
-                ));
-            }
+        if !self.check_domain_admin(user_id, domain_id)? {
+            return Err(NetworkError::msg(
+                "Permission denied: You must be an admin or the domain owner to update permissions",
+            ));
         }
 
         // Update the user's permissions
@@ -247,23 +390,10 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         allow: bool,
     ) -> Result<(), NetworkError> {
         // First check if the admin has permission to do this
-        if !self.is_admin(admin_id) {
-            let is_domain_owner = self.with_read_transaction(|tx| {
-                if let Some(domain) = tx.get_domain(domain_id) {
-                    match domain {
-                        Domain::Office { office } => Ok(office.owner_id == admin_id),
-                        Domain::Room { room } => Ok(room.owner_id == admin_id),
-                    }
-                } else {
-                    Err(NetworkError::msg("Domain not found"))
-                }
-            })?;
-
-            if !is_domain_owner {
-                return Err(NetworkError::msg(
-                    "Permission denied: Only admins or domain owners can set permissions",
-                ));
-            }
+        if !self.check_domain_admin(admin_id, domain_id)? {
+            return Err(NetworkError::msg(
+                "Permission denied: Only admins or domain owners can set permissions",
+            ));
         }
 
         // Now set the permission
@@ -284,5 +414,76 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 UpdateOperation::Remove,
             )
         }
+    }
+
+    /// Check if a user is an admin of an office
+    pub fn is_office_admin(&self, office: &Office, user_id: &str) -> bool {
+        // System administrators are always admins
+        if self.is_admin(user_id) {
+            return true;
+        }
+
+        // Office owner is admin
+        if office.owner_id == user_id {
+            return true;
+        }
+
+        // Check if user has office admin permissions
+        let has_admin_permission = self
+            .with_read_transaction(|tx| {
+                if let Some(user) = tx.get_user(user_id) {
+                    Ok(user.has_permission(&office.id, Permission::All))
+                } else {
+                    Ok(false)
+                }
+            })
+            .unwrap_or(false);
+
+        has_admin_permission
+    }
+
+    /// Check if a user is an admin of a room
+    pub fn is_room_admin(&self, room: &Room, user_id: &str) -> bool {
+        // System administrators are always admins
+        if self.is_admin(user_id) {
+            return true;
+        }
+
+        // Room owner is admin
+        if room.owner_id == user_id {
+            return true;
+        }
+
+        // Check if user has room admin permissions
+        let has_room_permission = self
+            .with_read_transaction(|tx| {
+                if let Some(user) = tx.get_user(user_id) {
+                    Ok(user.has_permission(&room.id, Permission::All))
+                } else {
+                    Ok(false)
+                }
+            })
+            .unwrap_or(false);
+
+        // If they have direct room admin permissions
+        if has_room_permission {
+            return true;
+        }
+
+        // Check if they are an admin of the parent office
+        let has_office_admin = self
+            .with_read_transaction(|tx| {
+                if let Some(domain) = tx.get_domain(&room.office_id) {
+                    match domain {
+                        Domain::Office { office } => Ok(self.is_office_admin(office, user_id)),
+                        _ => Ok(false),
+                    }
+                } else {
+                    Ok(false)
+                }
+            })
+            .unwrap_or(false);
+
+        has_office_admin
     }
 }

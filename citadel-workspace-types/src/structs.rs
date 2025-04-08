@@ -11,6 +11,7 @@ pub struct User {
     pub role: UserRole,
     // Permissions are a map of domain IDs to sets of permissions
     pub permissions: HashMap<String, HashSet<Permission>>,
+    pub metadata: Vec<MetadataField>,
 }
 
 impl User {
@@ -21,6 +22,7 @@ impl User {
             name,
             role,
             permissions: HashMap::new(),
+            metadata: Vec::new(),
         }
     }
 
@@ -206,42 +208,60 @@ impl PartialOrd for UserRole {
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum Permission {
-    // Basic permissions (existing)
+    // All permissions
+    All,
+    // Create a room
+    CreateRoom,
+    // Delete a room
+    DeleteRoom,
+    // Create an office
+    CreateOffice,
+    // Delete an office
+    DeleteOffice,
+    // Edit content
+    EditContent,
+    // Add users
+    AddUsers,
+    // Remove users
+    RemoveUsers,
+    // Create a workspace
+    CreateWorkspace,
+    // Update a workspace
+    UpdateWorkspace,
+    // Delete a workspace
+    DeleteWorkspace,
+    // Edit MDX content
     EditMdx,
+    // Edit room configuration
     EditRoomConfig,
+    // Edit office configuration
     EditOfficeConfig,
-    EditMemberConfig,
+    // Add an office
     AddOffice,
+    // Add a room
     AddRoom,
-
-    // Domain entity permissions
-    CreateEntity, // Can create entities (general permission)
-    ViewContent,  // Can view content of rooms and offices
-
-    // Office-specific permissions
-    CreateRoom,           // Can create rooms within an office
-    ManageOfficeMembers,  // Can add/remove members to/from an office
-    UpdateOfficeSettings, // Can update office settings (name, description, etc.)
-    DeleteOffice,         // Can delete the office
-    ViewOfficeMetrics,    // Can view office usage metrics
-
-    // Room-specific permissions
-    ManageRoomMembers,  // Can add/remove members to/from a room
-    UpdateRoomSettings, // Can update room settings (name, description, etc.)
-    DeleteRoom,         // Can delete the room
-    SendMessages,       // Can send messages in the room
-    ReadMessages,       // Can read messages in the room
-    UploadFiles,        // Can upload files to the room
-    DownloadFiles,      // Can download files from the room
-
-    // Administrative permissions
-    ManageDomains,   // Can create/delete domains
-    ManageUsers,     // Can manage users across all domains
-    ViewSystemLogs,  // Can view system logs
-    ConfigureSystem, // Can configure system settings
-
-    // Special permissions
-    All, // Has all permissions
+    // Update office settings
+    UpdateOfficeSettings,
+    // Update room settings
+    UpdateRoomSettings,
+    // View content
+    ViewContent,
+    // Manage office members
+    ManageOfficeMembers,
+    // Manage room members
+    ManageRoomMembers,
+    // Send messages
+    SendMessages,
+    // Read messages
+    ReadMessages,
+    // Upload files
+    UploadFiles,
+    // Download files
+    DownloadFiles,
+    // Manage domains (admin permission)
+    ManageDomains,
+    // Configure system (admin permission)
+    ConfigureSystem,
 }
 
 impl Permission {
@@ -255,28 +275,20 @@ impl Permission {
             }
             UserRole::Owner => {
                 // Office permissions
-                permissions.insert(Self::EditOfficeConfig);
-                permissions.insert(Self::EditMemberConfig);
-                permissions.insert(Self::AddRoom);
+                permissions.insert(Self::EditContent);
+                permissions.insert(Self::AddUsers);
+                permissions.insert(Self::RemoveUsers);
                 permissions.insert(Self::CreateRoom);
-                permissions.insert(Self::ManageOfficeMembers);
-                permissions.insert(Self::UpdateOfficeSettings);
-                permissions.insert(Self::DeleteOffice);
-                permissions.insert(Self::ViewOfficeMetrics);
-
-                // Room permissions
-                permissions.insert(Self::EditRoomConfig);
-                permissions.insert(Self::EditMdx);
-                permissions.insert(Self::ManageRoomMembers);
-                permissions.insert(Self::UpdateRoomSettings);
                 permissions.insert(Self::DeleteRoom);
-                permissions.insert(Self::SendMessages);
-                permissions.insert(Self::ReadMessages);
-                permissions.insert(Self::UploadFiles);
-                permissions.insert(Self::DownloadFiles);
+                permissions.insert(Self::CreateOffice);
+                permissions.insert(Self::DeleteOffice);
+                permissions.insert(Self::CreateWorkspace);
+                permissions.insert(Self::DeleteWorkspace);
             }
             UserRole::Member => {
                 // Basic member permissions
+                permissions.insert(Self::ViewContent);
+                permissions.insert(Self::EditContent);
                 permissions.insert(Self::SendMessages);
                 permissions.insert(Self::ReadMessages);
                 permissions.insert(Self::UploadFiles);
@@ -284,8 +296,7 @@ impl Permission {
             }
             UserRole::Guest => {
                 // Guest permissions - read-only access
-                permissions.insert(Self::ReadMessages);
-                permissions.insert(Self::DownloadFiles);
+                permissions.insert(Self::ViewContent);
             }
             UserRole::Banned => {
                 // No permissions for banned users
@@ -293,16 +304,20 @@ impl Permission {
             UserRole::Custom { rank, .. } => {
                 // Custom role permissions based on rank
                 // Basic permissions for all custom roles
+                permissions.insert(Self::ViewContent);
                 permissions.insert(Self::ReadMessages);
 
                 // Additional permissions based on rank
                 if *rank > CUSTOM_BASIC_THRESHOLD {
+                    permissions.insert(Self::EditContent);
                     permissions.insert(Self::SendMessages);
                     permissions.insert(Self::UploadFiles);
                     permissions.insert(Self::DownloadFiles);
                 }
 
                 if *rank > CUSTOM_EDITOR_THRESHOLD {
+                    permissions.insert(Self::AddUsers);
+                    permissions.insert(Self::RemoveUsers);
                     permissions.insert(Self::EditMdx);
                 }
             }
@@ -335,6 +350,37 @@ impl Permission {
     }
 }
 
+/// Metadata field for storing flexible data used by the frontend
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetadataField {
+    pub key: String,
+    pub value: MetadataValue,
+}
+
+/// Value types for metadata fields
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "content")]
+pub enum MetadataValue {
+    String(String),
+    Number(f64),
+    Boolean(bool),
+    Array(Vec<MetadataValue>),
+    Object(HashMap<String, MetadataValue>),
+    Null,
+}
+
+/// A workspace is a container for offices
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Workspace {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub owner_id: String,
+    pub members: Vec<String>, // User IDs
+    pub offices: Vec<String>, // Office IDs
+    pub metadata: Vec<u8>,
+}
+
 // Workspace entity structures
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Office {
@@ -342,9 +388,12 @@ pub struct Office {
     pub name: String,
     pub description: String,
     pub owner_id: String,
+    // workspace_id field removed - all offices belong to the single workspace
     pub members: Vec<String>, // User IDs
     pub rooms: Vec<String>,   // Room IDs
     pub mdx_content: String,
+    // Can be used to add any type of data by the UI
+    pub metadata: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -356,10 +405,12 @@ pub struct Room {
     pub description: String,
     pub members: Vec<String>, // User IDs
     pub mdx_content: String,
+    pub metadata: Vec<MetadataField>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Domain {
+    Workspace { workspace: Workspace },
     Office { office: Office },
     Room { room: Room },
 }
@@ -367,6 +418,7 @@ pub enum Domain {
 impl Domain {
     pub fn id(&self) -> &str {
         match self {
+            Domain::Workspace { workspace } => &workspace.id,
             Domain::Office { office } => &office.id,
             Domain::Room { room } => &room.id,
         }
@@ -374,6 +426,7 @@ impl Domain {
 
     pub fn name(&self) -> &str {
         match self {
+            Domain::Workspace { workspace } => &workspace.name,
             Domain::Office { office } => &office.name,
             Domain::Room { room } => &room.name,
         }
@@ -381,6 +434,7 @@ impl Domain {
 
     pub fn description(&self) -> &str {
         match self {
+            Domain::Workspace { workspace } => &workspace.description,
             Domain::Office { office } => &office.description,
             Domain::Room { room } => &room.description,
         }
@@ -388,6 +442,7 @@ impl Domain {
 
     pub fn owner_id(&self) -> &str {
         match self {
+            Domain::Workspace { workspace } => &workspace.owner_id,
             Domain::Office { office } => &office.owner_id,
             Domain::Room { room } => &room.owner_id,
         }
@@ -395,6 +450,7 @@ impl Domain {
 
     pub fn members(&self) -> &Vec<String> {
         match self {
+            Domain::Workspace { workspace } => &workspace.members,
             Domain::Office { office } => &office.members,
             Domain::Room { room } => &room.members,
         }
@@ -402,6 +458,7 @@ impl Domain {
 
     pub fn mdx_content(&self) -> &str {
         match self {
+            Domain::Workspace { .. } => "",
             Domain::Office { office } => &office.mdx_content,
             Domain::Room { room } => &room.mdx_content,
         }
@@ -410,6 +467,7 @@ impl Domain {
     /// Update the name of this domain
     pub fn update_name(&mut self, name: String) {
         match self {
+            Domain::Workspace { workspace } => workspace.name = name,
             Domain::Office { office } => office.name = name,
             Domain::Room { room } => room.name = name,
         }
@@ -418,6 +476,7 @@ impl Domain {
     /// Update the description of this domain
     pub fn update_description(&mut self, description: String) {
         match self {
+            Domain::Workspace { workspace } => workspace.description = description,
             Domain::Office { office } => office.description = description,
             Domain::Room { room } => room.description = description,
         }
@@ -426,7 +485,8 @@ impl Domain {
     /// Get the parent ID of this domain (for rooms, this is the office ID)
     pub fn parent_id(&self) -> &str {
         match self {
-            Domain::Office { .. } => "", // Offices don't have a parent
+            Domain::Workspace { .. } => "", // Workspaces don't have a parent
+            Domain::Office { .. } => "",    // Offices don't have a parent
             Domain::Room { room } => &room.office_id,
         }
     }
@@ -434,8 +494,18 @@ impl Domain {
     /// Update the members of this domain
     pub fn set_members(&mut self, members: Vec<String>) {
         match self {
+            Domain::Workspace { workspace } => workspace.members = members,
             Domain::Office { office } => office.members = members,
             Domain::Room { room } => room.members = members,
+        }
+    }
+
+    /// Update the MDX content of this domain
+    pub fn update_mdx_content(&mut self, mdx_content: String) {
+        match self {
+            Domain::Workspace { .. } => (), // Workspaces don't have MDX content
+            Domain::Office { office } => office.mdx_content = mdx_content,
+            Domain::Room { room } => room.mdx_content = mdx_content,
         }
     }
 }

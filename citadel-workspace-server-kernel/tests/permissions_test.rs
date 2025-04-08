@@ -17,6 +17,7 @@ mod tests {
             name: format!("Test {}", id),
             role,
             permissions: HashMap::new(),
+            metadata: Vec::new(),
         }
     }
 
@@ -47,7 +48,7 @@ mod tests {
         // Create an office
         let domain_ops = ServerDomainOps::new(kernel.clone());
         let office = domain_ops
-            .create_office("admin", "Test Office", "Test Description")
+            .create_office("admin", "Test Office", "Test Description", None)
             .unwrap();
 
         // Check that the user doesn't have permissions yet
@@ -155,7 +156,7 @@ mod tests {
 
         // Create an office
         let office = domain_ops
-            .create_office(&owner_user.id, "Test Office", "Test Description")
+            .create_office(&owner_user.id, "Test Office", "Test Description", None)
             .unwrap();
 
         // First check if the creator (owner) has permissions

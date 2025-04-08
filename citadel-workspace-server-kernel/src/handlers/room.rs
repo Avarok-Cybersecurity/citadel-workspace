@@ -12,6 +12,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         office_id: &str,
         name: &str,
         description: &str,
+        mdx_content: Option<&str>,
     ) -> Result<Room, NetworkError> {
         println!(
             "Create room: user_id={}, office_id={}, name={}, description={}",
@@ -35,7 +36,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
         // Now create the room in a separate transaction
         // Use the domain abstraction for creating a room
-        self.create_domain_entity::<Room>(user_id, Some(office_id), name, description)
+        self.create_domain_entity::<Room>(user_id, Some(office_id), name, description, mdx_content)
     }
 
     /// Delete a room
@@ -50,9 +51,10 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         room_id: &str,
         name: Option<&str>,
         description: Option<&str>,
+        mdx_content: Option<&str>,
     ) -> Result<Room, NetworkError> {
         // Use the domain abstraction for updating a room
-        self.update_domain_entity::<Room>(user_id, room_id, name, description)
+        self.update_domain_entity::<Room>(user_id, room_id, name, description, mdx_content)
     }
 
     /// Get a room by ID

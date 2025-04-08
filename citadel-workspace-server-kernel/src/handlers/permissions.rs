@@ -51,13 +51,16 @@ impl PermissionSet {
     pub fn for_admin() -> Self {
         Self::with_permissions(&[
             Permission::ViewContent,
-            Permission::EditMdx,
-            Permission::EditRoomConfig,
-            Permission::EditOfficeConfig,
-            Permission::AddOffice,
-            Permission::AddRoom,
-            Permission::ManageOfficeMembers,
-            Permission::ManageRoomMembers,
+            Permission::EditContent,
+            Permission::AddUsers,
+            Permission::RemoveUsers,
+            Permission::CreateOffice,
+            Permission::DeleteOffice,
+            Permission::CreateRoom,
+            Permission::DeleteRoom,
+            Permission::CreateWorkspace,
+            Permission::UpdateWorkspace,
+            Permission::DeleteWorkspace,
         ])
     }
 
@@ -65,9 +68,7 @@ impl PermissionSet {
     pub fn for_owner() -> Self {
         Self::with_permissions(&[
             Permission::ViewContent,
-            Permission::EditMdx,
-            Permission::EditRoomConfig,
-            Permission::EditOfficeConfig,
+            Permission::EditContent,
             Permission::CreateRoom,
             Permission::ManageOfficeMembers,
         ])
@@ -75,7 +76,7 @@ impl PermissionSet {
 
     /// Create a permission set for a domain member
     pub fn for_member() -> Self {
-        Self::with_permissions(&[Permission::ViewContent, Permission::EditMdx])
+        Self::with_permissions(&[Permission::ViewContent, Permission::EditContent])
     }
 
     /// Create a permission set for a guest

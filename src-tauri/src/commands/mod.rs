@@ -73,18 +73,44 @@ where
     guard.insert(request_id, packet_handle);
     drop(guard);
 
-    // Send message to internal service
+    // Send request to internal service
     citadel_logging::debug!(
         target: "citadel",
-        "Sending message with request_id {}:\n{:?}",
+        "Sending request with request_id {}:\n{:?}",
         request_id, payload
     );
 
-    state
-        .default_mux
-        .send_request(payload)
-        .await
-        .expect("error sending payload to stream");
+    match payload {
+        InternalServiceRequest::Message {
+            cid,
+            peer_cid: Some(peer_cid),
+            message,
+            request_id,
+            security_level,
+        } => {
+            // We only care to send messages using the reliable messenger via the mux'ed p2p handle
+            // For messages sent to the server, we assume the server is always online, and if not,
+            // the client can always retry. Thus, when the request is a message type and peer_cid is
+            // Some, we use this branch.
+            let read = state.muxes.read().await;
+            let tx = read.get(&cid).expect("mux not found");
+            tx.send_message_to_with_security_level(peer_cid, security_level, message)
+                .await
+                .expect("error sending payload to stream");
+        }
+
+        payload => {
+            // In the case of a Message type with a None for peer_cid, it will still be propagated
+            // to the server. The server will respond with a WorkspaceProtocolPayload per usual,
+            // since the InternalServiceRequest/Response::Message has a subprotocol for WorkspaceProtocolPayload
+            // In all other cases, the InternalServiceResponse will be handled appropriately by the internal service.
+            state
+                .default_mux
+                .send_request(payload)
+                .await
+                .expect("error sending payload to stream");
+        }
+    }
 
     loop {
         // Wait for the background TCP listener (main.rs) to dispatch the message

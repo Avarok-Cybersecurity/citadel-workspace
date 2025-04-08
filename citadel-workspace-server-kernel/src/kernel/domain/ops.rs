@@ -3,7 +3,9 @@ use crate::handlers::transaction::Transaction;
 use crate::kernel::WorkspaceServerKernel;
 use citadel_logging::{debug, info};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{Domain, Office, Permission, Room, User, UserRole};
+use citadel_workspace_types::structs::{
+    Domain, Office, Permission, Room, User, UserRole, Workspace,
+};
 
 impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServerKernel<R> {
     fn init(&self) -> Result<(), NetworkError> {
@@ -110,6 +112,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
                             Ok(false)
                         }
                     }
+                    Domain::Workspace { .. } => Ok(false),
                 }
             } else {
                 Err(NetworkError::msg("Entity not found"))
@@ -209,59 +212,87 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
         }
     }
 
-    fn create_domain_entity<T: DomainEntity + 'static>(
+    fn create_domain_entity<T>(
         &self,
         user_id: &str,
         parent_id: Option<&str>,
         name: &str,
         description: &str,
-    ) -> Result<T, NetworkError> {
-        // Generate entity ID
-        let entity_id = uuid::Uuid::new_v4().to_string();
-
-        // Check if user has permission to create this entity
-        let create_permission = match std::any::type_name::<T>() {
-            "Office" => Permission::AddOffice,
-            "Room" => Permission::AddRoom,
-            _ => Permission::CreateEntity,
-        };
-
-        // Permission check (use is_admin for system-wide permissions)
+        mdx_content: Option<&str>,
+    ) -> Result<T, NetworkError>
+    where
+        T: DomainEntity + Clone + 'static,
+    {
+        // Check if the user has permission to create an entity
         if !self.is_admin(user_id) {
-            if let Some(parent) = parent_id {
-                // Check if user has permission to create in this parent
-                if !self.check_entity_permission(user_id, parent, create_permission)? {
-                    info!(target: "citadel", "User {} denied permission to create entity in parent {}", user_id, parent);
+            // Only admin users can create top-level entities (offices)
+            if parent_id.is_none() && std::any::type_name::<T>().contains("Office") {
+                return Err(NetworkError::msg("Only admin users can create offices"));
+            }
+
+            // For rooms, check if the user has permission to add a room to the office
+            if let Some(office_id) = parent_id {
+                if !self.check_entity_permission(user_id, office_id, Permission::AddRoom)? {
                     return Err(NetworkError::msg(
-                        "No permission to create entity in this parent",
+                        "User does not have permission to create a room in this office",
                     ));
                 }
-            } else {
-                // For top-level entities, require admin by default
-                info!(target: "citadel", "User {} denied admin permission to create top-level entity", user_id);
-                return Err(NetworkError::msg(
-                    "No permission to create top-level entity",
-                ));
             }
         }
 
-        info!(target: "citadel", "User {} creating new entity of type {}", user_id, std::any::type_name::<T>());
+        // Create a unique ID
+        let id = uuid::Uuid::new_v4().to_string();
 
-        // Create the entity
+        // Initialize the entity with basic properties
         let entity = T::create(
-            entity_id.clone(),
-            parent_id.map(String::from),
+            id.clone(),
+            parent_id.map(|s| s.to_string()),
             name,
             description,
         );
 
-        // Convert to domain and store
+        // Create domain enum for the entity
         let domain = entity.clone().into_domain();
 
-        // Store domain in a write transaction
+        // Add the user as a member
+        let mut domain_with_user = domain.clone();
+        match &mut domain_with_user {
+            Domain::Office { ref mut office } => {
+                if !office.members.contains(&user_id.to_string()) {
+                    office.members.push(user_id.to_string());
+                }
+                // Add mdx_content if provided
+                if let Some(mdx) = mdx_content {
+                    office.mdx_content = mdx.to_string();
+                }
+            }
+            Domain::Room { ref mut room } => {
+                if !room.members.contains(&user_id.to_string()) {
+                    room.members.push(user_id.to_string());
+                }
+                // Add mdx_content if provided
+                if let Some(mdx) = mdx_content {
+                    room.mdx_content = mdx.to_string();
+                }
+            }
+            Domain::Workspace { ref mut workspace } => {
+                if !workspace.members.contains(&user_id.to_string()) {
+                    workspace.members.push(user_id.to_string());
+                }
+                // Store mdx_content in the metadata field
+                let content_bytes = match mdx_content {
+                    Some(content) => content.as_bytes().to_vec(),
+                    None => Vec::new(),
+                };
+                workspace.metadata = content_bytes;
+            }
+        }
+
+        // Insert the domain entity
         self.with_write_transaction(|tx| {
-            tx.insert_domain(entity_id.clone(), domain)?;
-            debug!(target: "citadel", "Audit log: User {} created entity {} of type {}", user_id, entity_id, std::any::type_name::<T>());
+            tx.insert_domain(id, domain_with_user.clone())?;
+            let entity = T::from_domain(domain_with_user)
+                .ok_or_else(|| NetworkError::msg("Failed to create domain entity"))?;
             Ok(entity)
         })
     }
@@ -302,6 +333,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
         entity_id: &str,
         name: Option<&str>,
         description: Option<&str>,
+        mdx_content: Option<&str>,
     ) -> Result<T, NetworkError> {
         // Check if user has permission to update this entity
         let update_permission = match std::any::type_name::<T>() {
@@ -328,6 +360,22 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
                 if let Some(description) = description {
                     info!(target: "citadel", "User {} updating description of entity {}", user_id, entity_id);
                     domain.update_description(description.to_string());
+                }
+                if let Some(mdx_content) = mdx_content {
+                    info!(target: "citadel", "User {} updating mdx_content of entity {}", user_id, entity_id);
+                    match &mut domain {
+                        Domain::Office { ref mut office } => {
+                            office.mdx_content = mdx_content.to_string();
+                        }
+                        Domain::Room { ref mut room } => {
+                            room.mdx_content = mdx_content.to_string();
+                        }
+                        Domain::Workspace { ref mut workspace } => {
+                            // Store mdx_content in the metadata field
+                            let content_bytes = mdx_content.as_bytes().to_vec();
+                            workspace.metadata = content_bytes;
+                        }
+                    }
                 }
 
                 // Save the updated domain
@@ -367,19 +415,30 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
             for (_, domain) in tx.get_domains().iter() {
                 // Check if domain has the expected parent
                 let domain_parent_matches = match domain {
-                    Domain::Office { .. } => {
-                        if let Some(_parent) = &parent_id {
-                            false // Offices don't have parents
-                        } else {
-                            true // Offices are always top-level entities
+                    Domain::Office { office } => {
+                        // For Office entities, the domain_id is always the fixed workspace root ID
+                        let is_match = parent_id.as_ref().map_or(false, |pid| "workspace-root" == *pid);
+                        if is_match {
+                            debug!(target: "citadel", "Office {} belongs to workspace-root", office.id);
                         }
+                        is_match
                     }
                     Domain::Room { room } => {
-                        if let Some(_parent) = &parent_id {
-                            room.office_id == *_parent
-                        } else {
-                            false // Rooms always have a parent office
+                        // For rooms, the parent could be our target office
+                        let is_match = parent_id.as_ref().map_or(false, |pid| room.office_id == *pid);
+                        if is_match {
+                            debug!(target: "citadel", "Room {} matches target office ID {:?}", room.id, parent_id);
                         }
+                        is_match
+                    },
+                    Domain::Workspace { workspace } => {
+                        // Workspaces have no parent but might be a parent of the target office
+                        let parent_id_str = parent_id.as_ref().map_or("", |s| s);
+                        let is_match = workspace.id == parent_id_str || workspace.offices.iter().any(|office_id| office_id == parent_id_str);
+                        if is_match {
+                            debug!(target: "citadel", "Workspace {} matches target ID {}", workspace.id, parent_id_str);
+                        }
+                        is_match
                     }
                 };
 
@@ -394,14 +453,25 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
         })
     }
 
+    fn list_offices_in_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+    ) -> Result<Vec<Office>, NetworkError> {
+        // Delegate to the ServerDomainOps implementation
+        self.domain_ops()
+            .list_offices_in_workspace(user_id, workspace_id)
+    }
+
     fn create_office(
         &self,
         user_id: &str,
         name: &str,
         description: &str,
+        mdx_content: Option<&str>,
     ) -> Result<Office, NetworkError> {
         // Use the generic method with Office type
-        self.create_domain_entity::<Office>(user_id, None, name, description)
+        self.create_domain_entity::<Office>(user_id, None, name, description, mdx_content)
     }
 
     fn create_room(
@@ -410,9 +480,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
         office_id: &str,
         name: &str,
         description: &str,
+        mdx_content: Option<&str>,
     ) -> Result<Room, NetworkError> {
         // Use the generic method with Room type
-        self.create_domain_entity::<Room>(user_id, Some(office_id), name, description)
+        self.create_domain_entity::<Room>(user_id, Some(office_id), name, description, mdx_content)
     }
 
     fn get_office(&self, user_id: &str, office_id: &str) -> Result<Office, NetworkError> {
@@ -441,12 +512,13 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
         office_id: &str,
         name: Option<&str>,
         description: Option<&str>,
+        mdx_content: Option<&str>,
     ) -> Result<Office, NetworkError> {
         // Get the office before updating to check if it exists
         let _office = self.get_office(user_id, office_id)?;
 
         // Update the office
-        self.update_domain_entity::<Office>(user_id, office_id, name, description)
+        self.update_domain_entity::<Office>(user_id, office_id, name, description, mdx_content)
     }
 
     fn update_room(
@@ -455,12 +527,13 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
         room_id: &str,
         name: Option<&str>,
         description: Option<&str>,
+        mdx_content: Option<&str>,
     ) -> Result<Room, NetworkError> {
         // Get the room before updating to check if it exists
         let _room = self.get_room(user_id, room_id)?;
 
         // Update the room
-        self.update_domain_entity::<Room>(user_id, room_id, name, description)
+        self.update_domain_entity::<Room>(user_id, room_id, name, description, mdx_content)
     }
 
     fn list_offices(&self, user_id: &str) -> Result<Vec<Office>, NetworkError> {
@@ -471,5 +544,101 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
     fn list_rooms(&self, user_id: &str, office_id: &str) -> Result<Vec<Room>, NetworkError> {
         // Use the generic method with Room type
         self.list_domain_entities::<Room>(user_id, Some(office_id))
+    }
+
+    fn get_workspace(&self, user_id: &str, workspace_id: &str) -> Result<Workspace, NetworkError> {
+        let domain_ops = self.domain_ops();
+        domain_ops.get_workspace(user_id, workspace_id)
+    }
+
+    fn create_workspace(
+        &self,
+        user_id: &str,
+        name: &str,
+        description: &str,
+        metadata: Option<Vec<u8>>,
+    ) -> Result<Workspace, NetworkError> {
+        let domain_ops = self.domain_ops();
+        domain_ops.create_workspace(user_id, name, description, metadata)
+    }
+
+    fn delete_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+    ) -> Result<Workspace, NetworkError> {
+        let domain_ops = self.domain_ops();
+        domain_ops.delete_workspace(user_id, workspace_id)
+    }
+
+    fn update_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        name: Option<&str>,
+        description: Option<&str>,
+        metadata: Option<Vec<u8>>,
+    ) -> Result<Workspace, NetworkError> {
+        let domain_ops = self.domain_ops();
+        domain_ops.update_workspace(user_id, workspace_id, name, description, metadata)
+    }
+
+    fn add_office_to_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        office_id: &str,
+    ) -> Result<(), NetworkError> {
+        let domain_ops = self.domain_ops();
+        domain_ops.add_office_to_workspace(user_id, workspace_id, office_id)
+    }
+
+    fn remove_office_from_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        office_id: &str,
+    ) -> Result<(), NetworkError> {
+        let domain_ops = self.domain_ops();
+        domain_ops.remove_office_from_workspace(user_id, workspace_id, office_id)
+    }
+
+    fn add_user_to_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        member_id: &str,
+    ) -> Result<(), NetworkError> {
+        let domain_ops = self.domain_ops();
+        domain_ops.add_user_to_workspace(user_id, workspace_id, member_id)
+    }
+
+    fn remove_user_from_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        member_id: &str,
+    ) -> Result<(), NetworkError> {
+        let domain_ops = self.domain_ops();
+        domain_ops.remove_user_from_workspace(user_id, workspace_id, member_id)
+    }
+
+    /// Load the workspace for a user
+    /// Since there's only one workspace in the system, this will retrieve that workspace
+    /// if the user has access to it
+    fn load_workspace(&self, user_id: &str) -> Result<Workspace, NetworkError> {
+        let domain_ops = self.domain_ops();
+        // Use the fixed workspace ID to retrieve the single workspace
+        domain_ops.get_workspace(user_id, "workspace-root")
+    }
+
+    /// List all workspaces (should only be one in the system)
+    fn list_workspaces(&self, user_id: &str) -> Result<Vec<Workspace>, NetworkError> {
+        let domain_ops = self.domain_ops();
+        // Get the single workspace and return it as a list with one item
+        match domain_ops.get_workspace(user_id, "") {
+            Ok(workspace) => Ok(vec![workspace]),
+            Err(_) => Ok(Vec::new()), // Return empty list if no workspace exists
+        }
     }
 }
