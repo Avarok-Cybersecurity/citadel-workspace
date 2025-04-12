@@ -15,11 +15,11 @@ pub struct LocalDb<'a> {
 }
 
 impl<'a> LocalDb<'a> {
-    pub fn connect_global(state: &'a State<'a, WorkspaceState>) -> Self {
+    pub fn global(state: &'a State<'a, WorkspaceState>) -> Self {
         LocalDb { cid: 0, state }
     }
 
-    pub fn connect(cid: String, state: &'a State<'a, WorkspaceState>) -> Self {
+    pub fn singular_user(cid: String, state: &'a State<'a, WorkspaceState>) -> Self {
         LocalDb {
             cid: cid.parse::<u64>().unwrap(),
             state,

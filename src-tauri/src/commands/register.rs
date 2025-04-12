@@ -71,6 +71,13 @@ pub async fn register(
     match response {
         InternalServiceResponse::RegisterSuccess(success) => {
             println!("Registration successful");
+            state.open_messenger_for(success.cid).await
+                .map_err(|e| RegisterFailureTS {
+                    cid: success.cid.to_string(),
+                    message: e.to_string(),
+                    request_id: Some(request_id.to_string()),
+                })?;
+            // TOOD: setup local database for their RegistrationInfo
             Ok(RegisterSuccessTS {
                 cid: success.cid.to_string(),
                 request_id: success.request_id.map(|id| id.to_string()),
@@ -79,6 +86,13 @@ pub async fn register(
         InternalServiceResponse::ConnectSuccess(success) => {
             // Also treat ConnectSuccess as a success case since connect_after_register is true
             println!("Registration and connection successful");
+            state.open_messenger_for(success.cid).await
+                .map_err(|e| RegisterFailureTS {
+                    cid: success.cid.to_string(),
+                    message: e.to_string(),
+                    request_id: Some(request_id.to_string()),
+                })?;
+            // TOOD: setup local database for their RegistrationInfo
             Ok(RegisterSuccessTS {
                 cid: success.cid.to_string(),
                 request_id: success.request_id.map(|id| id.to_string()),

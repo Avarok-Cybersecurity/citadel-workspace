@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 mod connect;
 mod disconnect;
+mod get_registration;
 mod get_session;
 mod list_all_peers;
 mod list_known_servers;
@@ -23,6 +24,7 @@ mod register;
 
 pub use connect::connect;
 pub use disconnect::disconnect;
+pub use get_registration::get_registration;
 pub use get_session::get_sessions;
 pub use list_all_peers::list_all_peers;
 pub use list_known_servers::list_known_servers;
@@ -92,11 +94,9 @@ where
             // For messages sent to the server, we assume the server is always online, and if not,
             // the client can always retry. Thus, when the request is a message type and peer_cid is
             // Some, we use this branch.
-            let read = state.muxes.read().await;
-            let tx = read.get(&cid).expect("mux not found");
-            tx.send_message_to_with_security_level(peer_cid, security_level, message)
+            state.send_message_with_security_level(cid, Some(peer_cid), security_level, request_id, message)
                 .await
-                .expect("error sending payload to stream");
+            .expect("send_and_recv: Failed to send message")
         }
 
         payload => {
@@ -105,10 +105,10 @@ where
             // since the InternalServiceRequest/Response::Message has a subprotocol for WorkspaceProtocolPayload
             // In all other cases, the InternalServiceResponse will be handled appropriately by the internal service.
             state
-                .default_mux
-                .send_request(payload)
+                .bypasser
+                .send(payload)
                 .await
-                .expect("error sending payload to stream");
+                .expect("send_and_recv: Failed to send bypasser payload")
         }
     }
 

@@ -17,7 +17,7 @@ path = "src/main.rs"
 structopt = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 citadel-internal-service = { workspace = true }
-citadel_sdk = { workspace = true }
+citadel_sdk = { workspace = true, features = ["sql"]}
 citadel_types = { workspace = true }
 citadel-workspace-types = { workspace = true }
 citadel_logging = { workspace = true }

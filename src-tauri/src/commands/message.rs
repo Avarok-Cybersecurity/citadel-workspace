@@ -1,7 +1,7 @@
 use crate::state::WorkspaceState;
 use crate::types::{string_to_u64, MessageRequestTS, MessageSendFailureTS, MessageSendSuccessTS};
 use citadel_internal_service_types::{
-    InternalServiceRequest::Message, InternalServiceResponse, SecurityLevel,
+    InternalServiceRequest, InternalServiceResponse, SecurityLevel,
 };
 use tauri::State;
 use uuid::Uuid;
@@ -22,7 +22,7 @@ pub async fn message(
     // Determine security level from the request
     let security_level = SecurityLevel::from(request.security_level);
 
-    let payload = Message {
+    let payload = InternalServiceRequest::Message {
         message: request.message,
         cid,
         peer_cid,

@@ -15,7 +15,7 @@ use citadel_internal_service_connector::messenger::CitadelWorkspaceMessenger;
 use citadel_internal_service_types::InternalServiceResponse;
 use citadel_logging::setup_log;
 use commands::{
-    connect, disconnect, get_sessions, list_all_peers, list_known_servers, list_registered_peers,
+    connect, disconnect, get_registration, get_sessions, list_all_peers, list_known_servers, list_registered_peers,
     local_db_clear_all_kv, local_db_delete_kv, local_db_get_all_kv, local_db_get_kv,
     local_db_set_kv, message, peer_connect, peer_disconnect, peer_register, register,
 };
@@ -32,17 +32,14 @@ pub async fn run() {
         .expect("Unable to connect to the internal service");
 
     let (multiplexer, mut stream) = CitadelWorkspaceMessenger::new(connector);
-    let default_mux = multiplexer
-        .multiplex(0)
-        .await
-        .expect("Failed to create default multiplexer");
+    let bypasser = multiplexer.bypasser();
 
     citadel_logging::info!(target: "citadel", "Connected to internal service.");
 
     let state = Arc::new(WorkspaceStateInner {
         messenger: multiplexer,
         to_subscribers: RwLock::new(HashMap::new()),
-        default_mux,
+        bypasser,
         muxes: RwLock::new(HashMap::new()),
         window: Default::default(),
     });
@@ -110,6 +107,7 @@ pub async fn run() {
         .invoke_handler(tauri::generate_handler![
             connect,
             disconnect,
+            get_registration,
             get_sessions,
             list_all_peers,
             list_known_servers,

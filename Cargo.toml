@@ -20,9 +20,9 @@ citadel-internal-service-types = { git = "https://github.com/Avarok-Cybersecurit
 citadel-internal-service-connector = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/", branch = "feat/request_cids" }
 
 # Avarok deps
-citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol" }
-citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol" }
-citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol" }
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "cw-debug" }
+citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "cw-debug" }
+citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "cw-debug" }
 
 # Tauri plugins
 tauri = { version = "2.4.1" }

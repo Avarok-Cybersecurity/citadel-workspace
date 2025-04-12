@@ -11,7 +11,7 @@ pub async fn list_known_servers(
     state: State<'_, WorkspaceState>,
 ) -> Result<ListKnownServersResponseTS, String> {
     citadel_logging::info!(target: "citadel", "list_known_servers: Listing known servers {request:?}");
-    let db = LocalDb::connect_global(&state);
+    let db = LocalDb::global(&state);
 
     // Validate CID
     let _cid = string_to_u64(&request.cid); // Just for validation, not used in this function yet
