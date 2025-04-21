@@ -1,8 +1,9 @@
 use crate::state::WorkspaceState;
-use crate::types::{RegisterFailureTS, RegisterSuccessTS, RegistrationRequestTS};
+use crate::types::{RegisterFailureTS, RegistrationRequestTS, RegisterSuccessTS};
+use crate::util::local_db::LocalDb;
 use crate::util::RegistrationInfo;
 use citadel_internal_service_types::{InternalServiceRequest, InternalServiceResponse};
-use citadel_types::crypto::{EncryptionAlgorithm, KemAlgorithm, SigAlgorithm};
+use log::error;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use tauri::State;
@@ -17,27 +18,16 @@ pub async fn register(
 ) -> Result<RegisterSuccessTS, RegisterFailureTS> {
     let request_id = Uuid::new_v4();
 
-    // Create registration info from the request
-    let info = RegistrationInfo {
-        server_address: request.workspace_identifier.clone(),
-        server_password: if request.workspace_password.trim().is_empty() {
-            None
-        } else {
-            Some(request.workspace_password.clone())
-        },
-        security_level: request.security_level,
-        security_mode: request.security_mode,
+    // The TryFrom<RegistrationRequestTS> for RegistrationInfo should handle this conversion
+    let info: RegistrationInfo = request.clone().try_into().map_err(|e| RegisterFailureTS {
+        cid: "0".to_string(), // Placeholder CID needed for error
+        message: e,
+        request_id: Some(request_id.to_string()),
+    })?;
 
-        // Use default values for algorithm types for now since
-        // the actual enum variants are not visible here
-        encryption_algorithm: EncryptionAlgorithm::default() as u8,
-        kem_algorithm: KemAlgorithm::default() as u8,
-        sig_algorithm: SigAlgorithm::default() as u8,
-
-        full_name: request.full_name.clone(),
-        username: request.username.clone(),
-        profile_password: request.profile_password.clone(),
-    };
+    // Clone necessary fields before info is potentially moved in try_into
+    let info_username_clone = info.username.clone();
+    let info_full_name_clone = info.full_name.clone();
 
     // Convert to an internal service request
     // Parse the server address or use a fallback
@@ -56,12 +46,12 @@ pub async fn register(
     let payload = InternalServiceRequest::Register {
         request_id,
         server_addr,
-        full_name: info.full_name,
-        username: info.username,
-        proposed_password: info.profile_password.into_bytes().into(),
+        full_name: info_full_name_clone, // Use the clone
+        username: info_username_clone, // Use the clone
+        proposed_password: info.profile_password.clone().into_bytes().into(),
         connect_after_register: true,
         session_security_settings: Default::default(), // Use default settings for now
-        server_password: info.server_password.map(|p| p.into()),
+        server_password: info.server_password.as_ref().map(|p| p.as_bytes().into()),
     };
 
     // Send the registration request and wait for a response
@@ -77,11 +67,19 @@ pub async fn register(
                     message: e.to_string(),
                     request_id: Some(request_id.to_string()),
                 })?;
-            // TOOD: setup local database for their RegistrationInfo
-            Ok(RegisterSuccessTS {
-                cid: success.cid.to_string(),
-                request_id: success.request_id.map(|id| id.to_string()),
-            })
+            if let Err(err) = LocalDb::global(&state).save_registration(&info).await {
+                error!(target: "citadel", "Registration OK but failed to save info: {:?} for CID: {}", err, success.cid);
+                Err(RegisterFailureTS {
+                    cid: success.cid.to_string(),
+                    message: format!("Registration succeeded but failed to save info locally: {}", err),
+                    request_id: Some(request_id.to_string()),
+                })
+            } else {
+                Ok(RegisterSuccessTS {
+                    cid: success.cid.to_string(),
+                    request_id: Some(request_id.to_string()),
+                })
+            }
         }
         InternalServiceResponse::ConnectSuccess(success) => {
             // Also treat ConnectSuccess as a success case since connect_after_register is true
@@ -92,18 +90,21 @@ pub async fn register(
                     message: e.to_string(),
                     request_id: Some(request_id.to_string()),
                 })?;
-            // TOOD: setup local database for their RegistrationInfo
+            if let Err(err) = LocalDb::global(&state).save_registration(&info).await {
+                error!(target: "citadel", "Failed to save registration info to local DB after successful registration: {:?}", err);
+            }
+
             Ok(RegisterSuccessTS {
                 cid: success.cid.to_string(),
-                request_id: success.request_id.map(|id| id.to_string()),
+                request_id: Some(request_id.to_string()),
             })
         }
         InternalServiceResponse::RegisterFailure(failure) => {
             println!("Registration failed: {}", failure.message);
             Err(RegisterFailureTS {
-                cid: Default::default(), // Using a default value since we don't have a CID yet
+                cid: failure.cid.to_string(),
                 message: failure.message,
-                request_id: failure.request_id.map(|id| id.to_string()),
+                request_id: Some(request_id.to_string()),
             })
         }
         other => {

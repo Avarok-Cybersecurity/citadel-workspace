@@ -1,4 +1,4 @@
-use crate::types::{string_to_u64, DisconnectFailureTS, DisconnectRequestTS, DisconnectSuccessTS};
+use crate::types::{DisconnectFailureTS, DisconnectRequestTS, DisconnectSuccessTS};
 use citadel_internal_service_types::{InternalServiceRequest::Disconnect, InternalServiceResponse};
 use tauri::State;
 use uuid::Uuid;
@@ -13,7 +13,7 @@ pub async fn disconnect(
 ) -> Result<DisconnectSuccessTS, DisconnectFailureTS> {
     let request_id = Uuid::new_v4();
     // Convert the string cid to u64
-    let cid = string_to_u64(&request.cid);
+    let cid = request.cid.parse::<u64>().unwrap();
 
     let payload = Disconnect { cid, request_id };
 

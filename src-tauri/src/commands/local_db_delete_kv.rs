@@ -16,8 +16,14 @@ pub async fn local_db_delete_kv(
     let request_id = Uuid::new_v4();
 
     // Convert string CID to u64
-    let cid = string_to_u64(&request.cid);
-    let peer_cid = request.peer_cid.as_ref().map(|s| string_to_u64(s));
+    let cid = string_to_u64(&request.cid).map_err(|err_msg| LocalDBDeleteKVFailureTS {
+        message: err_msg,
+        request_id: Some(request_id.to_string()),
+    })?;
+    let peer_cid = request.peer_cid.as_ref().map(|s| string_to_u64(s).map_err(|err_msg| LocalDBDeleteKVFailureTS {
+        message: err_msg,
+        request_id: Some(request_id.to_string()),
+    })).transpose()?;
 
     let payload = InternalServiceRequest::LocalDBDeleteKV {
         cid,

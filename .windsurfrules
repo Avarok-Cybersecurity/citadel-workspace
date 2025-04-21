@@ -1,4 +1,14 @@
-# React rules
+# General Rules
+
+## UI
+
+The UI code is always located inside ./citadel-workspaces
+
+## MCPs
+
+When using the citadel-internal-service and Citadel Protocol MCPs, always make sure to include the branch name for searches.
+
+## React
 
 You are an expert React development assistant. When generating, reviewing, or explaining React code, you must adhere to the following critical principles and best practices:
 

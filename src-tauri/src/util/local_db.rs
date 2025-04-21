@@ -1,4 +1,4 @@
-use std::{collections::HashMap, vec};
+use std::collections::HashMap;
 
 use citadel_internal_service_types::{InternalServiceRequest, InternalServiceResponse};
 use serde::{de::DeserializeOwned, Serialize};
@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{commands::send_and_recv, state::WorkspaceState};
 
-use super::{KeyName, KnownServers, RegistrationInfo};
+use super::{ConnectionPair, KeyName, KnownServers, RegistrationInfo};
 
 pub struct LocalDb<'a> {
     cid: u64,
@@ -92,12 +92,19 @@ impl<'a> LocalDb<'a> {
     }
 
     pub async fn save_registration(&self, registration: &RegistrationInfo) -> Result<(), String> {
-        self.set_kv(registration.key_name(), &registration).await?;
+        let connection_pair = ConnectionPair {
+            server_address: registration.server_address.clone(),
+            username: registration.username.clone(),
+        };
+
+        self.set_kv(connection_pair.key_name(), &registration).await?;
 
         let mut known_servers = self.list_known_servers().await?;
+
         known_servers
-            .server_addresses
-            .push(registration.server_address.clone());
+            .servers
+            .insert(connection_pair);
+
         self.set_kv(KnownServers::key_name_from_identifier(None), &known_servers)
             .await?;
 
@@ -106,12 +113,10 @@ impl<'a> LocalDb<'a> {
 
     pub async fn get_registration(
         &self,
-        server_address: String,
+        connection_pair: &ConnectionPair,
     ) -> Result<RegistrationInfo, String> {
         let registration: RegistrationInfo = self
-            .get_kv(RegistrationInfo::key_name_from_identifier(Some(
-                server_address,
-            )))
+            .get_kv(connection_pair.key_name())
             .await?;
         Ok(registration)
     }
@@ -123,16 +128,8 @@ impl<'a> LocalDb<'a> {
 
             Err(err) => {
                 citadel_logging::error!(target: "citadel", "Error getting known servers: {err}");
-                self.set_kv(
-                    key,
-                    &KnownServers {
-                        server_addresses: vec![],
-                    },
-                )
-                .await?;
-                Ok(KnownServers {
-                    server_addresses: vec![],
-                })
+                self.set_kv(key, &KnownServers { servers: Default::default() }).await?;
+                Ok(KnownServers { servers: Default::default() })
             }
         }
     }

@@ -15,10 +15,31 @@ pub async fn local_db_get_kv(
 ) -> Result<LocalDBGetKVSuccessTS, LocalDBGetKVFailureTS> {
     let request_id = Uuid::new_v4();
 
-    // Convert string CID to u64
-    let cid = string_to_u64(&request.cid);
-    let peer_cid = request.peer_cid.as_ref().map(|s| string_to_u64(s));
+    // Store original strings for potential error reporting
+    let original_cid_str = request.cid.clone();
+    let original_peer_cid_str = request.peer_cid.clone();
 
+    // Convert CIDs from string to u64
+    let cid = string_to_u64(&request.cid).map_err(|e| LocalDBGetKVFailureTS {
+        cid: original_cid_str.clone(),
+        peer_cid: original_peer_cid_str.clone(),
+        message: e,
+        request_id: Some(request_id.to_string()),
+    })?;
+
+    let peer_cid = request
+        .peer_cid
+        .as_deref()
+        .map(string_to_u64)
+        .transpose()
+        .map_err(|e| LocalDBGetKVFailureTS {
+            cid: original_cid_str.clone(),
+            peer_cid: original_peer_cid_str.clone(),
+            message: e,
+            request_id: Some(request_id.to_string()),
+        })?;
+
+    // Prepare the internal service request
     let payload = InternalServiceRequest::LocalDBGetKV {
         cid,
         peer_cid,
@@ -57,8 +78,8 @@ pub async fn local_db_get_kv(
             Err(LocalDBGetKVFailureTS {
                 request_id: Some(request_id.to_string()),
                 message: error_msg,
-                cid: cid.to_string(),
-                peer_cid: peer_cid.map(|id| id.to_string()),
+                cid: original_cid_str, // Use original request string
+                peer_cid: original_peer_cid_str, // Use original request string
             })
         }
     }

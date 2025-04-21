@@ -1,6 +1,8 @@
-use serde::{Deserialize, Serialize};
+use std::{collections::HashSet, fmt::Display};
 
+use serde::{Deserialize, Serialize};
 use crate::types::RegistrationRequestTS;
+use citadel_internal_service_types::SessionSecuritySettings;
 
 pub mod local_db;
 pub mod window_event_handler;
@@ -27,51 +29,68 @@ pub trait KeyName {
 pub struct RegistrationInfo {
     pub server_address: String,
     pub server_password: Option<String>,
-    pub security_level: u8,
-    pub security_mode: u8,
-    pub encryption_algorithm: u8,
-    pub kem_algorithm: u8,
-    pub sig_algorithm: u8,
+    pub static_security_settings: SessionSecuritySettings,
     pub full_name: String,
     pub username: String,
     pub profile_password: String,
 }
 
-impl From<RegistrationRequestTS> for RegistrationInfo {
-    fn from(value: RegistrationRequestTS) -> Self {
-        let server_password = match value.workspace_password.trim().len() {
-            0 => None,
-            _ => Some(value.workspace_password),
-        };
+impl TryFrom<RegistrationRequestTS> for RegistrationInfo {
+    type Error = String;
 
-        Self {
+    fn try_from(value: RegistrationRequestTS) -> Result<Self, Self::Error> {
+        let server_password = value.workspace_password.and_then(|pwd| {
+            if pwd.trim().is_empty() {
+                None // If the trimmed string is empty, result is None
+            } else {
+                Some(pwd) // Otherwise, keep the original (untrimmed) string
+            }
+        });
+
+        // Convert the nested TS security settings to the Rust equivalent *first*
+        let static_security_settings: SessionSecuritySettings = value.session_security_settings.try_into()?;
+
+        Ok(RegistrationInfo {
             server_address: value.workspace_identifier,
             server_password,
-            security_level: value.security_level,
-            security_mode: value.security_mode,
-            encryption_algorithm: value.encryption_algorithm,
-            kem_algorithm: value.kem_algorithm,
-            sig_algorithm: value.sig_algorithm,
+            // Use the converted Rust struct here
+            static_security_settings,
             full_name: value.full_name,
             username: value.username,
             profile_password: value.profile_password,
-        }
+        })
     }
 }
 
 impl KeyName for RegistrationInfo {
     fn identifier(&self) -> Option<String> {
-        Some(self.server_address.clone() + &self.username)
+        Some(server_addr_and_username_to_key(&self.server_address, &self.username))
     }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct KnownServers {
-    pub server_addresses: Vec<String>,
+    pub servers: HashSet<ConnectionPair>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Hash, Eq, PartialEq)]
+pub struct ConnectionPair {
+    pub server_address: String,
+    pub username: String,
+}
+
+impl KeyName for ConnectionPair {
+    fn identifier(&self) -> Option<String> {
+        Some(server_addr_and_username_to_key(&self.server_address, &self.username))
+    }
 }
 
 impl KeyName for KnownServers {
     fn identifier(&self) -> Option<String> {
         None
     }
+}
+
+fn server_addr_and_username_to_key<T: Display, R: Display>(server_address: T, username: R) -> String {
+    format!("{}@{}", username, server_address)
 }

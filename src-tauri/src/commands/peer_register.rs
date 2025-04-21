@@ -1,8 +1,8 @@
 use crate::state::WorkspaceState;
-use crate::types::{
-    string_to_u64, PeerRegisterFailureTS, PeerRegisterRequestTS, PeerRegisterSuccessTS,
-};
+use crate::types::{PeerRegisterFailureTS, PeerRegisterRequestTS, PeerRegisterSuccessTS};
 use citadel_internal_service_types::{InternalServiceRequest, InternalServiceResponse};
+use log::info;
+use log::error;
 use tauri::State;
 use uuid::Uuid;
 
@@ -14,48 +14,52 @@ pub async fn peer_register(
     state: State<'_, WorkspaceState>,
 ) -> Result<PeerRegisterSuccessTS, PeerRegisterFailureTS> {
     let request_id = Uuid::new_v4();
+    let _original_cid_str = request.cid.clone(); // Clone cid for potential error reporting
+    let original_peer_cid = request.peer_cid.clone(); // Clone peer_cid before request is moved
 
-    // Convert string CID to u64
-    let cid = string_to_u64(&request.cid);
-    let peer_cid = string_to_u64(&request.peer_cid);
+    // Convert TS request to internal request, mapping potential String error
+    let internal_request: InternalServiceRequest = request.try_into().map_err(|e| PeerRegisterFailureTS {
+        message: format!("Failed to convert PeerRegisterRequestTS: {}", e),
+        request_id: Some(request_id.to_string()),
+    })?;
 
-    // Using the correct field structure for PeerRegister
-    let payload = InternalServiceRequest::PeerRegister {
-        cid,
-        peer_cid,
-        request_id,
-        // Add the missing required fields
-        peer_session_password: None,
-        connect_after_register: false,
-        session_security_settings: Default::default(),
-    };
-
-    let response = send_and_recv(payload, request_id, &state).await;
+    // Send request and receive response
+    let response = send_and_recv(internal_request, request_id, &state).await;
 
     match response {
         InternalServiceResponse::PeerRegisterSuccess(success) => {
-            // Only include the fields that exist in PeerRegisterSuccessTS
-            Ok(PeerRegisterSuccessTS {
-                request_id: success.request_id.map(|id| id.to_string()),
-            })
-        }
-        InternalServiceResponse::PeerRegisterFailure(err) => {
-            println!("Peer register failed: {}", err.message);
-            Err(PeerRegisterFailureTS {
-                message: err.message,
-                request_id: err.request_id.map(|id| id.to_string()),
-            })
-        }
-        other => {
-            let error_msg = format!(
-                "Internal service returned unexpected type '{}' during peer registration",
-                std::any::type_name_of_val(&other)
+             info!(target: "citadel", "PeerRegisterSuccess: CID={}, Implicated CID={:?}", success.cid, success.peer_cid);
+             // Construct the TS success response
+             Ok(PeerRegisterSuccessTS {
+                 cid: success.cid.to_string(), // cid is u64
+                 // Assuming peer_cid is u64 based on compiler error, convert to String and wrap in Some
+                 implicated_cid: Some(success.peer_cid.to_string()), 
+                 // request_id is Option<Uuid>, use Option::map
+                 request_id: success.request_id.map(|id_val| id_val.to_string()),
+             })
+         }
+         InternalServiceResponse::PeerRegisterFailure(failure) => {
+            error!(
+                target: "citadel", 
+                "Peer register failure for request {}: CID={}, PeerCID={}, Message: {}", 
+                request_id, 
+                failure.cid, 
+                original_peer_cid, 
+                failure.message
             );
-            println!("{}", error_msg);
+            // Construct the TS failure response
             Err(PeerRegisterFailureTS {
-                message: error_msg,
-                request_id: Some(request_id.to_string()),
+                message: failure.message,
+                request_id: failure.request_id.map(|id| id.to_string()),
             })
-        }
-    }
-}
+         }
+         other => {
+            // Handle unexpected response types
+            error!(target: "citadel", "Unexpected response type in peer_register: {:?}", other);
+            Err(PeerRegisterFailureTS {
+                message: "Internal Error: Unexpected response type".to_string(),
+                request_id: other.request_id().map(|id| id.to_string()), // Get request_id from 'other'
+            })
+         }
+     }
+ }

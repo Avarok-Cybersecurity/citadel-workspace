@@ -1,7 +1,6 @@
 use crate::types::{ConnectFailureTS, ConnectRequestTS, ConnectSuccessTS};
-use citadel_internal_service_types::{
-    ConnectMode, InternalServiceRequest, InternalServiceResponse, UdpMode,
-};
+use citadel_internal_service_types::{InternalServiceRequest, InternalServiceResponse};
+use log::{error, info};
 use tauri::State;
 use uuid::Uuid;
 
@@ -19,40 +18,28 @@ pub async fn connect(
     // Create a request ID for this specific invocation
     let request_id = Uuid::new_v4();
 
-    // Convert u8 values to the correct enum types using pattern matching
-    let connect_mode = match request.connect_mode {
-        // Use the actual variants available in ConnectMode
-        0 => ConnectMode::default(),
-        _ => ConnectMode::default(),
+    let internal_request: InternalServiceRequest = match request.try_into() {
+        Ok(req) => req,
+        Err(e) => {
+            let error_msg = format!("Failed to convert request to internal request: {}", e);
+            println!("{}", error_msg);
+            return Err(ConnectFailureTS {
+                cid: "0".to_string(),
+                message: error_msg,
+                request_id: Some(request_id.to_string()),
+                peer_cid: None,
+            });
+        }
     };
 
-    let udp_mode = match request.udp_mode {
-        // Use the actual variants available in UdpMode
-        0 => UdpMode::default(),
-        _ => UdpMode::default(),
-    };
-
-    // Convert server_password to Option<Vec<u8>> before sending
-    let server_password = request.server_password.map(|vec_u8| vec_u8.into());
-
-    let payload = InternalServiceRequest::Connect {
-        request_id,
-        username: request.username.clone(),
-        password: request.password.into(),
-        connect_mode,
-        udp_mode,
-        keep_alive_timeout: request
-            .keep_alive_timeout
-            .map(std::time::Duration::from_millis),
-        session_security_settings: request.session_security_settings.into(),
-        server_password,
-    };
-
-    let response = send_and_recv(payload, request_id, &state).await;
+    let response = send_and_recv(internal_request, request_id, &state).await;
 
     match response {
         InternalServiceResponse::ConnectSuccess(success) => {
             println!("Connection was successful");
+
+            info!(target: "citadel", "ConnectSuccess: CID={}", success.cid);
+
             Ok(ConnectSuccessTS {
                 cid: success.cid.to_string(),
                 request_id: success.request_id.map(|id| id.to_string()),
@@ -60,8 +47,12 @@ pub async fn connect(
         }
         InternalServiceResponse::ConnectFailure(err) => {
             println!("Connection failed: {}", err.message);
+
+            info!(target: "citadel", "ConnectFailure: CID={}, Message='{}'", err.cid, err.message);
+
             Err(ConnectFailureTS {
                 cid: err.cid.to_string(),
+                peer_cid: None,
                 message: err.message,
                 request_id: err.request_id.map(|id| id.to_string()),
             })
@@ -72,10 +63,12 @@ pub async fn connect(
                 std::any::type_name_of_val(&other)
             );
             println!("{}", error_msg);
+            error!(target: "citadel", "{}", error_msg);
             Err(ConnectFailureTS {
                 cid: "0".to_string(),
                 message: error_msg,
                 request_id: Some(request_id.to_string()),
+                peer_cid: None,
             })
         }
     }

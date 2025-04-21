@@ -1,37 +1,52 @@
 use crate::state::WorkspaceState;
-use crate::types::RegistrationInfoTS;
+use crate::types::{SessionSecuritySettingsTS, GetRegistrationFailureTS, GetRegistrationSuccessTS};
 use crate::util::local_db::LocalDb;
 use tauri::State;
+use std::collections::HashMap;
+use crate::util::ConnectionPair;
 
-/// Get registration information for a specific server and cid
+/// Get registration information for a specific server
 #[tauri::command]
 pub async fn get_registration(
     server_address: String,
-    cid: String,
+    username: String,
     state: State<'_, WorkspaceState>,
-) -> Result<RegistrationInfoTS, String> {    
+) -> Result<GetRegistrationSuccessTS, GetRegistrationFailureTS> {
     // Get the database instance
-    let db = LocalDb::singular_user(cid, &state);
+    let db = LocalDb::global(&state);
     
     // Try to retrieve the registration info
-    match db.get_registration(server_address).await {
-        Ok(registration) => {
-            // Convert to TS-friendly struct
-            let ts_registration = RegistrationInfoTS {
-                server_address: registration.server_address,
-                server_password: registration.server_password,
-                security_level: registration.security_level,
-                security_mode: registration.security_mode,
-                encryption_algorithm: registration.encryption_algorithm,
-                kem_algorithm: registration.kem_algorithm,
-                sig_algorithm: registration.sig_algorithm,
-                full_name: registration.full_name,
-                username: registration.username,
-                profile_password: registration.profile_password,
+    match db.get_registration(&ConnectionPair { server_address, username }).await {
+        Ok(registration) => { 
+            // Convert internal SessionSecuritySettings to the TS version
+            let settings = registration.static_security_settings;
+            let crypto = settings.crypto_params; 
+            // Convert header obfuscator settings map - placeholder for now
+            // TODO: Properly handle HeaderObfuscatorSettings variants if necessary
+            let header_obfuscator_settings_ts: HashMap<String, String> = HashMap::new();
+            // Optionally log the variant: log::info!("Header Obfuscator Setting: {:?}", settings.header_obfuscator_settings);
+
+            let session_security_settings_ts = SessionSecuritySettingsTS {
+                security_level: format!("{:?}", settings.security_level),
+                secrecy_mode: format!("{:?}", settings.secrecy_mode),
+                encryption_algorithm: format!("{:?}", crypto.encryption_algorithm),
+                kem_algorithm: format!("{:?}", crypto.kem_algorithm),
+                sig_algorithm: format!("{:?}", crypto.sig_algorithm),
+                header_obfuscator_settings: header_obfuscator_settings_ts,
             };
-            
-            Ok(ts_registration)
-        },
-        Err(e) => Err(format!("Failed to retrieve registration: {}", e)),
+
+            // Construct the success response
+            Ok(GetRegistrationSuccessTS {
+                server_address: registration.server_address,
+                username: registration.username,
+                full_name: registration.full_name,
+                profile_password: Some(registration.profile_password), 
+                session_security_settings: session_security_settings_ts,
+                server_password: registration.server_password, 
+            })
+        }
+        Err(db_err) => { 
+            Err(GetRegistrationFailureTS::from(db_err)) 
+        }
     }
 }

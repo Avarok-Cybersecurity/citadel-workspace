@@ -5,7 +5,7 @@ mod server_kernel_commands;
 mod state;
 #[cfg(test)]
 mod tests;
-mod util;
+pub mod util;
 // Central type definitions
 mod types;
 
@@ -15,9 +15,10 @@ use citadel_internal_service_connector::messenger::CitadelWorkspaceMessenger;
 use citadel_internal_service_types::InternalServiceResponse;
 use citadel_logging::setup_log;
 use commands::{
-    connect, disconnect, get_registration, get_sessions, list_all_peers, list_known_servers, list_registered_peers,
-    local_db_clear_all_kv, local_db_delete_kv, local_db_get_all_kv, local_db_get_kv,
-    local_db_set_kv, message, peer_connect, peer_disconnect, peer_register, register,
+    connect, disconnect, get_registration, get_sessions, list_all_peers, list_known_servers,
+    list_registered_peers, local_db_clear_all_kv, local_db_delete_kv, local_db_get_all_kv,
+    local_db_get_kv, local_db_set_kv, peer_connect, peer_disconnect, peer_register, register,
+    send_workspace_request,
 };
 use std::{collections::HashMap, sync::Arc};
 use tauri::Manager;
@@ -50,7 +51,7 @@ pub async fn run() {
         citadel_logging::info!(target: "citadel", "Spawned background TCP dispatcher.");
 
         while let Some(packet) = stream.recv().await {
-            citadel_logging::info!(target: "citadel", "Incoming packet:\n{:#?}", &packet);
+            citadel_logging::info!(target: "citadel", "Incoming packet:\n{:?}", &packet);
             if let Some(request_id) = packet.request_id().copied() {
                 let mut guard = program_state.to_subscribers.write().await;
                 if let Some(handle) = guard.get(&request_id) {
@@ -117,7 +118,7 @@ pub async fn run() {
             local_db_get_all_kv,
             local_db_get_kv,
             local_db_set_kv,
-            message,
+            send_workspace_request,
             peer_connect,
             peer_disconnect,
             peer_register,

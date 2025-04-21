@@ -36,7 +36,14 @@ pub async fn list_all_peers(
     println!("Listing all peers...");
     let request_id = Uuid::new_v4();
 
-    let cid = string_to_u64(&request.cid);
+    // Store original string for potential error reporting
+    let original_cid_str = request.cid.clone();
+
+    let cid = string_to_u64(&request.cid).map_err(|e| ListAllPeersFailureTS {
+        cid: original_cid_str.clone(), // Use original string in error
+        message: e,
+        request_id: Some(request_id.to_string()),
+    })?;
 
     let payload = ListAllPeers { cid, request_id };
 
@@ -82,7 +89,7 @@ pub async fn list_all_peers(
             );
             println!("{}", error_msg);
             Err(ListAllPeersFailureTS {
-                cid: cid.to_string(),
+                cid: original_cid_str,
                 message: error_msg,
                 request_id: Some(request_id.to_string()),
             })

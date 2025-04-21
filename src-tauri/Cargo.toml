@@ -18,13 +18,15 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 vendored = ["citadel-internal-service-connector/vendored"]
 
 [build-dependencies]
-tauri-build = { workspace = true, features = [] }
+tauri-build = { version = "2.0.0-beta", features = [] }
 
 [dependencies]
-tauri = { workspace = true, features = [] }
+strum = { version = "0.26", features = ["derive"] }
+strum_macros = "0.26"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2.0.0-beta", features = [] }
 tauri-plugin-shell = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
 citadel-internal-service-types = { workspace = true }
 citadel-internal-service-connector = { workspace = true }
 citadel-workspace-types = { workspace = true }
@@ -34,3 +36,4 @@ tokio = { workspace = true, features = ["net", "rt", "macros"] }
 tokio-util = { workspace = true }
 uuid = { workspace = true }
 futures = { workspace = true }
+log = "0.4"

@@ -15,10 +15,27 @@ pub async fn local_db_set_kv(
 ) -> Result<LocalDBSetKVSuccessTS, LocalDBSetKVFailureTS> {
     let request_id = Uuid::new_v4();
 
-    // Convert string CID to u64
-    let cid = string_to_u64(&request.cid);
-    let peer_cid = request.peer_cid.as_ref().map(|s| string_to_u64(s));
+    // Convert CIDs from string to u64
+    let cid = string_to_u64(&request.cid).map_err(|e| LocalDBSetKVFailureTS {
+        cid: request.cid.clone(),
+        peer_cid: request.peer_cid.clone(),
+        message: e,
+        request_id: Some(request_id.to_string()),
+    })?;
 
+    let peer_cid = request
+        .peer_cid
+        .as_ref()
+        .map(|pc_str| string_to_u64(pc_str))
+        .transpose()
+        .map_err(|e| LocalDBSetKVFailureTS {
+            cid: request.cid.clone(),
+            peer_cid: request.peer_cid.clone(),
+            message: e,
+            request_id: Some(request_id.to_string()),
+        })?;
+
+    // Prepare the internal service request
     let payload = InternalServiceRequest::LocalDBSetKV {
         cid,
         peer_cid,

@@ -55,7 +55,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
     }
 
     async fn on_node_event_received(&self, event: NodeResult<R>) -> Result<(), NetworkError> {
-        debug!("NetKernel received event: {event:?}");
+        citadel_logging::debug!(target: "citadel", "NetKernel received event: {event:?}");
         match event {
             NodeResult::ConnectSuccess(connect_success) => {
                 let this = self.clone();

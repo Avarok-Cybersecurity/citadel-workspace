@@ -1,6 +1,7 @@
 use crate::types::{
     string_to_u64, PeerConnectFailureTS, PeerConnectRequestTS, PeerConnectSuccessTS,
 };
+use log::error;
 use citadel_internal_service_types::{
     InternalServiceRequest::PeerConnect, InternalServiceResponse,
 };
@@ -19,8 +20,22 @@ pub async fn peer_connect(
     let request_id = Uuid::new_v4();
 
     // Parse cid and peer_cid using our helper function
-    let cid = string_to_u64(&request.cid);
-    let peer_cid = string_to_u64(&request.peer_cid);
+    let original_cid_str = request.cid.clone(); // Clone for potential error reporting
+    let original_peer_cid_str = request.peer_cid.clone(); // Clone for potential error reporting
+
+    let cid = string_to_u64(&request.cid).map_err(|e| PeerConnectFailureTS {
+        cid: original_cid_str.clone(),
+        peer_cid: Some(original_peer_cid_str.clone()),
+        message: format!("Invalid CID: {}", e),
+        request_id: Some(request_id.to_string()),
+    })?;
+
+    let peer_cid = string_to_u64(&request.peer_cid).map_err(|e| PeerConnectFailureTS {
+        cid: original_cid_str.clone(),
+        peer_cid: Some(original_peer_cid_str.clone()),
+        message: format!("Invalid Peer CID: {}", e),
+        request_id: Some(request_id.to_string()),
+    })?;
 
     let payload = PeerConnect {
         request_id,
@@ -39,24 +54,22 @@ pub async fn peer_connect(
             peer_cid: r.peer_cid.to_string(),
             request_id: r.request_id.map(|id| id.to_string()),
         }),
-        InternalServiceResponse::PeerConnectFailure(r) => {
-            println!("Peer connect failed: {}", r.message);
+        InternalServiceResponse::PeerConnectFailure(failure) => {
+            error!(target: "citadel", "Failed to connect to peer with cid {}: {}", request.peer_cid, failure.message);
             Err(PeerConnectFailureTS {
-                cid: r.cid.to_string(),
-                message: r.message,
-                request_id: r.request_id.map(|id| id.to_string()),
+                cid: failure.cid.to_string(),
+                peer_cid: Some(request.peer_cid.to_string()),
+                message: failure.message,
+                request_id: failure.request_id.map(|id| id.to_string()),
             })
         }
         other => {
-            let error_msg = format!(
-                "Internal service returned unexpected type '{}' during peer connection",
-                std::any::type_name_of_val(&other)
-            );
-            println!("{}", error_msg);
+            error!(target: "citadel", "Unexpected response type in peer_connect: {:?}", other);
             Err(PeerConnectFailureTS {
                 cid: cid.to_string(),
-                message: error_msg,
-                request_id: Some(request_id.to_string()),
+                peer_cid: Some(peer_cid.to_string()),
+                message: "Internal Error: Unexpected response type".to_string(),
+                request_id: other.request_id().map(|id| id.to_string()),
             })
         }
     }
