@@ -11,6 +11,9 @@ RUN apt-get update && \
 # Copy the entire workspace context
 COPY . .
 
+# Copy the server-kernel.toml file
+COPY ./docker/workspace-server/kernel.toml .
+
 # Expose port if server listens on one (replace 12349 with actual port if needed)
 EXPOSE 12349
 

@@ -1,34 +1,8 @@
-use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
-use std::error::Error;
-use std::net::SocketAddr;
+use citadel_logging::{setup_log, error, info};
+use std::path::PathBuf;
+use std::fs;
 use structopt::StructOpt;
-
-use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    citadel_logging::setup_log();
-    let opts: Options = Options::from_args();
-    let backend = if let Some(backend_uri) = opts.backend.as_deref() {
-        BackendType::new(backend_uri)?
-    } else {
-        BackendType::InMemory
-    };
-    // Create the workspace server kernel with an admin user
-    let service = WorkspaceServerKernel::<StackedRatchet>::with_admin("admin", "Administrator");
-    let mut builder = NodeBuilder::default();
-    let mut builder = builder
-        .with_backend(backend)
-        .with_node_type(NodeType::server(opts.bind)?);
-
-    if opts.dangerous.unwrap_or(false) {
-        builder = builder.with_insecure_skip_cert_verification()
-    }
-
-    builder.build(service)?.await?;
-
-    Ok(())
-}
+use citadel_workspace_server_kernel::config::ServerConfig;
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -36,10 +10,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
     about = "Used for running a local service for citadel applications"
 )]
 pub struct Options {
-    #[structopt(short, long)]
-    bind: SocketAddr,
-    #[structopt(short, long)]
-    dangerous: Option<bool>,
-    #[structopt(long)]
-    backend: Option<String>,
+    #[structopt(short, long, parse(from_os_str))]
+    config: PathBuf,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    setup_log();
+
+    let options = Options::from_args();
+
+    let config_content = fs::read_to_string(&options.config)
+        .map_err(|e| format!("Failed to read config file {:?}: {}", options.config, e))?;
+
+    let config: ServerConfig = toml::from_str(&config_content)
+        .map_err(|e| format!("Failed to parse config file {:?}: {}", options.config, e))?;
+
+    info!(?config, "Loaded server configuration");
+
+    if let Err(e) = citadel_workspace_server_kernel::start_server(config).await {
+        error!("Server failed to start or encountered an error: {e}");
+        return Err(e.into()); // Propagate the error using Into
+    }
+
+    Ok(())
 }

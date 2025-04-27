@@ -1,7 +1,6 @@
 use crate::handlers::transaction::TransactionManager;
 use crate::WorkspaceProtocolResponse;
 use citadel_logging::debug;
-use citadel_sdk::prefabs::server;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, Ratchet};
 use citadel_workspace_types::structs::{User, UserRole, WorkspaceRoles};
 use citadel_workspace_types::WorkspaceProtocolPayload;

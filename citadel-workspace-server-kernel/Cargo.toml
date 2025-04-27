@@ -28,6 +28,7 @@ uuid = { workspace = true, features = ["v4"] }
 async-trait = { workspace = true }
 rstest = { workspace = true }
 futures = { workspace = true }
+toml = "0.8"
 
 [dev-dependencies]
 citadel_sdk = { workspace = true, features = ["localhost-testing"] }
