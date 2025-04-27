@@ -1,9 +1,10 @@
 use crate::state::WorkspaceState;
-use crate::types::{MessageRequestTS, MessageSendFailureTS, MessageSendSuccessTS};
-use citadel_internal_service_types::{
-    InternalServiceRequest, SecurityLevel,
-};
+use crate::types::{MessageSendFailureTS, MessageSendSuccessTS};
+use citadel_internal_service_types::{InternalServiceRequest, InternalServiceResponse};
+use citadel_types::prelude::SecurityLevel;
+use citadel_workspace_types::WorkspaceProtocolPayload;
 use log::error;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tauri::State;
 use uuid::Uuid;
@@ -11,32 +12,60 @@ use uuid::Uuid;
 /// Sends a workspace request
 #[tauri::command]
 pub async fn send_workspace_request(
-    request: MessageRequestTS,
+    cid_str: String,                   // Renamed for clarity
+    security_level_str: String,        // Renamed for clarity
+    payload: WorkspaceProtocolPayload, // Directly accept the structured payload
     state: State<'_, WorkspaceState>,
 ) -> Result<MessageSendSuccessTS, MessageSendFailureTS> {
     let request_id = Uuid::new_v4();
 
     // Convert string values to their native types
-    let cid = request.cid.parse::<u64>().unwrap();
-    let peer_cid = request.peer_cid.as_ref().map(|s| s.parse::<u64>().unwrap());
+    let cid = match cid_str.parse::<u64>() {
+        Ok(c) => c,
+        Err(e) => {
+            let err_msg = format!("Invalid cid format '{}': {}", cid_str, e);
+            error!(target: "citadel", "{}", err_msg);
+            return Err(MessageSendFailureTS {
+                cid: cid_str,   // Return original string on error
+                peer_cid: None, // No peer_cid in this refactored version
+                message: err_msg,
+                request_id: Some(request_id.to_string()),
+            });
+        }
+    };
+
+    // Peer CID is always None when sending to the server for workspace requests
+    let peer_cid: Option<u64> = None;
 
     // Determine security level from the request
-    let security_level = SecurityLevel::from_str(&request.security_level).map_err(|e| {
-        let err_msg = format!(
-            "Invalid security level '{}': {:?}",
-            request.security_level, e
-        );
+    let security_level = SecurityLevel::from_str(&security_level_str).map_err(|e| {
+        let err_msg = format!("Invalid security level '{}': {:?}", &security_level_str, e);
         error!(target: "citadel", "{}", err_msg);
         MessageSendFailureTS {
-            cid: request.cid.clone(),           // Use original string cid on error
-            peer_cid: request.peer_cid.clone(), // Use original string peer_cid on error
+            cid: cid_str.clone(), // Use original string cid on error
+            peer_cid: None,
             message: err_msg,
             request_id: Some(request_id.to_string()),
         }
     })?;
 
-    let payload = InternalServiceRequest::Message {
-        message: request.message,
+    // Serialize the WorkspaceProtocolPayload into bytes
+    let message_bytes = match serde_json::to_vec(&payload) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            let err_msg = format!("Failed to serialize workspace payload: {}", e);
+            error!(target: "citadel", "{}", err_msg);
+            return Err(MessageSendFailureTS {
+                cid: cid_str, // Use original string cid on error
+                peer_cid: None,
+                message: err_msg,
+                request_id: Some(request_id.to_string()),
+            });
+        }
+    };
+
+    let internal_request = InternalServiceRequest::Message {
+        message: message_bytes,
         cid,
         peer_cid,
         security_level,
@@ -44,7 +73,7 @@ pub async fn send_workspace_request(
     };
 
     // We do not have request id's here since our UI will handle them
-    let res = state.bypasser.send(payload).await;
+    let res = state.bypasser.send(internal_request).await;
 
     match res {
         Ok(_) => {

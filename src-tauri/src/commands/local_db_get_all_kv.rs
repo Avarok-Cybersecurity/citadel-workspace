@@ -22,7 +22,9 @@ pub async fn local_db_get_all_kv(
         message: err_msg,
         request_id: Some(request_id.to_string()),
     })?;
-    let peer_cid = request.peer_cid.as_ref()
+    let peer_cid = request
+        .peer_cid
+        .as_ref()
         .map(|s| string_to_u64(s))
         .transpose()
         .map_err(|err_msg| LocalDBGetAllKVFailureTS {

@@ -27,6 +27,7 @@ citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Proto
 # Tauri plugins
 tauri = { version = "2.4.1" }
 tauri-plugin-shell = { version = "2.2.1" }
+tauri-plugin-log = { version = "2.4.0" }
 tauri-build = { version = "2.1.1" }
 
 # Generic dependencies

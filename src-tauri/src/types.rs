@@ -6,17 +6,16 @@
 // Common type definitions for TypeScript-Rust interop
 use citadel_internal_service_types::{ConnectMode, InternalServiceRequest};
 use citadel_types::crypto::{
-    CryptoParameters, EncryptionAlgorithm, HeaderObfuscatorSettings, KemAlgorithm, 
-    PreSharedKey, 
-    SecrecyMode, SecurityLevel, SigAlgorithm, SecBuffer 
+    CryptoParameters, EncryptionAlgorithm, HeaderObfuscatorSettings, KemAlgorithm, PreSharedKey,
+    SecBuffer, SecrecyMode, SecurityLevel, SigAlgorithm,
 };
 use citadel_types::proto::UdpMode as ProtoUdpMode;
-use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Duration;
+use uuid::Uuid;
 
 //
 // Response Types
@@ -492,14 +491,14 @@ impl TryFrom<ConnectRequestTS> for InternalServiceRequest {
         let udp_mode = ProtoUdpMode::from_str(&ts_request.udp_mode).map_err(|e| {
             format!(
                 "Invalid UdpMode string '{}'. Expected 'Disabled' or 'Enabled'. Error: {:?}",
-                ts_request.udp_mode,
-                e
+                ts_request.udp_mode, e
             )
         })?;
 
         let keep_alive_timeout = ts_request.keep_alive_timeout_ms.map(Duration::from_millis);
 
-        let session_security_settings: citadel_internal_service_types::SessionSecuritySettings = ts_request.session_security_settings.try_into()?;
+        let session_security_settings: citadel_internal_service_types::SessionSecuritySettings =
+            ts_request.session_security_settings.try_into()?;
 
         let server_password = match ts_request.server_password {
             Some(p_str) => Some(PreSharedKey::from(p_str)), // p_str is already Vec<u8> here
@@ -525,8 +524,10 @@ impl TryFrom<PeerRegisterRequestTS> for InternalServiceRequest {
     type Error = String;
 
     fn try_from(ts_request: PeerRegisterRequestTS) -> Result<Self, Self::Error> {
-        let cid = string_to_u64(&ts_request.cid).map_err(|e| format!("Invalid cid format: {}", e))?;
-        let peer_cid = string_to_u64(&ts_request.peer_cid).map_err(|e| format!("Invalid peer_cid format: {}", e))?;
+        let cid =
+            string_to_u64(&ts_request.cid).map_err(|e| format!("Invalid cid format: {}", e))?;
+        let peer_cid = string_to_u64(&ts_request.peer_cid)
+            .map_err(|e| format!("Invalid peer_cid format: {}", e))?;
 
         Ok(InternalServiceRequest::PeerRegister {
             cid,
@@ -544,7 +545,8 @@ impl TryFrom<RegistrationRequestTS> for InternalServiceRequest {
 
     fn try_from(ts_request: RegistrationRequestTS) -> Result<Self, Self::Error> {
         // Convert SessionSecuritySettingsTS to SessionSecuritySettings
-        let session_security_settings: citadel_internal_service_types::SessionSecuritySettings = ts_request.session_security_settings.try_into()?;
+        let session_security_settings: citadel_internal_service_types::SessionSecuritySettings =
+            ts_request.session_security_settings.try_into()?;
 
         // Parse server_address into SocketAddr
         let server_addr = SocketAddr::from_str(&ts_request.workspace_identifier)
@@ -565,7 +567,7 @@ impl TryFrom<RegistrationRequestTS> for InternalServiceRequest {
             username: ts_request.username,
             proposed_password: SecBuffer::from(ts_request.profile_password.into_bytes()),
             connect_after_register: false, // Defaulting to false as before
-            session_security_settings, // Already converted above
+            session_security_settings,     // Already converted above
             server_password: server_password_opt,
         })
     }
@@ -574,7 +576,8 @@ impl TryFrom<RegistrationRequestTS> for InternalServiceRequest {
 // Utility functions
 // Convert from Typescript-friendly string representations to Rust native types
 pub fn string_to_u64(s: &str) -> Result<u64, String> {
-    s.parse().map_err(|e| format!("Invalid u64 string '{}': {:?}", s, e))
+    s.parse()
+        .map_err(|e| format!("Invalid u64 string '{}': {:?}", s, e))
 }
 
 pub fn string_to_uuid(s: &str) -> Result<Uuid, String> {
@@ -582,7 +585,9 @@ pub fn string_to_uuid(s: &str) -> Result<Uuid, String> {
 }
 
 // Convert SessionSecuritySettingsTS to the internal service version
-impl TryFrom<SessionSecuritySettingsTS> for citadel_internal_service_types::SessionSecuritySettings {
+impl TryFrom<SessionSecuritySettingsTS>
+    for citadel_internal_service_types::SessionSecuritySettings
+{
     type Error = String;
 
     fn try_from(ts: SessionSecuritySettingsTS) -> Result<Self, Self::Error> {
@@ -593,7 +598,12 @@ impl TryFrom<SessionSecuritySettingsTS> for citadel_internal_service_types::Sess
             .map_err(|e| format!("Invalid secrecy_mode '{}': {:?}", ts.secrecy_mode, e))?;
 
         let encryption_algorithm = EncryptionAlgorithm::from_str(&ts.encryption_algorithm)
-            .map_err(|e| format!("Invalid encryption_algorithm '{}': {:?}", ts.encryption_algorithm, e))?;
+            .map_err(|e| {
+                format!(
+                    "Invalid encryption_algorithm '{}': {:?}",
+                    ts.encryption_algorithm, e
+                )
+            })?;
 
         let kem_algorithm = KemAlgorithm::from_str(&ts.kem_algorithm)
             .map_err(|e| format!("Invalid kem_algorithm '{}': {:?}", ts.kem_algorithm, e))?;
@@ -602,16 +612,30 @@ impl TryFrom<SessionSecuritySettingsTS> for citadel_internal_service_types::Sess
             .map_err(|e| format!("Invalid sig_algorithm '{}': {:?}", ts.sig_algorithm, e))?;
 
         // Assuming HeaderObfuscatorSettings parsing logic is still needed and correct
-        let header_obfuscator_settings = match ts.header_obfuscator_settings.get("mode").map(|s| s.as_str()) {
+        let header_obfuscator_settings = match ts
+            .header_obfuscator_settings
+            .get("mode")
+            .map(|s| s.as_str())
+        {
             Some("disabled") => HeaderObfuscatorSettings::Disabled,
             Some("enabled") => HeaderObfuscatorSettings::Enabled,
             Some("enabled_with_key") => {
-                let key_str = ts.header_obfuscator_settings.get("key").ok_or("Missing 'key' for enabled_with_key mode")?;
-                let key = key_str.parse::<u128>().map_err(|e| format!("Invalid key value: {:?}", e))?;
+                let key_str = ts
+                    .header_obfuscator_settings
+                    .get("key")
+                    .ok_or("Missing 'key' for enabled_with_key mode")?;
+                let key = key_str
+                    .parse::<u128>()
+                    .map_err(|e| format!("Invalid key value: {:?}", e))?;
                 HeaderObfuscatorSettings::EnabledWithKey(key)
             }
             None => HeaderObfuscatorSettings::default(), // Default if mode is missing or consider error
-            Some(other) => return Err(format!("Invalid mode '{}' in header_obfuscator_settings", other)),
+            Some(other) => {
+                return Err(format!(
+                    "Invalid mode '{}' in header_obfuscator_settings",
+                    other
+                ))
+            }
         };
 
         // Construct the internal_service_types::SessionSecuritySettings variant
@@ -636,7 +660,10 @@ mod tests {
 
     #[test]
     fn test_string_to_u64_valid() {
-        assert_eq!(string_to_u64("1234567890123456789").unwrap(), 1234567890123456789);
+        assert_eq!(
+            string_to_u64("1234567890123456789").unwrap(),
+            1234567890123456789
+        );
     }
 
     #[test]
@@ -671,7 +698,15 @@ mod tests {
         let result: Result<InternalServiceRequest, String> = ts_request.try_into();
         assert!(result.is_ok());
 
-        if let Ok(InternalServiceRequest::PeerRegister { cid, peer_cid, request_id: _, session_security_settings: _, connect_after_register: _, peer_session_password: _ }) = result {
+        if let Ok(InternalServiceRequest::PeerRegister {
+            cid,
+            peer_cid,
+            request_id: _,
+            session_security_settings: _,
+            connect_after_register: _,
+            peer_session_password: _,
+        }) = result
+        {
             assert_eq!(cid, 123);
             assert_eq!(peer_cid, 456);
         } else {
@@ -698,13 +733,13 @@ mod tests {
             username: "test_user".to_string(),
             password: vec![1, 2, 3],
             connect_mode: "standard".to_string(),
-            udp_mode: "Disabled".to_string(), 
+            udp_mode: "Disabled".to_string(),
             keep_alive_timeout_ms: Some(1000),
             session_security_settings: SessionSecuritySettingsTS {
                 security_level: "High".to_string(),
                 secrecy_mode: "Perfect".to_string(),
                 encryption_algorithm: "ChaCha20Poly_1305".to_string(), // Corrected
-                kem_algorithm: "Kyber".to_string(), // Corrected
+                kem_algorithm: "Kyber".to_string(),                    // Corrected
                 sig_algorithm: "Falcon1024".to_string(),
                 header_obfuscator_settings: HashMap::new(),
             },
@@ -714,7 +749,14 @@ mod tests {
         let result: Result<InternalServiceRequest, String> = ts_request.try_into();
         assert!(result.is_ok());
 
-        if let Ok(InternalServiceRequest::Connect { username, password, keep_alive_timeout, server_password, .. }) = result {
+        if let Ok(InternalServiceRequest::Connect {
+            username,
+            password,
+            keep_alive_timeout,
+            server_password,
+            ..
+        }) = result
+        {
             assert_eq!(username, "test_user");
             assert_eq!(password, vec![1, 2, 3]);
             assert_eq!(keep_alive_timeout, Some(Duration::from_millis(1000)));
@@ -736,7 +778,7 @@ mod tests {
                 security_level: "High".to_string(),
                 secrecy_mode: "Perfect".to_string(),
                 encryption_algorithm: "ChaCha20Poly_1305".to_string(), // Corrected
-                kem_algorithm: "Kyber".to_string(), // Corrected
+                kem_algorithm: "Kyber".to_string(),                    // Corrected
                 sig_algorithm: "Falcon1024".to_string(),
                 header_obfuscator_settings: HashMap::new(),
             },

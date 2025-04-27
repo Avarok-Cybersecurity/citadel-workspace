@@ -1,0 +1,69 @@
+# Git files
+.git
+.gitignore
+
+# Docker related files
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker/
+
+# Tilt file
+Tiltfile
+
+# Rust build artifacts
+target_ide/
+target/
+**/target/
+
+# Node.js dependencies (assuming they are installed within the container or managed differently)
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Tauri build artifacts (often within src-tauri/target)
+src-tauri/target/
+src-tauri/gen/
+src-tauri/node_modules/
+
+# General build/dist folders (add specific ones if you use them)
+dist/
+build/
+out/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Editor/IDE specific files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Environment files (if sensitive or managed outside image)
+.env
+.env.*
+!/.env.example # Keep example files if they exist
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Test reports (if generated)
+coverage/
+junit.xml
+
+# Specific workspace files (add if necessary)
+.service-pid
+.server-pid
+internal-service.log
+citadel-server.log

@@ -16,11 +16,11 @@ mod local_db_delete_kv;
 mod local_db_get_all_kv;
 mod local_db_get_kv;
 mod local_db_set_kv;
-mod workspace_request;
 mod peer_connect;
 mod peer_disconnect;
 mod peer_register;
 pub mod register;
+mod workspace_request;
 
 pub use connect::connect;
 pub use disconnect::disconnect;
@@ -34,11 +34,11 @@ pub use local_db_delete_kv::local_db_delete_kv;
 pub use local_db_get_all_kv::local_db_get_all_kv;
 pub use local_db_get_kv::local_db_get_kv;
 pub use local_db_set_kv::local_db_set_kv;
-pub use workspace_request::send_workspace_request;
 pub use peer_connect::peer_connect;
 pub use peer_disconnect::peer_disconnect;
 pub use peer_register::peer_register;
 pub use register::register;
+pub use workspace_request::send_workspace_request;
 
 /// Note: this is a oneshot type of function. One send, one receive only. This is useful for only specific types of commands
 /// that don't need to observe multiple responses
@@ -94,9 +94,16 @@ where
             // For messages sent to the server, we assume the server is always online, and if not,
             // the client can always retry. Thus, when the request is a message type and peer_cid is
             // Some, we use this branch.
-            state.send_message_with_security_level(cid, Some(peer_cid), security_level, request_id, message)
+            state
+                .send_message_with_security_level(
+                    cid,
+                    Some(peer_cid),
+                    security_level,
+                    request_id,
+                    message,
+                )
                 .await
-            .expect("send_and_recv: Failed to send message")
+                .expect("send_and_recv: Failed to send message")
         }
 
         payload => {

@@ -17,9 +17,15 @@ pub async fn list_registered_peers(
     let request_id = Uuid::new_v4();
 
     // Convert string CID to u64, mapping potential error
-    let cid = string_to_u64(&request.cid).map_err(|e| ListRegisteredPeersFailureTS { message: e, request_id: Some(request_id.to_string()) });
+    let cid = string_to_u64(&request.cid).map_err(|e| ListRegisteredPeersFailureTS {
+        message: e,
+        request_id: Some(request_id.to_string()),
+    });
 
-    let payload = InternalServiceRequest::ListRegisteredPeers { cid: cid?, request_id };
+    let payload = InternalServiceRequest::ListRegisteredPeers {
+        cid: cid?,
+        request_id,
+    };
 
     let response = send_and_recv(payload, request_id, &state).await;
 

@@ -25,7 +25,8 @@ strum = { version = "0.26", features = ["derive"] }
 strum_macros = "0.26"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tauri = { version = "2.0.0-beta", features = [] }
+tauri = { workspace = true, features = [] }
+tauri-plugin-log = { workspace = true, features = ["colored"] }
 tauri-plugin-shell = { workspace = true }
 citadel-internal-service-types = { workspace = true }
 citadel-internal-service-connector = { workspace = true }
@@ -34,6 +35,6 @@ citadel_types = { workspace = true }
 citadel_logging = { workspace = true }
 tokio = { workspace = true, features = ["net", "rt", "macros"] }
 tokio-util = { workspace = true }
-uuid = { workspace = true }
+uuid = { version = "1.6", features = ["v4", "serde"] }
 futures = { workspace = true }
 log = "0.4"

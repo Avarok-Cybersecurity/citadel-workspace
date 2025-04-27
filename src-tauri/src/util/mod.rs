@@ -1,8 +1,8 @@
 use std::{collections::HashSet, fmt::Display};
 
-use serde::{Deserialize, Serialize};
 use crate::types::RegistrationRequestTS;
 use citadel_internal_service_types::SessionSecuritySettings;
+use serde::{Deserialize, Serialize};
 
 pub mod local_db;
 pub mod window_event_handler;
@@ -48,7 +48,8 @@ impl TryFrom<RegistrationRequestTS> for RegistrationInfo {
         });
 
         // Convert the nested TS security settings to the Rust equivalent *first*
-        let static_security_settings: SessionSecuritySettings = value.session_security_settings.try_into()?;
+        let static_security_settings: SessionSecuritySettings =
+            value.session_security_settings.try_into()?;
 
         Ok(RegistrationInfo {
             server_address: value.workspace_identifier,
@@ -64,7 +65,10 @@ impl TryFrom<RegistrationRequestTS> for RegistrationInfo {
 
 impl KeyName for RegistrationInfo {
     fn identifier(&self) -> Option<String> {
-        Some(server_addr_and_username_to_key(&self.server_address, &self.username))
+        Some(server_addr_and_username_to_key(
+            &self.server_address,
+            &self.username,
+        ))
     }
 }
 
@@ -81,7 +85,10 @@ pub struct ConnectionPair {
 
 impl KeyName for ConnectionPair {
     fn identifier(&self) -> Option<String> {
-        Some(server_addr_and_username_to_key(&self.server_address, &self.username))
+        Some(server_addr_and_username_to_key(
+            &self.server_address,
+            &self.username,
+        ))
     }
 }
 
@@ -91,6 +98,9 @@ impl KeyName for KnownServers {
     }
 }
 
-fn server_addr_and_username_to_key<T: Display, R: Display>(server_address: T, username: R) -> String {
+fn server_addr_and_username_to_key<T: Display, R: Display>(
+    server_address: T,
+    username: R,
+) -> String {
     format!("{}@{}", username, server_address)
 }

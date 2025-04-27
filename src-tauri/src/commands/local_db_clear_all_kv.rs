@@ -17,14 +17,22 @@ pub async fn local_db_clear_all_kv(
     let request_id = Uuid::new_v4();
 
     // Convert string CIDs to u64, mapping potential errors
-    let cid = string_to_u64(&request.cid).map_err(|e| LocalDBClearAllKVFailureTS { message: e, request_id: Some(request_id.to_string()) })?;
-    let peer_cid = request.peer_cid.as_ref()
+    let cid = string_to_u64(&request.cid).map_err(|e| LocalDBClearAllKVFailureTS {
+        message: e,
+        request_id: Some(request_id.to_string()),
+    })?;
+    let peer_cid = request
+        .peer_cid
+        .as_ref()
         .map(|s| string_to_u64(s))
         .transpose()
-        .map_err(|e| LocalDBClearAllKVFailureTS { message: e, request_id: Some(request_id.to_string()) })?; // transpose turns Option<Result> into Result<Option>
+        .map_err(|e| LocalDBClearAllKVFailureTS {
+            message: e,
+            request_id: Some(request_id.to_string()),
+        })?; // transpose turns Option<Result> into Result<Option>
 
     let payload = InternalServiceRequest::LocalDBClearAllKV {
-        cid, // Now u64
+        cid,      // Now u64
         peer_cid, // Now Option<u64>
         request_id,
     };

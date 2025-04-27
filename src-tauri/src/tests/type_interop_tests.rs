@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use crate::types::{RegistrationRequestTS, SessionSecuritySettingsTS, ConnectRequestTS};
-    use serde_json::{from_str, to_string};
+    use crate::types::{ConnectRequestTS, RegistrationRequestTS, SessionSecuritySettingsTS};
     use citadel_internal_service_types::InternalServiceRequest;
+    use serde_json::{from_str, to_string};
     use std::collections::HashMap;
     use std::convert::TryInto;
     use std::net::SocketAddr;
@@ -45,12 +45,14 @@ mod tests {
             },
             "fullName": "Test User",
             "username": "testuser"
-        }).to_string();
+        })
+        .to_string();
 
         // Compare serialized JSON with expected JSON
         let actual_json: serde_json::Value =
             serde_json::from_str(&json_str).expect("Failed to parse JSON");
-        let expected_json_value: serde_json::Value = serde_json::from_str(&expected_json_str).unwrap();
+        let expected_json_value: serde_json::Value =
+            serde_json::from_str(&expected_json_str).unwrap();
 
         assert_eq!(
             actual_json, expected_json_value,
@@ -74,7 +76,9 @@ mod tests {
         );
         assert_eq!(
             deserialized.session_security_settings.security_level,
-            registration_request.session_security_settings.security_level
+            registration_request
+                .session_security_settings
+                .security_level
         );
         assert_eq!(
             deserialized.session_security_settings.secrecy_mode,
@@ -82,7 +86,9 @@ mod tests {
         );
         assert_eq!(
             deserialized.session_security_settings.encryption_algorithm,
-            registration_request.session_security_settings.encryption_algorithm
+            registration_request
+                .session_security_settings
+                .encryption_algorithm
         );
         assert_eq!(
             deserialized.session_security_settings.kem_algorithm,
@@ -93,8 +99,12 @@ mod tests {
             registration_request.session_security_settings.sig_algorithm
         );
         assert_eq!(
-            deserialized.session_security_settings.header_obfuscator_settings,
-            registration_request.session_security_settings.header_obfuscator_settings
+            deserialized
+                .session_security_settings
+                .header_obfuscator_settings,
+            registration_request
+                .session_security_settings
+                .header_obfuscator_settings
         );
         assert_eq!(deserialized.full_name, registration_request.full_name);
         assert_eq!(deserialized.username, registration_request.username);
@@ -127,13 +137,34 @@ mod tests {
         assert_eq!(deserialized.username, "test-user");
         assert_eq!(deserialized.password, vec![1, 2, 3, 4]);
         assert_eq!(deserialized.keep_alive_timeout_ms, Some(5000));
-        assert_eq!(deserialized.session_security_settings.security_level, "Recommended");
-        assert_eq!(deserialized.session_security_settings.secrecy_mode, "PerfectForwardSecrecy");
-        assert_eq!(deserialized.session_security_settings.encryption_algorithm, "ChaChaPoly1305");
-        assert_eq!(deserialized.session_security_settings.kem_algorithm, "Kyber1024");
-        assert_eq!(deserialized.session_security_settings.sig_algorithm, "Dilithium5");
-        assert!(deserialized.session_security_settings.header_obfuscator_settings.is_empty());
-        assert_eq!(deserialized.server_password, Some("server_pass".to_string().into_bytes()));
+        assert_eq!(
+            deserialized.session_security_settings.security_level,
+            "Recommended"
+        );
+        assert_eq!(
+            deserialized.session_security_settings.secrecy_mode,
+            "PerfectForwardSecrecy"
+        );
+        assert_eq!(
+            deserialized.session_security_settings.encryption_algorithm,
+            "ChaChaPoly1305"
+        );
+        assert_eq!(
+            deserialized.session_security_settings.kem_algorithm,
+            "Kyber1024"
+        );
+        assert_eq!(
+            deserialized.session_security_settings.sig_algorithm,
+            "Dilithium5"
+        );
+        assert!(deserialized
+            .session_security_settings
+            .header_obfuscator_settings
+            .is_empty());
+        assert_eq!(
+            deserialized.server_password,
+            Some("server_pass".to_string().into_bytes())
+        );
     }
 
     /* // TODO: Re-enable this test once ConnectResponseTS is defined and implemented
@@ -196,36 +227,54 @@ mod tests {
         };
 
         // Attempt the conversion
-        let result: Result<InternalServiceRequest, String> = registration_request_ts.clone().try_into();
+        let result: Result<InternalServiceRequest, String> =
+            registration_request_ts.clone().try_into();
         assert!(result.is_ok());
 
         // Check if the conversion was successful and the variant is correct
         let internal_request = result.unwrap();
-        assert!(matches!(internal_request, InternalServiceRequest::Register { .. }));
+        assert!(matches!(
+            internal_request,
+            InternalServiceRequest::Register { .. }
+        ));
 
         // Destructure and verify the fields
-        if let InternalServiceRequest::Register { 
-            request_id: _, 
-            server_addr, 
-            full_name, 
-            username, 
-            proposed_password, 
-            connect_after_register, 
-            session_security_settings: _, 
-            server_password, 
-        } = internal_request 
-        { 
-            // Assertions on the fields directly 
-            assert_eq!(server_addr, registration_request_ts.workspace_identifier.parse::<SocketAddr>().unwrap());
-            assert_eq!(full_name, registration_request_ts.full_name); 
-            assert_eq!(username, registration_request_ts.username); 
-            assert_eq!(proposed_password.as_ref(), registration_request_ts.profile_password.as_bytes()); 
+        if let InternalServiceRequest::Register {
+            request_id: _,
+            server_addr,
+            full_name,
+            username,
+            proposed_password,
+            connect_after_register,
+            session_security_settings: _,
+            server_password,
+        } = internal_request
+        {
+            // Assertions on the fields directly
+            assert_eq!(
+                server_addr,
+                registration_request_ts
+                    .workspace_identifier
+                    .parse::<SocketAddr>()
+                    .unwrap()
+            );
+            assert_eq!(full_name, registration_request_ts.full_name);
+            assert_eq!(username, registration_request_ts.username);
+            assert_eq!(
+                proposed_password.as_ref(),
+                registration_request_ts.profile_password.as_bytes()
+            );
             assert_eq!(connect_after_register, false); // As defaulted in TryFrom
-            // Check if the Option<PreSharedKey> status matches the original Option<String> status
-            assert_eq!(server_password.is_some(), registration_request_ts.workspace_password.is_some());
+                                                       // Check if the Option<PreSharedKey> status matches the original Option<String> status
+            assert_eq!(
+                server_password.is_some(),
+                registration_request_ts.workspace_password.is_some()
+            );
         } else {
             // This branch should not be reached if the matches! assertion passed
-            panic!("Conversion did not result in InternalServiceRequest::Register variant as expected");
+            panic!(
+                "Conversion did not result in InternalServiceRequest::Register variant as expected"
+            );
         }
     }
 }

@@ -22,6 +22,7 @@ use commands::{
 };
 use std::{collections::HashMap, sync::Arc};
 use tauri::Manager;
+use tauri_plugin_log::{Target, TargetKind};
 use tokio::sync::RwLock;
 
 const INTERNAL_SERVICE_ADDR: &str = "127.0.0.1:12345";
@@ -90,6 +91,7 @@ pub async fn run() {
     });
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_log::Builder::new().build())
         .manage(state.clone())
         .setup(move |app| {
             setup_log();
@@ -124,6 +126,16 @@ pub async fn run() {
             peer_register,
             register,
         ])
+        .plugin(
+            tauri_plugin_log::Builder::default()
+                .level(log::LevelFilter::Debug)
+                .targets([
+                    Target::new(TargetKind::Stdout),
+                    Target::new(TargetKind::Stderr),
+                ])
+                .with_colors(Default::default())
+                .build(),
+        )
         .on_window_event(util::window_event_handler::on_window_event)
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use citadel_internal_service_connector::messenger::{
     backend::CitadelWorkspaceBackend, CitadelWorkspaceMessenger,
 };
-use citadel_internal_service_connector::messenger::{MessengerError, MessengerTx, BypasserTx};
+use citadel_internal_service_connector::messenger::{BypasserTx, MessengerError, MessengerTx};
 use citadel_internal_service_types::InternalServiceResponse;
 use citadel_types::crypto::SecurityLevel;
 use citadel_workspace_types::{WorkspaceProtocolPayload, WorkspaceProtocolRequest};
@@ -54,8 +54,13 @@ impl WorkspaceStateInner {
             let tx = read.get(&cid).ok_or(MessengerError::OtherError { reason: format!("CID {} not found in muxes. Make sure to call open_messenger_for first before calling this function", cid) })?;
             let peer_cid = peer_cid.unwrap_or(0); // if 0, then is sent to the server
             let serialized = serde_json::to_vec(&command.into()).unwrap();
-            tx.send_message_to_with_security_level_and_req_id(peer_cid, security_level, request_id, serialized)
-                .await
+            tx.send_message_to_with_security_level_and_req_id(
+                peer_cid,
+                security_level,
+                request_id,
+                serialized,
+            )
+            .await
         }
     }
     /// When a new connection is established between a client and server or peer-to-peer,

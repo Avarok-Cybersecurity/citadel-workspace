@@ -78,7 +78,7 @@ pub async fn local_db_get_kv(
             Err(LocalDBGetKVFailureTS {
                 request_id: Some(request_id.to_string()),
                 message: error_msg,
-                cid: original_cid_str, // Use original request string
+                cid: original_cid_str,           // Use original request string
                 peer_cid: original_peer_cid_str, // Use original request string
             })
         }

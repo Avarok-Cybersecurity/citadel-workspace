@@ -1,0 +1,55 @@
+services:
+  internal-service:
+    build:
+      context: .
+      dockerfile: ./docker/internal-service/Dockerfile
+    volumes:
+      - .:/usr/src/app # Mount entire codebase for live updates <-- RE-ENABLED
+      # Mount shared caches and target directory
+      - cargo_registry_cache:/usr/local/cargo/registry
+      - cargo_git_cache:/usr/local/cargo/git
+      - target_cache:/usr/src/app/target
+    environment:
+      - RUST_LOG=citadel=info
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "localhost", "12345" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    network_mode: service:server # Share network namespace with server
+
+  server:
+    build:
+      context: .
+      dockerfile: ./docker/workspace-server/Dockerfile
+    volumes:
+      - .:/usr/src/app # <-- RE-ENABLED
+      # Mount shared caches and target directory
+      - cargo_registry_cache:/usr/local/cargo/registry
+      - cargo_git_cache:/usr/local/cargo/git
+      - target_cache:/usr/src/app/target
+    environment:
+      - RUST_LOG=citadel=info
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "localhost", "12349" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "12349:12349"
+      - "12345:12345" # host:container
+    networks:
+      - citadel-net
+
+# Define named volumes for caching
+volumes:
+  cargo_registry_cache:
+  cargo_git_cache:
+  target_cache:
+
+# Define the network
+networks:
+  citadel-net:
+    driver: bridge

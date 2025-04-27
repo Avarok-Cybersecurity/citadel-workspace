@@ -97,13 +97,12 @@ impl<'a> LocalDb<'a> {
             username: registration.username.clone(),
         };
 
-        self.set_kv(connection_pair.key_name(), &registration).await?;
+        self.set_kv(connection_pair.key_name(), &registration)
+            .await?;
 
         let mut known_servers = self.list_known_servers().await?;
 
-        known_servers
-            .servers
-            .insert(connection_pair);
+        known_servers.servers.insert(connection_pair);
 
         self.set_kv(KnownServers::key_name_from_identifier(None), &known_servers)
             .await?;
@@ -115,9 +114,7 @@ impl<'a> LocalDb<'a> {
         &self,
         connection_pair: &ConnectionPair,
     ) -> Result<RegistrationInfo, String> {
-        let registration: RegistrationInfo = self
-            .get_kv(connection_pair.key_name())
-            .await?;
+        let registration: RegistrationInfo = self.get_kv(connection_pair.key_name()).await?;
         Ok(registration)
     }
 
@@ -128,8 +125,16 @@ impl<'a> LocalDb<'a> {
 
             Err(err) => {
                 citadel_logging::error!(target: "citadel", "Error getting known servers: {err}");
-                self.set_kv(key, &KnownServers { servers: Default::default() }).await?;
-                Ok(KnownServers { servers: Default::default() })
+                self.set_kv(
+                    key,
+                    &KnownServers {
+                        servers: Default::default(),
+                    },
+                )
+                .await?;
+                Ok(KnownServers {
+                    servers: Default::default(),
+                })
             }
         }
     }

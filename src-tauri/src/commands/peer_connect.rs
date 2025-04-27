@@ -1,10 +1,10 @@
 use crate::types::{
     string_to_u64, PeerConnectFailureTS, PeerConnectRequestTS, PeerConnectSuccessTS,
 };
-use log::error;
 use citadel_internal_service_types::{
     InternalServiceRequest::PeerConnect, InternalServiceResponse,
 };
+use log::error;
 use tauri::State;
 use uuid::Uuid;
 

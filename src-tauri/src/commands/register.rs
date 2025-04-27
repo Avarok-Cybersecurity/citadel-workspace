@@ -1,5 +1,5 @@
 use crate::state::WorkspaceState;
-use crate::types::{RegisterFailureTS, RegistrationRequestTS, RegisterSuccessTS};
+use crate::types::{RegisterFailureTS, RegisterSuccessTS, RegistrationRequestTS};
 use crate::util::local_db::LocalDb;
 use crate::util::RegistrationInfo;
 use citadel_internal_service_types::{InternalServiceRequest, InternalServiceResponse};
@@ -47,7 +47,7 @@ pub async fn register(
         request_id,
         server_addr,
         full_name: info_full_name_clone, // Use the clone
-        username: info_username_clone, // Use the clone
+        username: info_username_clone,   // Use the clone
         proposed_password: info.profile_password.clone().into_bytes().into(),
         connect_after_register: true,
         session_security_settings: Default::default(), // Use default settings for now
@@ -61,7 +61,9 @@ pub async fn register(
     match response {
         InternalServiceResponse::RegisterSuccess(success) => {
             println!("Registration successful");
-            state.open_messenger_for(success.cid).await
+            state
+                .open_messenger_for(success.cid)
+                .await
                 .map_err(|e| RegisterFailureTS {
                     cid: success.cid.to_string(),
                     message: e.to_string(),
@@ -71,7 +73,10 @@ pub async fn register(
                 error!(target: "citadel", "Registration OK but failed to save info: {:?} for CID: {}", err, success.cid);
                 Err(RegisterFailureTS {
                     cid: success.cid.to_string(),
-                    message: format!("Registration succeeded but failed to save info locally: {}", err),
+                    message: format!(
+                        "Registration succeeded but failed to save info locally: {}",
+                        err
+                    ),
                     request_id: Some(request_id.to_string()),
                 })
             } else {
@@ -84,7 +89,9 @@ pub async fn register(
         InternalServiceResponse::ConnectSuccess(success) => {
             // Also treat ConnectSuccess as a success case since connect_after_register is true
             println!("Registration and connection successful");
-            state.open_messenger_for(success.cid).await
+            state
+                .open_messenger_for(success.cid)
+                .await
                 .map_err(|e| RegisterFailureTS {
                     cid: success.cid.to_string(),
                     message: e.to_string(),

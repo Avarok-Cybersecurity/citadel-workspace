@@ -1,9 +1,9 @@
 use crate::state::WorkspaceState;
-use crate::types::{SessionSecuritySettingsTS, GetRegistrationFailureTS, GetRegistrationSuccessTS};
+use crate::types::{GetRegistrationFailureTS, GetRegistrationSuccessTS, SessionSecuritySettingsTS};
 use crate::util::local_db::LocalDb;
-use tauri::State;
-use std::collections::HashMap;
 use crate::util::ConnectionPair;
+use std::collections::HashMap;
+use tauri::State;
 
 /// Get registration information for a specific server
 #[tauri::command]
@@ -14,13 +14,19 @@ pub async fn get_registration(
 ) -> Result<GetRegistrationSuccessTS, GetRegistrationFailureTS> {
     // Get the database instance
     let db = LocalDb::global(&state);
-    
+
     // Try to retrieve the registration info
-    match db.get_registration(&ConnectionPair { server_address, username }).await {
-        Ok(registration) => { 
+    match db
+        .get_registration(&ConnectionPair {
+            server_address,
+            username,
+        })
+        .await
+    {
+        Ok(registration) => {
             // Convert internal SessionSecuritySettings to the TS version
             let settings = registration.static_security_settings;
-            let crypto = settings.crypto_params; 
+            let crypto = settings.crypto_params;
             // Convert header obfuscator settings map - placeholder for now
             // TODO: Properly handle HeaderObfuscatorSettings variants if necessary
             let header_obfuscator_settings_ts: HashMap<String, String> = HashMap::new();
@@ -40,13 +46,11 @@ pub async fn get_registration(
                 server_address: registration.server_address,
                 username: registration.username,
                 full_name: registration.full_name,
-                profile_password: Some(registration.profile_password), 
+                profile_password: Some(registration.profile_password),
                 session_security_settings: session_security_settings_ts,
-                server_password: registration.server_password, 
+                server_password: registration.server_password,
             })
         }
-        Err(db_err) => { 
-            Err(GetRegistrationFailureTS::from(db_err)) 
-        }
+        Err(db_err) => Err(GetRegistrationFailureTS::from(db_err)),
     }
 }
