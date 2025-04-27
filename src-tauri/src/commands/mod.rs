@@ -52,6 +52,7 @@ pub(crate) async fn send_and_recv(
 
 pub enum InspectionResult<T> {
     Done(T),
+    #[allow(dead_code)]
     Continue,
 }
 

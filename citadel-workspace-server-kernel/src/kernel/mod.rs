@@ -1,6 +1,7 @@
 use crate::handlers::transaction::TransactionManager;
 use crate::WorkspaceProtocolResponse;
 use citadel_logging::debug;
+use citadel_sdk::prefabs::server;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, Ratchet};
 use citadel_workspace_types::structs::{User, UserRole, WorkspaceRoles};
 use citadel_workspace_types::WorkspaceProtocolPayload;
@@ -59,8 +60,19 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
         match event {
             NodeResult::ConnectSuccess(connect_success) => {
                 let this = self.clone();
+                let server_remote = self.node_remote.read().clone().unwrap();
                 let peer_command_handler = async move {
-                    let user_id = connect_success.channel.get_session_cid().to_string();
+                    let user_cid = connect_success.channel.get_session_cid();
+                    let user_id = server_remote
+                        .account_manager()
+                        .get_username_by_cid(connect_success.session_cid)
+                        .await?
+                        .ok_or_else(|| {
+                            NetworkError::msg(format!(
+                                "Unable to obtain username. Unknown client: {user_cid}"
+                            ))
+                        })?;
+
                     let (mut tx, mut rx) = connect_success.channel.split();
 
                     while let Some(msg) = rx.next().await {
@@ -72,7 +84,9 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                 let response = response.unwrap_or_else(|e| {
                                     WorkspaceProtocolResponse::Error(e.to_string())
                                 });
-                                let serialized_response = serde_json::to_vec(&response).unwrap();
+                                let response_wrapped = WorkspaceProtocolPayload::Response(response);
+                                let serialized_response =
+                                    serde_json::to_vec(&response_wrapped).unwrap();
                                 tx.send(serialized_response).await?;
                             } else {
                                 citadel_logging::warn!(target: "citadel", "Server received a response when it can only receive commands: {command:?}");
@@ -90,7 +104,11 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     Ok::<(), NetworkError>(())
                 };
 
-                drop(tokio::task::spawn(peer_command_handler));
+                drop(tokio::task::spawn(async move {
+                    if let Err(e) = peer_command_handler.await {
+                        citadel_logging::error!(target: "citadel", "Peer command handler failed: {e}");
+                    }
+                }));
             }
 
             evt => {

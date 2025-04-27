@@ -1,10 +1,9 @@
 use crate::state::WorkspaceState;
 use crate::types::{MessageSendFailureTS, MessageSendSuccessTS};
-use citadel_internal_service_types::{InternalServiceRequest, InternalServiceResponse};
+use citadel_internal_service_types::InternalServiceRequest;
 use citadel_types::prelude::SecurityLevel;
 use citadel_workspace_types::WorkspaceProtocolPayload;
 use log::error;
-use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tauri::State;
 use uuid::Uuid;
@@ -17,6 +16,9 @@ pub async fn send_workspace_request(
     payload: WorkspaceProtocolPayload, // Directly accept the structured payload
     state: State<'_, WorkspaceState>,
 ) -> Result<MessageSendSuccessTS, MessageSendFailureTS> {
+    // Log the received payload for debugging case sensitivity issues
+    // println!("[Rust Command: send_workspace_request] Received raw payload: {:?}", payload);
+
     let request_id = Uuid::new_v4();
 
     // Convert string values to their native types

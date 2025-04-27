@@ -306,7 +306,7 @@ fn test_permissions_inheritance() {
 
             // Directly create the workspace in the transaction to bypass the single workspace check
             let workspace = Workspace {
-                id: "workspace-root".to_string(),
+                id: crate::WORKSPACE_ROOT_ID.to_string(),
                 name: "Test Workspace".to_string(),
                 description: "Test description".to_string(),
                 owner_id: owner_id.to_string(),
@@ -316,7 +316,7 @@ fn test_permissions_inheritance() {
             };
 
             tx.insert_domain(
-                "workspace-root".to_string(),
+                crate::WORKSPACE_ROOT_ID.to_string(),
                 Domain::Workspace {
                     workspace: workspace.clone(),
                 },
@@ -327,7 +327,7 @@ fn test_permissions_inheritance() {
         .unwrap();
 
     // In the single workspace model, we just get the existing workspace
-    // No need to create a new one since we're using the fixed "workspace-root"
+    // No need to create a new one since we're using the fixed crate::WORKSPACE_ROOT
     let _workspace_result =
         kernel.process_command(owner_id, WorkspaceProtocolRequest::GetWorkspace);
 
@@ -336,19 +336,19 @@ fn test_permissions_inheritance() {
     kernel
         .with_write_transaction(|tx| {
             // Get the workspace and create an owned clone
-            let workspace = tx.get_workspace("workspace-root").unwrap();
+            let workspace = tx.get_workspace(crate::WORKSPACE_ROOT_ID).unwrap();
             let mut workspace_clone = workspace.clone();
 
             // Add the user to the members list
             workspace_clone.members.push(member_id.to_string());
 
             // Update the workspace
-            tx.update_workspace("workspace-root", workspace_clone)?;
+            tx.update_workspace(crate::WORKSPACE_ROOT_ID, workspace_clone)?;
 
             // Update the user permissions to explicitly include ViewContent for the workspace
             if let Some(user) = tx.get_user(member_id) {
                 let mut user_clone = user.clone();
-                user_clone.add_permission("workspace-root", Permission::ViewContent);
+                user_clone.add_permission(crate::WORKSPACE_ROOT_ID, Permission::ViewContent);
                 tx.update_user(member_id, user_clone)?;
             }
 
@@ -418,8 +418,11 @@ fn test_permissions_inheritance() {
 
     // Test permissions inheritance
     // 1. Member should have ViewContent permission on workspace
-    let member_workspace_perm =
-        kernel.check_entity_permission(member_id, "workspace-root", Permission::ViewContent);
+    let member_workspace_perm = kernel.check_entity_permission(
+        member_id,
+        crate::WORKSPACE_ROOT_ID,
+        Permission::ViewContent,
+    );
     assert!(member_workspace_perm.unwrap());
 
     // 2. Member should have ViewContent permission on office (inherited from workspace)
@@ -439,7 +442,7 @@ fn test_permissions_inheritance() {
 
     // 5. Owner should have all permissions on workspace, office, and room
     let owner_edit_workspace =
-        kernel.check_entity_permission(owner_id, "workspace-root", Permission::EditContent);
+        kernel.check_entity_permission(owner_id, crate::WORKSPACE_ROOT_ID, Permission::EditContent);
     let owner_edit_office =
         kernel.check_entity_permission(owner_id, &office_id, Permission::EditContent);
     let owner_edit_room =
@@ -451,7 +454,7 @@ fn test_permissions_inheritance() {
 
     // 6. Admin should have all permissions regardless of membership
     let admin_edit_workspace =
-        kernel.check_entity_permission(admin_id, "workspace-root", Permission::EditContent);
+        kernel.check_entity_permission(admin_id, crate::WORKSPACE_ROOT_ID, Permission::EditContent);
     let admin_edit_office =
         kernel.check_entity_permission(admin_id, &office_id, Permission::EditContent);
     let admin_edit_room =
@@ -491,7 +494,7 @@ fn test_load_workspace() {
         assert_eq!(workspace.description, workspace_description);
         assert_eq!(workspace.owner_id, admin_id);
         assert!(workspace.members.contains(&admin_id.to_string()));
-        assert_eq!(workspace.id, "workspace-root"); // Should be using the fixed workspace ID
+        assert_eq!(workspace.id, crate::WORKSPACE_ROOT_ID); // Should be using the fixed workspace ID
     } else {
         panic!("Expected Workspace response");
     }

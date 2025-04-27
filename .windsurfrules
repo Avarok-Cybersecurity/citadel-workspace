@@ -2,7 +2,7 @@
 
 ## Debugging
 
-The most powerful way to debug: open a terminal and run `tilt logs -f`. This shows you the logs for all containers so you get the full picture. You can keep it up for the duration of the debugging session and check the command status for rapid debugging cycles. If rust code needs to change, you may need to restart tilt altogether. UI only code do not need a restart on tilt.
+The most powerful way to debug: open a terminal and run `tilt logs` to get the logs for all containers. This gives you all the logs, so, you may want to get only the last 200 lines.
 
 ## UI
 

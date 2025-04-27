@@ -27,13 +27,8 @@ impl DomainEntity for Workspace {
         Domain::Workspace { workspace: self }
     }
 
-    fn create(id: String, _parent_id: Option<String>, name: &str, description: &str) -> Self {
-        let workspace_id = if id.is_empty() {
-            // Use a fixed ID for the single workspace
-            "workspace-root".to_string()
-        } else {
-            id
-        };
+    fn create(_id: String, _parent_id: Option<String>, name: &str, description: &str) -> Self {
+        let workspace_id = crate::WORKSPACE_ROOT_ID.to_string();
 
         Workspace {
             id: workspace_id,

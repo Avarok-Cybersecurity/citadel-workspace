@@ -4,3 +4,5 @@ pub mod kernel;
 pub mod tests;
 pub use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 pub use kernel::WorkspaceServerKernel;
+
+pub const WORKSPACE_ROOT_ID: &str = "workspace-root";

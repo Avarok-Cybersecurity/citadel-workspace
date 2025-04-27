@@ -417,7 +417,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
                 let domain_parent_matches = match domain {
                     Domain::Office { office } => {
                         // For Office entities, the domain_id is always the fixed workspace root ID
-                        let is_match = parent_id.as_ref().map_or(false, |pid| "workspace-root" == *pid);
+                        let is_match = parent_id.as_ref().map_or(false, |pid| crate::WORKSPACE_ROOT_ID == *pid);
                         if is_match {
                             debug!(target: "citadel", "Office {} belongs to workspace-root", office.id);
                         }
@@ -629,7 +629,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for WorkspaceServer
     fn load_workspace(&self, user_id: &str) -> Result<Workspace, NetworkError> {
         let domain_ops = self.domain_ops();
         // Use the fixed workspace ID to retrieve the single workspace
-        domain_ops.get_workspace(user_id, "workspace-root")
+        domain_ops.get_workspace(user_id, crate::WORKSPACE_ROOT_ID)
     }
 
     /// List all workspaces (should only be one in the system)

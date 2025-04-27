@@ -16,7 +16,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-const ADMIN_ID: &str = "888888888888";
+const ADMIN_ID: &str = "admin";
 
 async fn new_internal_service_with_admin(
     bind_address_internal_service: SocketAddr,
@@ -58,17 +58,9 @@ async fn new_internal_service_with_admin(
 
     // Generate admin credentials
     println!("Generating admin credentials");
-    let admin_username = format!(
-        "admin_{}",
-        Uuid::new_v4()
-            .to_string()
-            .split('-')
-            .next()
-            .unwrap_or("user")
-    );
     let admin_password = Uuid::new_v4().to_string();
 
-    Ok((service_handle, admin_username, admin_password))
+    Ok((service_handle, ADMIN_ID.to_string(), admin_password))
 }
 
 async fn setup_test_environment() -> Result<
@@ -202,8 +194,11 @@ async fn send_workspace_command(
         ) = response
         {
             // Deserialize the response
-            let workspace_response: WorkspaceProtocolResponse = serde_json::from_slice(&message)?;
-            return Ok(workspace_response);
+            let workspace_response: WorkspaceProtocolPayload = serde_json::from_slice(&message)?;
+            let WorkspaceProtocolPayload::Response(response) = workspace_response else {
+                panic!("Expected WorkspaceProtocolPayload::Response")
+            };
+            return Ok(response);
         }
 
         println!("Received unexpected response: {:?}", response);
@@ -252,7 +247,7 @@ async fn test_office_operations() {
         create_workspace_cmd,
     )
     .await
-    .unwrap();
+    .expect("Failed to create root workspace");
 
     println!("Root workspace created: {:?}", workspace_response);
 

@@ -57,7 +57,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 "Failed to create workspace",
             ),
             WorkspaceProtocolRequest::GetWorkspace => Self::handle_result(
-                self.get_workspace(user_id, "workspace-root"),
+                self.get_workspace(user_id, crate::WORKSPACE_ROOT_ID),
                 WorkspaceProtocolResponse::Workspace,
                 "Failed to get workspace",
             ),
@@ -68,7 +68,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             } => Self::handle_result(
                 self.update_workspace(
                     user_id,
-                    "workspace-root",
+                    crate::WORKSPACE_ROOT_ID,
                     name.as_deref(),
                     description.as_deref(),
                     metadata,
@@ -77,7 +77,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 "Failed to update workspace",
             ),
             WorkspaceProtocolRequest::DeleteWorkspace => Self::handle_result(
-                self.delete_workspace(user_id, "workspace-root"),
+                self.delete_workspace(user_id, crate::WORKSPACE_ROOT_ID),
                 |_| {
                     WorkspaceProtocolResponse::Success("Workspace deleted successfully".to_string())
                 },

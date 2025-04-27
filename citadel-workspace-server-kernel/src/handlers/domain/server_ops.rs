@@ -378,7 +378,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         mdx_content: Option<&str>,
     ) -> Result<Office, NetworkError> {
         // Check if user has permission to create offices
-        let workspace_id = "workspace-root".to_string();
+        let workspace_id = crate::WORKSPACE_ROOT_ID;
 
         // Check if user is admin, workspace owner, or has CreateOffice permission
         let is_authorized = self.with_read_transaction(|tx| {
@@ -614,7 +614,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
     /// Get the single workspace that exists in the system
     fn get_workspace(&self, user_id: &str, _workspace_id: &str) -> Result<Workspace, NetworkError> {
         let perm_kernel = self.kernel.clone();
-        let actual_workspace_id = "workspace-root".to_string();
+        let actual_workspace_id = crate::WORKSPACE_ROOT_ID;
 
         self.with_read_transaction(move |tx| {
             let domain = tx
@@ -664,7 +664,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         }
 
         // Generate a unique ID for the new workspace
-        let workspace_id = "workspace-root".to_string();
+        let workspace_id = crate::WORKSPACE_ROOT_ID.to_string();
 
         let metadata = metadata.unwrap_or_default();
 
@@ -701,7 +701,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         _workspace_id: &str,
     ) -> Result<Workspace, NetworkError> {
         // Use fixed workspace-root ID
-        let actual_workspace_id = "workspace-root".to_string();
+        let actual_workspace_id = crate::WORKSPACE_ROOT_ID;
 
         // Ensure user has permission to delete workspaces
         if !self.check_entity_permission(
@@ -752,14 +752,10 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         metadata: Option<Vec<u8>>,
     ) -> Result<Workspace, NetworkError> {
         // Use fixed workspace-root ID
-        let actual_workspace_id = "workspace-root".to_string();
+        let workspace_id = crate::WORKSPACE_ROOT_ID.to_string();
 
         // Ensure user has permission to update workspaces
-        if !self.check_entity_permission(
-            user_id,
-            &actual_workspace_id,
-            Permission::UpdateWorkspace,
-        )? {
+        if !self.check_entity_permission(user_id, &workspace_id, Permission::UpdateWorkspace)? {
             return Err(NetworkError::msg(
                 "Permission denied: Cannot update workspace",
             ));
@@ -768,7 +764,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         self.with_write_transaction(move |tx| {
             // Get the workspace
             let domain = tx
-                .get_domain(&actual_workspace_id)
+                .get_domain(&workspace_id)
                 .ok_or_else(|| NetworkError::msg(format!("Workspace not found")))?;
 
             let mut workspace = match domain {
@@ -791,7 +787,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
 
             // Store the updated workspace
             tx.insert_domain(
-                actual_workspace_id,
+                workspace_id,
                 Domain::Workspace {
                     workspace: workspace.clone(),
                 },
@@ -808,14 +804,10 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         office_id: &str,
     ) -> Result<(), NetworkError> {
         // Use fixed workspace-root ID
-        let actual_workspace_id = "workspace-root".to_string();
+        let workspace_id = crate::WORKSPACE_ROOT_ID.to_string();
 
         // Ensure user has permission to update workspaces
-        if !self.check_entity_permission(
-            user_id,
-            &actual_workspace_id,
-            Permission::UpdateWorkspace,
-        )? {
+        if !self.check_entity_permission(user_id, &workspace_id, Permission::UpdateWorkspace)? {
             return Err(NetworkError::msg(
                 "Permission denied: Cannot add office to workspace",
             ));
@@ -823,8 +815,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
 
         self.with_write_transaction(|tx| {
             // Get the workspace
-            let Some(Domain::Workspace { mut workspace }) =
-                tx.get_domain(&actual_workspace_id).cloned()
+            let Some(Domain::Workspace { mut workspace }) = tx.get_domain(&workspace_id).cloned()
             else {
                 return Err(NetworkError::msg("Workspace not found"));
             };
@@ -842,7 +833,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
             // No need to update office's workspace_id - it's implied by the single workspace model
 
             // Update workspace entity
-            tx.insert_domain(actual_workspace_id, Domain::Workspace { workspace })?;
+            tx.insert_domain(workspace_id, Domain::Workspace { workspace })?;
             Ok(())
         })
     }
@@ -854,14 +845,10 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         office_id: &str,
     ) -> Result<(), NetworkError> {
         // Use fixed workspace-root ID
-        let actual_workspace_id = "workspace-root".to_string();
+        let workspace_id = crate::WORKSPACE_ROOT_ID.to_string();
 
         // Ensure user has permission
-        if !self.check_entity_permission(
-            user_id,
-            &actual_workspace_id,
-            Permission::UpdateWorkspace,
-        )? {
+        if !self.check_entity_permission(user_id, &workspace_id, Permission::UpdateWorkspace)? {
             return Err(NetworkError::msg(
                 "Permission denied: Cannot remove office from workspace",
             ));
@@ -870,7 +857,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         self.with_write_transaction(move |tx| {
             // Get the workspace
             let domain = tx
-                .get_domain(&actual_workspace_id)
+                .get_domain(&workspace_id)
                 .ok_or_else(|| NetworkError::msg("Workspace not found"))?;
 
             let mut workspace = match domain {
@@ -882,7 +869,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
             workspace.offices.retain(|id| id != office_id);
 
             // Update workspace
-            tx.insert_domain(actual_workspace_id, Domain::Workspace { workspace })?;
+            tx.insert_domain(workspace_id, Domain::Workspace { workspace })?;
 
             Ok(())
         })
@@ -895,10 +882,10 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         _workspace_id: &str,
     ) -> Result<(), NetworkError> {
         // Use fixed workspace-root ID
-        let actual_workspace_id = "workspace-root".to_string();
+        let workspace_id = crate::WORKSPACE_ROOT_ID.to_string();
 
         // Ensure user has permission to update workspace
-        if !self.check_entity_permission(user_id, &actual_workspace_id, Permission::AddUsers)? {
+        if !self.check_entity_permission(user_id, &workspace_id, Permission::AddUsers)? {
             return Err(NetworkError::msg(
                 "Permission denied: Cannot add users to workspace",
             ));
@@ -907,7 +894,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         self.with_write_transaction(move |tx| {
             // Get the workspace
             let domain = tx
-                .get_domain(&actual_workspace_id)
+                .get_domain(&workspace_id)
                 .ok_or_else(|| NetworkError::msg("Workspace not found"))?;
 
             let mut workspace = match domain {
@@ -924,7 +911,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
             workspace.members.push(member_id.to_string());
 
             // Update workspace
-            tx.insert_domain(actual_workspace_id, Domain::Workspace { workspace })?;
+            tx.insert_domain(workspace_id, Domain::Workspace { workspace })?;
 
             Ok(())
         })
@@ -937,10 +924,10 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         _workspace_id: &str,
     ) -> Result<(), NetworkError> {
         // Use fixed workspace-root ID
-        let actual_workspace_id = "workspace-root".to_string();
+        let workspace_id = crate::WORKSPACE_ROOT_ID.to_string();
 
         // Ensure user has permission to update workspace
-        if !self.check_entity_permission(user_id, &actual_workspace_id, Permission::RemoveUsers)? {
+        if !self.check_entity_permission(user_id, &workspace_id, Permission::RemoveUsers)? {
             return Err(NetworkError::msg(
                 "Permission denied: Cannot remove users from workspace",
             ));
@@ -949,7 +936,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         self.with_write_transaction(move |tx| {
             // Get the workspace
             let domain = tx
-                .get_domain(&actual_workspace_id)
+                .get_domain(&workspace_id)
                 .ok_or_else(|| NetworkError::msg("Workspace not found"))?;
 
             let mut workspace = match domain {
@@ -966,7 +953,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
             workspace.members.retain(|id| id != member_id);
 
             // Update workspace
-            tx.insert_domain(actual_workspace_id, Domain::Workspace { workspace })?;
+            tx.insert_domain(workspace_id, Domain::Workspace { workspace })?;
 
             Ok(())
         })
@@ -993,7 +980,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         _workspace_id: &str,
     ) -> Result<Vec<Office>, NetworkError> {
         // Use the fixed workspace ID, ignoring the provided workspace_id parameter
-        let workspace_id = "workspace-root";
+        let workspace_id = crate::WORKSPACE_ROOT_ID;
 
         self.with_read_transaction(|tx| {
             match tx.get_domain(workspace_id) {
@@ -1023,7 +1010,7 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
                 }
                 _ => {
                     // If the root workspace doesn't exist yet, create it
-                    if workspace_id == "workspace-root" && self.kernel.is_admin(user_id) {
+                    if workspace_id == crate::WORKSPACE_ROOT_ID && self.kernel.is_admin(user_id) {
                         // Create the root workspace implicitly
                         let _ = self.with_write_transaction(|tx| {
                             let workspace = Workspace {
