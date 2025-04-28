@@ -3,10 +3,19 @@ use std::collections::{HashMap, HashSet};
 
 use crate::handlers::transaction::Transaction;
 use crate::kernel::WorkspaceServerKernel;
+use crate::handlers::domain::DomainOperations;
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
 
 // Member handlers - functions for adding, removing, and updating workspace members
 impl<R: Ratchet> WorkspaceServerKernel<R> {
+    pub fn is_admin(&self, user_id: &str) -> bool {
+        if user_id == self.admin_username {
+            return true;
+        }
+        
+        self.transaction_manager.is_admin(user_id)
+    }
+    
     pub fn add_member(
         &self,
         admin_id: &str,
@@ -34,10 +43,10 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 // Create new user if they don't exist
                 let new_user = User {
                     id: user_id.to_string(),
-                    name: format!("User {}", user_id),
+                    name: user_id.to_string(),
                     role,
                     permissions: HashMap::new(),
-                    metadata: Vec::new(),
+                    metadata: Default::default(),
                 };
                 tx.insert_user(user_id.to_string(), new_user)?;
             } else {

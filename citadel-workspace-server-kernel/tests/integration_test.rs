@@ -6,7 +6,9 @@ use citadel_sdk::prelude::{
     BackendType, NetworkError, NodeBuilder, NodeType, PreSharedKey, StackedRatchet,
 };
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
+use citadel_workspace_server_kernel::WORKSPACE_MASTER_PASSWORD_KEY;
 use citadel_workspace_types::{
+    structs::{MetadataValue, User, UserRole},
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
 use std::error::Error;
@@ -101,6 +103,24 @@ async fn setup_test_environment() -> Result<
     // Wait for services to start and connection to be established
     println!("Waiting for services to start");
     tokio::time::sleep(Duration::from_millis(2000)).await;
+
+    // Inject the workspace master password into the admin user's metadata
+    // This simulates what `run_server` does during actual startup
+    println!("Injecting workspace password into admin metadata...");
+    workspace_kernel.transaction_manager.with_write_transaction(|tx| {
+        let mut admin_user = User {
+            id: admin_username.clone(),
+            name: admin_username.clone(), // Assuming name is same as ID for admin
+            role: UserRole::Admin,
+            permissions: Default::default(),
+            metadata: Default::default(),
+        };
+        admin_user.metadata.insert(
+            WORKSPACE_MASTER_PASSWORD_KEY.to_string(),
+            MetadataValue::String(admin_password.clone()),
+        );
+        tx.insert_user(admin_username.clone(), admin_user)
+    })?;
 
     println!("Done setting up test environment");
     Ok((
@@ -237,6 +257,7 @@ async fn test_office_operations() {
     let create_workspace_cmd = WorkspaceProtocolRequest::CreateWorkspace {
         name: "Root Workspace".to_string(),
         description: "Root workspace for the system".to_string(),
+        workspace_master_password: admin_password.clone(), // Provide correct password
         metadata: None,
     };
 
@@ -250,6 +271,33 @@ async fn test_office_operations() {
     .expect("Failed to create root workspace");
 
     println!("Root workspace created: {:?}", workspace_response);
+
+    // --- Test: Attempt to create workspace with WRONG password --- 
+    println!("Attempting to create workspace with wrong password...");
+    let create_workspace_wrong_pw_cmd = WorkspaceProtocolRequest::CreateWorkspace {
+        name: "Wrong PW Workspace".to_string(),
+        description: "Should fail".to_string(),
+        workspace_master_password: "wrong-password".to_string(), // Provide wrong password
+        metadata: None,
+    };
+    
+    let error_response = send_workspace_command(
+        &to_service,
+        &mut from_service,
+        admin_cid,
+        create_workspace_wrong_pw_cmd,
+    )
+    .await
+    .expect("Sending wrong password command should succeed, but result in error response");
+
+    match error_response {
+        WorkspaceProtocolResponse::Error(msg) => {
+            assert!(msg.contains("Incorrect workspace master password"), "Expected password error, got: {}", msg);
+            println!("Received expected error for wrong password: {}", msg);
+        },
+        _ => panic!("Expected Error response for wrong password, got: {:?}", error_response),
+    }
+    // --- End Test --- 
 
     // Create an office using the command processor instead of directly
     println!("Creating test office...");
@@ -409,16 +457,30 @@ async fn test_room_operations() {
 
     println!("Admin user registered and connected with CID: {admin_cid}.");
 
-    // Register the admin_cid as an admin user in the kernel
-    kernel
-        .inject_admin_user(&admin_cid.to_string(), "Connected Admin User")
-        .unwrap();
+    // Inject the workspace master password into the admin user's metadata
+    // This simulates what `run_server` does during actual startup
+    println!("Injecting workspace password into admin metadata...");
+    kernel.transaction_manager.with_write_transaction(|tx| {
+        let mut admin_user = User {
+            id: admin_username.clone(),
+            name: admin_username.clone(), // Assuming name is same as ID for admin
+            role: UserRole::Admin,
+            permissions: Default::default(),
+            metadata: Default::default(),
+        };
+        admin_user.metadata.insert(
+            WORKSPACE_MASTER_PASSWORD_KEY.to_string(),
+            MetadataValue::String(admin_password.clone()),
+        );
+        tx.insert_user(admin_username.clone(), admin_user)
+    }).unwrap(); 
 
     // Create the root workspace first for our single workspace model
     println!("Creating root workspace...");
     let create_workspace_cmd = WorkspaceProtocolRequest::CreateWorkspace {
         name: "Root Workspace".to_string(),
         description: "Root workspace for the system".to_string(),
+        workspace_master_password: admin_password.clone(), // Provide correct password
         metadata: None,
     };
 

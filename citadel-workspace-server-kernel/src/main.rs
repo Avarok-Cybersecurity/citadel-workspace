@@ -1,8 +1,8 @@
-use citadel_logging::{setup_log, error, info};
-use std::path::PathBuf;
-use std::fs;
-use structopt::StructOpt;
+use citadel_logging::{error, info, setup_log};
 use citadel_workspace_server_kernel::config::ServerConfig;
+use std::fs;
+use std::path::PathBuf;
+use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -28,10 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!(?config, "Loaded server configuration");
 
-    if let Err(e) = citadel_workspace_server_kernel::start_server(config).await {
-        error!("Server failed to start or encountered an error: {e}");
-        return Err(e.into()); // Propagate the error using Into
-    }
+    citadel_workspace_server_kernel::run_server(config).await?;
 
     Ok(())
 }

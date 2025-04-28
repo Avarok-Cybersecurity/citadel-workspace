@@ -51,8 +51,9 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 name,
                 description,
                 metadata,
+                workspace_master_password,
             } => Self::handle_result(
-                self.create_workspace(user_id, &name, &description, metadata),
+                self.create_workspace(user_id, &name, &description, metadata, workspace_master_password),
                 WorkspaceProtocolResponse::Workspace,
                 "Failed to create workspace",
             ),
@@ -65,6 +66,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 name,
                 description,
                 metadata,
+                workspace_master_password,
             } => Self::handle_result(
                 self.update_workspace(
                     user_id,
@@ -72,12 +74,13 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     name.as_deref(),
                     description.as_deref(),
                     metadata,
+                    workspace_master_password,
                 ),
                 WorkspaceProtocolResponse::Workspace,
                 "Failed to update workspace",
             ),
-            WorkspaceProtocolRequest::DeleteWorkspace => Self::handle_result(
-                self.delete_workspace(user_id, crate::WORKSPACE_ROOT_ID),
+            WorkspaceProtocolRequest::DeleteWorkspace { workspace_master_password } => Self::handle_result(
+                self.delete_workspace(user_id, crate::WORKSPACE_ROOT_ID, workspace_master_password),
                 |_| {
                     WorkspaceProtocolResponse::Success("Workspace deleted successfully".to_string())
                 },
@@ -189,7 +192,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             } => {
                 if let Some(domain_id) = office_id.or(room_id) {
                     Self::handle_result(
-                        self.add_user_to_domain(user_id, &member_id, &domain_id, role),
+                        self.add_user_to_domain(user_id, &domain_id, role),
                         |_| {
                             WorkspaceProtocolResponse::Success(
                                 "Member added to domain successfully".to_string(),
@@ -230,12 +233,11 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 permissions,
                 operation,
             } => Self::handle_result(
-                self.update_permissions_for_member(
+                self.update_member_permissions(
                     user_id,
                     &member_id,
                     &domain_id,
                     &permissions,
-                    operation,
                 ),
                 |_| {
                     WorkspaceProtocolResponse::Success(
@@ -275,21 +277,11 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
             // Query commands
             WorkspaceProtocolRequest::ListMembers { office_id, room_id } => {
-                match (office_id, room_id) {
-                    (Some(office_id), None) => Self::handle_result(
-                        self.list_members_in_domain(user_id, &office_id),
-                        WorkspaceProtocolResponse::Members,
-                        "Failed to list members",
-                    ),
-                    (None, Some(room_id)) => Self::handle_result(
-                        self.list_members_in_domain(user_id, &room_id),
-                        WorkspaceProtocolResponse::Members,
-                        "Failed to list members",
-                    ),
-                    _ => Ok(WorkspaceProtocolResponse::Error(
-                        "Must specify exactly one of office_id or room_id".to_string(),
-                    )),
-                }
+                Self::handle_result(
+                    self.list_members(office_id.as_ref(), room_id.as_ref()),
+                    WorkspaceProtocolResponse::Members,
+                    "Failed to list members",
+                )
             }
         };
 

@@ -1,5 +1,5 @@
-use citadel_sdk::prelude::NetworkError;
-use citadel_workspace_types::structs::{Domain, User, UserRole, Workspace};
+use citadel_sdk::prelude::{NetworkError, Ratchet};
+use citadel_workspace_types::structs::{Workspace, User, Office, Room, Permission, UserRole, Domain};
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::collections::HashMap;
 
@@ -41,9 +41,6 @@ pub trait Transaction {
 
     /// Get all users
     fn get_all_users(&self) -> &HashMap<String, User>;
-
-    /// Check if a user has the admin role
-    fn is_admin(&self, user_id: &str) -> bool;
 
     /// Check if a user is a member of a domain
     fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError>;
@@ -102,6 +99,27 @@ pub trait Transaction {
     fn commit(&self) -> Result<(), NetworkError> {
         Ok(()) // Default implementation, will be overridden for write transactions
     }
+
+    /// Get a user's role
+    fn get_user_role(&self, user_id: &str) -> Result<Option<UserRole>, NetworkError>;
+
+    /// Get a user's permissions
+    fn get_permissions(&self, user_id: &str) -> Result<Vec<Permission>, NetworkError>;
+
+    /// Get a role
+    fn get_role(&self, role_id: &str) -> Result<Option<UserRole>, NetworkError>;
+
+    /// Create a role
+    fn create_role(&mut self, role: UserRole) -> Result<(), NetworkError>;
+
+    /// Delete a role
+    fn delete_role(&mut self, role_id: &str) -> Result<(), NetworkError>;
+
+    /// Assign a role to a user
+    fn assign_role(&mut self, user_id: &str, role_id: &str) -> Result<(), NetworkError>;
+
+    /// Unassign a role from a user
+    fn unassign_role(&mut self, user_id: &str, role_id: &str) -> Result<(), NetworkError>;
 }
 
 /// Extended transaction interface to add, get, and remove workspaces
@@ -173,6 +191,14 @@ pub struct TransactionManager {
     pub workspaces: RwLock<HashMap<String, Workspace>>,
 }
 
+impl TransactionManager {
+    pub fn is_admin(&self, user_id: &str) -> bool {
+        self.with_read_transaction(|tx| {
+            Ok(tx.get_user(user_id).map(|u| u.role == UserRole::Admin).unwrap_or(false))
+        }).unwrap_or(false)
+    }
+}
+
 impl Transaction for ReadTransaction<'_> {
     fn get_domain(&self, domain_id: &str) -> Option<&Domain> {
         self.domains.get(domain_id)
@@ -211,14 +237,6 @@ impl Transaction for ReadTransaction<'_> {
 
     fn get_all_users(&self) -> &HashMap<String, User> {
         &self.users
-    }
-
-    fn is_admin(&self, user_id: &str) -> bool {
-        if let Some(user) = self.get_user(user_id) {
-            user.is_administrator() || matches!(user.role, UserRole::Owner)
-        } else {
-            false
-        }
     }
 
     fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
@@ -291,6 +309,40 @@ impl Transaction for ReadTransaction<'_> {
         _user_id: &str,
         _domain_id: &str,
     ) -> Result<(), NetworkError> {
+        Err(NetworkError::msg("Read transactions cannot modify data"))
+    }
+
+    fn get_user_role(&self, user_id: &str) -> Result<Option<UserRole>, NetworkError> {
+        if let Some(user) = self.get_user(user_id) {
+            Ok(Some(user.role.clone()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn get_permissions(&self, _user_id: &str) -> Result<Vec<Permission>, NetworkError> {
+        // TODO: Implement proper permission retrieval logic based on roles
+        Ok(vec![]) // Placeholder
+    }
+
+    fn get_role(&self, _role_id: &str) -> Result<Option<UserRole>, NetworkError> {
+        // TODO: Implement role retrieval, possibly from a dedicated roles map
+        Ok(None) // Placeholder
+    }
+
+    fn create_role(&mut self, _role: UserRole) -> Result<(), NetworkError> {
+        Err(NetworkError::msg("Read transactions cannot modify data"))
+    }
+
+    fn delete_role(&mut self, _role_id: &str) -> Result<(), NetworkError> {
+        Err(NetworkError::msg("Read transactions cannot modify data"))
+    }
+
+    fn assign_role(&mut self, _user_id: &str, _role_id: &str) -> Result<(), NetworkError> {
+        Err(NetworkError::msg("Read transactions cannot modify data"))
+    }
+
+    fn unassign_role(&mut self, _user_id: &str, _role_id: &str) -> Result<(), NetworkError> {
         Err(NetworkError::msg("Read transactions cannot modify data"))
     }
 }
@@ -377,14 +429,6 @@ impl Transaction for WriteTransaction<'_> {
 
     fn get_all_users(&self) -> &HashMap<String, User> {
         &self.users
-    }
-
-    fn is_admin(&self, user_id: &str) -> bool {
-        if let Some(user) = self.get_user(user_id) {
-            user.is_administrator() || matches!(user.role, UserRole::Owner)
-        } else {
-            false
-        }
     }
 
     fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
@@ -639,6 +683,44 @@ impl Transaction for WriteTransaction<'_> {
 
     fn commit(&self) -> Result<(), NetworkError> {
         // Nothing to do here, changes are automatically committed when the transaction is dropped
+        Ok(())
+    }
+
+    fn get_user_role(&self, user_id: &str) -> Result<Option<UserRole>, NetworkError> {
+        if let Some(user) = self.get_user(user_id) {
+            Ok(Some(user.role.clone()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn get_permissions(&self, _user_id: &str) -> Result<Vec<Permission>, NetworkError> {
+        // TODO: Implement proper permission retrieval logic based on roles
+        Ok(vec![]) // Placeholder
+    }
+
+    fn get_role(&self, _role_id: &str) -> Result<Option<UserRole>, NetworkError> {
+        // TODO: Implement role retrieval, possibly from a dedicated roles map
+        Ok(None) // Placeholder
+    }
+
+    fn create_role(&mut self, _role: UserRole) -> Result<(), NetworkError> {
+        // TODO: Implement role creation logic
+        Ok(())
+    }
+
+    fn delete_role(&mut self, _role_id: &str) -> Result<(), NetworkError> {
+        // TODO: Implement role deletion logic
+        Ok(())
+    }
+
+    fn assign_role(&mut self, _user_id: &str, _role_id: &str) -> Result<(), NetworkError> {
+        // TODO: Implement role assignment logic
+        Ok(())
+    }
+
+    fn unassign_role(&mut self, _user_id: &str, _role_id: &str) -> Result<(), NetworkError> {
+        // TODO: Implement role unassignment logic
         Ok(())
     }
 }

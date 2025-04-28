@@ -18,4 +18,4 @@ COPY ./docker/workspace-server/kernel.toml .
 EXPOSE 12349
 
 # Run the workspace server via cargo run
-CMD ["cargo", "run", "--bin", "citadel-workspace-server-kernel", "--", "--bind", "0.0.0.0:12349"]
+CMD ["cargo", "run", "--bin", "citadel-workspace-server-kernel", "--", "--config", "kernel.toml"]

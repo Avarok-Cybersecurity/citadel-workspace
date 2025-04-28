@@ -14,6 +14,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         user_id: &str,
         name: &str,
         description: &str,
+        workspace_master_password: &str,
         metadata: Option<Vec<u8>>,
     ) -> Result<Workspace, NetworkError> {
         // Check if user has permission to create a workspace
@@ -22,6 +23,9 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 "Permission denied: Only admins can create workspaces",
             ));
         }
+
+        // Verify the provided workspace master password
+        self.verify_workspace_password(workspace_master_password)?;
 
         let workspace_id = Uuid::new_v4().to_string();
         
@@ -69,6 +73,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         workspace_id: &str,
         name: Option<&str>,
         description: Option<&str>,
+        workspace_master_password: &str,
         metadata: Option<Vec<u8>>,
     ) -> Result<Workspace, NetworkError> {
         // Check if user has permission to update this workspace
@@ -87,6 +92,9 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 ));
             }
         }
+
+        // Verify the provided workspace master password
+        self.verify_workspace_password(workspace_master_password)?;
 
         // Update the workspace
         self.with_write_transaction(|tx| {
@@ -116,7 +124,12 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     }
 
     /// Delete a workspace
-    pub fn delete_workspace(&self, user_id: &str, workspace_id: &str) -> Result<(), NetworkError> {
+    pub fn delete_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        workspace_master_password: &str,
+    ) -> Result<(), NetworkError> {
         // Check if user has permission to delete this workspace
         if !self.is_admin(user_id) {
             let is_owner = self.with_read_transaction(|tx| {
@@ -133,6 +146,9 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 ));
             }
         }
+
+        // Verify the provided workspace master password
+        self.verify_workspace_password(workspace_master_password)?;
 
         // Get workspace first to know which offices to remove
         let workspace = self.get_workspace(user_id, workspace_id)?;

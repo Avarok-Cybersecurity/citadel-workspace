@@ -37,6 +37,7 @@ fn test_create_workspace() {
         WorkspaceProtocolRequest::CreateWorkspace {
             name: workspace_name.to_string(),
             description: workspace_description.to_string(),
+            workspace_master_password: "correct-password".to_string(),
             metadata: None,
         },
     );
@@ -81,6 +82,7 @@ fn test_get_workspace() {
         WorkspaceProtocolRequest::CreateWorkspace {
             name: workspace_name.to_string(),
             description: workspace_description.to_string(),
+            workspace_master_password: "correct-password".to_string(),
             metadata: None,
         },
     );
@@ -120,6 +122,7 @@ fn test_update_workspace() {
         WorkspaceProtocolRequest::CreateWorkspace {
             name: workspace_name.to_string(),
             description: workspace_description.to_string(),
+            workspace_master_password: "correct-password".to_string(),
             metadata: None,
         },
     );
@@ -138,6 +141,7 @@ fn test_update_workspace() {
         WorkspaceProtocolRequest::UpdateWorkspace {
             name: Some(updated_name.to_string()),
             description: Some(updated_description.to_string()),
+            workspace_master_password: "correct-password".to_string(),
             metadata: None,
         },
     );
@@ -178,6 +182,7 @@ fn test_delete_workspace() {
         WorkspaceProtocolRequest::CreateWorkspace {
             name: workspace_name.to_string(),
             description: workspace_description.to_string(),
+            workspace_master_password: "correct-password".to_string(),
             metadata: None,
         },
     );
@@ -189,7 +194,12 @@ fn test_delete_workspace() {
     };
 
     // Delete the workspace
-    let delete_result = kernel.process_command(admin_id, WorkspaceProtocolRequest::DeleteWorkspace);
+    let delete_result = kernel.process_command(
+        admin_id,
+        WorkspaceProtocolRequest::DeleteWorkspace {
+            workspace_master_password: "correct-password".to_string(),
+        },
+    );
 
     // Verify the response
     assert!(delete_result.is_ok());
@@ -223,6 +233,7 @@ fn test_add_office_to_workspace() {
         WorkspaceProtocolRequest::CreateWorkspace {
             name: workspace_name.to_string(),
             description: workspace_description.to_string(),
+            workspace_master_password: "correct-password".to_string(),
             metadata: None,
         },
     );
@@ -478,6 +489,7 @@ fn test_load_workspace() {
         WorkspaceProtocolRequest::CreateWorkspace {
             name: workspace_name.to_string(),
             description: workspace_description.to_string(),
+            workspace_master_password: "correct-password".to_string(),
             metadata: None,
         },
     );

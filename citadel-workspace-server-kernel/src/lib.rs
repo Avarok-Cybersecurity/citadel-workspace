@@ -1,8 +1,22 @@
-pub use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
-pub use kernel::WorkspaceServerKernel;
-pub use citadel_sdk::prelude::*;
-use crate::config::ServerConfig; // Import the config struct
-use citadel_logging::info;
+use crate::config::ServerConfig;
+use crate::kernel::WorkspaceServerKernel;
+// use citadel_internal_service_connector::{BackendConnection, ServiceConnector}; // Comment out for now
+use citadel_internal_service_types::InternalServiceRequest;
+use citadel_logging::{info, setup_log};
+use citadel_sdk::prelude::{
+    BackendType, NetKernel, NetworkError, NodeBuilder, NodeRemote, NodeResult, NodeType, Ratchet, ServicesConfig, StackedRatchet
+};
+use citadel_types::crypto::SecurityLevel;
+use citadel_workspace_types::{
+    WorkspaceProtocolRequest, WorkspaceProtocolResponse, WorkspaceProtocolPayload, structs::UserRole
+};
+use handlers::transaction::{self, TransactionManager};
+use serde::{Deserialize, Serialize};
+use std::error::Error;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use tokio::sync::mpsc;
+use tokio_stream::StreamExt;
 
 pub mod handlers;
 pub mod kernel;
@@ -10,47 +24,60 @@ pub mod kernel;
 pub mod tests;
 
 pub const WORKSPACE_ROOT_ID: &str = "workspace-root";
+pub const WORKSPACE_MASTER_PASSWORD_KEY: &str = "workspace_master_password";
 
 pub mod config {
     use serde::Deserialize;
-    use std::net::SocketAddr;
+use std::net::SocketAddr;
 
-    // Define the structure for the TOML configuration file
     #[derive(Deserialize, Debug, Clone)]
     pub struct ServerConfig {
         pub admin_username: String,
-        pub bind_address: SocketAddr,
+        pub bind_addr: String,
         pub dangerous_skip_cert_verification: Option<bool>,
         pub backend: Option<String>,
-        pub admin_otp: String,
+        pub workspace_master_password: String,
     }
 }
 
-// Update start_server to accept ServerConfig
-pub async fn start_server(config: ServerConfig) -> Result<(), NetworkError> {
-    info!("Starting Citadel Workspace Server Kernel...");
+pub async fn run_server(
+    config: ServerConfig,
+    sdk_config: ServicesConfig, 
+) -> Result<(), NetworkError> {
+    setup_log();
+    info!(target: "citadel", "Starting Citadel Workspace Server Kernel...");
 
-    // Extract values from config
-    let admin_username = config.admin_username.clone(); // Clone if needed later
-    let admin_otp = config.admin_otp.clone(); // Clone if needed later
-
-    let backend = if let Some(backend_uri) = config.backend.as_deref() {
-        BackendType::new(backend_uri)?
+    let backend = if let Some(backend) = config.backend.as_ref() {
+        BackendType::new(backend)?
     } else {
         BackendType::InMemory
     };
 
-    // Create the workspace server kernel with an admin user
-    let service = WorkspaceServerKernel::<StackedRatchet>::with_admin(&admin_username, "Administrator");
+    let workspace_password = config.workspace_master_password;
+    let admin_username = config.admin_username;
+    let bind_address_str = config.bind_addr;
+    let bind_address: SocketAddr = bind_address_str.parse()
+        .map_err(|e| NetworkError::msg(format!("Invalid bind address '{}': {}", bind_address_str, e)))?;
+
+    let kernel = WorkspaceServerKernel::<StackedRatchet>::with_admin(
+        &admin_username,               // Pass admin_username as &str
+        "Administrator",                  // Provide a default display name
+        &workspace_password
+    ); 
+
+    let node_type = NodeType::server(bind_address)?;
+
     let mut builder = NodeBuilder::default();
-    let mut builder = builder
-        .with_backend(backend)
-        .with_node_type(NodeType::server(config.bind_address)?);
+    builder
+        .with_node_type(node_type)
+        .with_backend(backend);
 
     if config.dangerous_skip_cert_verification.unwrap_or(false) {
-        builder = builder.with_insecure_skip_cert_verification()
+        builder.with_insecure_skip_cert_verification();
     }
 
-    builder.build(service)?.await?;
+    // Build and await server execution
+    builder.build(kernel)?.await?; 
+
     Ok(())
 }

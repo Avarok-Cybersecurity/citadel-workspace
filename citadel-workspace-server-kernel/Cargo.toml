@@ -17,7 +17,7 @@ path = "src/main.rs"
 structopt = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 citadel-internal-service = { workspace = true }
-citadel_sdk = { workspace = true, features = ["sql"]}
+citadel_sdk = { workspace = true, features = ["sql"] }
 citadel_types = { workspace = true }
 citadel-workspace-types = { workspace = true }
 citadel_logging = { workspace = true }
@@ -28,10 +28,17 @@ uuid = { workspace = true, features = ["v4"] }
 async-trait = { workspace = true }
 rstest = { workspace = true }
 futures = { workspace = true }
+
+# Extra dependencies
 toml = "0.8"
+clap = { version = "4.4", features = ["derive"] }
+tokio-stream = "0.1"
+log = "0.4"
+auto_impl = "1.3.0"
+# Add necessary internal service types/connector as regular dependencies
+citadel-internal-service-types = { workspace = true }
+citadel-internal-service-connector = { workspace = true }
 
 [dev-dependencies]
 citadel_sdk = { workspace = true, features = ["localhost-testing"] }
 citadel-internal-service-test-common = { workspace = true }
-citadel-internal-service-types = { workspace = true }
-citadel-internal-service-connector = { workspace = true }

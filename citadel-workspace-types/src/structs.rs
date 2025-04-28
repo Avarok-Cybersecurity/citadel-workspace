@@ -11,7 +11,7 @@ pub struct User {
     pub role: UserRole,
     // Permissions are a map of domain IDs to sets of permissions
     pub permissions: HashMap<String, HashSet<Permission>>,
-    pub metadata: Vec<MetadataField>,
+    pub metadata: HashMap<String, MetadataValue>,
 }
 
 impl User {
@@ -22,7 +22,7 @@ impl User {
             name,
             role,
             permissions: HashMap::new(),
-            metadata: Vec::new(),
+            metadata: HashMap::new(),
         }
     }
 
@@ -351,14 +351,14 @@ impl Permission {
 }
 
 /// Metadata field for storing flexible data used by the frontend
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MetadataField {
     pub key: String,
     pub value: MetadataValue,
 }
 
 /// Value types for metadata fields
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "content")]
 pub enum MetadataValue {
     String(String),
@@ -370,7 +370,7 @@ pub enum MetadataValue {
 }
 
 /// A workspace is a container for offices
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Workspace {
     pub id: String,
     pub name: String,
@@ -382,7 +382,7 @@ pub struct Workspace {
 }
 
 // Workspace entity structures
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Office {
     pub id: String,
     pub name: String,
@@ -396,7 +396,7 @@ pub struct Office {
     pub metadata: Vec<u8>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Room {
     pub id: String,
     pub owner_id: String,

@@ -29,16 +29,17 @@ pub enum WorkspaceProtocolRequest {
     CreateWorkspace {
         name: String,
         description: String,
+        workspace_master_password: String,
         metadata: Option<Vec<u8>>,
     },
     GetWorkspace,
     UpdateWorkspace {
         name: Option<String>,
         description: Option<String>,
+        workspace_master_password: String,
         metadata: Option<Vec<u8>>,
     },
-    DeleteWorkspace,
-    // Removing ListWorkspaces since there's only one workspace
+    DeleteWorkspace { workspace_master_password: String }, // Added comma here
 
     // Office commands
     CreateOffice {

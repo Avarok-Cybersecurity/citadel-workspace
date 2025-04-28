@@ -1,13 +1,14 @@
-use crate::handlers::transaction::Transaction;
-use crate::WorkspaceServerKernel;
+use crate::kernel::WorkspaceServerKernel;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{
     Domain, Office, Permission, Room, User, UserRole, Workspace,
 };
+use crate::handlers::transaction::Transaction;
 
 pub mod entity;
 pub mod server_ops;
 pub mod workspace_entity;
+pub mod functions;
 
 // NetworkError helpers (using functions instead of impl extension)
 pub fn permission_denied<S: std::fmt::Display>(msg: S) -> NetworkError {
@@ -39,7 +40,8 @@ pub trait DomainEntity: Clone + Send + Sync + 'static {
 }
 
 /// Domain operations trait
-pub trait DomainOperations<R: Ratchet> {
+#[auto_impl::auto_impl(Arc)]
+pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
     /// Initialize domain operations
     fn init(&self) -> Result<(), NetworkError>;
 
