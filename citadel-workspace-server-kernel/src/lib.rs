@@ -1,27 +1,16 @@
 use crate::config::ServerConfig;
 use crate::kernel::WorkspaceServerKernel;
-// use citadel_internal_service_connector::{BackendConnection, ServiceConnector}; // Comment out for now
-use citadel_internal_service_types::InternalServiceRequest;
 use citadel_logging::{info, setup_log};
 use citadel_sdk::prelude::{
-    BackendType, NetKernel, NetworkError, NodeBuilder, NodeRemote, NodeResult, NodeType, Ratchet, ServicesConfig, StackedRatchet
+    BackendType, NetworkError, NodeBuilder, NodeType, ServicesConfig, StackedRatchet
 };
-use citadel_types::crypto::SecurityLevel;
 use citadel_workspace_types::{
-    WorkspaceProtocolRequest, WorkspaceProtocolResponse, WorkspaceProtocolPayload, structs::UserRole
+    WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
-use handlers::transaction::{self, TransactionManager};
-use serde::{Deserialize, Serialize};
-use std::error::Error;
 use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio_stream::StreamExt;
 
 pub mod handlers;
 pub mod kernel;
-#[cfg(test)]
-pub mod tests;
 
 pub const WORKSPACE_ROOT_ID: &str = "workspace-root";
 pub const WORKSPACE_MASTER_PASSWORD_KEY: &str = "workspace_master_password";
@@ -42,7 +31,6 @@ use std::net::SocketAddr;
 
 pub async fn run_server(
     config: ServerConfig,
-    sdk_config: ServicesConfig, 
 ) -> Result<(), NetworkError> {
     setup_log();
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel...");

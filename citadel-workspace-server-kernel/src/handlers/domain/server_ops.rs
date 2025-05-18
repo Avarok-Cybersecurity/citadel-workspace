@@ -1,11 +1,11 @@
-use crate::kernel::WorkspaceServerKernel;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 //, ResponseType}; // Comment out for now
 // Import workspace types from structs module
 use citadel_workspace_types::structs::{Domain, Office, Permission, Room, User, UserRole, Workspace};
-use crate::handlers::transaction::{Transaction, TransactionManager};
 use crate::handlers::domain::{permission_denied, DomainEntity, DomainOperations};
 use std::sync::Arc;
+use crate::kernel::transaction::{Transaction, TransactionManager};
+
 /// Server-side implementation of domain operations
 #[derive(Clone)]
 pub struct ServerDomainOps<R: Ratchet> {
@@ -17,24 +17,6 @@ impl<R: Ratchet> ServerDomainOps<R> {
     /// Create a new instance of ServerDomainOps
     pub fn new(kernel: Arc<TransactionManager>) -> Self {
         Self { tx_manager: kernel, _ratchet: std::marker::PhantomData }
-    }
-
-    /// Execute a function with a read transaction
-    pub fn with_read_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
-    where
-        F: FnOnce(&dyn Transaction) -> Result<T, NetworkError>,
-    {
-        // Use the kernel's transaction manager
-        self.tx_manager.with_read_transaction(f)
-    }
-
-    /// Execute a function with a write transaction
-    pub fn with_write_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
-    where
-        F: FnOnce(&mut dyn Transaction) -> Result<T, NetworkError>,
-    {
-        // Use the kernel's transaction manager
-        self.tx_manager.with_write_transaction(f)
     }
 }
 
@@ -84,26 +66,6 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         // Delegate to the centralized permission checking system in the kernel
         self.tx_manager
             .check_entity_permission(user_id, entity_id, permission)
-    }
-
-    fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
-        // Delegate to the kernel's implementation
-        self.tx_manager.is_member_of_domain(user_id, domain_id)
-    }
-
-    fn check_permission<T: DomainEntity + 'static>(
-        &self,
-        user_id: &str,
-        entity_id: &str,
-        permission: Permission,
-    ) -> Result<bool, NetworkError> {
-        // Since this is identical to check_entity_permission, just call that
-        self.check_entity_permission(user_id, entity_id, permission)
-    }
-
-    fn check_room_access(&self, user_id: &str, room_id: &str) -> Result<bool, NetworkError> {
-        // Delegate to the kernel's implementation for consistent behavior
-        self.tx_manager.check_room_access(user_id, room_id)
     }
 
     fn get_domain(&self, domain_id: &str) -> Option<Domain> {

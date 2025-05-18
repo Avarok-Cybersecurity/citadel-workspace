@@ -82,7 +82,7 @@ async fn setup_test_environment() -> Result<
 
     // Create a client to connect to the server, which will trigger the connection handler
     let workspace_kernel =
-        WorkspaceServerKernel::<StackedRatchet>::with_admin(ADMIN_ID, &admin_username);
+        WorkspaceServerKernel::<StackedRatchet>::with_admin(ADMIN_ID, &admin_username, &admin_password);
 
     // TCP client (GUI, CLI) -> internal service -> empty kernel server(s)
     let (server, server_bind_address) =
@@ -220,7 +220,7 @@ async fn create_test_room(
 
 #[tokio::test]
 async fn test_member_operations() -> Result<(), Box<dyn Error>> {
-    let (workspace_kernel, internal_service_addr, server_addr, admin_username, _admin_password) =
+    let (workspace_kernel, internal_service_addr, server_addr, admin_username, admin_password) =
         setup_test_environment().await?;
 
     // Register and connect admin user
@@ -234,7 +234,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
 
     // Register the admin_cid as an admin user in the kernel
     workspace_kernel
-        .inject_admin_user(&admin_cid.to_string(), "Connected Admin")
+        .inject_admin_user(&admin_username, "Connected Admin", &admin_password)
         .unwrap();
 
     // Create the root workspace first for our single workspace model
@@ -243,6 +243,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
         name: "Root Workspace".to_string(),
         description: "Root workspace for the system".to_string(),
         metadata: None,
+        workspace_master_password: admin_password.clone(),
     };
 
     let workspace_response = send_workspace_command(
@@ -262,7 +263,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     // Inject the test user into the kernel with the username as the user ID
     // This is important: we need to use "test_user" as the ID to match later operations
     workspace_kernel
-        .inject_admin_user("test_user", "Test User")
+        .inject_admin_user("test_user", "Test User", &admin_password)
         .unwrap();
 
     // Create an office directly using the kernel
@@ -496,7 +497,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
-    let (workspace_kernel, internal_service_addr, server_addr, admin_username, _admin_password) =
+    let (workspace_kernel, internal_service_addr, server_addr, admin_username, admin_password) =
         setup_test_environment().await?;
 
     // Register and connect admin user
@@ -508,9 +509,9 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     )
     .await?;
 
-    // Register the admin_cid as an admin user in the kernel
+    // Register the admin as an admin user in the kernel
     workspace_kernel
-        .inject_admin_user(&admin_cid.to_string(), "Connected Admin")
+        .inject_admin_user(&admin_username, "Connected Admin", &admin_password)
         .unwrap();
 
     // Create the root workspace first for our single workspace model
@@ -519,6 +520,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
         name: "Root Workspace".to_string(),
         description: "Root workspace for the system".to_string(),
         metadata: None,
+        workspace_master_password: admin_password.clone(),
     };
 
     let workspace_response = send_workspace_command(
@@ -784,7 +786,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
-    let (workspace_kernel, internal_service_addr, server_addr, admin_username, _admin_password) =
+    let (workspace_kernel, internal_service_addr, server_addr, admin_username, admin_password) =
         setup_test_environment().await?;
 
     // Register and connect admin user
@@ -798,7 +800,7 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
 
     // Register the admin_cid as an admin user in the kernel
     workspace_kernel
-        .inject_admin_user(&admin_cid.to_string(), "Connected Admin")
+        .inject_admin_user(&admin_username, "Admin", &admin_password)
         .unwrap();
 
     // Create the root workspace first for our single workspace model
@@ -807,6 +809,7 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
         name: "Root Workspace".to_string(),
         description: "Root workspace for the system".to_string(),
         metadata: None,
+        workspace_master_password: admin_password.clone(),
     };
 
     let workspace_response = send_workspace_command(
@@ -826,7 +829,7 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
     // Inject the test user into the kernel with the username as the user ID
     // This is important: we need to use "test_user" as the ID to match later operations
     workspace_kernel
-        .inject_admin_user("test_user", "Test User")
+        .inject_admin_user("test_user", "Test User", &admin_password)
         .unwrap();
 
     // Create an office directly using the kernel

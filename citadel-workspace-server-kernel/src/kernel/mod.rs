@@ -1,17 +1,13 @@
 use crate::WorkspaceProtocolResponse;
 use citadel_logging::{debug, info};
-use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, Ratchet, NodeConnectionType, NetKernel};
+use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, Ratchet, NetKernel};
 use citadel_workspace_types::{WorkspaceProtocolPayload, structs::UserRole};
-use citadel_workspace_types::structs::{User, WorkspaceRoles, Permission, MetadataValue as InternalMetadataValue};
-use crate::handlers::transaction::TransactionManager;
+use citadel_workspace_types::structs::{User, WorkspaceRoles, MetadataValue as InternalMetadataValue, MetadataValue};
+use transaction::TransactionManager;
 use crate::WORKSPACE_MASTER_PASSWORD_KEY;
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_stream::StreamExt;
-use uuid::Uuid;
-use crate::handlers::domain::DomainOperations;
 use crate::handlers::domain::server_ops::ServerDomainOps;
 
 pub mod command_processor;
@@ -19,23 +15,20 @@ pub mod transaction;
 
 /// Server kernel implementation
 pub struct WorkspaceServerKernel<R: Ratchet> {
-    // Transaction manager serves as a single source of truth for domains and users
-    pub transaction_manager: Arc<TransactionManager>,
     // Keep roles separately for now, but might be integrated into transaction manager in the future
     pub roles: Arc<RwLock<WorkspaceRoles>>,
     pub node_remote: Arc<RwLock<Option<NodeRemote<R>>>>,
     pub admin_username: String, // Added field to store admin username
-    pub domain_operation: ServerDomainOps<R>,
+    pub domain_operations: ServerDomainOps<R>,
 }
 
 impl<R: Ratchet> Clone for WorkspaceServerKernel<R> {
     fn clone(&self) -> Self {
         Self {
-            transaction_manager: self.transaction_manager.clone(),
             roles: self.roles.clone(),
             node_remote: self.node_remote.clone(),
             admin_username: self.admin_username.clone(),
-            domain_operation: self.domain_operation.clone(),
+            domain_operations: self.domain_operations.clone(),
         }
     }
 }
@@ -135,11 +128,10 @@ impl<R: Ratchet> Default for WorkspaceServerKernel<R> {
     fn default() -> Self {
         let tx_manager = Arc::new(TransactionManager::default());
         Self {
-            transaction_manager: tx_manager.clone(),
             roles: Arc::new(RwLock::new(WorkspaceRoles::new())),
             node_remote: Arc::new(RwLock::new(None)),
             admin_username: String::new(),
-            domain_operation: ServerDomainOps::new(tx_manager),
+            domain_operations: ServerDomainOps::new(tx_manager),
         }
     }
 }
@@ -152,18 +144,17 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         admin_username: String,
     ) -> Self {
         Self {
-            transaction_manager: transaction_manager.clone(),
             roles: Arc::new(RwLock::new(WorkspaceRoles::new())), // Initialize roles
             node_remote: Arc::new(RwLock::new(node_remote)),
             admin_username, 
-            domain_operation: ServerDomainOps::new(transaction_manager),
+            domain_operations: ServerDomainOps::new(transaction_manager),
         }
     }
 
     /// Convenience constructor for creating a kernel with an admin user
     /// (Used primarily in older code/tests, might need adjustment)
     pub fn with_admin(admin_username: &str, admin_display_name: &str, admin_password: &str) -> Self {
-        let mut kernel = Self::default();
+        let kernel = Self::default();
 
         kernel.inject_admin_user(
             admin_username, 
@@ -176,38 +167,22 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
     /// Helper to inject the initial admin user into the database
     pub fn inject_admin_user(&self, username: &str, display_name: &str, workspace_password: &str) -> Result<(), NetworkError> {
-        self.transaction_manager.with_write_transaction(|tx| {
+        self.tx_manager().with_write_transaction(|tx| {
             let mut user = User::new(username.to_string(), display_name.to_string(), UserRole::Admin);
             // Store the workspace password in the user's metadata
-            user.metadata.insert(WORKSPACE_MASTER_PASSWORD_KEY.to_string(), InternalMetadataValue::String(workspace_password.to_string()));
+            user.metadata.insert(WORKSPACE_MASTER_PASSWORD_KEY.to_string(), MetadataValue::String(workspace_password.to_string()));
             tx.insert_user(username.to_string(), user)
         })
     }
 
-    /// Get a reference to the transaction manager
-    pub fn transaction_manager(&self) -> &Arc<TransactionManager> {
-        &self.transaction_manager
-    }
-
-    /// Execute a function with a read transaction
-    pub fn with_read_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
-    where
-        F: FnOnce(&dyn crate::handlers::transaction::Transaction) -> Result<T, NetworkError>,
-    {
-        self.transaction_manager.with_read_transaction(f)
-    }
-
-    /// Execute a function with a write transaction
-    pub fn with_write_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
-    where
-        F: FnOnce(&mut dyn crate::handlers::transaction::Transaction) -> Result<T, NetworkError>,
-    {
-        self.transaction_manager.with_write_transaction(f)
-    }
-
     /// Get a domain operations instance
-    pub fn domain_ops(&self) -> ServerDomainOps<R> {
-        ServerDomainOps::new(self.transaction_manager.clone())
+    pub fn domain_ops(&self) -> &ServerDomainOps<R> {
+        &self.domain_operations
+    }
+
+    // Retyrn the transaction manager
+    pub fn tx_manager(&self) -> &Arc<TransactionManager> {
+        &self.domain_operations.tx_manager
     }
 
     /// Sets the NodeRemote after the node has been built.
@@ -220,7 +195,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Verifies the provided workspace password against the one stored for the admin user
     pub async fn verify_workspace_password(&self, provided_password: &str) -> Result<(), NetworkError> {
         // Get the stored password Option from the admin user's metadata within a transaction
-        let stored_password_opt = self.transaction_manager.with_read_transaction(|tx| {
+        let stored_password_opt = self.tx_manager().with_read_transaction(|tx| {
             // Closure returns Result<Option<InternalMetadataValue>, NetworkError>
             match tx.get_user(&self.admin_username) {
                 Some(user) => Ok(user.metadata.get(WORKSPACE_MASTER_PASSWORD_KEY).cloned()),
@@ -246,7 +221,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     async fn create_member_user(&self, username: &str, display_name: &str) -> Result<(), NetworkError> {
         info!(target: "citadel", "Creating member user: {}", username);
         // Use write transaction to insert the new member user
-        self.with_write_transaction(|tx| {
+        self.tx_manager().with_write_transaction(|tx| {
             // Inside the transaction, create the User struct and insert it
             let user = User::new(username.to_string(), display_name.to_string(), UserRole::Member);
             tx.insert_user(username.to_string(), user)

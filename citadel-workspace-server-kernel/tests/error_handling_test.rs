@@ -10,6 +10,7 @@ use std::sync::Arc;
 mod tests {
     use super::*;
 
+    const ADMIN_PASSWORD: &str = "admin_password";
     // Helper function to create a test user
     fn create_test_user(id: &str, role: UserRole) -> User {
         User {
@@ -17,7 +18,7 @@ mod tests {
             name: format!("Test {}", id),
             role,
             permissions: std::collections::HashMap::new(),
-            metadata: Vec::new(),
+            metadata: Default::default(),
         }
     }
 
@@ -27,6 +28,7 @@ mod tests {
         Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
             "admin",
             "Administrator",
+            ADMIN_PASSWORD,
         ))
     }
 
@@ -39,7 +41,7 @@ mod tests {
         let user = create_test_user(user_id, UserRole::Guest);
 
         kernel
-            .transaction_manager
+            .tx_manager()
             .with_write_transaction(|tx| {
                 tx.insert_user(user_id.to_string(), user)?;
                 Ok(())
@@ -188,7 +190,7 @@ mod tests {
         let user_id = "test_user";
         let user = create_test_user(user_id, UserRole::Member);
         kernel
-            .transaction_manager
+            .tx_manager()
             .with_write_transaction(|tx| {
                 tx.insert_user(user_id.to_string(), user)?;
                 Ok(())

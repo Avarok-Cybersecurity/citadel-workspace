@@ -3,7 +3,7 @@ use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{
     Domain, Office, Permission, Room, User, UserRole, Workspace,
 };
-use crate::handlers::transaction::Transaction;
+use crate::kernel::transaction::Transaction;
 
 pub mod entity;
 pub mod server_ops;
@@ -45,9 +45,6 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
     /// Initialize domain operations
     fn init(&self) -> Result<(), NetworkError>;
 
-    /// Get the workspace server kernel
-    fn kernel(&self) -> &WorkspaceServerKernel<R>;
-
     /// Check if a user is an admin
     fn is_admin(&self, user_id: &str) -> bool;
 
@@ -73,18 +70,9 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
     ) -> Result<bool, NetworkError>;
 
     /// Check if a user is a member of a domain
-    fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError>;
-
-    /// Check if a user has a specific permission
-    fn check_permission<T: DomainEntity + 'static>(
-        &self,
-        user_id: &str,
-        entity_id: &str,
-        permission: Permission,
-    ) -> Result<bool, NetworkError>;
-
-    /// Check if a user has access to a room
-    fn check_room_access(&self, user_id: &str, room_id: &str) -> Result<bool, NetworkError>;
+    fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
+        self.check_entity_permission(user_id, domain_id, Permission::ViewContent)
+    }
 
     /// Get a domain by ID
     fn get_domain(&self, domain_id: &str) -> Option<Domain>;

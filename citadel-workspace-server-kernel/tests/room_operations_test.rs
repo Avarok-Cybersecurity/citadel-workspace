@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+const ADMIN_PASSWORD: &str = "admin_password";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -23,10 +25,11 @@ mod tests {
         let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
             "admin",
             "Administrator",
+            ADMIN_PASSWORD,
         ));
 
         // Create domain operations handler
-        let domain_ops = ServerDomainOps::<StackedRatchet>::new(kernel.clone());
+        let domain_ops = kernel.domain_ops().clone();
 
         // Create an office for testing
         let office = domain_ops
@@ -43,7 +46,7 @@ mod tests {
             name: format!("Test User {}", id),
             role,
             permissions: HashMap::new(),
-            metadata: Vec::new(),
+            metadata: Default::default(),
         }
     }
 
@@ -53,8 +56,7 @@ mod tests {
         user_id: &str,
         user: User,
     ) -> Result<(), String> {
-        kernel
-            .transaction_manager
+        kernel.tx_manager()
             .with_write_transaction(|tx| {
                 tx.insert_user(user_id.to_string(), user.clone())?;
                 // Explicitly commit the transaction to ensure locks are released
@@ -72,8 +74,7 @@ mod tests {
     ) -> Result<(), String> {
         println!("DEBUG: Starting direct room name update for {}", room_id);
 
-        kernel
-            .transaction_manager
+        kernel.tx_manager()
             .with_write_transaction(|tx| {
                 println!("DEBUG: Got write transaction lock");
 
@@ -124,8 +125,7 @@ mod tests {
             room_id
         );
 
-        kernel
-            .transaction_manager
+        kernel.tx_manager()
             .with_write_transaction(|tx| {
                 println!("DEBUG: Got write transaction lock");
 
@@ -169,8 +169,7 @@ mod tests {
     ) -> Result<(), String> {
         println!("DEBUG: Starting direct room deletion for {}", room_id);
 
-        kernel
-            .transaction_manager
+        kernel.tx_manager()
             .with_write_transaction(|tx| {
                 println!("DEBUG: Got write transaction lock");
 

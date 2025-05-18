@@ -13,7 +13,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         office_id: Option<&String>,
         room_id: Option<&String>,
     ) -> Result<Vec<User>, NetworkError> {
-        self.with_read_transaction(|tx| {
+        self.tx_manager().with_read_transaction(|tx| {
             let mut members = Vec::new();
 
             match (office_id, room_id) {

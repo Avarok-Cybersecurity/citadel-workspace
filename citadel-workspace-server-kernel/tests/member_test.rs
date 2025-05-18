@@ -2,9 +2,11 @@ use citadel_sdk::prelude::StackedRatchet;
 use citadel_workspace_server_kernel::handlers::domain::server_ops::ServerDomainOps;
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
-use citadel_workspace_server_kernel::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use citadel_workspace_types::structs::{Domain, Office, User, UserRole};
 use std::sync::Arc;
+use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+
+const ADMIN_PASSWORD: &str = "admin_password";
 
 // Helper function to create a test user
 fn create_test_user(id: &str, role: UserRole) -> User {
@@ -13,7 +15,7 @@ fn create_test_user(id: &str, role: UserRole) -> User {
         name: format!("Test {}", id),
         role,
         permissions: std::collections::HashMap::new(),
-        metadata: Vec::new(),
+        metadata: Default::default(),
     }
 }
 
@@ -26,8 +28,9 @@ fn setup_test_environment() -> (
     let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
         "admin",
         "Administrator",
+        ADMIN_PASSWORD,
     ));
-    let domain_ops = ServerDomainOps::new(kernel.clone());
+    let domain_ops = kernel.domain_ops().clone();
 
     (kernel, domain_ops)
 }
@@ -41,8 +44,7 @@ fn test_add_user_to_domain() {
     let user = create_test_user(user_id, UserRole::Member);
 
     // Insert the user
-    kernel
-        .transaction_manager
+    kernel.tx_manager()
         .with_write_transaction(|tx| {
             tx.insert_user(user_id.to_string(), user)?;
             Ok(())
@@ -81,8 +83,7 @@ fn test_remove_user_from_domain() {
     let user = create_test_user(user_id, UserRole::Member);
 
     // Insert the user
-    kernel
-        .transaction_manager
+    kernel.tx_manager()
         .with_write_transaction(|tx| {
             tx.insert_user(user_id.to_string(), user)?;
             Ok(())
@@ -126,8 +127,7 @@ fn test_complete_user_removal() {
     let user = create_test_user(user_id, UserRole::Member);
 
     // Insert the user
-    kernel
-        .transaction_manager
+    kernel.tx_manager()
         .with_write_transaction(|tx| {
             tx.insert_user(user_id.to_string(), user)?;
             Ok(())
@@ -145,8 +145,7 @@ fn test_complete_user_removal() {
         .unwrap();
 
     // Use transaction to completely remove the user
-    kernel
-        .transaction_manager
+    kernel.tx_manager()
         .with_write_transaction(|tx| {
             // First remove user from all domains
             if let Some(Domain::Office { mut office }) = tx.get_domain(&office.id).cloned() {
@@ -162,8 +161,7 @@ fn test_complete_user_removal() {
         .unwrap();
 
     // Verify the user no longer exists
-    let user_exists = kernel
-        .transaction_manager
+    let user_exists = kernel.tx_manager()
         .with_read_transaction(|tx| Ok(tx.get_user(user_id).is_some()))
         .unwrap();
 
@@ -175,10 +173,7 @@ fn test_member_command_processing() {
     citadel_logging::setup_log();
     citadel_logging::trace!(target: "citadel", "Starting test_member_command_processing");
 
-    let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
-        "admin",
-        "Administrator",
-    ));
+    let (kernel, domain_ops) = setup_test_environment();
 
     citadel_logging::trace!(target: "citadel", "Created kernel");
 
@@ -189,8 +184,7 @@ fn test_member_command_processing() {
     citadel_logging::trace!(target: "citadel", "Created test user");
 
     // Insert the user
-    kernel
-        .transaction_manager
+    kernel.tx_manager()
         .with_write_transaction(|tx| {
             citadel_logging::trace!(target: "citadel", "Inserting user");
             tx.insert_user(user_id.to_string(), user)?;
@@ -207,8 +201,7 @@ fn test_member_command_processing() {
     citadel_logging::trace!(target: "citadel", "Creating office");
 
     // First manually create an office since the command doesn't have office_id field
-    kernel
-        .transaction_manager
+    kernel.tx_manager()
         .with_write_transaction(|tx| {
             citadel_logging::trace!(target: "citadel", "In transaction to create office");
             tx.insert_domain(
@@ -257,8 +250,7 @@ fn test_member_command_processing() {
 
     // Verify the user is in the office
     citadel_logging::trace!(target: "citadel", "Verifying user is in office");
-    let office_exists = kernel
-        .transaction_manager
+    let office_exists = kernel.tx_manager()
         .with_read_transaction(|tx| {
             citadel_logging::trace!(target: "citadel", "In transaction to verify user in office");
             if let Some(Domain::Office { office }) = tx.get_domain(office_id) {
@@ -297,8 +289,7 @@ fn test_member_command_processing() {
 
     // Verify the user is no longer in the office
     citadel_logging::trace!(target: "citadel", "Verifying user is no longer in office");
-    let user_in_office = kernel
-        .transaction_manager
+    let user_in_office = kernel.tx_manager()
         .with_read_transaction(|tx| {
             citadel_logging::trace!(target: "citadel", "In transaction to verify user not in office");
             if let Some(Domain::Office { office }) = tx.get_domain(office_id) {

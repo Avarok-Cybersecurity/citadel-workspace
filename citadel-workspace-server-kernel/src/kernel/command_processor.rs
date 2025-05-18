@@ -237,7 +237,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     user_id,
                     &member_id,
                     &domain_id,
-                    &permissions,
+                    permissions.into_iter().collect(),
                 ),
                 |_| {
                     WorkspaceProtocolResponse::Success(
@@ -253,7 +253,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             } => {
                 if let Some(domain_id) = office_id.or(room_id) {
                     Self::handle_result(
-                        self.remove_user_from_domain(user_id, &member_id, &domain_id),
+                        self.remove_member_from_domain(&member_id, &domain_id),
                         |_| {
                             WorkspaceProtocolResponse::Success(
                                 "Member removed from domain successfully".to_string(),

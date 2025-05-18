@@ -6,6 +6,8 @@ use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+const ADMIN_PASSWORD: &str = "admin_password";
+
 // Helper function to create a test user
 fn create_test_user(id: &str, role: UserRole) -> User {
     User {
@@ -13,7 +15,7 @@ fn create_test_user(id: &str, role: UserRole) -> User {
         name: format!("Test {}", id),
         role,
         permissions: HashMap::new(),
-        metadata: Vec::new(),
+        metadata: Default::default(),
     }
 }
 
@@ -26,8 +28,9 @@ fn setup_test_environment() -> (
     let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
         "admin",
         "Administrator",
+        ADMIN_PASSWORD,
     ));
-    let domain_ops = ServerDomainOps::new(kernel.clone());
+    let domain_ops = kernel.domain_ops().clone();
 
     (kernel, domain_ops)
 }
@@ -41,8 +44,7 @@ fn test_office_room_permission_inheritance() {
     let user = create_test_user(user_id, UserRole::Member);
 
     // Insert the user
-    kernel
-        .transaction_manager
+    kernel.tx_manager()
         .with_write_transaction(|tx| {
             tx.insert_user(user_id.to_string(), user)?;
             Ok(())
@@ -78,7 +80,7 @@ fn test_office_room_permission_inheritance() {
 
     // Check permission inheritance - user should have view access to the room
     // because they are a member of the parent office
-    let has_room_access = domain_ops.check_room_access(user_id, &room.id).unwrap();
+    let has_room_access = domain_ops.is_member_of_domain(user_id, &room.id).unwrap();
     assert!(
         has_room_access,
         "User should have access to room because they're members of the parent office"
@@ -112,8 +114,7 @@ fn test_permission_escalation() {
     let user = create_test_user(user_id, UserRole::Member);
 
     // Insert the user
-    kernel
-        .transaction_manager
+    kernel.tx_manager()
         .with_write_transaction(|tx| {
             tx.insert_user(user_id.to_string(), user)?;
             Ok(())
@@ -148,8 +149,7 @@ fn test_permission_escalation() {
     );
 
     // Upgrade user to room admin via role
-    kernel
-        .transaction_manager
+    kernel.tx_manager()
         .with_write_transaction(|tx| {
             if let Some(mut user) = tx.get_user(user_id).cloned() {
                 user.role = UserRole::Admin;
@@ -180,8 +180,7 @@ fn test_is_member_of_domain_behavior() {
     let user = create_test_user(user_id, UserRole::Member);
 
     // Insert the user
-    kernel
-        .transaction_manager
+    kernel.tx_manager()
         .with_write_transaction(|tx| {
             tx.insert_user(user_id.to_string(), user)?;
             Ok(())
@@ -230,7 +229,7 @@ fn test_is_member_of_domain_behavior() {
     );
 
     // But user should still have access to the room because of permission inheritance
-    let has_room_access = domain_ops.check_room_access(user_id, &room.id).unwrap();
+    let has_room_access = domain_ops.is_member_of_domain(user_id, &room.id).unwrap();
     assert!(
         has_room_access,
         "User should have room access because they're in the parent office"

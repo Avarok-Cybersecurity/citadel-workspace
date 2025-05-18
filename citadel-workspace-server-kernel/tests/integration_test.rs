@@ -90,7 +90,7 @@ async fn setup_test_environment() -> Result<
     // Create a client to connect to the server, which will trigger the connection handler
     println!("Creating workspace kernel");
     let workspace_kernel =
-        WorkspaceServerKernel::<StackedRatchet>::with_admin(ADMIN_ID, &admin_username);
+        WorkspaceServerKernel::<StackedRatchet>::with_admin(ADMIN_ID, &admin_username, &admin_password);
 
     // TCP client (GUI, CLI) -> internal service -> empty kernel server(s)
     println!("Setting up server");
@@ -107,20 +107,7 @@ async fn setup_test_environment() -> Result<
     // Inject the workspace master password into the admin user's metadata
     // This simulates what `run_server` does during actual startup
     println!("Injecting workspace password into admin metadata...");
-    workspace_kernel.transaction_manager.with_write_transaction(|tx| {
-        let mut admin_user = User {
-            id: admin_username.clone(),
-            name: admin_username.clone(), // Assuming name is same as ID for admin
-            role: UserRole::Admin,
-            permissions: Default::default(),
-            metadata: Default::default(),
-        };
-        admin_user.metadata.insert(
-            WORKSPACE_MASTER_PASSWORD_KEY.to_string(),
-            MetadataValue::String(admin_password.clone()),
-        );
-        tx.insert_user(admin_username.clone(), admin_user)
-    })?;
+    workspace_kernel.inject_admin_user(&admin_username, "Admin", &admin_password).unwrap();
 
     println!("Done setting up test environment");
     Ok((
@@ -249,7 +236,7 @@ async fn test_office_operations() {
 
     // Register the admin_cid as an admin user in the kernel
     kernel
-        .inject_admin_user(&admin_cid.to_string(), "Connected Admin User")
+        .inject_admin_user(&admin_cid.to_string(), "Connected Admin User", &admin_password)
         .unwrap();
 
     // Create the root workspace first for our single workspace model
@@ -460,20 +447,7 @@ async fn test_room_operations() {
     // Inject the workspace master password into the admin user's metadata
     // This simulates what `run_server` does during actual startup
     println!("Injecting workspace password into admin metadata...");
-    kernel.transaction_manager.with_write_transaction(|tx| {
-        let mut admin_user = User {
-            id: admin_username.clone(),
-            name: admin_username.clone(), // Assuming name is same as ID for admin
-            role: UserRole::Admin,
-            permissions: Default::default(),
-            metadata: Default::default(),
-        };
-        admin_user.metadata.insert(
-            WORKSPACE_MASTER_PASSWORD_KEY.to_string(),
-            MetadataValue::String(admin_password.clone()),
-        );
-        tx.insert_user(admin_username.clone(), admin_user)
-    }).unwrap(); 
+    kernel.inject_admin_user(&admin_username, "Admin", &admin_password).unwrap();
 
     // Create the root workspace first for our single workspace model
     println!("Creating root workspace...");

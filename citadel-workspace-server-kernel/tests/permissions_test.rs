@@ -6,6 +6,8 @@ use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+const ADMIN_PASSWORD: &str = "admin_password";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -17,7 +19,7 @@ mod tests {
             name: format!("Test {}", id),
             role,
             permissions: HashMap::new(),
-            metadata: Vec::new(),
+            metadata: Default::default(),
         }
     }
 
@@ -28,6 +30,7 @@ mod tests {
         let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
             "admin",
             "Administrator",
+            ADMIN_PASSWORD,
         ));
 
         // Add a test user with explicit permissions
@@ -36,8 +39,7 @@ mod tests {
 
         // Add the user to the kernel
         {
-            kernel
-                .transaction_manager
+            kernel.tx_manager()
                 .with_write_transaction(|tx| {
                     tx.insert_user(user_id.to_string(), user.clone())?;
                     Ok(())
@@ -46,7 +48,7 @@ mod tests {
         }
 
         // Create an office
-        let domain_ops = ServerDomainOps::new(kernel.clone());
+        let domain_ops = kernel.domain_ops().clone();
         let office = domain_ops
             .create_office("admin", "Test Office", "Test Description", None)
             .unwrap();
@@ -98,8 +100,9 @@ mod tests {
         let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
             admin_id,
             "Custom Administrator",
+            ADMIN_PASSWORD,
         ));
-        let domain_ops = ServerDomainOps::new(kernel.clone());
+        let domain_ops = kernel.domain_ops();
 
         // Verify that the admin check works with custom admin ID
         assert!(domain_ops.is_admin(admin_id));
@@ -113,8 +116,7 @@ mod tests {
 
         // Add the user to the kernel
         {
-            kernel
-                .transaction_manager
+            kernel.tx_manager()
                 .with_write_transaction(|tx| {
                     tx.insert_user(second_admin_id.to_string(), admin2)?;
                     Ok(())
@@ -133,8 +135,9 @@ mod tests {
         let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
             "admin",
             "Administrator",
+            ADMIN_PASSWORD,
         ));
-        let domain_ops = ServerDomainOps::new(kernel.clone());
+        let domain_ops = kernel.domain_ops();
 
         // Create test users with different roles
         let owner_user = create_test_user("owner", UserRole::Owner);
@@ -143,8 +146,7 @@ mod tests {
 
         // Add users to the kernel
         {
-            kernel
-                .transaction_manager
+            kernel.tx_manager()
                 .with_write_transaction(|tx| {
                     tx.insert_user(owner_user.id.clone(), owner_user.clone())?;
                     tx.insert_user(member_user.id.clone(), member_user.clone())?;

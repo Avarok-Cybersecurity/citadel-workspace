@@ -1,4 +1,4 @@
-use crate::kernel::WorkspaceServerKernel;
+use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 use citadel_sdk::prelude::MonoRatchet;
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
@@ -9,8 +9,7 @@ fn create_test_kernel() -> WorkspaceServerKernel<MonoRatchet> {
 
     // Create admin user for testing
     let admin_id = "admin-user";
-    kernel
-        .with_write_transaction(|tx| {
+    kernel.tx_manager().with_write_transaction(|tx| {
             let admin = User::new(
                 admin_id.to_string(),
                 "Admin User".to_string(),
@@ -54,8 +53,7 @@ fn test_create_workspace() {
     }
 
     // Verify the workspace exists in the transaction manager
-    kernel
-        .with_read_transaction(|tx| {
+    kernel.tx_manager().with_read_transaction(|tx| {
             let workspaces = tx.get_all_workspaces();
             assert_eq!(workspaces.len(), 1);
 
@@ -158,8 +156,7 @@ fn test_update_workspace() {
     }
 
     // Verify the workspace was updated in the transaction manager
-    kernel
-        .with_read_transaction(|tx| {
+    kernel.tx_manager().with_read_transaction(|tx| {
             let workspace = tx.get_workspace(&workspace_id).unwrap();
             assert_eq!(workspace.name, updated_name);
             assert_eq!(workspace.description, updated_description);
@@ -211,8 +208,7 @@ fn test_delete_workspace() {
     }
 
     // Verify the workspace was deleted from the transaction manager
-    kernel
-        .with_read_transaction(|tx| {
+    kernel.tx_manager().with_read_transaction(|tx| {
             let workspace = tx.get_workspace(&workspace_id);
             assert!(workspace.is_none());
             Ok(())
@@ -293,8 +289,7 @@ fn test_permissions_inheritance() {
     let owner_id = "owner-user";
     let member_id = "member-user";
 
-    kernel
-        .with_write_transaction(|tx| {
+    kernel.tx_manager().with_write_transaction(|tx| {
             let admin = User::new(
                 admin_id.to_string(),
                 "Admin User".to_string(),
@@ -317,7 +312,7 @@ fn test_permissions_inheritance() {
 
             // Directly create the workspace in the transaction to bypass the single workspace check
             let workspace = Workspace {
-                id: crate::WORKSPACE_ROOT_ID.to_string(),
+                id: citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string(),
                 name: "Test Workspace".to_string(),
                 description: "Test description".to_string(),
                 owner_id: owner_id.to_string(),
@@ -327,7 +322,7 @@ fn test_permissions_inheritance() {
             };
 
             tx.insert_domain(
-                crate::WORKSPACE_ROOT_ID.to_string(),
+                citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string(),
                 Domain::Workspace {
                     workspace: workspace.clone(),
                 },
@@ -344,22 +339,21 @@ fn test_permissions_inheritance() {
 
     // In the single workspace model, add the member to the workspace directly
     // and explicitly add the ViewContent permission
-    kernel
-        .with_write_transaction(|tx| {
+    kernel.tx_manager().with_write_transaction(|tx| {
             // Get the workspace and create an owned clone
-            let workspace = tx.get_workspace(crate::WORKSPACE_ROOT_ID).unwrap();
+            let workspace = tx.get_workspace(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID).unwrap();
             let mut workspace_clone = workspace.clone();
 
             // Add the user to the members list
             workspace_clone.members.push(member_id.to_string());
 
             // Update the workspace
-            tx.update_workspace(crate::WORKSPACE_ROOT_ID, workspace_clone)?;
+            tx.update_workspace(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID, workspace_clone)?;
 
             // Update the user permissions to explicitly include ViewContent for the workspace
             if let Some(user) = tx.get_user(member_id) {
                 let mut user_clone = user.clone();
-                user_clone.add_permission(crate::WORKSPACE_ROOT_ID, Permission::ViewContent);
+                user_clone.add_permission(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID, Permission::ViewContent);
                 tx.update_user(member_id, user_clone)?;
             }
 
@@ -387,8 +381,7 @@ fn test_permissions_inheritance() {
     };
 
     // Before creating the room, ensure the member user also has ViewContent permission on the office
-    kernel
-        .with_write_transaction(|tx| {
+    kernel.tx_manager().with_write_transaction(|tx| {
             if let Some(user) = tx.get_user(member_id) {
                 let mut user_clone = user.clone();
                 user_clone.add_permission(&office_id, Permission::ViewContent);
@@ -416,8 +409,7 @@ fn test_permissions_inheritance() {
     };
 
     // After creating the room, add ViewContent permission for the room as well
-    kernel
-        .with_write_transaction(|tx| {
+    kernel.tx_manager().with_write_transaction(|tx| {
             if let Some(user) = tx.get_user(member_id) {
                 let mut user_clone = user.clone();
                 user_clone.add_permission(&room_id, Permission::ViewContent);
@@ -429,35 +421,35 @@ fn test_permissions_inheritance() {
 
     // Test permissions inheritance
     // 1. Member should have ViewContent permission on workspace
-    let member_workspace_perm = kernel.check_entity_permission(
+    let member_workspace_perm = kernel.tx_manager().check_entity_permission(
         member_id,
-        crate::WORKSPACE_ROOT_ID,
+        citadel_workspace_server_kernel::WORKSPACE_ROOT_ID,
         Permission::ViewContent,
     );
     assert!(member_workspace_perm.unwrap());
 
     // 2. Member should have ViewContent permission on office (inherited from workspace)
     let member_office_perm =
-        kernel.check_entity_permission(member_id, &office_id, Permission::ViewContent);
+        kernel.tx_manager().check_entity_permission(member_id, &office_id, Permission::ViewContent);
     assert!(member_office_perm.unwrap());
 
     // 3. Member should have ViewContent permission on room (inherited from workspace -> office)
     let member_room_perm =
-        kernel.check_entity_permission(member_id, &room_id, Permission::ViewContent);
+        kernel.tx_manager().check_entity_permission(member_id, &room_id, Permission::ViewContent);
     assert!(member_room_perm.unwrap());
 
     // 4. Member should NOT have EditContent permission on room (not granted to members)
     let member_edit_perm =
-        kernel.check_entity_permission(member_id, &room_id, Permission::EditContent);
+        kernel.tx_manager().check_entity_permission(member_id, &room_id, Permission::EditContent);
     assert!(!member_edit_perm.unwrap());
 
     // 5. Owner should have all permissions on workspace, office, and room
     let owner_edit_workspace =
-        kernel.check_entity_permission(owner_id, crate::WORKSPACE_ROOT_ID, Permission::EditContent);
+        kernel.tx_manager().check_entity_permission(owner_id, citadel_workspace_server_kernel::WORKSPACE_ROOT_ID, Permission::EditContent);
     let owner_edit_office =
-        kernel.check_entity_permission(owner_id, &office_id, Permission::EditContent);
+        kernel.tx_manager().check_entity_permission(owner_id, &office_id, Permission::EditContent);
     let owner_edit_room =
-        kernel.check_entity_permission(owner_id, &room_id, Permission::EditContent);
+        kernel.tx_manager().check_entity_permission(owner_id, &room_id, Permission::EditContent);
 
     assert!(owner_edit_workspace.unwrap());
     assert!(owner_edit_office.unwrap());
@@ -465,11 +457,11 @@ fn test_permissions_inheritance() {
 
     // 6. Admin should have all permissions regardless of membership
     let admin_edit_workspace =
-        kernel.check_entity_permission(admin_id, crate::WORKSPACE_ROOT_ID, Permission::EditContent);
+        kernel.tx_manager().check_entity_permission(admin_id, citadel_workspace_server_kernel::WORKSPACE_ROOT_ID, Permission::EditContent);
     let admin_edit_office =
-        kernel.check_entity_permission(admin_id, &office_id, Permission::EditContent);
+        kernel.tx_manager().check_entity_permission(admin_id, &office_id, Permission::EditContent);
     let admin_edit_room =
-        kernel.check_entity_permission(admin_id, &room_id, Permission::EditContent);
+        kernel.tx_manager().check_entity_permission(admin_id, &room_id, Permission::EditContent);
 
     assert!(admin_edit_workspace.unwrap());
     assert!(admin_edit_office.unwrap());
@@ -506,7 +498,7 @@ fn test_load_workspace() {
         assert_eq!(workspace.description, workspace_description);
         assert_eq!(workspace.owner_id, admin_id);
         assert!(workspace.members.contains(&admin_id.to_string()));
-        assert_eq!(workspace.id, crate::WORKSPACE_ROOT_ID); // Should be using the fixed workspace ID
+        assert_eq!(workspace.id, citadel_workspace_server_kernel::WORKSPACE_ROOT_ID); // Should be using the fixed workspace ID
     } else {
         panic!("Expected Workspace response");
     }

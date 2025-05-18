@@ -15,7 +15,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         mdx_content: Option<&str>,
     ) -> Result<Office, NetworkError> {
         // Use the domain abstraction for creating an office
-        self.create_domain_entity::<Office>(
+        self.domain_operations.create_domain_entity::<Office>(
             user_id,
             None, // No parent for an office
             name,
@@ -26,7 +26,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
     pub fn delete_office(&self, user_id: &str, office_id: &str) -> Result<Office, NetworkError> {
         // Use the domain abstraction for deleting an office
-        self.delete_domain_entity::<Office>(user_id, office_id)
+        self.domain_operations.delete_domain_entity::<Office>(user_id, office_id)
     }
 
     pub fn update_office(
@@ -38,12 +38,12 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         mdx_content: Option<&str>,
     ) -> Result<Office, NetworkError> {
         // Use the domain abstraction for updating an office
-        self.update_domain_entity::<Office>(user_id, office_id, name, description, mdx_content)
+        self.domain_operations.update_domain_entity::<Office>(user_id, office_id, name, description, mdx_content)
     }
 
     pub fn get_office(&self, user_id: &str, office_id: &str) -> Result<Office, NetworkError> {
         // Use the domain abstraction for getting an office
-        self.get_domain_entity::<Office>(user_id, office_id)
+        self.domain_operations.get_domain_entity::<Office>(user_id, office_id)
     }
 
     /// List all offices
@@ -53,6 +53,6 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         parent_id: Option<&str>,
     ) -> Result<Vec<Office>, NetworkError> {
         // Use the domain abstraction for listing all offices
-        self.list_domain_entities::<Office>(user_id, parent_id)
+        self.domain_operations.list_domain_entities::<Office>(user_id, parent_id)
     }
 }

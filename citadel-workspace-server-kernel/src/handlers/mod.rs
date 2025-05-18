@@ -5,4 +5,3 @@ pub mod office;
 pub mod permissions;
 pub mod query;
 pub mod room;
-pub mod transaction;

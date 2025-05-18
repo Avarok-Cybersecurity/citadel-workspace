@@ -3,7 +3,7 @@ use citadel_workspace_types::structs::{Domain, Permission, Room};
 use uuid::Uuid;
 use crate::handlers::domain::{permission_denied, DomainOperations};
 use crate::handlers::domain::server_ops::ServerDomainOps;
-use crate::handlers::transaction::Transaction;
+use crate::kernel::transaction::Transaction;
 
 impl<R: Ratchet> ServerDomainOps<R> {
     pub fn remove_user_from_workspace_inner(&self, user_id: &str, member_id: &str) -> Result<(), NetworkError> {

@@ -2,7 +2,7 @@ use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{Domain, Permission, Workspace};
 use crate::handlers::domain::DomainOperations;
 use crate::handlers::domain::server_ops::ServerDomainOps;
-use crate::handlers::transaction::Transaction;
+use crate::kernel::transaction::Transaction;
 
 impl<R: Ratchet> ServerDomainOps<R> {
     pub fn update_workspace_inner(&self, user_id: &str, name: Option<&str>, description: Option<&str>, metadata: Option<Vec<u8>>) -> Result<Workspace, NetworkError> {
@@ -106,7 +106,7 @@ impl<R: Ratchet> ServerDomainOps<R> {
 
         // Check if a workspace already exists
         let existing_workspace = self.with_read_transaction(|tx| {
-            let workspaces = tx.get_workspaces();
+            let workspaces = tx.get_all_workspaces();
             Ok(!workspaces.is_empty())
         })?;
 
