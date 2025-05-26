@@ -1,6 +1,7 @@
 use citadel_sdk::prelude::NetworkError;
 use citadel_logging::debug;
-use citadel_workspace_types::structs::{Domain, Permission, UserRole};
+use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
+use citadel_workspace_types::UpdateOperation;
 use crate::kernel::transaction::read::ReadTransaction;
 use crate::kernel::transaction::{Transaction, TransactionManager};
 use crate::kernel::transaction::write::WriteTransaction;
@@ -122,6 +123,56 @@ impl TransactionManager {
                 }
                 None => Err(NetworkError::msg("Domain not found")),
             }
+        })
+    }
+    
+    pub fn get_member(&self, user_id: &str, member_id: &str) -> Result<Option<User>, NetworkError> {
+        self.check_entity_permission(user_id, member_id, Permission::ViewContent)?;
+        self.with_read_transaction(|tx| {
+            Ok(tx.get_user(user_id).cloned())
+        })
+    }
+    
+    pub fn update_member_role(&self, user_id: &str, member_id: &str, role: UserRole) -> Result<(), NetworkError> {
+        // A user which can add users can update a user's role
+        self.check_entity_permission(user_id, member_id, Permission::AddUsers)?;
+        self.with_write_transaction(|tx| {
+            let member = tx.get_user_mut(user_id).ok_or_else(|| NetworkError::msg("User not found"))?;
+            member.role = role;
+            Ok(())
+        })
+    }
+    
+    pub fn update_member_permissions(&self, user_id: &str, member_id: &str, domain_id: &str, permissions: Vec<Permission>, modify_type: UpdateOperation) -> Result<(), NetworkError> {
+        self.check_entity_permission(user_id, member_id, Permission::AddUsers)?;
+        self.with_write_transaction(|tx| {
+            let member = tx.get_user_mut(user_id).ok_or_else(|| NetworkError::msg("User not found"))?;
+            let current_permission = member.permissions.get_mut(domain_id).ok_or_else(|| NetworkError::msg("Domain not found"))?;
+            match modify_type {
+                UpdateOperation::Add => {
+                    current_permission.extend(permissions);
+                }
+                UpdateOperation::Set => {
+                    *current_permission = permissions.into_iter().collect();
+                }
+                UpdateOperation::Remove => {
+                    current_permission.retain(|permission| !permissions.contains(permission));
+                }
+            }
+            Ok(())
+        })
+    }
+    
+    /// Completely deletes a member from the workspace, including all offices, rooms, etc
+    pub fn delete_member(&self, user_id: &str, member_id: &str) -> Result<(), NetworkError> {
+        self.check_entity_permission(user_id, member_id, Permission::AddUsers)?;
+        self.with_write_transaction(|tx| {
+            let user= tx.remove_user(user_id)?.ok_or_else(|| NetworkError::msg("User not found for deletion"))?;
+            let domain_memberships = user.permissions.keys();
+            for domain_id in domain_memberships {
+                let _ = tx.remove_user_from_domain(user_id, domain_id);
+            }
+            Ok(())
         })
     }
 }

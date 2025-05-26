@@ -1,15 +1,18 @@
 use citadel_sdk::prelude::*;
-use citadel_workspace_types::structs::Domain;
+use citadel_workspace_types::structs::{Domain, UserRole};
 use crate::handlers::domain::server_ops::ServerDomainOps;
 
 impl<R: Ratchet> ServerDomainOps<R> {
-    pub(crate) fn add_user_to_domain_inner(&self, user_id: &str, domain_id: &str) -> Result<(), NetworkError> {
+    pub(crate) fn add_user_to_domain_inner(&self, user_id: &str, domain_id: &str, role: UserRole) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
             let domain = tx
                 .get_domain(domain_id)
                 .cloned()
                 .ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
-    
+            let mut user = tx
+                .get_user(user_id)
+                .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?.clone();
+            
             // Update domain with updated user list
             match domain {
                 Domain::Office { mut office } => {
@@ -17,32 +20,30 @@ impl<R: Ratchet> ServerDomainOps<R> {
                     if !office.members.contains(&user_id.to_string()) {
                         office.members.push(user_id.to_string());
                     }
-                    // TODO: Handle setting the role correctly
                     let updated_domain = Domain::Office { office };
                     tx.update_domain(domain_id, updated_domain)?;
-                    Ok(())
                 }
                 Domain::Room { mut room } => {
                     // Add user to members if not already present
                     if !room.members.contains(&user_id.to_string()) {
                         room.members.push(user_id.to_string());
                     }
-                    // TODO: Handle setting the role correctly
                     let updated_domain = Domain::Room { room };
                     tx.update_domain(domain_id, updated_domain)?;
-                    Ok(())
                 }
                 Domain::Workspace { mut workspace } => {
                     // Add user to members if not already present
                     if !workspace.members.contains(&user_id.to_string()) {
                         workspace.members.push(user_id.to_string());
                     }
-                    // TODO: Handle setting the role correctly
                     let updated_domain = Domain::Workspace { workspace };
                     tx.update_domain(domain_id, updated_domain)?;
-                    Ok(())
                 }
             }
+
+            user.role = role;
+            tx.update_user(user_id, user)?;
+            Ok(())
         })
     }
 

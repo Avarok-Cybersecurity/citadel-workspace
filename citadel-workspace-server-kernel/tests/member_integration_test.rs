@@ -540,7 +540,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     // Inject the test user into the kernel with the username as the user ID
     // This is important: we need to use "test_user" as the ID to match later operations
     workspace_kernel
-        .inject_admin_user("test_user", "Test User")
+        .inject_admin_user("test_user", "Test User", &admin_username)
         .unwrap();
 
     // Create an office directly using the kernel

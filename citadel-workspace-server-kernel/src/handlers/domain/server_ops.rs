@@ -78,9 +78,9 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         &self,
         user_id: &str,
         domain_id: &str,
-        _role: UserRole,
+        role: UserRole,
     ) -> Result<(), NetworkError> {
-        self.add_user_to_domain_inner(user_id, domain_id)
+        self.add_user_to_domain_inner(user_id, domain_id, role)
     }
 
     fn remove_user_from_domain(&self, user_id: &str, domain_id: &str) -> Result<(), NetworkError> {
@@ -236,16 +236,18 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         name: &str,
         description: &str,
         metadata: Option<Vec<u8>>,
+        workspace_password: String,
     ) -> Result<Workspace, NetworkError> {
-        self.create_workspace_inner(user_id, name, description, metadata)
+        self.create_workspace_inner(user_id, name, description, metadata, workspace_password)
     }
 
     fn delete_workspace(
         &self,
         user_id: &str,
         _workspace_id: &str,
+        workspace_password: String,
     ) -> Result<Workspace, NetworkError> {
-        self.delete_workspace_inner(user_id)
+        self.delete_workspace_inner(user_id, workspace_password)
     }
 
     fn update_workspace(
@@ -255,8 +257,9 @@ impl<R: Ratchet> DomainOperations<R> for ServerDomainOps<R> {
         name: Option<&str>,
         description: Option<&str>,
         metadata: Option<Vec<u8>>,
+        workspace_master_password: String,
     ) -> Result<Workspace, NetworkError> {
-        self.update_workspace_inner(user_id, name, description, metadata)
+        self.update_workspace_inner(user_id, name, description, metadata, workspace_master_password)
     }
 
     fn add_office_to_workspace(

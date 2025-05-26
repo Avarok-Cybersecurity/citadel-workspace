@@ -1,8 +1,8 @@
 use crate::handlers::domain::DomainOperations;
 use crate::kernel::WorkspaceServerKernel;
-use crate::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use crate::{WorkspaceProtocolRequest, WorkspaceProtocolResponse, WORKSPACE_ROOT_ID};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{Office, Workspace};
+use citadel_workspace_types::structs::{Office, UserRole, Workspace};
 
 impl<R: Ratchet> WorkspaceServerKernel<R> {
     // Helper function to handle common error pattern
@@ -80,7 +80,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 "Failed to update workspace",
             ),
             WorkspaceProtocolRequest::DeleteWorkspace { workspace_master_password } => Self::handle_result(
-                self.delete_workspace(user_id, crate::WORKSPACE_ROOT_ID, workspace_master_password),
+                self.domain_ops().delete_workspace(user_id, crate::WORKSPACE_ROOT_ID, workspace_master_password),
                 |_| {
                     WorkspaceProtocolResponse::Success("Workspace deleted successfully".to_string())
                 },
@@ -192,7 +192,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             } => {
                 if let Some(domain_id) = office_id.or(room_id) {
                     Self::handle_result(
-                        self.add_user_to_domain(user_id, &domain_id, role),
+                        self.domain_ops().add_user_to_domain(user_id, &domain_id, role),
                         |_| {
                             WorkspaceProtocolResponse::Success(
                                 "Member added to domain successfully".to_string(),
@@ -207,10 +207,13 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 }
             }
             WorkspaceProtocolRequest::GetMember { user_id: member_id } => {
-                match self.get_member(&member_id) {
-                    Some(member) => Ok(WorkspaceProtocolResponse::Member(member)),
-                    None => Ok(WorkspaceProtocolResponse::Error(
+                match self.tx_manager().get_member(user_id, &member_id) {
+                    Ok(Some(member)) => Ok(WorkspaceProtocolResponse::Member(member)),
+                    Ok(None) => Ok(WorkspaceProtocolResponse::Error(
                         "Member not found".to_string(),
+                    )),
+                    Err(error) => Ok(WorkspaceProtocolResponse::Error(
+                        format!("Failed to get member: {error}"),
                     )),
                 }
             }
@@ -219,7 +222,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 role,
                 metadata: _,
             } => Self::handle_result(
-                self.update_member_role(user_id, &member_id, role),
+                self.tx_manager().update_member_role(user_id, &member_id, role),
                 |_| {
                     WorkspaceProtocolResponse::Success(
                         "Member role updated successfully".to_string(),
@@ -233,11 +236,12 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 permissions,
                 operation,
             } => Self::handle_result(
-                self.update_member_permissions(
+                self.tx_manager().update_member_permissions(
                     user_id,
                     &member_id,
                     &domain_id,
-                    permissions.into_iter().collect(),
+                    permissions,
+                    operation,
                 ),
                 |_| {
                     WorkspaceProtocolResponse::Success(
@@ -253,7 +257,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             } => {
                 if let Some(domain_id) = office_id.or(room_id) {
                     Self::handle_result(
-                        self.remove_member_from_domain(&member_id, &domain_id),
+                        self.domain_ops().remove_user_from_domain(&member_id, &domain_id),
                         |_| {
                             WorkspaceProtocolResponse::Success(
                                 "Member removed from domain successfully".to_string(),
@@ -264,7 +268,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 } else {
                     // No domain specified, completely remove the user
                     Self::handle_result(
-                        self.remove_member(&member_id),
+                        self.tx_manager().delete_member(user_id, &member_id),
                         |_| {
                             WorkspaceProtocolResponse::Success(
                                 "Member removed successfully".to_string(),
@@ -302,9 +306,10 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         name: &str,
         description: &str,
         metadata: Option<Vec<u8>>,
+        workspace_password: String,
     ) -> Result<Workspace, NetworkError> {
         self.domain_ops()
-            .create_workspace(user_id, name, description, metadata)
+            .create_workspace(user_id, name, description, metadata, workspace_password)
     }
 
     fn update_workspace(
@@ -314,9 +319,10 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         name: Option<&str>,
         description: Option<&str>,
         metadata: Option<Vec<u8>>,
+        workspace_master_password: String,
     ) -> Result<Workspace, NetworkError> {
         self.domain_ops()
-            .update_workspace(user_id, workspace_id, name, description, metadata)
+            .update_workspace(user_id, workspace_id, name, description, metadata, workspace_master_password)
     }
 
     fn list_all_offices(&self, user_id: &str) -> Result<Vec<Office>, NetworkError> {
@@ -327,5 +333,11 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 .list_offices_in_workspace(user_id, &workspace.id),
             Err(e) => Err(e),
         }
+    }
+    
+    pub fn add_member(&self, user_id: &str, member_id: &str, office_id: Option<&str>, room_id: Option<&str>, role: UserRole) -> Result<(), NetworkError> {
+        self.domain_ops().add_user_to_workspace(user_id, member_id, WORKSPACE_ROOT_ID)?;
+        let domain_id = office_id.or(room_id).ok_or_else(|| NetworkError::msg("No intial domain specified"))?;
+        self.domain_ops().add_user_to_domain(member_id, domain_id, role)
     }
 }

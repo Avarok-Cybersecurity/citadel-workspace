@@ -196,6 +196,7 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
         name: &str,
         description: &str,
         metadata: Option<Vec<u8>>,
+        workspace_password: String,
     ) -> Result<Workspace, NetworkError>;
 
     /// Delete a workspace
@@ -203,6 +204,7 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
         &self,
         user_id: &str,
         workspace_id: &str,
+        workspace_password: String,
     ) -> Result<Workspace, NetworkError>;
 
     /// Update a workspace
@@ -213,6 +215,7 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
         name: Option<&str>,
         description: Option<&str>,
         metadata: Option<Vec<u8>>,
+        workspace_master_password: String,
     ) -> Result<Workspace, NetworkError>;
 
     /// Add an office to a workspace

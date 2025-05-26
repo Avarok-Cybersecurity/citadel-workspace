@@ -3,9 +3,10 @@ use citadel_workspace_types::structs::{Domain, Permission, Workspace};
 use crate::handlers::domain::DomainOperations;
 use crate::handlers::domain::server_ops::ServerDomainOps;
 use crate::kernel::transaction::Transaction;
+use crate::WORKSPACE_ROOT_ID;
 
 impl<R: Ratchet> ServerDomainOps<R> {
-    pub fn update_workspace_inner(&self, user_id: &str, name: Option<&str>, description: Option<&str>, metadata: Option<Vec<u8>>) -> Result<Workspace, NetworkError> {
+    pub fn update_workspace_inner(&self, user_id: &str, name: Option<&str>, description: Option<&str>, metadata: Option<Vec<u8>>, workspace_master_password: String) -> Result<Workspace, NetworkError> {
         // Use fixed workspace-root ID
         let workspace_id = crate::WORKSPACE_ROOT_ID.to_string();
 
@@ -17,6 +18,10 @@ impl<R: Ratchet> ServerDomainOps<R> {
         }
 
         self.with_write_transaction(move |tx| {
+            if tx.workspace_password(WORKSPACE_ROOT_ID).unwrap_or_default() != workspace_master_password {
+                return Err(NetworkError::msg("update_workspace: Invalid workspace password"));
+            }
+            
             // Get the workspace
             let domain = tx
                 .get_domain(&workspace_id)
@@ -52,7 +57,7 @@ impl<R: Ratchet> ServerDomainOps<R> {
         })
     }
 
-    pub fn delete_workspace_inner(&self, user_id: &str) -> Result<Workspace, NetworkError> {
+    pub fn delete_workspace_inner(&self, user_id: &str, workspace_master_password: String) -> Result<Workspace, NetworkError> {
         // Use fixed workspace-root ID
         let actual_workspace_id = crate::WORKSPACE_ROOT_ID;
 
@@ -71,6 +76,10 @@ impl<R: Ratchet> ServerDomainOps<R> {
         let workspace = self.get_workspace(user_id, &actual_workspace_id)?;
 
         self.with_write_transaction(move |tx| {
+            if tx.workspace_password(WORKSPACE_ROOT_ID).unwrap_or_default() != workspace_master_password {
+                return Err(NetworkError::msg("Invalid workspace password"));
+            }
+            
             // Get the workspace
             let domain = tx
                 .get_domain(&actual_workspace_id)
@@ -96,7 +105,7 @@ impl<R: Ratchet> ServerDomainOps<R> {
         Ok(workspace)
     }
 
-    pub fn create_workspace_inner(&self, user_id: &str, name: &str, description: &str, metadata: Option<Vec<u8>>) -> Result<Workspace, NetworkError> {
+    pub fn create_workspace_inner(&self, user_id: &str, name: &str, description: &str, metadata: Option<Vec<u8>>, workspace_password: String) -> Result<Workspace, NetworkError> {
         // Ensure user has permission to create workspaces
         if !self.check_entity_permission(user_id, "global", Permission::CreateWorkspace)? {
             return Err(NetworkError::msg(
@@ -106,6 +115,10 @@ impl<R: Ratchet> ServerDomainOps<R> {
 
         // Check if a workspace already exists
         let existing_workspace = self.with_read_transaction(|tx| {
+            if tx.workspace_password(WORKSPACE_ROOT_ID).unwrap_or_default() != workspace_password {
+                return Err(NetworkError::msg("Invalid workspace password"));
+            }
+            
             let workspaces = tx.get_all_workspaces();
             Ok(!workspaces.is_empty())
         })?;
