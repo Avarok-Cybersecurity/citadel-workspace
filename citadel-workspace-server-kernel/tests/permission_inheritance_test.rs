@@ -44,7 +44,8 @@ fn test_office_room_permission_inheritance() {
     let user = create_test_user(user_id, UserRole::Member);
 
     // Insert the user
-    kernel.tx_manager()
+    kernel
+        .tx_manager()
         .with_write_transaction(|tx| {
             tx.insert_user(user_id.to_string(), user)?;
             Ok(())
@@ -114,7 +115,8 @@ fn test_permission_escalation() {
     let user = create_test_user(user_id, UserRole::Member);
 
     // Insert the user
-    kernel.tx_manager()
+    kernel
+        .tx_manager()
         .with_write_transaction(|tx| {
             tx.insert_user(user_id.to_string(), user)?;
             Ok(())
@@ -149,7 +151,8 @@ fn test_permission_escalation() {
     );
 
     // Upgrade user to room admin via role
-    kernel.tx_manager()
+    kernel
+        .tx_manager()
         .with_write_transaction(|tx| {
             if let Some(mut user) = tx.get_user(user_id).cloned() {
                 user.role = UserRole::Admin;
@@ -180,7 +183,8 @@ fn test_is_member_of_domain_behavior() {
     let user = create_test_user(user_id, UserRole::Member);
 
     // Insert the user
-    kernel.tx_manager()
+    kernel
+        .tx_manager()
         .with_write_transaction(|tx| {
             tx.insert_user(user_id.to_string(), user)?;
             Ok(())

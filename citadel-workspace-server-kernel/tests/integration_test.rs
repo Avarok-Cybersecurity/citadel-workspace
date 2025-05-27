@@ -6,9 +6,7 @@ use citadel_sdk::prelude::{
     BackendType, NetworkError, NodeBuilder, NodeType, PreSharedKey, StackedRatchet,
 };
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
-use citadel_workspace_server_kernel::WORKSPACE_MASTER_PASSWORD_KEY;
 use citadel_workspace_types::{
-    structs::{MetadataValue, User, UserRole},
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
 use std::error::Error;
@@ -89,8 +87,11 @@ async fn setup_test_environment() -> Result<
 
     // Create a client to connect to the server, which will trigger the connection handler
     println!("Creating workspace kernel");
-    let workspace_kernel =
-        WorkspaceServerKernel::<StackedRatchet>::with_admin(ADMIN_ID, &admin_username, &admin_password);
+    let workspace_kernel = WorkspaceServerKernel::<StackedRatchet>::with_admin(
+        ADMIN_ID,
+        &admin_username,
+        &admin_password,
+    );
 
     // TCP client (GUI, CLI) -> internal service -> empty kernel server(s)
     println!("Setting up server");
@@ -107,7 +108,9 @@ async fn setup_test_environment() -> Result<
     // Inject the workspace master password into the admin user's metadata
     // This simulates what `run_server` does during actual startup
     println!("Injecting workspace password into admin metadata...");
-    workspace_kernel.inject_admin_user(&admin_username, "Admin", &admin_password).unwrap();
+    workspace_kernel
+        .inject_admin_user(&admin_username, "Admin", &admin_password)
+        .unwrap();
 
     println!("Done setting up test environment");
     Ok((
@@ -236,7 +239,11 @@ async fn test_office_operations() {
 
     // Register the admin_cid as an admin user in the kernel
     kernel
-        .inject_admin_user(&admin_cid.to_string(), "Connected Admin User", &admin_password)
+        .inject_admin_user(
+            &admin_cid.to_string(),
+            "Connected Admin User",
+            &admin_password,
+        )
         .unwrap();
 
     // Create the root workspace first for our single workspace model
@@ -259,7 +266,7 @@ async fn test_office_operations() {
 
     println!("Root workspace created: {:?}", workspace_response);
 
-    // --- Test: Attempt to create workspace with WRONG password --- 
+    // --- Test: Attempt to create workspace with WRONG password ---
     println!("Attempting to create workspace with wrong password...");
     let create_workspace_wrong_pw_cmd = WorkspaceProtocolRequest::CreateWorkspace {
         name: "Wrong PW Workspace".to_string(),
@@ -267,7 +274,7 @@ async fn test_office_operations() {
         workspace_master_password: "wrong-password".to_string(), // Provide wrong password
         metadata: None,
     };
-    
+
     let error_response = send_workspace_command(
         &to_service,
         &mut from_service,
@@ -279,12 +286,19 @@ async fn test_office_operations() {
 
     match error_response {
         WorkspaceProtocolResponse::Error(msg) => {
-            assert!(msg.contains("Incorrect workspace master password"), "Expected password error, got: {}", msg);
+            assert!(
+                msg.contains("Incorrect workspace master password"),
+                "Expected password error, got: {}",
+                msg
+            );
             println!("Received expected error for wrong password: {}", msg);
-        },
-        _ => panic!("Expected Error response for wrong password, got: {:?}", error_response),
+        }
+        _ => panic!(
+            "Expected Error response for wrong password, got: {:?}",
+            error_response
+        ),
     }
-    // --- End Test --- 
+    // --- End Test ---
 
     // Create an office using the command processor instead of directly
     println!("Creating test office...");
@@ -447,7 +461,9 @@ async fn test_room_operations() {
     // Inject the workspace master password into the admin user's metadata
     // This simulates what `run_server` does during actual startup
     println!("Injecting workspace password into admin metadata...");
-    kernel.inject_admin_user(&admin_username, "Admin", &admin_password).unwrap();
+    kernel
+        .inject_admin_user(&admin_username, "Admin", &admin_password)
+        .unwrap();
 
     // Create the root workspace first for our single workspace model
     println!("Creating root workspace...");

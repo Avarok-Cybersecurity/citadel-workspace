@@ -39,7 +39,9 @@ pub enum WorkspaceProtocolRequest {
         workspace_master_password: String,
         metadata: Option<Vec<u8>>,
     },
-    DeleteWorkspace { workspace_master_password: String },
+    DeleteWorkspace {
+        workspace_master_password: String,
+    },
 
     // Office commands
     CreateOffice {
@@ -164,5 +166,5 @@ pub enum UpdateOperation {
     // Sets the existing permissions to the new permissions. This overwrites any existing permissions
     Set,
     // Removes the associated permissions from the user
-    Remove
+    Remove,
 }

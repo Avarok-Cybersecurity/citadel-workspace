@@ -1,14 +1,17 @@
-use crate::kernel::WorkspaceServerKernel;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
+// Re-export WorkspacePasswordPair publicly - REMOVING THIS LINE as it's not in citadel_workspace_types
+// Import other structs for use within the domain module
+use crate::kernel::transaction::Transaction;
 use citadel_workspace_types::structs::{
     Domain, Office, Permission, Room, User, UserRole, Workspace,
 };
-use crate::kernel::transaction::Transaction;
+// Corrected import path for WorkspaceDBList based on compiler suggestion
+use crate::handlers::domain::functions::workspace::workspace_ops::WorkspaceDBList;
 
 pub mod entity;
+pub mod functions;
 pub mod server_ops;
 pub mod workspace_entity;
-pub mod functions;
 
 // NetworkError helpers (using functions instead of impl extension)
 pub fn permission_denied<S: std::fmt::Display>(msg: S) -> NetworkError {
@@ -46,7 +49,7 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
     fn init(&self) -> Result<(), NetworkError>;
 
     /// Check if a user is an admin
-    fn is_admin(&self, user_id: &str) -> bool;
+    fn is_admin(&self, tx: &dyn Transaction, user_id: &str) -> Result<bool, NetworkError>;
 
     /// Get a user by ID
     fn get_user(&self, user_id: &str) -> Option<User>;
@@ -64,15 +67,19 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
     /// Check if a user has a specific permission for an entity
     fn check_entity_permission(
         &self,
+        tx: &dyn Transaction,
         user_id: &str,
         entity_id: &str,
         permission: Permission,
     ) -> Result<bool, NetworkError>;
 
     /// Check if a user is a member of a domain
-    fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
-        self.check_entity_permission(user_id, domain_id, Permission::ViewContent)
-    }
+    fn is_member_of_domain(
+        &self,
+        tx: &dyn Transaction,
+        user_id: &str,
+        domain_id: &str,
+    ) -> Result<bool, NetworkError>;
 
     /// Get a domain by ID
     fn get_domain(&self, domain_id: &str) -> Option<Domain>;
@@ -80,13 +87,19 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
     /// Add a user to a domain
     fn add_user_to_domain(
         &self,
-        user_id: &str,
+        admin_id: &str,
+        user_id_to_add: &str,
         domain_id: &str,
-        _role: UserRole,
+        role: UserRole,
     ) -> Result<(), NetworkError>;
 
     /// Remove a user from a domain
-    fn remove_user_from_domain(&self, _user_id: &str, domain_id: &str) -> Result<(), NetworkError>;
+    fn remove_user_from_domain(
+        &self,
+        admin_id: &str,
+        user_id_to_remove: &str,
+        domain_id: &str,
+    ) -> Result<(), NetworkError>;
 
     /// Get a domain entity
     fn get_domain_entity<T: DomainEntity + 'static>(
@@ -133,6 +146,7 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
     fn create_office(
         &self,
         user_id: &str,
+        workspace_id: &str,
         name: &str,
         description: &str,
         mdx_content: Option<&str>,
@@ -181,13 +195,24 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
     ) -> Result<Room, NetworkError>;
 
     /// List offices
-    fn list_offices(&self, user_id: &str) -> Result<Vec<Office>, NetworkError>;
+    fn list_offices(
+        &self,
+        user_id: &str,
+        workspace_id: Option<String>,
+    ) -> Result<Vec<Office>, NetworkError>;
 
     /// List rooms
-    fn list_rooms(&self, user_id: &str, office_id: &str) -> Result<Vec<Room>, NetworkError>;
+    fn list_rooms(
+        &self,
+        user_id: &str,
+        office_id: Option<String>,
+    ) -> Result<Vec<Room>, NetworkError>;
 
     /// Get a workspace
     fn get_workspace(&self, user_id: &str, workspace_id: &str) -> Result<Workspace, NetworkError>;
+
+    /// Get workspace details (potentially more verbose than get_workspace)
+    fn get_workspace_details(&self, user_id: &str, ws_id: &str) -> Result<Workspace, NetworkError>;
 
     /// Create a workspace
     fn create_workspace(
@@ -205,7 +230,7 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
         user_id: &str,
         workspace_id: &str,
         workspace_password: String,
-    ) -> Result<Workspace, NetworkError>;
+    ) -> Result<(), NetworkError>;
 
     /// Update a workspace
     fn update_workspace(
@@ -240,6 +265,7 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
         user_id: &str,
         workspace_id: &str,
         member_id: &str,
+        role: UserRole,
     ) -> Result<(), NetworkError>;
 
     /// Remove a user from a workspace
@@ -250,13 +276,20 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
         member_id: &str,
     ) -> Result<(), NetworkError>;
 
-    /// Load the single workspace that exists in the system
-    fn load_workspace(&self, user_id: &str) -> Result<Workspace, NetworkError>;
+    /// Load the primary workspace for a user (or a specific one if ID provided)
+    fn load_workspace(
+        &self,
+        user_id: &str,
+        workspace_id_opt: Option<&str>,
+    ) -> Result<Workspace, NetworkError>;
 
-    /// List all workspaces (should only return one workspace in this implementation)
+    /// List all workspaces accessible by a user
     fn list_workspaces(&self, user_id: &str) -> Result<Vec<Workspace>, NetworkError>;
 
-    /// List all offices in a specific workspace
+    /// Get all workspace IDs (primarily for internal server use)
+    fn get_all_workspace_ids(&self) -> Result<WorkspaceDBList, NetworkError>;
+
+    /// List offices in a specific workspace for a user
     fn list_offices_in_workspace(
         &self,
         user_id: &str,

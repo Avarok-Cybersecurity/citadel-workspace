@@ -1,136 +1,345 @@
-use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{Domain, Permission, Room};
-use uuid::Uuid;
-use crate::handlers::domain::{permission_denied, DomainOperations};
-use crate::handlers::domain::server_ops::ServerDomainOps;
-use crate::kernel::transaction::Transaction;
+pub mod room_ops {
+    use crate::handlers::domain::permission_denied;
+    use crate::kernel::transaction::Transaction;
+    use citadel_logging::{error, info};
+    use citadel_sdk::prelude::NetworkError;
+    use citadel_workspace_types::structs::{Domain, Permission, Room, UserRole};
 
-impl<R: Ratchet> ServerDomainOps<R> {
-    pub fn remove_user_from_workspace_inner(&self, user_id: &str, member_id: &str) -> Result<(), NetworkError> {
-        // Use fixed workspace-root ID
-        let workspace_id = crate::WORKSPACE_ROOT_ID.to_string();
-
-        // Ensure user has permission to update workspace
-        if !self.check_entity_permission(user_id, &workspace_id, Permission::RemoveUsers)? {
-            return Err(NetworkError::msg(
-                "Permission denied: Cannot remove users from workspace",
-            ));
+    pub(crate) fn create_room_inner(
+        tx: &mut dyn Transaction,
+        user_id: &str,   // User creating the room
+        office_id: &str, // Office this room belongs to
+        room_id: &str,   // Pre-generated room ID
+        name: &str,
+        description: &str,
+    ) -> Result<Room, NetworkError> {
+        let user = tx
+            .get_user(user_id)
+            .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
+        // Check if user has permission to create rooms in this office
+        if !user.has_permission(office_id, Permission::CreateRoom) {
+            return Err(permission_denied(format!(
+                "User {} cannot create room in office {}",
+                user_id, office_id
+            )));
         }
 
-        self.with_write_transaction(move |tx| {
-            // Get the workspace
-            let domain = tx
-                .get_domain(&workspace_id)
-                .ok_or_else(|| NetworkError::msg("Workspace not found"))?;
+        // Ensure the office domain exists and is indeed an office
+        let mut office_owned_domain = tx
+            .get_domain(office_id)
+            .ok_or_else(|| NetworkError::msg(format!("Office domain {} not found", office_id)))?
+            .clone();
 
-            let mut workspace = match domain {
-                Domain::Workspace { workspace } => workspace.clone(), // Clone to get owned value
-                _ => return Err(NetworkError::msg("Domain is not a workspace")),
-            };
+        let office_obj = office_owned_domain
+            .as_office_mut()
+            .ok_or_else(|| NetworkError::msg(format!("Domain {} is not an office", office_id)))?;
 
-            // Check if trying to remove the workspace owner
-            if workspace.owner_id == member_id {
-                return Err(NetworkError::msg("Cannot remove workspace owner"));
+        // Create the new room struct
+        let new_room = Room {
+            id: room_id.to_string(),
+            owner_id: user_id.to_string(),
+            office_id: office_id.to_string(),
+            name: name.to_string(),
+            description: description.to_string(),
+            members: vec![user_id.to_string()], // Creator is the first member
+            mdx_content: String::new(),         // Default empty MDX content
+            metadata: Vec::new(),               // Default empty metadata
+        };
+
+        // Create the domain entry for the room
+        // The parent_id for a Room domain is implicitly its office_id, handled by Domain::parent_id()
+        let room_domain = Domain::Room {
+            room: new_room.clone(),
+        };
+        tx.insert_domain(room_id.to_string(), room_domain)?; // Corrected: use insert_domain and ensure room_id is String
+
+        // Add user to the new room's domain with Owner role
+        tx.add_user_to_domain(user_id, room_id, UserRole::Owner)?;
+
+        // Add room_id to office's list of rooms
+        let room_id_string = room_id.to_string();
+        if !office_obj.rooms.contains(&room_id_string) {
+            office_obj.rooms.push(room_id_string);
+        }
+        tx.update_domain(office_id, office_owned_domain)?;
+
+        info!(
+            user_id = user_id,
+            office_id = office_id,
+            room_id = room_id,
+            "Created room {:?}",
+            new_room.name
+        );
+        Ok(new_room)
+    }
+
+    pub(crate) fn delete_room_inner(
+        tx: &mut dyn Transaction,
+        user_id: &str, // User performing the deletion
+        room_id: &str,
+    ) -> Result<Room, NetworkError> {
+        let user = tx
+            .get_user(user_id)
+            .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
+        if !user.has_permission(room_id, Permission::DeleteRoom) {
+            return Err(permission_denied(format!(
+                "User {} cannot delete room {}",
+                user_id, room_id
+            )));
+        }
+
+        let room_domain_clone = tx
+            .get_domain(room_id)
+            .ok_or_else(|| {
+                NetworkError::msg(format!("Room domain {} not found for deletion", room_id))
+            })?
+            .clone();
+
+        let parent_office_id_opt = match &room_domain_clone {
+            Domain::Room { room, .. } => Some(room.office_id.clone()), // Get office_id from the room struct
+            _ => {
+                return Err(NetworkError::msg(format!(
+                    "Domain {} is not a room, cannot be deleted as such",
+                    room_id
+                )))
+            }
+        };
+
+        // 1. Remove room from parent office's list
+        if let Some(ref parent_office_id_str) = parent_office_id_opt {
+            // Corrected: use ref to get &String
+            if !parent_office_id_str.is_empty() {
+                // Ensure parent_office_id is not empty
+                let mut office_owned_domain = tx
+                    .get_domain(parent_office_id_str)
+                    .ok_or_else(|| {
+                        NetworkError::msg(format!(
+                            "Parent office {} not found for room {}",
+                            parent_office_id_str, room_id
+                        ))
+                    })?
+                    .clone();
+
+                match &mut office_owned_domain {
+                    Domain::Office { office, .. } => {
+                        office.rooms.retain(|id| id != room_id); // Corrected: office.rooms
+                    }
+                    _ => {
+                        error!(
+                            "Parent domain {} for room {} is not an Office",
+                            parent_office_id_str, room_id
+                        );
+                        // Log error and continue with room deletion
+                    }
+                }
+                if let Err(e) = tx.update_domain(parent_office_id_str, office_owned_domain) {
+                    error!(error = ?e, parent_office_id = parent_office_id_str, room_id, "Failed to update parent office while deleting room. Manual cleanup may be required.");
+                }
+            }
+        }
+
+        // 2. Remove all users from this room's domain entries
+        let removed_domain = tx
+            .remove_domain(room_id)?
+            .ok_or_else(|| NetworkError::msg(format!("Room {} not found for deletion", room_id)))?;
+
+        let removed_room = match removed_domain {
+            Domain::Room { room, .. } => room,
+            _ => {
+                return Err(NetworkError::msg(format!(
+                    "Deleted domain {} was not a room",
+                    room_id
+                )))
+            }
+        };
+
+        info!(
+            user_id = user_id,
+            room_id = room_id,
+            "Deleted room {:?}",
+            removed_room.name
+        );
+        Ok(removed_room)
+    }
+
+    pub(crate) fn list_rooms_inner(
+        tx: &dyn Transaction,
+        user_id: &str,
+        office_id: Option<String>,
+    ) -> Result<Vec<Room>, NetworkError> {
+        let user = tx
+            .get_user(user_id)
+            .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
+        let mut rooms = Vec::new();
+
+        if let Some(off_id) = office_id {
+            if !tx.is_member_of_domain(&user.id, &off_id)? {
+                return Err(permission_denied(format!(
+                    "User {} is not a member of office {}",
+                    user_id, off_id
+                )));
             }
 
-            // Remove member from workspace
-            workspace.members.retain(|id| id != member_id);
+            let office_domain = tx
+                .get_domain(&off_id)
+                .ok_or_else(|| NetworkError::msg(format!("Office domain {} not found", off_id)))?;
 
-            // Update workspace
-            tx.insert_domain(workspace_id, Domain::Workspace { workspace })?;
+            let office = office_domain
+                .as_office() // Corrected: use as_office()
+                .ok_or_else(|| NetworkError::msg(format!("Domain {} is not an office", off_id)))?;
 
-            Ok(())
-        })
-    }
-
-    pub fn add_user_to_workspace_inner(&self, user_id: &str, member_id: &&str) -> Result<(), NetworkError> {
-        // Use fixed workspace-root ID
-        let workspace_id = crate::WORKSPACE_ROOT_ID.to_string();
-
-        // Ensure user has permission to update workspace
-        if !self.check_entity_permission(user_id, &workspace_id, Permission::AddUsers)? {
-            return Err(NetworkError::msg(
-                "Permission denied: Cannot add users to workspace",
-            ));
-        }
-
-        self.with_write_transaction(move |tx| {
-            // Get the workspace
-            let domain = tx
-                .get_domain(&workspace_id)
-                .ok_or_else(|| NetworkError::msg("Workspace not found"))?;
-
-            let mut workspace = match domain {
-                Domain::Workspace { workspace } => workspace.clone(), // Clone to get owned value
-                _ => return Err(NetworkError::msg("Domain is not a workspace")),
-            };
-
-            // Check if member is already in workspace
-            if workspace.members.contains(&member_id.to_string()) {
-                return Ok(()); // Member already in workspace
+            for r_id in &office.rooms {
+                // Corrected: office.rooms
+                if tx.is_member_of_domain(&user.id, r_id).unwrap_or(false) {
+                    if let Some(domain) = tx.get_domain(r_id) {
+                        if let Some(room) = domain.as_room() {
+                            // Corrected: use as_room()
+                            rooms.push(room.clone());
+                        }
+                    }
+                }
             }
-
-            // Add member to workspace
-            workspace.members.push(member_id.to_string());
-
-            // Update workspace
-            tx.insert_domain(workspace_id, Domain::Workspace { workspace })?;
-
-            Ok(())
-        })
+        } else {
+            // List all rooms the user is a member of, across all offices they can see
+            for domain_id_key in user.permissions.keys() {
+                if let Some(domain) = tx.get_domain(domain_id_key) {
+                    if let Domain::Room { room, .. } = domain {
+                        if tx.is_member_of_domain(&user.id, &room.id).unwrap_or(false) {
+                            rooms.push(room.clone());
+                        }
+                    }
+                }
+            }
+        }
+        info!(user_id = user_id, count = rooms.len(), "Listed rooms");
+        Ok(rooms)
     }
 
-    pub fn list_rooms_inner(&self, user_id: &str, office_id: &str) -> Result<Vec<Room>, NetworkError> {
-        // Check if user can access this office
-        if !ServerDomainOps::can_access_domain(self, user_id, office_id)? {
-            return Err(permission_denied(
-                "User does not have permission to access this office",
-            ));
+    pub(crate) fn add_user_to_room_inner(
+        tx: &mut dyn Transaction,
+        admin_id: &str,
+        user_id_to_add: &str,
+        room_id: &str,
+        role: UserRole,
+    ) -> Result<(), NetworkError> {
+        let admin_user = tx
+            .get_user(admin_id)
+            .ok_or_else(|| NetworkError::msg(format!("Admin user {} not found", admin_id)))?;
+        if !admin_user.has_permission(room_id, Permission::ManageRoomMembers) {
+            return Err(permission_denied(format!(
+                "Admin user {} cannot manage members in room {}",
+                admin_id, room_id
+            )));
+        }
+        // Ensure user to add exists
+        let _user_to_add = tx.get_user(user_id_to_add).ok_or_else(|| {
+            NetworkError::msg(format!("User to add {} not found", user_id_to_add))
+        })?;
+
+        tx.add_user_to_domain(user_id_to_add, room_id, role.clone())?;
+        info!(admin_id, user_id_to_add, room_id, role = ?role, "Added user to room");
+        Ok(())
+    }
+
+    pub(crate) fn remove_user_from_room_inner(
+        tx: &mut dyn Transaction,
+        admin_id: &str,
+        user_id_to_remove: &str,
+        room_id: &str,
+    ) -> Result<(), NetworkError> {
+        let admin_user = tx
+            .get_user(admin_id)
+            .ok_or_else(|| NetworkError::msg(format!("Admin user {} not found", admin_id)))?;
+        if !admin_user.has_permission(room_id, Permission::ManageRoomMembers) {
+            return Err(permission_denied(format!(
+                "Admin user {} cannot manage members in room {}",
+                admin_id, room_id
+            )));
         }
 
-        // List rooms in this office
-        DomainOperations::list_domain_entities::<Room>(self, user_id, Some(office_id))
-    }
+        let user_to_remove = tx.get_user(user_id_to_remove).ok_or_else(|| {
+            NetworkError::msg(format!("User to remove {} not found", user_id_to_remove))
+        })?;
 
-    pub fn get_room_inner(&self, user_id: &str, room_id: &str) -> Result<Room, NetworkError> {
-        // Check if user can access this room
-        if !self.can_access_domain(user_id, room_id)? {
-            return Err(permission_denied(
-                "User does not have permission to access this room",
-            ));
+        // Prevent removing the last owner
+        // This logic assumes UserRole::Owner on the User struct signifies ownership of any domain they are an owner in.
+        // A more robust check might involve checking specific permissions for UserRole::Owner in this domain.
+        if user_to_remove.role == UserRole::Owner {
+            let owners_in_room_count = tx
+                .get_all_users()
+                .values()
+                .filter(|u| {
+                    tx.is_member_of_domain(&u.id, room_id).unwrap_or(false)
+                        && u.role == UserRole::Owner
+                })
+                .count();
+
+            if owners_in_room_count <= 1 {
+                return Err(NetworkError::msg(
+                    "Cannot remove the last owner from the room. Assign another owner first.",
+                ));
+            }
         }
 
-        // Get the room entity
-        DomainOperations::get_domain_entity::<Room>(self, user_id, room_id)
+        tx.remove_user_from_domain(user_id_to_remove, room_id)?;
+        info!(
+            admin_id,
+            user_id_to_remove, room_id, "Removed user from room"
+        );
+        Ok(())
     }
-    
-    pub fn create_room_inner(&self, user_id: &str, office_id: &str, name: &str, description: &str, mdx_content: Option<&str>) -> Result<Room, NetworkError> {
-        // Check if user has permission to create a room in this office
-        if !self.check_entity_permission(user_id, office_id, Permission::CreateRoom)? {
-            return Err(permission_denied(
-                "You don't have permission to create rooms in this office",
-            ));
+
+    pub(crate) fn update_room_inner(
+        tx: &mut dyn Transaction,
+        user_id: &str,
+        room_id: &str,
+        name: Option<String>,
+        description: Option<String>,
+    ) -> Result<Room, NetworkError> {
+        let user = tx
+            .get_user(user_id)
+            .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
+        // Permission check: User needs UpdateRoom permission on the room itself
+        if !user.has_permission(room_id, Permission::UpdateRoom) {
+            return Err(permission_denied(format!(
+                "User {} cannot update room {}",
+                user_id, room_id
+            )));
         }
 
-        self.with_write_transaction(|tx| {
-            // Generate a unique ID for the new room
-            let room_id = Uuid::new_v4().to_string();
+        let mut owned_domain = tx
+            .get_domain(room_id)
+            .ok_or_else(|| NetworkError::msg(format!("Domain for room {} not found", room_id)))?
+            .clone();
 
-            // Create the room
-            let room = Room {
-                id: room_id.clone(),
-                name: name.to_string(),
-                description: description.to_string(),
-                office_id: office_id.to_string(),
-                owner_id: user_id.to_string(),
-                members: vec![user_id.to_string()], // Owner is automatically a member
-                mdx_content: mdx_content.unwrap_or_default().to_string(), // Use provided MDX content or empty string
-                metadata: Vec::new(),
-            };
+        let room_to_update = match &mut owned_domain {
+            Domain::Room { room, .. } => room,
+            _ => {
+                return Err(NetworkError::msg(format!(
+                    "Domain {} is not a room",
+                    room_id
+                )))
+            }
+        };
 
-            // Add it to the database
-            tx.insert_domain(room_id, Domain::Room { room: room.clone() })?;
-            Ok(room)
-        })
+        if let Some(n) = name {
+            room_to_update.name = n;
+        }
+        if let Some(d) = description {
+            room_to_update.description = d;
+        }
+
+        let updated_room_clone = room_to_update.clone();
+        tx.update_domain(room_id, owned_domain)?;
+
+        info!(
+            user_id = user_id,
+            room_id = room_id,
+            "Updated room {:?}",
+            updated_room_clone.name
+        );
+        Ok(updated_room_clone)
     }
+
+    // TODO: Implement functions for managing room-specific settings or features if any
 }

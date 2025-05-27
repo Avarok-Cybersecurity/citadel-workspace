@@ -1,4 +1,4 @@
-use citadel_logging::{error, info, setup_log};
+use citadel_logging::{info, setup_log};
 use citadel_workspace_server_kernel::config::ServerConfig;
 use std::fs;
 use std::path::PathBuf;

@@ -81,8 +81,11 @@ async fn setup_test_environment() -> Result<
         new_internal_service_with_admin(bind_address_internal_service).await?;
 
     // Create a client to connect to the server, which will trigger the connection handler
-    let workspace_kernel =
-        WorkspaceServerKernel::<StackedRatchet>::with_admin(ADMIN_ID, &admin_username, &admin_password);
+    let workspace_kernel = WorkspaceServerKernel::<StackedRatchet>::with_admin(
+        ADMIN_ID,
+        &admin_username,
+        &admin_password,
+    );
 
     // TCP client (GUI, CLI) -> internal service -> empty kernel server(s)
     let (server, server_bind_address) =

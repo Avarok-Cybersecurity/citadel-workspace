@@ -1,5 +1,4 @@
 use citadel_sdk::prelude::StackedRatchet;
-use citadel_workspace_server_kernel::handlers::domain::server_ops::ServerDomainOps;
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
@@ -39,7 +38,8 @@ mod tests {
 
         // Add the user to the kernel
         {
-            kernel.tx_manager()
+            kernel
+                .tx_manager()
                 .with_write_transaction(|tx| {
                     tx.insert_user(user_id.to_string(), user.clone())?;
                     Ok(())
@@ -116,7 +116,8 @@ mod tests {
 
         // Add the user to the kernel
         {
-            kernel.tx_manager()
+            kernel
+                .tx_manager()
                 .with_write_transaction(|tx| {
                     tx.insert_user(second_admin_id.to_string(), admin2)?;
                     Ok(())
@@ -146,7 +147,8 @@ mod tests {
 
         // Add users to the kernel
         {
-            kernel.tx_manager()
+            kernel
+                .tx_manager()
                 .with_write_transaction(|tx| {
                     tx.insert_user(owner_user.id.clone(), owner_user.clone())?;
                     tx.insert_user(member_user.id.clone(), member_user.clone())?;

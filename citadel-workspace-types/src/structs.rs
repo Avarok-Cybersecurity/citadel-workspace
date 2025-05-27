@@ -214,22 +214,26 @@ pub enum Permission {
     CreateRoom,
     // Delete a room
     DeleteRoom,
+    // Update a room
+    UpdateRoom,
     // Create an office
     CreateOffice,
     // Delete an office
     DeleteOffice,
-    // Edit content
-    EditContent,
-    // Add users
-    AddUsers,
-    // Remove users
-    RemoveUsers,
+    // Update an office
+    UpdateOffice,
     // Create a workspace
     CreateWorkspace,
     // Update a workspace
     UpdateWorkspace,
     // Delete a workspace
     DeleteWorkspace,
+    // Edit content
+    EditContent,
+    // Add users
+    AddUsers,
+    // Remove users
+    RemoveUsers,
     // Edit MDX content
     EditMdx,
     // Edit room configuration
@@ -370,25 +374,31 @@ pub enum MetadataValue {
 }
 
 /// A workspace is a container for offices
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Workspace {
     pub id: String,
     pub name: String,
     pub description: String,
     pub owner_id: String,
-    pub members: Vec<String>, // User IDs
-    pub offices: Vec<String>, // Office IDs
+    pub members: Vec<String>,
+    pub offices: Vec<String>,
     pub metadata: Vec<u8>,
+    pub password_protected: bool,
+}
+
+impl Workspace {
+    // ...
 }
 
 // Workspace entity structures
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Office {
     pub id: String,
+    pub owner_id: String,
+    pub workspace_id: String, // Added field to link to parent workspace
     pub name: String,
     pub description: String,
-    pub owner_id: String,
-    // workspace_id field removed - all offices belong to the single workspace
+    // workspace_id field added - all offices belong to the single workspace
     pub members: Vec<String>, // User IDs
     pub rooms: Vec<String>,   // Room IDs
     pub mdx_content: String,
@@ -473,7 +483,6 @@ impl Domain {
         }
     }
 
-    /// Update the description of this domain
     pub fn update_description(&mut self, description: String) {
         match self {
             Domain::Workspace { workspace } => workspace.description = description,
@@ -506,6 +515,48 @@ impl Domain {
             Domain::Workspace { .. } => (), // Workspaces don't have MDX content
             Domain::Office { office } => office.mdx_content = mdx_content,
             Domain::Room { room } => room.mdx_content = mdx_content,
+        }
+    }
+
+    pub fn as_workspace(&self) -> Option<&Workspace> {
+        match self {
+            Domain::Workspace { workspace } => Some(workspace),
+            _ => None,
+        }
+    }
+
+    pub fn as_workspace_mut(&mut self) -> Option<&mut Workspace> {
+        match self {
+            Domain::Workspace { workspace } => Some(workspace),
+            _ => None,
+        }
+    }
+
+    pub fn as_office(&self) -> Option<&Office> {
+        match self {
+            Domain::Office { office } => Some(office),
+            _ => None,
+        }
+    }
+
+    pub fn as_office_mut(&mut self) -> Option<&mut Office> {
+        match self {
+            Domain::Office { office } => Some(office),
+            _ => None,
+        }
+    }
+
+    pub fn as_room(&self) -> Option<&Room> {
+        match self {
+            Domain::Room { room } => Some(room),
+            _ => None,
+        }
+    }
+
+    pub fn as_room_mut(&mut self) -> Option<&mut Room> {
+        match self {
+            Domain::Room { room } => Some(room),
+            _ => None,
         }
     }
 }

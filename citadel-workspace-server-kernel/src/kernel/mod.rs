@@ -1,14 +1,16 @@
+use crate::handlers::domain::server_ops::DomainServerOperations;
 use crate::WorkspaceProtocolResponse;
-use citadel_logging::{debug, info};
-use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, Ratchet, NetKernel};
-use citadel_workspace_types::{WorkspaceProtocolPayload, structs::UserRole};
-use citadel_workspace_types::structs::{User, WorkspaceRoles, MetadataValue as InternalMetadataValue, MetadataValue};
-use transaction::TransactionManager;
 use crate::WORKSPACE_MASTER_PASSWORD_KEY;
+use citadel_logging::{debug, info};
+use citadel_sdk::prelude::{NetKernel, NetworkError, NodeRemote, NodeResult, Ratchet};
+use citadel_workspace_types::structs::{
+    MetadataValue as InternalMetadataValue, MetadataValue, User, WorkspaceRoles,
+};
+use citadel_workspace_types::{structs::UserRole, WorkspaceProtocolPayload};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_stream::StreamExt;
-use crate::handlers::domain::server_ops::ServerDomainOps;
+use transaction::TransactionManager;
 
 pub mod command_processor;
 pub mod transaction;
@@ -19,7 +21,7 @@ pub struct WorkspaceServerKernel<R: Ratchet> {
     pub roles: Arc<RwLock<WorkspaceRoles>>,
     pub node_remote: Arc<RwLock<Option<NodeRemote<R>>>>,
     pub admin_username: String, // Added field to store admin username
-    pub domain_operations: ServerDomainOps<R>,
+    pub domain_operations: DomainServerOperations<R>,
 }
 
 impl<R: Ratchet> Clone for WorkspaceServerKernel<R> {
@@ -40,9 +42,7 @@ pub enum MemberAction {
 }
 
 #[async_trait::async_trait]
-impl<R: Ratchet + Send + Sync + 'static> NetKernel<R>
-    for WorkspaceServerKernel<R>
-{
+impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<R> {
     fn load_remote(&mut self, server_remote: NodeRemote<R>) -> Result<(), NetworkError> {
         *self.node_remote.blocking_write() = Some(server_remote);
         Ok(())
@@ -131,7 +131,7 @@ impl<R: Ratchet> Default for WorkspaceServerKernel<R> {
             roles: Arc::new(RwLock::new(WorkspaceRoles::new())),
             node_remote: Arc::new(RwLock::new(None)),
             admin_username: String::new(),
-            domain_operations: ServerDomainOps::new(tx_manager),
+            domain_operations: DomainServerOperations::new(tx_manager),
         }
     }
 }
@@ -146,37 +146,51 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         Self {
             roles: Arc::new(RwLock::new(WorkspaceRoles::new())), // Initialize roles
             node_remote: Arc::new(RwLock::new(node_remote)),
-            admin_username, 
-            domain_operations: ServerDomainOps::new(transaction_manager),
+            admin_username,
+            domain_operations: DomainServerOperations::new(transaction_manager),
         }
     }
 
     /// Convenience constructor for creating a kernel with an admin user
     /// (Used primarily in older code/tests, might need adjustment)
-    pub fn with_admin(admin_username: &str, admin_display_name: &str, admin_password: &str) -> Self {
+    pub fn with_admin(
+        admin_username: &str,
+        admin_display_name: &str,
+        admin_password: &str,
+    ) -> Self {
         let kernel = Self::default();
 
-        kernel.inject_admin_user(
-            admin_username, 
-            admin_display_name, 
-            admin_password
-        ).expect("Failed to inject admin user during test setup");
+        kernel
+            .inject_admin_user(admin_username, admin_display_name, admin_password)
+            .expect("Failed to inject admin user during test setup");
 
         kernel
     }
 
     /// Helper to inject the initial admin user into the database
-    pub fn inject_admin_user(&self, username: &str, display_name: &str, workspace_password: &str) -> Result<(), NetworkError> {
+    pub fn inject_admin_user(
+        &self,
+        username: &str,
+        display_name: &str,
+        workspace_password: &str,
+    ) -> Result<(), NetworkError> {
         self.tx_manager().with_write_transaction(|tx| {
-            let mut user = User::new(username.to_string(), display_name.to_string(), UserRole::Admin);
+            let mut user = User::new(
+                username.to_string(),
+                display_name.to_string(),
+                UserRole::Admin,
+            );
             // Store the workspace password in the user's metadata
-            user.metadata.insert(WORKSPACE_MASTER_PASSWORD_KEY.to_string(), MetadataValue::String(workspace_password.to_string()));
+            user.metadata.insert(
+                WORKSPACE_MASTER_PASSWORD_KEY.to_string(),
+                MetadataValue::String(workspace_password.to_string()),
+            );
             tx.insert_user(username.to_string(), user)
         })
     }
 
     /// Get a domain operations instance
-    pub fn domain_ops(&self) -> &ServerDomainOps<R> {
+    pub fn domain_ops(&self) -> &DomainServerOperations<R> {
         &self.domain_operations
     }
 
@@ -193,18 +207,24 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     }
 
     /// Verifies the provided workspace password against the one stored for the admin user
-    pub async fn verify_workspace_password(&self, provided_password: &str) -> Result<(), NetworkError> {
+    pub async fn verify_workspace_password(
+        &self,
+        provided_password: &str,
+    ) -> Result<(), NetworkError> {
         // Get the stored password Option from the admin user's metadata within a transaction
         let stored_password_opt = self.tx_manager().with_read_transaction(|tx| {
             // Closure returns Result<Option<InternalMetadataValue>, NetworkError>
             match tx.get_user(&self.admin_username) {
                 Some(user) => Ok(user.metadata.get(WORKSPACE_MASTER_PASSWORD_KEY).cloned()),
-                None => Err(NetworkError::msg(format!("Admin user {} not found during password verification", self.admin_username))),
+                None => Err(NetworkError::msg(format!(
+                    "Admin user {} not found during password verification",
+                    self.admin_username
+                ))),
             }
         })?; // Handle potential transaction error
 
         // Now, handle the Option containing the password value
-        match stored_password_opt { 
+        match stored_password_opt {
             Some(InternalMetadataValue::String(stored_password)) => {
                 // Compare the stored password with the provided password
                 if provided_password == stored_password {
@@ -213,18 +233,12 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     Err(NetworkError::msg("Incorrect workspace master password"))
                 }
             }
-            Some(_) => Err(NetworkError::msg("Workspace master password stored with incorrect type")), // Handle wrong type
-            None => Err(NetworkError::msg("Workspace master password not found in admin metadata")), // Handle missing password
+            Some(_) => Err(NetworkError::msg(
+                "Workspace master password stored with incorrect type",
+            )), // Handle wrong type
+            None => Err(NetworkError::msg(
+                "Workspace master password not found in admin metadata",
+            )), // Handle missing password
         }
-    }
-
-    async fn create_member_user(&self, username: &str, display_name: &str) -> Result<(), NetworkError> {
-        info!(target: "citadel", "Creating member user: {}", username);
-        // Use write transaction to insert the new member user
-        self.tx_manager().with_write_transaction(|tx| {
-            // Inside the transaction, create the User struct and insert it
-            let user = User::new(username.to_string(), display_name.to_string(), UserRole::Member);
-            tx.insert_user(username.to_string(), user)
-        })
     }
 }

@@ -1,28 +1,35 @@
+use crate::handlers::domain::server_ops::DomainServerOperations;
+use crate::handlers::domain::{permission_denied, DomainOperations};
+use crate::kernel::transaction::Transaction;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{Permission, UserRole};
-use crate::handlers::domain::{permission_denied, DomainOperations};
-use crate::handlers::domain::server_ops::ServerDomainOps;
 
-impl<R: Ratchet> ServerDomainOps<R> {
+impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     /// Helper method to check if user can access a domain
-    pub fn can_access_domain(&self, user_id: &str, entity_id: &str) -> Result<bool, NetworkError> {
+    pub fn can_access_domain(
+        &self,
+        tx: &dyn Transaction,
+        user_id: &str,
+        entity_id: &str,
+    ) -> Result<bool, NetworkError> {
         // Admins can access all domains
-        if self.is_admin(user_id) {
+        if self.is_admin(tx, user_id)? {
             return Ok(true);
         }
 
         // Check if user is a member of the domain
-        self.is_member_of_domain(user_id, entity_id)
+        self.is_member_of_domain(tx, user_id, entity_id)
     }
 
     /// Helper method to check global permission
     pub fn check_global_permission(
         &self,
+        tx: &dyn Transaction,
         user_id: &str,
         permission: Permission,
     ) -> Result<bool, NetworkError> {
         // System administrators always have all global permissions
-        if self.is_admin(user_id) {
+        if self.is_admin(tx, user_id)? {
             return Ok(true);
         }
 
@@ -42,8 +49,10 @@ impl<R: Ratchet> ServerDomainOps<R> {
                     Permission::RemoveUsers => Ok(true),
                     Permission::CreateOffice => Ok(true),
                     Permission::DeleteOffice => Ok(true),
+                    Permission::UpdateOffice => Ok(true),
                     Permission::CreateRoom => Ok(true),
                     Permission::DeleteRoom => Ok(true),
+                    Permission::UpdateRoom => Ok(true),
                     Permission::CreateWorkspace => Ok(true),
                     Permission::DeleteWorkspace => Ok(true),
                     Permission::UpdateWorkspace => Ok(true),

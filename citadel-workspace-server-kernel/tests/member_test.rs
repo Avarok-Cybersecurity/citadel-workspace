@@ -3,8 +3,8 @@ use citadel_workspace_server_kernel::handlers::domain::server_ops::ServerDomainO
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 use citadel_workspace_types::structs::{Domain, Office, User, UserRole};
-use std::sync::Arc;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use std::sync::Arc;
 
 const ADMIN_PASSWORD: &str = "admin_password";
 
@@ -30,21 +30,22 @@ fn setup_test_environment() -> (
         "Administrator",
         ADMIN_PASSWORD,
     ));
-    let domain_ops = kernel.domain_ops().clone();
+    let _domain_ops = kernel.domain_ops().clone();
 
-    (kernel, domain_ops)
+    (kernel, _domain_ops)
 }
 
 #[test]
 fn test_add_user_to_domain() {
-    let (kernel, domain_ops) = setup_test_environment();
+    let (kernel, _domain_ops) = setup_test_environment();
 
     // Create a test user
     let user_id = "test_user";
     let user = create_test_user(user_id, UserRole::Member);
 
     // Insert the user
-    kernel.tx_manager()
+    kernel
+        .tx_manager()
         .with_write_transaction(|tx| {
             tx.insert_user(user_id.to_string(), user)?;
             Ok(())
@@ -52,17 +53,17 @@ fn test_add_user_to_domain() {
         .unwrap();
 
     // Create an office
-    let office = domain_ops
+    let office = _domain_ops
         .create_office("admin", "Test Office", "For Testing", None)
         .unwrap();
 
     // Add the user to the office
-    domain_ops
+    _domain_ops
         .add_user_to_domain(user_id, &office.id, UserRole::Member)
         .unwrap();
 
     // Verify the user is in the office
-    let office_domain = domain_ops.get_domain(&office.id).unwrap();
+    let office_domain = _domain_ops.get_domain(&office.id).unwrap();
     match office_domain {
         Domain::Office { office } => {
             assert!(
@@ -76,14 +77,15 @@ fn test_add_user_to_domain() {
 
 #[test]
 fn test_remove_user_from_domain() {
-    let (kernel, domain_ops) = setup_test_environment();
+    let (kernel, _domain_ops) = setup_test_environment();
 
     // Create a test user
     let user_id = "test_user";
     let user = create_test_user(user_id, UserRole::Member);
 
     // Insert the user
-    kernel.tx_manager()
+    kernel
+        .tx_manager()
         .with_write_transaction(|tx| {
             tx.insert_user(user_id.to_string(), user)?;
             Ok(())
@@ -91,22 +93,22 @@ fn test_remove_user_from_domain() {
         .unwrap();
 
     // Create an office
-    let office = domain_ops
+    let office = _domain_ops
         .create_office("admin", "Test Office", "For Testing", None)
         .unwrap();
 
     // Add the user to the office first
-    domain_ops
+    _domain_ops
         .add_user_to_domain(user_id, &office.id, UserRole::Member)
         .unwrap();
 
     // Remove the user from the office
-    domain_ops
+    _domain_ops
         .remove_user_from_domain(user_id, &office.id)
         .unwrap();
 
     // Verify the user is no longer in the office
-    let office_domain = domain_ops.get_domain(&office.id).unwrap();
+    let office_domain = _domain_ops.get_domain(&office.id).unwrap();
     match office_domain {
         Domain::Office { office } => {
             assert!(
@@ -120,14 +122,15 @@ fn test_remove_user_from_domain() {
 
 #[test]
 fn test_complete_user_removal() {
-    let (kernel, domain_ops) = setup_test_environment();
+    let (kernel, _domain_ops) = setup_test_environment();
 
     // Create a test user
     let user_id = "test_user";
     let user = create_test_user(user_id, UserRole::Member);
 
     // Insert the user
-    kernel.tx_manager()
+    kernel
+        .tx_manager()
         .with_write_transaction(|tx| {
             tx.insert_user(user_id.to_string(), user)?;
             Ok(())
@@ -135,17 +138,18 @@ fn test_complete_user_removal() {
         .unwrap();
 
     // Create an office
-    let office = domain_ops
+    let office = _domain_ops
         .create_office("admin", "Test Office", "For Testing", None)
         .unwrap();
 
     // Add the user to the office
-    domain_ops
+    _domain_ops
         .add_user_to_domain(user_id, &office.id, UserRole::Member)
         .unwrap();
 
     // Use transaction to completely remove the user
-    kernel.tx_manager()
+    kernel
+        .tx_manager()
         .with_write_transaction(|tx| {
             // First remove user from all domains
             if let Some(Domain::Office { mut office }) = tx.get_domain(&office.id).cloned() {
@@ -161,7 +165,8 @@ fn test_complete_user_removal() {
         .unwrap();
 
     // Verify the user no longer exists
-    let user_exists = kernel.tx_manager()
+    let user_exists = kernel
+        .tx_manager()
         .with_read_transaction(|tx| Ok(tx.get_user(user_id).is_some()))
         .unwrap();
 
@@ -173,7 +178,7 @@ fn test_member_command_processing() {
     citadel_logging::setup_log();
     citadel_logging::trace!(target: "citadel", "Starting test_member_command_processing");
 
-    let (kernel, domain_ops) = setup_test_environment();
+    let (kernel, _domain_ops) = setup_test_environment();
 
     citadel_logging::trace!(target: "citadel", "Created kernel");
 
@@ -184,7 +189,8 @@ fn test_member_command_processing() {
     citadel_logging::trace!(target: "citadel", "Created test user");
 
     // Insert the user
-    kernel.tx_manager()
+    kernel
+        .tx_manager()
         .with_write_transaction(|tx| {
             citadel_logging::trace!(target: "citadel", "Inserting user");
             tx.insert_user(user_id.to_string(), user)?;
@@ -201,7 +207,8 @@ fn test_member_command_processing() {
     citadel_logging::trace!(target: "citadel", "Creating office");
 
     // First manually create an office since the command doesn't have office_id field
-    kernel.tx_manager()
+    kernel
+        .tx_manager()
         .with_write_transaction(|tx| {
             citadel_logging::trace!(target: "citadel", "In transaction to create office");
             tx.insert_domain(
@@ -250,7 +257,8 @@ fn test_member_command_processing() {
 
     // Verify the user is in the office
     citadel_logging::trace!(target: "citadel", "Verifying user is in office");
-    let office_exists = kernel.tx_manager()
+    let office_exists = kernel
+        .tx_manager()
         .with_read_transaction(|tx| {
             citadel_logging::trace!(target: "citadel", "In transaction to verify user in office");
             if let Some(Domain::Office { office }) = tx.get_domain(office_id) {

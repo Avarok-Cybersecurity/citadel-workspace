@@ -40,7 +40,7 @@ impl DomainEntity for Office {
             name: name.to_string(),
             description: description.to_string(),
             owner_id: "".to_string(),
-            // workspace_id field removed - all offices belong to the single workspace
+            workspace_id: "test_workspace_id_placeholder".to_string(), // Added placeholder
             members: vec![],
             rooms: Vec::new(),
             mdx_content: String::new(),

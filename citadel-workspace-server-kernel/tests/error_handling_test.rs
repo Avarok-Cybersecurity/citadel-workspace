@@ -1,7 +1,7 @@
-use citadel_sdk::prelude::StackedRatchet;
+use citadel_sdk::prelude::*;
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
-use citadel_workspace_types::structs::{Permission, User, UserRole};
 use citadel_workspace_types::{
+    structs::{Permission, User, UserRole},
     UpdateOperation, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
 use std::sync::Arc;
@@ -9,6 +9,8 @@ use std::sync::Arc;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::*;
+    use std::time::Duration;
 
     const ADMIN_PASSWORD: &str = "admin_password";
     // Helper function to create a test user
@@ -24,7 +26,6 @@ mod tests {
 
     // Helper to setup a test environment
     fn setup_test_environment() -> Arc<WorkspaceServerKernel<StackedRatchet>> {
-        citadel_logging::setup_log();
         Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
             "admin",
             "Administrator",
@@ -32,6 +33,8 @@ mod tests {
         ))
     }
 
+    #[rstest]
+    #[timeout(Duration::from_secs(15))]
     #[test]
     fn test_command_invalid_access() {
         let kernel = setup_test_environment();
@@ -48,6 +51,7 @@ mod tests {
             })
             .unwrap();
 
+        println!("test_command_invalid_access: Attempting CreateOffice");
         // Attempt to create an office (should fail due to lack of permissions)
         let result = kernel.process_command(
             user_id,
@@ -58,16 +62,24 @@ mod tests {
                 metadata: None,
             },
         );
+        println!(
+            "test_command_invalid_access: CreateOffice call completed, result: {:?}",
+            result.is_ok()
+        );
 
         // Verify we get an error response, not a panic or actual error
         assert!(result.is_ok());
         match result.unwrap() {
             WorkspaceProtocolResponse::Error(message) => {
-                assert!(message.contains("Failed to create office"));
+                assert!(message.contains(
+                    "Permission denied: User does not have permission to create an office"
+                ));
             }
             _ => panic!("Expected error response"),
         }
+        println!("test_command_invalid_access: CreateOffice assertions passed");
 
+        println!("test_command_invalid_access: Attempting DeleteOffice");
         // Attempt to delete a non-existent office
         let result = kernel.process_command(
             user_id,
@@ -75,17 +87,28 @@ mod tests {
                 office_id: "non_existent_id".to_string(),
             },
         );
+        println!(
+            "test_command_invalid_access: DeleteOffice call completed, result: {:?}",
+            result.is_ok()
+        );
 
         // Verify we get an error response
         assert!(result.is_ok());
         match result.unwrap() {
             WorkspaceProtocolResponse::Error(message) => {
-                assert!(message.contains("Failed to delete office"));
+                assert!(
+                    message.contains("No permission to delete entity"),
+                    "Unexpected error message: {}",
+                    message
+                );
             }
             _ => panic!("Expected error response"),
         }
+        println!("test_command_invalid_access: DeleteOffice assertions passed. Test finished.");
     }
 
+    #[rstest]
+    #[timeout(Duration::from_secs(15))]
     #[test]
     fn test_command_invalid_resource() {
         let kernel = setup_test_environment();
@@ -142,6 +165,8 @@ mod tests {
         }
     }
 
+    #[rstest]
+    #[timeout(Duration::from_secs(15))]
     #[test]
     fn test_member_operations_errors() {
         let kernel = setup_test_environment();
@@ -218,6 +243,8 @@ mod tests {
         }
     }
 
+    #[rstest]
+    #[timeout(Duration::from_secs(15))]
     #[test]
     fn test_list_members_invalid_parameters() {
         let kernel = setup_test_environment();

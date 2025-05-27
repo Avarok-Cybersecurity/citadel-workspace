@@ -1,15 +1,19 @@
 use citadel_sdk::prelude::NetworkError;
+use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
 use parking_lot::RwLock;
 use std::collections::HashMap;
-use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
+pub mod rbac;
 pub mod read;
 pub mod write;
-pub mod rbac;
 
 /// Transaction trait defines common functionality for both read and write transactions
 pub trait Transaction {
     fn workspace_password(&self, workspace_id: &str) -> Option<String>;
-    fn set_workspace_password(&mut self, workspace_id: &str, password: &str) -> Result<(), NetworkError>;
+    fn set_workspace_password(
+        &mut self,
+        workspace_id: &str,
+        password: &str,
+    ) -> Result<(), NetworkError>;
     /// Get a domain by ID
     fn get_domain(&self, domain_id: &str) -> Option<&Domain>;
 
@@ -17,7 +21,7 @@ pub trait Transaction {
     fn get_domain_mut(&mut self, domain_id: &str) -> Option<&mut Domain>;
 
     /// Get all domains
-    fn get_all_domains(&self) -> &HashMap<String, Domain>;
+    fn get_all_domains(&self) -> Result<Vec<(String, Domain)>, NetworkError>;
 
     /// Get a workspace by ID
     fn get_workspace(&self, workspace_id: &str) -> Option<&Workspace>;
@@ -169,4 +173,3 @@ pub struct TransactionManager {
     pub workspaces: RwLock<HashMap<String, Workspace>>,
     pub workspace_password: RwLock<HashMap<String, String>>,
 }
-

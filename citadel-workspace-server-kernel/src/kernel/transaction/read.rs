@@ -1,8 +1,8 @@
-use parking_lot::RwLockReadGuard;
-use std::collections::HashMap;
+use crate::kernel::transaction::{Transaction, WorkspaceOperations};
 use citadel_sdk::prelude::NetworkError;
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
-use crate::kernel::transaction::{Transaction, WorkspaceOperations};
+use parking_lot::RwLockReadGuard;
+use std::collections::HashMap;
 
 /// A read-only transaction
 pub struct ReadTransaction<'a> {
@@ -17,7 +17,11 @@ impl Transaction for ReadTransaction<'_> {
         self.workspace_password.get(workspace_id).cloned()
     }
 
-    fn set_workspace_password(&mut self, workspace_id: &str, password: &str) -> Result<(), NetworkError> {
+    fn set_workspace_password(
+        &mut self,
+        _workspace_id: &str,
+        _password: &str,
+    ) -> Result<(), NetworkError> {
         Err(NetworkError::msg("Read transactions cannot modify data"))
     }
 
@@ -30,8 +34,12 @@ impl Transaction for ReadTransaction<'_> {
         None
     }
 
-    fn get_all_domains(&self) -> &HashMap<String, Domain> {
-        &self.domains
+    fn get_all_domains(&self) -> Result<Vec<(String, Domain)>, NetworkError> {
+        Ok(self
+            .domains
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect())
     }
 
     fn get_workspace(&self, workspace_id: &str) -> Option<&Workspace> {

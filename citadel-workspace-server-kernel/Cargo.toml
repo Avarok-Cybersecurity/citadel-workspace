@@ -26,7 +26,6 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 async-trait = { workspace = true }
-rstest = { workspace = true }
 futures = { workspace = true }
 
 # Extra dependencies
@@ -42,3 +41,4 @@ citadel-internal-service-connector = { workspace = true }
 [dev-dependencies]
 citadel_sdk = { workspace = true, features = ["localhost-testing"] }
 citadel-internal-service-test-common = { workspace = true }
+rstest = { workspace = true }

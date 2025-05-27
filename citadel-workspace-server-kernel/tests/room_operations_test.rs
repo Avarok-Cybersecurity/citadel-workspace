@@ -56,7 +56,8 @@ mod tests {
         user_id: &str,
         user: User,
     ) -> Result<(), String> {
-        kernel.tx_manager()
+        kernel
+            .tx_manager()
             .with_write_transaction(|tx| {
                 tx.insert_user(user_id.to_string(), user.clone())?;
                 // Explicitly commit the transaction to ensure locks are released
@@ -74,7 +75,8 @@ mod tests {
     ) -> Result<(), String> {
         println!("DEBUG: Starting direct room name update for {}", room_id);
 
-        kernel.tx_manager()
+        kernel
+            .tx_manager()
             .with_write_transaction(|tx| {
                 println!("DEBUG: Got write transaction lock");
 
@@ -125,7 +127,8 @@ mod tests {
             room_id
         );
 
-        kernel.tx_manager()
+        kernel
+            .tx_manager()
             .with_write_transaction(|tx| {
                 println!("DEBUG: Got write transaction lock");
 
@@ -169,7 +172,8 @@ mod tests {
     ) -> Result<(), String> {
         println!("DEBUG: Starting direct room deletion for {}", room_id);
 
-        kernel.tx_manager()
+        kernel
+            .tx_manager()
             .with_write_transaction(|tx| {
                 println!("DEBUG: Got write transaction lock");
 

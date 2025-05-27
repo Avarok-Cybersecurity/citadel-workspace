@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 /// A set of permissions that can be assigned to a user or role
-/// 
+///
 /// The logic for checking permissions is inside src/kernel/transactions/rbac.rs
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct PermissionSet {
