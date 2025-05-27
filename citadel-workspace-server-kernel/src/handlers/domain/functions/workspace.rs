@@ -30,13 +30,51 @@ pub mod workspace_ops {
         metadata: Option<Vec<u8>>,
         workspace_password: String,
     ) -> Result<Workspace, NetworkError> {
-        let new_workspace_id_uuid = Uuid::new_v4();
-        let new_workspace_id_str = new_workspace_id_uuid.to_string();
-
         // Ensure the user creating the workspace exists
         let _user = tx
             .get_user(user_id)
             .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
+
+        let all_workspaces = tx.get_all_workspaces();
+        if let Some(existing_workspace_id) = all_workspaces.keys().next() {
+            // A workspace already exists, treat it as the root and validate password
+            if let Some(stored_password) = tx.workspace_password(existing_workspace_id) {
+                if stored_password == workspace_password {
+                    info!(
+                        "User '{}' accessed existing workspace '{}' with correct password",
+                        user_id, existing_workspace_id
+                    );
+                    // Return the existing workspace DTO
+                    return tx
+                        .get_workspace(existing_workspace_id)
+                        .cloned()
+                        .ok_or_else(|| {
+                            NetworkError::msg(format!(
+                                "Existing workspace {} not found after check",
+                                existing_workspace_id
+                            ))
+                        });
+                } else {
+                    warn!(
+                        "User '{}' failed to access workspace '{}': Incorrect password",
+                        user_id, existing_workspace_id
+                    );
+                    return Err(NetworkError::msg("Incorrect workspace master password"));
+                }
+            } else {
+                // Should not happen if a workspace exists and is password protected
+                warn!(
+                    "Workspace '{}' exists but has no password set. Allowing creation for now.",
+                    existing_workspace_id
+                );
+                // Or, could return an error: Err(NetworkError::msg("Existing workspace has no password, configuration error"))
+            }
+        }
+
+        // No workspace exists, or existing one had no password (edge case handled by warning above)
+        // Proceed to create a new one (this will be the first/root workspace)
+        let new_workspace_id_uuid = Uuid::new_v4();
+        let new_workspace_id_str = new_workspace_id_uuid.to_string();
 
         let new_workspace_dto = Workspace {
             id: new_workspace_id_str.clone(),
@@ -49,9 +87,15 @@ pub mod workspace_ops {
             password_protected: !workspace_password.is_empty(),
         };
 
-        // Set password if provided
+        // Set password if provided (it should always be provided for the first workspace)
         if !workspace_password.is_empty() {
             tx.set_workspace_password(&new_workspace_id_str, &workspace_password)?;
+        } else {
+            // This case should ideally not be hit if we enforce password for the first workspace
+            warn!(
+                "Creating workspace '{}' without a password.",
+                new_workspace_id_str
+            );
         }
 
         // Insert the Workspace DTO into the transaction

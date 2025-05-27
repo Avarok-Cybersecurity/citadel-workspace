@@ -2,7 +2,7 @@ pub mod office_ops {
     use crate::handlers::domain::functions::room::room_ops;
     use crate::handlers::domain::permission_denied;
     use crate::kernel::transaction::Transaction;
-    use citadel_logging::{error, info, warn};
+    use citadel_logging::{debug, error, info, warn};
     use citadel_sdk::prelude::*;
     use citadel_workspace_types::structs::{Domain, Office, Permission, UserRole}; // Added import
 
@@ -13,13 +13,29 @@ pub mod office_ops {
         office_id: &str,    // Pre-generated office ID
         name: &str,
         description: &str,
+        mdx_content: Option<String>, // Added mdx_content parameter
     ) -> Result<Office, NetworkError> {
         let user = tx
             .get_user(user_id)
             .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
 
+        debug!(
+            user_id = user_id,
+            workspace_id = workspace_id,
+            user_details = ?user,
+            "Checking CreateOffice permission for user on workspace"
+        );
+
+        let has_perm = user.has_permission(workspace_id, Permission::CreateOffice); // Use the potentially overridden value
+        debug!(
+            user_id = user_id,
+            workspace_id = workspace_id,
+            permission_check_result = has_perm,
+            "Result of user.has_permission(workspace_id, Permission::CreateOffice)"
+        );
+
         // Permission check: User needs CreateOffice permission on the parent workspace
-        if !user.has_permission(workspace_id, Permission::CreateOffice) {
+        if !has_perm {
             return Err(permission_denied(format!(
                 "User {} cannot create office in workspace {}",
                 user_id, workspace_id
@@ -50,7 +66,7 @@ pub mod office_ops {
             description: description.to_string(),
             members: vec![user_id.to_string()], // Creator is the first member
             rooms: Vec::new(),                  // Starts with no rooms
-            mdx_content: String::new(),         // Default empty MDX content
+            mdx_content: mdx_content.unwrap_or_else(String::new), // Use provided mdx_content
             metadata: Vec::new(),               // Default empty metadata
         };
 
@@ -113,6 +129,7 @@ pub mod office_ops {
         office_id: &str,
         name: Option<String>,
         description: Option<String>,
+        mdx_content: Option<String>, // Added mdx_content parameter
     ) -> Result<Office, NetworkError> {
         let user = tx
             .get_user(user_id)
@@ -145,6 +162,9 @@ pub mod office_ops {
         if let Some(d) = description {
             office_to_update.description = d;
         }
+        if let Some(mdx) = mdx_content {
+            office_to_update.mdx_content = mdx;
+        }
 
         let updated_office_clone = office_to_update.clone();
         tx.update_domain(office_id, owned_domain)?;
@@ -152,8 +172,10 @@ pub mod office_ops {
         info!(
             user_id = user_id,
             office_id = office_id,
-            "Updated office {:?}",
-            updated_office_clone.name
+            name = ?updated_office_clone.name,
+            description = ?updated_office_clone.description,
+            mdx_content_is_empty = updated_office_clone.mdx_content.is_empty(),
+            "Updated office details"
         );
         Ok(updated_office_clone)
     }

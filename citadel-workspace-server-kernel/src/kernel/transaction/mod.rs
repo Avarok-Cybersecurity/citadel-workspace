@@ -6,6 +6,9 @@ pub mod rbac;
 pub mod read;
 pub mod write;
 
+pub use self::rbac::retrieve_role_permissions;
+pub use self::rbac::DomainType;
+
 /// Transaction trait defines common functionality for both read and write transactions
 pub trait Transaction {
     fn workspace_password(&self, workspace_id: &str) -> Option<String>;

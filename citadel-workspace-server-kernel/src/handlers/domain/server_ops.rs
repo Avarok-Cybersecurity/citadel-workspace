@@ -1,24 +1,24 @@
 use citadel_logging::{debug, error, info};
-// Removed problematic UserCID import: use citadel_types::connections::UserCID;
-use crate::kernel::transaction::{Transaction, TransactionManager};
 use citadel_sdk::prelude::{NetworkError, NodeRemote, Ratchet};
 use citadel_workspace_types::structs::{
     Domain, MetadataValue, Office, Permission, Room, User, UserRole, Workspace,
 };
+use citadel_workspace_types::WorkspaceProtocolResponse;
 use std::any::TypeId;
 use std::sync::Arc;
 use uuid::Uuid;
+
+use crate::handlers::domain::functions::workspace::workspace_ops::WorkspacePasswordPair;
+use crate::handlers::domain::WorkspaceDBList;
+use crate::kernel::transaction::{Transaction, TransactionManager};
 
 use super::functions::office::office_ops;
 use super::functions::room::room_ops;
 use super::functions::user as user_ops;
 use super::functions::workspace::workspace_ops;
 use super::DomainOperations;
-use crate::handlers::domain::functions::workspace::workspace_ops::WorkspacePasswordPair;
-
 use crate::handlers::domain::permission_denied;
 use crate::handlers::domain::DomainEntity;
-use crate::handlers::domain::WorkspaceDBList;
 
 /// Server-side implementation of domain operations
 #[derive(Clone)]
@@ -496,8 +496,18 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         description: &str,
         mdx_content: Option<&str>,
     ) -> Result<Office, NetworkError> {
+        info!(
+            user_id = user_id,
+            workspace_id = workspace_id,
+            name = name,
+            description = description,
+            mdx_content_is_some = mdx_content.is_some(),
+            "Attempting to create office via DomainServerOperations"
+        );
         let office_id = Uuid::new_v4().to_string();
-        self.tx_manager.with_write_transaction(|tx| {
+        let mdx_content_owned = mdx_content.map(|s| s.to_string());
+
+        let result = self.with_write_transaction(|tx| {
             office_ops::create_office_inner(
                 tx,
                 user_id,
@@ -505,8 +515,23 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                 &office_id,
                 name,
                 description,
+                mdx_content_owned,
             )
-        })
+        });
+
+        match result {
+            Ok(office) => Ok(office),
+            Err(e) => {
+                error!(
+                    user_id = user_id,
+                    workspace_id = workspace_id,
+                    name = name,
+                    error = ?e,
+                    "Failed to create office via DomainServerOperations"
+                );
+                Err(e)
+            }
+        }
     }
 
     fn get_office(&self, user_id: &str, office_id: &str) -> Result<Office, NetworkError> {
@@ -525,7 +550,15 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         self.tx_manager.with_write_transaction(|tx| {
             let name_string = name.map(|s| s.to_string());
             let description_string = description.map(|s| s.to_string());
-            office_ops::update_office_inner(tx, user_id, office_id, name_string, description_string)
+            let mdx_content_string = mdx_content.map(|s| s.to_string());
+            office_ops::update_office_inner(
+                tx,
+                user_id,
+                office_id,
+                name_string,
+                description_string,
+                mdx_content_string,
+            )
         })
     }
 

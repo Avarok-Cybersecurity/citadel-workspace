@@ -5,6 +5,14 @@ use citadel_logging::debug;
 use citadel_sdk::prelude::NetworkError;
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
 use citadel_workspace_types::UpdateOperation;
+use std::collections::HashSet;
+
+// Helper enum to distinguish domain types for permission mapping
+pub enum DomainType {
+    Workspace,
+    Office,
+    Room,
+}
 
 impl TransactionManager {
     pub fn is_admin(&self, user_id: &str) -> bool {
@@ -236,9 +244,7 @@ impl TransactionManager {
             Ok(())
         })
     }
-}
 
-impl TransactionManager {
     /// Create a new read transaction
     pub fn read_transaction(&self) -> ReadTransaction {
         ReadTransaction::new(
@@ -286,4 +292,119 @@ impl TransactionManager {
             }
         }
     }
+}
+
+/// Returns the set of permissions granted by a specific role for a given domain type.
+pub fn retrieve_role_permissions(role: &UserRole, domain_type: &DomainType) -> Vec<Permission> {
+    let mut permissions = Vec::new();
+
+    match domain_type {
+        DomainType::Workspace => match role {
+            UserRole::Owner => {
+                permissions.extend(vec![
+                    Permission::CreateOffice,
+                    Permission::DeleteOffice, // Owner of workspace can delete offices in it
+                    Permission::UpdateWorkspace, // Owner can update workspace settings
+                    Permission::AddUsers,     // Invite users to the workspace
+                    Permission::RemoveUsers,  // Remove users from the workspace
+                    Permission::EditWorkspaceConfig, // Owner can edit workspace config
+                ]);
+            }
+            UserRole::Admin => {
+                // Admins get all permissions related to managing the workspace itself,
+                // but not necessarily all data access permissions within all sub-domains unless also Owner/Admin there.
+                permissions.extend(vec![
+                    Permission::CreateOffice,
+                    Permission::DeleteOffice,
+                    Permission::UpdateWorkspace,
+                    Permission::AddUsers,
+                    Permission::RemoveUsers,
+                    Permission::EditWorkspaceConfig,
+                    Permission::BanUser, // Admins can ban users from the workspace
+                ]);
+            }
+            UserRole::Member => {
+                // Regular members can view content and potentially create offices if allowed by config (handled elsewhere)
+                permissions.extend(vec![
+                    Permission::ViewContent,  // General permission to see the workspace exists
+                    Permission::CreateOffice, // Subject to workspace settings
+                    Permission::SendMessages, // If there's a workspace-level chat
+                    Permission::ReadMessages, // If there's a workspace-level chat
+                ]);
+            }
+            _ => {} // Guests, Banned, Custom - typically no direct workspace creation/management perms
+        },
+        DomainType::Office => match role {
+            UserRole::Owner => {
+                permissions.extend(vec![
+                    Permission::UpdateOffice, // Owner can update office settings
+                    Permission::DeleteOffice, // Owner can delete the office
+                    Permission::CreateRoom,   // Owner can create rooms in their office
+                    Permission::AddUsers,     // Invite users to the office
+                    Permission::RemoveUsers,  // Remove users from the office
+                    Permission::EditContent,  // Was ModifyContent, broader edit rights for owner
+                    // For DeleteContent, an Office Owner can delete the office itself
+                    // Permission::DeleteOffice, // Already added
+                    Permission::EditOfficeConfig,
+                    Permission::SendMessages, // Office-wide announcements, etc.
+                    Permission::ReadMessages,
+                    Permission::UploadFiles, // To office-level storage if any
+                    Permission::DownloadFiles,
+                ]);
+            }
+            UserRole::Admin => {
+                permissions.extend(vec![Permission::All]);
+            }
+            UserRole::Member => {
+                permissions.extend(vec![
+                    Permission::ViewContent,
+                    Permission::EditContent, // Was ModifyContent
+                    Permission::CreateRoom,
+                    Permission::SendMessages,
+                    Permission::ReadMessages,
+                    Permission::UploadFiles,
+                    Permission::DownloadFiles,
+                ]);
+            }
+            _ => {} // Guests, Banned, Custom
+        },
+        DomainType::Room => match role {
+            UserRole::Owner => {
+                permissions.extend(vec![
+                    Permission::UpdateRoom,  // Owner can update room settings
+                    Permission::DeleteRoom,  // Owner can delete the room
+                    Permission::AddUsers,    // Invite users to the room (was InviteUserToRoom)
+                    Permission::RemoveUsers, // Remove users from the room
+                    Permission::EditContent, // Was ModifyContent
+                    // For DeleteContent, a Room Owner can delete the room itself
+                    // Permission::DeleteRoom, // Already added
+                    Permission::EditRoomConfig,
+                    Permission::SendMessages,
+                    Permission::ReadMessages,
+                    Permission::UploadFiles,
+                    Permission::DownloadFiles,
+                ]);
+            }
+            UserRole::Admin => {
+                permissions.extend(vec![Permission::All]);
+            }
+            UserRole::Member => {
+                permissions.extend(vec![
+                    Permission::ViewContent,
+                    Permission::EditContent, // Was ModifyContent
+                    Permission::SendMessages,
+                    Permission::ReadMessages,
+                    Permission::UploadFiles,
+                    Permission::DownloadFiles,
+                ]);
+            }
+            _ => {} // Guests, Banned, Custom
+        },
+    }
+
+    // Remove duplicates that might have been added if logic overlaps (e.g. DeleteRoom for Office Owner)
+    let mut unique_permissions = HashSet::new();
+    permissions.retain(|p| unique_permissions.insert(*p));
+
+    permissions
 }

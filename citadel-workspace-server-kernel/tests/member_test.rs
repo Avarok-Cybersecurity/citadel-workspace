@@ -1,5 +1,5 @@
 use citadel_sdk::prelude::StackedRatchet;
-use citadel_workspace_server_kernel::handlers::domain::server_ops::ServerDomainOps;
+use citadel_workspace_server_kernel::handlers::domain::server_ops::DomainServerOperations;
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 use citadel_workspace_types::structs::{Domain, Office, User, UserRole};
@@ -19,10 +19,25 @@ fn create_test_user(id: &str, role: UserRole) -> User {
     }
 }
 
+// Helper function to create a test office
+fn create_test_office(id: &str, name: &str, owner_id: &str, workspace_id: &str) -> Office {
+    Office {
+        id: id.to_string(),
+        owner_id: owner_id.to_string(),
+        workspace_id: workspace_id.to_string(),
+        name: name.to_string(),
+        description: "Test Office Description".to_string(),
+        members: vec![owner_id.to_string()],
+        rooms: Vec::new(),
+        mdx_content: "".to_string(),
+        metadata: Vec::new(),
+    }
+}
+
 // Helper to setup a test environment with admin, domains, and test users
 fn setup_test_environment() -> (
     Arc<WorkspaceServerKernel<StackedRatchet>>,
-    ServerDomainOps<StackedRatchet>,
+    DomainServerOperations<StackedRatchet>,
 ) {
     citadel_logging::setup_log();
     let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
@@ -54,12 +69,12 @@ fn test_add_user_to_domain() {
 
     // Create an office
     let office = _domain_ops
-        .create_office("admin", "Test Office", "For Testing", None)
+        .create_office("admin", "test_ws_id", "Test Office", "For Testing", None)
         .unwrap();
 
     // Add the user to the office
     _domain_ops
-        .add_user_to_domain(user_id, &office.id, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
         .unwrap();
 
     // Verify the user is in the office
@@ -94,17 +109,17 @@ fn test_remove_user_from_domain() {
 
     // Create an office
     let office = _domain_ops
-        .create_office("admin", "Test Office", "For Testing", None)
+        .create_office("admin", "test_ws_id", "Test Office", "For Testing", None)
         .unwrap();
 
     // Add the user to the office first
     _domain_ops
-        .add_user_to_domain(user_id, &office.id, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
         .unwrap();
 
     // Remove the user from the office
     _domain_ops
-        .remove_user_from_domain(user_id, &office.id)
+        .remove_user_from_domain("admin", user_id, &office.id)
         .unwrap();
 
     // Verify the user is no longer in the office
@@ -139,12 +154,12 @@ fn test_complete_user_removal() {
 
     // Create an office
     let office = _domain_ops
-        .create_office("admin", "Test Office", "For Testing", None)
+        .create_office("admin", "test_ws_id", "Test Office", "For Testing", None)
         .unwrap();
 
     // Add the user to the office
     _domain_ops
-        .add_user_to_domain(user_id, &office.id, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
         .unwrap();
 
     // Use transaction to completely remove the user
@@ -211,21 +226,18 @@ fn test_member_command_processing() {
         .tx_manager()
         .with_write_transaction(|tx| {
             citadel_logging::trace!(target: "citadel", "In transaction to create office");
-            tx.insert_domain(
-                office_id.to_string(),
-                Domain::Office {
-                    office: Office {
-                        id: office_id.to_string(),
-                        name: "Test Office".to_string(),
-                        description: "Test Office Description".to_string(),
-                        owner_id: "admin".to_string(),
-                        members: Vec::new(),
-                        rooms: Vec::new(),
-                        mdx_content: String::new(),
-                        metadata: Vec::new(),
-                    },
-                },
-            )?;
+            let office = Office {
+                id: office_id.to_string(),
+                owner_id: "admin".to_string(),
+                workspace_id: "test_ws_id".to_string(), // Added missing field
+                name: "Test Office".to_string(),
+                description: "Test Office Description".to_string(),
+                members: vec!["admin".to_string()],
+                rooms: Vec::new(),
+                mdx_content: "".to_string(),
+                metadata: Vec::new(),
+            };
+            tx.insert_domain(office_id.to_string(), Domain::Office { office })?;
             citadel_logging::trace!(target: "citadel", "Office created");
             Ok(())
         })

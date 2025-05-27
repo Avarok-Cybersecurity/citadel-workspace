@@ -45,6 +45,7 @@ pub enum WorkspaceProtocolRequest {
 
     // Office commands
     CreateOffice {
+        workspace_id: String,
         name: String,
         description: String,
         mdx_content: Option<String>,

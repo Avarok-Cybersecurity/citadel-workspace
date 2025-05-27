@@ -946,6 +946,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "auto_impl",
+ "bincode",
  "citadel-internal-service",
  "citadel-internal-service-connector",
  "citadel-internal-service-test-common",

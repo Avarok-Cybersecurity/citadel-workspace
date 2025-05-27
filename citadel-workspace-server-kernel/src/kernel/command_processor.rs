@@ -95,19 +95,20 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
             // Office commands
             WorkspaceProtocolRequest::CreateOffice {
+                workspace_id,
                 name,
                 description,
                 mdx_content,
-                metadata: _,
+                metadata: _, // Ensure metadata is handled or explicitly ignored if not used by create_office
             } => Self::handle_result(
                 self.domain_ops().create_office(
                     user_id,
-                    crate::WORKSPACE_ROOT_ID,
+                    &workspace_id,
                     &name,
                     &description,
                     mdx_content.as_deref(),
                 ),
-                |office| WorkspaceProtocolResponse::Office(office),
+                |office_struct| WorkspaceProtocolResponse::Office(office_struct),
                 "Failed to create office",
             ),
             WorkspaceProtocolRequest::GetOffice { office_id } => Self::handle_result(

@@ -1,8 +1,10 @@
 use citadel_sdk::prelude::StackedRatchet;
-use citadel_workspace_server_kernel::handlers::domain::server_ops::ServerDomainOps;
+use citadel_workspace_server_kernel::handlers::domain::server_ops::DomainServerOperations;
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
-use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
+use citadel_workspace_types::structs::{
+    Domain, Office, Permission, Room, User, UserRole, Workspace,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -22,7 +24,7 @@ fn create_test_user(id: &str, role: UserRole) -> User {
 // Helper to setup a test environment with admin, domains, and test users
 fn setup_test_environment() -> (
     Arc<WorkspaceServerKernel<StackedRatchet>>,
-    ServerDomainOps<StackedRatchet>,
+    DomainServerOperations<StackedRatchet>,
 ) {
     citadel_logging::setup_log();
     let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
@@ -54,7 +56,13 @@ fn test_office_room_permission_inheritance() {
 
     // Create an office
     let office = domain_ops
-        .create_office("admin", "Test Office", "For Testing", None)
+        .create_office(
+            "admin",
+            "test_ws_perms_inherit",
+            "Test Office",
+            "For Testing",
+            None,
+        )
         .unwrap();
 
     // Create a room in the office
@@ -64,11 +72,15 @@ fn test_office_room_permission_inheritance() {
 
     // Add the user to the office but not the room
     domain_ops
-        .add_user_to_domain(user_id, &office.id, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
         .unwrap();
 
     // Verify the user is in the office
-    let office_domain = domain_ops.get_domain(&office.id).unwrap();
+    let office_domain_result = domain_ops
+        .with_read_transaction(|tx| Ok(tx.get_domain(&office.id).cloned()))
+        .unwrap();
+    let office_domain = office_domain_result.expect("Office domain should exist");
+
     match office_domain {
         Domain::Office { office } => {
             assert!(
@@ -81,7 +93,9 @@ fn test_office_room_permission_inheritance() {
 
     // Check permission inheritance - user should have view access to the room
     // because they are a member of the parent office
-    let has_room_access = domain_ops.is_member_of_domain(user_id, &room.id).unwrap();
+    let has_room_access = domain_ops
+        .with_read_transaction(|tx| domain_ops.is_member_of_domain(tx, user_id, &room.id))
+        .unwrap();
     assert!(
         has_room_access,
         "User should have access to room because they're members of the parent office"
@@ -89,7 +103,9 @@ fn test_office_room_permission_inheritance() {
 
     // Check view permission inheritance
     let has_view_permission = domain_ops
-        .check_entity_permission(user_id, &room.id, Permission::ViewContent)
+        .with_read_transaction(|tx| {
+            domain_ops.check_entity_permission(tx, user_id, &room.id, Permission::ViewContent)
+        })
         .unwrap();
     assert!(
         has_view_permission,
@@ -98,7 +114,9 @@ fn test_office_room_permission_inheritance() {
 
     // User shouldn't have edit permission on the room
     let has_edit_permission = domain_ops
-        .check_entity_permission(user_id, &room.id, Permission::SendMessages)
+        .with_read_transaction(|tx| {
+            domain_ops.check_entity_permission(tx, user_id, &room.id, Permission::SendMessages)
+        })
         .unwrap();
     assert!(
         !has_edit_permission,
@@ -125,7 +143,13 @@ fn test_permission_escalation() {
 
     // Create an office
     let office = domain_ops
-        .create_office("admin", "Test Office", "For Testing", None)
+        .create_office(
+            "admin",
+            "test_ws_perms_inherit",
+            "Test Office",
+            "For Testing",
+            None,
+        )
         .unwrap();
 
     // Create a room in the office
@@ -135,15 +159,17 @@ fn test_permission_escalation() {
 
     // Add user to both office and room
     domain_ops
-        .add_user_to_domain(user_id, &office.id, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
         .unwrap();
     domain_ops
-        .add_user_to_domain(user_id, &room.id, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &room.id, UserRole::Member)
         .unwrap();
 
     // Check basic permission
     let has_view_permission = domain_ops
-        .check_entity_permission(user_id, &room.id, Permission::ViewContent)
+        .with_read_transaction(|tx| {
+            domain_ops.check_entity_permission(tx, user_id, &room.id, Permission::ViewContent)
+        })
         .unwrap();
     assert!(
         has_view_permission,
@@ -154,9 +180,9 @@ fn test_permission_escalation() {
     kernel
         .tx_manager()
         .with_write_transaction(|tx| {
-            if let Some(mut user) = tx.get_user(user_id).cloned() {
-                user.role = UserRole::Admin;
-                tx.update_user(user_id, user)?;
+            if let Some(mut user_from_db) = tx.get_user(user_id).cloned() {
+                user_from_db.role = UserRole::Admin;
+                tx.update_user(user_id, user_from_db)?;
                 Ok(())
             } else {
                 Err(citadel_sdk::prelude::NetworkError::msg("User not found"))
@@ -166,7 +192,9 @@ fn test_permission_escalation() {
 
     // Now user should have admin permissions
     let has_admin_permission = domain_ops
-        .check_entity_permission(user_id, &room.id, Permission::ManageRoomMembers)
+        .with_read_transaction(|tx| {
+            domain_ops.check_entity_permission(tx, user_id, &room.id, Permission::ManageRoomMembers)
+        })
         .unwrap();
     assert!(
         has_admin_permission,
@@ -193,7 +221,13 @@ fn test_is_member_of_domain_behavior() {
 
     // Create an office
     let office = domain_ops
-        .create_office("admin", "Test Office", "For Testing", None)
+        .create_office(
+            "admin",
+            "test_ws_id_perms",
+            "Test Office",
+            "For Testing",
+            None,
+        )
         .unwrap();
 
     // Create a room in the office
@@ -202,8 +236,12 @@ fn test_is_member_of_domain_behavior() {
         .unwrap();
 
     // Initially user is not a member of any domain
-    let is_member_office = domain_ops.is_member_of_domain(user_id, &office.id).unwrap();
-    let is_member_room = domain_ops.is_member_of_domain(user_id, &room.id).unwrap();
+    let is_member_office = domain_ops
+        .with_read_transaction(|tx| domain_ops.is_member_of_domain(tx, user_id, &office.id))
+        .unwrap();
+    let is_member_room = domain_ops
+        .with_read_transaction(|tx| domain_ops.is_member_of_domain(tx, user_id, &room.id))
+        .unwrap();
 
     assert!(
         !is_member_office,
@@ -216,26 +254,32 @@ fn test_is_member_of_domain_behavior() {
 
     // Add user to the office only
     domain_ops
-        .add_user_to_domain(user_id, &office.id, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
         .unwrap();
 
     // Now user should be a member of the office but not the room
-    let is_member_office = domain_ops.is_member_of_domain(user_id, &office.id).unwrap();
-    let is_member_room = domain_ops.is_member_of_domain(user_id, &room.id).unwrap();
+    let is_member_office = domain_ops
+        .with_read_transaction(|tx| domain_ops.is_member_of_domain(tx, user_id, &office.id))
+        .unwrap();
+    let is_member_room = domain_ops
+        .with_read_transaction(|tx| domain_ops.is_member_of_domain(tx, user_id, &room.id))
+        .unwrap();
 
     assert!(
         is_member_office,
         "User should be member of office after addition"
     );
     assert!(
-        !is_member_room,
+        !is_member_room, // This is checking direct membership, not inherited.
         "User should still not be member of room directly"
     );
 
-    // But user should still have access to the room because of permission inheritance
-    let has_room_access = domain_ops.is_member_of_domain(user_id, &room.id).unwrap();
+    // But user should still have access to the room because of permission inheritance (implicitly a member for access purposes)
+    let has_room_access_via_inheritance = domain_ops
+        .with_read_transaction(|tx| domain_ops.is_member_of_domain(tx, user_id, &room.id))
+        .unwrap();
     assert!(
-        has_room_access,
+        has_room_access_via_inheritance,
         "User should have room access because they're in the parent office"
     );
 }

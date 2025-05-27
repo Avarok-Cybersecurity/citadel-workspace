@@ -9,6 +9,7 @@ use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
+use rstest::*;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -162,62 +163,146 @@ async fn send_workspace_command(
     cid: u64,
     command: WorkspaceProtocolRequest,
 ) -> Result<WorkspaceProtocolResponse, Box<dyn Error>> {
-    let request_id = Uuid::new_v4();
-    let payload = WorkspaceProtocolPayload::Request(command);
-    let serialized_command = serde_json::to_vec(&payload)?;
-
-    // Send command to the workspace server
-    to_service.send(
-        citadel_internal_service_types::InternalServiceRequest::Message {
-            cid,
-            request_id,
-            message: serialized_command,
-            peer_cid: None,
-            security_level: citadel_internal_service_types::SecurityLevel::Standard,
-        },
-    )?;
-
     println!(
-        "Sent command: {:?} with request_id: {}",
-        payload, request_id
+        "Sending command: {:?} for CID: {}", // Changed to Debug format
+        command,                             // No .to_string()
+        cid
+    );
+    let request_id = Uuid::new_v4(); // Add request_id
+    let payload = WorkspaceProtocolPayload::Request(command.clone()); // Clone command here
+    let message_bytes = bincode::serialize(&payload).map_err(|e| Box::new(e) as Box<dyn Error>)?; // Handle bincode error
+
+    let internal_request = citadel_internal_service_types::InternalServiceRequest::Message {
+        request_id, // Added request_id
+        cid,
+        message: message_bytes,
+        peer_cid: None, // Corrected from destination_cid to peer_cid
+        security_level: citadel_internal_service_types::SecurityLevel::Standard,
+    };
+
+    to_service.send(internal_request)?;
+
+    // Wait for the response from the service
+    // The first response might be a MessageSendSuccess, which we should ignore and wait for the actual MessageNotification.
+    println!(
+        "Waiting for first response from service for request_id: {}",
+        request_id
+    );
+    let opt_response = tokio::time::timeout(Duration::from_secs(10), from_service.recv())
+        .await
+        .map_err(|e| {
+            println!(
+                "Timeout or error receiving first response for request_id: {}: {:?}",
+                request_id, e
+            );
+            Box::new(e) as Box<dyn Error>
+        })?
+        .ok_or_else(|| {
+            println!(
+                "Channel closed before first response for request_id: {}",
+                request_id
+            );
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "Receive operation timed out or channel closed for first response",
+            )) as Box<dyn Error>
+        })?;
+    println!(
+        "Received first response for request_id: {}: {:?}",
+        request_id, opt_response
     );
 
-    // Wait for response
-    while let Some(response) = from_service.recv().await {
-        println!("Received response: {:?}", response);
-
-        if let citadel_internal_service_types::InternalServiceResponse::MessageSendSuccess(
-            citadel_internal_service_types::MessageSendSuccess {
-                request_id: resp_id,
-                ..
-            },
-        ) = &response
-        {
-            if resp_id.as_ref() == Some(&request_id) {
-                println!("Received confirmation that message was sent successfully");
-                continue; // This is just confirmation the message was sent
+    match opt_response {
+        citadel_internal_service_types::InternalServiceResponse::MessageNotification(
+            inner_notification,
+        ) => {
+            println!("First response is MessageNotification. Deserializing payload for request_id: {}...", request_id);
+            let payload: WorkspaceProtocolPayload = bincode::deserialize(&inner_notification.message).map_err(|e| {
+                println!("Bincode deserialize error for MessageNotification payload for request_id: {}: {:?}", request_id, e);
+                println!("Message bytes (first 100): {:?}", &inner_notification.message.iter().take(100).collect::<Vec<_>>());
+                Box::new(e) as Box<dyn Error>
+            })?;
+            match payload {
+                WorkspaceProtocolPayload::Response(resp) => Ok(resp),
+                _ => {
+                    println!("Expected WorkspaceProtocolPayload::Response, got something else for request_id: {}", request_id);
+                    panic!("Expected WorkspaceProtocolPayload::Response, got something else")
+                }
             }
         }
-
-        if let citadel_internal_service_types::InternalServiceResponse::MessageNotification(
-            citadel_internal_service_types::MessageNotification { message, .. },
-        ) = response
-        {
-            // Deserialize the response
-            let workspace_response: WorkspaceProtocolPayload = serde_json::from_slice(&message)?;
-            let WorkspaceProtocolPayload::Response(response) = workspace_response else {
-                panic!("Expected WorkspaceProtocolPayload::Response")
-            };
-            return Ok(response);
+        citadel_internal_service_types::InternalServiceResponse::MessageSendSuccess(
+            success_msg,
+        ) => {
+            if success_msg.request_id.as_ref() == Some(&request_id) {
+                println!("Received MessageSendSuccess for request_id: {}. Waiting for actual response...", request_id);
+                // Loop to get the next message which should be the actual response
+                let actual_opt_response =
+                    tokio::time::timeout(Duration::from_secs(10), from_service.recv())
+                        .await
+                        .map_err(|e| {
+                            println!(
+                        "Timeout or error receiving actual response for request_id: {}: {:?}",
+                        request_id, e
+                    );
+                            Box::new(e) as Box<dyn Error>
+                        })?
+                        .ok_or_else(|| {
+                            println!(
+                                "Channel closed before actual response for request_id: {}",
+                                request_id
+                            );
+                            Box::new(std::io::Error::new(
+                                std::io::ErrorKind::TimedOut,
+                                "Receive operation for actual response timed out or channel closed",
+                            )) as Box<dyn Error>
+                        })?;
+                println!(
+                    "Received actual response for request_id: {}: {:?}",
+                    request_id, actual_opt_response
+                );
+                match actual_opt_response {
+                    citadel_internal_service_types::InternalServiceResponse::MessageNotification(inner_notification) => {
+                        println!("Actual response is MessageNotification. Deserializing payload for request_id: {}...", request_id);
+                        let payload: WorkspaceProtocolPayload = bincode::deserialize(&inner_notification.message).map_err(|e| {
+                            println!("Bincode deserialize error for actual MessageNotification payload for request_id: {}: {:?}", request_id, e);
+                            println!("Message bytes (first 100): {:?}", &inner_notification.message.iter().take(100).collect::<Vec<_>>());
+                            Box::new(e) as Box<dyn Error>
+                        })?;
+                        match payload {
+                            WorkspaceProtocolPayload::Response(resp) => Ok(resp),
+                            _ => {
+                                println!("Expected WorkspaceProtocolPayload::Response in actual response, got something else for request_id: {}", request_id);
+                                panic!("Expected WorkspaceProtocolPayload::Response in actual response, got something else")
+                            }
+                        }
+                    }
+                    _ => {
+                        println!("Expected MessageNotification for actual response, got {:?} for request_id: {}", actual_opt_response, request_id);
+                        panic!("Expected MessageNotification for actual response, got {:?}", actual_opt_response)
+                    }
+                }
+            } else {
+                println!("Received MessageSendSuccess for an unexpected request_id: {:?}, expected: {} for command: {:?}", success_msg.request_id, request_id, command);
+                panic!(
+                    "Received MessageSendSuccess for an unexpected request_id: {:?}",
+                    success_msg.request_id
+                );
+            }
         }
-
-        println!("Received unexpected response: {:?}", response);
+        other_response => {
+            println!("Expected MessageNotification or MessageSendSuccess, got {:?} for command: {:?} (request_id: {})", other_response, command, request_id);
+            panic!(
+                "Expected MessageNotification or MessageSendSuccess response, got {:?}\nCommand was: {:?}",
+                other_response,
+                command
+            )
+        }
     }
-
-    Err("No response received".into())
 }
 
+#[rstest]
 #[tokio::test]
+#[timeout(Duration::from_secs(15))]
 async fn test_office_operations() {
     println!("Setting up test environment...");
     let (kernel, internal_service_addr, server_addr, admin_username, admin_password) =
@@ -266,6 +351,17 @@ async fn test_office_operations() {
 
     println!("Root workspace created: {:?}", workspace_response);
 
+    let actual_workspace_id = match workspace_response {
+        WorkspaceProtocolResponse::Workspace(workspace) => {
+            println!("Extracted workspace ID: {}", workspace.id);
+            workspace.id
+        }
+        _ => panic!(
+            "Expected Workspace response after creating workspace, got {:?}",
+            workspace_response
+        ),
+    };
+
     // --- Test: Attempt to create workspace with WRONG password ---
     println!("Attempting to create workspace with wrong password...");
     let create_workspace_wrong_pw_cmd = WorkspaceProtocolRequest::CreateWorkspace {
@@ -303,6 +399,7 @@ async fn test_office_operations() {
     // Create an office using the command processor instead of directly
     println!("Creating test office...");
     let create_office_cmd = WorkspaceProtocolRequest::CreateOffice {
+        workspace_id: actual_workspace_id.clone(), // Use the extracted workspace ID
         name: "Test Office".to_string(),
         description: "A test office".to_string(),
         mdx_content: Some("# Test Office\nThis is a test office".to_string()),
@@ -438,7 +535,9 @@ async fn test_office_operations() {
     println!("Test complete.");
 }
 
+#[rstest]
 #[tokio::test]
+#[timeout(Duration::from_secs(15))]
 async fn test_room_operations() {
     println!("Setting up test environment...");
     let (kernel, internal_service_addr, server_addr, admin_username, admin_password) =
@@ -485,9 +584,21 @@ async fn test_room_operations() {
 
     println!("Root workspace created: {:?}", workspace_response);
 
+    let actual_workspace_id = match workspace_response {
+        WorkspaceProtocolResponse::Workspace(workspace) => {
+            println!("Extracted workspace ID: {}", workspace.id);
+            workspace.id
+        }
+        _ => panic!(
+            "Expected Workspace response after creating workspace, got {:?}",
+            workspace_response
+        ),
+    };
+
     // Create an office using the command processor instead of directly
     println!("Creating test office...");
     let create_office_cmd = WorkspaceProtocolRequest::CreateOffice {
+        workspace_id: actual_workspace_id.clone(), // Use the extracted workspace ID
         name: "Test Office".to_string(),
         description: "A test office".to_string(),
         mdx_content: Some("# Test Office\nThis is a test office".to_string()),

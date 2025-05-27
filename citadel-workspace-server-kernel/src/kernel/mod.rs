@@ -1,6 +1,7 @@
 use crate::handlers::domain::server_ops::DomainServerOperations;
 use crate::WorkspaceProtocolResponse;
 use crate::WORKSPACE_MASTER_PASSWORD_KEY;
+use bincode;
 use citadel_logging::{debug, info};
 use citadel_sdk::prelude::{NetKernel, NetworkError, NodeRemote, NodeResult, Ratchet};
 use citadel_workspace_types::structs::{
@@ -44,7 +45,55 @@ pub enum MemberAction {
 #[async_trait::async_trait]
 impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<R> {
     fn load_remote(&mut self, server_remote: NodeRemote<R>) -> Result<(), NetworkError> {
-        *self.node_remote.blocking_write() = Some(server_remote);
+        citadel_logging::info!(target: "citadel", "WorkspaceServerKernel: load_remote called and server_remote received.");
+
+        let old_node_remote_to_drop: Option<NodeRemote<R>>;
+
+        // Scope 1: Take out the old remote from self.node_remote
+        {
+            let mut guard = match self.node_remote.try_write() {
+                Ok(g) => g,
+                Err(_would_block_err) => {
+                    // Log the error and return, or handle as appropriate for your application's logic.
+                    // For now, we'll log and return a generic error, as load_remote is critical.
+                    citadel_logging::error!(target: "citadel", "WorkspaceServerKernel: load_remote: Failed to acquire write lock on node_remote (try_write would block).");
+                    return Err(NetworkError::Generic(
+                        "Failed to acquire lock in load_remote".to_string(),
+                    ));
+                }
+            };
+            if guard.is_none() {
+                citadel_logging::info!(target: "citadel", "WorkspaceServerKernel: load_remote: guard is None before take().");
+            } else {
+                citadel_logging::info!(target: "citadel", "WorkspaceServerKernel: load_remote: guard is Some before take().");
+            }
+            old_node_remote_to_drop = guard.take(); // Replaces inner with None, returns previous Some(T) or None
+            citadel_logging::info!(target: "citadel", "WorkspaceServerKernel: load_remote: Took old remote option from RwLock. Releasing lock.");
+        } // RwLockWriteGuard for self.node_remote is dropped here, lock released
+
+        // Drop the old remote (if any) outside of any lock on self.node_remote
+        if let Some(old_remote) = old_node_remote_to_drop {
+            citadel_logging::info!(target: "citadel", "WorkspaceServerKernel: load_remote: Dropping previous NodeRemote instance (outside lock).");
+            drop(old_remote); // Explicitly drop the old remote
+            citadel_logging::info!(target: "citadel", "WorkspaceServerKernel: load_remote: Previous NodeRemote instance dropped (outside lock).");
+        }
+
+        // Scope 2: Insert the new remote into self.node_remote
+        {
+            let mut guard = match self.node_remote.try_write() {
+                Ok(g) => g,
+                Err(_would_block_err) => {
+                    citadel_logging::error!(target: "citadel", "WorkspaceServerKernel: load_remote: Failed to acquire write lock on node_remote for insertion (try_write would block).");
+                    return Err(NetworkError::Generic(
+                        "Failed to acquire lock for insertion in load_remote".to_string(),
+                    ));
+                }
+            };
+            citadel_logging::info!(target: "citadel", "WorkspaceServerKernel: load_remote: Inserting new NodeRemote instance into RwLock.");
+            *guard = Some(server_remote);
+            citadel_logging::info!(target: "citadel", "WorkspaceServerKernel: load_remote: New NodeRemote instance inserted into RwLock.");
+        } // RwLockWriteGuard for self.node_remote is dropped here, lock released
+
         Ok(())
     }
 
@@ -58,56 +107,107 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
         match event {
             NodeResult::ConnectSuccess(connect_success) => {
                 let this = self.clone();
-                let server_remote = self.node_remote.read().await.clone().unwrap();
-                let peer_command_handler = async move {
+                // Spawn a task to handle the connection success event
+                tokio::spawn(async move {
+                    let _cid = connect_success.session_cid; // Use session_cid
                     let user_cid = connect_success.channel.get_session_cid();
-                    let user_id = server_remote
-                        .account_manager()
+
+                    let node_remote_guard = this.node_remote.read().await;
+                    let account_manager = match node_remote_guard.as_ref() {
+                        Some(remote) => remote.account_manager(),
+                        None => {
+                            citadel_logging::error!(target: "citadel", "NodeRemote not available during ConnectSuccess for CID {}", connect_success.session_cid);
+                            return Err(NetworkError::Generic(
+                                "NodeRemote not available".to_string(),
+                            ));
+                        }
+                    };
+
+                    let user_id = account_manager
                         .get_username_by_cid(connect_success.session_cid)
                         .await?
-                        .ok_or_else(|| {
-                            NetworkError::msg(format!(
-                                "Unable to obtain username. Unknown client: {user_cid}"
-                            ))
-                        })?;
+                        .ok_or_else(|| NetworkError::Generic("User not found".to_string()))?;
+
+                    citadel_logging::info!(target: "citadel", "User {} connected with cid {} ({})", user_id, connect_success.session_cid, user_cid);
+
+                    // Attempt to register the user's CID with their user ID
+                    // This is crucial for routing messages correctly
+                    // @human-review: The method `register_user_cid` was not found on `DomainOperations`.
+                    // The SDK's `AccountManager` already provides `get_username_by_cid`, so the necessity of
+                    // explicit CID registration at the domain layer for message routing needs re-evaluation.
+                    // If issues arise with message routing to specific user sessions, this might be the cause.
+                    /*
+                    match this.domain_operations.register_user_cid(&user_id, connect_success.session_cid).await {
+                        Ok(_) => {
+                            citadel_logging::info!(target: "citadel", "Successfully registered CID {} for user {}", connect_success.session_cid, user_id);
+                        }
+                        Err(e) => {
+                            citadel_logging::error!(target: "citadel", "Failed to register CID {} for user {}: {:?}", connect_success.session_cid, user_id, e);
+                        }
+                    }
+                    */
 
                     let (mut tx, mut rx) = connect_success.channel.split();
 
                     while let Some(msg) = rx.next().await {
-                        if let Ok(command) =
-                            serde_json::from_slice::<WorkspaceProtocolPayload>(msg.as_ref())
-                        {
-                            if let WorkspaceProtocolPayload::Request(request) = command {
-                                let response = this.process_command(&user_id, request);
-                                let response = response.unwrap_or_else(|e| {
-                                    WorkspaceProtocolResponse::Error(e.to_string())
-                                });
-                                let response_wrapped = WorkspaceProtocolPayload::Response(response);
-                                let serialized_response =
-                                    serde_json::to_vec(&response_wrapped).unwrap();
-                                // The client receives a WorkspaceProtocolPayload, and should deserialize the message content as such
-                                tx.send(serialized_response).await?;
-                            } else {
-                                citadel_logging::warn!(target: "citadel", "Server received a response when it can only receive commands: {command:?}");
+                        // Deserialize with bincode instead of serde_json
+                        match bincode::deserialize::<WorkspaceProtocolPayload>(msg.as_ref()) {
+                            Ok(command_payload) => {
+                                if let WorkspaceProtocolPayload::Request(request) = command_payload
+                                {
+                                    let response = this.process_command(&user_id, request);
+                                    let response = response.unwrap_or_else(|e| {
+                                        WorkspaceProtocolResponse::Error(e.to_string())
+                                    });
+                                    let response_wrapped =
+                                        WorkspaceProtocolPayload::Response(response);
+                                    // Serialize with bincode instead of serde_json
+                                    match bincode::serialize(&response_wrapped) {
+                                        Ok(serialized_response) => {
+                                            if let Err(e) = tx.send(serialized_response).await {
+                                                citadel_logging::error!(target: "citadel", "Failed to send response: {:?}", e);
+                                                break; // Exit loop on send error
+                                            }
+                                        }
+                                        Err(e) => {
+                                            citadel_logging::error!(target: "citadel", "Failed to serialize response with bincode: {:?}", e);
+                                            // Optionally send a generic error back if serialization fails
+                                        }
+                                    }
+                                } else {
+                                    citadel_logging::warn!(target: "citadel", "Server received a WorkspaceProtocolPayload::Response when it expected a Request: {:?}", command_payload);
+                                    // It's unusual for the server to receive a Response type directly from the client here.
+                                    // Decide if an error response is appropriate.
+                                }
                             }
-                        } else {
-                            let serialized_response =
-                                serde_json::to_vec(&WorkspaceProtocolResponse::Error(
-                                    "Invalid command. Failed deserialization".to_string(),
-                                ))
-                                .unwrap();
-                            tx.send(serialized_response).await?;
+                            Err(e) => {
+                                citadel_logging::error!(target: "citadel", "Failed to deserialize command with bincode: {:?}. Message (first 50 bytes): {:?}", e, msg.as_ref().iter().take(50).collect::<Vec<_>>());
+                                // Construct an error response, wrap it in WorkspaceProtocolPayload, and serialize with bincode
+                                let error_response = WorkspaceProtocolResponse::Error(format!(
+                                    "Invalid command. Failed bincode deserialization: {}",
+                                    e
+                                ));
+                                let response_wrapped =
+                                    WorkspaceProtocolPayload::Response(error_response);
+                                match bincode::serialize(&response_wrapped) {
+                                    Ok(serialized_error_response) => {
+                                        if let Err(send_err) =
+                                            tx.send(serialized_error_response).await
+                                        {
+                                            citadel_logging::error!(target: "citadel", "Failed to send deserialization error response: {:?}", send_err);
+                                            break; // Exit loop on send error
+                                        }
+                                    }
+                                    Err(serialize_err) => {
+                                        citadel_logging::error!(target: "citadel", "Failed to serialize deserialization error response with bincode: {:?}", serialize_err);
+                                    }
+                                }
+                            }
                         }
                     }
 
                     Ok::<(), NetworkError>(())
-                };
-
-                drop(tokio::task::spawn(async move {
-                    if let Err(e) = peer_command_handler.await {
-                        citadel_logging::error!(target: "citadel", "Peer command handler failed: {e}");
-                    }
-                }));
+                });
             }
 
             evt => {

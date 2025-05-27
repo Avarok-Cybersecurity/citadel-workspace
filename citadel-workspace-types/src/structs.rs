@@ -266,6 +266,10 @@ pub enum Permission {
     ManageDomains,
     // Configure system (admin permission)
     ConfigureSystem,
+    // Edit workspace configuration
+    EditWorkspaceConfig,
+    // Ban a user from a domain
+    BanUser,
 }
 
 impl Permission {

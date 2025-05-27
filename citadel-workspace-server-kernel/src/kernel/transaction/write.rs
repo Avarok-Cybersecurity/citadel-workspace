@@ -1,5 +1,6 @@
 use crate::kernel::transaction::{
-    DomainChange, Transaction, UserChange, WorkspaceChange, WorkspaceOperations,
+    retrieve_role_permissions, DomainChange, DomainType, Transaction, UserChange, WorkspaceChange,
+    WorkspaceOperations,
 };
 use citadel_sdk::prelude::NetworkError;
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
@@ -253,29 +254,52 @@ impl<'a> Transaction for WriteTransaction<'a> {
         &mut self,
         user_id: &str,
         domain_id: &str,
-        _role: UserRole, // Add back the role parameter, marked as unused
+        role: UserRole,
     ) -> Result<(), NetworkError> {
-        let domain = self
+        // First, get mutable access to the user to update their permissions
+        let user = self
+            .users
+            .get_mut(user_id)
+            .ok_or_else(|| NetworkError::msg(format!("User not found: {}", user_id)))?;
+
+        // Determine DomainType and get permissions for the role
+        let domain_type_for_rbac;
+        // Get the domain to determine its type and update its member list
+        let domain_for_membership_update = self
             .domains
             .get_mut(domain_id)
             .ok_or_else(|| NetworkError::msg(format!("Domain not found: {}", domain_id)))?;
-        match domain {
+
+        match domain_for_membership_update {
             Domain::Workspace { workspace } => {
+                domain_type_for_rbac = DomainType::Workspace;
                 if !workspace.members.contains(&user_id.to_string()) {
                     workspace.members.push(user_id.to_string());
                 }
             }
             Domain::Office { office } => {
+                domain_type_for_rbac = DomainType::Office;
                 if !office.members.contains(&user_id.to_string()) {
                     office.members.push(user_id.to_string());
                 }
             }
             Domain::Room { room } => {
+                domain_type_for_rbac = DomainType::Room;
                 if !room.members.contains(&user_id.to_string()) {
                     room.members.push(user_id.to_string());
                 }
             }
         };
+
+        // Get the set of permissions for the given role and domain type
+        let permissions_for_role = retrieve_role_permissions(&role, &domain_type_for_rbac);
+
+        // Update the user's permissions map for this domain
+        let domain_permissions_set = user.permissions.entry(domain_id.to_string()).or_default();
+        for perm in permissions_for_role {
+            domain_permissions_set.insert(perm);
+        }
+
         Ok(())
     }
 

@@ -50,6 +50,7 @@ fn test_create_workspace() {
         assert_eq!(workspace.description, workspace_description);
         assert_eq!(workspace.owner_id, admin_id);
         assert!(workspace.members.contains(&admin_id.to_string()));
+        assert_eq!(workspace.password_protected, false);
     } else {
         panic!("Expected Workspace response");
     }
@@ -66,6 +67,7 @@ fn test_create_workspace() {
             assert_eq!(workspace.description, workspace_description);
             assert_eq!(workspace.owner_id, admin_id);
             assert!(workspace.members.contains(&admin_id.to_string()));
+            assert_eq!(workspace.password_protected, false);
             Ok(())
         })
         .unwrap();
@@ -106,6 +108,7 @@ fn test_get_workspace() {
         assert_eq!(workspace.description, workspace_description);
         assert_eq!(workspace.owner_id, admin_id);
         assert!(workspace.members.contains(&admin_id.to_string()));
+        assert_eq!(workspace.password_protected, false);
     } else {
         panic!("Expected Workspace response");
     }
@@ -155,6 +158,7 @@ fn test_update_workspace() {
         assert_eq!(workspace.name, updated_name);
         assert_eq!(workspace.description, updated_description);
         assert_eq!(workspace.owner_id, admin_id);
+        assert_eq!(workspace.password_protected, false);
     } else {
         panic!("Expected Workspace response");
     }
@@ -167,6 +171,7 @@ fn test_update_workspace() {
             assert_eq!(workspace.name, updated_name);
             assert_eq!(workspace.description, updated_description);
             assert_eq!(workspace.owner_id, admin_id);
+            assert_eq!(workspace.password_protected, false);
             Ok(())
         })
         .unwrap();
@@ -329,6 +334,7 @@ fn test_permissions_inheritance() {
                 members: vec![owner_id.to_string()],
                 offices: Vec::new(),
                 metadata: Vec::new(),
+                password_protected: false,
             };
 
             tx.insert_domain(
@@ -546,6 +552,7 @@ fn test_load_workspace() {
             workspace.id,
             citadel_workspace_server_kernel::WORKSPACE_ROOT_ID
         ); // Should be using the fixed workspace ID
+        assert_eq!(workspace.password_protected, false);
     } else {
         panic!("Expected Workspace response");
     }

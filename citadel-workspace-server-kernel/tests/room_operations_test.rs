@@ -1,6 +1,6 @@
 use citadel_sdk::prelude::{NetworkError, StackedRatchet};
 use citadel_workspace_server_kernel::handlers::domain::{
-    server_ops::ServerDomainOps, DomainOperations,
+    server_ops::DomainServerOperations, DomainOperations,
 };
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 use citadel_workspace_types::structs::{Domain, User, UserRole};
@@ -18,7 +18,7 @@ mod tests {
     /// Helper function to set up a test environment with a kernel, domain operations, and an office
     fn setup_test_environment() -> (
         Arc<WorkspaceServerKernel<StackedRatchet>>,
-        ServerDomainOps<StackedRatchet>,
+        DomainServerOperations<StackedRatchet>,
         String, // office_id
     ) {
         // Create a workspace server kernel for testing
@@ -33,7 +33,13 @@ mod tests {
 
         // Create an office for testing
         let office = domain_ops
-            .create_office("admin", "Test Office", "Test office description", None)
+            .create_office(
+                "admin",
+                "test_ws_id",
+                "Test Office",
+                "Test office description",
+                None,
+            )
             .unwrap();
 
         (kernel, domain_ops, office.id.to_string())
@@ -225,7 +231,7 @@ mod tests {
 
         // List rooms in the office (should be one)
         println!("DEBUG: Listing rooms in office");
-        let rooms = domain_ops.list_rooms("admin", &office_id).unwrap();
+        let rooms = domain_ops.list_rooms("admin", None).unwrap();
         println!("DEBUG: Rooms listed successfully");
         assert_eq!(rooms.len(), 1);
         println!("DEBUG: Test completed successfully");
@@ -350,7 +356,7 @@ mod tests {
 
         // Add user to office
         println!("DEBUG: Adding user to office");
-        match domain_ops.add_user_to_domain(user_id, &office_id, UserRole::Member) {
+        match domain_ops.add_user_to_domain("admin", user_id, &office_id, UserRole::Member) {
             Ok(_) => println!("DEBUG: User added to office successfully"),
             Err(e) => {
                 println!("DEBUG: Failed to add user to office: {:?}", e);
@@ -360,7 +366,7 @@ mod tests {
 
         // Verify user can list offices (a simple permission test)
         println!("DEBUG: Testing user office access");
-        match domain_ops.list_offices(user_id) {
+        match domain_ops.list_offices(user_id, None) {
             Ok(offices) => {
                 println!("DEBUG: User can list {} offices", offices.len());
                 assert!(!offices.is_empty(), "User should see at least one office");

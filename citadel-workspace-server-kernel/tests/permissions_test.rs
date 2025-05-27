@@ -50,12 +50,24 @@ mod tests {
         // Create an office
         let domain_ops = kernel.domain_ops().clone();
         let office = domain_ops
-            .create_office("admin", "Test Office", "Test Description", None)
+            .create_office(
+                "admin",
+                "test_workspace_id",
+                "Test Office",
+                "Test Description",
+                None,
+            )
             .unwrap();
 
         // Check that the user doesn't have permissions yet
-        let result =
-            domain_ops.check_entity_permission(user_id, &office.id, Permission::ViewContent);
+        let result = domain_ops.with_read_transaction(|tx| {
+            domain_ops.check_entity_permission(
+                tx,
+                user_id,
+                office.id.as_str(),
+                Permission::ViewContent,
+            )
+        });
         assert!(result.is_ok());
         assert!(!result.unwrap()); // User isn't a member yet, so should be false
 
@@ -86,8 +98,14 @@ mod tests {
         }
 
         // Now check again - user should have permission
-        let result =
-            domain_ops.check_entity_permission(user_id, &office.id, Permission::ViewContent);
+        let result = domain_ops.with_read_transaction(|tx| {
+            domain_ops.check_entity_permission(
+                tx,
+                user_id,
+                office.id.as_str(),
+                Permission::ViewContent,
+            )
+        });
         assert!(result.is_ok());
         assert!(result.unwrap(), "Member should have ViewContent permission");
     }
@@ -105,10 +123,15 @@ mod tests {
         let domain_ops = kernel.domain_ops();
 
         // Verify that the admin check works with custom admin ID
-        assert!(domain_ops.is_admin(admin_id));
+        // is_admin needs a transaction
+        assert!(domain_ops
+            .with_read_transaction(|tx| domain_ops.is_admin(tx, admin_id))
+            .unwrap());
 
         // Verify that non-admin users are recognized as such
-        assert!(!domain_ops.is_admin("non_admin_user"));
+        assert!(!domain_ops
+            .with_read_transaction(|tx| domain_ops.is_admin(tx, "non_admin_user"))
+            .unwrap());
 
         // Create another user with admin role
         let second_admin_id = "second_admin";
@@ -126,7 +149,9 @@ mod tests {
         }
 
         // Verify that the second admin is recognized
-        assert!(domain_ops.is_admin(second_admin_id));
+        assert!(domain_ops
+            .with_read_transaction(|tx| domain_ops.is_admin(tx, second_admin_id))
+            .unwrap());
     }
 
     #[test]
@@ -160,15 +185,24 @@ mod tests {
 
         // Create an office
         let office = domain_ops
-            .create_office(&owner_user.id, "Test Office", "Test Description", None)
+            .create_office(
+                owner_user.id.as_str(),
+                "test_workspace_id",
+                "Test Office",
+                "Test Description",
+                None,
+            )
             .unwrap();
 
         // First check if the creator (owner) has permissions
-        let result = domain_ops.check_entity_permission(
-            &owner_user.id,
-            &office.id,
-            Permission::EditOfficeConfig,
-        );
+        let result = domain_ops.with_read_transaction(|tx| {
+            domain_ops.check_entity_permission(
+                tx,
+                owner_user.id.as_str(),
+                office.id.as_str(),
+                Permission::EditOfficeConfig,
+            )
+        });
         assert!(result.is_ok());
         assert!(
             result.unwrap(),
@@ -176,11 +210,14 @@ mod tests {
         );
 
         // Member should not have permission until added
-        let result = domain_ops.check_entity_permission(
-            &member_user.id,
-            &office.id,
-            Permission::ViewContent,
-        );
+        let result = domain_ops.with_read_transaction(|tx| {
+            domain_ops.check_entity_permission(
+                tx,
+                member_user.id.as_str(),
+                office.id.as_str(),
+                Permission::ViewContent,
+            )
+        });
         assert!(result.is_ok());
         assert!(
             !result.unwrap(),
@@ -214,22 +251,28 @@ mod tests {
         }
 
         // Now member should have basic permissions but not admin permissions
-        let result = domain_ops.check_entity_permission(
-            &member_user.id,
-            &office.id,
-            Permission::ViewContent,
-        );
+        let result = domain_ops.with_read_transaction(|tx| {
+            domain_ops.check_entity_permission(
+                tx,
+                member_user.id.as_str(),
+                office.id.as_str(),
+                Permission::ViewContent,
+            )
+        });
         assert!(result.is_ok());
         assert!(
             result.unwrap(),
             "Member should have ViewContent permission after being added"
         );
 
-        let result = domain_ops.check_entity_permission(
-            &member_user.id,
-            &office.id,
-            Permission::EditOfficeConfig,
-        );
+        let result = domain_ops.with_read_transaction(|tx| {
+            domain_ops.check_entity_permission(
+                tx,
+                member_user.id.as_str(),
+                office.id.as_str(),
+                Permission::EditOfficeConfig,
+            )
+        });
         assert!(result.is_ok());
         assert!(
             !result.unwrap(),
@@ -237,8 +280,14 @@ mod tests {
         );
 
         // Guest should not have permissions without explicit addition
-        let result =
-            domain_ops.check_entity_permission(&guest_user.id, &office.id, Permission::ViewContent);
+        let result = domain_ops.with_read_transaction(|tx| {
+            domain_ops.check_entity_permission(
+                tx,
+                guest_user.id.as_str(),
+                office.id.as_str(),
+                Permission::ViewContent,
+            )
+        });
         assert!(result.is_ok());
         assert!(!result.unwrap(), "Guest should not have permissions");
     }

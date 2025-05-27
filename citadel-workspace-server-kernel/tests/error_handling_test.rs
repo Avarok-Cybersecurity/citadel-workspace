@@ -72,7 +72,7 @@ mod tests {
         match result.unwrap() {
             WorkspaceProtocolResponse::Error(message) => {
                 assert!(message.contains(
-                    "Permission denied: User does not have permission to create an office"
+                    "Permission denied: User unprivileged_user cannot create office in workspace workspace-root"
                 ));
             }
             _ => panic!("Expected error response"),
@@ -97,7 +97,7 @@ mod tests {
         match result.unwrap() {
             WorkspaceProtocolResponse::Error(message) => {
                 assert!(
-                    message.contains("No permission to delete entity"),
+                    message.contains("Permission denied: User unprivileged_user cannot delete office non_existent_id"),
                     "Unexpected error message: {}",
                     message
                 );

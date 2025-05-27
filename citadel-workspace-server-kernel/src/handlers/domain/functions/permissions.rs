@@ -71,6 +71,8 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                     Permission::DownloadFiles => Ok(true),
                     Permission::ManageDomains => Ok(true),
                     Permission::ConfigureSystem => Ok(true),
+                    Permission::EditWorkspaceConfig => Ok(true),
+                    Permission::BanUser => Ok(true),
                     Permission::All => Ok(true),
                 },
                 _ => Ok(false), // Other roles don't have global permissions by default
