@@ -10,6 +10,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     pub fn create_office(
         &self,
         user_id: &str,
+        workspace_id: &str,
         name: &str,
         description: &str,
         mdx_content: Option<&str>,
@@ -17,7 +18,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         // Use the domain abstraction for creating an office
         self.domain_operations.create_domain_entity::<Office>(
             user_id,
-            None, // No parent for an office
+            Some(workspace_id),
             name,
             description,
             mdx_content,

@@ -1,6 +1,6 @@
 pub mod workspace_ops {
     use crate::kernel::transaction::Transaction;
-    use citadel_logging::{info, warn};
+    use citadel_logging::{debug, error, info, warn};
     use citadel_sdk::prelude::NetworkError;
     use citadel_workspace_types::structs::{Domain, Permission, UserRole, Workspace};
     use serde::{Deserialize, Serialize};
@@ -120,49 +120,6 @@ pub mod workspace_ops {
         Ok(new_workspace_dto)
     }
 
-    // Renamed from create_workspace_inner as its logic is for updating existing metadata
-    pub(crate) fn update_workspace_metadata_inner(
-        tx: &mut dyn Transaction,
-        user_id: &str,
-        workspace_id: &str,
-        name: &str,
-        description: &str,
-    ) -> Result<Workspace, NetworkError> {
-        // Permission check: User must have 'UpdateWorkspace' permission.
-        let user = tx
-            .get_user(user_id)
-            .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
-        if !user.has_permission(workspace_id, Permission::UpdateWorkspace) {
-            return Err(permission_denied(format!(
-                "User {} does not have permission to update workspace {}",
-                user_id, workspace_id
-            )));
-        }
-
-        let mut workspace = tx
-            .get_workspace_mut(workspace_id)
-            .ok_or_else(|| NetworkError::msg(format!("Workspace {} not found", workspace_id)))?
-            .clone();
-
-        workspace.name = name.to_string();
-        workspace.description = description.to_string();
-
-        tx.update_workspace(workspace_id, workspace.clone())?;
-        // Also update the domain entry
-        tx.update_domain(
-            workspace_id,
-            Domain::Workspace {
-                workspace: workspace.clone(),
-            },
-        )?;
-
-        info!(
-            "User '{}' updated metadata for workspace '{}' (new name: '{}')",
-            user_id, workspace_id, name
-        );
-        Ok(workspace)
-    }
-
     pub(crate) fn delete_workspace_inner(
         tx: &mut dyn Transaction,
         user_id: &str,
@@ -188,56 +145,6 @@ pub mod workspace_ops {
         Ok(())
     }
 
-    pub(crate) fn update_workspace_inner(
-        tx: &mut dyn Transaction,
-        user_id: &str,
-        workspace_id: &str,
-        name: Option<&str>,
-        description: Option<&str>,
-    ) -> Result<Workspace, NetworkError> {
-        // Permission check: User must have 'UpdateWorkspace' permission.
-        let user = tx
-            .get_user(user_id)
-            .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
-        if !user.has_permission(workspace_id, Permission::UpdateWorkspace) {
-            return Err(permission_denied(format!(
-                "User {} does not have permission to update workspace {}",
-                user_id, workspace_id
-            )));
-        }
-
-        let mut workspace = tx
-            .get_workspace_mut(workspace_id)
-            .ok_or_else(|| NetworkError::msg(format!("Workspace {} not found", workspace_id)))?
-            .clone();
-
-        if let Some(n) = name {
-            if workspace.name != n {
-                workspace.name = n.to_string();
-            }
-        }
-        if let Some(d) = description {
-            if workspace.description != d {
-                workspace.description = d.to_string();
-            }
-        }
-
-        tx.update_workspace(workspace_id, workspace.clone())?;
-        // Also update the domain entry
-        tx.update_domain(
-            workspace_id,
-            Domain::Workspace {
-                workspace: workspace.clone(),
-            },
-        )?;
-
-        info!(
-            "User '{}' updated workspace '{}' with id '{}'",
-            user_id, workspace.name, workspace_id
-        );
-        Ok(workspace)
-    }
-
     pub(crate) fn add_user_to_workspace_inner(
         tx: &mut dyn Transaction,
         admin_id: &str,
@@ -249,7 +156,11 @@ pub mod workspace_ops {
         let admin_user = tx
             .get_user(admin_id)
             .ok_or_else(|| NetworkError::msg(format!("Admin user {} not found", admin_id)))?;
+
+        debug!(target: "citadel", "[ADD_USER_TO_WORKSPACE_INNER_PERM_CHECK] admin_id: {}, workspace_id: {}, admin_user_role: {:?}, required_permission: {:?}", admin_id, workspace_id, admin_user.role, Permission::AddUsers);
+
         if !admin_user.has_permission(workspace_id, Permission::AddUsers) {
+            error!(target: "citadel", "Admin {} does not have AddUsers permission for workspace {}", admin_id, workspace_id);
             return Err(permission_denied(format!(
                 "Admin {} does not have permission to add users to workspace {}",
                 admin_id, workspace_id
@@ -366,19 +277,6 @@ pub mod workspace_ops {
             admin_id, user_to_remove_id, workspace_id
         );
         Ok(())
-    }
-
-    pub(crate) fn get_workspace_password_pair_inner(
-        tx: &dyn Transaction,
-        workspace_id: &str,
-    ) -> Result<WorkspacePasswordPair, NetworkError> {
-        let password = tx.workspace_password(workspace_id).ok_or_else(|| {
-            NetworkError::msg(format!("Password not found for workspace {}", workspace_id))
-        })?;
-        Ok(WorkspacePasswordPair {
-            workspace_id: workspace_id.to_string(),
-            password,
-        })
     }
 
     // Gets all workspace IDs (primarily for internal server use)

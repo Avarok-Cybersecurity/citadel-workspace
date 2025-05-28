@@ -254,6 +254,7 @@ fn test_add_office_to_workspace() {
     let office_result = kernel.process_command(
         admin_id,
         WorkspaceProtocolRequest::CreateOffice {
+            workspace_id: citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string(),
             name: office_name.to_string(),
             description: "Test Office Description".to_string(),
             mdx_content: None,
@@ -393,6 +394,7 @@ fn test_permissions_inheritance() {
     let office_result = kernel.process_command(
         owner_id,
         WorkspaceProtocolRequest::CreateOffice {
+            workspace_id: citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string(),
             name: "Test Office".to_string(),
             description: "Test Office Description".to_string(),
             mdx_content: None,

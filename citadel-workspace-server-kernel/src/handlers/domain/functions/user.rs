@@ -1,196 +1,235 @@
-use crate::handlers::domain::permission_denied;
 use crate::kernel::transaction::Transaction;
 use citadel_sdk::prelude::NetworkError;
-use citadel_workspace_types::structs::{Domain, Permission, UserRole};
-use log::{error, info};
-use serde::{Deserialize, Serialize};
+use crate::WORKSPACE_ROOT_ID;
+use crate::kernel::transaction::rbac::DomainType;
+use citadel_workspace_types::{
+    structs::{Domain, Permission, UserRole},
+};
+use log::{debug, info, warn};
+use std::collections::HashSet;
 
-// Helper to determine the required permission for managing members of a domain
-fn get_required_permission_for_membership_management(domain: &Domain) -> Permission {
-    match domain {
-        // @human-review: Using Permission::All for Workspace member management due to missing ManageWorkspaceMembers variant. This grants broad permissions and should be reviewed.
-        Domain::Workspace { .. } => citadel_workspace_types::structs::Permission::All,
-        Domain::Office { .. } => Permission::ManageOfficeMembers,
-        Domain::Room { .. } => Permission::ManageRoomMembers,
+// Helper function to get domain type from Domain
+fn get_domain_type_from_domain_entry(domain_entry: &Domain) -> Result<DomainType, NetworkError> {
+    match domain_entry {
+        Domain::Workspace { .. } => Ok(DomainType::Workspace),
+        Domain::Office { .. } => Ok(DomainType::Office),
+        Domain::Room { .. } => Ok(DomainType::Room),
     }
 }
 
-// Define UserWithRole struct locally
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct UserWithRole {
-    pub id: String,
-    pub name: String,
-    pub role_name: String,
+// Helper function to get mutable members from domain
+fn get_mutable_members_from_domain_entry(domain_entry: &mut Domain) -> Result<&mut Vec<String>, NetworkError> {
+    match domain_entry {
+        Domain::Workspace { workspace, .. } => Ok(&mut workspace.members),
+        Domain::Office { office, .. } => Ok(&mut office.members),
+        Domain::Room { room, .. } => Ok(&mut room.members),
+    }
+}
+
+// Helper function to get members from domain
+fn get_members_from_domain_entry(domain_entry: &Domain) -> Result<&Vec<String>, NetworkError> {
+    match domain_entry {
+        Domain::Workspace { workspace, .. } => Ok(&workspace.members),
+        Domain::Office { office, .. } => Ok(&office.members),
+        Domain::Room { room, .. } => Ok(&room.members),
+    }
+}
+
+// Helper function to determine the parent domain ID for permission checking
+fn get_permission_check_domain_id(tx: &dyn Transaction, domain_id: &str) -> Result<String, NetworkError> {
+    let domain_entry = tx.get_domain(domain_id).ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
+    match domain_entry { 
+        Domain::Room { room, .. } => { 
+            let parent = room.office_id.clone();
+            if parent.is_empty() {
+                return Err(NetworkError::msg("Room has no parent office ID or parent_id is empty"));
+            }
+            Ok(parent)
+        }
+        Domain::Office { .. } => Ok(WORKSPACE_ROOT_ID.to_string()), 
+        Domain::Workspace { .. } => Ok(WORKSPACE_ROOT_ID.to_string()), 
+    }
+}
+
+// Helper function to get domain type from domain_id using Transaction
+fn get_domain_type_from_id(tx: &dyn Transaction, domain_id: &str) -> Result<DomainType, NetworkError> {
+    let domain_entry = tx.get_domain(domain_id).ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
+    get_domain_type_from_domain_entry(domain_entry)
+}
+
+// Helper function to retrieve role permissions based on domain type
+fn get_role_based_permissions(role: &UserRole, domain_type: DomainType) -> HashSet<Permission> {
+    let mut permissions = HashSet::new();
+    match role {
+        UserRole::Admin => {
+            permissions.insert(Permission::All);
+        }
+        UserRole::Owner => {
+            match domain_type {
+                DomainType::Workspace => {
+                    permissions.insert(Permission::EditWorkspaceConfig);
+                }
+                DomainType::Office => {
+                    permissions.insert(Permission::UpdateOfficeSettings);
+                }
+                DomainType::Room => {
+                    permissions.insert(Permission::UpdateRoomSettings);
+                }
+            }
+        }
+        UserRole::Member => match domain_type {
+            DomainType::Workspace | DomainType::Office | DomainType::Room => {
+                permissions.insert(Permission::ViewContent);
+            }
+        },
+        UserRole::Guest => match domain_type {
+            DomainType::Workspace | DomainType::Office | DomainType::Room => {
+                permissions.insert(Permission::ViewContent);
+            }
+        },
+        UserRole::Banned => {
+            // No permissions for banned users
+        }
+        UserRole::Custom { name: _, rank: _ } => {
+            // Implement custom role permission logic here if needed
+            // For now, let's assume custom roles might have ViewContent by default
+            permissions.insert(Permission::ViewContent);
+        }
+    }
+    permissions
 }
 
 // Add a user to a domain with a specific role
 pub(crate) fn add_user_to_domain_inner(
     tx: &mut dyn Transaction,
-    admin_id: &str,       // User performing the action
-    user_to_add_id: &str, // User to be added
+    actor_user_id: &str,
+    target_user_id: &str,
     domain_id: &str,
-    role: UserRole, // Role to assign
+    role: UserRole,
 ) -> Result<(), NetworkError> {
-    let admin_user = tx
-        .get_user(admin_id)
-        .ok_or_else(|| NetworkError::msg(format!("Admin user {} not found", admin_id)))?;
-    let domain = tx
-        .get_domain(domain_id)
-        .ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
+    debug!(
+        "Attempting to add user {} to domain {} with role {:?} by actor {}",
+        target_user_id,
+        domain_id,
+        role,
+        actor_user_id
+    );
 
-    let required_permission = get_required_permission_for_membership_management(&domain);
+    // Get the actor user for permission checks (immutable borrow of tx.users)
+    let actor_user = tx.get_user(actor_user_id).ok_or_else(|| {
+        NetworkError::msg(format!("Actor user {} not found", actor_user_id))
+    })?;
 
-    if !admin_user.has_permission(domain_id, required_permission) {
-        return Err(permission_denied(format!(
-            "Admin user {} lacks permission {:?} for domain {}",
-            admin_id, required_permission, domain_id
+    // Determine the domain_id to check for permissions (immutable borrows of tx.domains)
+    let id_to_check_permissions_on = get_permission_check_domain_id(tx, domain_id)?;
+    debug!("Permission check for add_user_to_domain_inner will be on domain: {}", id_to_check_permissions_on);
+
+    // Check if actor has permission to add users to this domain or its parent
+    // Using AddUsers permission as it's more generic for adding members
+    if !actor_user.has_permission(&id_to_check_permissions_on, Permission::AddUsers) {
+        return Err(NetworkError::msg(format!(
+            "Actor {} does not have AddUsers permission on domain {} to add user {} to domain {}",
+            actor_user_id,
+            id_to_check_permissions_on,
+            target_user_id,
+            domain_id
         )));
     }
 
-    let mut user_to_add = tx
-        .get_user(user_to_add_id)
-        .ok_or_else(|| NetworkError::msg(format!("User to add {} not found", user_to_add_id)))?
-        .clone();
+    // Get the domain type for role-based permissions (immutable borrow of tx.domains)
+    let domain_type_for_role_perms = get_domain_type_from_id(tx, domain_id)?;
+    let role_permissions = get_role_based_permissions(&role, domain_type_for_role_perms);
 
-    // Set the user's role for this specific domain.
-    // Note: User.role is a global role. Domain-specific roles are managed by permissions.
-    // Here, we are effectively granting permissions based on the intended role.
-    user_to_add.role = role.clone(); // This might be an oversimplification if User.role is meant to be global.
-                                     // For now, let's assume we're setting a 'contextual' role for this domain.
-    user_to_add.set_role_permissions(domain_id); // This grants permissions based on user_to_add.role
+    // Get mutable reference to the user to add (mutable borrow of tx.users)
+    // This must happen after all immutable borrows of tx related to actor_user and domain type checks are done if they conflict.
+    // However, tx.users and tx.domains are distinct fields, so this order should be fine.
+    let user_to_add = tx.get_user_mut(target_user_id).ok_or_else(|| {
+        NetworkError::msg(format!("User to add {} not found", target_user_id))
+    })?;
 
-    // Add user to the domain's member list if not already present
-    let mut domain_clone = domain.clone();
-    let members_list = match &mut domain_clone {
-        Domain::Workspace { workspace } => &mut workspace.members,
-        Domain::Office { office } => &mut office.members,
-        Domain::Room { room } => &mut room.members,
-    };
-    if !members_list.contains(&user_to_add_id.to_string()) {
-        members_list.push(user_to_add_id.to_string());
+    user_to_add.role = role.clone(); // Set the user's role for this context
+    user_to_add.permissions.insert(domain_id.to_string(), role_permissions);
+    info!(
+        "Successfully set role {:?} and permissions for user {} in domain {}",
+        role,
+        target_user_id,
+        domain_id
+    );
+
+    // Add user to domain's member list (mutable borrow of tx.domains)
+    let domain_entry = tx.get_domain_mut(domain_id).ok_or_else(|| {
+        NetworkError::msg(format!("Domain {} not found when adding user", domain_id))
+    })?;
+    let members = get_mutable_members_from_domain_entry(domain_entry)?;
+    if !members.contains(&target_user_id.to_string()) {
+        members.push(target_user_id.to_string());
+        info!("User {} added to domain {} member list", target_user_id, domain_id);
+    } else {
+        info!("User {} already in domain {} member list", target_user_id, domain_id);
     }
 
-    tx.update_user(user_to_add_id, user_to_add)?;
-    tx.update_domain(domain_id, domain_clone)?;
-
-    info!(
-        target: "citadel",
-        "User {user_id} added to domain {domain_id} with role {role}",
-        user_id = admin_id,
-        domain_id = domain_id,
-        role = role,
-    );
     Ok(())
 }
 
-// Remove a user from a domain
 pub(crate) fn remove_user_from_domain_inner(
     tx: &mut dyn Transaction,
-    admin_id: &str,          // User performing the action
-    user_to_remove_id: &str, // User to be removed
+    actor_user_id: &str,
+    target_user_id: &str,
     domain_id: &str,
 ) -> Result<(), NetworkError> {
-    let admin_user = tx
-        .get_user(admin_id)
-        .ok_or_else(|| NetworkError::msg(format!("Admin user {} not found", admin_id)))?;
-    let domain = tx
-        .get_domain(domain_id)
-        .ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
+    debug!(
+        "Attempting to remove user {} from domain {} by actor {}",
+        target_user_id,
+        domain_id,
+        actor_user_id
+    );
 
-    let required_permission = get_required_permission_for_membership_management(&domain);
+    let actor_user = tx.get_user(actor_user_id).ok_or_else(|| {
+        NetworkError::msg(format!("Actor user {} not found", actor_user_id))
+    })?;
 
-    if !admin_user.has_permission(domain_id, required_permission) {
-        return Err(permission_denied(format!(
-            "Admin user {} lacks permission {:?} for domain {}",
-            admin_id, required_permission, domain_id
+    let id_to_check_permissions_on = get_permission_check_domain_id(tx, domain_id)?;
+    debug!("Permission check for remove_user_from_domain_inner will be on domain: {}", id_to_check_permissions_on);
+
+    // Using RemoveUsers permission
+    if !actor_user.has_permission(&id_to_check_permissions_on, Permission::RemoveUsers) {
+        return Err(NetworkError::msg(format!(
+            "Actor {} does not have RemoveUsers permission on domain {} to remove user {} from domain {}",
+            actor_user_id,
+            id_to_check_permissions_on,
+            target_user_id,
+            domain_id
         )));
     }
 
-    let mut user_to_remove = tx
-        .get_user(user_to_remove_id)
-        .ok_or_else(|| {
-            NetworkError::msg(format!("User to remove {} not found", user_to_remove_id))
-        })?
-        .clone();
+    // Check if user is in domain before attempting to remove (read operation)
+    let domain_entry_for_read = tx.get_domain(domain_id).ok_or_else(|| {
+        NetworkError::msg(format!("Domain {} not found when checking members for removal", domain_id))
+    })?;
+    let members_for_check = get_members_from_domain_entry(domain_entry_for_read)?;
 
-    user_to_remove.clear_permissions(domain_id);
+    let is_member = members_for_check.contains(&target_user_id.to_string()); // E0502 fix: check before mutable borrow of tx.users
 
-    let mut domain_clone = domain.clone();
-    let members_list = match &mut domain_clone {
-        Domain::Workspace { workspace } => &mut workspace.members,
-        Domain::Office { office } => &mut office.members,
-        Domain::Room { room } => &mut room.members,
-    };
-    members_list.retain(|id| id != user_to_remove_id);
+    if !is_member {
+        warn!("User {} not found in domain {} member list, cannot remove from list. Still clearing permissions.", target_user_id, domain_id);
+    }
 
-    tx.update_user(user_to_remove_id, user_to_remove)?;
-    tx.update_domain(domain_id, domain_clone)?;
+    // Now get user mutably to clear permissions
+    let user_being_removed = tx.get_user_mut(target_user_id).ok_or_else(|| {
+        NetworkError::msg(format!("User to remove {} not found", target_user_id))
+    })?;
+    user_being_removed.permissions.remove(domain_id);
+    info!("Permissions for user {} in domain {} cleared", target_user_id, domain_id);
 
-    info!(
-        target: "citadel",
-        "Removed user {user_id} from domain {domain_id}",
-        user_id = user_to_remove_id,
-        domain_id = domain_id
-    );
+    // Now get domain mutably to update members list if user was in it
+    if is_member { // E0502 fix: use the pre-calculated is_member
+        let domain_entry_for_write = tx.get_domain_mut(domain_id).ok_or_else(|| {
+            NetworkError::msg(format!("Domain {} not found when removing user from member list (for write)", domain_id))
+        })?;
+        let members_for_write = get_mutable_members_from_domain_entry(domain_entry_for_write)?;
+        members_for_write.retain(|id| id != target_user_id);
+        info!("User {} removed from domain {} member list", target_user_id, domain_id);
+    }
 
     Ok(())
-}
-
-// List all users in a domain
-pub(crate) fn list_domain_members_inner(
-    tx: &dyn Transaction,
-    caller_id: &str,
-    domain_id: &str,
-) -> Result<Vec<UserWithRole>, NetworkError> {
-    let caller_user = tx
-        .get_user(caller_id)
-        .ok_or_else(|| NetworkError::msg(format!("Caller user {} not found", caller_id)))?;
-    let domain = tx
-        .get_domain(domain_id)
-        .ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
-
-    // To list members, user needs the 'manage' permission for that domain type
-    let required_permission = get_required_permission_for_membership_management(&domain);
-
-    if !caller_user.has_permission(domain_id, required_permission.clone()) {
-        return Err(permission_denied(format!(
-            "User {} lacks permission {:?} for domain {}",
-            caller_id, required_permission, domain_id
-        )));
-    }
-
-    let member_ids = domain.members().clone();
-    let mut users_with_roles = Vec::new();
-
-    for member_id_ref in &member_ids {
-        let member_id_str: &str = member_id_ref;
-        match tx.get_user(member_id_str) {
-            Some(member_user) => {
-                // Use the user's global role, as domain-specific roles aren't in User.permissions HashMap value
-                let role = member_user.role.clone();
-                users_with_roles.push(UserWithRole {
-                    id: member_user.id.clone(),
-                    name: member_user.name.clone(),
-                    role_name: role.to_string(),
-                });
-            }
-            None => {
-                error!(
-                    target: "citadel",
-                    "User ID {user_id} found in domain members list but user object not found in domain {domain_id}.",
-                    user_id = member_id_str,
-                    domain_id = domain_id,
-                );
-            }
-        }
-    }
-
-    info!(
-        target: "citadel",
-        "Listed domain members for domain {domain_id}. Caller: {caller_id}. Count: {count}",
-        caller_id = caller_id,
-        domain_id = domain_id,
-        count = users_with_roles.len()
-    );
-    Ok(users_with_roles)
 }

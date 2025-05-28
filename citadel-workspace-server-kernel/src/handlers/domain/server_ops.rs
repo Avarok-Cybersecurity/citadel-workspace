@@ -1,9 +1,8 @@
 use citadel_logging::{debug, error, info};
-use citadel_sdk::prelude::{NetworkError, NodeRemote, Ratchet};
+use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{
     Domain, MetadataValue, Office, Permission, Room, User, UserRole, Workspace,
 };
-use citadel_workspace_types::WorkspaceProtocolResponse;
 use std::any::TypeId;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -43,10 +42,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
     }
 
     fn is_admin(&self, tx: &dyn Transaction, user_id: &str) -> Result<bool, NetworkError> {
-        let user = tx.get_user(user_id).ok_or_else(|| {
+        let _user = tx.get_user(user_id).ok_or_else(|| {
             NetworkError::msg(format!("User '{}' not found in is_admin", user_id))
         })?;
-        Ok(user.role == UserRole::Admin)
+        Ok(_user.role == UserRole::Admin)
     }
 
     fn get_user(&self, user_id: &str) -> Option<User> {
@@ -105,7 +104,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         role: UserRole,
     ) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            user_ops::add_user_to_domain_inner(tx, admin_id, user_id_to_add, domain_id, role)
+            debug!(target: "citadel", "[ADD_USER_TO_OFFICE_TX_ENTRY] admin_id: {}, user_to_add_id: {}, office_id: {}, role: {:?}", admin_id, user_id_to_add, domain_id, role);
+            let result = user_ops::add_user_to_domain_inner(tx, admin_id, user_id_to_add, domain_id, role);
+            debug!(target: "citadel", "[ADD_USER_TO_OFFICE_TX_EXIT] result: {:?}", result);
+            result.map(|_| ()) // Map Ok(User) to Ok(())
         })
     }
 
@@ -316,9 +318,9 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         &self,
         user_id: &str,
         workspace_id: &str,
-        name: Option<&str>,
-        description: Option<&str>,
-        metadata: Option<Vec<u8>>,
+        _name: Option<&str>, // unused
+        _description: Option<&str>, // unused
+        _metadata: Option<Vec<u8>>, // unused
         workspace_master_password: String,
     ) -> Result<Workspace, NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
@@ -374,9 +376,9 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
 
     fn add_office_to_workspace(
         &self,
-        user_id: &str,
-        workspace_id: &str,
-        office_id: &str,
+        _user_id: &str,
+        _workspace_id: &str,
+        _office_id: &str,
     ) -> Result<(), NetworkError> {
         // self.tx_manager.with_write_transaction(|tx| {
         //     workspace_ops::add_office_to_workspace_inner(tx, user_id, workspace_id, office_id)
@@ -387,9 +389,9 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
 
     fn remove_office_from_workspace(
         &self,
-        user_id: &str,
-        workspace_id: &str,
-        office_id: &str,
+        _user_id: &str,
+        _workspace_id: &str,
+        _office_id: &str,
     ) -> Result<(), NetworkError> {
         // self.tx_manager.with_write_transaction(|tx| {
         //     workspace_ops::remove_office_from_workspace_inner(tx, user_id, workspace_id, office_id)
@@ -409,9 +411,9 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             let role_name_string = role.to_string();
             workspace_ops::add_user_to_workspace_inner(
                 tx,
-                admin_id,
-                user_id,
-                workspace_id,
+                admin_id,     // This is the actor_user_id, maps to inner's admin_id
+                workspace_id, // This is the target_member_id, maps to inner's user_to_add_id
+                user_id,      // This is the crate::WORKSPACE_ROOT_ID, maps to inner's workspace_id
                 &role_name_string,
             )
         })
@@ -420,11 +422,11 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
     fn remove_user_from_workspace(
         &self,
         admin_id: &str,
-        user_id: &str,
-        workspace_id: &str,
+        _user_id: &str, 
+        _workspace_id: &str, 
     ) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            workspace_ops::remove_user_from_workspace_inner(tx, admin_id, user_id, workspace_id)
+            workspace_ops::remove_user_from_workspace_inner(tx, admin_id, _user_id, _workspace_id)
         })
     }
 
@@ -589,13 +591,21 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
     ) -> Result<Room, NetworkError> {
         let room_id = Uuid::new_v4().to_string();
         self.tx_manager.with_write_transaction(|tx| {
-            room_ops::create_room_inner(tx, user_id, office_id, &room_id, name, description)
+            room_ops::create_room_inner(
+                tx,
+                user_id,
+                office_id,
+                &room_id,
+                name,
+                description,
+                mdx_content.map(String::from),
+            )
         })
     }
 
     fn get_room(&self, user_id: &str, room_id: &str) -> Result<Room, NetworkError> {
         self.with_read_transaction(|tx| {
-            let user = tx
+            let _user = tx
                 .get_user(user_id)
                 .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
             // TODO: Define and use a specific ViewRoom permission if necessary
@@ -633,7 +643,15 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         self.tx_manager.with_write_transaction(|tx| {
             let name_string = name.map(|s| s.to_string());
             let description_string = description.map(|s| s.to_string());
-            room_ops::update_room_inner(tx, user_id, room_id, name_string, description_string)
+            let mdx_content_string = mdx_content.map(|s| s.to_string());
+            room_ops::update_room_inner(
+                tx,
+                user_id,
+                room_id,
+                name_string,
+                description_string,
+                mdx_content_string,
+            )
         })
     }
 

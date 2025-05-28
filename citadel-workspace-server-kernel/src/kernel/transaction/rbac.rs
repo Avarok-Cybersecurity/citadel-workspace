@@ -34,14 +34,29 @@ impl TransactionManager {
         permission: Permission,
     ) -> Result<bool, NetworkError> {
         // System administrators always have all permissions
-        if tx
-            .get_user(user_id)
-            .map(|u| u.role == UserRole::Admin)
-            .unwrap_or(false)
-        {
-            debug!(target: "citadel", "User {} is admin, permission granted for entity {}", user_id, entity_id);
+        let admin_check_user = tx.get_user(user_id);
+
+        // +++ ADDED LOGGING +++
+        if user_id == "admin" { // Compare with the string literal used in tests
+            debug!(target: "citadel", "[ADMIN_CHECK_DETAIL] user_id: {}, entity_id: {}, permission: {:?}. User fetched for admin check: {:?}",
+                user_id, entity_id, permission, admin_check_user.as_ref().map(|u| (u.id.clone(), u.role.clone(), u.permissions.get(entity_id).cloned()))
+            );
+            if let Some(user_details) = admin_check_user.as_ref() {
+                debug!(target: "citadel", "[ADMIN_CHECK_DETAIL] User details found: id='{}', role='{:?}'. Comparing role to UserRole::Admin.", user_details.id, user_details.role);
+                let is_admin_role = user_details.role == UserRole::Admin;
+                debug!(target: "citadel", "[ADMIN_CHECK_DETAIL] Result of (user_details.role == UserRole::Admin): {}", is_admin_role);
+            }
+        }
+        // +++ END LOGGING +++
+
+        let is_admin_by_role = admin_check_user.map(|u| u.role == UserRole::Admin).unwrap_or(false);
+        debug!(target: "citadel", "[ADMIN_CHECK_DETAIL] Value of is_admin_by_role (just before if): {}", is_admin_by_role);
+
+        if is_admin_by_role {
+            debug!(target: "citadel", "[ADMIN_CHECK_DETAIL] User {} IS admin by role. Granting permission for entity {}. THIS BLOCK SHOULD BE EXECUTED.", user_id, entity_id);
             return Ok(true);
         }
+        debug!(target: "citadel", "[ADMIN_CHECK_DETAIL] User {} is NOT admin by role OR the admin block was not entered. Proceeding with other checks.", user_id);
 
         // Get the user and check their permissions
         let user_role = if let Some(user) = tx.get_user(user_id) {
@@ -342,6 +357,7 @@ pub fn retrieve_role_permissions(role: &UserRole, domain_type: &DomainType) -> V
                     Permission::CreateRoom,   // Owner can create rooms in their office
                     Permission::AddUsers,     // Invite users to the office
                     Permission::RemoveUsers,  // Remove users from the office
+                    Permission::ManageOfficeMembers, // <<< ADDED THIS LINE
                     Permission::EditContent,  // Was ModifyContent, broader edit rights for owner
                     // For DeleteContent, an Office Owner can delete the office itself
                     // Permission::DeleteOffice, // Already added

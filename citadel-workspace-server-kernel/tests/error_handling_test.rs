@@ -56,6 +56,7 @@ mod tests {
         let result = kernel.process_command(
             user_id,
             WorkspaceProtocolRequest::CreateOffice {
+                workspace_id: citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string(),
                 name: "Office 1".to_string(),
                 description: "Office 1 Description".to_string(),
                 mdx_content: None,

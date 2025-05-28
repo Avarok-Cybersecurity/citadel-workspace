@@ -147,7 +147,7 @@ async fn send_workspace_command(
 ) -> Result<WorkspaceProtocolResponse, Box<dyn Error>> {
     let request_id = Uuid::new_v4();
     let payload = WorkspaceProtocolPayload::Request(command);
-    let serialized_command = serde_json::to_vec(&payload)?;
+    let serialized_command = bincode::serialize(&payload).map_err(|e| Box::new(e) as Box<dyn Error>)?;
 
     // Send command to the workspace server
     to_service.send(
@@ -182,7 +182,7 @@ async fn send_workspace_command(
         ) = &response
         {
             info!(target: "citadel", "Received response: {response:?}");
-            let response: WorkspaceProtocolPayload = serde_json::from_slice(message)?;
+            let response: WorkspaceProtocolPayload = bincode::deserialize(message).map_err(|e| Box::new(e) as Box<dyn Error>)?;
             let WorkspaceProtocolPayload::Response(response) = response else {
                 panic!("Expected WorkspaceProtocolPayload::Response")
             };
@@ -258,6 +258,11 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     .await?;
     println!("Root workspace created: {:?}", workspace_response);
 
+    let root_workspace_id = match workspace_response {
+        WorkspaceProtocolResponse::Workspace(workspace) => workspace.id,
+        _ => return Err("Expected Workspace response for root workspace creation".into()),
+    };
+
     // Register and connect a regular user
     let (_user_to_service, _user_from_service, _user_cid) =
         register_and_connect_user(internal_service_addr, server_addr, "test_user", "Test User")
@@ -272,7 +277,13 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     // Create an office directly using the kernel
     println!("Creating test office directly with kernel...");
     let office = workspace_kernel
-        .create_office(ADMIN_ID, "Test Office", "A test office", None)
+        .create_office(
+            ADMIN_ID,
+            &root_workspace_id,
+            "Test Office",
+            "A test office",
+            None,
+        )
         .map_err(|e| Box::<dyn Error>::from(format!("Failed to create office: {}", e)))?;
     let office_id = office.id;
     println!("Test office created with ID: {}", office_id);
@@ -281,7 +292,7 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
     workspace_kernel
         .add_member(
             ADMIN_ID,
-            admin_cid.to_string().as_str(),
+            ADMIN_ID,
             Some(&office_id),
             None,
             UserRole::Admin,
@@ -535,6 +546,11 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     .await?;
     println!("Root workspace created: {:?}", workspace_response);
 
+    let root_workspace_id = match workspace_response {
+        WorkspaceProtocolResponse::Workspace(workspace) => workspace.id,
+        _ => return Err("Expected Workspace response for root workspace creation".into()),
+    };
+
     // Register and connect a regular user
     let (_user_to_service, _user_from_service, _user_cid) =
         register_and_connect_user(internal_service_addr, server_addr, "test_user", "Test User")
@@ -549,24 +565,29 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
     // Create an office directly using the kernel
     println!("Creating test office directly with kernel...");
     let office = workspace_kernel
-        .create_office(ADMIN_ID, "Test Office", "A test office", None)
+        .create_office(
+            ADMIN_ID,
+            &root_workspace_id,
+            "Test Office",
+            "A test office",
+            None,
+        )
         .map_err(|e| Box::<dyn Error>::from(format!("Failed to create office: {}", e)))?;
     let office_id = office.id;
     println!("Test office created with ID: {}", office_id);
 
-    // Explicitly add the admin to the office to ensure permissions are set up correctly
+    // Add admin to the office with all permissions
     workspace_kernel
         .add_member(
             ADMIN_ID,
-            admin_cid.to_string().as_str(),
+            ADMIN_ID,
             Some(&office_id),
             None,
             UserRole::Admin,
         )
-        .unwrap();
+        .unwrap(); // This was line 588
 
-    // Add the test user to the office first with basic permissions through the kernel
-    // This ensures the permissions map exists and has the office_id key when we check later
+    // Add the test user to the office with specific permissions
     workspace_kernel
         .add_member(
             ADMIN_ID,
@@ -824,6 +845,11 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
     .await?;
     println!("Root workspace created: {:?}", workspace_response);
 
+    let root_workspace_id = match workspace_response {
+        WorkspaceProtocolResponse::Workspace(workspace) => workspace.id,
+        _ => return Err("Expected Workspace response for root workspace creation".into()),
+    };
+
     // Register and connect a test user for custom role
     let (_user_to_service, _user_from_service, _user_cid) =
         register_and_connect_user(internal_service_addr, server_addr, "test_user", "Test User")
@@ -838,31 +864,25 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
     // Create an office directly using the kernel
     info!(target: "citadel", "Creating test office directly with kernel...");
     let office = workspace_kernel
-        .create_office(ADMIN_ID, "Test Office", "A test office", None)
+        .create_office(
+            ADMIN_ID,
+            &root_workspace_id,
+            "Test Office",
+            "A test office",
+            None,
+        )
         .map_err(|e| Box::<dyn Error>::from(format!("Failed to create office: {}", e)))?;
     let office_id = office.id;
     info!(target: "citadel", "Test office created with ID: {}", office_id);
 
-    // Explicitly add the admin to the office to ensure permissions are set up correctly
+    // Add admin to the office with all permissions
     workspace_kernel
         .add_member(
             ADMIN_ID,
-            admin_cid.to_string().as_str(),
+            ADMIN_ID,
             Some(&office_id),
             None,
             UserRole::Admin,
-        )
-        .unwrap();
-
-    // Add the test user to the office first with basic permissions through the kernel
-    // This ensures the permissions map exists and has the office_id key when we check later
-    workspace_kernel
-        .add_member(
-            ADMIN_ID,
-            "test_user",
-            Some(&office_id),
-            None,
-            UserRole::Member,
         )
         .unwrap();
 

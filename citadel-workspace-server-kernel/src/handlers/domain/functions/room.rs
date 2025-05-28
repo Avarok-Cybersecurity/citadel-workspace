@@ -12,6 +12,7 @@ pub mod room_ops {
         room_id: &str,   // Pre-generated room ID
         name: &str,
         description: &str,
+        mdx_content: Option<String>,
     ) -> Result<Room, NetworkError> {
         let user = tx
             .get_user(user_id)
@@ -42,7 +43,7 @@ pub mod room_ops {
             name: name.to_string(),
             description: description.to_string(),
             members: vec![user_id.to_string()], // Creator is the first member
-            mdx_content: String::new(),         // Default empty MDX content
+            mdx_content: mdx_content.unwrap_or_default(),
             metadata: Vec::new(),               // Default empty metadata
         };
 
@@ -215,86 +216,13 @@ pub mod room_ops {
         Ok(rooms)
     }
 
-    pub(crate) fn add_user_to_room_inner(
-        tx: &mut dyn Transaction,
-        admin_id: &str,
-        user_id_to_add: &str,
-        room_id: &str,
-        role: UserRole,
-    ) -> Result<(), NetworkError> {
-        let admin_user = tx
-            .get_user(admin_id)
-            .ok_or_else(|| NetworkError::msg(format!("Admin user {} not found", admin_id)))?;
-        if !admin_user.has_permission(room_id, Permission::ManageRoomMembers) {
-            return Err(permission_denied(format!(
-                "Admin user {} cannot manage members in room {}",
-                admin_id, room_id
-            )));
-        }
-        // Ensure user to add exists
-        let _user_to_add = tx.get_user(user_id_to_add).ok_or_else(|| {
-            NetworkError::msg(format!("User to add {} not found", user_id_to_add))
-        })?;
-
-        tx.add_user_to_domain(user_id_to_add, room_id, role.clone())?;
-        info!(admin_id, user_id_to_add, room_id, role = ?role, "Added user to room");
-        Ok(())
-    }
-
-    pub(crate) fn remove_user_from_room_inner(
-        tx: &mut dyn Transaction,
-        admin_id: &str,
-        user_id_to_remove: &str,
-        room_id: &str,
-    ) -> Result<(), NetworkError> {
-        let admin_user = tx
-            .get_user(admin_id)
-            .ok_or_else(|| NetworkError::msg(format!("Admin user {} not found", admin_id)))?;
-        if !admin_user.has_permission(room_id, Permission::ManageRoomMembers) {
-            return Err(permission_denied(format!(
-                "Admin user {} cannot manage members in room {}",
-                admin_id, room_id
-            )));
-        }
-
-        let user_to_remove = tx.get_user(user_id_to_remove).ok_or_else(|| {
-            NetworkError::msg(format!("User to remove {} not found", user_id_to_remove))
-        })?;
-
-        // Prevent removing the last owner
-        // This logic assumes UserRole::Owner on the User struct signifies ownership of any domain they are an owner in.
-        // A more robust check might involve checking specific permissions for UserRole::Owner in this domain.
-        if user_to_remove.role == UserRole::Owner {
-            let owners_in_room_count = tx
-                .get_all_users()
-                .values()
-                .filter(|u| {
-                    tx.is_member_of_domain(&u.id, room_id).unwrap_or(false)
-                        && u.role == UserRole::Owner
-                })
-                .count();
-
-            if owners_in_room_count <= 1 {
-                return Err(NetworkError::msg(
-                    "Cannot remove the last owner from the room. Assign another owner first.",
-                ));
-            }
-        }
-
-        tx.remove_user_from_domain(user_id_to_remove, room_id)?;
-        info!(
-            admin_id,
-            user_id_to_remove, room_id, "Removed user from room"
-        );
-        Ok(())
-    }
-
     pub(crate) fn update_room_inner(
         tx: &mut dyn Transaction,
         user_id: &str,
         room_id: &str,
         name: Option<String>,
         description: Option<String>,
+        mdx_content: Option<String>,
     ) -> Result<Room, NetworkError> {
         let user = tx
             .get_user(user_id)
@@ -327,6 +255,9 @@ pub mod room_ops {
         }
         if let Some(d) = description {
             room_to_update.description = d;
+        }
+        if let Some(mdx) = mdx_content {
+            room_to_update.mdx_content = mdx;
         }
 
         let updated_room_clone = room_to_update.clone();

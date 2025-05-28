@@ -1,13 +1,15 @@
 use crate::handlers::domain::server_ops::DomainServerOperations;
 use crate::WorkspaceProtocolResponse;
 use crate::WORKSPACE_MASTER_PASSWORD_KEY;
+use crate::WORKSPACE_ROOT_ID; // Added this import
 use bincode;
 use citadel_logging::{debug, info};
 use citadel_sdk::prelude::{NetKernel, NetworkError, NodeRemote, NodeResult, Ratchet};
 use citadel_workspace_types::structs::{
-    MetadataValue as InternalMetadataValue, MetadataValue, User, WorkspaceRoles,
+    MetadataValue as InternalMetadataValue, MetadataValue, User, WorkspaceRoles, Permission,
 };
 use citadel_workspace_types::{structs::UserRole, WorkspaceProtocolPayload};
+use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_stream::StreamExt;
@@ -280,6 +282,13 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 display_name.to_string(),
                 UserRole::Admin,
             );
+
+            // Grant the admin user all permissions on the root workspace
+            let mut root_permissions = HashSet::new();
+            root_permissions.insert(Permission::All);
+            user.permissions
+                .insert(WORKSPACE_ROOT_ID.to_string(), root_permissions);
+
             // Store the workspace password in the user's metadata
             user.metadata.insert(
                 WORKSPACE_MASTER_PASSWORD_KEY.to_string(),
