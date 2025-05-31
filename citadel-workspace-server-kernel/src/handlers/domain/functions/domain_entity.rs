@@ -1,7 +1,7 @@
 use crate::handlers::domain::server_ops::DomainServerOperations;
 use crate::handlers::domain::{permission_denied, DomainEntity, DomainOperations};
 use citadel_sdk::prelude::*;
-use citadel_workspace_types::structs::{Domain};
+use citadel_workspace_types::structs::Domain;
 
 impl<R: Ratchet> DomainServerOperations<R> {
     pub fn delete_domain_entity_inner<T>(

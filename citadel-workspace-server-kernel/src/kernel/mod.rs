@@ -1,3 +1,4 @@
+use crate::handlers::domain::functions::user;
 use crate::handlers::domain::server_ops::DomainServerOperations;
 use crate::WorkspaceProtocolResponse;
 use crate::WORKSPACE_MASTER_PASSWORD_KEY;
@@ -6,7 +7,7 @@ use bincode;
 use citadel_logging::{debug, info};
 use citadel_sdk::prelude::{NetKernel, NetworkError, NodeRemote, NodeResult, Ratchet};
 use citadel_workspace_types::structs::{
-    MetadataValue as InternalMetadataValue, MetadataValue, User, WorkspaceRoles, Permission,
+    MetadataValue as InternalMetadataValue, MetadataValue, Permission, User, WorkspaceRoles,
 };
 use citadel_workspace_types::{structs::UserRole, WorkspaceProtocolPayload};
 use std::collections::HashSet;
@@ -294,6 +295,28 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 WORKSPACE_MASTER_PASSWORD_KEY.to_string(),
                 MetadataValue::String(workspace_password.to_string()),
             );
+            // Ensure the root workspace domain exists
+            if tx.get_domain(WORKSPACE_ROOT_ID).is_none() {
+                let root_workspace_obj = citadel_workspace_types::structs::Workspace {
+                    id: WORKSPACE_ROOT_ID.to_string(),
+                    name: "Root Workspace".to_string(),
+                    description: "The main workspace for this instance.".to_string(),
+                    owner_id: username.to_string(),
+                    members: vec![username.to_string()],
+                    offices: Vec::new(),
+                    metadata: Default::default(), // Vec::new() for Vec<u8>
+                    password_protected: false,    // Added missing field
+                };
+
+                // Use the enum variant for Domain
+                let root_domain_enum_variant =
+                    citadel_workspace_types::structs::Domain::Workspace {
+                        workspace: root_workspace_obj,
+                    };
+
+                tx.insert_domain(WORKSPACE_ROOT_ID.to_string(), root_domain_enum_variant)?;
+            }
+
             tx.insert_user(username.to_string(), user)
         })
     }
@@ -349,5 +372,42 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 "Workspace master password not found in admin metadata",
             )), // Handle missing password
         }
+    }
+
+    pub fn add_member(
+        &self,
+        actor_user_id: &str,
+        target_user_id: &str,
+        domain_id: Option<&str>, // Can be Workspace, Office, or Room ID
+        role: UserRole,
+        metadata: Option<Vec<u8>>,
+    ) -> Result<(), NetworkError> {
+        let mut tx = self.tx_manager().write_transaction();
+        let domain_id_str = domain_id.ok_or_else(|| {
+            NetworkError::msg("Domain ID must be provided to add a member to a domain")
+        })?;
+
+        user::add_user_to_domain_inner(
+            &mut tx,
+            actor_user_id,
+            target_user_id,
+            domain_id_str,
+            role,
+            metadata,
+        )
+    }
+
+    pub fn remove_member(
+        &self,
+        actor_user_id: &str,
+        target_user_id: &str,
+    ) -> Result<(), NetworkError> {
+        let mut tx = self.tx_manager().write_transaction();
+        user::remove_user_from_domain_inner(
+            &mut tx,
+            actor_user_id,
+            target_user_id,
+            WORKSPACE_ROOT_ID,
+        )
     }
 }

@@ -1,8 +1,9 @@
-use citadel_logging::{debug, error, info};
+use citadel_logging::{debug, info};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{
     Domain, MetadataValue, Office, Permission, Room, User, UserRole, Workspace,
 };
+use serde_json; // Ensure this import is present
 use std::any::TypeId;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -105,7 +106,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
     ) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
             debug!(target: "citadel", "[ADD_USER_TO_OFFICE_TX_ENTRY] admin_id: {}, user_to_add_id: {}, office_id: {}, role: {:?}", admin_id, user_id_to_add, domain_id, role);
-            let result = user_ops::add_user_to_domain_inner(tx, admin_id, user_id_to_add, domain_id, role);
+            let result = user_ops::add_user_to_domain_inner(tx, admin_id, user_id_to_add, domain_id, role, None);
             debug!(target: "citadel", "[ADD_USER_TO_OFFICE_TX_EXIT] result: {:?}", result);
             result.map(|_| ()) // Map Ok(User) to Ok(())
         })
@@ -142,7 +143,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         })
     }
 
-    fn create_domain_entity<T: DomainEntity + 'static>(
+    fn create_domain_entity<T: DomainEntity + 'static + serde::de::DeserializeOwned>(
         &self,
         user_id: &str,
         parent_id: Option<&str>,
@@ -151,24 +152,58 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         mdx_content: Option<&str>,
     ) -> Result<T, NetworkError> {
         let type_id = TypeId::of::<T>();
+
         if type_id == TypeId::of::<Workspace>() {
-            Err(NetworkError::msg(
-                "Use create_workspace for Workspace entities",
-            ))
+            return Err(NetworkError::msg(
+                "Use create_workspace for Workspace entities. create_domain_entity does not support Workspace.",
+            ));
         } else if type_id == TypeId::of::<Office>() {
-            let parent_workspace_id = parent_id
-                .ok_or_else(|| NetworkError::msg("Parent workspace ID required for Office"))?;
-            self.create_office(user_id, parent_workspace_id, name, description, mdx_content)
-                .map(|office| unsafe { std::mem::transmute_copy(&office) })
+            // This branch means T is Office
+            let parent_workspace_id = parent_id.ok_or_else(|| {
+                NetworkError::msg(
+                    "Parent workspace ID required for Office creation via create_domain_entity",
+                )
+            })?;
+
+            let office_json_str =
+                self.create_office(user_id, parent_workspace_id, name, description, mdx_content)?;
+
+            // DomainEntity requires Deserialize, so T should be Deserialize.
+            return serde_json::from_str(&office_json_str).map_err(|e| {
+                NetworkError::msg(format!(
+                    "Failed to deserialize to T (Office) in create_domain_entity: {}",
+                    e
+                ))
+            });
         } else if type_id == TypeId::of::<Room>() {
-            let parent_office_id =
-                parent_id.ok_or_else(|| NetworkError::msg("Parent office ID required for Room"))?;
-            self.create_room(user_id, parent_office_id, name, description, mdx_content)
-                .map(|room| unsafe { std::mem::transmute_copy(&room) })
+            // This branch means T is Room
+            let parent_office_id = parent_id.ok_or_else(|| {
+                NetworkError::msg(
+                    "Parent office ID required for Room creation via create_domain_entity",
+                )
+            })?;
+
+            let room_obj: Room =
+                self.create_room(user_id, parent_office_id, name, description, mdx_content)?;
+
+            // DomainEntity requires Deserialize. We serialize Room to value then deserialize to T (which is Room).
+            // This ensures type compatibility if T has a slightly different but compatible structure or if direct casting is problematic.
+            let room_json_val = serde_json::to_value(room_obj).map_err(|e| {
+                NetworkError::msg(format!(
+                    "Failed to serialize Room to JSON value for T (Room) conversion: {}",
+                    e
+                ))
+            })?;
+            return serde_json::from_value(room_json_val).map_err(|e| {
+                NetworkError::msg(format!(
+                    "Failed to deserialize to T (Room) in create_domain_entity: {}",
+                    e
+                ))
+            });
         } else {
             Err(NetworkError::msg(format!(
                 "Unsupported entity type for create_domain_entity: {:?}",
-                type_id
+                std::any::type_name::<T>() // Using type_name for better readability
             )))
         }
     }
@@ -318,7 +353,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         &self,
         user_id: &str,
         workspace_id: &str,
-        _name: Option<&str>, // unused
+        _name: Option<&str>,        // unused
         _description: Option<&str>, // unused
         _metadata: Option<Vec<u8>>, // unused
         workspace_master_password: String,
@@ -408,13 +443,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         role: UserRole,
     ) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            let role_name_string = role.to_string();
             workspace_ops::add_user_to_workspace_inner(
                 tx,
                 admin_id,     // This is the actor_user_id, maps to inner's admin_id
-                workspace_id, // This is the target_member_id, maps to inner's user_to_add_id
-                user_id,      // This is the crate::WORKSPACE_ROOT_ID, maps to inner's workspace_id
-                &role_name_string,
+                user_id,      // This is the target_member_id (user_to_add)
+                workspace_id, // This is the workspace_id (e.g. crate::WORKSPACE_ROOT_ID)
+                role,
             )
         })
     }
@@ -422,8 +456,8 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
     fn remove_user_from_workspace(
         &self,
         admin_id: &str,
-        _user_id: &str, 
-        _workspace_id: &str, 
+        _user_id: &str,
+        _workspace_id: &str,
     ) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
             workspace_ops::remove_user_from_workspace_inner(tx, admin_id, _user_id, _workspace_id)
@@ -493,23 +527,15 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
     fn create_office(
         &self,
         user_id: &str,
-        workspace_id: &str,
+        workspace_id: &str, // parent_id
         name: &str,
         description: &str,
         mdx_content: Option<&str>,
-    ) -> Result<Office, NetworkError> {
-        info!(
-            user_id = user_id,
-            workspace_id = workspace_id,
-            name = name,
-            description = description,
-            mdx_content_is_some = mdx_content.is_some(),
-            "Attempting to create office via DomainServerOperations"
-        );
+    ) -> Result<String, NetworkError> {
+        // Changed return type to String
         let office_id = Uuid::new_v4().to_string();
-        let mdx_content_owned = mdx_content.map(|s| s.to_string());
-
-        let result = self.with_write_transaction(|tx| {
+        self.tx_manager.with_write_transaction(|tx| {
+            // office_ops::create_office_inner already returns Result<String, NetworkError>
             office_ops::create_office_inner(
                 tx,
                 user_id,
@@ -517,28 +543,42 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                 &office_id,
                 name,
                 description,
-                mdx_content_owned,
+                mdx_content.map(String::from),
             )
-        });
-
-        match result {
-            Ok(office) => Ok(office),
-            Err(e) => {
-                error!(
-                    user_id = user_id,
-                    workspace_id = workspace_id,
-                    name = name,
-                    error = ?e,
-                    "Failed to create office via DomainServerOperations"
-                );
-                Err(e)
-            }
-        }
+        })
     }
 
-    fn get_office(&self, user_id: &str, office_id: &str) -> Result<Office, NetworkError> {
-        self.tx_manager
-            .with_read_transaction(|tx| office_ops::get_office_inner(tx, user_id, office_id))
+    fn get_office(&self, user_id: &str, office_id: &str) -> Result<String, NetworkError> {
+        // Changed return type to String
+        self.with_read_transaction(|tx| {
+            let _user = tx
+                .get_user(user_id)
+                .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
+
+            // TODO: Define and use a specific ViewOffice permission if necessary
+            // For now, checking if the user is part of the office's domain (implicitly can view)
+            // A more granular check like `user.has_permission(office_id, Permission::ViewOffice)` would be better.
+            if !tx.is_member_of_domain(user_id, office_id)? {
+                return Err(permission_denied(format!(
+                    "User {} does not have permission to view office {}",
+                    user_id, office_id
+                )));
+            }
+
+            let domain = tx.get_domain(office_id).ok_or_else(|| {
+                NetworkError::msg(format!("Office domain {} not found", office_id))
+            })?;
+
+            match domain {
+                Domain::Office { office, .. } => serde_json::to_string(&office).map_err(|e| {
+                    NetworkError::msg(format!("Failed to serialize office to JSON: {}", e))
+                }),
+                _ => Err(NetworkError::msg(format!(
+                    "Domain {} is not an office",
+                    office_id
+                ))),
+            }
+        })
     }
 
     fn update_office(

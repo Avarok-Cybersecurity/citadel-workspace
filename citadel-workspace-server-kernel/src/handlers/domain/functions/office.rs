@@ -5,6 +5,7 @@ pub mod office_ops {
     use citadel_logging::{debug, error, info, warn};
     use citadel_sdk::prelude::*;
     use citadel_workspace_types::structs::{Domain, Office, Permission, UserRole}; // Added import
+    use serde_json; // Added serde_json import
 
     pub(crate) fn create_office_inner(
         tx: &mut dyn Transaction,
@@ -14,7 +15,8 @@ pub mod office_ops {
         name: &str,
         description: &str,
         mdx_content: Option<String>, // Added mdx_content parameter
-    ) -> Result<Office, NetworkError> {
+    ) -> Result<String, NetworkError> {
+        // Changed return type
         let user = tx
             .get_user(user_id)
             .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
@@ -72,9 +74,9 @@ pub mod office_ops {
 
         // Create the domain entry for the office
         let office_domain = Domain::Office {
-            office: new_office.clone(),
-        }; // Corrected Domain variant usage
-        tx.insert_domain(office_id.to_string(), office_domain)?; // Use insert_domain
+            office: new_office.clone(), // new_office is still type Office here
+        };
+        tx.insert_domain(office_id.to_string(), office_domain)?;
 
         // Add user to the new office's domain with Owner role
         tx.add_user_to_domain(user_id, office_id, UserRole::Owner)?;
@@ -94,7 +96,9 @@ pub mod office_ops {
             new_office.name,
             workspace_id
         );
-        Ok(new_office)
+        // Serialize new_office to JSON string before returning
+        serde_json::to_string(&new_office)
+            .map_err(|e| NetworkError::msg(format!("Failed to serialize office: {}", e)))
     }
 
     pub(crate) fn get_office_inner(

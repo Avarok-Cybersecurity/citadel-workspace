@@ -10,8 +10,8 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     // List members in an office or room
     pub fn list_members(
         &self,
-        office_id: Option<&String>,
-        room_id: Option<&String>,
+        office_id: Option<&str>,
+        room_id: Option<&str>,
     ) -> Result<Vec<User>, NetworkError> {
         self.tx_manager().with_read_transaction(|tx| {
             let mut members = Vec::new();

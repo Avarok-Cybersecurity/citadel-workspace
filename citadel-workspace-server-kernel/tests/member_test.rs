@@ -74,11 +74,11 @@ fn test_add_user_to_domain() {
 
     // Add the user to the office
     _domain_ops
-        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &office, UserRole::Member)
         .unwrap();
 
     // Verify the user is in the office
-    let office_domain = _domain_ops.get_domain(&office.id).unwrap();
+    let office_domain = _domain_ops.get_domain(&office).unwrap();
     match office_domain {
         Domain::Office { office } => {
             assert!(
@@ -114,16 +114,16 @@ fn test_remove_user_from_domain() {
 
     // Add the user to the office first
     _domain_ops
-        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &office, UserRole::Member)
         .unwrap();
 
     // Remove the user from the office
     _domain_ops
-        .remove_user_from_domain("admin", user_id, &office.id)
+        .remove_user_from_domain("admin", user_id, &office)
         .unwrap();
 
     // Verify the user is no longer in the office
-    let office_domain = _domain_ops.get_domain(&office.id).unwrap();
+    let office_domain = _domain_ops.get_domain(&office).unwrap();
     match office_domain {
         Domain::Office { office } => {
             assert!(
@@ -159,7 +159,7 @@ fn test_complete_user_removal() {
 
     // Add the user to the office
     _domain_ops
-        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &office, UserRole::Member)
         .unwrap();
 
     // Use transaction to completely remove the user
@@ -167,7 +167,7 @@ fn test_complete_user_removal() {
         .tx_manager()
         .with_write_transaction(|tx| {
             // First remove user from all domains
-            if let Some(Domain::Office { mut office }) = tx.get_domain(&office.id).cloned() {
+            if let Some(Domain::Office { mut office }) = tx.get_domain(&office).cloned() {
                 office.members.retain(|id| id != user_id);
                 let office_id = office.id.clone(); // Clone the ID to avoid borrow issues
                 tx.update_domain(&office_id, Domain::Office { office })?;

@@ -37,7 +37,8 @@ impl TransactionManager {
         let admin_check_user = tx.get_user(user_id);
 
         // +++ ADDED LOGGING +++
-        if user_id == "admin" { // Compare with the string literal used in tests
+        if user_id == "admin" {
+            // Compare with the string literal used in tests
             debug!(target: "citadel", "[ADMIN_CHECK_DETAIL] user_id: {}, entity_id: {}, permission: {:?}. User fetched for admin check: {:?}",
                 user_id, entity_id, permission, admin_check_user.as_ref().map(|u| (u.id.clone(), u.role.clone(), u.permissions.get(entity_id).cloned()))
             );
@@ -49,7 +50,9 @@ impl TransactionManager {
         }
         // +++ END LOGGING +++
 
-        let is_admin_by_role = admin_check_user.map(|u| u.role == UserRole::Admin).unwrap_or(false);
+        let is_admin_by_role = admin_check_user
+            .map(|u| u.role == UserRole::Admin)
+            .unwrap_or(false);
         debug!(target: "citadel", "[ADMIN_CHECK_DETAIL] Value of is_admin_by_role (just before if): {}", is_admin_by_role);
 
         if is_admin_by_role {
@@ -352,13 +355,13 @@ pub fn retrieve_role_permissions(role: &UserRole, domain_type: &DomainType) -> V
         DomainType::Office => match role {
             UserRole::Owner => {
                 permissions.extend(vec![
-                    Permission::UpdateOffice, // Owner can update office settings
-                    Permission::DeleteOffice, // Owner can delete the office
-                    Permission::CreateRoom,   // Owner can create rooms in their office
-                    Permission::AddUsers,     // Invite users to the office
-                    Permission::RemoveUsers,  // Remove users from the office
+                    Permission::UpdateOffice,        // Owner can update office settings
+                    Permission::DeleteOffice,        // Owner can delete the office
+                    Permission::CreateRoom,          // Owner can create rooms in their office
+                    Permission::AddUsers,            // Invite users to the office
+                    Permission::RemoveUsers,         // Remove users from the office
                     Permission::ManageOfficeMembers, // <<< ADDED THIS LINE
-                    Permission::EditContent,  // Was ModifyContent, broader edit rights for owner
+                    Permission::EditContent, // Was ModifyContent, broader edit rights for owner
                     // For DeleteContent, an Office Owner can delete the office itself
                     // Permission::DeleteOffice, // Already added
                     Permission::EditOfficeConfig,

@@ -67,17 +67,17 @@ fn test_office_room_permission_inheritance() {
 
     // Create a room in the office
     let room = domain_ops
-        .create_room("admin", &office.id, "Test Room", "Room for testing", None)
+        .create_room("admin", &office, "Test Room", "Room for testing", None)
         .unwrap();
 
     // Add the user to the office but not the room
     domain_ops
-        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &office, UserRole::Member)
         .unwrap();
 
     // Verify the user is in the office
     let office_domain_result = domain_ops
-        .with_read_transaction(|tx| Ok(tx.get_domain(&office.id).cloned()))
+        .with_read_transaction(|tx| Ok(tx.get_domain(&office).cloned()))
         .unwrap();
     let office_domain = office_domain_result.expect("Office domain should exist");
 
@@ -154,12 +154,12 @@ fn test_permission_escalation() {
 
     // Create a room in the office
     let room = domain_ops
-        .create_room("admin", &office.id, "Test Room", "Room for testing", None)
+        .create_room("admin", &office, "Test Room", "Room for testing", None)
         .unwrap();
 
     // Add user to both office and room
     domain_ops
-        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &office, UserRole::Member)
         .unwrap();
     domain_ops
         .add_user_to_domain("admin", user_id, &room.id, UserRole::Member)
@@ -232,12 +232,12 @@ fn test_is_member_of_domain_behavior() {
 
     // Create a room in the office
     let room = domain_ops
-        .create_room("admin", &office.id, "Test Room", "Room for testing", None)
+        .create_room("admin", &office, "Test Room", "Room for testing", None)
         .unwrap();
 
     // Initially user is not a member of any domain
     let is_member_office = domain_ops
-        .with_read_transaction(|tx| domain_ops.is_member_of_domain(tx, user_id, &office.id))
+        .with_read_transaction(|tx| domain_ops.is_member_of_domain(tx, user_id, &office))
         .unwrap();
     let is_member_room = domain_ops
         .with_read_transaction(|tx| domain_ops.is_member_of_domain(tx, user_id, &room.id))
@@ -254,12 +254,12 @@ fn test_is_member_of_domain_behavior() {
 
     // Add user to the office only
     domain_ops
-        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &office, UserRole::Member)
         .unwrap();
 
     // Now user should be a member of the office but not the room
     let is_member_office = domain_ops
-        .with_read_transaction(|tx| domain_ops.is_member_of_domain(tx, user_id, &office.id))
+        .with_read_transaction(|tx| domain_ops.is_member_of_domain(tx, user_id, &office))
         .unwrap();
     let is_member_room = domain_ops
         .with_read_transaction(|tx| domain_ops.is_member_of_domain(tx, user_id, &room.id))

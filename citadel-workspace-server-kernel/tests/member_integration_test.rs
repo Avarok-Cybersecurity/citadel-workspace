@@ -5,13 +5,17 @@ use citadel_internal_service_test_common::{
 };
 use citadel_logging::info;
 use citadel_sdk::prelude::*;
+use citadel_workspace_server_kernel::handlers::domain::server_ops::DomainServerOperations;
+use citadel_workspace_server_kernel::handlers::domain::DomainOperations; // Added this line
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::{Office, Permission, User, UserRole};
 use citadel_workspace_types::{
     UpdateOperation, WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
+use serde_json; // Added for deserialization
 use std::error::Error;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task::JoinHandle;
@@ -128,6 +132,7 @@ async fn register_and_connect_user(
     }];
 
     let returned_service_info = common::register_and_connect_to_server(to_spawn).await?;
+
     let mut service_vec = returned_service_info;
 
     if let Some(service_handle) = service_vec.pop() {
@@ -147,7 +152,8 @@ async fn send_workspace_command(
 ) -> Result<WorkspaceProtocolResponse, Box<dyn Error>> {
     let request_id = Uuid::new_v4();
     let payload = WorkspaceProtocolPayload::Request(command);
-    let serialized_command = bincode::serialize(&payload).map_err(|e| Box::new(e) as Box<dyn Error>)?;
+    let serialized_command =
+        bincode::serialize(&payload).map_err(|e| Box::new(e) as Box<dyn Error>)?;
 
     // Send command to the workspace server
     to_service.send(
@@ -182,7 +188,8 @@ async fn send_workspace_command(
         ) = &response
         {
             info!(target: "citadel", "Received response: {response:?}");
-            let response: WorkspaceProtocolPayload = bincode::deserialize(message).map_err(|e| Box::new(e) as Box<dyn Error>)?;
+            let response: WorkspaceProtocolPayload =
+                bincode::deserialize(message).map_err(|e| Box::new(e) as Box<dyn Error>)?;
             let WorkspaceProtocolPayload::Response(response) = response else {
                 panic!("Expected WorkspaceProtocolPayload::Response")
             };
@@ -274,9 +281,9 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
         .inject_admin_user("test_user", "Test User", &admin_password)
         .unwrap();
 
-    // Create an office directly using the kernel
+    // Create a test office directly using the kernel
     println!("Creating test office directly with kernel...");
-    let office = workspace_kernel
+    let office_result = workspace_kernel
         .create_office(
             ADMIN_ID,
             &root_workspace_id,
@@ -284,19 +291,28 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
             "A test office",
             None,
         )
-        .map_err(|e| Box::<dyn Error>::from(format!("Failed to create office: {}", e)))?;
-    let office_id = office.id;
-    println!("Test office created with ID: {}", office_id);
+        .map_err(|e| Box::<dyn Error>::from(format!("Failed to create office: {}", e)));
+    println!(
+        "[Test::test_member_operations] Office creation result: {:?}",
+        office_result
+    );
+    let office_from_kernel = office_result.unwrap();
+    let office_id = office_from_kernel.id.clone();
+    println!(
+        "Office created in test_member_operations. ID: '{}', Full Office: {:?}",
+        office_id, office_from_kernel
+    );
 
     // Explicitly add the admin to the office to ensure permissions are set up correctly
     workspace_kernel
-        .add_member(
-            ADMIN_ID,
-            ADMIN_ID,
-            Some(&office_id),
-            None,
-            UserRole::Admin,
-        )
+        .add_member(ADMIN_ID, ADMIN_ID, Some(&office_id), UserRole::Admin, None)
+        .map_err(|e| {
+            eprintln!(
+                "ADMIN_ID add_member to office_id {} FAILED at line 300: {:?}",
+                office_id, e
+            );
+            e
+        })
         .unwrap();
 
     // Add the test user to the office first with basic permissions through the kernel
@@ -306,9 +322,16 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
             ADMIN_ID,
             "test_user",
             Some(&office_id),
-            None,
             UserRole::Member,
+            None,
         )
+        .map_err(|e| {
+            eprintln!(
+                "add_member failed at line 300 for office_id {}: {:?}",
+                office_id, e
+            );
+            e
+        })
         .unwrap();
 
     println!("Creating test room directly with kernel...");
@@ -501,11 +524,41 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
         WorkspaceProtocolResponse::Member(member) => {
             println!("Verified test user is not in office");
             assert_eq!(member.id, "test_user");
-            assert!(!member.is_member_of_domain(office_id));
+            assert!(!member.is_member_of_domain(&office_id));
         }
         _ => return Err("Expected Member response".into()),
     }
 
+    // Verify member was added (simplified check)
+    println!(
+        "[Test] Before get_office (after add). User: {}, Office ID: {}",
+        "test_user", office_id
+    );
+    let office_details_result = workspace_kernel.get_office("test_user", &office_id);
+    println!("[Test] get_office returned: {:?}", office_details_result);
+
+    let office_details_after_add = match office_details_result {
+        Ok(office_struct) => {
+            println!(
+                "[Test] get_office received Office struct: {:?}",
+                office_struct
+            );
+            office_struct
+        }
+        Err(e) => {
+            panic!("[Test] get_office failed: {:?}", e);
+        }
+    };
+
+    println!(
+        "[Test] Office details after add (deserialized): {:?}",
+        office_details_after_add
+    );
+    assert!(office_details_after_add
+        .members
+        .contains(&"test_user".to_string()));
+
+    println!("[Test] test_member_operations completed successfully.");
     Ok(())
 }
 
@@ -564,7 +617,7 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
 
     // Create an office directly using the kernel
     println!("Creating test office directly with kernel...");
-    let office = workspace_kernel
+    let office_result = workspace_kernel
         .create_office(
             ADMIN_ID,
             &root_workspace_id,
@@ -572,19 +625,28 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
             "A test office",
             None,
         )
-        .map_err(|e| Box::<dyn Error>::from(format!("Failed to create office: {}", e)))?;
-    let office_id = office.id;
-    println!("Test office created with ID: {}", office_id);
+        .map_err(|e| Box::<dyn Error>::from(format!("Failed to create office: {}", e)));
+    println!(
+        "[Test::test_permission_operations] Office creation result: {:?}",
+        office_result
+    );
+    let office_from_kernel = office_result.unwrap();
+    let office_id = office_from_kernel.id.clone();
+    println!(
+        "Office created in test_permission_operations. ID: '{}', Full Office: {:?}",
+        office_id, office_from_kernel
+    );
 
     // Add admin to the office with all permissions
     workspace_kernel
-        .add_member(
-            ADMIN_ID,
-            ADMIN_ID,
-            Some(&office_id),
-            None,
-            UserRole::Admin,
-        )
+        .add_member(ADMIN_ID, ADMIN_ID, Some(&office_id), UserRole::Admin, None)
+        .map_err(|e| {
+            eprintln!(
+                "ADMIN_ID add_member to office_id {} FAILED at line 588: {:?}",
+                office_id, e
+            );
+            e
+        })
         .unwrap(); // This was line 588
 
     // Add the test user to the office with specific permissions
@@ -593,8 +655,8 @@ async fn test_permission_operations() -> Result<(), Box<dyn Error>> {
             ADMIN_ID,
             "test_user",
             Some(&office_id),
-            None,
             UserRole::Member,
+            None,
         )
         .unwrap();
 
@@ -863,7 +925,7 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
 
     // Create an office directly using the kernel
     info!(target: "citadel", "Creating test office directly with kernel...");
-    let office = workspace_kernel
+    let office_result = workspace_kernel
         .create_office(
             ADMIN_ID,
             &root_workspace_id,
@@ -871,19 +933,25 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
             "A test office",
             None,
         )
-        .map_err(|e| Box::<dyn Error>::from(format!("Failed to create office: {}", e)))?;
-    let office_id = office.id;
-    info!(target: "citadel", "Test office created with ID: {}", office_id);
+        .map_err(|e| Box::<dyn Error>::from(format!("Failed to create office: {}", e)));
+    println!(
+        "[Test::test_custom_role_operations] Office creation result: {:?}",
+        office_result
+    );
+    let office_from_kernel = office_result.unwrap();
+    let office_id = office_from_kernel.id.clone();
+    info!(target: "citadel", "Office created in test_custom_role_operations. ID: '{}', Full Office: {:?}", office_id, office_from_kernel);
 
     // Add admin to the office with all permissions
     workspace_kernel
-        .add_member(
-            ADMIN_ID,
-            ADMIN_ID,
-            Some(&office_id),
-            None,
-            UserRole::Admin,
-        )
+        .add_member(ADMIN_ID, ADMIN_ID, Some(&office_id), UserRole::Admin, None)
+        .map_err(|e| {
+            eprintln!(
+                "ADMIN_ID add_member to office_id {} FAILED at line 887: {:?}",
+                office_id, e
+            );
+            e
+        })
         .unwrap();
 
     // Create a custom role for the user
@@ -984,4 +1052,225 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+async fn test_admin_can_add_multiple_users_to_office(
+    kernel: Arc<WorkspaceServerKernel<StackedRatchet>>,
+    domain_server_ops: Arc<DomainServerOperations<StackedRatchet>>,
+) {
+    let admin_id = "admin_for_multi_add";
+    let workspace_id = "ws_for_multi_add";
+
+    // Create admin user and workspace
+    let _ = domain_server_ops.create_workspace(
+        admin_id,
+        workspace_id,
+        "Workspace Multi Add",
+        None,
+        "password".to_string(),
+    );
+
+    println!(
+        "[Test MultiAdd] Before create_office. Admin: {}, Workspace: {}",
+        admin_id, workspace_id
+    );
+    let office_result_json_string = domain_server_ops.create_office(
+        admin_id,
+        workspace_id,
+        "Office for Multi Add",
+        "Description",
+        None,
+    );
+
+    println!(
+        "[Test MultiAdd] create_office returned (JSON String): {:?}",
+        office_result_json_string
+    );
+
+    let office_json_string = office_result_json_string
+        .expect("create_office failed in test_admin_can_add_multiple_users_to_office");
+    println!(
+        "[Test MultiAdd] create_office returned (JSON String): {:?}",
+        office_json_string
+    );
+    let office: Office = serde_json::from_str(&office_json_string).unwrap_or_else(|e| {
+        panic!(
+            "[Test MultiAdd] Failed to deserialize Office from JSON: {}. JSON: {}",
+            e, office_json_string
+        )
+    });
+
+    println!(
+        "[Test MultiAdd] Deserialized Office: {:?}, ID: {}",
+        office, office.id
+    );
+
+    let user1_id = "user1_multi_add";
+    let user2_id = "user2_multi_add";
+
+    println!(
+        "[Test MultiAdd] Before add_user_to_domain (User1). Office ID: {}, User1: {}",
+        office.id, user1_id
+    );
+    let add_user1_result =
+        domain_server_ops.add_user_to_domain(admin_id, user1_id, &office.id, UserRole::Member);
+    println!(
+        "[Test MultiAdd] add_user_to_domain (User1) result: {:?}",
+        add_user1_result
+    );
+    assert!(
+        add_user1_result.is_ok(),
+        "Admin should be able to add user1. Error: {:?}",
+        add_user1_result.err()
+    );
+
+    println!(
+        "[Test MultiAdd] Before add_user_to_domain (User2). Office ID: {}, User2: {}",
+        office.id, user2_id
+    );
+    let add_user2_result =
+        domain_server_ops.add_user_to_domain(admin_id, user2_id, &office.id, UserRole::Member);
+    println!(
+        "[Test MultiAdd] add_user_to_domain (User2) result: {:?}",
+        add_user2_result
+    );
+    assert!(
+        add_user2_result.is_ok(),
+        "Admin should be able to add user2. Error: {:?}",
+        add_user2_result.err()
+    );
+
+    println!(
+        "[Test MultiAdd] Before get_office (admin_can_add_multiple). Admin: {}, Office ID: {}",
+        admin_id, office.id
+    );
+    let office_details_json = domain_server_ops
+        .get_office(admin_id, &office.id) // Use office.id from deserialized 'office' struct
+        .expect("Failed to get office details");
+    let office_details: Office =
+        serde_json::from_str(&office_details_json).expect("Failed to deserialize office details");
+
+    println!(
+        "[Test MultiAdd] Office details after adds (deserialized): {:?}",
+        office_details
+    );
+
+    assert!(office_details.members.contains(&user1_id.to_string()));
+    assert!(office_details.members.contains(&user2_id.to_string()));
+    println!("[Test MultiAdd] test_admin_can_add_multiple_users_to_office completed successfully.");
+}
+
+async fn test_non_admin_cannot_add_user_to_office(
+    kernel: Arc<WorkspaceServerKernel<StackedRatchet>>,
+    domain_server_ops: Arc<DomainServerOperations<StackedRatchet>>,
+) {
+    let owner_id = "owner_for_non_admin_test";
+    let non_admin_id = "non_admin_for_test";
+    let target_user_id = "target_user_for_non_admin_test";
+    let workspace_id = "ws_for_non_admin_test";
+
+    // Create users and workspace
+    let _ = domain_server_ops.create_workspace(
+        owner_id,
+        workspace_id,
+        "Workspace NonAdmin",
+        None,
+        "password".to_string(),
+    );
+
+    println!(
+        "[Test NonAdmin] Before create_office. Owner: {}, Workspace: {}",
+        owner_id, workspace_id
+    );
+    let office_result = domain_server_ops.create_office(
+        owner_id,
+        workspace_id,
+        "Office for Non-Admin Test",
+        "Description",
+        None,
+    );
+
+    println!(
+        "[Test NonAdmin] create_office returned: {:?}",
+        office_result
+    );
+
+    let office_json_string =
+        office_result.expect("create_office failed in test_non_admin_cannot_add_user_to_office");
+    println!(
+        "[Test NonAdmin] create_office returned (JSON String): {:?}",
+        office_json_string
+    );
+    let office: Office = serde_json::from_str(&office_json_string).unwrap_or_else(|e| {
+        panic!(
+            "[Test NonAdmin] Failed to deserialize Office from JSON: {}. JSON: {}",
+            e, office_json_string
+        )
+    });
+
+    println!(
+        "[Test NonAdmin] Deserialized Office: {:?}, ID: {}",
+        office, office.id
+    );
+
+    // Add non_admin_id to the office as a Member by the owner
+    println!(
+        "[Test NonAdmin] Owner adding NonAdmin to office. Office ID: {}, NonAdmin: {}",
+        office.id, non_admin_id
+    );
+    let add_non_admin_result = domain_server_ops.add_user_to_domain(
+        owner_id,
+        non_admin_id,
+        &office.id,
+        UserRole::Member, // Non-admin is just a member
+    );
+    println!(
+        "[Test NonAdmin] Owner adding NonAdmin result: {:?}",
+        add_non_admin_result
+    );
+    assert!(
+        add_non_admin_result.is_ok(),
+        "Owner should be able to add non_admin as member. Error: {:?}",
+        add_non_admin_result.err()
+    );
+
+    // Attempt by non_admin_id to add another_user_id
+    println!(
+        "[Test NonAdmin] NonAdmin attempting to add TargetUser. Office ID: {}, TargetUser: {}",
+        office.id, target_user_id
+    );
+    let non_admin_add_result = domain_server_ops.add_user_to_domain(
+        non_admin_id, // Invoker is non-admin
+        target_user_id,
+        &office.id,
+        UserRole::Member,
+    );
+
+    println!(
+        "[Test NonAdmin] NonAdmin add_member result: {:?}",
+        non_admin_add_result
+    );
+    assert!(
+        non_admin_add_result.is_err(),
+        "Non-admin should not be able to add users to the office"
+    );
+    if let Err(e) = non_admin_add_result {
+        if e.to_string().starts_with("Permission denied:") {
+            println!(
+                "[Test NonAdmin] Correctly received PermissionDenied: {}",
+                e.to_string()
+            );
+        } else {
+            panic!(
+                "[Test NonAdmin] Expected error message to start with 'Permission denied:', got: {}",
+                e.to_string()
+            );
+        }
+    } else {
+        panic!(
+            "[Test NonAdmin] Expected NetworkError::Msg for permission denied, got {:?}",
+            non_admin_add_result
+        );
+    }
+    println!("[Test NonAdmin] test_non_admin_cannot_add_user_to_office completed successfully.");
 }

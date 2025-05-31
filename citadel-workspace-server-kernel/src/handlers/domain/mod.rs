@@ -109,7 +109,7 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
     ) -> Result<T, NetworkError>;
 
     /// Create a domain entity
-    fn create_domain_entity<T: DomainEntity + 'static>(
+    fn create_domain_entity<T: DomainEntity + 'static + serde::de::DeserializeOwned>(
         &self,
         user_id: &str,
         parent_id: Option<&str>,
@@ -150,7 +150,7 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
         name: &str,
         description: &str,
         mdx_content: Option<&str>,
-    ) -> Result<Office, NetworkError>;
+    ) -> Result<String, NetworkError>;
 
     /// Create a room
     fn create_room(
@@ -163,7 +163,7 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
     ) -> Result<Room, NetworkError>;
 
     /// Get an office
-    fn get_office(&self, user_id: &str, office_id: &str) -> Result<Office, NetworkError>;
+    fn get_office(&self, user_id: &str, office_id: &str) -> Result<String, NetworkError>;
 
     /// Get a room
     fn get_room(&self, user_id: &str, room_id: &str) -> Result<Room, NetworkError>;

@@ -150,7 +150,7 @@ pub mod workspace_ops {
         admin_id: &str,
         user_to_add_id: &str,
         workspace_id: &str,
-        role_name: &str,
+        role: UserRole,
     ) -> Result<(), NetworkError> {
         // Permission check: Admin must have 'AddUsers' permission.
         let admin_user = tx
@@ -186,28 +186,15 @@ pub mod workspace_ops {
             );
         }
 
-        // Convert role_name string to UserRole enum
-        let _role = match role_name {
-            "Admin" => UserRole::Admin,
-            "Owner" => UserRole::Owner,
-            "Member" => UserRole::Member,
-            "Guest" => UserRole::Guest,
-            _ => {
-                return Err(NetworkError::msg(format!(
-                    "Invalid role name: {}",
-                    role_name
-                )))
-            }
-        };
+        // The `role: UserRole` is now passed directly. No need to parse from string.
+        // TODO: Actually *use* the role. For example, by setting permissions based on this role.
+        // This might involve a call like:
+        // permission_ops::set_permissions_for_user_on_domain_based_on_role(tx, user_to_add_id, workspace_id, &role)?;
+        // For now, the role is not explicitly used to set fine-grained permissions in this function beyond membership.
+        // The permissions are checked for the admin, and the user is added as a member.
+        // The actual enforcement of what a "Member" or "Custom Editor" can do is handled by permission checks elsewhere.
 
-        // Add user to domain (which might handle role assignments internally or require separate logic)
-        // For now, we assume adding to workspace.members is the primary action here.
-        // If roles are managed per-domain by the Transaction trait, use that:
-        // tx.add_user_to_domain(user_to_add_id, workspace_id, role.clone())?;
-
-        // Update the workspace with new member list
         tx.update_workspace(workspace_id, workspace.clone())?;
-        // Also update the domain entry
         tx.update_domain(
             workspace_id,
             Domain::Workspace {
@@ -216,8 +203,8 @@ pub mod workspace_ops {
         )?;
 
         info!(
-            "Admin '{}' added user '{}' to workspace '{}' with role '{}'",
-            admin_id, user_to_add_id, workspace_id, role_name
+            "Admin '{}' added user '{}' to workspace '{}' with role '{}'", // Log uses Display for role
+            admin_id, user_to_add_id, workspace_id, &role
         );
         Ok(())
     }

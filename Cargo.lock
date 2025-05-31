@@ -973,7 +973,10 @@ dependencies = [
 name = "citadel-workspace-types"
 version = "0.1.0"
 dependencies = [
+ "citadel_sdk",
  "serde",
+ "serde_json",
+ "uuid",
 ]
 
 [[package]]

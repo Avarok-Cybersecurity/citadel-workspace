@@ -44,7 +44,7 @@ pub mod room_ops {
             description: description.to_string(),
             members: vec![user_id.to_string()], // Creator is the first member
             mdx_content: mdx_content.unwrap_or_default(),
-            metadata: Vec::new(),               // Default empty metadata
+            metadata: Vec::new(), // Default empty metadata
         };
 
         // Create the domain entry for the room

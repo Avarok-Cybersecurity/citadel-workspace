@@ -42,7 +42,7 @@ mod tests {
             )
             .unwrap();
 
-        (kernel, domain_ops, office.id.to_string())
+        (kernel, domain_ops, office.to_string())
     }
 
     /// Helper function to create a test user with specified ID and role

@@ -410,7 +410,7 @@ pub struct Office {
     pub metadata: Vec<u8>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Room {
     pub id: String,
     pub owner_id: String,

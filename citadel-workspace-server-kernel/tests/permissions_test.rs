@@ -64,7 +64,7 @@ mod tests {
             domain_ops.check_entity_permission(
                 tx,
                 user_id,
-                office.id.as_str(),
+                office.as_str(),
                 Permission::ViewContent,
             )
         });
@@ -74,18 +74,18 @@ mod tests {
         // Manually add the user's ID to the office members list via a write transaction
         domain_ops
             .with_write_transaction(|tx| {
-                let mut domain = tx.get_domain(&office.id).unwrap().clone();
+                let mut domain = tx.get_domain(&office).unwrap().clone();
                 if let Domain::Office { ref mut office } = domain {
                     office.members.push(user_id.to_string());
                 }
-                tx.update_domain(&office.id, domain)?;
+                tx.update_domain(&office, domain)?;
                 Ok(())
             })
             .unwrap();
 
         // Verify the user is now in the members list
         {
-            let domain = domain_ops.get_domain(&office.id).unwrap();
+            let domain = domain_ops.get_domain(&office).unwrap();
             match domain {
                 Domain::Office { office } => {
                     assert!(
@@ -102,7 +102,7 @@ mod tests {
             domain_ops.check_entity_permission(
                 tx,
                 user_id,
-                office.id.as_str(),
+                office.as_str(),
                 Permission::ViewContent,
             )
         });
@@ -199,7 +199,7 @@ mod tests {
             domain_ops.check_entity_permission(
                 tx,
                 owner_user.id.as_str(),
-                office.id.as_str(),
+                office.as_str(),
                 Permission::EditOfficeConfig,
             )
         });
@@ -214,7 +214,7 @@ mod tests {
             domain_ops.check_entity_permission(
                 tx,
                 member_user.id.as_str(),
-                office.id.as_str(),
+                office.as_str(),
                 Permission::ViewContent,
             )
         });
@@ -227,18 +227,18 @@ mod tests {
         // Manually add the member to the office via a write transaction
         domain_ops
             .with_write_transaction(|tx| {
-                let mut domain = tx.get_domain(&office.id).unwrap().clone();
+                let mut domain = tx.get_domain(&office).unwrap().clone();
                 if let Domain::Office { ref mut office } = domain {
                     office.members.push(member_user.id.clone());
                 }
-                tx.update_domain(&office.id, domain)?;
+                tx.update_domain(&office, domain)?;
                 Ok(())
             })
             .unwrap();
 
         // Verify member was actually added to the office
         {
-            let domain = domain_ops.get_domain(&office.id).unwrap();
+            let domain = domain_ops.get_domain(&office).unwrap();
             match domain {
                 Domain::Office { office } => {
                     assert!(
@@ -255,7 +255,7 @@ mod tests {
             domain_ops.check_entity_permission(
                 tx,
                 member_user.id.as_str(),
-                office.id.as_str(),
+                office.as_str(),
                 Permission::ViewContent,
             )
         });
@@ -269,7 +269,7 @@ mod tests {
             domain_ops.check_entity_permission(
                 tx,
                 member_user.id.as_str(),
-                office.id.as_str(),
+                office.as_str(),
                 Permission::EditOfficeConfig,
             )
         });
@@ -284,7 +284,7 @@ mod tests {
             domain_ops.check_entity_permission(
                 tx,
                 guest_user.id.as_str(),
-                office.id.as_str(),
+                office.as_str(),
                 Permission::ViewContent,
             )
         });
