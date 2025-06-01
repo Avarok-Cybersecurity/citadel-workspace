@@ -70,7 +70,7 @@ fn get_domain_type_from_id(
 }
 
 // Helper function to retrieve role permissions based on domain type
-fn get_role_based_permissions(role: &UserRole, domain_type: DomainType) -> HashSet<Permission> {
+pub fn get_role_based_permissions(role: &UserRole, domain_type: DomainType) -> HashSet<Permission> {
     let mut permissions = HashSet::new();
     match role {
         UserRole::Admin => {
@@ -100,7 +100,7 @@ fn get_role_based_permissions(role: &UserRole, domain_type: DomainType) -> HashS
         UserRole::Banned => {
             // No permissions for banned users
         }
-        UserRole::Custom { name: _, rank: _ } => {
+        UserRole::Custom(_, _) => {
             // Implement custom role permission logic here if needed
             // For now, let's assume custom roles might have ViewContent by default
             permissions.insert(Permission::ViewContent);
@@ -162,10 +162,14 @@ pub(crate) fn add_user_to_domain_inner(
     user_to_add.role = role.clone(); // Set the user's role for this context
     user_to_add
         .permissions
-        .insert(domain_id.to_string(), role_permissions);
+        .insert(domain_id.to_string(), role_permissions.clone());
     info!(
         "Successfully set role {:?} and permissions for user {} in domain {}",
         role, target_user_id, domain_id
+    );
+    println!(
+        "[USER_OPS_ADD_USER_INNER_PRINTLN] User: '{}', Domain: '{}', Role: {:?}, Set Permissions: {:?}, User Full Permissions after update: {:?}",
+        target_user_id, domain_id, role, role_permissions, user_to_add.permissions
     );
 
     // Add user to domain's member list (mutable borrow of tx.domains)

@@ -4,7 +4,8 @@ use crate::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use citadel_logging::error;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::Room;
-use citadel_workspace_types::structs::{Office, UserRole, Workspace};
+use citadel_workspace_types::structs::{Office, Permission, UserRole, Workspace};
+use citadel_workspace_types::UpdateOperation;
 use serde_json;
 
 impl<R: Ratchet> WorkspaceServerKernel<R> {
@@ -33,6 +34,10 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         actor_user_id: &str,
         command: WorkspaceProtocolRequest,
     ) -> Result<WorkspaceProtocolResponse, NetworkError> {
+        println!(
+            "[PROCESS_COMMAND_ENTRY] actor_user_id: {}, command: {:?}",
+            actor_user_id, command
+        );
         let resp = match command {
             WorkspaceProtocolRequest::Message { .. } => {
                 return Ok(WorkspaceProtocolResponse::Error(
@@ -295,6 +300,41 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 )
             }
 
+            WorkspaceProtocolRequest::UpdateMemberRole {
+                user_id,
+                role,
+                metadata,
+            } => Self::handle_result(
+                self.update_member_role_command_internal(actor_user_id, &user_id, role, metadata),
+                |_| {
+                    WorkspaceProtocolResponse::Success(
+                        "Member role updated successfully".to_string(),
+                    )
+                },
+                "Failed to update member role",
+            ),
+
+            WorkspaceProtocolRequest::UpdateMemberPermissions {
+                user_id,
+                domain_id,
+                permissions,
+                operation,
+            } => Self::handle_result(
+                self.update_member_permissions_command_internal(
+                    actor_user_id,
+                    &user_id,
+                    &domain_id,
+                    permissions,
+                    operation,
+                ),
+                |_| {
+                    WorkspaceProtocolResponse::Success(
+                        "Member permissions updated successfully".to_string(),
+                    )
+                },
+                "Failed to update member permissions",
+            ),
+
             // Query commands
             WorkspaceProtocolRequest::ListMembers { office_id, room_id } => {
                 if office_id.is_some() == room_id.is_some() {
@@ -307,13 +347,6 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     WorkspaceProtocolResponse::Members,
                     "Failed to list members",
                 )
-            }
-            _ => {
-                error!("Unhandled WorkspaceProtocolRequest variant: {:?}", command);
-                Ok(WorkspaceProtocolResponse::Error(format!(
-                    "Unhandled command: {:?}",
-                    command
-                )))
             }
         };
 
@@ -399,17 +432,21 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         room_id_opt: Option<&str>,
         role: UserRole,
     ) -> Result<(), NetworkError> {
+        println!(
+            "[ADD_MEMBER_CMD_INTERNAL_ENTRY] actor_user_id: {}",
+            actor_user_id
+        );
         let workspace_id_for_membership: String;
-        let mut final_target_domain_id: Option<String> = None;
+        let final_target_domain_id_str: String;
 
         if let Some(office_id_str) = office_id_opt {
-            final_target_domain_id = Some(office_id_str.to_string());
+            final_target_domain_id_str = office_id_str.to_string();
             let office_json = self.domain_ops().get_office(actor_user_id, office_id_str)?;
             let office: Office = serde_json::from_str(&office_json)
                 .map_err(|e| NetworkError::msg(format!("Failed to deserialize office JSON in add_member_command_internal. Office ID: {}. Error: {}. JSON: {}", office_id_str, e, office_json)))?;
             workspace_id_for_membership = office.workspace_id;
         } else if let Some(room_id_str) = room_id_opt {
-            final_target_domain_id = Some(room_id_str.to_string());
+            final_target_domain_id_str = room_id_str.to_string();
             // get_room returns the Room struct directly
             let room: Room = self.domain_ops().get_room(actor_user_id, room_id_str)?;
 
@@ -437,15 +474,13 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         )?;
         citadel_logging::debug!(target: "citadel", "[ADD_MEMBER_CMD_INTERNAL] Added {} to workspace {}", target_member_id, workspace_id_for_membership);
 
-        if let Some(specific_domain_id) = final_target_domain_id {
-            self.domain_ops().add_user_to_domain(
-                actor_user_id,
-                target_member_id,
-                &specific_domain_id,
-                role,
-            )?;
-            citadel_logging::debug!(target: "citadel", "[ADD_MEMBER_CMD_INTERNAL] Added {} to specific domain {}", target_member_id, specific_domain_id);
-        }
+        self.domain_ops().add_user_to_domain(
+            actor_user_id,
+            target_member_id,
+            &final_target_domain_id_str,
+            role,
+        )?;
+        citadel_logging::debug!(target: "citadel", "[ADD_MEMBER_CMD_INTERNAL] Added {} to specific domain {}", target_member_id, final_target_domain_id_str);
 
         Ok(())
     }
@@ -470,5 +505,39 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 target_user_id
             ))),
         }
+    }
+
+    fn update_member_role_command_internal(
+        &self,
+        actor_user_id: &str,
+        target_user_id: &str,
+        role: UserRole,
+        metadata: Option<Vec<u8>>,
+    ) -> Result<(), NetworkError> {
+        // This will call a new method in domain_ops, e.g., update_workspace_member_role
+        // The actual error "Failed to update member role: User X not found" will come from domain_ops.
+        self.domain_ops().update_workspace_member_role(
+            actor_user_id,
+            target_user_id,
+            role,
+            metadata,
+        )
+    }
+
+    fn update_member_permissions_command_internal(
+        &self,
+        actor_user_id: &str,
+        target_user_id: &str,
+        domain_id: &str,
+        permissions: Vec<Permission>,
+        operation: UpdateOperation,
+    ) -> Result<(), NetworkError> {
+        self.domain_ops().update_member_permissions(
+            actor_user_id,
+            target_user_id,
+            domain_id,
+            permissions,
+            operation,
+        )
     }
 }

@@ -1,7 +1,9 @@
 use citadel_sdk::prelude::NetworkError;
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
 use parking_lot::RwLock;
+use rocksdb::DB;
 use std::collections::HashMap;
+use std::sync::Arc;
 pub mod rbac;
 pub mod read;
 pub mod write;
@@ -169,10 +171,94 @@ pub enum WorkspaceChange {
 }
 
 /// Transaction manager for creating read and write transactions
-#[derive(Default)]
 pub struct TransactionManager {
     pub domains: RwLock<HashMap<String, Domain>>,
     pub users: RwLock<HashMap<String, User>>,
     pub workspaces: RwLock<HashMap<String, Workspace>>,
     pub workspace_password: RwLock<HashMap<String, String>>,
+    pub db: Arc<DB>,
+}
+
+impl TransactionManager {
+    pub fn new(db: Arc<DB>) -> Self {
+        let mut domains_map = HashMap::new();
+        let mut users_map = HashMap::new();
+        let mut workspaces_map = HashMap::new();
+        // workspace_password map is not persisted in this manner, handled differently or ephemeral
+
+        println!("[TM_NEW_PRINTLN] Initializing TransactionManager: Loading data from RocksDB...");
+
+        let iter = db.iterator(rocksdb::IteratorMode::Start);
+        for result in iter {
+            match result {
+                Ok((key_bytes, value_bytes)) => {
+                    let key_str = match std::str::from_utf8(&key_bytes) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            eprintln!("[TM_NEW_ERROR_PRINTLN] Failed to convert key to UTF-8: {}. Skipping entry.", e);
+                            continue;
+                        }
+                    };
+
+                    if key_str.starts_with("domain::") {
+                        match bincode::deserialize::<Domain>(&value_bytes) {
+                            Ok(domain) => {
+                                let domain_id = key_str.trim_start_matches("domain::").to_string();
+                                println!("[TM_NEW_PRINTLN] Loading domain: {}", domain_id);
+                                domains_map.insert(domain_id, domain);
+                            }
+                            Err(e) => {
+                                eprintln!("[TM_NEW_ERROR_PRINTLN] Failed to deserialize domain for key {}: {}. Skipping entry.", key_str, e);
+                            }
+                        }
+                    } else if key_str.starts_with("user::") {
+                        match bincode::deserialize::<User>(&value_bytes) {
+                            Ok(user) => {
+                                let user_id = key_str.trim_start_matches("user::").to_string();
+                                println!("[TM_NEW_PRINTLN] Loading user: {}", user_id);
+                                users_map.insert(user_id, user);
+                            }
+                            Err(e) => {
+                                eprintln!("[TM_NEW_ERROR_PRINTLN] Failed to deserialize user for key {}: {}. Skipping entry.", key_str, e);
+                            }
+                        }
+                    } else if key_str.starts_with("workspace::") {
+                        match bincode::deserialize::<Workspace>(&value_bytes) {
+                            Ok(workspace) => {
+                                let workspace_id =
+                                    key_str.trim_start_matches("workspace::").to_string();
+                                println!("[TM_NEW_PRINTLN] Loading workspace: {}", workspace_id);
+                                workspaces_map.insert(workspace_id, workspace);
+                            }
+                            Err(e) => {
+                                eprintln!("[TM_NEW_ERROR_PRINTLN] Failed to deserialize workspace for key {}: {}. Skipping entry.", key_str, e);
+                            }
+                        }
+                    } else {
+                        // Optional: Log other keys if necessary, or ignore them if they are not managed by TransactionManager caches
+                        // println!("[TM_NEW_PRINTLN] Skipping unrecognized key prefix: {}", key_str);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[TM_NEW_ERROR_PRINTLN] Error iterating RocksDB: {}. Aborting further loading.", e);
+                    break; // Or handle more gracefully, e.g., by returning a Result from new()
+                }
+            }
+        }
+
+        println!(
+            "[TM_NEW_PRINTLN] RocksDB loading complete. Domains: {}, Users: {}, Workspaces: {}.",
+            domains_map.len(),
+            users_map.len(),
+            workspaces_map.len()
+        );
+
+        Self {
+            domains: RwLock::new(domains_map),
+            users: RwLock::new(users_map),
+            workspaces: RwLock::new(workspaces_map),
+            workspace_password: RwLock::new(HashMap::new()), // Remains empty, not loaded from DB this way
+            db,
+        }
+    }
 }

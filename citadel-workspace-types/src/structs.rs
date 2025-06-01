@@ -113,7 +113,7 @@ pub enum UserRole {
     Member,
     Guest,
     Banned,
-    Custom { name: String, rank: u8 },
+    Custom(String, u8),
 }
 
 impl fmt::Display for UserRole {
@@ -124,7 +124,7 @@ impl fmt::Display for UserRole {
             UserRole::Member => write!(f, "Member"),
             UserRole::Guest => write!(f, "Guest"),
             UserRole::Banned => write!(f, "Banned"),
-            UserRole::Custom { name, .. } => write!(f, "{}", name),
+            UserRole::Custom(name, _) => write!(f, "{}", name),
         }
     }
 }
@@ -175,7 +175,7 @@ impl UserRole {
             UserRole::Member => MEMBER_RANK,
             UserRole::Guest => GUEST_RANK,
             UserRole::Banned => BANNED_RANK,
-            UserRole::Custom { rank, .. } => *rank,
+            UserRole::Custom(_, rank) => *rank,
         }
     }
 
@@ -190,7 +190,7 @@ impl UserRole {
             return None;
         }
 
-        Some(UserRole::Custom { name, rank })
+        Some(UserRole::Custom(name, rank))
     }
 }
 
@@ -309,7 +309,7 @@ impl Permission {
             UserRole::Banned => {
                 // No permissions for banned users
             }
-            UserRole::Custom { rank, .. } => {
+            UserRole::Custom(_, rank) => {
                 // Custom role permissions based on rank
                 // Basic permissions for all custom roles
                 permissions.insert(Self::ViewContent);

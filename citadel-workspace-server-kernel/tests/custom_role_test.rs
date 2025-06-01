@@ -10,7 +10,7 @@ mod tests {
         let custom_role = UserRole::create_custom_role("Editor".to_string(), 16);
         assert!(custom_role.is_some());
 
-        if let Some(UserRole::Custom { name, rank }) = custom_role {
+        if let Some(UserRole::Custom(name, rank)) = custom_role {
             assert_eq!(name, "Editor");
             assert_eq!(rank, 16);
         } else {

@@ -2,9 +2,12 @@ use citadel_sdk::prelude::StackedRatchet;
 use citadel_workspace_server_kernel::handlers::domain::server_ops::DomainServerOperations;
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
+use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::{Domain, Office, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use rocksdb::DB;
 use std::sync::Arc;
+use tempfile::TempDir;
 
 const ADMIN_PASSWORD: &str = "admin_password";
 
@@ -19,40 +22,31 @@ fn create_test_user(id: &str, role: UserRole) -> User {
     }
 }
 
-// Helper function to create a test office
-fn create_test_office(id: &str, name: &str, owner_id: &str, workspace_id: &str) -> Office {
-    Office {
-        id: id.to_string(),
-        owner_id: owner_id.to_string(),
-        workspace_id: workspace_id.to_string(),
-        name: name.to_string(),
-        description: "Test Office Description".to_string(),
-        members: vec![owner_id.to_string()],
-        rooms: Vec::new(),
-        mdx_content: "".to_string(),
-        metadata: Vec::new(),
-    }
-}
-
 // Helper to setup a test environment with admin, domains, and test users
 fn setup_test_environment() -> (
     Arc<WorkspaceServerKernel<StackedRatchet>>,
     DomainServerOperations<StackedRatchet>,
+    TempDir,
 ) {
     citadel_logging::setup_log();
+    let db_temp_dir = TempDir::new().expect("Failed to create temp dir for DB");
+    let db_path = db_temp_dir.path().join("test_member_db");
+    let db = DB::open_default(&db_path).expect("Failed to open DB");
     let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
         "admin",
         "Administrator",
         ADMIN_PASSWORD,
+        Arc::new(db),
     ));
-    let _domain_ops = kernel.domain_ops().clone();
+    let domain_ops = kernel.domain_ops().clone();
 
-    (kernel, _domain_ops)
+    (kernel, domain_ops, db_temp_dir)
 }
 
 #[test]
 fn test_add_user_to_domain() {
-    let (kernel, _domain_ops) = setup_test_environment();
+    let (kernel, domain_ops, _db_temp_dir) = setup_test_environment();
+    let _domain_ops = domain_ops; // Use the returned domain_ops
 
     // Create a test user
     let user_id = "test_user";
@@ -69,7 +63,13 @@ fn test_add_user_to_domain() {
 
     // Create an office
     let office = _domain_ops
-        .create_office("admin", "test_ws_id", "Test Office", "For Testing", None)
+        .create_office(
+            "admin",
+            &WORKSPACE_ROOT_ID.to_string(),
+            "Test Office",
+            "For Testing",
+            None,
+        )
         .unwrap();
 
     // Add the user to the office
@@ -92,7 +92,8 @@ fn test_add_user_to_domain() {
 
 #[test]
 fn test_remove_user_from_domain() {
-    let (kernel, _domain_ops) = setup_test_environment();
+    let (kernel, domain_ops, _db_temp_dir) = setup_test_environment();
+    let _domain_ops = domain_ops; // Use the returned domain_ops
 
     // Create a test user
     let user_id = "test_user";
@@ -109,7 +110,13 @@ fn test_remove_user_from_domain() {
 
     // Create an office
     let office = _domain_ops
-        .create_office("admin", "test_ws_id", "Test Office", "For Testing", None)
+        .create_office(
+            "admin",
+            &WORKSPACE_ROOT_ID.to_string(),
+            "Test Office",
+            "For Testing",
+            None,
+        )
         .unwrap();
 
     // Add the user to the office first
@@ -137,7 +144,8 @@ fn test_remove_user_from_domain() {
 
 #[test]
 fn test_complete_user_removal() {
-    let (kernel, _domain_ops) = setup_test_environment();
+    let (kernel, domain_ops, _db_temp_dir) = setup_test_environment();
+    let _domain_ops = domain_ops; // Use the returned domain_ops
 
     // Create a test user
     let user_id = "test_user";
@@ -154,7 +162,13 @@ fn test_complete_user_removal() {
 
     // Create an office
     let office = _domain_ops
-        .create_office("admin", "test_ws_id", "Test Office", "For Testing", None)
+        .create_office(
+            "admin",
+            &WORKSPACE_ROOT_ID.to_string(),
+            "Test Office",
+            "For Testing",
+            None,
+        )
         .unwrap();
 
     // Add the user to the office
@@ -190,10 +204,10 @@ fn test_complete_user_removal() {
 
 #[test]
 fn test_member_command_processing() {
+    let (kernel, _domain_ops, _db_temp_dir) = setup_test_environment();
+
     citadel_logging::setup_log();
     citadel_logging::trace!(target: "citadel", "Starting test_member_command_processing");
-
-    let (kernel, _domain_ops) = setup_test_environment();
 
     citadel_logging::trace!(target: "citadel", "Created kernel");
 
@@ -216,9 +230,9 @@ fn test_member_command_processing() {
 
     citadel_logging::trace!(target: "citadel", "Inserted test user");
 
-    // Create an office via command processing
+    // Create the office manually in the transaction for testing command processing
     let office_id = "test_office";
-
+    let _workspace_id = WORKSPACE_ROOT_ID.to_string();
     citadel_logging::trace!(target: "citadel", "Creating office");
 
     // First manually create an office since the command doesn't have office_id field

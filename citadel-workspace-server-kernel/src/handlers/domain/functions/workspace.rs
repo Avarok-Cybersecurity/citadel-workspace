@@ -157,9 +157,14 @@ pub mod workspace_ops {
             .get_user(admin_id)
             .ok_or_else(|| NetworkError::msg(format!("Admin user {} not found", admin_id)))?;
 
-        debug!(target: "citadel", "[ADD_USER_TO_WORKSPACE_INNER_PERM_CHECK] admin_id: {}, workspace_id: {}, admin_user_role: {:?}, required_permission: {:?}", admin_id, workspace_id, admin_user.role, Permission::AddUsers);
+        println!("[AUTCWI_PRE_PERM_CHECK_SIMPLE_PRINTLN] Actor: {}, Workspace: {}, About to call has_permission. User object: {:?}", admin_id, workspace_id, admin_user);
+        let has_perm_result = admin_user.has_permission(workspace_id, Permission::AddUsers);
+        println!(
+            "[AUTCWI_POST_PERM_CHECK_SIMPLE_PRINTLN] Actor: {}, Workspace: {}, has_perm_result: {}",
+            admin_id, workspace_id, has_perm_result
+        );
 
-        if !admin_user.has_permission(workspace_id, Permission::AddUsers) {
+        if !has_perm_result {
             error!(target: "citadel", "Admin {} does not have AddUsers permission for workspace {}", admin_id, workspace_id);
             return Err(permission_denied(format!(
                 "Admin {} does not have permission to add users to workspace {}",

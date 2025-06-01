@@ -9,10 +9,12 @@ use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
+use rocksdb::DB;
 use rstest::*;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::time::Duration;
+use tempfile::TempDir;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -71,6 +73,7 @@ async fn setup_test_environment() -> Result<
         SocketAddr,
         String,
         String,
+        TempDir,
     ),
     Box<dyn Error>,
 > {
@@ -88,10 +91,14 @@ async fn setup_test_environment() -> Result<
 
     // Create a client to connect to the server, which will trigger the connection handler
     println!("Creating workspace kernel");
+    let db_temp_dir = TempDir::new().expect("Failed to create temp dir for DB");
+    let db_path = db_temp_dir.path().join("integration_test_db");
+    let db = DB::open_default(&db_path).expect("Failed to open DB");
     let workspace_kernel = WorkspaceServerKernel::<StackedRatchet>::with_admin(
         ADMIN_ID,
         &admin_username,
         &admin_password,
+        std::sync::Arc::new(db),
     );
 
     // TCP client (GUI, CLI) -> internal service -> empty kernel server(s)
@@ -120,6 +127,7 @@ async fn setup_test_environment() -> Result<
         server_bind_address,
         admin_username,
         admin_password,
+        db_temp_dir,
     ))
 }
 
@@ -170,7 +178,7 @@ async fn send_workspace_command(
     );
     let request_id = Uuid::new_v4(); // Add request_id
     let payload = WorkspaceProtocolPayload::Request(command.clone()); // Clone command here
-    let message_bytes = bincode::serialize(&payload).map_err(|e| Box::new(e) as Box<dyn Error>)?; // Handle bincode error
+    let message_bytes = serde_json::to_vec(&payload).map_err(|e| Box::new(e) as Box<dyn Error>)?;
 
     let internal_request = citadel_internal_service_types::InternalServiceRequest::Message {
         request_id, // Added request_id
@@ -217,8 +225,8 @@ async fn send_workspace_command(
             inner_notification,
         ) => {
             println!("First response is MessageNotification. Deserializing payload for request_id: {}...", request_id);
-            let payload: WorkspaceProtocolPayload = bincode::deserialize(&inner_notification.message).map_err(|e| {
-                println!("Bincode deserialize error for MessageNotification payload for request_id: {}: {:?}", request_id, e);
+            let payload: WorkspaceProtocolPayload = serde_json::from_slice(&inner_notification.message).map_err(|e| {
+                println!("serde_json deserialize error for MessageNotification payload for request_id: {}: {:?}", request_id, e);
                 println!("Message bytes (first 100): {:?}", &inner_notification.message.iter().take(100).collect::<Vec<_>>());
                 Box::new(e) as Box<dyn Error>
             })?;
@@ -263,8 +271,8 @@ async fn send_workspace_command(
                 match actual_opt_response {
                     citadel_internal_service_types::InternalServiceResponse::MessageNotification(inner_notification) => {
                         println!("Actual response is MessageNotification. Deserializing payload for request_id: {}...", request_id);
-                        let payload: WorkspaceProtocolPayload = bincode::deserialize(&inner_notification.message).map_err(|e| {
-                            println!("Bincode deserialize error for actual MessageNotification payload for request_id: {}: {:?}", request_id, e);
+                        let payload: WorkspaceProtocolPayload = serde_json::from_slice(&inner_notification.message).map_err(|e| {
+                            println!("serde_json deserialize error for actual MessageNotification payload for request_id: {}: {:?}", request_id, e);
                             println!("Message bytes (first 100): {:?}", &inner_notification.message.iter().take(100).collect::<Vec<_>>());
                             Box::new(e) as Box<dyn Error>
                         })?;
@@ -305,7 +313,7 @@ async fn send_workspace_command(
 #[timeout(Duration::from_secs(15))]
 async fn test_office_operations() {
     println!("Setting up test environment...");
-    let (kernel, internal_service_addr, server_addr, admin_username, admin_password) =
+    let (kernel, internal_service_addr, server_addr, admin_username, admin_password, _db_temp_dir) =
         setup_test_environment().await.unwrap();
     println!("Test environment setup complete.");
 
@@ -540,7 +548,7 @@ async fn test_office_operations() {
 #[timeout(Duration::from_secs(15))]
 async fn test_room_operations() {
     println!("Setting up test environment...");
-    let (kernel, internal_service_addr, server_addr, admin_username, admin_password) =
+    let (kernel, internal_service_addr, server_addr, admin_username, admin_password, _db_temp_dir) =
         setup_test_environment().await.unwrap();
     println!("Test environment setup complete.");
 

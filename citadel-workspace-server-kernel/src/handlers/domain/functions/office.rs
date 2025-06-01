@@ -101,32 +101,6 @@ pub mod office_ops {
             .map_err(|e| NetworkError::msg(format!("Failed to serialize office: {}", e)))
     }
 
-    pub(crate) fn get_office_inner(
-        tx: &dyn Transaction,
-        user_id: &str,
-        office_id: &str,
-    ) -> Result<Office, NetworkError> {
-        let user = tx
-            .get_user(user_id)
-            .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
-
-        if !tx.is_member_of_domain(&user.id, office_id)? {
-            return Err(permission_denied(format!(
-                "User {} is not a member of office {}",
-                user_id, office_id
-            )));
-        }
-
-        let domain = tx.get_domain(office_id).ok_or_else(|| {
-            NetworkError::msg(format!("Domain for office {} not found", office_id))
-        })?;
-
-        domain
-            .as_office()
-            .cloned()
-            .ok_or_else(|| NetworkError::msg(format!("Domain {} is not an office", office_id)))
-    }
-
     pub(crate) fn update_office_inner(
         tx: &mut dyn Transaction,
         user_id: &str,

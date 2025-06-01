@@ -4,7 +4,9 @@ use citadel_workspace_types::{
     structs::{Permission, User, UserRole},
     UpdateOperation, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
+use rocksdb::DB;
 use std::sync::Arc;
+use tempfile::TempDir;
 
 #[cfg(test)]
 mod tests {
@@ -25,19 +27,24 @@ mod tests {
     }
 
     // Helper to setup a test environment
-    fn setup_test_environment() -> Arc<WorkspaceServerKernel<StackedRatchet>> {
-        Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
+    fn setup_test_environment() -> (Arc<WorkspaceServerKernel<StackedRatchet>>, TempDir) {
+        let db_temp_dir = TempDir::new().expect("Failed to create temp dir for DB");
+        let db_path = db_temp_dir.path().join("test_error_handling_db");
+        let db = DB::open_default(&db_path).expect("Failed to open DB");
+        let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
             "admin",
             "Administrator",
             ADMIN_PASSWORD,
-        ))
+            Arc::new(db),
+        ));
+        (kernel, db_temp_dir)
     }
 
     #[rstest]
     #[timeout(Duration::from_secs(15))]
     #[test]
     fn test_command_invalid_access() {
-        let kernel = setup_test_environment();
+        let (kernel, _db_temp_dir) = setup_test_environment();
 
         // Add a regular user with no special permissions
         let user_id = "unprivileged_user";
@@ -112,7 +119,7 @@ mod tests {
     #[timeout(Duration::from_secs(15))]
     #[test]
     fn test_command_invalid_resource() {
-        let kernel = setup_test_environment();
+        let (kernel, _db_temp_dir) = setup_test_environment();
 
         // Attempt to get a non-existent office (even as admin)
         let result = kernel.process_command(
@@ -170,7 +177,7 @@ mod tests {
     #[timeout(Duration::from_secs(15))]
     #[test]
     fn test_member_operations_errors() {
-        let kernel = setup_test_environment();
+        let (kernel, _db_temp_dir) = setup_test_environment();
 
         // Attempt to update role for non-existent member
         let result = kernel.process_command(
@@ -248,7 +255,7 @@ mod tests {
     #[timeout(Duration::from_secs(15))]
     #[test]
     fn test_list_members_invalid_parameters() {
-        let kernel = setup_test_environment();
+        let (kernel, _db_temp_dir) = setup_test_environment();
 
         // Test ListMembers with neither office_id nor room_id
         let result = kernel.process_command(

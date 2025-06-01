@@ -3,6 +3,7 @@ use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{
     Domain, MetadataValue, Office, Permission, Room, User, UserRole, Workspace,
 };
+use citadel_workspace_types::UpdateOperation;
 use serde_json; // Ensure this import is present
 use std::any::TypeId;
 use std::sync::Arc;
@@ -34,6 +35,38 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             tx_manager: kernel,
             _ratchet: std::marker::PhantomData,
         }
+    }
+
+    pub async fn add_user_to_domain_entity_with_role(
+        &self,
+        user_id_to_add: &str,
+        entity_id: &str,
+        _domain_type: crate::kernel::transaction::rbac::DomainType, // Parameter used for logic, not directly passed to inner usually
+        role: UserRole,
+        actor_user_id: Option<&str>,
+    ) -> Result<(), NetworkError> {
+        // If actor_user_id is None, for now, let's assume the user_id_to_add is the actor.
+        // This might need refinement based on actual permission model requirements.
+        // The `add_user_to_domain_inner` expects an `admin_id` which is the actor.
+        let effective_actor_id = actor_user_id.unwrap_or(user_id_to_add);
+
+        println!("[ADD_USER_TO_DOMAIN_ENTITY_WITH_ROLE_IMPL_PRINTLN] Actor: '{}', User to add: '{}', Entity: '{}', Role: {:?}", effective_actor_id, user_id_to_add, entity_id, role);
+
+        self.tx_manager.with_write_transaction(|tx| {
+            // Call the inner function that eventually calls tx.add_user_to_domain
+            // The `_domain_type` parameter from the trait might be used by `add_user_to_domain_inner` if it handled different logic per type,
+            // but current `add_user_to_domain_inner` doesn't seem to use it directly for permission assignment logic itself (it's derived inside).
+            // The critical part is that `entity_id` here is the `domain_id` for `add_user_to_domain_inner`.
+            user_ops::add_user_to_domain_inner(
+                tx,
+                effective_actor_id,
+                user_id_to_add,
+                entity_id,
+                role,
+                None,
+            )
+            .map(|_| ()) // Map Ok(User) to Ok(())
+        })
     }
 }
 
@@ -123,20 +156,154 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         })
     }
 
+    fn update_workspace_member_role(
+        &self,
+        actor_user_id: &str,
+        target_user_id: &str,
+        role: UserRole,
+        _metadata: Option<Vec<u8>>, // metadata is unused for now
+    ) -> Result<(), NetworkError> {
+        self.tx_manager.with_write_transaction(|tx| {
+            // 1. Check actor permissions
+            if !self.check_entity_permission(
+                tx,
+                actor_user_id,
+                crate::WORKSPACE_ROOT_ID,
+                Permission::EditWorkspaceConfig,
+            )? {
+                return Err(NetworkError::msg(format!(
+                    "Actor {} lacks EditWorkspaceConfig permission in workspace {}.",
+                    // @human-review: Changed permission from ManageWorkspaceMembers (non-existent) to EditWorkspaceConfig. Verify if this is the correct semantic choice.
+                    actor_user_id,
+                    crate::WORKSPACE_ROOT_ID
+                )));
+            }
+
+            // 2. Get target user
+            let target_user = tx.get_user_mut(target_user_id).ok_or_else(|| {
+                NetworkError::msg(format!(
+                    "Failed to update member role: User {} not found",
+                    target_user_id
+                ))
+            })?;
+
+            // 3. Update role and associated workspace permissions
+            target_user.role = role.clone();
+            // Use the imported DomainType for Workspace
+            let workspace_permissions = user_ops::get_role_based_permissions(
+                &role,
+                crate::kernel::transaction::rbac::DomainType::Workspace,
+            );
+            target_user
+                .permissions
+                .insert(crate::WORKSPACE_ROOT_ID.to_string(), workspace_permissions);
+
+            info!(
+                "Successfully updated role to {:?} for user {} in workspace {} by actor {}",
+                role,
+                target_user_id,
+                crate::WORKSPACE_ROOT_ID,
+                actor_user_id
+            );
+
+            Ok(())
+        })
+    }
+
+    fn update_member_permissions(
+        &self,
+        actor_user_id: &str,
+        target_user_id: &str,
+        domain_id: &str,
+        permissions_to_update: Vec<Permission>,
+        operation: UpdateOperation,
+    ) -> Result<(), NetworkError> {
+        self.tx_manager.with_write_transaction(|tx| {
+            info!(
+                target: "citadel",
+                "Attempting to update permissions for user {} in domain {} by actor {}. Operation: {:?}",
+                target_user_id, domain_id, actor_user_id, operation
+            );
+
+            let domain = tx.get_domain(domain_id).ok_or_else(|| {
+                NetworkError::msg(format!("Domain {} not found for permission update.", domain_id))
+            })?;
+
+            let required_permission_for_actor = match domain {
+                Domain::Workspace { .. } => Permission::EditWorkspaceConfig,
+                Domain::Office { .. } => Permission::ManageOfficeMembers,
+                Domain::Room { .. } => Permission::ManageRoomMembers,
+            };// @human-review: Verify these are the correct permissions for managing members/permissions in Office/Room.
+            // Consider if UpdateOfficeSettings/UpdateRoomSettings is more appropriate.
+            // ManageOfficeMembers/ManageRoomMembers seems more direct for permission changes.
+
+            if !self.check_entity_permission(tx, actor_user_id, domain_id, required_permission_for_actor)? {
+                return Err(permission_denied(format!(
+                    "Actor {} lacks {:?} permission in domain {}.",
+                    actor_user_id, required_permission_for_actor, domain_id
+                )));
+            }
+
+            let user = tx.get_user_mut(target_user_id).ok_or_else(|| {
+                NetworkError::msg(format!(
+                    "Failed to update member permissions: User {} not found in domain {}",
+                    target_user_id, domain_id
+                ))
+            })?;
+
+            {
+                let user_domain_permissions = user.permissions.entry(domain_id.to_string()).or_default();
+                match operation {
+                    UpdateOperation::Add => {
+                        for perm in permissions_to_update {
+                            user_domain_permissions.insert(perm);
+                        }
+                    }
+                    UpdateOperation::Set => {
+                        user_domain_permissions.clear();
+                        for perm in permissions_to_update {
+                            user_domain_permissions.insert(perm);
+                        }
+                    }
+                    UpdateOperation::Remove => {
+                        for perm in permissions_to_update {
+                            user_domain_permissions.remove(&perm);
+                        }
+                    }
+                }
+            } // Scope for user_domain_permissions ends, mutable borrow of user.permissions released
+
+            let updated_user_for_db = user.clone();
+            tx.insert_user(target_user_id.to_string(), updated_user_for_db)?;
+
+            info!(
+                target: "citadel",
+                "Successfully updated permissions for user {} in domain {}. Check user object for new permissions.",
+                target_user_id, domain_id
+            );
+
+            Ok(())
+        })
+    }
+
     fn get_domain_entity<T>(&self, user_id: &str, entity_id: &str) -> Result<T, NetworkError>
     where
         T: DomainEntity + Clone + 'static,
     {
         self.with_read_transaction(|tx| {
-            if !self.check_entity_permission(tx, user_id, entity_id, Permission::ViewContent)? {
+            let has_permission = self.check_entity_permission(tx, user_id, entity_id, Permission::ViewContent)?;
+            println!("[GET_DOMAIN_ENTITY_PERM_CHECK_PRINTLN] User: '{}', Entity: '{}', Permission: ViewContent, Result: {}", user_id, entity_id, has_permission);
+
+            if !has_permission {
                 return Err(permission_denied(format!(
-                    "User {} does not have permission to view entity {}",
+                    "User {} does not have permission to view entity {} (explicit check failed in get_domain_entity)",
                     user_id, entity_id
                 )));
             }
+
             let domain = tx
                 .get_domain(entity_id)
-                .ok_or_else(|| permission_denied(format!("Entity {} not found", entity_id)))?;
+                .ok_or_else(|| NetworkError::msg(format!("ENTITY_NOT_FOUND_IN_TRANSACTION: Entity {} not found within get_domain_entity", entity_id)))?;
             T::from_domain(domain.clone()).ok_or_else(|| {
                 NetworkError::msg(format!("Entity {} is not of the expected type", entity_id))
             })
@@ -203,7 +370,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         } else {
             Err(NetworkError::msg(format!(
                 "Unsupported entity type for create_domain_entity: {:?}",
-                std::any::type_name::<T>() // Using type_name for better readability
+                std::any::type_name::<T>()
             )))
         }
     }
@@ -219,9 +386,11 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                 "Use delete_workspace for Workspace entities. Requires password.",
             ))
         } else if type_id == TypeId::of::<Office>() {
+            // Assuming T is Office, and Office can be transmuted. This is risky.
             self.delete_office(user_id, entity_id)
                 .map(|office| unsafe { std::mem::transmute_copy(&office) })
         } else if type_id == TypeId::of::<Room>() {
+            // Assuming T is Room, and Room can be transmuted. This is risky.
             self.delete_room(user_id, entity_id)
                 .map(|room| unsafe { std::mem::transmute_copy(&room) })
         } else {
@@ -549,6 +718,8 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
     }
 
     fn get_office(&self, user_id: &str, office_id: &str) -> Result<String, NetworkError> {
+        // !!!!! LOUD DEBUGGING !!!!!
+        debug!(target: "citadel", "!!!!!!!!!! [GET_OFFICE_ENTRY_UNCONDITIONAL] Received User: '{}', Office_ID: '{}'. Is 'test_user': {} !!!!!!!!!!!", user_id, office_id, user_id == "test_user");
         // Changed return type to String
         self.with_read_transaction(|tx| {
             let _user = tx
@@ -558,7 +729,13 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             // TODO: Define and use a specific ViewOffice permission if necessary
             // For now, checking if the user is part of the office's domain (implicitly can view)
             // A more granular check like `user.has_permission(office_id, Permission::ViewOffice)` would be better.
-            if !tx.is_member_of_domain(user_id, office_id)? {
+            // Updated to use check_entity_permission_with_tx for proper ViewContent check.
+            if !self.tx_manager.check_entity_permission_with_tx(
+                tx,
+                user_id,
+                office_id,
+                Permission::ViewContent,
+            )? {
                 return Err(permission_denied(format!(
                     "User {} does not have permission to view office {}",
                     user_id, office_id
@@ -651,7 +828,13 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             // TODO: Define and use a specific ViewRoom permission if necessary
             // For now, checking if the user is part of the room's domain (implicitly can view)
             // A more granular check like `user.has_permission(room_id, Permission::ViewRoom)` would be better.
-            if !tx.is_member_of_domain(user_id, room_id)? {
+            // Updated to use check_entity_permission_with_tx for proper ViewContent check.
+            if !self.tx_manager.check_entity_permission_with_tx(
+                tx,
+                user_id,
+                room_id,
+                Permission::ViewContent,
+            )? {
                 return Err(permission_denied(format!(
                     "User {} does not have permission to view room {}",
                     user_id, room_id

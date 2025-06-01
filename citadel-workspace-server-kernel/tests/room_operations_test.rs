@@ -3,11 +3,14 @@ use citadel_workspace_server_kernel::handlers::domain::{
     server_ops::DomainServerOperations, DomainOperations,
 };
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
+use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::{Domain, User, UserRole};
+use rocksdb::DB;
 use rstest::rstest;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use tempfile::TempDir;
 
 const ADMIN_PASSWORD: &str = "admin_password";
 
@@ -20,12 +23,17 @@ mod tests {
         Arc<WorkspaceServerKernel<StackedRatchet>>,
         DomainServerOperations<StackedRatchet>,
         String, // office_id
+        TempDir,
     ) {
+        let db_temp_dir = TempDir::new().expect("Failed to create temp dir for DB");
+        let db_path = db_temp_dir.path().join("test_room_ops_db");
+        let db = DB::open_default(&db_path).expect("Failed to open DB");
         // Create a workspace server kernel for testing
         let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
             "admin",
             "Administrator",
             ADMIN_PASSWORD,
+            Arc::new(db),
         ));
 
         // Create domain operations handler
@@ -35,14 +43,14 @@ mod tests {
         let office = domain_ops
             .create_office(
                 "admin",
-                "test_ws_id",
+                &WORKSPACE_ROOT_ID.to_string(),
                 "Test Office",
                 "Test office description",
                 None,
             )
             .unwrap();
 
-        (kernel, domain_ops, office.to_string())
+        (kernel, domain_ops, office.to_string(), db_temp_dir)
     }
 
     /// Helper function to create a test user with specified ID and role
@@ -209,7 +217,7 @@ mod tests {
     #[timeout(Duration::from_secs(10))]
     fn test_room_creation_and_retrieval() {
         println!("DEBUG: Starting test_room_creation_and_retrieval");
-        let (_, domain_ops, office_id) = setup_test_environment();
+        let (_, domain_ops, office_id, _db_temp_dir) = setup_test_environment();
         println!("DEBUG: Created test environment");
 
         // Create a test room
@@ -241,7 +249,7 @@ mod tests {
     #[timeout(Duration::from_secs(10))]
     fn test_room_name_update() {
         println!("DEBUG: Starting test_room_name_update");
-        let (kernel, domain_ops, office_id) = setup_test_environment();
+        let (kernel, domain_ops, office_id, _db_temp_dir) = setup_test_environment();
         println!("DEBUG: Created test environment");
 
         // Create a test room
@@ -290,7 +298,7 @@ mod tests {
     #[timeout(Duration::from_secs(10))]
     fn test_room_description_update() {
         println!("DEBUG: Starting test_room_description_update");
-        let (kernel, domain_ops, office_id) = setup_test_environment();
+        let (kernel, domain_ops, office_id, _db_temp_dir) = setup_test_environment();
         println!("DEBUG: Created test environment");
 
         // Create a test room
@@ -342,7 +350,7 @@ mod tests {
     #[timeout(Duration::from_secs(10))]
     fn test_user_domain_access() {
         println!("DEBUG: Starting test_user_domain_access");
-        let (kernel, domain_ops, office_id) = setup_test_environment();
+        let (kernel, domain_ops, office_id, _db_temp_dir) = setup_test_environment();
         println!("DEBUG: Created test environment");
 
         // Create and add a regular user
@@ -384,7 +392,7 @@ mod tests {
     #[timeout(Duration::from_secs(10))]
     fn test_room_deletion() {
         println!("DEBUG: Starting test_room_deletion");
-        let (kernel, domain_ops, office_id) = setup_test_environment();
+        let (kernel, domain_ops, office_id, _db_temp_dir) = setup_test_environment();
         println!("DEBUG: Created test environment");
 
         // Create a room for deletion
@@ -423,7 +431,7 @@ mod tests {
     #[timeout(Duration::from_secs(10))]
     fn test_multiple_rooms_in_office() {
         println!("DEBUG: Starting test_multiple_rooms_in_office");
-        let (_, domain_ops, office_id) = setup_test_environment();
+        let (_, domain_ops, office_id, _db_temp_dir) = setup_test_environment();
         println!("DEBUG: Created test environment");
 
         // Create first room

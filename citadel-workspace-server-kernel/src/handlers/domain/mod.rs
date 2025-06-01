@@ -5,6 +5,7 @@ use crate::kernel::transaction::Transaction;
 use citadel_workspace_types::structs::{
     Domain, Office, Permission, Room, User, UserRole, Workspace,
 };
+use citadel_workspace_types::UpdateOperation;
 // Corrected import path for WorkspaceDBList based on compiler suggestion
 use crate::handlers::domain::functions::workspace::workspace_ops::WorkspaceDBList;
 
@@ -99,6 +100,25 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
         admin_id: &str,
         user_id_to_remove: &str,
         domain_id: &str,
+    ) -> Result<(), NetworkError>;
+
+    /// Update a user's role in the workspace
+    fn update_workspace_member_role(
+        &self,
+        actor_user_id: &str,
+        target_user_id: &str,
+        role: UserRole,
+        metadata: Option<Vec<u8>>, // metadata might be used later for specific role features
+    ) -> Result<(), NetworkError>;
+
+    /// Update a user's permissions in a specific domain
+    fn update_member_permissions(
+        &self,
+        actor_user_id: &str,
+        target_user_id: &str,
+        domain_id: &str,
+        permissions: Vec<Permission>,
+        operation: UpdateOperation,
     ) -> Result<(), NetworkError>;
 
     /// Get a domain entity

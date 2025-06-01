@@ -1,7 +1,8 @@
 use citadel_sdk::prelude::StackedRatchet;
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
-use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
+use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
+use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -10,6 +11,8 @@ const ADMIN_PASSWORD: &str = "admin_password";
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rocksdb::DB;
+    use tempfile::TempDir;
 
     // Helper function to create a test user
     fn create_test_user(id: &str, role: UserRole) -> User {
@@ -25,11 +28,15 @@ mod tests {
     #[test]
     fn test_permission_set() {
         citadel_logging::setup_log();
+        let _db_temp_dir = TempDir::new().expect("Failed to create temp dir for DB");
+        let db_path = _db_temp_dir.path().join("test_perm_set_db");
+        let db = DB::open_default(&db_path).expect("Failed to open DB");
         // Create a kernel with an admin user for testing
         let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
             "admin",
             "Administrator",
             ADMIN_PASSWORD,
+            Arc::new(db),
         ));
 
         // Add a test user with explicit permissions
@@ -52,7 +59,7 @@ mod tests {
         let office = domain_ops
             .create_office(
                 "admin",
-                "test_workspace_id",
+                &WORKSPACE_ROOT_ID.to_string(),
                 "Test Office",
                 "Test Description",
                 None,
@@ -113,12 +120,16 @@ mod tests {
     #[test]
     fn test_admin_check() {
         citadel_logging::setup_log();
+        let _db_temp_dir = TempDir::new().expect("Failed to create temp dir for DB");
+        let db_path = _db_temp_dir.path().join("test_admin_check_db");
+        let db = DB::open_default(&db_path).expect("Failed to open DB");
         // Create a kernel with a custom admin user
         let admin_id = "custom_admin";
         let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
             admin_id,
             "Custom Administrator",
             ADMIN_PASSWORD,
+            Arc::new(db),
         ));
         let domain_ops = kernel.domain_ops();
 
@@ -157,27 +168,58 @@ mod tests {
     #[test]
     fn test_role_based_permissions() {
         citadel_logging::setup_log();
+        let _db_temp_dir = TempDir::new().expect("Failed to create temp dir for DB");
+        let db_path = _db_temp_dir.path().join("test_role_based_db");
+        let db = DB::open_default(&db_path).expect("Failed to open DB");
         // Create a kernel with an admin user for testing
         let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
             "admin",
             "Administrator",
             ADMIN_PASSWORD,
+            Arc::new(db),
         ));
         let domain_ops = kernel.domain_ops();
 
-        // Create test users with different roles
+        const TEST_WORKSPACE_ID: &str = "test_workspace_id";
+
+        // Create test users
         let owner_user = create_test_user("owner", UserRole::Owner);
         let member_user = create_test_user("member", UserRole::Member);
         let guest_user = create_test_user("guest", UserRole::Guest);
 
-        // Add users to the kernel
+        // Add users to the kernel and set up workspace & permissions
         {
             kernel
                 .tx_manager()
                 .with_write_transaction(|tx| {
+                    // Create and insert the workspace
+                    let workspace = Workspace {
+                        id: TEST_WORKSPACE_ID.to_string(),
+                        name: "Test Workspace".to_string(),
+                        description: "A workspace for testing".to_string(),
+                        owner_id: owner_user.id.clone(),
+                        members: vec![owner_user.id.clone()],
+                        offices: Vec::new(),
+                        metadata: Vec::new(),
+                        password_protected: false,
+                    };
+                    let workspace_domain = Domain::Workspace { workspace };
+                    tx.insert_domain(TEST_WORKSPACE_ID.to_string(), workspace_domain)?;
+
+                    // Insert users
                     tx.insert_user(owner_user.id.clone(), owner_user.clone())?;
                     tx.insert_user(member_user.id.clone(), member_user.clone())?;
                     tx.insert_user(guest_user.id.clone(), guest_user.clone())?;
+
+                    // Grant CreateOffice permission to owner_user for the workspace
+                    let mut fetched_owner_user = tx.get_user(&owner_user.id).unwrap().clone();
+                    fetched_owner_user
+                        .permissions
+                        .entry(TEST_WORKSPACE_ID.to_string())
+                        .or_default()
+                        .insert(Permission::CreateOffice);
+                    tx.update_user(&owner_user.id, fetched_owner_user)?;
+
                     Ok(())
                 })
                 .unwrap();
@@ -187,7 +229,7 @@ mod tests {
         let office = domain_ops
             .create_office(
                 owner_user.id.as_str(),
-                "test_workspace_id",
+                TEST_WORKSPACE_ID, // Use the defined workspace ID
                 "Test Office",
                 "Test Description",
                 None,

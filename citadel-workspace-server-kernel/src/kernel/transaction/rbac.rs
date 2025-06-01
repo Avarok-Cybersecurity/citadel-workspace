@@ -1,13 +1,14 @@
 use crate::kernel::transaction::read::ReadTransaction;
 use crate::kernel::transaction::write::WriteTransaction;
 use crate::kernel::transaction::{Transaction, TransactionManager};
-use citadel_logging::debug;
+use citadel_logging::{debug, error, info};
 use citadel_sdk::prelude::NetworkError;
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
 use citadel_workspace_types::UpdateOperation;
 use std::collections::HashSet;
 
 // Helper enum to distinguish domain types for permission mapping
+#[derive(Debug)]
 pub enum DomainType {
     Workspace,
     Office,
@@ -33,19 +34,31 @@ impl TransactionManager {
         entity_id: &str,
         permission: Permission,
     ) -> Result<bool, NetworkError> {
+        debug!(target: "citadel", "[RBAC_ENTRY_LOG] ENTERING check_entity_permission_with_tx. User: {}, Entity: {}, Permission: {:?}", user_id, entity_id, permission);
+
+        // Log user retrieval attempt for ANY user during the critical path
+        // We expect this to be "test_user" for the failing call.
+        let user_opt_for_log = tx.get_user(user_id);
+        debug!(target: "citadel",
+            "[RBAC_ATTEMPT_GET_USER] In Read TX for entity '{}', perm '{:?}'. Attempting to get user '{}': Found: {}",
+            entity_id, permission, user_id, user_opt_for_log.is_some()
+        );
+        if let Some(user_obj_for_log) = user_opt_for_log {
+            if user_id == "test_user" {
+                // Only print permissions map for test_user to reduce noise
+                println!("[RBAC_ATTEMPT_GET_USER_DETAIL_TEST_USER_PRINTLN] User '{}' found. Permissions map: {:?}", user_id, user_obj_for_log.permissions);
+            }
+        }
+
         // System administrators always have all permissions
         let admin_check_user = tx.get_user(user_id);
 
         // +++ ADDED LOGGING +++
         if user_id == "admin" {
             // Compare with the string literal used in tests
-            debug!(target: "citadel", "[ADMIN_CHECK_DETAIL] user_id: {}, entity_id: {}, permission: {:?}. User fetched for admin check: {:?}",
-                user_id, entity_id, permission, admin_check_user.as_ref().map(|u| (u.id.clone(), u.role.clone(), u.permissions.get(entity_id).cloned()))
-            );
+            info!(target: "citadel", "[RBAC_CHECK_TEST_USER] Retrieved user for 'test_user': {:?}", user_opt_for_log.is_some());
             if let Some(user_details) = admin_check_user.as_ref() {
-                debug!(target: "citadel", "[ADMIN_CHECK_DETAIL] User details found: id='{}', role='{:?}'. Comparing role to UserRole::Admin.", user_details.id, user_details.role);
-                let is_admin_role = user_details.role == UserRole::Admin;
-                debug!(target: "citadel", "[ADMIN_CHECK_DETAIL] Result of (user_details.role == UserRole::Admin): {}", is_admin_role);
+                info!(target: "citadel", "[RBAC_CHECK_TEST_USER] 'test_user' details: Role: {:?}, Permissions map: {:?}", user_details.role, user_details.permissions);
             }
         }
         // +++ END LOGGING +++
@@ -56,16 +69,31 @@ impl TransactionManager {
         debug!(target: "citadel", "[ADMIN_CHECK_DETAIL] Value of is_admin_by_role (just before if): {}", is_admin_by_role);
 
         if is_admin_by_role {
-            debug!(target: "citadel", "[ADMIN_CHECK_DETAIL] User {} IS admin by role. Granting permission for entity {}. THIS BLOCK SHOULD BE EXECUTED.", user_id, entity_id);
+            // Admin has permission, log already exists prior to this block if needed for admin.
             return Ok(true);
         }
         debug!(target: "citadel", "[ADMIN_CHECK_DETAIL] User {} is NOT admin by role OR the admin block was not entered. Proceeding with other checks.", user_id);
 
         // Get the user and check their permissions
         let user_role = if let Some(user) = tx.get_user(user_id) {
+            // Specific detailed log for WORKSPACE_ROOT_ID checks
+            if entity_id == crate::WORKSPACE_ROOT_ID {
+                println!("[DEBUG_WORKSPACE_ROOT_CHECK_PRINTLN] User: '{}', Entity_ID: '{}' (is WORKSPACE_ROOT_ID), Checking Perm: {:?}. User's FULL permissions map in this Read TX: {:?}", user_id, entity_id, permission, user.permissions);
+                let specific_perms = user.permissions.get(entity_id);
+                println!("[DEBUG_WORKSPACE_ROOT_CHECK_DETAIL_PRINTLN] Lookup for WORKSPACE_ROOT_ID ('{}') in user's map: {:?}. Contains {:?}: {}", entity_id, specific_perms, permission, specific_perms.map_or(false, |s| s.contains(&permission)));
+            }
+
+            // The existing general log for test_user can remain or be removed if too noisy
+            if user_id == "test_user" {
+                // Log specifically for the user in the failing test
+                let perms_for_entity_being_checked = user.permissions.get(entity_id);
+                println!("[RBAC_EXPLICIT_CHECK_DETAIL_PRINTLN] For user_id: '{}', entity_id: '{}', checking permission: {:?}. User's explicit permissions for this entity: {:?}. Required perm present: {}", user_id, entity_id, permission, perms_for_entity_being_checked, perms_for_entity_being_checked.map_or(false, |s| s.contains(&permission)));
+            }
+            // +++ END DETAILED LOGGING +++
+            debug!(target: "citadel", "[CHECK_ENTITY_PERM_PRE_CHECK] User: {}, Entity: {}, PermToChk: {:?}, UserPermsForEntity: {:?}", user_id, entity_id, permission, user.permissions.get(entity_id));
             // Check if user has the specific permission for this entity
             if user.has_permission(entity_id, permission) {
-                debug!(target: "citadel", "User {} has explicit permission {:?} for entity {}", user_id, permission, entity_id);
+                println!("[RBAC_EXPLICIT_GRANT_PRINTLN] User '{}' has explicit permission {:?} for entity '{}'. Details: {:?}", user_id, permission, entity_id, user.permissions.get(entity_id));
                 return Ok(true);
             }
 
@@ -104,19 +132,35 @@ impl TransactionManager {
 
                 // Office members may have some permissions based on role
                 if office.members.contains(&user_id.to_string()) {
-                    // Admins and owners have all permissions of a given domain
-                    Ok(matches!(user_role, UserRole::Admin | UserRole::Owner))
+                    // User is a direct member. Check their role permissions for an office.
+                    let default_role_perms =
+                        retrieve_role_permissions(&user_role, &DomainType::Office);
+                    if default_role_perms.contains(&permission) {
+                        debug!(target: "citadel", "User {} (Role: {:?}) is a member of Office {}. Permission {:?} GRANTED via office role.", user_id, user_role, entity_id, permission);
+                        return Ok(true);
+                    } else {
+                        // User is a direct member, but their office role does not grant this permission.
+                        debug!(target: "citadel", "User {} (Role: {:?}) is a member of Office {}. Permission {:?} DENIED by office role.", user_id, user_role, entity_id, permission);
+                        return Ok(false); // Direct members' office roles are definitive here for role-based perms.
+                    }
                 } else {
-                    // Check if the user has permissions via a parent workspace
+                    // User is NOT a direct member of the office. Now, check parent workspace membership.
                     // Try to find which workspace contains this office
                     for workspace_candidate in tx.get_all_workspaces().values() {
-                        if workspace_candidate.offices.contains(&office.id)
-                            && (workspace_candidate.owner_id == user_id
-                                || workspace_candidate.members.contains(&user_id.to_string()))
-                        {
-                            // User is a member of the parent workspace - check role permissions
-                            // Admins and owners have all permissions of a given domain
-                            return Ok(matches!(user_role, UserRole::Admin | UserRole::Owner));
+                        if workspace_candidate.offices.contains(&office.id) {
+                            // Check if user is owner or member of this parent workspace
+                            if workspace_candidate.owner_id == user_id
+                                || workspace_candidate.members.contains(&user_id.to_string())
+                            {
+                                // User is associated with the parent workspace. Check their role's default permissions for an Office context.
+                                // This implies that membership in a parent workspace can grant permissions over child offices based on the user's role.
+                                let workspace_member_office_perms =
+                                    retrieve_role_permissions(&user_role, &DomainType::Office);
+                                if workspace_member_office_perms.contains(&permission) {
+                                    debug!(target: "citadel", "User {} (Role: {:?}) is member of parent workspace of Office {}. Permission {:?} GRANTED via parent workspace role for office context.", user_id, user_role, entity_id, permission);
+                                    return Ok(true);
+                                }
+                            }
                         }
                     }
                     Ok(false)
@@ -158,12 +202,18 @@ impl TransactionManager {
                 }
             }
             None => {
-                // Entity not found, so no permissions can be granted.
-                // This case should ideally be handled before calling check_entity_permission
-                // or result in a specific "entity not found" error if that's more appropriate.
-                // For a boolean permission check, false is correct if entity doesn't exist.
-                debug!(target: "citadel", "Entity {} not found, permission denied for user {}", entity_id, user_id);
-                Ok(false)
+                // THIS IS WHERE "Workspace workspace-root not found" WOULD ORIGINATE
+                // if entity_id was WORKSPACE_ROOT_ID and it wasn't found.
+                // Let's make this log more specific if entity_id is WORKSPACE_ROOT_ID
+                if entity_id == crate::WORKSPACE_ROOT_ID {
+                    // <<< NEW LINES START HERE
+                    println!("[CRITICAL_WORKSPACE_ROOT_NOT_FOUND_IN_GET_DOMAIN_PRINTLN] WORKSPACE_ROOT_ID ('{}') not found by tx.get_domain! User: '{}', Perm: '{:?}'", entity_id, user_id, permission);
+                } // <<< NEW LINES END HERE
+                error!(target: "citadel", "[RBAC_ENTITY_NOT_FOUND_PRINTLN] Entity domain '{}' not found in check_entity_permission_with_tx. User: '{}', Perm: '{:?}'", entity_id, user_id, permission);
+                return Err(NetworkError::msg(format!(
+                    "Entity domain '{}' not found",
+                    entity_id
+                )));
             }
         }
     }
@@ -280,6 +330,7 @@ impl TransactionManager {
             self.users.write(),
             self.workspaces.write(),
             self.workspace_password.write(),
+            self.db.clone(),
         )
     }
 

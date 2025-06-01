@@ -1,20 +1,20 @@
 use crate::handlers::domain::functions::user;
 use crate::handlers::domain::server_ops::DomainServerOperations;
+use crate::kernel::transaction::{Transaction, TransactionManager};
 use crate::WorkspaceProtocolResponse;
 use crate::WORKSPACE_MASTER_PASSWORD_KEY;
-use crate::WORKSPACE_ROOT_ID; // Added this import
-use bincode;
+use crate::WORKSPACE_ROOT_ID;
 use citadel_logging::{debug, info};
 use citadel_sdk::prelude::{NetKernel, NetworkError, NodeRemote, NodeResult, Ratchet};
 use citadel_workspace_types::structs::{
     MetadataValue as InternalMetadataValue, MetadataValue, Permission, User, WorkspaceRoles,
 };
 use citadel_workspace_types::{structs::UserRole, WorkspaceProtocolPayload};
+use rocksdb::DB;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio_stream::StreamExt;
-use transaction::TransactionManager;
+use tokio_stream::StreamExt; // Corrected and consolidated
 
 pub mod command_processor;
 pub mod transaction;
@@ -110,9 +110,8 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
         match event {
             NodeResult::ConnectSuccess(connect_success) => {
                 let this = self.clone();
-                // Spawn a task to handle the connection success event
                 tokio::spawn(async move {
-                    let _cid = connect_success.session_cid; // Use session_cid
+                    let _cid = connect_success.session_cid;
                     let user_cid = connect_success.channel.get_session_cid();
 
                     let node_remote_guard = this.node_remote.read().await;
@@ -133,91 +132,65 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
 
                     citadel_logging::info!(target: "citadel", "User {} connected with cid {} ({})", user_id, connect_success.session_cid, user_cid);
 
-                    // Attempt to register the user's CID with their user ID
-                    // This is crucial for routing messages correctly
-                    // @human-review: The method `register_user_cid` was not found on `DomainOperations`.
-                    // The SDK's `AccountManager` already provides `get_username_by_cid`, so the necessity of
-                    // explicit CID registration at the domain layer for message routing needs re-evaluation.
-                    // If issues arise with message routing to specific user sessions, this might be the cause.
-                    /*
-                    match this.domain_operations.register_user_cid(&user_id, connect_success.session_cid).await {
-                        Ok(_) => {
-                            citadel_logging::info!(target: "citadel", "Successfully registered CID {} for user {}", connect_success.session_cid, user_id);
-                        }
-                        Err(e) => {
-                            citadel_logging::error!(target: "citadel", "Failed to register CID {} for user {}: {:?}", connect_success.session_cid, user_id, e);
-                        }
-                    }
-                    */
-
                     let (mut tx, mut rx) = connect_success.channel.split();
 
                     while let Some(msg) = rx.next().await {
-                        // Deserialize with bincode instead of serde_json
-                        match bincode::deserialize::<WorkspaceProtocolPayload>(msg.as_ref()) {
+                        match serde_json::from_slice::<WorkspaceProtocolPayload>(msg.as_ref()) {
                             Ok(command_payload) => {
                                 if let WorkspaceProtocolPayload::Request(request) = command_payload
                                 {
-                                    let response = this.process_command(&user_id, request);
-                                    let response = response.unwrap_or_else(|e| {
-                                        WorkspaceProtocolResponse::Error(e.to_string())
-                                    });
+                                    let response =
+                                        this.process_command(&user_id, request).unwrap_or_else(
+                                            |e| WorkspaceProtocolResponse::Error(e.to_string()),
+                                        );
                                     let response_wrapped =
                                         WorkspaceProtocolPayload::Response(response);
-                                    // Serialize with bincode instead of serde_json
-                                    match bincode::serialize(&response_wrapped) {
+                                    match serde_json::to_vec(&response_wrapped) {
                                         Ok(serialized_response) => {
                                             if let Err(e) = tx.send(serialized_response).await {
                                                 citadel_logging::error!(target: "citadel", "Failed to send response: {:?}", e);
-                                                break; // Exit loop on send error
+                                                break;
                                             }
                                         }
                                         Err(e) => {
-                                            citadel_logging::error!(target: "citadel", "Failed to serialize response with bincode: {:?}", e);
-                                            // Optionally send a generic error back if serialization fails
+                                            citadel_logging::error!(target: "citadel", "Failed to serialize response with serde_json: {:?}", e);
                                         }
                                     }
                                 } else {
                                     citadel_logging::warn!(target: "citadel", "Server received a WorkspaceProtocolPayload::Response when it expected a Request: {:?}", command_payload);
-                                    // It's unusual for the server to receive a Response type directly from the client here.
-                                    // Decide if an error response is appropriate.
                                 }
                             }
                             Err(e) => {
-                                citadel_logging::error!(target: "citadel", "Failed to deserialize command with bincode: {:?}. Message (first 50 bytes): {:?}", e, msg.as_ref().iter().take(50).collect::<Vec<_>>());
-                                // Construct an error response, wrap it in WorkspaceProtocolPayload, and serialize with bincode
+                                citadel_logging::error!(target: "citadel", "Failed to deserialize command with serde_json: {:?}. Message (first 50 bytes): {:?}", e, msg.as_ref().iter().take(50).collect::<Vec<_>>());
                                 let error_response = WorkspaceProtocolResponse::Error(format!(
-                                    "Invalid command. Failed bincode deserialization: {}",
+                                    "Invalid command. Failed serde_json deserialization: {}",
                                     e
                                 ));
                                 let response_wrapped =
                                     WorkspaceProtocolPayload::Response(error_response);
-                                match bincode::serialize(&response_wrapped) {
+                                match serde_json::to_vec(&response_wrapped) {
                                     Ok(serialized_error_response) => {
                                         if let Err(send_err) =
                                             tx.send(serialized_error_response).await
                                         {
                                             citadel_logging::error!(target: "citadel", "Failed to send deserialization error response: {:?}", send_err);
-                                            break; // Exit loop on send error
+                                            break;
                                         }
                                     }
                                     Err(serialize_err) => {
-                                        citadel_logging::error!(target: "citadel", "Failed to serialize deserialization error response with bincode: {:?}", serialize_err);
+                                        citadel_logging::error!(target: "citadel", "Failed to serialize deserialization error response with serde_json: {:?}", serialize_err);
                                     }
                                 }
                             }
                         }
                     }
-
                     Ok::<(), NetworkError>(())
                 });
             }
-
             evt => {
                 debug!("Unhandled event: {evt:?}");
             }
         }
-        // TODO: Handle node events or this implementation is useless
         Ok(())
     }
 
@@ -229,12 +202,18 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
 
 impl<R: Ratchet> Default for WorkspaceServerKernel<R> {
     fn default() -> Self {
-        let tx_manager = Arc::new(TransactionManager::default());
-        Self {
-            roles: Arc::new(RwLock::new(WorkspaceRoles::new())),
-            node_remote: Arc::new(RwLock::new(None)),
-            admin_username: String::new(),
-            domain_operations: DomainServerOperations::new(tx_manager),
+        panic!("WorkspaceServerKernel::default() cannot be used when a persistent DB is required. Use a constructor that initializes TransactionManager with a DB instance.");
+        // The following is unreachable but needed for type checking if panic is removed.
+        #[allow(unreachable_code)]
+        {
+            let _tx_manager =
+                Arc::new(TransactionManager::new(todo!("No DB available in default")));
+            Self {
+                roles: Arc::new(RwLock::new(WorkspaceRoles::new())),
+                node_remote: Arc::new(RwLock::new(None)),
+                admin_username: String::new(),
+                domain_operations: DomainServerOperations::new(_tx_manager),
+            }
         }
     }
 }
@@ -257,14 +236,21 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Convenience constructor for creating a kernel with an admin user
     /// (Used primarily in older code/tests, might need adjustment)
     pub fn with_admin(
-        admin_username: &str,
+        admin_username_str: &str,
         admin_display_name: &str,
         admin_password: &str,
+        db: Arc<DB>,
     ) -> Self {
-        let kernel = Self::default();
+        let tx_mngr = Arc::new(TransactionManager::new(db));
+        let kernel = Self {
+            roles: Arc::new(RwLock::new(WorkspaceRoles::new())),
+            node_remote: Arc::new(RwLock::new(None)),
+            admin_username: admin_username_str.to_string(),
+            domain_operations: DomainServerOperations::new(tx_mngr.clone()),
+        };
 
         kernel
-            .inject_admin_user(admin_username, admin_display_name, admin_password)
+            .inject_admin_user(admin_username_str, admin_display_name, admin_password)
             .expect("Failed to inject admin user during test setup");
 
         kernel
@@ -311,9 +297,12 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 // Use the enum variant for Domain
                 let root_domain_enum_variant =
                     citadel_workspace_types::structs::Domain::Workspace {
-                        workspace: root_workspace_obj,
+                        workspace: root_workspace_obj.clone(),
                     };
 
+                // Also insert the Workspace object directly into the workspaces cache
+                tx.insert_workspace(WORKSPACE_ROOT_ID.to_string(), root_workspace_obj)?;
+                // Insert the domain variant (which also contains the workspace data)
                 tx.insert_domain(WORKSPACE_ROOT_ID.to_string(), root_domain_enum_variant)?;
             }
 
@@ -321,6 +310,31 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         })
     }
 
+    pub fn inject_user_for_test(&self, username: &str, role: UserRole) -> Result<(), NetworkError> {
+        self.tx_manager().with_write_transaction(|tx| {
+            let user_id_string = username.to_string();
+            if tx.get_user(&user_id_string).is_some() {
+                // For tests, if user already exists, we might not want to error out,
+                // or we might want a specific error. For now, let's allow re-injection to be idempotent for simplicity.
+                // If strict "already exists" is needed, return Err(NetworkError::user_exists(username));
+                println!(
+                    "[INJECT_USER_FOR_TEST] User {} already exists. Skipping creation.",
+                    username
+                );
+                return Ok(());
+            }
+            // Use username for both id and name for simplicity in tests
+            let user = User::new(user_id_string.clone(), user_id_string.clone(), role.clone()); // Clone role here
+            tx.insert_user(username.to_string(), user)?;
+            println!(
+                "[INJECT_USER_FOR_TEST] Successfully injected user {} with role {:?}.",
+                username, role
+            ); // Original role can now be used
+            Ok(())
+        })
+    }
+
+    /// Get a domain operations instance
     /// Get a domain operations instance
     pub fn domain_ops(&self) -> &DomainServerOperations<R> {
         &self.domain_operations
@@ -394,7 +408,19 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             domain_id_str,
             role,
             metadata,
-        )
+        )?; // Propagate error if add_user_to_domain_inner fails
+
+        // If we reach here, add_user_to_domain_inner was Ok. Now commit.
+        tx.commit().map_err(|e| {
+            // @human-review: Consider proper logging for transaction commit failures
+            eprintln!(
+                "[add_member KERNEL COMMIT_FAILURE_PRINTLN] Transaction commit failed: {:?}",
+                e
+            );
+            NetworkError::msg(format!("Transaction commit failed: {}", e))
+        })?;
+
+        Ok(())
     }
 
     pub fn remove_member(

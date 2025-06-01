@@ -2,10 +2,14 @@ use crate::kernel::transaction::{
     retrieve_role_permissions, DomainChange, DomainType, Transaction, UserChange, WorkspaceChange,
     WorkspaceOperations,
 };
+use bincode; // For serialization
 use citadel_sdk::prelude::NetworkError;
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
+use log::debug;
 use parking_lot::RwLockWriteGuard;
+use rocksdb::DB; // Already used, just for clarity
 use std::collections::HashMap;
+use std::sync::Arc; // Already used
 
 /// A writable transaction that can modify domains and users
 pub struct WriteTransaction<'a> {
@@ -16,6 +20,7 @@ pub struct WriteTransaction<'a> {
     pub(crate) domain_changes: Vec<DomainChange>,
     pub(crate) user_changes: Vec<UserChange>,
     pub(crate) workspace_changes: Vec<WorkspaceChange>,
+    pub(crate) db: Arc<DB>,
 }
 
 impl<'a> WriteTransaction<'a> {
@@ -25,6 +30,7 @@ impl<'a> WriteTransaction<'a> {
         users: RwLockWriteGuard<'a, HashMap<String, User>>,
         workspaces: RwLockWriteGuard<'a, HashMap<String, Workspace>>,
         workspace_password: RwLockWriteGuard<'a, HashMap<String, String>>,
+        db: Arc<DB>,
     ) -> Self {
         Self {
             domains,
@@ -34,6 +40,7 @@ impl<'a> WriteTransaction<'a> {
             domain_changes: Vec::new(),
             user_changes: Vec::new(),
             workspace_changes: Vec::new(),
+            db,
         }
     }
 
@@ -108,6 +115,11 @@ impl<'a> Transaction for WriteTransaction<'a> {
     }
 
     fn get_domain_mut(&mut self, domain_id: &str) -> Option<&mut Domain> {
+        println!(
+            "[WTX_GET_DOMAIN_MUT] Called for domain_id: '{}'. self.domains.contains_key: {}",
+            domain_id,
+            self.domains.contains_key(domain_id)
+        );
         self.domains.get_mut(domain_id)
     }
 
@@ -124,6 +136,7 @@ impl<'a> Transaction for WriteTransaction<'a> {
     }
 
     fn get_workspace_mut(&mut self, workspace_id: &str) -> Option<&mut Workspace> {
+        println!("[WTX_GET_WORKSPACE_MUT] Called for workspace_id: '{}'. self.workspaces.contains_key: {}", workspace_id, self.workspaces.contains_key(workspace_id));
         self.workspaces.get_mut(workspace_id)
     }
 
@@ -296,9 +309,28 @@ impl<'a> Transaction for WriteTransaction<'a> {
 
         // Update the user's permissions map for this domain
         let domain_permissions_set = user.permissions.entry(domain_id.to_string()).or_default();
-        for perm in permissions_for_role {
-            domain_permissions_set.insert(perm);
+        for perm in &permissions_for_role {
+            // Iterate over a slice here
+            domain_permissions_set.insert(*perm); // Dereference perm
         }
+
+        // +++ DETAILED LOGGING FOR PERMISSION ASSIGNMENT +++
+        if user_id == "test_user" {
+            // Log specifically for the user in the failing test
+            debug!(target: "citadel",
+                "[TX_ADD_USER_TO_DOMAIN_DETAIL] For user_id: '{}', domain_id: '{}', role: {:?}. Assigned permissions: {:?}. Full user.permissions for this domain: {:?}",
+                user_id,
+                domain_id,
+                role,
+                &permissions_for_role, // Log the original Vec by reference
+                user.permissions.get(domain_id) // The actual state of user.permissions for this domain_id after update
+            );
+            println!("[WRITE_TX_ADD_USER_TO_DOMAIN_PRINTLN] User '{}' updated for domain '{}' (Type: {:?}, Role: {:?}). Permissions for this domain: {:?}. Full map: {:?}",
+                user_id, domain_id, domain_type_for_rbac, role, user.permissions.get(domain_id), user.permissions);
+        }
+        // +++ END DETAILED LOGGING +++
+
+        debug!(target: "citadel", "[ADD_USER_TO_DOMAIN_PERMS] User: {}, Domain: {}, Role: {:?}, Final Permissions for Domain: {:?}", user_id, domain_id, role, user.permissions.get(domain_id));
 
         Ok(())
     }
@@ -321,9 +353,72 @@ impl<'a> Transaction for WriteTransaction<'a> {
     }
 
     fn commit(&self) -> Result<(), NetworkError> {
-        // For WriteTransaction, commit is handled by dropping the RwLockWriteGuard implicitly.
-        // Actual commit logic (if any beyond dropping guards) would go here.
-        // For now, we assume dropping the guards is sufficient to commit changes.
+        println!("[COMMIT_WRITE_TX_PRINTLN] Attempting to commit WriteTransaction. Users map size: {}, Domains map size: {}", self.users.len(), self.domains.len());
+
+        // Persist all users from the in-memory map to RocksDB
+        for (user_id, user) in self.users.iter() {
+            let user_key = format!("user::{}", user_id);
+            let serialized_user = bincode::serialize(user).map_err(|e| {
+                let err_msg = format!("Failed to serialize user {}: {}", user_id, e);
+                eprintln!("[COMMIT_WRITE_TX_ERROR_PRINTLN] {}", err_msg);
+                NetworkError::msg(&err_msg)
+            })?;
+            self.db
+                .put(user_key.as_bytes(), serialized_user)
+                .map_err(|e| {
+                    let err_msg = format!("Failed to put user {} to RocksDB: {}", user_id, e);
+                    eprintln!("[COMMIT_WRITE_TX_ERROR_PRINTLN] {}", err_msg);
+                    NetworkError::msg(&err_msg)
+                })?;
+            println!(
+                "[COMMIT_WRITE_TX_PRINTLN] Successfully wrote user {} to RocksDB.",
+                user_id
+            );
+        }
+
+        // Persist all domains from the in-memory map to RocksDB
+        for (domain_id, domain) in self.domains.iter() {
+            let domain_key = format!("domain::{}", domain_id);
+            let serialized_domain = bincode::serialize(domain).map_err(|e| {
+                let err_msg = format!("Failed to serialize domain {}: {}", domain_id, e); // domain_entry changed to domain
+                eprintln!("[COMMIT_WRITE_TX_ERROR_PRINTLN] {}", err_msg);
+                NetworkError::msg(&err_msg)
+            })?;
+            self.db
+                .put(domain_key.as_bytes(), serialized_domain)
+                .map_err(|e| {
+                    let err_msg = format!("Failed to put domain {} to RocksDB: {}", domain_id, e);
+                    eprintln!("[COMMIT_WRITE_TX_ERROR_PRINTLN] {}", err_msg);
+                    NetworkError::msg(&err_msg)
+                })?;
+            println!(
+                "[COMMIT_WRITE_TX_PRINTLN] Successfully wrote domain {} to RocksDB.",
+                domain_id
+            );
+        }
+
+        // Persist all workspaces from the in-memory map to RocksDB
+        for (workspace_id, workspace) in self.workspaces.iter() {
+            let workspace_key = format!("workspace::{}", workspace_id);
+            let serialized_workspace = bincode::serialize(workspace).map_err(|e| {
+                let err_msg = format!("Failed to serialize workspace {}: {}", workspace_id, e);
+                eprintln!("[COMMIT_WRITE_TX_ERROR_PRINTLN] {}", err_msg);
+                NetworkError::msg(&err_msg)
+            })?;
+            self.db
+                .put(workspace_key.as_bytes(), serialized_workspace)
+                .map_err(|e| {
+                    let err_msg =
+                        format!("Failed to put workspace {} to RocksDB: {}", workspace_id, e);
+                    eprintln!("[COMMIT_WRITE_TX_ERROR_PRINTLN] {}", err_msg);
+                    NetworkError::msg(&err_msg)
+                })?;
+            println!(
+                "[COMMIT_WRITE_TX_PRINTLN] Successfully wrote workspace {} to RocksDB.",
+                workspace_id
+            );
+        }
+
         Ok(())
     }
 

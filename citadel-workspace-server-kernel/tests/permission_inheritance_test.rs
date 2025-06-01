@@ -2,11 +2,12 @@ use citadel_sdk::prelude::StackedRatchet;
 use citadel_workspace_server_kernel::handlers::domain::server_ops::DomainServerOperations;
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
-use citadel_workspace_types::structs::{
-    Domain, Office, Permission, Room, User, UserRole, Workspace,
-};
+use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
+use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
+use rocksdb::DB;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tempfile::TempDir;
 
 const ADMIN_PASSWORD: &str = "admin_password";
 
@@ -25,21 +26,26 @@ fn create_test_user(id: &str, role: UserRole) -> User {
 fn setup_test_environment() -> (
     Arc<WorkspaceServerKernel<StackedRatchet>>,
     DomainServerOperations<StackedRatchet>,
+    TempDir,
 ) {
     citadel_logging::setup_log();
+    let db_temp_dir = TempDir::new().expect("Failed to create temp dir for DB");
+    let db_path = db_temp_dir.path().join("test_perms_inherit_db");
+    let db = DB::open_default(&db_path).expect("Failed to open DB");
     let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
         "admin",
         "Administrator",
         ADMIN_PASSWORD,
+        Arc::new(db),
     ));
     let domain_ops = kernel.domain_ops().clone();
 
-    (kernel, domain_ops)
+    (kernel, domain_ops, db_temp_dir)
 }
 
 #[test]
 fn test_office_room_permission_inheritance() {
-    let (kernel, domain_ops) = setup_test_environment();
+    let (kernel, domain_ops, _db_temp_dir) = setup_test_environment();
 
     // Create test users with different roles
     let user_id = "test_user";
@@ -58,7 +64,7 @@ fn test_office_room_permission_inheritance() {
     let office = domain_ops
         .create_office(
             "admin",
-            "test_ws_perms_inherit",
+            &WORKSPACE_ROOT_ID.to_string(),
             "Test Office",
             "For Testing",
             None,
@@ -126,7 +132,7 @@ fn test_office_room_permission_inheritance() {
 
 #[test]
 fn test_permission_escalation() {
-    let (kernel, domain_ops) = setup_test_environment();
+    let (kernel, domain_ops, _db_temp_dir) = setup_test_environment();
 
     // Create a regular user
     let user_id = "test_user";
@@ -145,7 +151,7 @@ fn test_permission_escalation() {
     let office = domain_ops
         .create_office(
             "admin",
-            "test_ws_perms_inherit",
+            &WORKSPACE_ROOT_ID.to_string(),
             "Test Office",
             "For Testing",
             None,
@@ -204,7 +210,7 @@ fn test_permission_escalation() {
 
 #[test]
 fn test_is_member_of_domain_behavior() {
-    let (kernel, domain_ops) = setup_test_environment();
+    let (kernel, domain_ops, _db_temp_dir) = setup_test_environment();
 
     // Create test users
     let user_id = "test_user";
