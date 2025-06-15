@@ -191,11 +191,9 @@ pub mod room_ops {
                 .ok_or_else(|| NetworkError::msg(format!("Domain {} is not an office", off_id)))?;
 
             for r_id in &office.rooms {
-                // Corrected: office.rooms
                 if tx.is_member_of_domain(&user.id, r_id).unwrap_or(false) {
-                    if let Some(domain) = tx.get_domain(r_id) {
-                        if let Some(room) = domain.as_room() {
-                            // Corrected: use as_room()
+                    if let Some(domain_obj) = tx.get_domain(r_id) { // Changed variable name to avoid conflict if lint applied here too
+                        if let Some(room) = domain_obj.as_room() {
                             rooms.push(room.clone());
                         }
                     }
@@ -204,11 +202,12 @@ pub mod room_ops {
         } else {
             // List all rooms the user is a member of, across all offices they can see
             for domain_id_key in user.permissions.keys() {
-                if let Some(domain) = tx.get_domain(domain_id_key) {
-                    if let Domain::Room { room, .. } = domain {
-                        if tx.is_member_of_domain(&user.id, &room.id).unwrap_or(false) {
-                            rooms.push(room.clone());
-                        }
+                if let Some(Domain::Room { room, .. }) = tx.get_domain(domain_id_key) { // Applied collapsible_match
+                    if tx
+                        .is_member_of_domain(&user.id, &room.id)
+                        .unwrap_or(false)
+                    {
+                        rooms.push(room.clone());
                     }
                 }
             }

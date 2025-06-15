@@ -292,9 +292,9 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         let type_id = TypeId::of::<T>();
 
         if type_id == TypeId::of::<Workspace>() {
-            return Err(NetworkError::msg(
+            Err(NetworkError::msg(
                 "Use create_workspace for Workspace entities. create_domain_entity does not support Workspace.",
-            ));
+            ))
         } else if type_id == TypeId::of::<Office>() {
             let parent_workspace_id = parent_id.ok_or_else(|| {
                 NetworkError::msg(
@@ -421,22 +421,21 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         metadata: Option<Vec<u8>>,
         workspace_password: String,
     ) -> Result<Workspace, NetworkError> {
-    let final_result = self.tx_manager.with_write_transaction(|tx| {
-        workspace_ops::create_workspace_inner(
-            tx,
-            user_id,
-            name,
-            description,
-            metadata,
-            workspace_password,
-        )
-    }); // Semicolon is correctly here
-    final_result
-}
+        self.tx_manager.with_write_transaction(|tx| {
+            workspace_ops::create_workspace_inner(
+                tx,
+                user_id,
+                name,
+                description,
+                metadata,
+                workspace_password,
+            )
+        })
+    }
 
     fn get_workspace(&self, user_id: &str, ws_id: &str) -> Result<Workspace, NetworkError> {
         info!(target: "citadel", user_id, workspace_id = ws_id, "Attempting to get workspace");
-        self.with_read_transaction(|tx| {
+        self.tx_manager.with_read_transaction(|tx| {
             tx.get_workspace(ws_id)
                 .cloned()
                 .ok_or_else(|| NetworkError::msg(format!("Workspace {} not found", ws_id)))
@@ -470,15 +469,14 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             password: workspace_password,
         };
 
-        let final_result = self.with_write_transaction(|tx| {
+        self.with_write_transaction(|tx| {
             // @human-review: WorkspaceCNRepository is undeclared. Temporarily commenting out.
             // let mut workspace_cn = WorkspaceCNRepository::find_by_id(tx, workspace_id)?;
             // if !workspace_cn.verify_password(&workspace_password) {
             //     return Err(permission_denied("Incorrect workspace password"));
             // }
             workspace_ops::delete_workspace_inner(tx, user_id, workspace_id)
-        });
-        final_result
+        })
     }
 
     fn update_workspace(

@@ -65,7 +65,7 @@ pub mod workspace_ops {
             owner_id: user_id.to_string(),
             description: description.to_string(),
             members: vec![user_id.to_string()],
-            metadata: metadata.unwrap_or_else(Vec::new),
+            metadata: metadata.unwrap_or_default(),
             offices: Vec::new(),
             password_protected: !workspace_password.is_empty(),
         };

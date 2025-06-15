@@ -96,7 +96,7 @@ impl<'a> WriteTransaction<'a> {
     }
 }
 
-impl<'a> Transaction for WriteTransaction<'a> {
+impl Transaction for WriteTransaction<'_> {
     fn workspace_password(&self, workspace_id: &str) -> Option<String> {
         self.workspace_password.get(workspace_id).cloned()
     }
@@ -519,7 +519,7 @@ impl<'a> Transaction for WriteTransaction<'a> {
     }
 }
 
-impl<'a> WorkspaceOperations for WriteTransaction<'a> {
+impl WorkspaceOperations for WriteTransaction<'_> {
     fn get_workspace(&self, workspace_id: &str) -> Option<&Workspace> {
         self.workspaces.get(workspace_id)
     }

@@ -65,7 +65,7 @@ fn test_add_user_to_domain() {
     let office = _domain_ops
         .create_office(
             "admin",
-            &WORKSPACE_ROOT_ID.to_string(),
+            WORKSPACE_ROOT_ID,
             "Test Office",
             "For Testing",
             None,
@@ -112,7 +112,7 @@ fn test_remove_user_from_domain() {
     let office = _domain_ops
         .create_office(
             "admin",
-            &WORKSPACE_ROOT_ID.to_string(),
+            WORKSPACE_ROOT_ID,
             "Test Office",
             "For Testing",
             None,
@@ -164,7 +164,7 @@ fn test_complete_user_removal() {
     let office = _domain_ops
         .create_office(
             "admin",
-            &WORKSPACE_ROOT_ID.to_string(),
+            WORKSPACE_ROOT_ID,
             "Test Office",
             "For Testing",
             None,

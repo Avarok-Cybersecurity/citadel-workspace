@@ -209,8 +209,8 @@ impl<R: Ratchet> Default for WorkspaceServerKernel<R> {
         // The following is unreachable but needed for type checking if panic is removed.
         #[allow(unreachable_code)]
         {
-            let _tx_manager =
-                Arc::new(TransactionManager::new(todo!("No DB available in default")));
+            #[allow(clippy::diverging_sub_expression)]
+            let _tx_manager = Arc::new(TransactionManager::new(todo!("No DB available in default")));
             Self {
                 roles: Arc::new(RwLock::new(WorkspaceRoles::new())),
                 node_remote: Arc::new(RwLock::new(None)),

@@ -4,7 +4,6 @@ use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
-use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use rocksdb::DB;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -66,7 +65,7 @@ fn test_office_room_permission_inheritance() {
     let office = domain_ops
         .create_office(
             "admin",
-            &WORKSPACE_ROOT_ID.to_string(),
+            WORKSPACE_ROOT_ID,
             "Test Office",
             "For Testing",
             None,
@@ -155,7 +154,7 @@ fn test_permission_escalation() {
     let office = domain_ops
         .create_office(
             "admin",
-            &WORKSPACE_ROOT_ID.to_string(),
+            WORKSPACE_ROOT_ID,
             "Test Office",
             "For Testing",
             None,
@@ -365,7 +364,7 @@ fn test_workspace_add_no_explicit_office_perms() {
         .unwrap();
 
     assert!(
-        user_explicit_office_perms.as_ref().map_or(true, |p| p.is_empty()),
+        user_explicit_office_perms.as_ref().is_none_or(|p| p.is_empty()),
         "User should have no explicit permissions (or an empty set) on child office '{}' after being added to workspace '{}'. Found: {:?}",
         office.id, workspace_id, user_explicit_office_perms
     );

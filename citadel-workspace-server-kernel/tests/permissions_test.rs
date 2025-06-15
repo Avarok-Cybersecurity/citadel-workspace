@@ -59,7 +59,7 @@ mod tests {
         let office = domain_ops
             .create_office(
                 "admin",
-                &WORKSPACE_ROOT_ID.to_string(),
+                WORKSPACE_ROOT_ID,
                 "Test Office",
                 "Test Description",
                 None,

@@ -14,7 +14,6 @@ use citadel_workspace_types::{
 };
 use rocksdb::DB;
 use rstest::rstest;
-use serde_json;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -1169,7 +1168,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
         metadata: None,
     };
 
-    let cmd_result = _kernel.process_command(&non_admin_id, add_target_by_non_admin_req);
+    let cmd_result = _kernel.process_command(non_admin_id, add_target_by_non_admin_req);
 
     if let Ok(response) = cmd_result {
         match response {

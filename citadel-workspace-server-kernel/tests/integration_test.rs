@@ -458,7 +458,7 @@ async fn test_office_operations() {
     match response {
         WorkspaceProtocolResponse::Offices(offices) => {
             assert!(
-                offices.len() >= 1,
+                !offices.is_empty(),
                 "Expected at least 1 office, found {}",
                 offices.len()
             );

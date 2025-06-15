@@ -80,14 +80,14 @@ impl TransactionManager {
             if entity_id == crate::WORKSPACE_ROOT_ID {
                 println!("[DEBUG_WORKSPACE_ROOT_CHECK_PRINTLN] User: '{}', Entity_ID: '{}' (is WORKSPACE_ROOT_ID), Checking Perm: {:?}. User's FULL permissions map in this Read TX: {:?}", user_id, entity_id, permission, user.permissions);
                 let specific_perms = user.permissions.get(entity_id);
-                println!("[DEBUG_WORKSPACE_ROOT_CHECK_DETAIL_PRINTLN] Lookup for WORKSPACE_ROOT_ID ('{}') in user's map: {:?}. Contains {:?}: {}", entity_id, specific_perms, permission, specific_perms.map_or(false, |s| s.contains(&permission)));
+                println!("[DEBUG_WORKSPACE_ROOT_CHECK_DETAIL_PRINTLN] Lookup for WORKSPACE_ROOT_ID ('{}') in user's map: {:?}. Contains {:?}: {}", entity_id, specific_perms, permission, specific_perms.is_some_and(|s| s.contains(&permission)));
             }
 
             // The existing general log for test_user can remain or be removed if too noisy
             if user_id == "test_user" {
                 // Log specifically for the user in the failing test
                 let perms_for_entity_being_checked = user.permissions.get(entity_id);
-                println!("[RBAC_EXPLICIT_CHECK_DETAIL_PRINTLN] For user_id: '{}', entity_id: '{}', checking permission: {:?}. User's explicit permissions for this entity: {:?}. Required perm present: {}", user_id, entity_id, permission, perms_for_entity_being_checked, perms_for_entity_being_checked.map_or(false, |s| s.contains(&permission)));
+                println!("[RBAC_EXPLICIT_CHECK_DETAIL_PRINTLN] For user_id: '{}', entity_id: '{}', checking permission: {:?}. User's explicit permissions for this entity: {:?}. Required perm present: {}", user_id, entity_id, permission, perms_for_entity_being_checked, perms_for_entity_being_checked.is_some_and(|s| s.contains(&permission)));
             }
             // +++ END DETAILED LOGGING +++
             debug!(target: "citadel", "[CHECK_ENTITY_PERM_PRE_CHECK] User: {}, Entity: {}, PermToChk: {:?}, UserPermsForEntity: {:?}", user_id, entity_id, permission, user.permissions.get(entity_id));
@@ -148,89 +148,91 @@ impl TransactionManager {
                 }
 
                 // Workspace inheritance check
-                if let Some(Domain::Workspace { workspace }) = tx.get_domain(&office.workspace_id) {
+                let granted_by_workspace_inheritance = if let Some(Domain::Workspace { workspace }) = tx.get_domain(&office.workspace_id) {
                     // Check if user has the required permission directly on the parent workspace
-                    if tx.get_user(user_id).map_or(false, |u| u.has_permission(&workspace.id, permission)) {
-                        // Define which permissions can be inherited from a workspace to an office
-                        if [Permission::ViewContent, Permission::ReadMessages, Permission::SendMessages, Permission::CreateRoom].contains(&permission) { // Added CreateRoom as example
-                            debug!(target: "citadel", "User {} granted {:?} on office {} via direct permission on parent workspace {}", user_id, permission, entity_id, &workspace.id);
-                            return Ok(true);
-                        }
+                    if tx.get_user(user_id).is_some_and(|u| u.has_permission(&workspace.id, permission)) {
+                        // TODO: Be more specific about which permissions can be inherited here, e.g. ViewContent, AddUserToOffice etc.
+                        // For now, assume any direct perm on workspace can grant it to office if not explicitly denied.
+                        debug!(target: "citadel", "User {} granted {:?} on office {} via direct permission on parent workspace {}", user_id, permission, entity_id, &workspace.id);
+                        true
+                    } else if workspace.members.contains(&user_id.to_string()) && permission == Permission::ViewContent {
+                        debug!(target: "citadel", "User {} granted ViewContent on office {} via workspace {} membership (fallback)", user_id, entity_id, &office.workspace_id);
+                        true
+                    } else {
+                        // Workspace exists, but no permission granted through it by these checks.
+                        false
                     }
-                    // Fallback: Original check for workspace membership granting ViewContent (might be redundant if above is comprehensive)
-                    if workspace.members.contains(&user_id.to_string()) {
-                        if permission == Permission::ViewContent {
-                            debug!(target: "citadel", "User {} granted ViewContent on office {} via workspace {} membership (fallback)", user_id, entity_id, &office.workspace_id);
-                            return Ok(true);
-                        }
-                    }
+                } else {
+                    // No parent workspace found, so no permission can be inherited from it.
+                    false
+                };
+
+                if granted_by_workspace_inheritance {
+                    return Ok(true);
                 }
 
+                // Default for Office if no permissions found by any check above (owner, explicit member, or successful workspace inheritance).
+                debug!(target: "citadel", "User {} - Office {}: No explicit, owner, or workspace inheritance grants {:?}. Denying.", user_id, entity_id, permission);
                 Ok(false)
-            }
+            } // Closes: Some(Domain::Office { office })
+
             Some(Domain::Room { room }) => {
-                // Denylist check
+                // Denylist check for room (if applicable)
                 // if room.denylist.contains(&user_id.to_string()) {
                 //     debug!(target: "citadel", "User {} is on the denylist for room {}, access denied", user_id, entity_id);
                 //     return Ok(false);
                 // }
 
-                // Owner check
+                // Owner check for room
                 if room.owner_id == user_id {
+                    debug!(target: "citadel", "User {} is owner of room {}, permission granted", user_id, entity_id);
                     return Ok(true);
                 }
 
-                // If user is an explicit member, check permissions based on their role.
+                // If user is an explicit member of the room, check permissions based on their role.
                 if room.members.contains(&user_id.to_string()) {
-                    let permissions_for_role = Permission::for_role(&user_role);
+                    let permissions_for_role = Permission::for_role(&user_role); // user_role was fetched earlier
                     if permissions_for_role.contains(&permission) {
                         debug!(target: "citadel", "User {} granted {:?} on room {} via explicit membership and role {:?}", user_id, permission, entity_id, user_role);
                         return Ok(true);
                     }
-                    // Explicit member but role does not grant permission, so they don't get it.
-                    // Do not proceed to check for inheritance, as explicit membership should be final.
+                    // Explicit member but role does not grant permission for this room.
+                    // Do not proceed to check for inheritance for this room, as explicit membership here is final for the room itself.
                     return Ok(false);
                 }
 
                 // Inheritance checks if not explicit room member or owner
                 if let Some(Domain::Office { office }) = tx.get_domain(&room.office_id) {
                     // 3a. Check direct permission on parent Office
-                    if tx.get_user(user_id).map_or(false, |u| u.has_permission(&office.id, permission)) {
-                        if [Permission::ViewContent, Permission::ReadMessages, Permission::SendMessages].contains(&permission) {
-                            debug!(target: "citadel", "User {} granted {:?} on room {} via direct permission on parent office {}", user_id, permission, entity_id, &office.id);
-                            return Ok(true);
-                        }
+                    if tx.get_user(user_id).is_some_and(|u| u.has_permission(&office.id, permission)) && 
+                       [Permission::ViewContent, Permission::ReadMessages, Permission::SendMessages, Permission::CreateRoom].contains(&permission) {
+                        debug!(target: "citadel", "User {} granted {:?} on room {} via direct permission on parent office {}", user_id, permission, entity_id, &office.id);
+                        return Ok(true);
                     }
                     // 3b. Fallback: Original check for office membership granting ViewContent (might be redundant)
-                    if office.members.contains(&user_id.to_string()) {
-                        if permission == Permission::ViewContent {
-                            debug!(target: "citadel", "User {} granted ViewContent on room {} via office {} membership (fallback)", user_id, entity_id, &office.id);
-                            return Ok(true);
-                        }
+                    if office.members.contains(&user_id.to_string()) && permission == Permission::ViewContent {
+                        debug!(target: "citadel", "User {} granted ViewContent on room {} via office {} membership (fallback)", user_id, entity_id, &office.id);
+                        return Ok(true);
                     }
 
                     // 4. If not granted via office, check grandparent Workspace
                     if let Some(Domain::Workspace { workspace }) = tx.get_domain(&office.workspace_id) {
                         // 4a. Check direct permission on grandparent Workspace
-                        if tx.get_user(user_id).map_or(false, |u| u.has_permission(&workspace.id, permission)) {
-                            if [Permission::ViewContent, Permission::ReadMessages, Permission::SendMessages].contains(&permission) {
-                                debug!(target: "citadel", "User {} granted {:?} on room {} via direct permission on grandparent workspace {}", user_id, permission, entity_id, &workspace.id);
-                                return Ok(true);
-                            }
+                        if tx.get_user(user_id).is_some_and(|u| u.has_permission(&workspace.id, permission)) && 
+                           [Permission::ViewContent, Permission::ReadMessages, Permission::SendMessages].contains(&permission) {
+                            debug!(target: "citadel", "User {} granted {:?} on room {} via direct permission on grandparent workspace {}", user_id, permission, entity_id, &workspace.id);
+                            return Ok(true);
                         }
                         // 4b. Fallback: Original check for workspace membership granting ViewContent (might be redundant)
-                        // This is what the test currently relies on for member-user to see room content.
-                        if workspace.members.contains(&user_id.to_string()) {
-                            if permission == Permission::ViewContent {
-                                debug!(target: "citadel", "User {} granted ViewContent on room {} via workspace {} membership (fallback to grandparent)", user_id, entity_id, &workspace.id);
-                                return Ok(true);
-                            }
+                        if workspace.members.contains(&user_id.to_string()) && permission == Permission::ViewContent {
+                            debug!(target: "citadel", "User {} granted ViewContent on room {} via workspace {} membership (fallback to grandparent)", user_id, entity_id, &workspace.id);
+                            return Ok(true);
                         }
                     }
                 }
+                Ok(false) // Default for room if no permissions found through any check
+            } // Closes: Some(Domain::Room { room })
 
-                Ok(false)
-            }
             None => {
                 // THIS IS WHERE "Workspace workspace-root not found" WOULD ORIGINATE
                 // if entity_id was WORKSPACE_ROOT_ID and it wasn't found.
@@ -240,10 +242,10 @@ impl TransactionManager {
                     println!("[CRITICAL_WORKSPACE_ROOT_NOT_FOUND_IN_GET_DOMAIN_PRINTLN] WORKSPACE_ROOT_ID ('{}') not found by tx.get_domain! User: '{}', Perm: '{:?}'", entity_id, user_id, permission);
                 } // <<< NEW LINES END HERE
                 error!(target: "citadel", "[RBAC_ENTITY_NOT_FOUND_PRINTLN] Entity domain '{}' not found in check_entity_permission_with_tx. User: '{}', Perm: '{:?}'", entity_id, user_id, permission);
-                return Err(NetworkError::msg(format!(
+                Err(NetworkError::msg(format!(
                     "Entity domain '{}' not found",
                     entity_id
-                )));
+                )))
             }
         }
     }

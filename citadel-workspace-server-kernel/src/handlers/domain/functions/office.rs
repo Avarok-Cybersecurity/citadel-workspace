@@ -72,7 +72,7 @@ pub mod office_ops {
             members: vec![user_id.to_string()], // Creator is the first member
             // denylist: Vec::new(), // Commented out
             rooms: Vec::new(),
-            mdx_content: mdx_content.unwrap_or_else(String::new), // Use provided mdx_content
+            mdx_content: mdx_content.unwrap_or_default(), // Use provided mdx_content
             metadata: Vec::new(),
         };
 
@@ -317,25 +317,17 @@ pub mod office_ops {
 
             for off_id in &workspace.offices {
                 if tx.is_member_of_domain(&user.id, off_id).unwrap_or(false) {
-                    if let Some(domain) = tx.get_domain(off_id) {
-                        if let Some(office) = domain.as_office() {
-                            offices.push(office.clone());
-                        }
+                    if let Some(Domain::Office { office, .. }) = tx.get_domain(off_id) {
+                        offices.push(office.clone());
                     }
                 }
             }
         } else {
             // List all offices the user is a member of
             for domain_id_key in user.permissions.keys() {
-                if let Some(domain) = tx.get_domain(domain_id_key) {
-                    if let Domain::Office { office, .. } = domain {
-                        // Confirm membership via tx method for consistency, though permissions.keys() implies some level of access
-                        if tx
-                            .is_member_of_domain(&user.id, &office.id)
-                            .unwrap_or(false)
-                        {
-                            offices.push(office.clone());
-                        }
+                if let Some(Domain::Office { office, .. }) = tx.get_domain(domain_id_key) {
+                    if tx.is_member_of_domain(user_id, domain_id_key).unwrap_or(false) {
+                        offices.push(office.clone());
                     }
                 }
             }
