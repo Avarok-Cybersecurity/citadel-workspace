@@ -1,4 +1,4 @@
-use citadel_sdk::prelude::StackedRatchet;
+use citadel_sdk::prelude::{NetworkError, StackedRatchet};
 use citadel_workspace_server_kernel::handlers::domain::server_ops::DomainServerOperations;
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
@@ -17,7 +17,7 @@ fn create_test_user(id: &str, role: UserRole) -> User {
         id: id.to_string(),
         name: format!("Test {}", id),
         role,
-        permissions: std::collections::HashMap::new(),
+        permissions: Default::default(),
         metadata: Default::default(),
     }
 }
@@ -74,11 +74,11 @@ fn test_add_user_to_domain() {
 
     // Add the user to the office
     _domain_ops
-        .add_user_to_domain("admin", user_id, &office, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
         .unwrap();
 
     // Verify the user is in the office
-    let office_domain = _domain_ops.get_domain(&office).unwrap();
+    let office_domain = _domain_ops.get_domain(&office.id).unwrap();
     match office_domain {
         Domain::Office { office } => {
             assert!(
@@ -121,16 +121,16 @@ fn test_remove_user_from_domain() {
 
     // Add the user to the office first
     _domain_ops
-        .add_user_to_domain("admin", user_id, &office, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
         .unwrap();
 
     // Remove the user from the office
     _domain_ops
-        .remove_user_from_domain("admin", user_id, &office)
+        .remove_user_from_domain("admin", user_id, &office.id)
         .unwrap();
 
     // Verify the user is no longer in the office
-    let office_domain = _domain_ops.get_domain(&office).unwrap();
+    let office_domain = _domain_ops.get_domain(&office.id).unwrap();
     match office_domain {
         Domain::Office { office } => {
             assert!(
@@ -173,7 +173,7 @@ fn test_complete_user_removal() {
 
     // Add the user to the office
     _domain_ops
-        .add_user_to_domain("admin", user_id, &office, UserRole::Member)
+        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
         .unwrap();
 
     // Use transaction to completely remove the user
@@ -181,7 +181,7 @@ fn test_complete_user_removal() {
         .tx_manager()
         .with_write_transaction(|tx| {
             // First remove user from all domains
-            if let Some(Domain::Office { mut office }) = tx.get_domain(&office).cloned() {
+            if let Some(Domain::Office { mut office }) = tx.get_domain(&office.id).cloned() {
                 office.members.retain(|id| id != user_id);
                 let office_id = office.id.clone(); // Clone the ID to avoid borrow issues
                 tx.update_domain(&office_id, Domain::Office { office })?;
@@ -204,6 +204,7 @@ fn test_complete_user_removal() {
 
 #[test]
 fn test_member_command_processing() {
+    // Force recompile to pick up latest changes
     let (kernel, _domain_ops, _db_temp_dir) = setup_test_environment();
 
     citadel_logging::setup_log();
@@ -235,7 +236,27 @@ fn test_member_command_processing() {
     let _workspace_id = WORKSPACE_ROOT_ID.to_string();
     citadel_logging::trace!(target: "citadel", "Creating office");
 
-    // First manually create an office since the command doesn't have office_id field
+    // The root workspace is created by setup_test_environment(), so we use it directly.
+    citadel_logging::trace!(target: "citadel", "Using existing root workspace (ID: {})", WORKSPACE_ROOT_ID);
+    let workspace_id_str = WORKSPACE_ROOT_ID.to_string();
+
+    // Grant admin All permissions on this new workspace (may be redundant if CreateWorkspace does it, but explicit for test clarity)
+    // This needs to be in a transaction after the workspace is created.
+    kernel
+        .tx_manager()
+        .with_write_transaction(|tx| {
+            if let Some(admin_user) = tx.get_user_mut("admin") {
+                admin_user.permissions.entry(workspace_id_str.clone()).or_default().insert(citadel_workspace_types::structs::Permission::All);
+                citadel_logging::trace!(target: "citadel", "Granted admin All permissions on workspace {}", workspace_id_str);
+                tx.commit()?;
+                Ok(())
+            } else {
+                Err(NetworkError::Generic("Admin user not found in transaction for workspace permission grant".to_string()))
+            }
+        })
+        .unwrap();
+
+    // Now, create the office manually within the workspace created by command
     kernel
         .tx_manager()
         .with_write_transaction(|tx| {
@@ -243,16 +264,26 @@ fn test_member_command_processing() {
             let office = Office {
                 id: office_id.to_string(),
                 owner_id: "admin".to_string(),
-                workspace_id: "test_ws_id".to_string(), // Added missing field
+                workspace_id: workspace_id_str.to_string(),
                 name: "Test Office".to_string(),
                 description: "Test Office Description".to_string(),
                 members: vec!["admin".to_string()],
+                // denylist: Vec::new(),
                 rooms: Vec::new(),
                 mdx_content: "".to_string(),
                 metadata: Vec::new(),
             };
             tx.insert_domain(office_id.to_string(), Domain::Office { office })?;
             citadel_logging::trace!(target: "citadel", "Office created");
+
+            // Grant admin All permissions on this new office
+            if let Some(admin_user) = tx.get_user_mut("admin") {
+                admin_user.permissions.entry(office_id.to_string()).or_default().insert(citadel_workspace_types::structs::Permission::All);
+                citadel_logging::trace!(target: "citadel", "Granted admin All permissions on office {}", office_id);
+            } else {
+                return Err(NetworkError::Generic("Admin user not found in transaction for office permission grant".to_string()));
+            }
+            tx.commit()?;
             Ok(())
         })
         .unwrap();

@@ -50,7 +50,7 @@ mod tests {
             )
             .unwrap();
 
-        (kernel, domain_ops, office.to_string(), db_temp_dir)
+        (kernel, domain_ops, office.id.clone(), db_temp_dir)
     }
 
     /// Helper function to create a test user with specified ID and role

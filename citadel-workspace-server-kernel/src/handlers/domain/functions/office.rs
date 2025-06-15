@@ -4,9 +4,8 @@ pub mod office_ops {
     use crate::kernel::transaction::Transaction;
     use citadel_logging::{debug, error, info, warn};
     use citadel_sdk::prelude::*;
-    use citadel_workspace_types::structs::{Domain, Office, Permission, UserRole}; // Added import
-    use serde_json; // Added serde_json import
-
+    use citadel_workspace_types::structs::{Domain, Office, Permission, UserRole};
+    
     pub(crate) fn create_office_inner(
         tx: &mut dyn Transaction,
         user_id: &str,      // User creating the office
@@ -15,7 +14,11 @@ pub mod office_ops {
         name: &str,
         description: &str,
         mdx_content: Option<String>, // Added mdx_content parameter
-    ) -> Result<String, NetworkError> {
+    ) -> Result<Office, NetworkError> {
+    eprintln!( // <<< NEW LOG INSERTED HERE
+        "[CREATE_OFFICE_INNER_ENTRY_EPRINTLN] Received workspace_id: {}, office_id: {}, name: {}",
+        workspace_id, office_id, name
+    );
         // Changed return type
         let user = tx
             .get_user(user_id)
@@ -62,14 +65,15 @@ pub mod office_ops {
         // Create the new office struct
         let new_office = Office {
             id: office_id.to_string(),
-            owner_id: user_id.to_string(),
-            workspace_id: workspace_id.to_string(), // Set the workspace_id
+            workspace_id: workspace_id.to_string(),
             name: name.to_string(),
             description: description.to_string(),
+            owner_id: user_id.to_string(),
             members: vec![user_id.to_string()], // Creator is the first member
-            rooms: Vec::new(),                  // Starts with no rooms
+            // denylist: Vec::new(), // Commented out
+            rooms: Vec::new(),
             mdx_content: mdx_content.unwrap_or_else(String::new), // Use provided mdx_content
-            metadata: Vec::new(),               // Default empty metadata
+            metadata: Vec::new(),
         };
 
         // Create the domain entry for the office
@@ -96,9 +100,7 @@ pub mod office_ops {
             new_office.name,
             workspace_id
         );
-        // Serialize new_office to JSON string before returning
-        serde_json::to_string(&new_office)
-            .map_err(|e| NetworkError::msg(format!("Failed to serialize office: {}", e)))
+        Ok(new_office)
     }
 
     pub(crate) fn update_office_inner(
@@ -185,7 +187,7 @@ pub mod office_ops {
 
         // Extract parent_workspace_id and associated room_ids from the office domain
         let (parent_workspace_id_opt, room_ids_clone) = match &office_domain_clone {
-            Domain::Office { office } => (Some(office.workspace_id.clone()), office.rooms.clone()), // Get workspace_id from office struct
+            Domain::Office { office } => (Some(office.workspace_id.clone()), office.rooms.clone()),
             _ => {
                 return Err(NetworkError::msg(format!(
                     "Domain {} is not an office, cannot be deleted as such",

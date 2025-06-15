@@ -115,91 +115,88 @@ impl TransactionManager {
                     return Ok(true);
                 }
 
-                // Workspace members may have some permissions based on role
+                // For workspaces, being a member is sufficient for most checks that reach this point
                 if workspace.members.contains(&user_id.to_string()) {
-                    // Admins and owners have all permissions of a given domain
-                    Ok(matches!(user_role, UserRole::Admin | UserRole::Owner))
-                } else {
-                    Ok(false)
+                    debug!(target: "citadel", "User {} is a member of workspace {}, permission granted", user_id, entity_id);
+                    return Ok(true);
                 }
+
+                Ok(false)
             }
             Some(Domain::Office { office }) => {
-                // Office owners have all permissions for their office
+                // Denylist check
+                // if office.denylist.contains(&user_id.to_string()) {
+                //     debug!(target: "citadel", "User {} is on the denylist for office {}, access denied", user_id, entity_id);
+                //     return Ok(false);
+                // }
+
+                // Owner check
                 if office.owner_id == user_id {
-                    debug!(target: "citadel", "User {} is owner of office {}, permission granted", user_id, entity_id);
                     return Ok(true);
                 }
 
-                // Office members may have some permissions based on role
+                // If user is an explicit member, check permissions based on their role.
                 if office.members.contains(&user_id.to_string()) {
-                    // User is a direct member. Check their role permissions for an office.
-                    let default_role_perms =
-                        retrieve_role_permissions(&user_role, &DomainType::Office);
-                    if default_role_perms.contains(&permission) {
-                        debug!(target: "citadel", "User {} (Role: {:?}) is a member of Office {}. Permission {:?} GRANTED via office role.", user_id, user_role, entity_id, permission);
+                    let permissions_for_role = Permission::for_role(&user_role);
+                    if permissions_for_role.contains(&permission) {
+                        debug!(target: "citadel", "User {} granted {:?} on office {} via explicit membership and role {:?}", user_id, permission, entity_id, user_role);
                         return Ok(true);
-                    } else {
-                        // User is a direct member, but their office role does not grant this permission.
-                        debug!(target: "citadel", "User {} (Role: {:?}) is a member of Office {}. Permission {:?} DENIED by office role.", user_id, user_role, entity_id, permission);
-                        return Ok(false); // Direct members' office roles are definitive here for role-based perms.
                     }
-                } else {
-                    // User is NOT a direct member of the office. Now, check parent workspace membership.
-                    // Try to find which workspace contains this office
-                    for workspace_candidate in tx.get_all_workspaces().values() {
-                        if workspace_candidate.offices.contains(&office.id) {
-                            // Check if user is owner or member of this parent workspace
-                            if workspace_candidate.owner_id == user_id
-                                || workspace_candidate.members.contains(&user_id.to_string())
-                            {
-                                // User is associated with the parent workspace. Check their role's default permissions for an Office context.
-                                // This implies that membership in a parent workspace can grant permissions over child offices based on the user's role.
-                                let workspace_member_office_perms =
-                                    retrieve_role_permissions(&user_role, &DomainType::Office);
-                                if workspace_member_office_perms.contains(&permission) {
-                                    debug!(target: "citadel", "User {} (Role: {:?}) is member of parent workspace of Office {}. Permission {:?} GRANTED via parent workspace role for office context.", user_id, user_role, entity_id, permission);
-                                    return Ok(true);
-                                }
-                            }
+                    // Explicit member but role does not grant permission, so they don't get it.
+                    // Do not proceed to check for inheritance, as explicit membership should be final.
+                    return Ok(false);
+                }
+
+                // Workspace inheritance check
+                if let Some(Domain::Workspace { workspace }) = tx.get_domain(&office.workspace_id) {
+                    if workspace.members.contains(&user_id.to_string()) {
+                        // When inheriting from a workspace, member only gets ViewContent on the office
+                        if permission == Permission::ViewContent {
+                            debug!(target: "citadel", "User {} granted ViewContent on office {} via workspace {} membership", user_id, entity_id, &office.workspace_id);
+                            return Ok(true);
                         }
                     }
-                    Ok(false)
                 }
+
+                Ok(false)
             }
             Some(Domain::Room { room }) => {
-                // Room owners have all permissions for their room
+                // Denylist check
+                // if room.denylist.contains(&user_id.to_string()) {
+                //     debug!(target: "citadel", "User {} is on the denylist for room {}, access denied", user_id, entity_id);
+                //     return Ok(false);
+                // }
+
+                // Owner check
                 if room.owner_id == user_id {
-                    debug!(target: "citadel", "User {} is owner of room {}, permission granted", user_id, entity_id);
                     return Ok(true);
                 }
 
-                // Room members may have some permissions based on role
+                // If user is an explicit member, check permissions based on their role.
                 if room.members.contains(&user_id.to_string()) {
-                    // Admins and owners have all permissions of a given domain
-                    Ok(matches!(user_role, UserRole::Admin | UserRole::Owner))
-                } else {
-                    // Check if the user has permissions via the parent office
-                    // First get the parent office
-                    if let Some(Domain::Office { office }) = tx.get_domain(&room.office_id) {
-                        if office.owner_id == user_id
-                            || office.members.contains(&user_id.to_string())
-                        {
-                            // User is a member of the parent office - check role permissions
-                            // Admins and owners have all permissions of a given domain
-                            return Ok(matches!(user_role, UserRole::Admin | UserRole::Owner));
-                        }
-                        // If not a member of the direct parent office, check if they are a member of the workspace containing this office's parent
-                        for workspace_candidate in tx.get_all_workspaces().values() {
-                            if workspace_candidate.offices.contains(&office.id)
-                                && (workspace_candidate.owner_id == user_id
-                                    || workspace_candidate.members.contains(&user_id.to_string()))
-                            {
-                                return Ok(matches!(user_role, UserRole::Admin | UserRole::Owner));
-                            }
+                    let permissions_for_role = Permission::for_role(&user_role);
+                    if permissions_for_role.contains(&permission) {
+                        debug!(target: "citadel", "User {} granted {:?} on room {} via explicit membership and role {:?}", user_id, permission, entity_id, user_role);
+                        return Ok(true);
+                    }
+                    // Explicit member but role does not grant permission, so they don't get it.
+                    // Do not proceed to check for inheritance, as explicit membership should be final.
+                    return Ok(false);
+                }
+
+                // Office inheritance check
+                if let Some(Domain::Office { office }) = tx.get_domain(&room.office_id) {
+                    // User is not on the room's denylist, so we can check office membership
+                    if office.members.contains(&user_id.to_string()) {
+                        // When inheriting from a parent office, member only gets ViewContent on the room
+                        if permission == Permission::ViewContent {
+                            debug!(target: "citadel", "User {} granted ViewContent on room {} via office {} membership", user_id, entity_id, &room.office_id);
+                            return Ok(true);
                         }
                     }
-                    Ok(false)
                 }
+
+                Ok(false)
             }
             None => {
                 // THIS IS WHERE "Workspace workspace-root not found" WOULD ORIGINATE
@@ -315,8 +312,17 @@ impl TransactionManager {
 
     /// Create a new read transaction
     pub fn read_transaction(&self) -> ReadTransaction {
+        let domains_guard = self.domains.read();
+
+        // Diagnostic log specifically for "ws1_id", which is used in the failing test
+        if let Some(domain_ws1) = domains_guard.get("ws1_id") {
+            debug!(target: "citadel", "[TM_READ_TX_CREATE] Post-lock, pre-RTX (ws1_id): Domain members: {:?}", domain_ws1.members());
+        } else {
+            debug!(target: "citadel", "[TM_READ_TX_CREATE] Post-lock, pre-RTX (ws1_id): Domain NOT FOUND");
+        }
+
         ReadTransaction::new(
-            self.domains.read(),
+            domains_guard, // Use the guard we just acquired and logged from
             self.users.read(),
             self.workspaces.read(),
             self.workspace_password.read(),

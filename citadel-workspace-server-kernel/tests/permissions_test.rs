@@ -71,7 +71,7 @@ mod tests {
             domain_ops.check_entity_permission(
                 tx,
                 user_id,
-                office.as_str(),
+                office.id.as_str(),
                 Permission::ViewContent,
             )
         });
@@ -81,18 +81,18 @@ mod tests {
         // Manually add the user's ID to the office members list via a write transaction
         domain_ops
             .with_write_transaction(|tx| {
-                let mut domain = tx.get_domain(&office).unwrap().clone();
+                let mut domain = tx.get_domain(&office.id).unwrap().clone();
                 if let Domain::Office { ref mut office } = domain {
                     office.members.push(user_id.to_string());
                 }
-                tx.update_domain(&office, domain)?;
+                tx.update_domain(&office.id, domain)?;
                 Ok(())
             })
             .unwrap();
 
         // Verify the user is now in the members list
         {
-            let domain = domain_ops.get_domain(&office).unwrap();
+            let domain = domain_ops.get_domain(&office.id).unwrap();
             match domain {
                 Domain::Office { office } => {
                     assert!(
@@ -109,7 +109,7 @@ mod tests {
             domain_ops.check_entity_permission(
                 tx,
                 user_id,
-                office.as_str(),
+                office.id.as_str(),
                 Permission::ViewContent,
             )
         });
@@ -138,6 +138,19 @@ mod tests {
         assert!(domain_ops
             .with_read_transaction(|tx| domain_ops.is_admin(tx, admin_id))
             .unwrap());
+
+        // Create a non-admin user for testing this specific check
+        let non_admin_id = "non_admin_user";
+        let non_admin_user_obj = create_test_user(non_admin_id, UserRole::Member);
+        {
+            kernel
+                .tx_manager()
+                .with_write_transaction(|tx| {
+                    tx.insert_user(non_admin_id.to_string(), non_admin_user_obj)?;
+                    Ok(())
+                })
+                .unwrap();
+        }
 
         // Verify that non-admin users are recognized as such
         assert!(!domain_ops
@@ -241,7 +254,7 @@ mod tests {
             domain_ops.check_entity_permission(
                 tx,
                 owner_user.id.as_str(),
-                office.as_str(),
+                office.id.as_str(),
                 Permission::EditOfficeConfig,
             )
         });
@@ -256,7 +269,7 @@ mod tests {
             domain_ops.check_entity_permission(
                 tx,
                 member_user.id.as_str(),
-                office.as_str(),
+                office.id.as_str(),
                 Permission::ViewContent,
             )
         });
@@ -269,18 +282,18 @@ mod tests {
         // Manually add the member to the office via a write transaction
         domain_ops
             .with_write_transaction(|tx| {
-                let mut domain = tx.get_domain(&office).unwrap().clone();
+                let mut domain = tx.get_domain(&office.id).unwrap().clone();
                 if let Domain::Office { ref mut office } = domain {
                     office.members.push(member_user.id.clone());
                 }
-                tx.update_domain(&office, domain)?;
+                tx.update_domain(&office.id, domain)?;
                 Ok(())
             })
             .unwrap();
 
         // Verify member was actually added to the office
         {
-            let domain = domain_ops.get_domain(&office).unwrap();
+            let domain = domain_ops.get_domain(&office.id).unwrap();
             match domain {
                 Domain::Office { office } => {
                     assert!(
@@ -297,7 +310,7 @@ mod tests {
             domain_ops.check_entity_permission(
                 tx,
                 member_user.id.as_str(),
-                office.as_str(),
+                office.id.as_str(),
                 Permission::ViewContent,
             )
         });
@@ -311,7 +324,7 @@ mod tests {
             domain_ops.check_entity_permission(
                 tx,
                 member_user.id.as_str(),
-                office.as_str(),
+                office.id.as_str(),
                 Permission::EditOfficeConfig,
             )
         });
@@ -321,12 +334,12 @@ mod tests {
             "Member should not have EditOfficeConfig permission"
         );
 
-        // Guest should not have permissions without explicit addition
+        // Guest should not have any permissions
         let result = domain_ops.with_read_transaction(|tx| {
             domain_ops.check_entity_permission(
                 tx,
                 guest_user.id.as_str(),
-                office.as_str(),
+                office.id.as_str(), // This was the final intended fix
                 Permission::ViewContent,
             )
         });
@@ -334,3 +347,4 @@ mod tests {
         assert!(!result.unwrap(), "Guest should not have permissions");
     }
 }
+

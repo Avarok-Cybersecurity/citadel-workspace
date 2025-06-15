@@ -3,9 +3,10 @@ use crate::kernel::transaction::{
     WorkspaceOperations,
 };
 use bincode; // For serialization
+use bcrypt;
+use citadel_logging::debug;
 use citadel_sdk::prelude::NetworkError;
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
-use log::debug;
 use parking_lot::RwLockWriteGuard;
 use rocksdb::DB; // Already used, just for clarity
 use std::collections::HashMap;
@@ -105,8 +106,18 @@ impl<'a> Transaction for WriteTransaction<'a> {
         workspace_id: &str,
         password: &str,
     ) -> Result<(), NetworkError> {
+        if password.is_empty() {
+            // Passwords cannot be empty. If an attempt is made to set an empty password,
+            // it could be treated as an attempt to remove password protection, or an error.
+            // For now, let's return an error, as workspaces should be password protected.
+            // Alternatively, one might remove the entry: self.workspace_password.remove(workspace_id);
+            return Err(NetworkError::msg("Workspace password cannot be empty"));
+        }
+        // Hash the password before storing
+        let hashed_password = bcrypt::hash(password, bcrypt::DEFAULT_COST)
+            .map_err(|e| NetworkError::msg(format!("Failed to hash workspace password: {}", e)))?;
         self.workspace_password
-            .insert(workspace_id.to_string(), password.to_string());
+            .insert(workspace_id.to_string(), hashed_password);
         Ok(())
     }
 
@@ -195,7 +206,14 @@ impl<'a> Transaction for WriteTransaction<'a> {
         if let Some(old_domain) = self.domains.get(domain_id).cloned() {
             self.domain_changes
                 .push(DomainChange::Update(domain_id.to_string(), old_domain));
-            self.domains.insert(domain_id.to_string(), new_domain);
+            debug!("WriteTransaction::update_domain - domain_id: {}, new_members: {:?}", domain_id, new_domain.members());
+            self.domains.insert(domain_id.to_string(), new_domain.clone());
+
+            // Also update the parallel workspaces map if this is a workspace
+            if let Domain::Workspace { workspace } = new_domain {
+                self.workspaces.insert(domain_id.to_string(), workspace);
+            }
+
             Ok(())
         } else {
             Err(NetworkError::msg("Domain not found"))
@@ -315,7 +333,7 @@ impl<'a> Transaction for WriteTransaction<'a> {
         }
 
         // +++ DETAILED LOGGING FOR PERMISSION ASSIGNMENT +++
-        if user_id == "test_user" {
+        if user_id == "test_user_ws_add" {
             // Log specifically for the user in the failing test
             debug!(target: "citadel",
                 "[TX_ADD_USER_TO_DOMAIN_DETAIL] For user_id: '{}', domain_id: '{}', role: {:?}. Assigned permissions: {:?}. Full user.permissions for this domain: {:?}",

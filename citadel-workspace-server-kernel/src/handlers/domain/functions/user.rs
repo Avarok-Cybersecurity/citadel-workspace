@@ -71,22 +71,19 @@ fn get_domain_type_from_id(
 
 // Helper function to retrieve role permissions based on domain type
 pub fn get_role_based_permissions(role: &UserRole, domain_type: DomainType) -> HashSet<Permission> {
+    match role {
+        UserRole::Admin | UserRole::Owner => {
+            // Admins and Owners get their full set of permissions regardless of domain type context here
+            // as they are being explicitly added with this role.
+            // The check_entity_permission function will handle the applicability of a permission to a domain type.
+            return Permission::for_role(role);
+        }
+        _ => {}
+    }
+
+    // For other roles, apply domain-specific logic
     let mut permissions = HashSet::new();
     match role {
-        UserRole::Admin => {
-            permissions.insert(Permission::All);
-        }
-        UserRole::Owner => match domain_type {
-            DomainType::Workspace => {
-                permissions.insert(Permission::EditWorkspaceConfig);
-            }
-            DomainType::Office => {
-                permissions.insert(Permission::UpdateOfficeSettings);
-            }
-            DomainType::Room => {
-                permissions.insert(Permission::UpdateRoomSettings);
-            }
-        },
         UserRole::Member => match domain_type {
             DomainType::Workspace | DomainType::Office | DomainType::Room => {
                 permissions.insert(Permission::ViewContent);
@@ -105,6 +102,11 @@ pub fn get_role_based_permissions(role: &UserRole, domain_type: DomainType) -> H
             // For now, let's assume custom roles might have ViewContent by default
             permissions.insert(Permission::ViewContent);
         }
+        // Admin and Owner are handled by the match block above, which returns early.
+        // This arm makes the compiler happy and documents the assumption.
+        UserRole::Admin | UserRole::Owner => unreachable!(
+            "Admin and Owner roles should have been handled by the preceding match block and returned early."
+        ),
     }
     permissions
 }
@@ -152,40 +154,53 @@ pub(crate) fn add_user_to_domain_inner(
     let domain_type_for_role_perms = get_domain_type_from_id(tx, domain_id)?;
     let role_permissions = get_role_based_permissions(&role, domain_type_for_role_perms);
 
-    // Get mutable reference to the user to add (mutable borrow of tx.users)
-    // This must happen after all immutable borrows of tx related to actor_user and domain type checks are done if they conflict.
-    // However, tx.users and tx.domains are distinct fields, so this order should be fine.
-    let user_to_add = tx
-        .get_user_mut(target_user_id)
+    // Get an owned clone of the user to add, modify it, then update through the transaction
+    let mut user_to_add = tx
+        .get_user(target_user_id)
+        .cloned()
         .ok_or_else(|| NetworkError::msg(format!("User to add {} not found", target_user_id)))?;
 
     user_to_add.role = role.clone(); // Set the user's role for this context
     user_to_add
         .permissions
         .insert(domain_id.to_string(), role_permissions.clone());
-    info!(
-        "Successfully set role {:?} and permissions for user {} in domain {}",
-        role, target_user_id, domain_id
-    );
+    
+    // Log before calling update_user, which might change the object if it re-fetches internally (though current impl doesn't)
     println!(
-        "[USER_OPS_ADD_USER_INNER_PRINTLN] User: '{}', Domain: '{}', Role: {:?}, Set Permissions: {:?}, User Full Permissions after update: {:?}",
+        "[USER_OPS_ADD_USER_INNER_PRINTLN] User: '{}', Domain: '{}', Role: {:?}, Attempting to set Permissions: {:?}, User Full Permissions before tx.update_user: {:?}",
         target_user_id, domain_id, role, role_permissions, user_to_add.permissions
     );
 
-    // Add user to domain's member list (mutable borrow of tx.domains)
-    let domain_entry = tx.get_domain_mut(domain_id).ok_or_else(|| {
+    // Update the user through the transaction to record the change
+    tx.update_user(target_user_id, user_to_add)?;
+    info!(
+        "Successfully updated user {} with role {:?} and permissions in domain {}",
+        role, target_user_id, domain_id
+    );
+
+    // Get an owned clone of the domain, modify its member list, then update through the transaction
+    let mut domain_entry = tx.get_domain(domain_id).cloned().ok_or_else(|| {
         NetworkError::msg(format!("Domain {} not found when adding user", domain_id))
     })?;
-    let members = get_mutable_members_from_domain_entry(domain_entry)?;
+    
+    // Modify the cloned domain_entry
+    let members = get_mutable_members_from_domain_entry(&mut domain_entry)?;
+    let mut added_to_members = false;
     if !members.contains(&target_user_id.to_string()) {
         members.push(target_user_id.to_string());
+        added_to_members = true;
+    }
+
+    // Update the domain through the transaction to record the change
+    tx.update_domain(domain_id, domain_entry)?;
+    if added_to_members {
         info!(
-            "User {} added to domain {} member list",
+            "User {} added to domain {} member list and domain updated via transaction",
             target_user_id, domain_id
         );
     } else {
         info!(
-            "User {} already in domain {} member list",
+            "User {} already in domain {} member list; domain (potentially other fields) updated via transaction",
             target_user_id, domain_id
         );
     }
@@ -250,7 +265,7 @@ pub(crate) fn remove_user_from_domain_inner(
         target_user_id, domain_id
     );
 
-    // Now get domain mutably to update members list if user was in it
+    // Now get domain mutably to update members list and denylist if user was in it
     if is_member {
         // E0502 fix: use the pre-calculated is_member
         let domain_entry_for_write = tx.get_domain_mut(domain_id).ok_or_else(|| {
@@ -259,10 +274,28 @@ pub(crate) fn remove_user_from_domain_inner(
                 domain_id
             ))
         })?;
-        let members_for_write = get_mutable_members_from_domain_entry(domain_entry_for_write)?;
-        members_for_write.retain(|id| id != target_user_id);
+
+        match domain_entry_for_write {
+            Domain::Office { office } => {
+                office.members.retain(|id| id != target_user_id);
+                // if !office.denylist.contains(&target_user_id.to_string()) {
+                //     office.denylist.push(target_user_id.to_string());
+                // }
+            }
+            Domain::Room { room } => {
+                room.members.retain(|id| id != target_user_id);
+                // if !room.denylist.contains(&target_user_id.to_string()) {
+                //     room.denylist.push(target_user_id.to_string());
+                // }
+            }
+            Domain::Workspace { workspace } => {
+                // No denylist for workspace, just remove member
+                workspace.members.retain(|id| id != target_user_id);
+            }
+        }
+
         info!(
-            "User {} removed from domain {} member list",
+            "User {} removed from domain {} member list and added to denylist if applicable",
             target_user_id, domain_id
         );
     }

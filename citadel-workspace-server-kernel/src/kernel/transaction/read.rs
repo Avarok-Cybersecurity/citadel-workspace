@@ -3,6 +3,7 @@ use citadel_sdk::prelude::NetworkError;
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
 use parking_lot::RwLockReadGuard;
 use std::collections::HashMap;
+use citadel_logging::debug;
 
 /// A read-only transaction
 pub struct ReadTransaction<'a> {
@@ -26,7 +27,17 @@ impl Transaction for ReadTransaction<'_> {
     }
 
     fn get_domain(&self, domain_id: &str) -> Option<&Domain> {
-        self.domains.get(domain_id)
+        let domain_option = self.domains.get(domain_id);
+        if let Some(domain) = domain_option {
+            debug!(
+                "ReadTransaction::get_domain - domain_id: {}, members: {:?}",
+                domain_id,
+                domain.members()
+            );
+        } else {
+            debug!("ReadTransaction::get_domain - domain_id: {} NOT FOUND", domain_id);
+        }
+        domain_option
     }
 
     fn get_domain_mut(&mut self, _domain_id: &str) -> Option<&mut Domain> {

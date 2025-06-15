@@ -115,22 +115,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     &description,
                     mdx_content.as_deref(),
                 ),
-                |office_json_string: String| match serde_json::from_str::<Office>(
-                    &office_json_string,
-                ) {
-                    Ok(office_struct) => WorkspaceProtocolResponse::Office(office_struct),
-                    Err(e) => {
-                        let err_msg = format!(
-                            "Internal error: Failed to process office data after creation: {}",
-                            e
-                        );
-                        error!(
-                            "Failed to deserialize office JSON from create_office: {}. JSON: {}",
-                            e, office_json_string
-                        );
-                        WorkspaceProtocolResponse::Error(err_msg)
-                    }
-                },
+                |office: Office| WorkspaceProtocolResponse::Office(office),
                 "Failed to create office",
             ),
             WorkspaceProtocolRequest::GetOffice { office_id } => Self::handle_result(

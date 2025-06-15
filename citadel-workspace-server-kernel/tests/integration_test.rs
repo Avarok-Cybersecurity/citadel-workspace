@@ -5,7 +5,7 @@ use citadel_internal_service_test_common::{
 use citadel_sdk::prelude::{
     BackendType, NetworkError, NodeBuilder, NodeType, PreSharedKey, StackedRatchet,
 };
-use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
+use citadel_workspace_server_kernel::{kernel::WorkspaceServerKernel, WORKSPACE_ROOT_ID};
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
@@ -93,7 +93,9 @@ async fn setup_test_environment() -> Result<
     println!("Creating workspace kernel");
     let db_temp_dir = TempDir::new().expect("Failed to create temp dir for DB");
     let db_path = db_temp_dir.path().join("integration_test_db");
-    let db = DB::open_default(&db_path).expect("Failed to open DB");
+    let db = tokio::task::spawn_blocking(move || DB::open_default(&db_path).expect("Failed to open DB"))
+        .await
+        .expect("DB task panicked");
     let workspace_kernel = WorkspaceServerKernel::<StackedRatchet>::with_admin(
         ADMIN_ID,
         &admin_username,
@@ -313,7 +315,7 @@ async fn send_workspace_command(
 #[timeout(Duration::from_secs(15))]
 async fn test_office_operations() {
     println!("Setting up test environment...");
-    let (kernel, internal_service_addr, server_addr, admin_username, admin_password, _db_temp_dir) =
+    let (_kernel, internal_service_addr, server_addr, admin_username, admin_password, _db_temp_dir) =
         setup_test_environment().await.unwrap();
     println!("Test environment setup complete.");
 
@@ -330,52 +332,19 @@ async fn test_office_operations() {
 
     println!("Admin user registered and connected with CID: {admin_cid}.");
 
-    // Register the admin_cid as an admin user in the kernel
-    kernel
-        .inject_admin_user(
-            &admin_cid.to_string(),
-            "Connected Admin User",
-            &admin_password,
-        )
-        .unwrap();
 
-    // Create the root workspace first for our single workspace model
-    println!("Creating root workspace...");
-    let create_workspace_cmd = WorkspaceProtocolRequest::CreateWorkspace {
-        name: "Root Workspace".to_string(),
-        description: "Root workspace for the system".to_string(),
-        workspace_master_password: admin_password.clone(), // Provide correct password
-        metadata: None,
-    };
 
-    let workspace_response = send_workspace_command(
-        &to_service,
-        &mut from_service,
-        admin_cid,
-        create_workspace_cmd,
-    )
-    .await
-    .expect("Failed to create root workspace");
+    // The root workspace is created during `setup_test_environment`, so we don't need to create it again.
+    // We can directly use WORKSPACE_ROOT_ID for further operations.
+    let actual_workspace_id = WORKSPACE_ROOT_ID.to_string();
+    println!("Using pre-existing root workspace with ID: {}", actual_workspace_id);
 
-    println!("Root workspace created: {:?}", workspace_response);
-
-    let actual_workspace_id = match workspace_response {
-        WorkspaceProtocolResponse::Workspace(workspace) => {
-            println!("Extracted workspace ID: {}", workspace.id);
-            workspace.id
-        }
-        _ => panic!(
-            "Expected Workspace response after creating workspace, got {:?}",
-            workspace_response
-        ),
-    };
-
-    // --- Test: Attempt to create workspace with WRONG password ---
-    println!("Attempting to create workspace with wrong password...");
-    let create_workspace_wrong_pw_cmd = WorkspaceProtocolRequest::CreateWorkspace {
-        name: "Wrong PW Workspace".to_string(),
-        description: "Should fail".to_string(),
-        workspace_master_password: "wrong-password".to_string(), // Provide wrong password
+    // --- Test: Attempt to update workspace with WRONG password ---
+    println!("Attempting to update root workspace with wrong password...");
+    let update_workspace_wrong_pw_cmd = WorkspaceProtocolRequest::UpdateWorkspace {
+        name: Some("Attempted Update Name".to_string()),
+        description: Some("This update should fail due to wrong password".to_string()),
+        workspace_master_password: "wrong-password".to_string(), // Provide wrong password (as String)
         metadata: None,
     };
 
@@ -383,7 +352,7 @@ async fn test_office_operations() {
         &to_service,
         &mut from_service,
         admin_cid,
-        create_workspace_wrong_pw_cmd,
+        update_workspace_wrong_pw_cmd,
     )
     .await
     .expect("Sending wrong password command should succeed, but result in error response");
@@ -398,7 +367,7 @@ async fn test_office_operations() {
             println!("Received expected error for wrong password: {}", msg);
         }
         _ => panic!(
-            "Expected Error response for wrong password, got: {:?}",
+            "Expected Error response after attempting to update workspace with wrong password, got {:?}",
             error_response
         ),
     }
@@ -548,7 +517,7 @@ async fn test_office_operations() {
 #[timeout(Duration::from_secs(15))]
 async fn test_room_operations() {
     println!("Setting up test environment...");
-    let (kernel, internal_service_addr, server_addr, admin_username, admin_password, _db_temp_dir) =
+    let (_kernel, internal_service_addr, server_addr, admin_username, admin_password, _db_temp_dir) =
         setup_test_environment().await.unwrap();
     println!("Test environment setup complete.");
 
@@ -565,43 +534,10 @@ async fn test_room_operations() {
 
     println!("Admin user registered and connected with CID: {admin_cid}.");
 
-    // Inject the workspace master password into the admin user's metadata
-    // This simulates what `run_server` does during actual startup
-    println!("Injecting workspace password into admin metadata...");
-    kernel
-        .inject_admin_user(&admin_username, "Admin", &admin_password)
-        .unwrap();
-
-    // Create the root workspace first for our single workspace model
-    println!("Creating root workspace...");
-    let create_workspace_cmd = WorkspaceProtocolRequest::CreateWorkspace {
-        name: "Root Workspace".to_string(),
-        description: "Root workspace for the system".to_string(),
-        workspace_master_password: admin_password.clone(), // Provide correct password
-        metadata: None,
-    };
-
-    let workspace_response = send_workspace_command(
-        &to_service,
-        &mut from_service,
-        admin_cid,
-        create_workspace_cmd,
-    )
-    .await
-    .unwrap();
-
-    println!("Root workspace created: {:?}", workspace_response);
-
-    let actual_workspace_id = match workspace_response {
-        WorkspaceProtocolResponse::Workspace(workspace) => {
-            println!("Extracted workspace ID: {}", workspace.id);
-            workspace.id
-        }
-        _ => panic!(
-            "Expected Workspace response after creating workspace, got {:?}",
-            workspace_response
-        ),
-    };
+    // The root workspace is created during `setup_test_environment`, so we don't need to create it again.
+    // We can directly use WORKSPACE_ROOT_ID for further operations.
+    let actual_workspace_id = WORKSPACE_ROOT_ID.to_string();
+    println!("Using pre-existing root workspace with ID: {}", actual_workspace_id);
 
     // Create an office using the command processor instead of directly
     println!("Creating test office...");

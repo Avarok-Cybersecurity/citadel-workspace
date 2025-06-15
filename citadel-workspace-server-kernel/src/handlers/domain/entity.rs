@@ -37,11 +37,12 @@ impl DomainEntity for Office {
 
         Office {
             id: office_id,
+            workspace_id: _parent_id.unwrap_or_default(),
             name: name.to_string(),
             description: description.to_string(),
             owner_id: "".to_string(),
-            workspace_id: "test_workspace_id_placeholder".to_string(), // Added placeholder
             members: vec![],
+            // denylist: Vec::new(),
             rooms: Vec::new(),
             mdx_content: String::new(),
             metadata: Vec::new(),
@@ -98,6 +99,7 @@ impl DomainEntity for Room {
             office_id,
             owner_id: "".to_string(),
             members: vec![],
+            // denylist: Vec::new(),
             mdx_content: String::new(),
             metadata: Vec::new(),
         }

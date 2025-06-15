@@ -1,6 +1,6 @@
 pub mod workspace_ops {
     use crate::kernel::transaction::Transaction;
-    use citadel_logging::{debug, error, info, warn};
+        use citadel_logging::{error, info, warn};
     use citadel_sdk::prelude::NetworkError;
     use citadel_workspace_types::structs::{Domain, Permission, UserRole, Workspace};
     use serde::{Deserialize, Serialize};
@@ -30,49 +30,32 @@ pub mod workspace_ops {
         metadata: Option<Vec<u8>>,
         workspace_password: String,
     ) -> Result<Workspace, NetworkError> {
-        // Ensure the user creating the workspace exists
+        // Check if a root workspace already exists
+    let found_root_ws = tx.get_workspace(crate::WORKSPACE_ROOT_ID);
+    let root_ws_exists = found_root_ws.is_some();
+    if root_ws_exists {
+        return Err(NetworkError::msg(
+            "A root workspace already exists. Cannot create another one.",
+        ));
+    }
+
+    // Ensure the user creating the workspace exists
         let _user = tx
             .get_user(user_id)
             .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
 
+        // If other workspaces exist, validate the password against the master password
         let all_workspaces = tx.get_all_workspaces();
-        if let Some(existing_workspace_id) = all_workspaces.keys().next() {
-            // A workspace already exists, treat it as the root and validate password
-            if let Some(stored_password) = tx.workspace_password(existing_workspace_id) {
-                if stored_password == workspace_password {
-                    info!(
-                        "User '{}' accessed existing workspace '{}' with correct password",
-                        user_id, existing_workspace_id
-                    );
-                    // Return the existing workspace DTO
-                    return tx
-                        .get_workspace(existing_workspace_id)
-                        .cloned()
-                        .ok_or_else(|| {
-                            NetworkError::msg(format!(
-                                "Existing workspace {} not found after check",
-                                existing_workspace_id
-                            ))
-                        });
-                } else {
-                    warn!(
-                        "User '{}' failed to access workspace '{}': Incorrect password",
-                        user_id, existing_workspace_id
-                    );
-                    return Err(NetworkError::msg("Incorrect workspace master password"));
-                }
-            } else {
-                // Should not happen if a workspace exists and is password protected
-                warn!(
-                    "Workspace '{}' exists but has no password set. Allowing creation for now.",
-                    existing_workspace_id
-                );
-                // Or, could return an error: Err(NetworkError::msg("Existing workspace has no password, configuration error"))
+        if let Some(first_workspace_id) = all_workspaces.keys().next() {
+            let master_password = tx.workspace_password(first_workspace_id)
+                .ok_or_else(|| NetworkError::msg("Master password not found for initial workspace"))?;
+
+            if workspace_password != master_password {
+                return Err(NetworkError::msg("Incorrect workspace master password"));
             }
         }
 
-        // No workspace exists, or existing one had no password (edge case handled by warning above)
-        // Proceed to create a new one (this will be the first/root workspace)
+        // CreateWorkspace should always create a new workspace.
         let new_workspace_id_uuid = Uuid::new_v4();
         let new_workspace_id_str = new_workspace_id_uuid.to_string();
 
@@ -125,7 +108,12 @@ pub mod workspace_ops {
         user_id: &str,
         workspace_id: &str,
     ) -> Result<(), NetworkError> {
-        // Permission check: User must have 'DeleteWorkspace' permission.
+        // Check if the workspace is the root workspace
+    if workspace_id == crate::WORKSPACE_ROOT_ID {
+        return Err(NetworkError::msg("Cannot delete the root workspace"));
+    }
+
+    // Permission check: User must have 'DeleteWorkspace' permission.
         let user = tx
             .get_user(user_id)
             .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;

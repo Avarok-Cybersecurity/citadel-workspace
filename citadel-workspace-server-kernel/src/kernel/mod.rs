@@ -2,20 +2,23 @@ use crate::handlers::domain::functions::user;
 use crate::handlers::domain::server_ops::DomainServerOperations;
 use crate::kernel::transaction::{Transaction, TransactionManager};
 use crate::WorkspaceProtocolResponse;
-use crate::WORKSPACE_MASTER_PASSWORD_KEY;
-use crate::WORKSPACE_ROOT_ID;
 use citadel_logging::{debug, info};
 use citadel_sdk::prelude::{NetKernel, NetworkError, NodeRemote, NodeResult, Ratchet};
-use citadel_workspace_types::structs::{
-    MetadataValue as InternalMetadataValue, MetadataValue, Permission, User, WorkspaceRoles,
+use crate::{
+    WORKSPACE_MASTER_PASSWORD_KEY,
+    WORKSPACE_ROOT_ID,
 };
-use citadel_workspace_types::{structs::UserRole, WorkspaceProtocolPayload};
+use citadel_workspace_types::{
+    structs::{Permission, User, UserRole, WorkspaceRoles, MetadataValue as InternalMetadataValue},
+    WorkspaceProtocolPayload,
+};
 use rocksdb::DB;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_stream::StreamExt; // Corrected and consolidated
 
+// pub mod backend;
 pub mod command_processor;
 pub mod transaction;
 
@@ -270,18 +273,21 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 UserRole::Admin,
             );
 
+            // Add primary_workspace_id to admin user's metadata
+            user.metadata.insert(
+                "primary_workspace_id".to_string(),
+                InternalMetadataValue::String(WORKSPACE_ROOT_ID.to_string()),
+            );
+
             // Grant the admin user all permissions on the root workspace
             let mut root_permissions = HashSet::new();
             root_permissions.insert(Permission::All);
             user.permissions
                 .insert(WORKSPACE_ROOT_ID.to_string(), root_permissions);
 
-            // Store the workspace password in the user's metadata
-            user.metadata.insert(
-                WORKSPACE_MASTER_PASSWORD_KEY.to_string(),
-                MetadataValue::String(workspace_password.to_string()),
-            );
-            // Ensure the root workspace domain exists
+            // The workspace master password is not stored in user.metadata.
+            // It's stored hashed in the workspace's own metadata via tx.set_workspace_password().
+            // Ensure the root workspace domain exists and its password is set
             if tx.get_domain(WORKSPACE_ROOT_ID).is_none() {
                 let root_workspace_obj = citadel_workspace_types::structs::Workspace {
                     id: WORKSPACE_ROOT_ID.to_string(),
@@ -290,20 +296,41 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     owner_id: username.to_string(),
                     members: vec![username.to_string()],
                     offices: Vec::new(),
-                    metadata: Default::default(), // Vec::new() for Vec<u8>
-                    password_protected: false,    // Added missing field
+                    metadata: Default::default(), // Will be populated by set_workspace_password
+                    password_protected: !workspace_password.is_empty(),
                 };
 
-                // Use the enum variant for Domain
                 let root_domain_enum_variant =
                     citadel_workspace_types::structs::Domain::Workspace {
                         workspace: root_workspace_obj.clone(),
                     };
 
-                // Also insert the Workspace object directly into the workspaces cache
                 tx.insert_workspace(WORKSPACE_ROOT_ID.to_string(), root_workspace_obj)?;
-                // Insert the domain variant (which also contains the workspace data)
                 tx.insert_domain(WORKSPACE_ROOT_ID.to_string(), root_domain_enum_variant)?;
+            }
+
+            // Always set/update the workspace password for the root workspace during admin injection.
+            // This ensures it's correctly hashed and stored in the workspace's metadata.
+            if !workspace_password.is_empty() {
+                debug!(
+                    "Injecting admin: Setting/Updating password for WORKSPACE_ROOT_ID ('{}') to: '{}'",
+                    WORKSPACE_ROOT_ID, workspace_password
+                );
+                tx.set_workspace_password(WORKSPACE_ROOT_ID, workspace_password)?;
+            } else {
+                // If no password is provided during admin injection, ensure any existing password metadata is cleared.
+                // This might be an edge case, but handles consistency.
+                // This requires a way to remove a key from the serialized metadata or set it to an empty hash.
+                // For now, we'll assume a password is required for the root workspace setup.
+                // If an empty password means "no password", then set_workspace_password should handle it or
+                // we need a tx.clear_workspace_password(WORKSPACE_ROOT_ID)?;
+                debug!(
+                    "Injecting admin: No workspace password provided for WORKSPACE_ROOT_ID ('{}'). Ensuring it's not password protected.",
+                    WORKSPACE_ROOT_ID
+                );
+                // Potentially: tx.clear_workspace_password(WORKSPACE_ROOT_ID)? or ensure set_workspace_password with empty string does this.
+                // For now, if password is empty, password_protected was set to false. The metadata should reflect this (e.g. no key or empty hash).
+                // The current set_workspace_password likely handles empty string by not setting a password or setting an unusable hash.
             }
 
             tx.insert_user(username.to_string(), user)

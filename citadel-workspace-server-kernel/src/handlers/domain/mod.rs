@@ -170,7 +170,7 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
         name: &str,
         description: &str,
         mdx_content: Option<&str>,
-    ) -> Result<String, NetworkError>;
+    ) -> Result<Office, NetworkError>;
 
     /// Create a room
     fn create_room(
