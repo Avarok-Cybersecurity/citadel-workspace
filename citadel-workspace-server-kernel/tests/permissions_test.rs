@@ -347,4 +347,3 @@ mod tests {
         assert!(!result.unwrap(), "Guest should not have permissions");
     }
 }
-

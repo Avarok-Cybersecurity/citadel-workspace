@@ -93,9 +93,10 @@ async fn setup_test_environment() -> Result<
     println!("Creating workspace kernel");
     let db_temp_dir = TempDir::new().expect("Failed to create temp dir for DB");
     let db_path = db_temp_dir.path().join("integration_test_db");
-    let db = tokio::task::spawn_blocking(move || DB::open_default(&db_path).expect("Failed to open DB"))
-        .await
-        .expect("DB task panicked");
+    let db =
+        tokio::task::spawn_blocking(move || DB::open_default(&db_path).expect("Failed to open DB"))
+            .await
+            .expect("DB task panicked");
     let workspace_kernel = WorkspaceServerKernel::<StackedRatchet>::with_admin(
         ADMIN_ID,
         &admin_username,
@@ -332,12 +333,13 @@ async fn test_office_operations() {
 
     println!("Admin user registered and connected with CID: {admin_cid}.");
 
-
-
     // The root workspace is created during `setup_test_environment`, so we don't need to create it again.
     // We can directly use WORKSPACE_ROOT_ID for further operations.
     let actual_workspace_id = WORKSPACE_ROOT_ID.to_string();
-    println!("Using pre-existing root workspace with ID: {}", actual_workspace_id);
+    println!(
+        "Using pre-existing root workspace with ID: {}",
+        actual_workspace_id
+    );
 
     // --- Test: Attempt to update workspace with WRONG password ---
     println!("Attempting to update root workspace with wrong password...");
@@ -537,7 +539,10 @@ async fn test_room_operations() {
     // The root workspace is created during `setup_test_environment`, so we don't need to create it again.
     // We can directly use WORKSPACE_ROOT_ID for further operations.
     let actual_workspace_id = WORKSPACE_ROOT_ID.to_string();
-    println!("Using pre-existing root workspace with ID: {}", actual_workspace_id);
+    println!(
+        "Using pre-existing root workspace with ID: {}",
+        actual_workspace_id
+    );
 
     // Create an office using the command processor instead of directly
     println!("Creating test office...");

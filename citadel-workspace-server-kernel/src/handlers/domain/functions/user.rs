@@ -164,7 +164,7 @@ pub(crate) fn add_user_to_domain_inner(
     user_to_add
         .permissions
         .insert(domain_id.to_string(), role_permissions.clone());
-    
+
     // Log before calling update_user, which might change the object if it re-fetches internally (though current impl doesn't)
     println!(
         "[USER_OPS_ADD_USER_INNER_PRINTLN] User: '{}', Domain: '{}', Role: {:?}, Attempting to set Permissions: {:?}, User Full Permissions before tx.update_user: {:?}",
@@ -182,7 +182,7 @@ pub(crate) fn add_user_to_domain_inner(
     let mut domain_entry = tx.get_domain(domain_id).cloned().ok_or_else(|| {
         NetworkError::msg(format!("Domain {} not found when adding user", domain_id))
     })?;
-    
+
     // Modify the cloned domain_entry
     let members = get_mutable_members_from_domain_entry(&mut domain_entry)?;
     let mut added_to_members = false;

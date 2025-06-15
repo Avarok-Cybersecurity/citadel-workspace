@@ -2,8 +2,8 @@ use crate::kernel::transaction::{
     retrieve_role_permissions, DomainChange, DomainType, Transaction, UserChange, WorkspaceChange,
     WorkspaceOperations,
 };
-use bincode; // For serialization
 use bcrypt;
+use bincode; // For serialization
 use citadel_logging::debug;
 use citadel_sdk::prelude::NetworkError;
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
@@ -206,8 +206,13 @@ impl Transaction for WriteTransaction<'_> {
         if let Some(old_domain) = self.domains.get(domain_id).cloned() {
             self.domain_changes
                 .push(DomainChange::Update(domain_id.to_string(), old_domain));
-            debug!("WriteTransaction::update_domain - domain_id: {}, new_members: {:?}", domain_id, new_domain.members());
-            self.domains.insert(domain_id.to_string(), new_domain.clone());
+            debug!(
+                "WriteTransaction::update_domain - domain_id: {}, new_members: {:?}",
+                domain_id,
+                new_domain.members()
+            );
+            self.domains
+                .insert(domain_id.to_string(), new_domain.clone());
 
             // Also update the parallel workspaces map if this is a workspace
             if let Domain::Workspace { workspace } = new_domain {

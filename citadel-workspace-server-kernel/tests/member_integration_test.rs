@@ -497,7 +497,8 @@ async fn test_member_operations() -> Result<(), Box<dyn Error>> {
         _ => return Err("Expected Member response".into()),
     }
 
-    let office_details_result_for_removed_user = workspace_kernel.get_office("test_user", &office_id);
+    let office_details_result_for_removed_user =
+        workspace_kernel.get_office("test_user", &office_id);
     assert!(
         office_details_result_for_removed_user.is_ok(),
         "Expected get_office to succeed for workspace member (even if removed from office's direct members), but got: {:?}",
@@ -966,8 +967,12 @@ async fn test_admin_can_add_multiple_users_to_office() {
     let user1_id = "user1_multi_add";
     let user2_id = "user2_multi_add";
 
-    _kernel.inject_user_for_test(user1_id, UserRole::Guest).expect("Failed to inject user1_multi_add");
-    _kernel.inject_user_for_test(user2_id, UserRole::Guest).expect("Failed to inject user2_multi_add");
+    _kernel
+        .inject_user_for_test(user1_id, UserRole::Guest)
+        .expect("Failed to inject user1_multi_add");
+    _kernel
+        .inject_user_for_test(user2_id, UserRole::Guest)
+        .expect("Failed to inject user2_multi_add");
 
     let add_member1_req = WorkspaceProtocolRequest::AddMember {
         user_id: user1_id.to_string(),

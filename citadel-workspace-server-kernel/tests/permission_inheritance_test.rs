@@ -1,3 +1,4 @@
+use citadel_logging::debug;
 use citadel_sdk::prelude::StackedRatchet;
 use citadel_workspace_server_kernel::handlers::domain::server_ops::DomainServerOperations;
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
@@ -7,8 +8,7 @@ use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
 use rocksdb::DB;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tempfile::TempDir;
-use citadel_logging::{debug}; // Added this line
+use tempfile::TempDir; // Added this line
 
 const ADMIN_PASSWORD: &str = "admin_password";
 
@@ -87,7 +87,10 @@ fn test_office_room_permission_inheritance() {
         .with_read_transaction(|tx| Ok(tx.get_domain(&office.id).cloned()))
         .unwrap();
     let office_id_for_check = office.id.clone();
-    debug!("[TEST_DEBUG] Created office 'OfficeInWsPermTest' with ID: {} in workspace_id: {}", office_id_for_check, WORKSPACE_ROOT_ID);
+    debug!(
+        "[TEST_DEBUG] Created office 'OfficeInWsPermTest' with ID: {} in workspace_id: {}",
+        office_id_for_check, WORKSPACE_ROOT_ID
+    );
     let office_domain = office_domain_result.expect("Office domain should exist");
 
     match office_domain {
@@ -329,13 +332,25 @@ fn test_workspace_add_no_explicit_office_perms() {
     citadel_logging::info!(target: "citadel", "Using existing workspace for test_workspace_add_no_explicit_office_perms: {}", workspace_id);
 
     // Create an office in this workspace
-    eprintln!("[TEST_EPRINTLN] Attempting to create office 'OfficeInWsPermTest' in workspace_id: {}", workspace_id);
+    eprintln!(
+        "[TEST_EPRINTLN] Attempting to create office 'OfficeInWsPermTest' in workspace_id: {}",
+        workspace_id
+    );
     let office = domain_ops
-        .create_office("admin", &workspace_id, "OfficeInWsPermTest", "Test Office", None)
+        .create_office(
+            "admin",
+            &workspace_id,
+            "OfficeInWsPermTest",
+            "Test Office",
+            None,
+        )
         .unwrap();
 
     // Add user to the WORKSPACE
-    eprintln!("[TEST_EPRINTLN] Adding user '{}' to dynamic workspace '{}'", user_id, workspace_id);
+    eprintln!(
+        "[TEST_EPRINTLN] Adding user '{}' to dynamic workspace '{}'",
+        user_id, workspace_id
+    );
     citadel_logging::debug!(
         "[TEST_LOG] About to add user_id: '{}' to workspace_id: '{}'",
         user_id,
@@ -344,7 +359,10 @@ fn test_workspace_add_no_explicit_office_perms() {
     domain_ops
         .add_user_to_domain("admin", user_id, &workspace_id, UserRole::Member)
         .unwrap();
-    eprintln!("[TEST_EPRINTLN] Added user '{}' to dynamic workspace '{}'", user_id, workspace_id);
+    eprintln!(
+        "[TEST_EPRINTLN] Added user '{}' to dynamic workspace '{}'",
+        user_id, workspace_id
+    );
 
     // ASSERTION 1: User should NOT have explicit permissions on the OFFICE
     let user_explicit_office_perms = kernel
@@ -355,9 +373,7 @@ fn test_workspace_add_no_explicit_office_perms() {
             let perms = u.permissions.get(&office.id);
             println!(
                 "CASCADE_TEST_DEBUG: User '{}' explicit permissions for office '{}': {:?}",
-                user_id,
-                office.id,
-                perms
+                user_id, office.id, perms
             );
             Ok(perms.cloned())
         })

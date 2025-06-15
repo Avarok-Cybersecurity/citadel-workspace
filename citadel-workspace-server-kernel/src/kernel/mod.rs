@@ -2,14 +2,11 @@ use crate::handlers::domain::functions::user;
 use crate::handlers::domain::server_ops::DomainServerOperations;
 use crate::kernel::transaction::{Transaction, TransactionManager};
 use crate::WorkspaceProtocolResponse;
+use crate::{WORKSPACE_MASTER_PASSWORD_KEY, WORKSPACE_ROOT_ID};
 use citadel_logging::{debug, info};
 use citadel_sdk::prelude::{NetKernel, NetworkError, NodeRemote, NodeResult, Ratchet};
-use crate::{
-    WORKSPACE_MASTER_PASSWORD_KEY,
-    WORKSPACE_ROOT_ID,
-};
 use citadel_workspace_types::{
-    structs::{Permission, User, UserRole, WorkspaceRoles, MetadataValue as InternalMetadataValue},
+    structs::{MetadataValue as InternalMetadataValue, Permission, User, UserRole, WorkspaceRoles},
     WorkspaceProtocolPayload,
 };
 use rocksdb::DB;
@@ -210,7 +207,8 @@ impl<R: Ratchet> Default for WorkspaceServerKernel<R> {
         #[allow(unreachable_code)]
         {
             #[allow(clippy::diverging_sub_expression)]
-            let _tx_manager = Arc::new(TransactionManager::new(todo!("No DB available in default")));
+            let _tx_manager =
+                Arc::new(TransactionManager::new(todo!("No DB available in default")));
             Self {
                 roles: Arc::new(RwLock::new(WorkspaceRoles::new())),
                 node_remote: Arc::new(RwLock::new(None)),

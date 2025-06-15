@@ -1,6 +1,6 @@
 pub mod workspace_ops {
     use crate::kernel::transaction::Transaction;
-        use citadel_logging::{error, info, warn};
+    use citadel_logging::{error, info, warn};
     use citadel_sdk::prelude::NetworkError;
     use citadel_workspace_types::structs::{Domain, Permission, UserRole, Workspace};
     use serde::{Deserialize, Serialize};
@@ -31,15 +31,15 @@ pub mod workspace_ops {
         workspace_password: String,
     ) -> Result<Workspace, NetworkError> {
         // Check if a root workspace already exists
-    let found_root_ws = tx.get_workspace(crate::WORKSPACE_ROOT_ID);
-    let root_ws_exists = found_root_ws.is_some();
-    if root_ws_exists {
-        return Err(NetworkError::msg(
-            "A root workspace already exists. Cannot create another one.",
-        ));
-    }
+        let found_root_ws = tx.get_workspace(crate::WORKSPACE_ROOT_ID);
+        let root_ws_exists = found_root_ws.is_some();
+        if root_ws_exists {
+            return Err(NetworkError::msg(
+                "A root workspace already exists. Cannot create another one.",
+            ));
+        }
 
-    // Ensure the user creating the workspace exists
+        // Ensure the user creating the workspace exists
         let _user = tx
             .get_user(user_id)
             .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
@@ -47,8 +47,9 @@ pub mod workspace_ops {
         // If other workspaces exist, validate the password against the master password
         let all_workspaces = tx.get_all_workspaces();
         if let Some(first_workspace_id) = all_workspaces.keys().next() {
-            let master_password = tx.workspace_password(first_workspace_id)
-                .ok_or_else(|| NetworkError::msg("Master password not found for initial workspace"))?;
+            let master_password = tx.workspace_password(first_workspace_id).ok_or_else(|| {
+                NetworkError::msg("Master password not found for initial workspace")
+            })?;
 
             if workspace_password != master_password {
                 return Err(NetworkError::msg("Incorrect workspace master password"));
@@ -109,11 +110,11 @@ pub mod workspace_ops {
         workspace_id: &str,
     ) -> Result<(), NetworkError> {
         // Check if the workspace is the root workspace
-    if workspace_id == crate::WORKSPACE_ROOT_ID {
-        return Err(NetworkError::msg("Cannot delete the root workspace"));
-    }
+        if workspace_id == crate::WORKSPACE_ROOT_ID {
+            return Err(NetworkError::msg("Cannot delete the root workspace"));
+        }
 
-    // Permission check: User must have 'DeleteWorkspace' permission.
+        // Permission check: User must have 'DeleteWorkspace' permission.
         let user = tx
             .get_user(user_id)
             .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
@@ -167,9 +168,9 @@ pub mod workspace_ops {
 
         // Ensure the user to add exists
         // Get the user to add mutably. The binding itself doesn't need to be mut.
-        let user_to_add = tx
-            .get_user_mut(user_to_add_id)
-            .ok_or_else(|| NetworkError::msg(format!("User to add {} not found", user_to_add_id)))?;
+        let user_to_add = tx.get_user_mut(user_to_add_id).ok_or_else(|| {
+            NetworkError::msg(format!("User to add {} not found", user_to_add_id))
+        })?;
 
         // Add user to workspace members list (if not already present)
         if !workspace.members.contains(&user_to_add_id.to_string()) {

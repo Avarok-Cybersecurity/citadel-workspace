@@ -1,3 +1,4 @@
+use bcrypt;
 use citadel_logging::info;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{
@@ -5,7 +6,6 @@ use citadel_workspace_types::structs::{
 };
 use citadel_workspace_types::UpdateOperation;
 use serde_json;
-use bcrypt;
 use std::any::TypeId;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::handlers::domain::functions::workspace::workspace_ops::WorkspacePasswordPair;
 use crate::handlers::domain::WorkspaceDBList;
 use crate::kernel::transaction::{Transaction, TransactionManager};
-use crate::{WORKSPACE_ROOT_ID,};
+use crate::WORKSPACE_ROOT_ID;
 
 use super::functions::office::office_ops;
 use super::functions::room::room_ops;
@@ -209,7 +209,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
     ) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
             let domain = tx.get_domain(domain_id).ok_or_else(|| {
-                NetworkError::msg(format!("Domain {} not found for permission update.", domain_id))
+                NetworkError::msg(format!(
+                    "Domain {} not found for permission update.",
+                    domain_id
+                ))
             })?;
 
             let required_permission_for_actor = match domain {
@@ -218,7 +221,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                 Domain::Room { .. } => Permission::ManageRoomMembers,
             };
 
-            if !self.check_entity_permission(tx, actor_user_id, domain_id, required_permission_for_actor)? {
+            if !self.check_entity_permission(
+                tx,
+                actor_user_id,
+                domain_id,
+                required_permission_for_actor,
+            )? {
                 return Err(permission_denied(format!(
                     "Actor {} lacks {:?} permission in domain {}.",
                     actor_user_id, required_permission_for_actor, domain_id
@@ -232,7 +240,8 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                 ))
             })?;
 
-            let user_domain_permissions = user.permissions.entry(domain_id.to_string()).or_default();
+            let user_domain_permissions =
+                user.permissions.entry(domain_id.to_string()).or_default();
             match operation {
                 UpdateOperation::Add => {
                     for perm in permissions_to_update {
@@ -305,7 +314,13 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             let office_struct =
                 self.create_office(user_id, parent_workspace_id, name, description, mdx_content)?;
 
-            let result_t = serde_json::from_value(serde_json::to_value(office_struct).map_err(|e| NetworkError::msg(format!("Failed to serialize Office to Value: {}", e)))?).map_err(|e| NetworkError::msg(format!("Failed to deserialize Office from Value: {}", e)))?;
+            let result_t =
+                serde_json::from_value(serde_json::to_value(office_struct).map_err(|e| {
+                    NetworkError::msg(format!("Failed to serialize Office to Value: {}", e))
+                })?)
+                .map_err(|e| {
+                    NetworkError::msg(format!("Failed to deserialize Office from Value: {}", e))
+                })?;
             return Ok(result_t);
         } else if type_id == TypeId::of::<Room>() {
             let parent_office_id = parent_id.ok_or_else(|| {
@@ -502,11 +517,18 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                     return Err(permission_denied("Incorrect workspace master password"));
                 }
             } else {
-                return Err(NetworkError::msg("Master password not found for root workspace"));
+                return Err(NetworkError::msg(
+                    "Master password not found for root workspace",
+                ));
             }
 
             // 3. Check user permissions
-            if !self.check_entity_permission(tx, user_id, workspace_id, Permission::EditWorkspaceConfig)? {
+            if !self.check_entity_permission(
+                tx,
+                user_id,
+                workspace_id,
+                Permission::EditWorkspaceConfig,
+            )? {
                 return Err(permission_denied(format!(
                     "User {} lacks permission to update workspace {}",
                     user_id, workspace_id
@@ -514,9 +536,9 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             }
 
             // 4. Get the workspace and update fields
-            let workspace = tx
-                .get_workspace_mut(workspace_id)
-                .ok_or_else(|| NetworkError::msg(format!("Workspace {} not found", workspace_id)))?;
+            let workspace = tx.get_workspace_mut(workspace_id).ok_or_else(|| {
+                NetworkError::msg(format!("Workspace {} not found", workspace_id))
+            })?;
 
             if let Some(n) = name {
                 workspace.name = n.to_string();
@@ -529,8 +551,6 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             Ok(workspace.clone())
         })
     }
-
-
 
     fn add_office_to_workspace(
         &self,
@@ -578,7 +598,6 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             workspace_ops::remove_user_from_workspace_inner(tx, admin_id, user_id, workspace_id)
         })
     }
-
 
     fn load_workspace(
         &self,
@@ -668,14 +687,13 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                 )));
             }
 
-            let domain = tx
-                .get_domain(office_id)
-                .ok_or_else(|| NetworkError::msg(format!("Office domain {} not found", office_id)))?;
+            let domain = tx.get_domain(office_id).ok_or_else(|| {
+                NetworkError::msg(format!("Office domain {} not found", office_id))
+            })?;
 
             match domain {
-                Domain::Office { office, .. } => serde_json::to_string(office).map_err(|e| {
-                    NetworkError::msg(format!("Failed to serialize office: {}", e))
-                }),
+                Domain::Office { office, .. } => serde_json::to_string(office)
+                    .map_err(|e| NetworkError::msg(format!("Failed to serialize office: {}", e))),
                 _ => Err(NetworkError::msg(format!(
                     "Domain {} is not an office",
                     office_id

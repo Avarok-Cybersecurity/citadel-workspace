@@ -41,7 +41,10 @@ fn test_create_workspace() {
     );
 
     // Verify the command fails
-    assert!(result.is_ok(), "process_command should return Ok even for app errors");
+    assert!(
+        result.is_ok(),
+        "process_command should return Ok even for app errors"
+    );
     match result.unwrap() {
         WorkspaceProtocolResponse::Error(e) => {
             assert_eq!(e, "Failed to create workspace: A root workspace already exists. Cannot create another one.", "Incorrect error message");
@@ -61,7 +64,10 @@ fn test_get_workspace() {
     // Verify the response
     assert!(get_result.is_ok());
     if let Ok(WorkspaceProtocolResponse::Workspace(workspace)) = get_result {
-        assert_eq!(workspace.id, citadel_workspace_server_kernel::WORKSPACE_ROOT_ID);
+        assert_eq!(
+            workspace.id,
+            citadel_workspace_server_kernel::WORKSPACE_ROOT_ID
+        );
         assert_eq!(workspace.owner_id, "admin-user"); // Default admin
     } else {
         panic!("Expected Workspace response, got {:?}", get_result);
@@ -89,7 +95,10 @@ fn test_update_workspace() {
     // Verify the response
     assert!(update_result.is_ok(), "Update failed: {:?}", update_result);
     if let Ok(WorkspaceProtocolResponse::Workspace(workspace)) = update_result {
-        assert_eq!(workspace.id, citadel_workspace_server_kernel::WORKSPACE_ROOT_ID);
+        assert_eq!(
+            workspace.id,
+            citadel_workspace_server_kernel::WORKSPACE_ROOT_ID
+        );
         assert_eq!(workspace.name, updated_name);
         assert_eq!(workspace.description, updated_description);
     } else {
@@ -100,7 +109,9 @@ fn test_update_workspace() {
     kernel
         .tx_manager()
         .with_read_transaction(|tx| {
-            let workspace = tx.get_workspace(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID).unwrap();
+            let workspace = tx
+                .get_workspace(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID)
+                .unwrap();
             assert_eq!(workspace.name, updated_name);
             assert_eq!(workspace.description, updated_description);
             Ok(())
@@ -136,7 +147,10 @@ fn test_delete_workspace() {
         .tx_manager()
         .with_read_transaction(|tx| {
             let workspace = tx.get_workspace(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID);
-            assert!(workspace.is_some(), "Root workspace should not have been deleted");
+            assert!(
+                workspace.is_some(),
+                "Root workspace should not have been deleted"
+            );
             Ok(())
         })
         .unwrap();
@@ -199,7 +213,11 @@ fn test_permissions_inheritance() {
     kernel
         .tx_manager()
         .with_write_transaction(|tx| {
-            let owner = User::new(owner_id.to_string(), "Owner User".to_string(), UserRole::Owner);
+            let owner = User::new(
+                owner_id.to_string(),
+                "Owner User".to_string(),
+                UserRole::Owner,
+            );
             let member = User::new(
                 member_id.to_string(),
                 "Member User".to_string(),
@@ -280,28 +298,40 @@ fn test_permissions_inheritance() {
         citadel_workspace_server_kernel::WORKSPACE_ROOT_ID,
         Permission::ViewContent,
     );
-    assert!(member_workspace_perm.unwrap(), "Member should have ViewContent on workspace");
+    assert!(
+        member_workspace_perm.unwrap(),
+        "Member should have ViewContent on workspace"
+    );
 
     // 2. Member should have ViewContent permission on office (inherited from workspace)
     let member_office_perm =
         kernel
             .tx_manager()
             .check_entity_permission(member_id, &office_id, Permission::ViewContent);
-    assert!(member_office_perm.unwrap(), "Member should have ViewContent on office by inheritance");
+    assert!(
+        member_office_perm.unwrap(),
+        "Member should have ViewContent on office by inheritance"
+    );
 
     // 3. Member should have ViewContent permission on room (inherited from workspace -> office)
     let member_room_perm =
         kernel
             .tx_manager()
             .check_entity_permission(member_id, &room_id, Permission::ViewContent);
-    assert!(member_room_perm.unwrap(), "Member should have ViewContent on room by inheritance");
+    assert!(
+        member_room_perm.unwrap(),
+        "Member should have ViewContent on room by inheritance"
+    );
 
     // 4. Member should NOT have EditContent permission on room (not granted to members)
     let member_edit_perm =
         kernel
             .tx_manager()
             .check_entity_permission(member_id, &room_id, Permission::EditContent);
-    assert!(!member_edit_perm.unwrap(), "Member should NOT have EditContent on room");
+    assert!(
+        !member_edit_perm.unwrap(),
+        "Member should NOT have EditContent on room"
+    );
 
     // 5. Owner should have all permissions on workspace, office, and room
     let owner_edit_workspace = kernel.tx_manager().check_entity_permission(
@@ -318,9 +348,18 @@ fn test_permissions_inheritance() {
             .tx_manager()
             .check_entity_permission(owner_id, &room_id, Permission::EditContent);
 
-    assert!(owner_edit_workspace.unwrap(), "Owner should have EditContent on workspace");
-    assert!(owner_edit_office.unwrap(), "Owner should have EditContent on office");
-    assert!(owner_edit_room.unwrap(), "Owner should have EditContent on room");
+    assert!(
+        owner_edit_workspace.unwrap(),
+        "Owner should have EditContent on workspace"
+    );
+    assert!(
+        owner_edit_office.unwrap(),
+        "Owner should have EditContent on office"
+    );
+    assert!(
+        owner_edit_room.unwrap(),
+        "Owner should have EditContent on room"
+    );
 
     // 6. Admin should have all permissions regardless of membership
     let admin_edit_workspace = kernel.tx_manager().check_entity_permission(
@@ -337,9 +376,18 @@ fn test_permissions_inheritance() {
             .tx_manager()
             .check_entity_permission(admin_id, &room_id, Permission::EditContent);
 
-    assert!(admin_edit_workspace.unwrap(), "Admin should have EditContent on workspace");
-    assert!(admin_edit_office.unwrap(), "Admin should have EditContent on office");
-    assert!(admin_edit_room.unwrap(), "Admin should have EditContent on room");
+    assert!(
+        admin_edit_workspace.unwrap(),
+        "Admin should have EditContent on workspace"
+    );
+    assert!(
+        admin_edit_office.unwrap(),
+        "Admin should have EditContent on office"
+    );
+    assert!(
+        admin_edit_room.unwrap(),
+        "Admin should have EditContent on room"
+    );
 }
 
 #[test]
@@ -353,7 +401,10 @@ fn test_load_workspace() {
     // Verify the response
     assert!(load_result.is_ok());
     if let Ok(WorkspaceProtocolResponse::Workspace(workspace)) = load_result {
-        assert_eq!(workspace.id, citadel_workspace_server_kernel::WORKSPACE_ROOT_ID);
+        assert_eq!(
+            workspace.id,
+            citadel_workspace_server_kernel::WORKSPACE_ROOT_ID
+        );
         assert_eq!(workspace.owner_id, "admin-user");
     } else {
         panic!("Expected Workspace response, got {:?}", load_result);

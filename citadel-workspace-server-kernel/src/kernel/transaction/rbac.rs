@@ -148,14 +148,22 @@ impl TransactionManager {
                 }
 
                 // Workspace inheritance check
-                let granted_by_workspace_inheritance = if let Some(Domain::Workspace { workspace }) = tx.get_domain(&office.workspace_id) {
+                let granted_by_workspace_inheritance = if let Some(Domain::Workspace {
+                    workspace,
+                }) = tx.get_domain(&office.workspace_id)
+                {
                     // Check if user has the required permission directly on the parent workspace
-                    if tx.get_user(user_id).is_some_and(|u| u.has_permission(&workspace.id, permission)) {
+                    if tx
+                        .get_user(user_id)
+                        .is_some_and(|u| u.has_permission(&workspace.id, permission))
+                    {
                         // TODO: Be more specific about which permissions can be inherited here, e.g. ViewContent, AddUserToOffice etc.
                         // For now, assume any direct perm on workspace can grant it to office if not explicitly denied.
                         debug!(target: "citadel", "User {} granted {:?} on office {} via direct permission on parent workspace {}", user_id, permission, entity_id, &workspace.id);
                         true
-                    } else if workspace.members.contains(&user_id.to_string()) && permission == Permission::ViewContent {
+                    } else if workspace.members.contains(&user_id.to_string())
+                        && permission == Permission::ViewContent
+                    {
                         debug!(target: "citadel", "User {} granted ViewContent on office {} via workspace {} membership (fallback)", user_id, entity_id, &office.workspace_id);
                         true
                     } else {
@@ -204,27 +212,50 @@ impl TransactionManager {
                 // Inheritance checks if not explicit room member or owner
                 if let Some(Domain::Office { office }) = tx.get_domain(&room.office_id) {
                     // 3a. Check direct permission on parent Office
-                    if tx.get_user(user_id).is_some_and(|u| u.has_permission(&office.id, permission)) && 
-                       [Permission::ViewContent, Permission::ReadMessages, Permission::SendMessages, Permission::CreateRoom].contains(&permission) {
+                    if tx
+                        .get_user(user_id)
+                        .is_some_and(|u| u.has_permission(&office.id, permission))
+                        && [
+                            Permission::ViewContent,
+                            Permission::ReadMessages,
+                            Permission::SendMessages,
+                            Permission::CreateRoom,
+                        ]
+                        .contains(&permission)
+                    {
                         debug!(target: "citadel", "User {} granted {:?} on room {} via direct permission on parent office {}", user_id, permission, entity_id, &office.id);
                         return Ok(true);
                     }
                     // 3b. Fallback: Original check for office membership granting ViewContent (might be redundant)
-                    if office.members.contains(&user_id.to_string()) && permission == Permission::ViewContent {
+                    if office.members.contains(&user_id.to_string())
+                        && permission == Permission::ViewContent
+                    {
                         debug!(target: "citadel", "User {} granted ViewContent on room {} via office {} membership (fallback)", user_id, entity_id, &office.id);
                         return Ok(true);
                     }
 
                     // 4. If not granted via office, check grandparent Workspace
-                    if let Some(Domain::Workspace { workspace }) = tx.get_domain(&office.workspace_id) {
+                    if let Some(Domain::Workspace { workspace }) =
+                        tx.get_domain(&office.workspace_id)
+                    {
                         // 4a. Check direct permission on grandparent Workspace
-                        if tx.get_user(user_id).is_some_and(|u| u.has_permission(&workspace.id, permission)) && 
-                           [Permission::ViewContent, Permission::ReadMessages, Permission::SendMessages].contains(&permission) {
+                        if tx
+                            .get_user(user_id)
+                            .is_some_and(|u| u.has_permission(&workspace.id, permission))
+                            && [
+                                Permission::ViewContent,
+                                Permission::ReadMessages,
+                                Permission::SendMessages,
+                            ]
+                            .contains(&permission)
+                        {
                             debug!(target: "citadel", "User {} granted {:?} on room {} via direct permission on grandparent workspace {}", user_id, permission, entity_id, &workspace.id);
                             return Ok(true);
                         }
                         // 4b. Fallback: Original check for workspace membership granting ViewContent (might be redundant)
-                        if workspace.members.contains(&user_id.to_string()) && permission == Permission::ViewContent {
+                        if workspace.members.contains(&user_id.to_string())
+                            && permission == Permission::ViewContent
+                        {
                             debug!(target: "citadel", "User {} granted ViewContent on room {} via workspace {} membership (fallback to grandparent)", user_id, entity_id, &workspace.id);
                             return Ok(true);
                         }
@@ -413,16 +444,16 @@ pub fn retrieve_role_permissions(role: &UserRole, domain_type: &DomainType) -> V
             UserRole::Owner => {
                 permissions.extend(vec![
                     Permission::EditWorkspaceConfig,
-                    Permission::AddUsers,           // For adding members
-                    Permission::RemoveUsers,        // For removing members (member management also involves role checks elsewhere)
-                    Permission::CreateOffice,       // Can create offices in the workspace
-                    Permission::DeleteOffice,       // Can delete offices in the workspace
-                    Permission::EditOfficeConfig,   // Can edit config of offices they manage/own
-                    Permission::CreateRoom,         // Can create rooms in offices they manage/own
-                    Permission::DeleteRoom,         // Can delete rooms
-                    Permission::EditRoomConfig,     // Can edit room config
-                    Permission::ViewContent,        // Can view content within the workspace
-                    Permission::EditContent,        // For managing/editing content within the workspace
+                    Permission::AddUsers,         // For adding members
+                    Permission::RemoveUsers, // For removing members (member management also involves role checks elsewhere)
+                    Permission::CreateOffice, // Can create offices in the workspace
+                    Permission::DeleteOffice, // Can delete offices in the workspace
+                    Permission::EditOfficeConfig, // Can edit config of offices they manage/own
+                    Permission::CreateRoom,  // Can create rooms in offices they manage/own
+                    Permission::DeleteRoom,  // Can delete rooms
+                    Permission::EditRoomConfig, // Can edit room config
+                    Permission::ViewContent, // Can view content within the workspace
+                    Permission::EditContent, // For managing/editing content within the workspace
                 ]);
             }
             UserRole::Admin => {

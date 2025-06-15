@@ -5,7 +5,7 @@ pub mod office_ops {
     use citadel_logging::{debug, error, info, warn};
     use citadel_sdk::prelude::*;
     use citadel_workspace_types::structs::{Domain, Office, Permission, UserRole};
-    
+
     pub(crate) fn create_office_inner(
         tx: &mut dyn Transaction,
         user_id: &str,      // User creating the office
@@ -15,7 +15,7 @@ pub mod office_ops {
         description: &str,
         mdx_content: Option<String>, // Added mdx_content parameter
     ) -> Result<Office, NetworkError> {
-    eprintln!( // <<< NEW LOG INSERTED HERE
+        eprintln!( // <<< NEW LOG INSERTED HERE
         "[CREATE_OFFICE_INNER_ENTRY_EPRINTLN] Received workspace_id: {}, office_id: {}, name: {}",
         workspace_id, office_id, name
     );
@@ -326,7 +326,10 @@ pub mod office_ops {
             // List all offices the user is a member of
             for domain_id_key in user.permissions.keys() {
                 if let Some(Domain::Office { office, .. }) = tx.get_domain(domain_id_key) {
-                    if tx.is_member_of_domain(user_id, domain_id_key).unwrap_or(false) {
+                    if tx
+                        .is_member_of_domain(user_id, domain_id_key)
+                        .unwrap_or(false)
+                    {
                         offices.push(office.clone());
                     }
                 }
