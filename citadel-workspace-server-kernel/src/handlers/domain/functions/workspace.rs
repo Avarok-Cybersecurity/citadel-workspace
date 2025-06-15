@@ -166,27 +166,38 @@ pub mod workspace_ops {
             .clone();
 
         // Ensure the user to add exists
-        let _ = tx.get_user(user_to_add_id).ok_or_else(|| {
-            NetworkError::msg(format!("User to add {} not found", user_to_add_id))
-        })?;
+        // Get the user to add mutably. The binding itself doesn't need to be mut.
+        let user_to_add = tx
+            .get_user_mut(user_to_add_id)
+            .ok_or_else(|| NetworkError::msg(format!("User to add {} not found", user_to_add_id)))?;
 
+        // Add user to workspace members list (if not already present)
         if !workspace.members.contains(&user_to_add_id.to_string()) {
             workspace.members.push(user_to_add_id.to_string());
         } else {
             warn!(
-                "User {} is already a member of workspace {}. Skipping addition.",
+                "User {} is already a member of workspace {}. Role/permissions will still be updated.",
                 user_to_add_id, workspace_id
             );
         }
 
-        // The `role: UserRole` is now passed directly. No need to parse from string.
-        // TODO: Actually *use* the role. For example, by setting permissions based on this role.
-        // This might involve a call like:
-        // permission_ops::set_permissions_for_user_on_domain_based_on_role(tx, user_to_add_id, workspace_id, &role)?;
-        // For now, the role is not explicitly used to set fine-grained permissions in this function beyond membership.
-        // The permissions are checked for the admin, and the user is added as a member.
-        // The actual enforcement of what a "Member" or "Custom Editor" can do is handled by permission checks elsewhere.
+        // Retrieve permissions for the given role and domain type
+        let role_permissions = crate::kernel::transaction::rbac::retrieve_role_permissions(
+            &role,
+            &crate::kernel::transaction::rbac::DomainType::Workspace,
+        );
 
+        // Add/update permissions for the user on this workspace (modifying through &mut User)
+        user_to_add
+            .permissions
+            .entry(workspace_id.to_string())
+            .or_default()
+            .extend(role_permissions.iter().cloned());
+
+        // The user object within the transaction is already modified via the &mut User reference.
+        // No need to call tx.update_user().
+
+        // Update the workspace (with potentially updated members list)
         tx.update_workspace(workspace_id, workspace.clone())?;
         tx.update_domain(
             workspace_id,

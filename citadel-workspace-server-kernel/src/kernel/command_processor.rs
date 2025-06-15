@@ -230,9 +230,9 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 role,
                 metadata: _, // Added metadata field
             } => {
-                if office_id.is_some() == room_id.is_some() {
+                if office_id.is_some() && room_id.is_some() {
                     return Ok(WorkspaceProtocolResponse::Error(
-                        "Must specify exactly one of office_id or room_id, or neither for workspace-level member addition".to_string(),
+                        "Cannot specify both office_id and room_id. Specify one for domain-level addition, or neither for workspace-level.".to_string(),
                     ));
                 }
                 Self::handle_result(
@@ -421,6 +421,22 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             "[ADD_MEMBER_CMD_INTERNAL_ENTRY] actor_user_id: {}",
             actor_user_id
         );
+        if office_id_opt.is_none() && room_id_opt.is_none() {
+            // Adding member directly to the workspace (root workspace for now)
+            let workspace_id = crate::WORKSPACE_ROOT_ID.to_string();
+            println!(
+                "[ADD_MEMBER_CMD_INTERNAL_WORKSPACE_ONLY] actor_user_id: {}, target_member_id: {}, workspace_id: {}, role: {:?}",
+                actor_user_id, target_member_id, workspace_id, role
+            );
+            return self.domain_ops().add_user_to_workspace(
+                actor_user_id,
+                target_member_id,
+                &workspace_id,
+                role,
+            );
+        }
+
+        // Existing logic for adding to office or room
         let workspace_id_for_membership: String;
         let final_target_domain_id_str: String;
 
