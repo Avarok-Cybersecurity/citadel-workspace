@@ -1,6 +1,8 @@
 use crate::handlers::domain::functions::user;
 use crate::handlers::domain::server_ops::DomainServerOperations;
+use crate::handlers::domain::DomainOperations;
 use crate::kernel::transaction::{Transaction, TransactionManager};
+use crate::kernel::transaction::prelude::*;
 use crate::WorkspaceProtocolResponse;
 use crate::{WORKSPACE_MASTER_PASSWORD_KEY, WORKSPACE_ROOT_ID};
 use citadel_logging::{debug, info};
@@ -222,7 +224,7 @@ impl<R: Ratchet> Default for WorkspaceServerKernel<R> {
 impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Create a new WorkspaceServerKernel without any default users
     pub fn new(
-        transaction_manager: Arc<TransactionManager>,
+        transaction_manager: Arc<RwLock<TransactionManager>>,
         node_remote: Option<NodeRemote<R>>,
         admin_username: String,
     ) -> Self {
@@ -365,8 +367,8 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         &self.domain_operations
     }
 
-    // Retyrn the transaction manager
-    pub fn tx_manager(&self) -> &Arc<TransactionManager> {
+    // Return the transaction manager
+    pub fn tx_manager(&self) -> &Arc<parking_lot::RwLock<TransactionManager>> {
         &self.domain_operations.tx_manager
     }
 
@@ -421,31 +423,32 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         role: UserRole,
         metadata: Option<Vec<u8>>,
     ) -> Result<(), NetworkError> {
-        let mut tx = self.tx_manager().write_transaction();
-        let domain_id_str = domain_id.ok_or_else(|| {
-            NetworkError::msg("Domain ID must be provided to add a member to a domain")
-        })?;
+        self.tx_manager().with_write_transaction(|tx| {
+            let domain_id_str = domain_id.ok_or_else(|| {
+                NetworkError::msg("Domain ID must be provided to add a member to a domain")
+            })?;
 
-        user::add_user_to_domain_inner(
-            &mut tx,
-            actor_user_id,
-            target_user_id,
-            domain_id_str,
-            role,
-            metadata,
-        )?; // Propagate error if add_user_to_domain_inner fails
+            user::add_user_to_domain_inner(
+                tx,
+                actor_user_id,
+                target_user_id,
+                domain_id_str,
+                role,
+                metadata,
+            )?; // Propagate error if add_user_to_domain_inner fails
 
-        // If we reach here, add_user_to_domain_inner was Ok. Now commit.
-        tx.commit().map_err(|e| {
-            // @human-review: Consider proper logging for transaction commit failures
-            eprintln!(
-                "[add_member KERNEL COMMIT_FAILURE_PRINTLN] Transaction commit failed: {:?}",
-                e
-            );
-            NetworkError::msg(format!("Transaction commit failed: {}", e))
-        })?;
+            // Commit changes
+            tx.commit().map_err(|e| {
+                // @human-review: Consider proper logging for transaction commit failures
+                eprintln!(
+                    "[add_member KERNEL COMMIT_FAILURE_PRINTLN] Transaction commit failed: {:?}",
+                    e
+                );
+                NetworkError::msg(format!("Transaction commit failed: {}", e))
+            })?;
 
-        Ok(())
+            Ok(())
+        })
     }
 
     pub fn remove_member(
@@ -453,12 +456,18 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         actor_user_id: &str,
         target_user_id: &str,
     ) -> Result<(), NetworkError> {
-        let mut tx = self.tx_manager().write_transaction();
-        user::remove_user_from_domain_inner(
-            &mut tx,
-            actor_user_id,
-            target_user_id,
-            WORKSPACE_ROOT_ID,
-        )
+        self.tx_manager().with_write_transaction(|tx| {
+            user::remove_user_from_domain_inner(
+                tx,
+                actor_user_id,
+                target_user_id,
+                WORKSPACE_ROOT_ID,
+            )?;
+
+            // Commit the transaction
+            tx.commit()?;
+            
+            Ok(())
+        })
     }
 }

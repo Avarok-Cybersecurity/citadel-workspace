@@ -8,8 +8,15 @@ pub mod rbac;
 pub mod read;
 pub mod write;
 
+// Re-export rbac functionality for convenience
 pub use self::rbac::retrieve_role_permissions;
 pub use self::rbac::DomainType;
+pub use self::rbac::TransactionManagerExt;
+
+// Create a prelude module for easy imports
+pub mod prelude {
+    pub use super::rbac::TransactionManagerExt;
+}
 
 /// Transaction trait defines common functionality for both read and write transactions
 pub trait Transaction {

@@ -1,4 +1,6 @@
 use crate::kernel::WorkspaceServerKernel;
+use crate::kernel::transaction::prelude::TransactionManagerExt;
+use crate::kernel::transaction::Transaction;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{Domain, User};
 use std::collections::HashSet;
@@ -8,7 +10,7 @@ use std::collections::HashSet;
 #[allow(dead_code)]
 impl<R: Ratchet> WorkspaceServerKernel<R> {
     // List members in an office or room
-    pub fn list_members(
+    pub fn query_members(
         &self,
         office_id: Option<&str>,
         room_id: Option<&str>,
