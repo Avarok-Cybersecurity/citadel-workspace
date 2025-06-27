@@ -3,7 +3,7 @@ use crate::handlers::domain::server_ops::DomainServerOperations;
 use crate::handlers::domain::DomainEntity;
 use crate::kernel::transaction::Transaction;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{Domain, User, UserRole};
+use citadel_workspace_types::structs::{Domain, User, UserRole, Permission, UpdateOperation, Room, Office, Workspace, WorkspaceDBList};
 
 impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOperations<R> {
     fn init(&self) -> Result<(), NetworkError> {
@@ -845,9 +845,8 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                 description: description.to_string(),
                 members: vec![user_id.to_string()],
                 offices: Vec::new(),
-                mdx_content: String::new(),
                 metadata: metadata.unwrap_or_default(),
-                password: workspace_password,
+                password_protected: !workspace_password.is_empty(),
             };
             
             // Add workspace to domain storage
@@ -1197,8 +1196,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                 description: description.to_string(),
                 workspace_id: workspace_id.to_string(),
                 owner_id: user_id.to_string(),
-                created_at: chrono::Utc::now(),
-                updated_at: chrono::Utc::now(),
+                members: vec![user_id.to_string()], // Creator is the first member
+                rooms: Vec::new(),
+                mdx_content: mdx_content.unwrap_or_default(),
+                metadata: Vec::new(),
             };
             
             // Add office to domain storage

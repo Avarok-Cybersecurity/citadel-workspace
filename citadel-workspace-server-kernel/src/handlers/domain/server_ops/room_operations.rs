@@ -1,7 +1,7 @@
 use crate::handlers::domain::server_ops::DomainServerOperations;
 use crate::handlers::domain::DomainOperations;
 use crate::handlers::domain::functions::room::room_ops;
-use crate::kernel::transaction::rbac::transaction_operations::TransactionManagerExt;
+use crate::kernel::transaction::TransactionManagerExt;
 
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{Room, Permission};
@@ -27,10 +27,13 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             }
 
             // Create the room
-            let room = room_ops::create_room(tx, office_id, name, description, mdx_content)?;
+            // Generate a unique room ID
+            let room_id = uuid::Uuid::new_v4().to_string();
+            let mdx_content_string = mdx_content.map(|s| s.to_string());
+            let room = room_ops::create_room_inner(tx, user_id, office_id, &room_id, name, description, mdx_content_string)?;
             
             // Add the creating user to the room with appropriate privileges
-            room_ops::add_user_to_room(tx, user_id, &room.id)?;
+            // User is already added in create_room_inner
             
             Ok(room)
         })
@@ -64,7 +67,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             }
 
             // Update the room
-            room_ops::update_room(tx, room_id, name, description, mdx_content)
+            let name_option = name.map(|s| s.to_string());
+            let desc_option = description.map(|s| s.to_string());
+            let mdx_option = mdx_content.map(|s| s.to_string());
+            room_ops::update_room_inner(tx, user_id, room_id, name_option, desc_option, mdx_option)
         })
     }
 
@@ -80,7 +86,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             }
 
             // Delete the room
-            room_ops::delete_room(tx, room_id)
+            room_ops::delete_room_inner(tx, user_id, room_id)
         })
     }
 
@@ -102,7 +108,9 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             }
 
             // List the rooms
-            room_ops::list_rooms(tx, office_id_opt.as_deref(), Some(user_id))
+            // Convert Option<&str> to Option<String> for the office_id
+            let office_id_string = office_id_opt.map(|s| s.to_string());
+            room_ops::list_rooms_inner(tx, user_id, office_id_string)
         })
     }
     

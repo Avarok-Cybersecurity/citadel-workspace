@@ -1,14 +1,13 @@
-use crate::handlers::domain::Domain;
 use crate::handlers::domain::DomainOperations;
 use crate::handlers::domain::server_ops::DomainServerOperations;
 use crate::handlers::domain::functions::user::user_ops;
-use crate::kernel::transaction::{Transaction, TransactionManager};
-use crate::kernel::transaction::rbac::transaction_operations::TransactionManagerExt;
+use crate::kernel::transaction::{Transaction, TransactionManager, TransactionManagerExt};
+use crate::kernel::transaction::DomainType;
 use crate::WORKSPACE_ROOT_ID;
 
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{Domain, DomainEntity, Office, Permission, Room, User, UserRole, Workspace};
-use citadel_workspace_types::UpdateOperation;
+use citadel_workspace_types::structs::{Permission, User, UserRole};
+use crate::handlers::domain::{Domain, DomainEntity};
 
 // Standalone methods for DomainServerOperations
 impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {

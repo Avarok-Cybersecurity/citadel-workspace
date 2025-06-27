@@ -2,7 +2,7 @@ use crate::handlers::domain::server_ops::DomainServerOperations;
 use crate::handlers::domain::DomainOperations;
 use crate::handlers::domain::functions::office::office_ops;
 use crate::kernel::transaction::Transaction;
-use crate::kernel::transaction::rbac::transaction_operations::TransactionManagerExt;
+use crate::kernel::transaction::TransactionManagerExt;
 
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{Office, Permission};
@@ -28,10 +28,13 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             }
 
             // Create the office
-            let office = office_ops::create_office(tx, workspace_id, name, description, mdx_content)?;
+            // Generate a unique office ID
+            let office_id = uuid::Uuid::new_v4().to_string();
+            let mdx_content_string = mdx_content.map(|s| s.to_string());
+            let office = office_ops::create_office_inner(tx, user_id, workspace_id, &office_id, name, description, mdx_content_string)?;
             
             // Add the creating user to the office with admin privileges
-            office_ops::add_user_to_office(tx, user_id, &office.id)?;
+            // User is already added to office in create_office_inner
             
             Ok(office)
         })
@@ -63,7 +66,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             }
 
             // Update the office
-            office_ops::update_office(tx, office_id, name, description, mdx_content)
+            let name_option = name.map(|s| s.to_string());
+            let desc_option = description.map(|s| s.to_string());
+            let mdx_option = mdx_content.map(|s| s.to_string());
+            office_ops::update_office_inner(tx, user_id, office_id, name_option, desc_option, mdx_option)
         })
     }
 
@@ -79,7 +85,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             }
 
             // Delete the office
-            office_ops::delete_office(tx, office_id)
+            office_ops::delete_office_inner(tx, user_id, office_id)
         })
     }
 
@@ -101,7 +107,9 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             }
 
             // List the offices
-            office_ops::list_offices(tx, workspace_id_opt.as_deref(), Some(user_id))
+            // Convert Option<&str> to Option<String> for the workspace_id
+            let workspace_id_string = workspace_id_opt.map(|s| s.to_string());
+            office_ops::list_offices_inner(tx, user_id, workspace_id_string)
         })
     }
 

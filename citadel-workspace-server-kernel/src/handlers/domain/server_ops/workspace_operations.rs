@@ -2,8 +2,7 @@ use crate::handlers::domain::server_ops::DomainServerOperations;
 use crate::handlers::domain::DomainOperations;
 use crate::handlers::domain::functions::workspace::workspace_ops;
 use crate::handlers::domain::WorkspaceDBList;
-use crate::kernel::transaction::Transaction;
-use crate::kernel::transaction::rbac::transaction_operations::TransactionManagerExt;
+use crate::kernel::transaction::{Transaction, TransactionManagerExt};
 use crate::WORKSPACE_ROOT_ID;
 
 use citadel_sdk::prelude::{NetworkError, Ratchet};
@@ -28,7 +27,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             let workspace_id = Uuid::new_v4().to_string();
 
             // Create the workspace
-            workspace_ops::create_workspace(
+            workspace_ops::create_workspace_inner(
                 tx,
                 &workspace_id,
                 name,
@@ -51,7 +50,8 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             }
 
             // Get the workspace
-            workspace_ops::get_workspace(tx, ws_id)
+            // Assuming there's a get_workspace_inner function, otherwise we need to implement this
+            tx.get_workspace(ws_id).ok_or_else(|| NetworkError::msg(format!("Workspace '{}' not found", ws_id))).map(|ws| ws.clone())
         })
     }
 
@@ -71,11 +71,15 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                 )));
             }
 
-            // Verify the workspace password
-            workspace_ops::verify_workspace_password(tx, &workspace_password)?;
+            // Verify password by checking against stored password
+            let stored_password = tx.workspace_password(workspace_id)
+                .ok_or_else(|| NetworkError::msg("Workspace password not found"))?;
+            if stored_password != workspace_password {
+                return Err(NetworkError::msg("Incorrect workspace password"));
+            }
 
             // Delete the workspace
-            workspace_ops::delete_workspace(tx, workspace_id)?;
+            workspace_ops::delete_workspace_inner(tx, user_id, workspace_id)?;
             
             Ok(())
         })
@@ -100,11 +104,32 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                 )));
             }
 
-            // Verify the workspace password
-            workspace_ops::verify_workspace_password(tx, &workspace_password)?;
+            // Verify password by checking against stored password
+            let stored_password = tx.workspace_password(workspace_id)
+                .ok_or_else(|| NetworkError::msg("Workspace password not found"))?;
+            if stored_password != workspace_password {
+                return Err(NetworkError::msg("Incorrect workspace password"));
+            }
 
             // Update the workspace
-            workspace_ops::update_workspace(tx, workspace_id, name, description, _metadata)
+            // Assuming there should be an update_workspace_inner, we need to implement a method that updates the workspace
+            // For now, we'll directly update it in the transaction
+            let workspace = tx.get_workspace_mut(workspace_id)
+                .ok_or_else(|| NetworkError::msg(format!("Workspace '{}' not found", workspace_id)))?;
+            
+            if let Some(new_name) = name {
+                workspace.name = new_name.to_string();
+            }
+            
+            if let Some(new_description) = description {
+                workspace.description = new_description.to_string();
+            }
+            
+            if let Some(metadata) = _metadata {
+                workspace.metadata = metadata;
+            }
+            
+            Ok(workspace.clone())
         })
     }
 
@@ -148,7 +173,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             }
 
             // Add user to workspace
-            workspace_ops::add_user_to_workspace(tx, user_id, workspace_id, role)
+            workspace_ops::add_user_to_workspace_inner(tx, admin_id, user_id, workspace_id, role)
         })
     }
 
@@ -169,7 +194,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             }
 
             // Remove user from workspace
-            workspace_ops::remove_user_from_workspace(tx, user_id, workspace_id)
+            workspace_ops::remove_user_from_workspace_inner(tx, admin_id, user_id, workspace_id)
         })
     }
 

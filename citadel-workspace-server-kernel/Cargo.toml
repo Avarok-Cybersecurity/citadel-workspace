@@ -41,6 +41,7 @@ citadel-internal-service-types = { workspace = true }
 citadel-internal-service-connector = { workspace = true }
 tempfile = "3.10.1"
 bcrypt = "0.17.0"
+chrono = { workspace = true }
 
 [dev-dependencies]
 citadel_sdk = { workspace = true, features = ["localhost-testing"] }

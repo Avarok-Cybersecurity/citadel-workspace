@@ -1,65 +1,115 @@
-use crate::kernel::transaction::rbac::DomainType;
-use crate::kernel::transaction::Transaction;
-use crate::WORKSPACE_ROOT_ID;
-use citadel_sdk::prelude::NetworkError;
-use citadel_workspace_types::structs::{Domain, Permission, UserRole};
-use log::{debug, info, warn};
-use std::collections::HashSet;
+use crate::kernel::transaction::DomainType;
 
-// Helper function to get domain type from Domain
-fn get_domain_type_from_domain_entry(domain_entry: &Domain) -> Result<DomainType, NetworkError> {
-    match domain_entry {
-        Domain::Workspace { .. } => Ok(DomainType::Workspace),
-        Domain::Office { .. } => Ok(DomainType::Office),
-        Domain::Room { .. } => Ok(DomainType::Room),
+pub mod user_ops {
+    use crate::kernel::transaction::DomainType;
+    use crate::kernel::transaction::Transaction;
+    use crate::WORKSPACE_ROOT_ID;
+    use citadel_sdk::prelude::NetworkError;
+    use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
+    use log::{debug, info, warn};
+    use std::collections::HashSet;
+
+    // For get_all_user_domain_permissions function
+    pub fn get_all_user_domain_permissions(
+        tx: &dyn Transaction,
+        user_id: &str
+    ) -> Result<Vec<(String, Vec<String>)>, NetworkError> {
+        // Implement this function if not already present
+        let user = tx.get_user(user_id).ok_or_else(|| {
+            NetworkError::msg(format!("User '{}' not found", user_id))
+        })?;
+
+        // Convert the permissions map to a list of (domain_id, permission_names) tuples
+        let mut result = Vec::new();
+        for (domain_id, permissions) in &user.permissions {
+            let permission_names: Vec<String> = permissions
+                .iter()
+                .map(|p| format!("{:?}", p))
+                .collect();
+            result.push((domain_id.clone(), permission_names));
+        }
+
+        Ok(result)
     }
-}
 
-// Helper function to get mutable members from domain
-fn get_mutable_members_from_domain_entry(
+    // For update_user_domain_role function
+    pub fn update_user_domain_role(
+        tx: &mut dyn Transaction,
+        user_id: &str,
+        domain_id: &str,
+        role: UserRole
+    ) -> Result<(), NetworkError> {
+        // Get domain type for role-based permissions
+        let domain_type = get_domain_type_from_id(tx, domain_id)?;
+        
+        // Calculate permissions for this role and domain type
+        let permissions = get_role_based_permissions(&role, domain_type);
+        
+        // Update user's permissions for this domain
+        let mut user = tx.get_user(user_id).cloned().ok_or_else(|| {
+            NetworkError::msg(format!("User '{}' not found", user_id))
+        })?;
+        
+        user.permissions.insert(domain_id.to_string(), permissions);
+        tx.update_user(user_id, user)?;
+        
+        Ok(())
+    }
+
+    // Helper function to get domain type from Domain
+    fn get_domain_type_from_domain_entry(domain_entry: &Domain) -> Result<DomainType, NetworkError> {
+        match domain_entry {
+            Domain::Workspace { .. } => Ok(DomainType::Workspace),
+            Domain::Office { .. } => Ok(DomainType::Office),
+            Domain::Room { .. } => Ok(DomainType::Room),
+        }
+    }
+
+    // Helper function to get mutable members from domain
+    fn get_mutable_members_from_domain_entry(
     domain_entry: &mut Domain,
 ) -> Result<&mut Vec<String>, NetworkError> {
-    match domain_entry {
-        Domain::Workspace { workspace, .. } => Ok(&mut workspace.members),
-        Domain::Office { office, .. } => Ok(&mut office.members),
-        Domain::Room { room, .. } => Ok(&mut room.members),
+        match domain_entry {
+            Domain::Workspace { workspace, .. } => Ok(&mut workspace.members),
+            Domain::Office { office, .. } => Ok(&mut office.members),
+            Domain::Room { room, .. } => Ok(&mut room.members),
+        }
     }
-}
 
-// Helper function to get members from domain
-fn get_members_from_domain_entry(domain_entry: &Domain) -> Result<&Vec<String>, NetworkError> {
-    match domain_entry {
-        Domain::Workspace { workspace, .. } => Ok(&workspace.members),
-        Domain::Office { office, .. } => Ok(&office.members),
-        Domain::Room { room, .. } => Ok(&room.members),
+    // Helper function to get members from domain
+    fn get_members_from_domain_entry(domain_entry: &Domain) -> Result<&Vec<String>, NetworkError> {
+        match domain_entry {
+            Domain::Workspace { workspace, .. } => Ok(&workspace.members),
+            Domain::Office { office, .. } => Ok(&office.members),
+            Domain::Room { room, .. } => Ok(&room.members),
+        }
     }
-}
 
-// Helper function to determine the parent domain ID for permission checking
-fn get_permission_check_domain_id(
+    // Helper function to determine the parent domain ID for permission checking
+    fn get_permission_check_domain_id(
     tx: &dyn Transaction,
     domain_id: &str,
 ) -> Result<String, NetworkError> {
     let domain_entry = tx
         .get_domain(domain_id)
         .ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
-    match domain_entry {
-        Domain::Room { room, .. } => {
-            let parent = room.office_id.clone();
-            if parent.is_empty() {
-                return Err(NetworkError::msg(
-                    "Room has no parent office ID or parent_id is empty",
-                ));
+        match domain_entry {
+            Domain::Room { room, .. } => {
+                let parent = room.office_id.clone();
+                if parent.is_empty() {
+                    return Err(NetworkError::msg(
+                        "Room has no parent office ID or parent_id is empty",
+                    ));
+                }
+                Ok(parent)
             }
-            Ok(parent)
+            Domain::Office { .. } => Ok(WORKSPACE_ROOT_ID.to_string()),
+            Domain::Workspace { .. } => Ok(WORKSPACE_ROOT_ID.to_string()),
         }
-        Domain::Office { .. } => Ok(WORKSPACE_ROOT_ID.to_string()),
-        Domain::Workspace { .. } => Ok(WORKSPACE_ROOT_ID.to_string()),
     }
-}
 
-// Helper function to get domain type from domain_id using Transaction
-fn get_domain_type_from_id(
+    // Helper function to get domain type from domain_id using Transaction
+    pub(crate) fn get_domain_type_from_id(
     tx: &dyn Transaction,
     domain_id: &str,
 ) -> Result<DomainType, NetworkError> {
@@ -69,8 +119,8 @@ fn get_domain_type_from_id(
     get_domain_type_from_domain_entry(domain_entry)
 }
 
-// Helper function to retrieve role permissions based on domain type
-pub fn get_role_based_permissions(role: &UserRole, domain_type: DomainType) -> HashSet<Permission> {
+    // Helper function to retrieve role permissions based on domain type
+    pub fn get_role_based_permissions(role: &UserRole, domain_type: DomainType) -> HashSet<Permission> {
     match role {
         UserRole::Admin | UserRole::Owner => {
             // Admins and Owners get their full set of permissions regardless of domain type context here
@@ -111,8 +161,8 @@ pub fn get_role_based_permissions(role: &UserRole, domain_type: DomainType) -> H
     permissions
 }
 
-// Add a user to a domain with a specific role
-pub(crate) fn add_user_to_domain_inner(
+    // Add a user to a domain with a specific role
+    pub(crate) fn add_user_to_domain_inner(
     tx: &mut dyn Transaction,
     actor_user_id: &str,
     target_user_id: &str,
@@ -208,7 +258,7 @@ pub(crate) fn add_user_to_domain_inner(
     Ok(())
 }
 
-pub(crate) fn remove_user_from_domain_inner(
+    pub(crate) fn remove_user_from_domain_inner(
     tx: &mut dyn Transaction,
     actor_user_id: &str,
     target_user_id: &str,
