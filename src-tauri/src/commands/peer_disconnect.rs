@@ -62,11 +62,11 @@ pub async fn peer_disconnect(
             let error_msg = format!("Unexpected response type for PeerDisconnect: {:?}", other);
             error!(target: "citadel", "{}", error_msg);
             // Error case for unexpected response type
-            return Err(PeerDisconnectFailureTS {
+            Err(PeerDisconnectFailureTS {
                 cid: cid.to_string(), // Convert the parsed u64 cid back to string
                 message: error_msg,
                 request_id: Some(request_id.to_string()),
-            });
+            })
         }
     }
 }

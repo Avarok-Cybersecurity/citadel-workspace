@@ -5,16 +5,12 @@ use citadel_logging::error;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 
 // Import submodules
-mod workspace_commands;
+mod member_commands;
 mod office_commands;
 mod room_commands;
-mod member_commands;
+mod workspace_commands;
 
 // Re-export the submodules
-pub use workspace_commands::*;
-pub use office_commands::*;
-pub use room_commands::*;
-pub use member_commands::*;
 
 impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Helper function to handle common error pattern
@@ -123,7 +119,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     &description,
                     mdx_content.as_deref(),
                 ),
-                |office| WorkspaceProtocolResponse::Office(office),
+                WorkspaceProtocolResponse::Office,
                 "Failed to create office",
             ),
             WorkspaceProtocolRequest::GetOffice { office_id } => Self::handle_result(
@@ -150,12 +146,12 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     description.as_deref(),
                     mdx_content.as_deref(),
                 ),
-                |office_struct| WorkspaceProtocolResponse::Office(office_struct),
+                WorkspaceProtocolResponse::Office,
                 "Failed to update office",
             ),
             WorkspaceProtocolRequest::ListOffices => Self::handle_result(
                 self.domain_ops().list_offices(actor_user_id, None),
-                |offices_vec| WorkspaceProtocolResponse::Offices(offices_vec),
+                WorkspaceProtocolResponse::Offices,
                 "Failed to list offices",
             ),
 
@@ -174,12 +170,12 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     &description,
                     mdx_content.as_deref(),
                 ),
-                |room_struct| WorkspaceProtocolResponse::Room(room_struct),
+                WorkspaceProtocolResponse::Room,
                 "Failed to create room",
             ),
             WorkspaceProtocolRequest::GetRoom { room_id } => Self::handle_result(
                 self.domain_ops().get_room(actor_user_id, &room_id),
-                |room_struct| WorkspaceProtocolResponse::Room(room_struct),
+                WorkspaceProtocolResponse::Room,
                 "Failed to get room",
             ),
             WorkspaceProtocolRequest::DeleteRoom { room_id } => Self::handle_result(
@@ -201,15 +197,15 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     description.as_deref(),
                     mdx_content.as_deref(),
                 ),
-                |room_struct| WorkspaceProtocolResponse::Room(room_struct),
+                WorkspaceProtocolResponse::Room,
                 "Failed to update room",
             ),
             WorkspaceProtocolRequest::ListRooms { office_id } => Self::handle_result(
                 self.domain_ops().list_rooms(actor_user_id, Some(office_id)),
-                |rooms_vec| WorkspaceProtocolResponse::Rooms(rooms_vec),
+                WorkspaceProtocolResponse::Rooms,
                 "Failed to list rooms",
             ),
-            
+
             // Member commands
             WorkspaceProtocolRequest::GetMember { user_id } => Self::handle_result(
                 self.get_member_command_internal(actor_user_id, &user_id),
@@ -221,7 +217,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 office_id,
                 room_id,
                 role,
-                metadata: _,
+                metadata: _metadata,
             } => {
                 if office_id.is_some() && room_id.is_some() {
                     return Ok(WorkspaceProtocolResponse::Error(
@@ -239,7 +235,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     |_| WorkspaceProtocolResponse::Success("Member added successfully".to_string()),
                     "Failed to add member",
                 )
-            },
+            }
             WorkspaceProtocolRequest::RemoveMember {
                 user_id,
                 office_id,
@@ -266,7 +262,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     },
                     "Failed to remove member",
                 )
-            },
+            }
             WorkspaceProtocolRequest::UpdateMemberRole {
                 user_id,
                 role,
@@ -308,7 +304,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 }
                 // Use handlers::query::list_members implementation to avoid ambiguity
                 Self::handle_result(
-                    crate::handlers::query::list_members(self, office_id.as_deref(), room_id.as_deref()),
+                    self.query_members(office_id.as_deref(), room_id.as_deref()),
                     WorkspaceProtocolResponse::Members,
                     "Failed to list members",
                 )

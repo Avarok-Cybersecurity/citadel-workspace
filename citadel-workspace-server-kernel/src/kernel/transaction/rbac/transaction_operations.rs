@@ -1,6 +1,6 @@
-use crate::kernel::transaction::{TransactionManager, Transaction};
 use crate::kernel::transaction::read::ReadTransaction;
 use crate::kernel::transaction::write::WriteTransaction;
+use crate::kernel::transaction::TransactionManager;
 use citadel_logging::{debug, error};
 use citadel_sdk::prelude::NetworkError;
 use parking_lot::RwLock;
@@ -16,17 +16,12 @@ impl TransactionManager {
         let workspaces = self.workspaces.read();
         let workspace_password = self.workspace_password.read();
 
-        ReadTransaction::new(
-            domains,
-            users,
-            workspaces,
-            workspace_password
-        )
+        ReadTransaction::new(domains, users, workspaces, workspace_password)
     }
 
     /// Create a new write transaction
     ///
-    /// Note: As per the Citadel Workspace transaction system behavior, changes made during a 
+    /// Note: As per the Citadel Workspace transaction system behavior, changes made during a
     /// transaction are immediately applied to the in-memory storage. The commit() method
     /// only syncs these changes to the backend store (RocksDB in this case).
     ///

@@ -1,13 +1,12 @@
-use crate::handlers::domain::DomainOperations;
-use crate::handlers::domain::server_ops::DomainServerOperations;
 use crate::handlers::domain::functions::user::user_ops;
-use crate::kernel::transaction::{Transaction, TransactionManager, TransactionManagerExt};
+use crate::handlers::domain::server_ops::DomainServerOperations;
+use crate::handlers::domain::DomainOperations;
 use crate::kernel::transaction::DomainType;
+use crate::kernel::transaction::TransactionManagerExt;
 use crate::WORKSPACE_ROOT_ID;
 
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{Permission, User, UserRole};
-use crate::handlers::domain::{Domain, DomainEntity};
+use citadel_workspace_types::structs::{Permission, UserRole};
 
 // Standalone methods for DomainServerOperations
 impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
@@ -20,7 +19,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         self.tx_manager.with_read_transaction(|tx| {
             // Admin can see any user's permissions
             let is_admin = self.is_admin(tx, actor_user_id)?;
-            
+
             // Users can see their own permissions
             if actor_user_id != target_user_id && !is_admin {
                 return Err(NetworkError::msg(format!(
@@ -28,7 +27,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                     actor_user_id, target_user_id
                 )));
             }
-            
+
             // Get all domains the user is a member of, with their permissions
             user_ops::get_all_user_domain_permissions(tx, target_user_id)
         })
@@ -45,9 +44,14 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     ) -> Result<(), NetworkError> {
         // If domain is the workspace root, handle it differently
         if domain_id == WORKSPACE_ROOT_ID {
-            return self.update_workspace_member_role(actor_user_id, target_user_id, role, metadata);
+            return self.update_workspace_member_role(
+                actor_user_id,
+                target_user_id,
+                role,
+                metadata,
+            );
         }
-        
+
         self.tx_manager.with_write_transaction(|tx| {
             // Check if actor has permission
             if !self.check_entity_permission(tx, actor_user_id, domain_id, Permission::All)? {
@@ -56,20 +60,20 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                     actor_user_id, domain_id
                 )));
             }
-            
+
             // Update the user's role in the domain
             user_ops::update_user_domain_role(tx, target_user_id, domain_id, role)?;
-            
+
             Ok(())
         })
     }
-    
+
     /// Add a user to a domain entity with a specific role
     pub async fn add_user_to_domain_entity_with_role(
         &self,
         user_id_to_add: &str,
         entity_id: &str,
-        domain_type: DomainType,
+        _domain_type: DomainType,
         role: UserRole,
         actor_user_id: Option<&str>,
     ) -> Result<(), NetworkError> {

@@ -499,7 +499,7 @@ impl Domain {
     pub fn parent_id(&self) -> &str {
         match self {
             Domain::Workspace { .. } => "", // Workspaces don't have a parent
-            Domain::Office { .. } => "",    // Offices don't have a parent
+            Domain::Office { office } => &office.workspace_id, // Offices belong to workspaces
             Domain::Room { room } => &room.office_id,
         }
     }

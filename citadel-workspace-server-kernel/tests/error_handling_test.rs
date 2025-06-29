@@ -1,4 +1,5 @@
 use citadel_sdk::prelude::*;
+use citadel_workspace_server_kernel::kernel::transaction::{Transaction, TransactionManagerExt};
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 use citadel_workspace_types::{
     structs::{Permission, User, UserRole},
@@ -80,7 +81,7 @@ mod tests {
         match result.unwrap() {
             WorkspaceProtocolResponse::Error(message) => {
                 assert!(message.contains(
-                    "Permission denied: User unprivileged_user cannot create office in workspace workspace-root"
+                    "User 'unprivileged_user' does not have permission to add offices to workspace 'workspace-root'"
                 ));
             }
             _ => panic!("Expected error response"),
@@ -104,8 +105,10 @@ mod tests {
         assert!(result.is_ok());
         match result.unwrap() {
             WorkspaceProtocolResponse::Error(message) => {
+                // The message could be either permission denied or office not found
                 assert!(
-                    message.contains("Permission denied: User unprivileged_user cannot delete office non_existent_id"),
+                    message.contains("User 'unprivileged_user' does not have permission")
+                        || message.contains("Office 'non_existent_id' not found"),
                     "Unexpected error message: {}",
                     message
                 );

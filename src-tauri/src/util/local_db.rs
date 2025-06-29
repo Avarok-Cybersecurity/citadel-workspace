@@ -64,6 +64,7 @@ impl<'a> LocalDb<'a> {
         }
     }
 
+    #[allow(dead_code)]
     async fn list_all_kv(&self) -> Result<HashMap<String, String>, String> {
         let request_id = Uuid::new_v4();
         let payload = InternalServiceRequest::LocalDBGetAllKV {

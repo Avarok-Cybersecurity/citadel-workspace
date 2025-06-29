@@ -1,6 +1,6 @@
-use crate::WorkspaceProtocolResponse;
-use crate::kernel::WorkspaceServerKernel;
 use crate::handlers::domain::DomainOperations;
+use crate::kernel::WorkspaceServerKernel;
+use crate::WorkspaceProtocolResponse;
 use citadel_logging::error;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::Office;
@@ -15,7 +15,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     ) -> Result<WorkspaceProtocolResponse, NetworkError> {
         // Get the office details
         let office_json_string = self.domain_ops().get_office(actor_user_id, office_id)?;
-        
+
         // Process and return the office data
         match serde_json::from_str::<Office>(&office_json_string) {
             Ok(office_struct) => Ok(WorkspaceProtocolResponse::Office(office_struct)),
@@ -43,12 +43,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         mdx_content: Option<&str>,
     ) -> Result<Office, NetworkError> {
         // Call the domain operation to update the office
-        self.domain_ops().update_office(
-            actor_user_id,
-            office_id,
-            name,
-            description,
-            mdx_content,
-        )
+        self.domain_ops()
+            .update_office(actor_user_id, office_id, name, description, mdx_content)
     }
 }

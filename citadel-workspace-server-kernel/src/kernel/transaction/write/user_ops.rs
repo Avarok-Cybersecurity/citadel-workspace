@@ -1,10 +1,10 @@
-use crate::kernel::transaction::{Transaction, UserChange};
 use crate::kernel::transaction::rbac::{retrieve_role_permissions, DomainType};
 use crate::kernel::transaction::write::WriteTransaction;
+use crate::kernel::transaction::{Transaction, UserChange};
 use citadel_sdk::prelude::NetworkError;
 use citadel_workspace_types::structs::{Permission, User, UserRole};
 
-impl<'a> WriteTransaction<'a> {
+impl WriteTransaction<'_> {
     /// Get a user by ID - user management implementation
     pub fn get_user_internal(&self, user_id: &str) -> Option<&User> {
         self.users.get(user_id)
@@ -14,10 +14,8 @@ impl<'a> WriteTransaction<'a> {
     pub fn get_user_mut_internal(&mut self, user_id: &str) -> Option<&mut User> {
         // Track the change before returning the mutable reference
         if let Some(user) = self.users.get(user_id) {
-            self.user_changes.push(UserChange::Update(
-                user_id.to_string(),
-                user.clone(),
-            ));
+            self.user_changes
+                .push(UserChange::Update(user_id.to_string(), user.clone()));
         }
         self.users.get_mut(user_id)
     }
@@ -28,14 +26,22 @@ impl<'a> WriteTransaction<'a> {
     }
 
     /// Insert a new user - user management implementation
-    pub fn insert_user_internal(&mut self, user_id: String, user: User) -> Result<(), NetworkError> {
+    pub fn insert_user_internal(
+        &mut self,
+        user_id: String,
+        user: User,
+    ) -> Result<(), NetworkError> {
         self.user_changes.push(UserChange::Insert(user_id.clone()));
         self.users.insert(user_id, user);
         Ok(())
     }
 
     /// Update an existing user - user management implementation
-    pub fn update_user_internal(&mut self, user_id: &str, new_user: User) -> Result<(), NetworkError> {
+    pub fn update_user_internal(
+        &mut self,
+        user_id: &str,
+        new_user: User,
+    ) -> Result<(), NetworkError> {
         let old_user = if let Some(old_user) = self.users.get(user_id) {
             old_user.clone()
         } else {
@@ -45,10 +51,8 @@ impl<'a> WriteTransaction<'a> {
             )));
         };
 
-        self.user_changes.push(UserChange::Update(
-            user_id.to_string(),
-            old_user,
-        ));
+        self.user_changes
+            .push(UserChange::Update(user_id.to_string(), old_user));
         self.users.insert(user_id.to_string(), new_user);
         Ok(())
     }
@@ -57,7 +61,8 @@ impl<'a> WriteTransaction<'a> {
     pub fn remove_user_internal(&mut self, user_id: &str) -> Result<Option<User>, NetworkError> {
         if let Some(old_user) = self.users.get(user_id) {
             let old_user_clone = old_user.clone();
-            self.user_changes.push(UserChange::Remove(user_id.to_string(), old_user_clone));
+            self.user_changes
+                .push(UserChange::Remove(user_id.to_string(), old_user_clone));
             return Ok(self.users.remove(user_id));
         }
         Ok(None)
@@ -69,10 +74,14 @@ impl<'a> WriteTransaction<'a> {
     }
 
     /// Get permissions for a user - user management implementation
-    pub fn get_permissions_internal(&self, user_id: &str) -> Result<Vec<Permission>, NetworkError> {
-        let user = self.get_user_internal(user_id).ok_or_else(|| {
-            NetworkError::msg(format!("User with id {} not found", user_id))
-        })?;
+    pub fn get_permissions_internal(
+        &self,
+        user_id: &str,
+        domain_id: Option<&str>,
+    ) -> Result<Vec<Permission>, NetworkError> {
+        let user = self
+            .get_user_internal(user_id)
+            .ok_or_else(|| NetworkError::msg(format!("User with id {} not found", user_id)))?;
 
         // Get base permissions from user's role - default to Workspace domain type
         let role_permissions = retrieve_role_permissions(&user.role, &DomainType::Workspace);
@@ -80,8 +89,10 @@ impl<'a> WriteTransaction<'a> {
         // Combine with any explicit permissions
         let mut all_permissions = role_permissions;
         // Check if the user has specific permissions for this domain
-        if let Some(domain_permissions) = user.get_permissions(domain_id) {
-            all_permissions.extend(domain_permissions.iter().cloned());
+        if let Some(domain_id) = domain_id {
+            if let Some(domain_permissions) = user.get_permissions(domain_id) {
+                all_permissions.extend(domain_permissions.iter().cloned());
+            }
         }
 
         Ok(all_permissions)
@@ -111,10 +122,15 @@ impl<'a> WriteTransaction<'a> {
     }
 
     /// Assign a role to a user - user management implementation
-    pub fn assign_role_internal(&mut self, user_id: &str, role_id: &str) -> Result<(), NetworkError> {
-        let mut user = self.get_user(user_id).ok_or_else(|| {
-            NetworkError::msg(format!("User with id {} not found", user_id))
-        })?.clone();
+    pub fn assign_role_internal(
+        &mut self,
+        user_id: &str,
+        role_id: &str,
+    ) -> Result<(), NetworkError> {
+        let mut user = self
+            .get_user(user_id)
+            .ok_or_else(|| NetworkError::msg(format!("User with id {} not found", user_id)))?
+            .clone();
 
         // Parse role_id to UserRole
         let new_role = match role_id {
@@ -137,11 +153,16 @@ impl<'a> WriteTransaction<'a> {
         Ok(())
     }
 
-    pub fn unassign_role_internal(&mut self, user_id: &str, role_id: &str) -> Result<(), NetworkError> {
+    pub fn unassign_role_internal(
+        &mut self,
+        user_id: &str,
+        role_id: &str,
+    ) -> Result<(), NetworkError> {
         // In our model, unassigning a role means setting the role to None
-        let mut user = self.get_user(user_id).ok_or_else(|| {
-            NetworkError::msg(format!("User with id {} not found", user_id))
-        })?.clone();
+        let mut user = self
+            .get_user(user_id)
+            .ok_or_else(|| NetworkError::msg(format!("User with id {} not found", user_id)))?
+            .clone();
 
         // Only unassign if the user has the specified role
         let current_role_id = match user.role {
@@ -150,15 +171,19 @@ impl<'a> WriteTransaction<'a> {
             UserRole::Member => "member",
             UserRole::Guest => "guest",
             UserRole::Banned => "banned",
-            UserRole::Custom(ref name, _) => return Err(NetworkError::msg(
-                format!("Cannot unassign custom role {} from user", name)
-            )),
+            UserRole::Custom(ref name, _) => {
+                return Err(NetworkError::msg(format!(
+                    "Cannot unassign custom role {} from user",
+                    name
+                )))
+            }
         };
 
         if current_role_id != role_id {
-            return Err(NetworkError::msg(
-                format!("Cannot unassign role {} from user with role {}", role_id, current_role_id)
-            ));
+            return Err(NetworkError::msg(format!(
+                "Cannot unassign role {} from user with role {}",
+                role_id, current_role_id
+            )));
         }
 
         // Set role to Guest (lowest standard permission level)

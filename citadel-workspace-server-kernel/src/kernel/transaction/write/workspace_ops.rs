@@ -1,9 +1,9 @@
-use crate::kernel::transaction::{Transaction, WorkspaceChange, WorkspaceOperations};
 use crate::kernel::transaction::write::WriteTransaction;
+use crate::kernel::transaction::{WorkspaceChange, WorkspaceOperations};
 use citadel_sdk::prelude::NetworkError;
 use citadel_workspace_types::structs::Workspace;
 
-impl<'a> WriteTransaction<'a> {
+impl WriteTransaction<'_> {
     /// Get a workspace by ID - workspace management implementation
     pub fn get_workspace_internal(&self, workspace_id: &str) -> Option<&Workspace> {
         self.workspaces.get(workspace_id)
@@ -71,7 +71,10 @@ impl<'a> WriteTransaction<'a> {
     }
 
     /// Remove a workspace - workspace management implementation
-    pub fn remove_workspace_internal(&mut self, workspace_id: &str) -> Result<Option<Workspace>, NetworkError> {
+    pub fn remove_workspace_internal(
+        &mut self,
+        workspace_id: &str,
+    ) -> Result<Option<Workspace>, NetworkError> {
         // Track the change before removing
         if let Some(old_workspace) = self.workspaces.get(workspace_id) {
             self.workspace_changes.push(WorkspaceChange::Remove(
@@ -108,11 +111,13 @@ impl WorkspaceOperations for WriteTransaction<'_> {
             }
         } else {
             // If it's new, track as an insert
-            self.workspace_changes.push(WorkspaceChange::Insert(workspace_id.to_string()));
+            self.workspace_changes
+                .push(WorkspaceChange::Insert(workspace_id.to_string()));
         }
 
         // Insert or update the workspace
-        self.workspaces.insert(workspace_id.to_string(), workspace.clone());
+        self.workspaces
+            .insert(workspace_id.to_string(), workspace.clone());
         Ok(())
     }
 
@@ -124,7 +129,7 @@ impl WorkspaceOperations for WriteTransaction<'_> {
                 workspace_id.to_string(),
                 old_workspace.clone(),
             ));
-            
+
             // Remove the workspace
             self.workspaces.remove(workspace_id);
             Ok(())
@@ -148,7 +153,7 @@ impl WorkspaceOperations for WriteTransaction<'_> {
                 workspace_id.to_string(),
                 old_workspace.clone(),
             ));
-            
+
             // Update the workspace
             self.workspaces.insert(workspace_id.to_string(), workspace);
             Ok(())

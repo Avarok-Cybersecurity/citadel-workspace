@@ -1,4 +1,6 @@
 use citadel_sdk::prelude::MonoRatchet;
+use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
+use citadel_workspace_server_kernel::kernel::transaction::{Transaction, TransactionManagerExt};
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 use citadel_workspace_types::structs::{Permission, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
@@ -293,60 +295,83 @@ fn test_permissions_inheritance() {
 
     // Test permissions inheritance
     // 1. Member should have ViewContent permission on workspace
-    let member_workspace_perm = kernel.tx_manager().check_entity_permission(
-        member_id,
-        citadel_workspace_server_kernel::WORKSPACE_ROOT_ID,
-        Permission::ViewContent,
-    );
+    let member_workspace_perm = kernel.domain_ops().with_read_transaction(|tx| {
+        kernel.domain_ops().check_entity_permission(
+            tx,
+            member_id,
+            citadel_workspace_server_kernel::WORKSPACE_ROOT_ID,
+            Permission::ViewContent,
+        )
+    });
     assert!(
         member_workspace_perm.unwrap(),
         "Member should have ViewContent on workspace"
     );
 
     // 2. Member should have ViewContent permission on office (inherited from workspace)
-    let member_office_perm =
-        kernel
-            .tx_manager()
-            .check_entity_permission(member_id, &office_id, Permission::ViewContent);
+    let member_office_perm = kernel.domain_ops().with_read_transaction(|tx| {
+        kernel.domain_ops().check_entity_permission(
+            tx,
+            member_id,
+            &office_id,
+            Permission::ViewContent,
+        )
+    });
     assert!(
         member_office_perm.unwrap(),
         "Member should have ViewContent on office by inheritance"
     );
 
     // 3. Member should have ViewContent permission on room (inherited from workspace -> office)
-    let member_room_perm =
-        kernel
-            .tx_manager()
-            .check_entity_permission(member_id, &room_id, Permission::ViewContent);
+    let member_room_perm = kernel.domain_ops().with_read_transaction(|tx| {
+        kernel.domain_ops().check_entity_permission(
+            tx,
+            member_id,
+            &room_id,
+            Permission::ViewContent,
+        )
+    });
     assert!(
         member_room_perm.unwrap(),
         "Member should have ViewContent on room by inheritance"
     );
 
     // 4. Member should NOT have EditContent permission on room (not granted to members)
-    let member_edit_perm =
-        kernel
-            .tx_manager()
-            .check_entity_permission(member_id, &room_id, Permission::EditContent);
+    let member_edit_perm = kernel.domain_ops().with_read_transaction(|tx| {
+        kernel.domain_ops().check_entity_permission(
+            tx,
+            member_id,
+            &room_id,
+            Permission::EditContent,
+        )
+    });
     assert!(
         !member_edit_perm.unwrap(),
         "Member should NOT have EditContent on room"
     );
 
     // 5. Owner should have all permissions on workspace, office, and room
-    let owner_edit_workspace = kernel.tx_manager().check_entity_permission(
-        owner_id,
-        citadel_workspace_server_kernel::WORKSPACE_ROOT_ID,
-        Permission::EditContent,
-    );
-    let owner_edit_office =
+    let owner_edit_workspace = kernel.domain_ops().with_read_transaction(|tx| {
+        kernel.domain_ops().check_entity_permission(
+            tx,
+            owner_id,
+            citadel_workspace_server_kernel::WORKSPACE_ROOT_ID,
+            Permission::EditContent,
+        )
+    });
+    let owner_edit_office = kernel.domain_ops().with_read_transaction(|tx| {
+        kernel.domain_ops().check_entity_permission(
+            tx,
+            owner_id,
+            &office_id,
+            Permission::EditContent,
+        )
+    });
+    let owner_edit_room = kernel.domain_ops().with_read_transaction(|tx| {
         kernel
-            .tx_manager()
-            .check_entity_permission(owner_id, &office_id, Permission::EditContent);
-    let owner_edit_room =
-        kernel
-            .tx_manager()
-            .check_entity_permission(owner_id, &room_id, Permission::EditContent);
+            .domain_ops()
+            .check_entity_permission(tx, owner_id, &room_id, Permission::EditContent)
+    });
 
     assert!(
         owner_edit_workspace.unwrap(),
@@ -362,19 +387,27 @@ fn test_permissions_inheritance() {
     );
 
     // 6. Admin should have all permissions regardless of membership
-    let admin_edit_workspace = kernel.tx_manager().check_entity_permission(
-        admin_id,
-        citadel_workspace_server_kernel::WORKSPACE_ROOT_ID,
-        Permission::EditContent,
-    );
-    let admin_edit_office =
+    let admin_edit_workspace = kernel.domain_ops().with_read_transaction(|tx| {
+        kernel.domain_ops().check_entity_permission(
+            tx,
+            admin_id,
+            citadel_workspace_server_kernel::WORKSPACE_ROOT_ID,
+            Permission::EditContent,
+        )
+    });
+    let admin_edit_office = kernel.domain_ops().with_read_transaction(|tx| {
+        kernel.domain_ops().check_entity_permission(
+            tx,
+            admin_id,
+            &office_id,
+            Permission::EditContent,
+        )
+    });
+    let admin_edit_room = kernel.domain_ops().with_read_transaction(|tx| {
         kernel
-            .tx_manager()
-            .check_entity_permission(admin_id, &office_id, Permission::EditContent);
-    let admin_edit_room =
-        kernel
-            .tx_manager()
-            .check_entity_permission(admin_id, &room_id, Permission::EditContent);
+            .domain_ops()
+            .check_entity_permission(tx, admin_id, &room_id, Permission::EditContent)
+    });
 
     assert!(
         admin_edit_workspace.unwrap(),

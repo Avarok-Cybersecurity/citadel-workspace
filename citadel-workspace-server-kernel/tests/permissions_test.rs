@@ -1,5 +1,6 @@
 use citadel_sdk::prelude::StackedRatchet;
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
+use citadel_workspace_server_kernel::kernel::transaction::{Transaction, TransactionManagerExt};
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
@@ -216,7 +217,12 @@ mod tests {
                         metadata: Vec::new(),
                         password_protected: false,
                     };
-                    let workspace_domain = Domain::Workspace { workspace };
+                    let workspace_domain = Domain::Workspace {
+                        workspace: workspace.clone(),
+                    };
+
+                    // Insert into both workspace table and domain table
+                    tx.insert_workspace(TEST_WORKSPACE_ID.to_string(), workspace)?;
                     tx.insert_domain(TEST_WORKSPACE_ID.to_string(), workspace_domain)?;
 
                     // Insert users

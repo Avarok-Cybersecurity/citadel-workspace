@@ -1,12 +1,12 @@
+use crate::handlers::domain::functions::room::room_ops;
 use crate::handlers::domain::server_ops::DomainServerOperations;
 use crate::handlers::domain::DomainOperations;
-use crate::handlers::domain::functions::room::room_ops;
+use crate::kernel::transaction::Transaction;
 use crate::kernel::transaction::TransactionManagerExt;
-
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{Room, Permission};
+use citadel_workspace_types::structs::{Domain, Permission, Room};
 
-
+#[allow(dead_code)]
 impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     /// Create a new room within an office (internal implementation)
     pub(crate) fn create_room_internal(
@@ -18,29 +18,38 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         mdx_content: Option<&str>,
     ) -> Result<Room, NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            // Check if the user has permission to create rooms in this office
-            if !self.check_entity_permission(tx, user_id, office_id, Permission::ViewContent)? {
+            if !self.check_entity_permission(tx, user_id, office_id, Permission::CreateRoom)? {
                 return Err(NetworkError::msg(format!(
-                    "User '{}' does not have permission to create room in office '{}'",
+                    "User '{}' does not have permission to create rooms in office '{}'",
                     user_id, office_id
                 )));
             }
 
-            // Create the room
-            // Generate a unique room ID
             let room_id = uuid::Uuid::new_v4().to_string();
             let mdx_content_string = mdx_content.map(|s| s.to_string());
-            let room = room_ops::create_room_inner(tx, user_id, office_id, &room_id, name, description, mdx_content_string)?;
-            
+            let room = room_ops::create_room_inner(
+                tx,
+                user_id,
+                office_id,
+                &room_id,
+                name,
+                description,
+                mdx_content_string,
+            )?;
+
             // Add the creating user to the room with appropriate privileges
             // User is already added in create_room_inner
-            
+
             Ok(room)
         })
     }
 
     /// Get room details by ID (internal implementation)
-    pub(crate) fn get_room_internal(&self, user_id: &str, room_id: &str) -> Result<Room, NetworkError> {
+    pub(crate) fn get_room_internal(
+        &self,
+        user_id: &str,
+        room_id: &str,
+    ) -> Result<Room, NetworkError> {
         // Use the trait implementation to get the room by delegating to DomainOperations::get_room
         // This properly handles permissions and existence checks
         self.get_room(user_id, room_id)
@@ -75,7 +84,11 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     }
 
     /// Delete a room (internal implementation)
-    pub(crate) fn delete_room_internal(&self, user_id: &str, room_id: &str) -> Result<Room, NetworkError> {
+    pub(crate) fn delete_room_internal(
+        &self,
+        user_id: &str,
+        room_id: &str,
+    ) -> Result<Room, NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
             // Check if the user has permission to delete this room
             if !self.check_entity_permission(tx, user_id, room_id, Permission::ViewContent)? {
@@ -113,11 +126,24 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             room_ops::list_rooms_inner(tx, user_id, office_id_string)
         })
     }
-    
+
     /// List members of a specific room (internal implementation)
-    pub(crate) fn list_room_members(&self, room_id: &str) -> Result<Vec<(String, String)>, NetworkError> {
+    pub(crate) fn list_room_members(
+        &self,
+        room_id: &str,
+    ) -> Result<Vec<(String, String)>, NetworkError> {
         self.tx_manager.with_read_transaction(|tx| {
-            room_ops::list_room_members(tx, room_id)
+            // Get room and return its members
+            if let Some(Domain::Room { room }) = tx.get_domain(room_id) {
+                Ok(room
+                    .members
+                    .clone()
+                    .into_iter()
+                    .map(|id| (id.clone(), id))
+                    .collect())
+            } else {
+                Err(NetworkError::msg(format!("Room {} not found", room_id)))
+            }
         })
     }
 }

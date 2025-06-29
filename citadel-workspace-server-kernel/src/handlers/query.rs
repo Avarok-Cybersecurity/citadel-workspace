@@ -1,6 +1,6 @@
-use crate::kernel::WorkspaceServerKernel;
 use crate::kernel::transaction::prelude::TransactionManagerExt;
 use crate::kernel::transaction::Transaction;
+use crate::kernel::WorkspaceServerKernel;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{Domain, User};
 use std::collections::HashSet;

@@ -264,8 +264,8 @@ mod tests {
                 proposed_password.as_ref(),
                 registration_request_ts.profile_password.as_bytes()
             );
-            assert_eq!(connect_after_register, false); // As defaulted in TryFrom
-                                                       // Check if the Option<PreSharedKey> status matches the original Option<String> status
+            assert!(!connect_after_register); // As defaulted in TryFrom
+                                              // Check if the Option<PreSharedKey> status matches the original Option<String> status
             assert_eq!(
                 server_password.is_some(),
                 registration_request_ts.workspace_password.is_some()

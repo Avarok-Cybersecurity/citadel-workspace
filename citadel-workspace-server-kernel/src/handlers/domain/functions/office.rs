@@ -6,6 +6,7 @@ pub mod office_ops {
     use citadel_sdk::prelude::*;
     use citadel_workspace_types::structs::{Domain, Office, Permission, UserRole};
 
+    #[allow(dead_code)]
     pub(crate) fn create_office_inner(
         tx: &mut dyn Transaction,
         user_id: &str,      // User creating the office
@@ -103,6 +104,7 @@ pub mod office_ops {
         Ok(new_office)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn update_office_inner(
         tx: &mut dyn Transaction,
         user_id: &str,
@@ -160,6 +162,7 @@ pub mod office_ops {
         Ok(updated_office_clone)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn delete_office_inner(
         tx: &mut dyn Transaction,
         user_id: &str, // User performing the deletion
@@ -289,6 +292,7 @@ pub mod office_ops {
         Ok(removed_office)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn list_offices_inner(
         tx: &dyn Transaction,
         user_id: &str,

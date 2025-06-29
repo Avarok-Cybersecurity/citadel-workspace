@@ -1,25 +1,19 @@
-use crate::kernel::transaction::{
-    DomainChange, Transaction, UserChange, WorkspaceChange, WorkspaceOperations,
-};
+use crate::kernel::transaction::{DomainChange, Transaction, UserChange, WorkspaceChange};
 use citadel_logging::debug;
 use citadel_sdk::prelude::NetworkError;
-use citadel_workspace_types::structs::{Domain, User, UserRole, Workspace};
+use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
 use parking_lot::RwLockWriteGuard;
 use rocksdb::DB;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 // Define submodules
+mod commit_ops;
 mod domain_ops;
 mod user_ops;
 mod workspace_ops;
-mod commit_ops;
 
 // Re-export the operations
-pub use domain_ops::*;
-pub use user_ops::*;
-pub use workspace_ops::*;
-pub use commit_ops::*;
 
 /// A writable transaction that can modify domains and users
 pub struct WriteTransaction<'a> {
@@ -130,7 +124,7 @@ impl Transaction for WriteTransaction<'_> {
             .insert(workspace_id.to_string(), hashed_password);
         Ok(())
     }
-    
+
     // Workspace operations
     fn get_workspace(&self, workspace_id: &str) -> Option<&Workspace> {
         self.get_workspace_internal(workspace_id)
@@ -163,7 +157,7 @@ impl Transaction for WriteTransaction<'_> {
     fn remove_workspace(&mut self, workspace_id: &str) -> Result<Option<Workspace>, NetworkError> {
         self.remove_workspace_internal(workspace_id)
     }
-    
+
     // Domain operations
     fn get_domain(&self, domain_id: &str) -> Option<&Domain> {
         self.get_domain_internal(domain_id)
@@ -188,7 +182,7 @@ impl Transaction for WriteTransaction<'_> {
     fn remove_domain(&mut self, domain_id: &str) -> Result<Option<Domain>, NetworkError> {
         self.remove_domain_internal(domain_id)
     }
-    
+
     // User operations
     fn get_user(&self, user_id: &str) -> Option<&User> {
         self.get_user_internal(user_id)
@@ -213,7 +207,7 @@ impl Transaction for WriteTransaction<'_> {
     fn remove_user(&mut self, user_id: &str) -> Result<Option<User>, NetworkError> {
         self.remove_user_internal(user_id)
     }
-    
+
     // Domain-User operations
     fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError> {
         self.is_member_of_domain_internal(user_id, domain_id)
@@ -235,14 +229,14 @@ impl Transaction for WriteTransaction<'_> {
     ) -> Result<(), NetworkError> {
         self.remove_user_from_domain_internal(user_id, domain_id)
     }
-    
+
     // Role and permissions operations
     fn get_user_role(&self, user_id: &str) -> Result<Option<UserRole>, NetworkError> {
         self.get_user_role_internal(user_id)
     }
 
     fn get_permissions(&self, user_id: &str) -> Result<Vec<Permission>, NetworkError> {
-        self.get_permissions_internal(user_id)
+        self.get_permissions_internal(user_id, None)
     }
 
     fn get_role(&self, role_id: &str) -> Result<Option<UserRole>, NetworkError> {
@@ -264,48 +258,49 @@ impl Transaction for WriteTransaction<'_> {
     fn unassign_role(&mut self, user_id: &str, role_id: &str) -> Result<(), NetworkError> {
         self.unassign_role_internal(user_id, role_id)
     }
-    
+
     // Commit operation
     fn commit(&self) -> Result<(), NetworkError> {
         // Delegate to the actual implementation
         debug!("Committing transaction changes to database");
-        
+
         // Note that in-memory changes are already applied at this point
-        
+
         // Create a write batch for RocksDB
         let mut batch = rocksdb::WriteBatch::default();
-        
+
         // Add domains to the batch
         for (id, domain) in self.domains.iter() {
             let domain_bytes = bincode::serialize(domain)
                 .map_err(|_| NetworkError::msg(format!("Failed to serialize domain {}", id)))?;
-            
+
             batch.put(format!("domain:{}", id), domain_bytes);
         }
-        
+
         // Add users to the batch
         for (id, user) in self.users.iter() {
             let user_bytes = bincode::serialize(user)
                 .map_err(|_| NetworkError::msg(format!("Failed to serialize user {}", id)))?;
-            
+
             batch.put(format!("user:{}", id), user_bytes);
         }
-        
+
         // Add workspaces to the batch
         for (id, workspace) in self.workspaces.iter() {
             let workspace_bytes = bincode::serialize(workspace)
                 .map_err(|_| NetworkError::msg(format!("Failed to serialize workspace {}", id)))?;
-            
+
             batch.put(format!("workspace:{}", id), workspace_bytes);
         }
-        
+
         // Add workspace passwords to the batch
         for (id, password) in self.workspace_password.iter() {
             batch.put(format!("workspace_password:{}", id), password);
         }
-        
+
         // Write the batch to the database
-        self.db.write(batch)
-            .map_err(|e| NetworkError::msg(format!("Failed to write transaction to database: {}", e)))
+        self.db.write(batch).map_err(|e| {
+            NetworkError::msg(format!("Failed to write transaction to database: {}", e))
+        })
     }
 }

@@ -40,7 +40,7 @@ pub fn retrieve_role_permissions(role: &UserRole, domain_type: &DomainType) -> V
             permissions.push(Permission::EditContent);
             permissions.push(Permission::SendMessages);
             permissions.push(Permission::ReadMessages);
-            
+
             // Domain-specific permissions
             match domain_type {
                 DomainType::Workspace => {
@@ -105,6 +105,7 @@ pub fn retrieve_role_permissions(role: &UserRole, domain_type: &DomainType) -> V
 /// - Role-based permissions come from the retrieve_role_permissions function
 /// - Explicit permissions are directly assigned to the user
 /// - The final set is the union of both, with no duplicates
+#[allow(dead_code)]
 pub fn get_effective_permissions(
     role: &UserRole,
     domain_type: &DomainType,
@@ -112,7 +113,7 @@ pub fn get_effective_permissions(
 ) -> Vec<Permission> {
     // Get role-based permissions
     let mut permissions = retrieve_role_permissions(role, domain_type);
-    
+
     // Add explicit permissions if any
     if let Some(explicit) = explicit_permissions {
         for perm in explicit {
@@ -121,6 +122,6 @@ pub fn get_effective_permissions(
             }
         }
     }
-    
+
     permissions
 }

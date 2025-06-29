@@ -22,6 +22,7 @@ pub mod workspace_ops {
     }
 
     // NEW FUNCTION for creating a workspace
+    #[allow(dead_code)]
     pub(crate) fn create_workspace_inner(
         tx: &mut dyn Transaction,
         user_id: &str,
@@ -104,6 +105,7 @@ pub mod workspace_ops {
         Ok(new_workspace_dto)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn delete_workspace_inner(
         tx: &mut dyn Transaction,
         user_id: &str,
@@ -134,6 +136,7 @@ pub mod workspace_ops {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub(crate) fn add_user_to_workspace_inner(
         tx: &mut dyn Transaction,
         admin_id: &str,
@@ -214,6 +217,7 @@ pub mod workspace_ops {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub(crate) fn remove_user_from_workspace_inner(
         tx: &mut dyn Transaction,
         admin_id: &str,
@@ -272,6 +276,7 @@ pub mod workspace_ops {
     }
 
     // Gets all workspace IDs (primarily for internal server use)
+    #[allow(dead_code)]
     pub(crate) fn get_all_workspace_ids_inner(
         _tx: &dyn Transaction,
     ) -> Result<WorkspaceDBList, NetworkError> {

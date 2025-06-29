@@ -1,10 +1,10 @@
-use crate::WorkspaceProtocolResponse;
-use crate::kernel::WorkspaceServerKernel;
 use crate::handlers::domain::DomainOperations;
+
+use crate::kernel::WorkspaceServerKernel;
+use crate::WorkspaceProtocolResponse;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{Permission, UserRole};
 use citadel_workspace_types::UpdateOperation;
-use crate::kernel::transaction::rbac::DomainType;
 
 impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Add a member to workspace, office, or room
@@ -16,30 +16,22 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         room_id_opt: Option<&str>,
         role: UserRole,
     ) -> Result<(), NetworkError> {
-        // Three cases: add to workspace, office, or room
         if let Some(office_id_str) = office_id_opt {
-            // Add member to an office
             self.domain_ops().add_user_to_domain(
                 actor_user_id,
                 target_member_id,
                 office_id_str,
-                role
+                role,
             )
         } else if let Some(room_id_str) = room_id_opt {
-            // Add member to a room
-            self.domain_ops().add_user_to_domain(
-                actor_user_id,
-                target_member_id,
-                room_id_str,
-                role
-            )
+            self.domain_ops()
+                .add_user_to_domain(actor_user_id, target_member_id, room_id_str, role)
         } else {
-            // Add member to the workspace
             self.domain_ops().add_user_to_domain(
                 actor_user_id,
                 target_member_id,
                 crate::WORKSPACE_ROOT_ID,
-                role
+                role,
             )
         }
     }
@@ -53,16 +45,13 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         room_id: Option<&str>,
     ) -> Result<(), NetworkError> {
         if let Some(domain_id_str) = office_id.or(room_id) {
-            self.domain_ops().remove_user_from_domain(
-                actor_user_id,
-                target_user_id,
-                domain_id_str
-            )
+            self.domain_ops()
+                .remove_user_from_domain(actor_user_id, target_user_id, domain_id_str)
         } else {
             self.domain_ops().remove_user_from_domain(
                 actor_user_id,
                 target_user_id,
-                crate::WORKSPACE_ROOT_ID
+                crate::WORKSPACE_ROOT_ID,
             )
         }
     }
@@ -70,22 +59,17 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Get member details by user ID
     pub(crate) fn get_member_command_internal(
         &self,
-        actor_user_id: &str,
+        _actor_user_id: &str,
         target_user_id: &str,
     ) -> Result<WorkspaceProtocolResponse, NetworkError> {
-        // Use the domain_ops method to get the user directly
-        self.domain_ops().with_read_transaction(|tx| {
-            // Get the user from the transaction
-            match tx.get_user(target_user_id) {
-                Some(user) => {
-                    // Return the user details using Member variant
-                    Ok(WorkspaceProtocolResponse::Member(user.clone()))
-                },
-                None => {
-                    Err(NetworkError::msg(format!("User with id {} not found", target_user_id)))
-                }
-            }
-        })
+        self.domain_ops()
+            .with_read_transaction(|tx| match tx.get_user(target_user_id) {
+                Some(user) => Ok(WorkspaceProtocolResponse::Member(user.clone())),
+                None => Err(NetworkError::msg(format!(
+                    "User with id {} not found",
+                    target_user_id
+                ))),
+            })
     }
 
     /// Update member role
@@ -96,12 +80,11 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         role: UserRole,
         metadata: Option<Vec<u8>>,
     ) -> Result<(), NetworkError> {
-        // Use update_workspace_member_role instead of update_user_role
         self.domain_ops().update_workspace_member_role(
             actor_user_id,
             target_user_id,
             role,
-            metadata
+            metadata,
         )
     }
 
@@ -119,7 +102,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             target_user_id,
             domain_id,
             permissions,
-            operation
+            operation,
         )
     }
 }

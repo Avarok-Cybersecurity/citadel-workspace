@@ -1,8 +1,7 @@
-use crate::handlers::domain::functions::user;
 use crate::handlers::domain::server_ops::DomainServerOperations;
-use crate::handlers::domain::DomainOperations;
-use crate::kernel::transaction::{Transaction, TransactionManager};
+
 use crate::kernel::transaction::prelude::*;
+use crate::kernel::transaction::{Transaction, TransactionManager};
 use crate::WorkspaceProtocolResponse;
 use crate::{WORKSPACE_MASTER_PASSWORD_KEY, WORKSPACE_ROOT_ID};
 use citadel_logging::{debug, info};
@@ -11,10 +10,10 @@ use citadel_workspace_types::{
     structs::{MetadataValue as InternalMetadataValue, Permission, User, UserRole, WorkspaceRoles},
     WorkspaceProtocolPayload,
 };
+use parking_lot::RwLock;
 use rocksdb::DB;
 use std::collections::HashSet;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tokio_stream::StreamExt; // Corrected and consolidated
 
 // pub mod backend;
@@ -57,8 +56,8 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
         // Scope 1: Take out the old remote from self.node_remote
         {
             let mut guard = match self.node_remote.try_write() {
-                Ok(g) => g,
-                Err(_would_block_err) => {
+                Some(g) => g,
+                None => {
                     // Log the error and return, or handle as appropriate for your application's logic.
                     // For now, we'll log and return a generic error, as load_remote is critical.
                     citadel_logging::error!(target: "citadel", "WorkspaceServerKernel: load_remote: Failed to acquire write lock on node_remote (try_write would block).");
@@ -86,8 +85,8 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
         // Scope 2: Insert the new remote into self.node_remote
         {
             let mut guard = match self.node_remote.try_write() {
-                Ok(g) => g,
-                Err(_would_block_err) => {
+                Some(g) => g,
+                None => {
                     citadel_logging::error!(target: "citadel", "WorkspaceServerKernel: load_remote: Failed to acquire write lock on node_remote for insertion (try_write would block).");
                     return Err(NetworkError::Generic(
                         "Failed to acquire lock for insertion in load_remote".to_string(),
@@ -116,14 +115,16 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
                     let _cid = connect_success.session_cid;
                     let user_cid = connect_success.channel.get_session_cid();
 
-                    let node_remote_guard = this.node_remote.read().await;
-                    let account_manager = match node_remote_guard.as_ref() {
-                        Some(remote) => remote.account_manager(),
-                        None => {
-                            citadel_logging::error!(target: "citadel", "NodeRemote not available during ConnectSuccess for CID {}", connect_success.session_cid);
-                            return Err(NetworkError::Generic(
-                                "NodeRemote not available".to_string(),
-                            ));
+                    let account_manager = {
+                        let node_remote_guard = this.node_remote.read();
+                        match node_remote_guard.as_ref() {
+                            Some(remote) => remote.account_manager().clone(),
+                            None => {
+                                citadel_logging::error!(target: "citadel", "NodeRemote not available during ConnectSuccess for CID {}", connect_success.session_cid);
+                                return Err(NetworkError::Generic(
+                                    "NodeRemote not available".to_string(),
+                                ));
+                            }
                         }
                     };
 
@@ -204,13 +205,13 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
 
 impl<R: Ratchet> Default for WorkspaceServerKernel<R> {
     fn default() -> Self {
-        panic!("WorkspaceServerKernel::default() cannot be used when a persistent DB is required. Use a constructor that initializes TransactionManager with a DB instance.");
-        // The following is unreachable but needed for type checking if panic is removed.
-        #[allow(unreachable_code)]
+        // Note: This default implementation is not meant for production use
+        // as it requires a proper database connection. Use `new()` or `with_admin()` instead.
+        #[allow(clippy::diverging_sub_expression, unreachable_code)]
         {
-            #[allow(clippy::diverging_sub_expression)]
-            let _tx_manager =
-                Arc::new(TransactionManager::new(todo!("No DB available in default")));
+            let _tx_manager = Arc::new(RwLock::new(TransactionManager::new(todo!(
+                "No DB available in default - use WorkspaceServerKernel::new() instead"
+            ))));
             Self {
                 roles: Arc::new(RwLock::new(WorkspaceRoles::new())),
                 node_remote: Arc::new(RwLock::new(None)),
@@ -244,7 +245,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         admin_password: &str,
         db: Arc<DB>,
     ) -> Self {
-        let tx_mngr = Arc::new(TransactionManager::new(db));
+        let tx_mngr = Arc::new(RwLock::new(TransactionManager::new(db)));
         let kernel = Self {
             roles: Arc::new(RwLock::new(WorkspaceRoles::new())),
             node_remote: Arc::new(RwLock::new(None)),
@@ -267,26 +268,31 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         workspace_password: &str,
     ) -> Result<(), NetworkError> {
         self.tx_manager().with_write_transaction(|tx| {
-            let mut user = User::new(
-                username.to_string(),
-                display_name.to_string(),
-                UserRole::Admin,
-            );
+            // Check if user already exists
+            let user_exists = tx.get_user(username).is_some();
 
-            // Add primary_workspace_id to admin user's metadata
-            user.metadata.insert(
-                "primary_workspace_id".to_string(),
-                InternalMetadataValue::String(WORKSPACE_ROOT_ID.to_string()),
-            );
+            if !user_exists {
+                let mut user = User::new(
+                    username.to_string(),
+                    display_name.to_string(),
+                    UserRole::Admin,
+                );
 
-            // Grant the admin user all permissions on the root workspace
-            let mut root_permissions = HashSet::new();
-            root_permissions.insert(Permission::All);
-            user.permissions
-                .insert(WORKSPACE_ROOT_ID.to_string(), root_permissions);
+                // Add primary_workspace_id to admin user's metadata
+                user.metadata.insert(
+                    "primary_workspace_id".to_string(),
+                    InternalMetadataValue::String(WORKSPACE_ROOT_ID.to_string()),
+                );
 
-            // The workspace master password is not stored in user.metadata.
-            // It's stored hashed in the workspace's own metadata via tx.set_workspace_password().
+                // Grant the admin user all permissions on the root workspace
+                let mut root_permissions = HashSet::new();
+                root_permissions.insert(Permission::All);
+                user.permissions
+                    .insert(WORKSPACE_ROOT_ID.to_string(), root_permissions);
+
+                tx.insert_user(username.to_string(), user)?;
+            }
+
             // Ensure the root workspace domain exists and its password is set
             if tx.get_domain(WORKSPACE_ROOT_ID).is_none() {
                 let root_workspace_obj = citadel_workspace_types::structs::Workspace {
@@ -294,7 +300,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                     name: "Root Workspace".to_string(),
                     description: "The main workspace for this instance.".to_string(),
                     owner_id: username.to_string(),
-                    members: vec![username.to_string()],
+                    members: Vec::new(), // Start with empty members list - will be populated by add_user_to_domain
                     offices: Vec::new(),
                     metadata: Default::default(), // Will be populated by set_workspace_password
                     password_protected: !workspace_password.is_empty(),
@@ -333,7 +339,12 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 // The current set_workspace_password likely handles empty string by not setting a password or setting an unusable hash.
             }
 
-            tx.insert_user(username.to_string(), user)
+            // Add the admin user to the root workspace domain only if they're not already a member
+            if !tx.is_member_of_domain(username, WORKSPACE_ROOT_ID)? {
+                tx.add_user_to_domain(username, WORKSPACE_ROOT_ID, UserRole::Admin)?;
+            }
+
+            Ok(())
         })
     }
 
@@ -374,7 +385,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
     /// Sets the NodeRemote after the node has been built.
     pub async fn set_node_remote(&self, node_remote: NodeRemote<R>) {
-        let mut remote_guard = self.node_remote.write().await; // Keep .await here as this function is async
+        let mut remote_guard = self.node_remote.write();
         *remote_guard = Some(node_remote);
         info!(target: "citadel", "NodeRemote set for WorkspaceServerKernel");
     }
@@ -428,7 +439,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 NetworkError::msg("Domain ID must be provided to add a member to a domain")
             })?;
 
-            user::add_user_to_domain_inner(
+            crate::handlers::domain::functions::user::user_ops::add_user_to_domain_inner(
                 tx,
                 actor_user_id,
                 target_user_id,
@@ -457,7 +468,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         target_user_id: &str,
     ) -> Result<(), NetworkError> {
         self.tx_manager().with_write_transaction(|tx| {
-            user::remove_user_from_domain_inner(
+            crate::handlers::domain::functions::user::user_ops::remove_user_from_domain_inner(
                 tx,
                 actor_user_id,
                 target_user_id,
@@ -466,7 +477,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
             // Commit the transaction
             tx.commit()?;
-            
+
             Ok(())
         })
     }

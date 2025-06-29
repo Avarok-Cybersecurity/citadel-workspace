@@ -1,20 +1,20 @@
-use crate::kernel::transaction::Transaction;
 use crate::kernel::transaction::write::WriteTransaction;
+
+use bincode;
 use citadel_logging::debug;
 use citadel_sdk::prelude::NetworkError;
-use bincode;
 
-impl<'a> WriteTransaction<'a> {
+impl WriteTransaction<'_> {
     /// Commit transaction changes to the database
     ///
-    /// Note: As per the Citadel Workspace transaction system behavior, changes made during a 
-    /// transaction are immediately applied to the in-memory storage. This commit() method 
+    /// Note: As per the Citadel Workspace transaction system behavior, changes made during a
+    /// transaction are immediately applied to the in-memory storage. This commit() method
     /// only syncs those changes to the backend store (RocksDB).
     pub fn commit(&self) -> Result<(), NetworkError> {
         debug!("Committing transaction changes to database");
-        
+
         // Note that in-memory changes are already applied at this point
-        
+
         // Create a write batch for RocksDB
         let mut batch = rocksdb::WriteBatch::default();
 
@@ -56,10 +56,9 @@ impl<'a> WriteTransaction<'a> {
 
         // Process workspace passwords
         for (workspace_id, password) in self.workspace_password.iter() {
-            let serialized = bincode::serialize(password)
-                .map_err(|e| {
-                    NetworkError::msg(format!("Failed to serialize workspace password: {}", e))
-                })?;
+            let serialized = bincode::serialize(password).map_err(|e| {
+                NetworkError::msg(format!("Failed to serialize workspace password: {}", e))
+            })?;
 
             // Add to write batch
             batch.put(
@@ -69,9 +68,9 @@ impl<'a> WriteTransaction<'a> {
         }
 
         // Commit the write batch to the database
-        self.db.write(batch).map_err(|e| {
-            NetworkError::msg(format!("Failed to write batch to database: {}", e))
-        })?;
+        self.db
+            .write(batch)
+            .map_err(|e| NetworkError::msg(format!("Failed to write batch to database: {}", e)))?;
 
         debug!("Transaction committed successfully");
         Ok(())

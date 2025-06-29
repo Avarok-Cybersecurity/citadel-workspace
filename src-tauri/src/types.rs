@@ -500,10 +500,7 @@ impl TryFrom<ConnectRequestTS> for InternalServiceRequest {
         let session_security_settings: citadel_internal_service_types::SessionSecuritySettings =
             ts_request.session_security_settings.try_into()?;
 
-        let server_password = match ts_request.server_password {
-            Some(p_str) => Some(PreSharedKey::from(p_str)), // p_str is already Vec<u8> here
-            None => None,
-        };
+        let server_password = ts_request.server_password.map(PreSharedKey::from);
 
         let password = ts_request.password.into();
 
@@ -580,6 +577,7 @@ pub fn string_to_u64(s: &str) -> Result<u64, String> {
         .map_err(|e| format!("Invalid u64 string '{}': {:?}", s, e))
 }
 
+#[allow(dead_code)]
 pub fn string_to_uuid(s: &str) -> Result<Uuid, String> {
     Uuid::parse_str(s).map_err(|e| format!("Invalid UUID string '{}': {:?}", s, e))
 }

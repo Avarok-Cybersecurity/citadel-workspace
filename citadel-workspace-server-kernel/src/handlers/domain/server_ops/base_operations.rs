@@ -1,9 +1,62 @@
-use crate::handlers::domain::DomainOperations;
 use crate::handlers::domain::server_ops::DomainServerOperations;
-use crate::handlers::domain::DomainEntity;
+use crate::handlers::domain::{DomainEntity, DomainOperations};
+use crate::handlers::domain::{UpdateOperation, WorkspaceDBList};
 use crate::kernel::transaction::Transaction;
+use crate::kernel::transaction::TransactionManagerExt;
+use bcrypt;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{Domain, User, UserRole, Permission, UpdateOperation, Room, Office, Workspace, WorkspaceDBList};
+use citadel_workspace_types::structs::{
+    Domain, Office, Permission, Room, User, UserRole, Workspace,
+};
+use std::collections::HashSet;
+
+/// Determines if a permission can be inherited from parent domains based on the user's role
+fn permission_can_inherit_for_user(permission: Permission, user_role: &UserRole) -> bool {
+    match user_role {
+        UserRole::Admin | UserRole::Owner => matches!(
+            permission,
+            Permission::ViewContent
+                | Permission::ReadMessages
+                | Permission::All
+                | Permission::ManageDomains
+                | Permission::AddUsers
+                | Permission::RemoveUsers
+                | Permission::CreateOffice
+                | Permission::CreateRoom
+                | Permission::AddOffice
+                | Permission::AddRoom
+                | Permission::EditContent
+                | Permission::EditMdx
+                | Permission::SendMessages
+                | Permission::UploadFiles
+                | Permission::DownloadFiles
+                | Permission::DeleteOffice
+                | Permission::DeleteRoom
+                | Permission::DeleteWorkspace
+                | Permission::UpdateOffice
+                | Permission::UpdateRoom
+                | Permission::UpdateWorkspace
+        ),
+        _ => match permission {
+            Permission::ViewContent => true,
+            Permission::ReadMessages => true,
+            Permission::All => false,
+            Permission::ManageDomains => false,
+            Permission::AddUsers => false,
+            Permission::RemoveUsers => false,
+            Permission::CreateOffice => true,
+            Permission::CreateRoom => true,
+            Permission::AddOffice => true,
+            Permission::AddRoom => true,
+            Permission::SendMessages => false,
+            Permission::EditContent => false,
+            Permission::EditMdx => false,
+            Permission::UploadFiles => false,
+            Permission::DownloadFiles => false,
+            _ => false,
+        },
+    }
+}
 
 impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOperations<R> {
     fn init(&self) -> Result<(), NetworkError> {
@@ -27,14 +80,16 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
     where
         F: FnOnce(&dyn Transaction) -> Result<T, NetworkError>,
     {
-        self.tx_manager.with_read_transaction(f)
+        self.tx_manager
+            .with_read_transaction(|tx| f(tx as &dyn Transaction))
     }
 
     fn with_write_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
     where
         F: FnOnce(&mut dyn Transaction) -> Result<T, NetworkError>,
     {
-        self.tx_manager.with_write_transaction(f)
+        self.tx_manager
+            .with_write_transaction(|tx| f(tx as &mut dyn Transaction))
     }
 
     fn check_entity_permission(
@@ -42,50 +97,85 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         tx: &dyn Transaction,
         actor_user_id: &str,
         entity_id: &str,
-        permission: super::Permission,
+        permission: Permission,
     ) -> Result<bool, NetworkError> {
-        let actor = tx.get_user(actor_user_id).ok_or_else(|| {
-            NetworkError::msg(format!(
-                "User '{}' not found in check_entity_permission",
-                actor_user_id
-            ))
-        })?;
+        use crate::kernel::transaction::rbac::{retrieve_role_permissions, DomainType};
+        use crate::WORKSPACE_ROOT_ID;
 
-        // Admin has all permissions
-        if actor.role == UserRole::Admin {
-            return Ok(true);
-        }
-
-        // Check if user has explicit permission for this entity
-        // First check if user exists
-        if tx.get_user(actor_user_id).is_none() {
-            return Ok(false);
-        }
-        
-        // Then check if the domain exists
-        if tx.get_domain(entity_id).is_none() {
-            return Ok(false);
-        }
-        
-        // Check user's permissions for this domain
-        let user_permissions = tx.get_permissions(actor_user_id)?
-            .into_iter()
-            .filter(|p| p == &permission)
-            .collect::<Vec<_>>();
-            
-        // If user has the specific permission, return true
-        if !user_permissions.is_empty() {
-            return Ok(true);
-        }
-        
-        // Otherwise check if user is an admin
         if let Some(user) = tx.get_user(actor_user_id) {
-            if user.role == super::UserRole::Admin {
+            if user.role == UserRole::Admin {
                 return Ok(true);
             }
+
+            if user.has_permission(entity_id, permission) {
+                return Ok(true);
+            }
+
+            if entity_id == WORKSPACE_ROOT_ID {
+                if let Some(workspace_domain) = tx.get_domain(WORKSPACE_ROOT_ID) {
+                    let is_workspace_member = workspace_domain
+                        .members()
+                        .iter()
+                        .any(|member_id| member_id == actor_user_id);
+                    if is_workspace_member {
+                        let role_permissions =
+                            retrieve_role_permissions(&user.role, &DomainType::Workspace);
+                        let role_permissions_set: HashSet<Permission> =
+                            role_permissions.into_iter().collect();
+                        return Ok(Permission::has_permission(
+                            &role_permissions_set,
+                            &permission,
+                        ));
+                    } else {
+                        return Ok(false);
+                    }
+                } else {
+                    return Ok(false);
+                }
+            }
+
+            if let Some(domain) = tx.get_domain(entity_id) {
+                let domain_type = if domain.as_office().is_some() {
+                    DomainType::Office
+                } else if domain.as_room().is_some() {
+                    DomainType::Room
+                } else if domain.as_workspace().is_some() {
+                    DomainType::Workspace
+                } else {
+                    return Err(NetworkError::msg(format!(
+                        "Unknown domain type for domain: {}",
+                        entity_id
+                    )));
+                };
+
+                let is_member = domain
+                    .members()
+                    .iter()
+                    .any(|member_id| member_id == actor_user_id);
+
+                if is_member {
+                    let role_permissions = retrieve_role_permissions(&user.role, &domain_type);
+                    let role_permissions_set: HashSet<Permission> =
+                        role_permissions.into_iter().collect();
+                    return Ok(Permission::has_permission(
+                        &role_permissions_set,
+                        &permission,
+                    ));
+                }
+
+                let parent_id = domain.parent_id();
+                let can_inherit = permission_can_inherit_for_user(permission, &user.role);
+                if !parent_id.is_empty() && can_inherit {
+                    return self.check_entity_permission(tx, actor_user_id, parent_id, permission);
+                }
+            }
+        } else {
+            return Err(NetworkError::msg(format!(
+                "User '{}' not found",
+                actor_user_id
+            )));
         }
 
-        // User doesn't have direct permissions for this entity
         Ok(false)
     }
 
@@ -95,8 +185,22 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         user_id: &str,
         domain_id: &str,
     ) -> Result<bool, NetworkError> {
-        // Simply delegate to check_entity_permission with no specific permission required
-        self.check_entity_permission(tx, user_id, domain_id, super::Permission::All)
+        if let Some(domain) = tx.get_domain(domain_id) {
+            let is_direct_member = domain
+                .members()
+                .iter()
+                .any(|member_id| member_id == user_id);
+            if is_direct_member {
+                return Ok(true);
+            }
+
+            let parent_id = domain.parent_id();
+            if !parent_id.is_empty() {
+                return self.is_member_of_domain(tx, user_id, parent_id);
+            }
+        }
+
+        Ok(false)
     }
 
     fn get_domain(&self, domain_id: &str) -> Option<Domain> {
@@ -113,15 +217,13 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         role: UserRole,
     ) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            // Check if admin has permission to add users
-            if !self.check_entity_permission(tx, admin_id, domain_id, super::Permission::AddUsers)? {
+            if !self.check_entity_permission(tx, admin_id, domain_id, Permission::AddUsers)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to add users to domain '{}'",
                     admin_id, domain_id
                 )));
             }
 
-            // Check if user to add exists
             if tx.get_user(user_id_to_add).is_none() {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not exist",
@@ -129,7 +231,6 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                 )));
             }
 
-            // Add user to domain with specified role
             tx.add_user_to_domain(user_id_to_add, domain_id, role)?;
             Ok(())
         })
@@ -142,15 +243,13 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         domain_id: &str,
     ) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            // Check if admin has permission
-            if !self.check_entity_permission(tx, admin_id, domain_id, super::Permission::RemoveUsers)? {
+            if !self.check_entity_permission(tx, admin_id, domain_id, Permission::RemoveUsers)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to remove users from domain '{}'",
                     admin_id, domain_id
                 )));
             }
 
-            // Check if user exists in domain
             if !self.is_member_of_domain(tx, user_id_to_remove, domain_id)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' is not a member of domain '{}'",
@@ -158,17 +257,33 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                 )));
             }
 
-            // Remove user from domain
             tx.remove_user_from_domain(user_id_to_remove, domain_id)?;
             Ok(())
         })
     }
 
     // Generic domain entity operations: these functions serve as the base for specialized entity operations
-    fn get_domain_entity<T: DomainEntity + 'static>(&self, user_id: &str, entity_id: &str) -> Result<T, NetworkError> {
+    fn get_domain_entity<T: DomainEntity + 'static>(
+        &self,
+        user_id: &str,
+        entity_id: &str,
+    ) -> Result<T, NetworkError> {
         self.tx_manager.with_read_transaction(|tx| {
+            // Determine the appropriate permission based on the entity type
+            let permission = match tx.get_domain(entity_id) {
+                Some(Domain::Workspace { .. }) => Permission::ViewContent,
+                Some(Domain::Office { .. }) => Permission::ViewContent,
+                Some(Domain::Room { .. }) => Permission::ViewContent,
+                None => {
+                    return Err(NetworkError::msg(format!(
+                        "Entity '{}' not found",
+                        entity_id
+                    )))
+                }
+            };
+
             // Check if user has permission to access this entity
-            if !self.check_entity_permission(tx, user_id, entity_id, super::Permission::All)? {
+            if !self.check_entity_permission(tx, user_id, entity_id, permission)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to access {}",
                     user_id, entity_id
@@ -177,10 +292,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
 
             // Get the entity
             // Using get_domain for domain entities
-            let domain = tx.get_domain(entity_id).ok_or_else(|| {
-                NetworkError::msg(format!("Entity '{}' not found", entity_id))
-            })?;
-            
+            let domain = tx
+                .get_domain(entity_id)
+                .ok_or_else(|| NetworkError::msg(format!("Entity '{}' not found", entity_id)))?;
+
             // Convert domain to the requested type
             let entity = T::from_domain(domain.clone()).ok_or_else(|| {
                 NetworkError::msg(format!(
@@ -193,7 +308,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             Ok(entity.clone())
         })
     }
-    
+
     fn create_domain_entity<T: DomainEntity + 'static + serde::de::DeserializeOwned>(
         &self,
         user_id: &str,
@@ -205,42 +320,45 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         self.tx_manager.with_write_transaction(|tx| {
             // If parent_id is provided, check if parent exists and user has permission to create entities in it
             if let Some(parent) = parent_id {
-                if !self.check_entity_permission(tx, user_id, parent, super::Permission::CreateRoom)? {
+                if !self.check_entity_permission(tx, user_id, parent, Permission::CreateRoom)? {
                     return Err(NetworkError::msg(format!(
                         "User '{}' does not have permission to create entities in '{}'",
                         user_id, parent
                     )));
                 }
             }
-            
-            // Generate a unique ID for the new entity
+
             let id = uuid::Uuid::new_v4().to_string();
-            
-            // Create the entity
-            let entity = T::create(id.clone(), parent_id.map(|p| p.to_string()), name, description);
-            
+
+            let entity = T::create(
+                id.clone(),
+                parent_id.map(|p| p.to_string()),
+                name,
+                description,
+            );
+
             // Convert to Domain and add to storage
             let domain = entity.clone().into_domain();
-            
+
             // Update domain with MDX content if provided
             let domain = match (domain, mdx_content) {
-                (Domain::Workspace { mut workspace }, Some(content)) => {
+                (Domain::Workspace { workspace }, Some(_content)) => {
                     Domain::Workspace { workspace }
-                },
+                }
                 (Domain::Office { mut office }, Some(content)) => {
                     office.mdx_content = content.to_string();
                     Domain::Office { office }
-                },
+                }
                 (Domain::Room { mut room }, Some(content)) => {
                     room.mdx_content = content.to_string();
                     Domain::Room { room }
-                },
+                }
                 (domain, _) => domain,
             };
-            
+
             // Add domain to storage
             tx.insert_domain(id.clone(), domain.clone())?;
-            
+
             // Convert back to the requested type and return
             let entity = T::from_domain(domain).ok_or_else(|| {
                 NetworkError::msg(format!(
@@ -248,11 +366,11 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                     std::any::type_name::<T>()
                 ))
             })?;
-            
+
             Ok(entity)
         })
     }
-    
+
     fn delete_domain_entity<T: DomainEntity + 'static>(
         &self,
         user_id: &str,
@@ -261,24 +379,29 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         self.tx_manager.with_write_transaction(|tx| {
             // Check if user has permission to delete this entity
             let permission = match tx.get_domain(entity_id) {
-                Some(Domain::Workspace { .. }) => super::Permission::DeleteWorkspace,
-                Some(Domain::Office { .. }) => super::Permission::DeleteOffice,
-                Some(Domain::Room { .. }) => super::Permission::DeleteRoom,
-                None => return Err(NetworkError::msg(format!("Entity '{}' not found", entity_id))),
+                Some(Domain::Workspace { .. }) => Permission::DeleteWorkspace,
+                Some(Domain::Office { .. }) => Permission::DeleteOffice,
+                Some(Domain::Room { .. }) => Permission::DeleteRoom,
+                None => {
+                    return Err(NetworkError::msg(format!(
+                        "Entity '{}' not found",
+                        entity_id
+                    )))
+                }
             };
-            
+
             if !self.check_entity_permission(tx, user_id, entity_id, permission)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to delete {}",
                     user_id, entity_id
                 )));
             }
-            
+
             // Get the entity before deleting
-            let domain = tx.get_domain(entity_id).ok_or_else(|| {
-                NetworkError::msg(format!("Entity '{}' not found", entity_id))
-            })?;
-            
+            let domain = tx
+                .get_domain(entity_id)
+                .ok_or_else(|| NetworkError::msg(format!("Entity '{}' not found", entity_id)))?;
+
             // Convert domain to the requested type
             let entity = T::from_domain(domain.clone()).ok_or_else(|| {
                 NetworkError::msg(format!(
@@ -287,14 +410,14 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                     std::any::type_name::<T>()
                 ))
             })?;
-            
+
             // Remove the entity
             tx.remove_domain(entity_id)?;
-            
+
             Ok(entity)
         })
     }
-    
+
     fn update_domain_entity<T: DomainEntity + 'static>(
         &self,
         user_id: &str,
@@ -306,48 +429,69 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         self.tx_manager.with_write_transaction(|tx| {
             // Check if user has permission to update this entity
             let permission = match tx.get_domain(domain_id) {
-                Some(Domain::Workspace { .. }) => super::Permission::UpdateWorkspace,
-                Some(Domain::Office { .. }) => super::Permission::UpdateOffice,
-                Some(Domain::Room { .. }) => super::Permission::UpdateRoom,
-                None => return Err(NetworkError::msg(format!("Entity '{}' not found", domain_id))),
+                Some(Domain::Workspace { .. }) => Permission::UpdateWorkspace,
+                Some(Domain::Office { .. }) => Permission::UpdateOffice,
+                Some(Domain::Room { .. }) => Permission::UpdateRoom,
+                None => {
+                    return Err(NetworkError::msg(format!(
+                        "Entity '{}' not found",
+                        domain_id
+                    )))
+                }
             };
-            
+
             if !self.check_entity_permission(tx, user_id, domain_id, permission)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to update {}",
                     user_id, domain_id
                 )));
             }
-            
+
             // Get the entity
-            let domain = tx.get_domain(domain_id).ok_or_else(|| {
-                NetworkError::msg(format!("Entity '{}' not found", domain_id))
-            })?;
-            
+            let domain = tx
+                .get_domain(domain_id)
+                .ok_or_else(|| NetworkError::msg(format!("Entity '{}' not found", domain_id)))?;
+
             // Update the domain with provided values
-            let updated_domain = match domain {
+            let updated_domain = match domain.clone() {
                 Domain::Workspace { mut workspace } => {
-                    if let Some(n) = name { workspace.name = n.to_string(); }
-                    if let Some(d) = description { workspace.description = d.to_string(); }
+                    if let Some(n) = name {
+                        workspace.name = n.to_string();
+                    }
+                    if let Some(d) = description {
+                        workspace.description = d.to_string();
+                    }
                     Domain::Workspace { workspace }
-                },
+                }
                 Domain::Office { mut office } => {
-                    if let Some(n) = name { office.name = n.to_string(); }
-                    if let Some(d) = description { office.description = d.to_string(); }
-                    if let Some(m) = mdx_content { office.mdx_content = m.to_string(); }
+                    if let Some(n) = name {
+                        office.name = n.to_string();
+                    }
+                    if let Some(d) = description {
+                        office.description = d.to_string();
+                    }
+                    if let Some(m) = mdx_content {
+                        office.mdx_content = m.to_string();
+                    }
                     Domain::Office { office }
-                },
+                }
                 Domain::Room { mut room } => {
-                    if let Some(n) = name { room.name = n.to_string(); }
-                    if let Some(d) = description { room.description = d.to_string(); }
-                    if let Some(m) = mdx_content { room.mdx_content = m.to_string(); }
+                    if let Some(n) = name {
+                        room.name = n.to_string();
+                    }
+                    if let Some(d) = description {
+                        room.description = d.to_string();
+                    }
+                    if let Some(m) = mdx_content {
+                        room.mdx_content = m.to_string();
+                    }
                     Domain::Room { room }
-                },
+                }
             };
-            
+
             // Update domain in storage
-            tx.update_domain(domain_id.to_string(), updated_domain.clone())?;
-            
+            tx.update_domain(domain_id, updated_domain.clone())?;
+
             // Convert back to the requested type
             let entity = T::from_domain(updated_domain).ok_or_else(|| {
                 NetworkError::msg(format!(
@@ -355,11 +499,11 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                     std::any::type_name::<T>()
                 ))
             })?;
-            
+
             Ok(entity)
         })
     }
-    
+
     fn list_domain_entities<T: DomainEntity + 'static>(
         &self,
         user_id: &str,
@@ -368,27 +512,28 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         self.tx_manager.with_read_transaction(|tx| {
             // If parent_id is provided, check if user has permission to list entities in it
             if let Some(parent) = parent_id {
-                if !self.check_entity_permission(tx, user_id, parent, super::Permission::All)? {
+                if !self.check_entity_permission(tx, user_id, parent, Permission::All)? {
                     return Err(NetworkError::msg(format!(
                         "User '{}' does not have permission to list entities in '{}'",
                         user_id, parent
                     )));
                 }
             }
-            
+
             // Get all domains
             let domains = tx.get_all_domains()?;
-            
+
             // Filter domains based on parent_id
-            let filtered_domains = domains.into_iter().filter(|(_, domain)| {
-                match (domain, parent_id) {
-                    (Domain::Workspace { .. }, None) => true,
-                    (Domain::Office { office }, Some(parent)) => office.workspace_id == parent,
-                    (Domain::Room { room }, Some(parent)) => room.office_id == parent,
-                    _ => false,
-                }
-            });
-            
+            let filtered_domains =
+                domains
+                    .into_iter()
+                    .filter(|(_, domain)| match (domain, parent_id) {
+                        (Domain::Workspace { .. }, None) => true,
+                        (Domain::Office { office }, Some(parent)) => office.workspace_id == parent,
+                        (Domain::Room { room }, Some(parent)) => room.office_id == parent,
+                        _ => false,
+                    });
+
             // Convert each domain to the requested type and collect
             let mut entities = Vec::new();
             for (_id, domain) in filtered_domains {
@@ -396,11 +541,11 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                     entities.push(entity);
                 }
             }
-            
+
             Ok(entities)
         })
     }
-    
+
     fn add_user_to_workspace(
         &self,
         user_id: &str,
@@ -410,29 +555,29 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
     ) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
             // Check if admin has permission to add users
-            if !self.check_entity_permission(tx, user_id, workspace_id, super::Permission::AddUsers)? {
+            if !self.check_entity_permission(tx, user_id, workspace_id, Permission::AddUsers)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to add users to workspace '{}'",
                     user_id, workspace_id
                 )));
             }
-            
+
             // Check if user exists
-            let user = tx.get_user(member_id).ok_or_else(|| {
-                NetworkError::msg(format!("User '{}' not found", member_id))
-            })?;
-            
+            let _user = tx
+                .get_user(member_id)
+                .ok_or_else(|| NetworkError::msg(format!("User '{}' not found", member_id)))?;
+
             // Check if workspace exists
-            let workspace = tx.get_workspace(workspace_id).ok_or_else(|| {
+            let _workspace = tx.get_workspace(workspace_id).ok_or_else(|| {
                 NetworkError::msg(format!("Workspace '{}' not found", workspace_id))
             })?;
-            
+
             // Add user to workspace with specified role
             tx.add_user_to_domain(member_id, workspace_id, role)?;
             Ok(())
         })
     }
-    
+
     fn remove_user_from_workspace(
         &self,
         user_id: &str,
@@ -441,36 +586,39 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
     ) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
             // Check if admin has permission to remove users
-            if !self.check_entity_permission(tx, user_id, workspace_id, super::Permission::RemoveUsers)? {
+            if !self.check_entity_permission(tx, user_id, workspace_id, Permission::RemoveUsers)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to remove users from workspace '{}'",
                     user_id, workspace_id
                 )));
             }
-            
+
             // Prevent removing the owner
             if let Some(workspace) = tx.get_workspace(workspace_id) {
                 if workspace.owner_id == member_id {
                     return Err(NetworkError::msg(
-                        "Cannot remove workspace owner from workspace"
+                        "Cannot remove workspace owner from workspace",
                     ));
                 }
             } else {
-                return Err(NetworkError::msg(format!("Workspace '{}' not found", workspace_id)));
+                return Err(NetworkError::msg(format!(
+                    "Workspace '{}' not found",
+                    workspace_id
+                )));
             }
-            
+
             // Remove user from workspace
             tx.remove_user_from_domain(member_id, workspace_id)?;
             Ok(())
         })
     }
-    
+
     fn update_workspace_member_role(
         &self,
         actor_user_id: &str,
         target_user_id: &str,
         role: UserRole,
-        metadata: Option<Vec<u8>>,
+        _metadata: Option<Vec<u8>>,
     ) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
             // Only admins can update roles
@@ -480,12 +628,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                     actor_user_id
                 )));
             }
-            
+
             // Check if target user exists
-            let target_user = tx.get_user(target_user_id).ok_or_else(|| {
-                NetworkError::msg(format!("User '{}' not found", target_user_id))
-            })?;
-            
+            let target_user = tx
+                .get_user(target_user_id)
+                .ok_or_else(|| NetworkError::msg(format!("User '{}' not found", target_user_id)))?;
+
             // Cannot change role of workspace admin unless you're also an admin
             if target_user.role == UserRole::Admin && role != UserRole::Admin {
                 let actor_is_admin = if let Some(actor) = tx.get_user(actor_user_id) {
@@ -493,108 +641,91 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                 } else {
                     false
                 };
-                
+
                 if !actor_is_admin {
-                    return Err(NetworkError::msg("Cannot demote an admin unless you are also an admin"));
+                    return Err(NetworkError::msg(
+                        "Cannot demote an admin unless you are also an admin",
+                    ));
                 }
             }
-            
+
             // Update the user's role
-            // Get the user and update their role
-            if let Some(mut user) = tx.get_user_mut(target_user_id) {
-                // Set permissions based on the new role
-                user.clear_permissions(workspace_id);
-                let permissions = super::Permission::for_role(&role);
-                for permission in permissions {
-                    user.add_permission(workspace_id, permission);
-                }
-                // Update the user
-                tx.update_user(target_user_id, user.clone())?;
-                Ok(())
-            } else {
-                Err(NetworkError::msg(format!("User '{}' not found", target_user_id)))
-            }
+            // Get the user, modify it, and update
+            let mut user = tx
+                .get_user_mut(target_user_id)
+                .ok_or_else(|| NetworkError::msg(format!("User '{}' not found", target_user_id)))?
+                .clone();
+
+            user.role = role;
+            tx.update_user(target_user_id, user)?;
+            Ok(())
         })
     }
-    
+
     fn update_member_permissions(
         &self,
         actor_user_id: &str,
         target_user_id: &str,
-        workspace_id: &str,
+        domain_id: &str,
         permissions: Vec<Permission>,
         operation: UpdateOperation,
     ) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            // Check if actor has permission to manage users
-            if !self.check_entity_permission(tx, actor_user_id, workspace_id, super::Permission::AddUsers)? {
+            if !self.check_entity_permission(tx, actor_user_id, domain_id, Permission::AddUsers)? {
                 return Err(NetworkError::msg(format!(
-                    "User '{}' does not have permission to update permissions in workspace '{}'",
-                    actor_user_id, workspace_id
+                    "User '{}' does not have permission to update permissions in domain '{}'",
+                    actor_user_id, domain_id
                 )));
             }
-            
-            // Check if target user exists
+
             if tx.get_user(target_user_id).is_none() {
-                return Err(NetworkError::msg(format!("Target user '{}' not found", target_user_id)));
+                return Err(NetworkError::msg(format!(
+                    "Target user '{}' not found",
+                    target_user_id
+                )));
             }
-            
-            // Check if workspace exists
-            if tx.get_workspace(workspace_id).is_none() {
-                return Err(NetworkError::msg(format!("Workspace '{}' not found", workspace_id)));
+
+            if tx.get_domain(domain_id).is_none() {
+                return Err(NetworkError::msg(format!(
+                    "Domain '{}' not found",
+                    domain_id
+                )));
             }
-            
-            // Update permissions based on operation
+
+            let mut user = tx
+                .get_user_mut(target_user_id)
+                .ok_or_else(|| NetworkError::msg(format!("User '{}' not found", target_user_id)))?
+                .clone();
+
             match operation {
                 UpdateOperation::Add => {
-                    // Add permissions
                     for permission in permissions {
-                        // Get the user and add the permission
-                        if let Some(mut user) = tx.get_user_mut(target_user_id) {
-                            user.add_permission(workspace_id, permission);
-                            tx.update_user(target_user_id, user.clone())?;
-                        } else {
-                            return Err(NetworkError::msg(format!("User '{}' not found", target_user_id)));
-                        }
+                        user.add_permission(domain_id, permission);
                     }
-                },
+                }
                 UpdateOperation::Remove => {
-                    // Remove permissions
                     for permission in permissions {
-                        // Get the user and remove the permission
-                        if let Some(mut user) = tx.get_user_mut(target_user_id) {
-                            user.revoke_permission(workspace_id, permission);
-                            tx.update_user(target_user_id, user.clone())?;
-                        } else {
-                            return Err(NetworkError::msg(format!("User '{}' not found", target_user_id)));
-                        }
+                        user.revoke_permission(domain_id, permission);
                     }
-                },
+                }
                 UpdateOperation::Set => {
-                    // Clear existing permissions and set new ones
-                    // Get the user and clear permissions
-                    if let Some(mut user) = tx.get_user_mut(target_user_id) {
-                        user.clear_permissions(workspace_id);
-                        tx.update_user(target_user_id, user.clone())?;
-                    } else {
-                        return Err(NetworkError::msg(format!("User '{}' not found", target_user_id)));
-                    }
+                    user.clear_permissions(domain_id);
                     for permission in permissions {
-                        // Get the user and add the permission
-                        if let Some(mut user) = tx.get_user_mut(target_user_id) {
-                            user.add_permission(workspace_id, permission);
-                            tx.update_user(target_user_id, user.clone())?;
-                        } else {
-                            return Err(NetworkError::msg(format!("User '{}' not found", target_user_id)));
-                        }
+                        user.add_permission(domain_id, permission);
                     }
-                },
+                }
             }
-            
+
+            if let Some(new_role) = Self::determine_custom_role_from_permissions(&user) {
+                user.role = new_role;
+            }
+
+            tx.update_user(target_user_id, user)?;
+
             Ok(())
         })
     }
-    
+
     fn create_room(
         &self,
         user_id: &str,
@@ -604,25 +735,20 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         mdx_content: Option<&str>,
     ) -> Result<Room, NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            // Check if user has permission to create a room in this office
-            if !self.check_entity_permission(tx, user_id, office_id, super::Permission::CreateRoom)? {
+            if !self.check_entity_permission(tx, user_id, office_id, Permission::CreateRoom)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to create rooms in office '{}'",
                     user_id, office_id
                 )));
             }
-            
-            // Check if office exists
-            let office_domain = tx.get_domain(office_id).ok_or_else(|| {
-                NetworkError::msg(format!("Office '{}' not found", office_id))
-            })?;
-            
-            // Verify it's an office
-            if let Domain::Office { office } = office_domain {
-                // Generate room ID
+
+            let office_domain = tx
+                .get_domain(office_id)
+                .ok_or_else(|| NetworkError::msg(format!("Office '{}' not found", office_id)))?;
+
+            if let Domain::Office { office } = office_domain.clone() {
                 let room_id = uuid::Uuid::new_v4().to_string();
-                
-                // Create room
+
                 let room = Room {
                     id: room_id.clone(),
                     owner_id: user_id.to_string(),
@@ -633,15 +759,18 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                     mdx_content: mdx_content.unwrap_or("").to_string(),
                     metadata: Vec::new(),
                 };
-                
-                // Add room to domain storage
+
                 tx.insert_domain(room_id.clone(), Domain::Room { room: room.clone() })?;
-                
-                // Update office to include the room
-                let mut updated_office = office;
+
+                let mut updated_office = office.clone();
                 updated_office.rooms.push(room_id.clone());
-                tx.update_domain(office_id.to_string(), Domain::Office { office: updated_office })?;
-                
+                tx.update_domain(
+                    office_id,
+                    Domain::Office {
+                        office: updated_office,
+                    },
+                )?;
+
                 Ok(room)
             } else {
                 Err(NetworkError::msg(format!(
@@ -654,23 +783,20 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
 
     fn get_office(&self, user_id: &str, office_id: &str) -> Result<String, NetworkError> {
         self.tx_manager.with_read_transaction(|tx| {
-            // Check if user has permission to access this office
-            if !self.check_entity_permission(tx, user_id, office_id, super::Permission::All)? {
+            if !self.check_entity_permission(tx, user_id, office_id, Permission::ViewContent)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to access office '{}'",
                     user_id, office_id
                 )));
             }
-            
-            // Get the office domain
-            let domain = tx.get_domain(office_id).ok_or_else(|| {
-                NetworkError::msg(format!("Office '{}' not found", office_id))
-            })?;
-            
-            // Verify it's an office
-            if let Domain::Office { office: _ } = domain {
-                // Return the office ID as required by trait signature
-                Ok(office_id.to_string())
+
+            let domain = tx
+                .get_domain(office_id)
+                .ok_or_else(|| NetworkError::msg(format!("Office '{}' not found", office_id)))?;
+
+            if let Domain::Office { office } = domain {
+                serde_json::to_string(office)
+                    .map_err(|e| NetworkError::msg(format!("Failed to serialize office: {}", e)))
             } else {
                 Err(NetworkError::msg(format!(
                     "Entity '{}' is not an office",
@@ -679,25 +805,22 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             }
         })
     }
-    
+
     fn get_room(&self, user_id: &str, room_id: &str) -> Result<Room, NetworkError> {
         self.tx_manager.with_read_transaction(|tx| {
-            // Check if user has permission to access this room
-            if !self.check_entity_permission(tx, user_id, room_id, super::Permission::All)? {
+            if !self.check_entity_permission(tx, user_id, room_id, Permission::All)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to access room '{}'",
                     user_id, room_id
                 )));
             }
-            
-            // Get the room domain
-            let domain = tx.get_domain(room_id).ok_or_else(|| {
-                NetworkError::msg(format!("Room '{}' not found", room_id))
-            })?;
-            
-            // Convert to room
+
+            let domain = tx
+                .get_domain(room_id)
+                .ok_or_else(|| NetworkError::msg(format!("Room '{}' not found", room_id)))?;
+
             if let Domain::Room { room } = domain {
-                Ok(room)
+                Ok(room.clone())
             } else {
                 Err(NetworkError::msg(format!(
                     "Entity '{}' is not a room",
@@ -706,43 +829,36 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             }
         })
     }
-    
+
     fn delete_office(&self, user_id: &str, office_id: &str) -> Result<Office, NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            // Check if user has permission to delete this office
-            if !self.check_entity_permission(tx, user_id, office_id, super::Permission::DeleteOffice)? {
+            if !self.check_entity_permission(tx, user_id, office_id, Permission::DeleteOffice)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to delete office '{}'",
                     user_id, office_id
                 )));
             }
-            
-            // Get the office domain
-            let domain = tx.get_domain(office_id).ok_or_else(|| {
-                NetworkError::msg(format!("Office '{}' not found", office_id))
-            })?;
-            
-            // Verify it's an office and extract it
+
+            let domain = tx
+                .get_domain(office_id)
+                .ok_or_else(|| NetworkError::msg(format!("Office '{}' not found", office_id)))?;
+
             if let Domain::Office { office } = domain.clone() {
-                // Get parent workspace
                 let workspace_id = office.workspace_id.clone();
-                
-                // Get workspace to update its offices list
-                if let Some(Domain::Workspace { mut workspace }) = tx.get_domain(&workspace_id) {
-                    // Remove office from workspace's list of offices
+
+                if let Some(Domain::Workspace { mut workspace }) =
+                    tx.get_domain(&workspace_id).cloned()
+                {
                     workspace.offices.retain(|id| id != &office_id.to_string());
-                    // Update workspace
-                    tx.update_domain(workspace_id, Domain::Workspace { workspace })?;
+                    tx.update_domain(&workspace_id, Domain::Workspace { workspace })?;
                 }
-                
-                // Delete all rooms in this office
+
                 for room_id in office.rooms.iter() {
                     tx.remove_domain(room_id)?;
                 }
-                
-                // Finally delete the office
+
                 tx.remove_domain(office_id)?;
-                
+
                 Ok(office)
             } else {
                 Err(NetworkError::msg(format!(
@@ -752,38 +868,30 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             }
         })
     }
-    
+
     fn delete_room(&self, user_id: &str, room_id: &str) -> Result<Room, NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            // Check if user has permission to delete this room
-            if !self.check_entity_permission(tx, user_id, room_id, super::Permission::DeleteRoom)? {
+            if !self.check_entity_permission(tx, user_id, room_id, Permission::DeleteRoom)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to delete room '{}'",
                     user_id, room_id
                 )));
             }
-            
-            // Get the room domain
-            let domain = tx.get_domain(room_id).ok_or_else(|| {
-                NetworkError::msg(format!("Room '{}' not found", room_id))
-            })?;
-            
-            // Verify it's a room and extract it
+
+            let domain = tx
+                .get_domain(room_id)
+                .ok_or_else(|| NetworkError::msg(format!("Room '{}' not found", room_id)))?;
+
             if let Domain::Room { room } = domain.clone() {
-                // Get parent office
                 let office_id = room.office_id.clone();
-                
-                // Get office to update its rooms list
-                if let Some(Domain::Office { mut office }) = tx.get_domain(&office_id) {
-                    // Remove room from office's list of rooms
+
+                if let Some(Domain::Office { mut office }) = tx.get_domain(&office_id).cloned() {
                     office.rooms.retain(|id| id != &room_id.to_string());
-                    // Update office
                     tx.update_domain(&office_id, Domain::Office { office })?;
                 }
-                
-                // Delete the room
+
                 tx.remove_domain(room_id)?;
-                
+
                 Ok(room)
             } else {
                 Err(NetworkError::msg(format!(
@@ -793,25 +901,22 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             }
         })
     }
-    
+
     fn get_workspace(&self, user_id: &str, workspace_id: &str) -> Result<Workspace, NetworkError> {
         self.tx_manager.with_read_transaction(|tx| {
-            // Check if user has permission to access this workspace
-            if !self.check_entity_permission(tx, user_id, workspace_id, super::Permission::All)? {
+            if !self.check_entity_permission(tx, user_id, workspace_id, Permission::All)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to access workspace '{}'",
                     user_id, workspace_id
                 )));
             }
-            
-            // Get the workspace domain
+
             let domain = tx.get_domain(workspace_id).ok_or_else(|| {
                 NetworkError::msg(format!("Workspace '{}' not found", workspace_id))
             })?;
-            
-            // Verify it's a workspace
+
             if let Domain::Workspace { workspace } = domain {
-                Ok(workspace)
+                Ok(workspace.clone())
             } else {
                 Err(NetworkError::msg(format!(
                     "Entity '{}' is not a workspace",
@@ -820,11 +925,11 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             }
         })
     }
-    
+
     fn get_workspace_details(&self, user_id: &str, ws_id: &str) -> Result<Workspace, NetworkError> {
         self.get_workspace(user_id, ws_id)
     }
-    
+
     fn create_workspace(
         &self,
         user_id: &str,
@@ -834,31 +939,41 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         workspace_password: String,
     ) -> Result<Workspace, NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            // Generate workspace ID
+            let all_domains = tx.get_all_domains()?;
+            for (_id, domain) in all_domains {
+                if let Domain::Workspace { .. } = domain {
+                    return Err(NetworkError::msg(
+                        "A root workspace already exists. Cannot create another one.",
+                    ));
+                }
+            }
+
             let workspace_id = uuid::Uuid::new_v4().to_string();
-            
-            // Create workspace
+
             let workspace = Workspace {
                 id: workspace_id.clone(),
                 owner_id: user_id.to_string(),
                 name: name.to_string(),
                 description: description.to_string(),
-                members: vec![user_id.to_string()],
+                members: Vec::new(),
                 offices: Vec::new(),
                 metadata: metadata.unwrap_or_default(),
                 password_protected: !workspace_password.is_empty(),
             };
-            
-            // Add workspace to domain storage
-            tx.insert_domain(workspace_id.clone(), Domain::Workspace { workspace: workspace.clone() })?;
-            
-            // Ensure the user has admin permissions for this workspace
-            tx.add_user_to_domain(user_id, &workspace_id, super::UserRole::Admin)?;
-            
+
+            tx.insert_domain(
+                workspace_id.clone(),
+                Domain::Workspace {
+                    workspace: workspace.clone(),
+                },
+            )?;
+
+            tx.add_user_to_domain(user_id, &workspace_id, UserRole::Admin)?;
+
             Ok(workspace)
         })
     }
-    
+
     fn add_office_to_workspace(
         &self,
         user_id: &str,
@@ -866,37 +981,36 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         office_id: &str,
     ) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            // Check if user has permission to modify the workspace
-            if !self.check_entity_permission(tx, user_id, workspace_id, super::Permission::UpdateWorkspace)? {
+            if !self.check_entity_permission(
+                tx,
+                user_id,
+                workspace_id,
+                Permission::UpdateWorkspace,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to add offices to workspace '{}'",
                     user_id, workspace_id
                 )));
             }
-            
-            // Check if office exists
-            let office_domain = tx.get_domain(office_id).ok_or_else(|| {
-                NetworkError::msg(format!("Office '{}' not found", office_id))
-            })?;
-            
-            // Get workspace
+
+            let office_domain = tx
+                .get_domain(office_id)
+                .ok_or_else(|| NetworkError::msg(format!("Office '{}' not found", office_id)))?;
+
             let workspace_domain = tx.get_domain(workspace_id).ok_or_else(|| {
                 NetworkError::msg(format!("Workspace '{}' not found", workspace_id))
             })?;
-            
-            // Verify entities are of correct type
-            if let Domain::Office { mut office } = office_domain {
-                if let Domain::Workspace { mut workspace } = workspace_domain {
-                    // Update office to reference this workspace
+
+            if let Domain::Office { mut office } = office_domain.clone() {
+                if let Domain::Workspace { mut workspace } = workspace_domain.clone() {
                     office.workspace_id = workspace_id.to_string();
-                    tx.update_domain(office_id, Domain::Office { office: office.clone() })?;
-                    
-                    // Add office to workspace's list
+                    tx.update_domain(office_id, Domain::Office { office })?;
+
                     if !workspace.offices.contains(&office_id.to_string()) {
                         workspace.offices.push(office_id.to_string());
                         tx.update_domain(workspace_id, Domain::Workspace { workspace })?;
                     }
-                    
+
                     Ok(())
                 } else {
                     Err(NetworkError::msg(format!(
@@ -912,7 +1026,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             }
         })
     }
-    
+
     fn remove_office_from_workspace(
         &self,
         user_id: &str,
@@ -920,25 +1034,26 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         office_id: &str,
     ) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            // Check if user has permission to modify the workspace
-            if !self.check_entity_permission(tx, user_id, workspace_id, super::Permission::UpdateWorkspace)? {
+            if !self.check_entity_permission(
+                tx,
+                user_id,
+                workspace_id,
+                Permission::UpdateWorkspace,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to remove offices from workspace '{}'",
                     user_id, workspace_id
                 )));
             }
-            
-            // Get workspace
+
             let workspace_domain = tx.get_domain(workspace_id).ok_or_else(|| {
                 NetworkError::msg(format!("Workspace '{}' not found", workspace_id))
             })?;
-            
-            // Check if office exists and belongs to this workspace
-            let office_domain = tx.get_domain(office_id).ok_or_else(|| {
-                NetworkError::msg(format!("Office '{}' not found", office_id))
-            })?;
-            
-            // Verify entities are of correct type
+
+            let office_domain = tx
+                .get_domain(office_id)
+                .ok_or_else(|| NetworkError::msg(format!("Office '{}' not found", office_id)))?;
+
             if let Domain::Office { office } = &office_domain {
                 if office.workspace_id != workspace_id {
                     return Err(NetworkError::msg(format!(
@@ -952,15 +1067,11 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
                     office_id
                 )));
             }
-            
-            // Update workspace to remove the office
-            if let Domain::Workspace { mut workspace } = workspace_domain {
+
+            if let Domain::Workspace { mut workspace } = workspace_domain.clone() {
                 workspace.offices.retain(|id| id != office_id);
                 tx.update_domain(workspace_id, Domain::Workspace { workspace })?;
-                
-                // Note: We don't update the office itself - it remains but is no longer part of the workspace
-                // This allows it to be potentially re-added later
-                
+
                 Ok(())
             } else {
                 Err(NetworkError::msg(format!(
@@ -970,27 +1081,24 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             }
         })
     }
-    
+
     fn list_workspaces(&self, user_id: &str) -> Result<Vec<Workspace>, NetworkError> {
         self.tx_manager.with_read_transaction(|tx| {
-            // Get all domains
             let domains = tx.get_all_domains()?;
-            
-            // Filter and convert to workspaces
+
             let mut workspaces = Vec::new();
             for (_id, domain) in domains {
                 if let Domain::Workspace { workspace } = domain {
-                    // Only include workspaces the user has access to
-                    if self.check_entity_permission(tx, user_id, &workspace.id, super::Permission::All)? {
+                    if self.check_entity_permission(tx, user_id, &workspace.id, Permission::All)? {
                         workspaces.push(workspace);
                     }
                 }
             }
-            
+
             Ok(workspaces)
         })
     }
-    
+
     fn update_office(
         &self,
         user_id: &str,
@@ -1000,30 +1108,33 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         mdx_content: Option<&str>,
     ) -> Result<Office, NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            // Check if user has permission to update this office
-            if !self.check_entity_permission(tx, user_id, office_id, super::Permission::UpdateOffice)? {
+            if !self.check_entity_permission(tx, user_id, office_id, Permission::UpdateOffice)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to update office '{}'",
                     user_id, office_id
                 )));
             }
-            
-            // Get the office domain
-            let domain = tx.get_domain(office_id).ok_or_else(|| {
-                NetworkError::msg(format!("Office '{}' not found", office_id))
-            })?;
-            
-            // Verify it's an office and update it
-            if let Domain::Office { mut office } = domain {
-                // Update fields if provided
-                if let Some(n) = name { office.name = n.to_string(); }
-                if let Some(d) = description { office.description = d.to_string(); }
-                if let Some(m) = mdx_content { office.mdx_content = m.to_string(); }
-                
-                // Update domain in storage
-                let updated_domain = Domain::Office { office: office.clone() };
+
+            let domain = tx
+                .get_domain(office_id)
+                .ok_or_else(|| NetworkError::msg(format!("Office '{}' not found", office_id)))?;
+
+            if let Domain::Office { mut office } = domain.clone() {
+                if let Some(n) = name {
+                    office.name = n.to_string();
+                }
+                if let Some(d) = description {
+                    office.description = d.to_string();
+                }
+                if let Some(m) = mdx_content {
+                    office.mdx_content = m.to_string();
+                }
+
+                let updated_domain = Domain::Office {
+                    office: office.clone(),
+                };
                 tx.update_domain(office_id, updated_domain)?;
-                
+
                 Ok(office)
             } else {
                 Err(NetworkError::msg(format!(
@@ -1033,7 +1144,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             }
         })
     }
-    
+
     fn update_room(
         &self,
         user_id: &str,
@@ -1043,30 +1154,31 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         mdx_content: Option<&str>,
     ) -> Result<Room, NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            // Check if user has permission to update this room
-            if !self.check_entity_permission(tx, user_id, room_id, super::Permission::UpdateRoom)? {
+            if !self.check_entity_permission(tx, user_id, room_id, Permission::UpdateRoom)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to update room '{}'",
                     user_id, room_id
                 )));
             }
-            
-            // Get the room domain
-            let domain = tx.get_domain(room_id).ok_or_else(|| {
-                NetworkError::msg(format!("Room '{}' not found", room_id))
-            })?;
-            
-            // Verify it's a room and update it
-            if let Domain::Room { mut room } = domain {
-                // Update fields if provided
-                if let Some(n) = name { room.name = n.to_string(); }
-                if let Some(d) = description { room.description = d.to_string(); }
-                if let Some(m) = mdx_content { room.mdx_content = m.to_string(); }
-                
-                // Update domain in storage
+
+            let domain = tx
+                .get_domain(room_id)
+                .ok_or_else(|| NetworkError::msg(format!("Room '{}' not found", room_id)))?;
+
+            if let Domain::Room { mut room } = domain.clone() {
+                if let Some(n) = name {
+                    room.name = n.to_string();
+                }
+                if let Some(d) = description {
+                    room.description = d.to_string();
+                }
+                if let Some(m) = mdx_content {
+                    room.mdx_content = m.to_string();
+                }
+
                 let updated_domain = Domain::Room { room: room.clone() };
                 tx.update_domain(room_id, updated_domain)?;
-                
+
                 Ok(room)
             } else {
                 Err(NetworkError::msg(format!(
@@ -1076,150 +1188,159 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             }
         })
     }
-    
+
     fn list_offices(
         &self,
         user_id: &str,
         workspace_id: Option<String>,
     ) -> Result<Vec<Office>, NetworkError> {
         self.tx_manager.with_read_transaction(|tx| {
-            // If workspace_id is provided, check if user has permission to access it
             if let Some(ws_id) = &workspace_id {
-                if !self.check_entity_permission(tx, user_id, ws_id, super::Permission::All)? {
+                if !self.check_entity_permission(tx, user_id, ws_id, Permission::ViewContent)? {
                     return Err(NetworkError::msg(format!(
                         "User '{}' does not have permission to list offices in workspace '{}'",
                         user_id, ws_id
                     )));
                 }
             }
-            
-            // Get all domains
+
             let domains = tx.get_all_domains()?;
-            
-            // Filter and convert to offices
+
             let mut offices = Vec::new();
             for (_id, domain) in domains {
                 if let Domain::Office { office } = domain {
-                    // If workspace_id is provided, only include offices from that workspace
                     if let Some(ws_id) = &workspace_id {
                         if office.workspace_id == *ws_id {
                             offices.push(office);
                         }
-                    } else {
-                        // If no workspace_id, include all offices the user has access to
-                        if self.check_entity_permission(tx, user_id, &office.id, super::Permission::All)? {
-                            offices.push(office);
-                        }
+                    } else if self.check_entity_permission(
+                        tx,
+                        user_id,
+                        &office.id,
+                        Permission::ViewContent,
+                    )? {
+                        offices.push(office);
                     }
                 }
             }
-            
+
             Ok(offices)
         })
     }
-    
+
     fn list_rooms(
         &self,
         user_id: &str,
         office_id: Option<String>,
     ) -> Result<Vec<Room>, NetworkError> {
         self.tx_manager.with_read_transaction(|tx| {
-            // If office_id is provided, check if user has permission to access it
             if let Some(o_id) = &office_id {
-                if !self.check_entity_permission(tx, user_id, o_id, super::Permission::All)? {
+                if !self.check_entity_permission(tx, user_id, o_id, Permission::ViewContent)? {
                     return Err(NetworkError::msg(format!(
                         "User '{}' does not have permission to list rooms in office '{}'",
                         user_id, o_id
                     )));
                 }
             }
-            
-            // Get all domains
+
             let domains = tx.get_all_domains()?;
-            
-            // Filter and convert to rooms
+
             let mut rooms = Vec::new();
             for (_id, domain) in domains {
                 if let Domain::Room { room } = domain {
-                    // If office_id is provided, only include rooms from that office
                     if let Some(o_id) = &office_id {
                         if room.office_id == *o_id {
                             rooms.push(room);
                         }
-                    } else {
-                        // If no office_id, include all rooms the user has access to
-                        if self.check_entity_permission(tx, user_id, &room.id, super::Permission::All)? {
-                            rooms.push(room);
-                        }
+                    } else if self.check_entity_permission(
+                        tx,
+                        user_id,
+                        &room.id,
+                        Permission::ViewContent,
+                    )? {
+                        rooms.push(room);
                     }
                 }
             }
-            
+
             Ok(rooms)
         })
     }
-    
+
     fn create_office(
-        &self, 
-        user_id: &str, 
-        workspace_id: &str, 
-        name: &str, 
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        name: &str,
         description: &str,
         mdx_content: Option<&str>,
     ) -> Result<Office, NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            // Check if user exists
             if tx.get_user(user_id).is_none() {
                 return Err(NetworkError::msg(format!("User '{}' not found", user_id)));
             }
-            
-            // Check if workspace exists
-            let workspace = tx.get_workspace(workspace_id).ok_or_else(|| {
+
+            let _workspace = tx.get_workspace(workspace_id).ok_or_else(|| {
                 NetworkError::msg(format!("Workspace '{}' not found", workspace_id))
             })?;
-            
-            // Check if user has permission to add offices to this workspace
-            if !self.check_entity_permission(tx, user_id, workspace_id, super::Permission::CreateRoom)? {
+
+            if !self.check_entity_permission(tx, user_id, workspace_id, Permission::CreateOffice)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to add offices to workspace '{}'",
                     user_id, workspace_id
                 )));
             }
-            
-            // Generate a unique ID for the new office
+
             let office_id = uuid::Uuid::new_v4().to_string();
-            
-            // Create the office
+
             let office = Office {
                 id: office_id.clone(),
                 name: name.to_string(),
                 description: description.to_string(),
                 workspace_id: workspace_id.to_string(),
                 owner_id: user_id.to_string(),
-                members: vec![user_id.to_string()], // Creator is the first member
+                members: Vec::new(),
                 rooms: Vec::new(),
-                mdx_content: mdx_content.unwrap_or_default(),
+                mdx_content: mdx_content.unwrap_or_default().to_string(),
                 metadata: Vec::new(),
             };
-            
-            // Add office to domain storage
-            tx.insert_domain(office_id.clone(), Domain::Office { office: office.clone() })?;
-            
-            // Add office to workspace
-            tx.add_office_to_workspace(&office_id, workspace_id)?;
-            
-            // Add owner as member with all permissions
-            tx.add_user_to_workspace(user_id, &office_id, super::UserRole::Owner)?;
-            
-            // Add MDX content if provided
-            if let Some(content) = mdx_content {
-                tx.set_mdx_content(&office_id, content)?;
+
+            tx.insert_domain(
+                office_id.clone(),
+                Domain::Office {
+                    office: office.clone(),
+                },
+            )?;
+
+            if let Some(workspace) = tx.get_workspace_mut(workspace_id) {
+                workspace.offices.push(office_id.clone());
+                let workspace_clone = workspace.clone();
+                tx.update_workspace(workspace_id, workspace_clone.clone())?;
+                tx.update_domain(
+                    workspace_id,
+                    Domain::Workspace {
+                        workspace: workspace_clone,
+                    },
+                )?;
+            } else {
+                return Err(NetworkError::msg(format!(
+                    "Workspace '{}' not found",
+                    workspace_id
+                )));
             }
-            
+
+            if let Some(user) = tx.get_user_mut(user_id) {
+                let user_clone = user.clone();
+                tx.add_user_to_domain(user_id, &office_id, UserRole::Owner)?;
+                tx.update_user(user_id, user_clone)?;
+            } else {
+                return Err(NetworkError::msg(format!("User '{}' not found", user_id)));
+            }
+
             Ok(office)
         })
     }
-    
+
     fn update_workspace(
         &self,
         user_id: &str,
@@ -1230,37 +1351,57 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         workspace_master_password: String,
     ) -> Result<Workspace, NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            // Check if user exists
             if tx.get_user(user_id).is_none() {
                 return Err(NetworkError::msg(format!("User '{}' not found", user_id)));
             }
-            
-            // Check if workspace exists
+
             let domain = tx.get_domain(workspace_id).ok_or_else(|| {
                 NetworkError::msg(format!("Workspace '{}' not found", workspace_id))
             })?;
-            
-            // Check if user has permission to update workspace
-            if !self.check_entity_permission(tx, user_id, workspace_id, super::Permission::UpdateWorkspace)? {
+
+            if !self.check_entity_permission(
+                tx,
+                user_id,
+                workspace_id,
+                Permission::UpdateWorkspace,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to update workspace '{}'",
                     user_id, workspace_id
                 )));
             }
-            
-            // Verify it's a workspace and update it
-            if let Domain::Workspace { mut workspace } = domain {
-                // Update fields if provided
-                if let Some(n) = name { workspace.name = n.to_string(); }
-                if let Some(d) = description { workspace.description = d.to_string(); }
-                if let Some(m) = metadata { workspace.metadata = m; }
+
+            let stored_password_hash = tx
+                .workspace_password(workspace_id)
+                .ok_or_else(|| NetworkError::msg("Workspace password not found"))?;
+
+            let password_valid = bcrypt::verify(&workspace_master_password, &stored_password_hash)
+                .map_err(|_| NetworkError::msg("Password verification failed"))?;
+
+            if !password_valid {
+                return Err(NetworkError::msg("Incorrect workspace master password"));
+            }
+
+            if let Domain::Workspace { mut workspace } = domain.clone() {
+                if let Some(n) = name {
+                    workspace.name = n.to_string();
+                }
+                if let Some(d) = description {
+                    workspace.description = d.to_string();
+                }
+                if let Some(m) = metadata {
+                    workspace.metadata = m;
+                }
                 workspace.password_protected = !workspace_master_password.is_empty();
                 tx.set_workspace_password(workspace_id, &workspace_master_password)?;
-                
-                // Update domain in storage
-                let updated_domain = Domain::Workspace { workspace: workspace.clone() };
+
+                let updated_domain = Domain::Workspace {
+                    workspace: workspace.clone(),
+                };
                 tx.update_domain(workspace_id, updated_domain)?;
-                
+
+                tx.update_workspace(workspace_id, workspace.clone())?;
+
                 Ok(workspace)
             } else {
                 Err(NetworkError::msg(format!(
@@ -1270,138 +1411,184 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             }
         })
     }
-    
-    fn load_workspace(&self, user_id: &str, workspace_id_opt: Option<&str>) -> Result<Workspace, NetworkError> {
+
+    fn load_workspace(
+        &self,
+        user_id: &str,
+        workspace_id_opt: Option<&str>,
+    ) -> Result<Workspace, NetworkError> {
         self.tx_manager.with_read_transaction(|tx| {
             if let Some(workspace_id) = workspace_id_opt {
-                // If a specific workspace ID is provided, check permissions and return it
-                if !self.check_entity_permission(tx, user_id, workspace_id, super::Permission::All)? {
+                if !self.check_entity_permission(tx, user_id, workspace_id, Permission::All)? {
                     return Err(NetworkError::msg(format!(
                         "User '{}' does not have permission to access workspace '{}'",
                         user_id, workspace_id
                     )));
                 }
-                
-                // Get the workspace domain
+
                 let domain = tx.get_domain(workspace_id).ok_or_else(|| {
                     NetworkError::msg(format!("Workspace '{}' not found", workspace_id))
                 })?;
-                
-                // Verify it's a workspace
+
                 if let Domain::Workspace { workspace } = domain {
-                    return Ok(workspace.clone());
+                    Ok(workspace.clone())
                 } else {
-                    return Err(NetworkError::msg(format!(
+                    Err(NetworkError::msg(format!(
                         "Entity '{}' is not a workspace",
                         workspace_id
-                    )));
+                    )))
                 }
             } else {
-                // If no workspace ID provided, find the first workspace the user is a member of
                 let domains = tx.get_all_domains()?;
-                
+
                 for (_id, domain) in domains {
                     if let Domain::Workspace { workspace } = domain {
-                        if workspace.members.contains(&user_id.to_string()) ||
-                           workspace.owner_id == user_id {
+                        if workspace.members.contains(&user_id.to_string())
+                            || workspace.owner_id == user_id
+                        {
                             return Ok(workspace.clone());
                         }
                     }
                 }
-                
-                // If no workspace found, return an error
-                Err(NetworkError::msg(format!("No workspace found for user '{}'", user_id)))
+
+                Err(NetworkError::msg(format!(
+                    "No workspace found for user '{}'",
+                    user_id
+                )))
             }
         })
     }
 
-    
     fn delete_workspace(
         &self,
         user_id: &str,
         workspace_id: &str,
+        _workspace_password: String,
     ) -> Result<(), NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            // Check if user exists
+            if workspace_id == crate::WORKSPACE_ROOT_ID {
+                return Err(NetworkError::msg("Cannot delete the root workspace"));
+            }
+
             if tx.get_user(user_id).is_none() {
                 return Err(NetworkError::msg(format!("User '{}' not found", user_id)));
             }
-            
-            // Check if workspace exists
-            let workspace = tx.get_workspace(workspace_id).ok_or_else(|| {
-                NetworkError::msg(format!("Workspace '{}' not found", workspace_id))
-            })?;
-            
-            // Check if user has permission to delete workspace
-            if !self.check_entity_permission(tx, user_id, workspace_id, super::Permission::DeleteWorkspace)? {
+
+            if !self.check_entity_permission(
+                tx,
+                user_id,
+                workspace_id,
+                Permission::DeleteWorkspace,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to delete workspace '{}'",
                     user_id, workspace_id
                 )));
             }
-            
-            // Delete workspace
+
             tx.remove_workspace(workspace_id)?;
-            
+
             Ok(())
         })
     }
-    
 
-    
     fn get_all_workspace_ids(&self) -> Result<WorkspaceDBList, NetworkError> {
         self.tx_manager.with_read_transaction(|tx| {
-            let all_domains = tx.get_all_domains();
+            let all_domains = tx.get_all_domains()?;
             let mut workspace_ids = Vec::new();
-            
-            for domain in all_domains {
+
+            for (_id, domain) in all_domains {
                 if let Domain::Workspace { workspace } = domain {
                     workspace_ids.push(workspace.id.clone());
                 }
             }
-            
+
             let list = WorkspaceDBList {
                 workspaces: workspace_ids,
             };
             Ok(list)
         })
     }
-    
+
     fn list_offices_in_workspace(
-        &self, 
-        user_id: &str, 
-        workspace_id: &str
+        &self,
+        user_id: &str,
+        workspace_id: &str,
     ) -> Result<Vec<Office>, NetworkError> {
         self.tx_manager.with_read_transaction(|tx| {
-            // Check if user exists
             if tx.get_user(user_id).is_none() {
                 return Err(NetworkError::msg(format!("User '{}' not found", user_id)));
             }
-            
-            // Check if workspace exists
+
             let workspace_domain = tx.get_domain(workspace_id).ok_or_else(|| {
                 NetworkError::msg(format!("Workspace '{}' not found", workspace_id))
             })?;
-            
-            // Check if it's a workspace
+
             if let Domain::Workspace { workspace: _ } = workspace_domain {
                 // Continue
             } else {
-                return Err(NetworkError::msg(format!("Entity '{}' is not a workspace", workspace_id)));
+                return Err(NetworkError::msg(format!(
+                    "Entity '{}' is not a workspace",
+                    workspace_id
+                )));
             }
-            
-            // Check if user has permission to view workspace
-            if !self.check_entity_permission(tx, user_id, workspace_id, super::Permission::All)? {
+
+            if !self.check_entity_permission(tx, user_id, workspace_id, Permission::All)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to view workspace '{}'",
                     user_id, workspace_id
                 )));
             }
-            
-            // Get all offices in this workspace
-            let offices = tx.list_offices_in_workspace(workspace_id)?;
-            
-            Ok(offices)
+
+            let workspace_domain = tx.get_domain(workspace_id).ok_or_else(|| {
+                NetworkError::msg(format!("Workspace '{}' not found", workspace_id))
+            })?;
+
+            if let Domain::Workspace { workspace } = workspace_domain {
+                let mut offices = Vec::new();
+
+                for office_id in &workspace.offices {
+                    if let Some(Domain::Office { office }) = tx.get_domain(office_id) {
+                        offices.push(office.clone());
+                    }
+                }
+
+                Ok(offices)
+            } else {
+                Err(NetworkError::msg(format!(
+                    "Entity '{}' is not a workspace",
+                    workspace_id
+                )))
+            }
         })
+    }
+}
+
+impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
+    /// Determine if a user should be promoted to a custom role based on their permissions
+    fn determine_custom_role_from_permissions(user: &User) -> Option<UserRole> {
+        // Check if user already has a custom role with appropriate rank
+        if let UserRole::Custom(_, rank) = &user.role {
+            if *rank >= 16 {
+                return None; // Already has appropriate custom role
+            }
+        }
+
+        // Collect all permissions across all domains
+        let mut all_permissions = std::collections::HashSet::new();
+        for permissions in user.permissions.values() {
+            all_permissions.extend(permissions.iter().cloned());
+        }
+
+        // Check for Editor role criteria: EditMdx + any config editing permission
+        if all_permissions.contains(&Permission::EditMdx)
+            && (all_permissions.contains(&Permission::EditOfficeConfig)
+                || all_permissions.contains(&Permission::EditRoomConfig)
+                || all_permissions.contains(&Permission::EditWorkspaceConfig))
+        {
+            return UserRole::create_custom_role("Editor".to_string(), 16);
+        }
+
+        None
     }
 }

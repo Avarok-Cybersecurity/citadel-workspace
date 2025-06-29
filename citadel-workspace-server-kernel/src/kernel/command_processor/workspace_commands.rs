@@ -1,9 +1,8 @@
-use crate::kernel::WorkspaceServerKernel;
 use crate::handlers::domain::DomainOperations;
-use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{PasswordPair, UserRole, Workspace};
-use crate::kernel::transaction::prelude::TransactionManagerExt;
 use crate::kernel::transaction::Transaction;
+use crate::kernel::WorkspaceServerKernel;
+use citadel_sdk::prelude::{NetworkError, Ratchet};
+use citadel_workspace_types::structs::Workspace;
 
 impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Load a workspace by ID or use the default workspace if none specified
@@ -80,17 +79,18 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     }
 
     /// List all members for a specified office or room
+    #[allow(dead_code)]
     pub(crate) fn list_members(
         &self,
         office_id: Option<&str>,
         room_id: Option<&str>,
     ) -> Result<Vec<(String, String)>, NetworkError> {
         // Use the transaction manager to directly access the members
-        use crate::kernel::transaction::rbac::transaction_operations::TransactionManagerExt;
-        
+        use crate::kernel::TransactionManagerExt;
+
         self.tx_manager().with_read_transaction(|tx| {
             let mut member_names = Vec::new();
-            
+
             match (office_id, room_id) {
                 (Some(office_id_str), _) => {
                     // Get office domain and its members
@@ -109,11 +109,11 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                             }
                         }
                         None => Err(NetworkError::msg(format!(
-                            "Office with id {} not found", 
+                            "Office with id {} not found",
                             office_id_str
-                        )))
+                        ))),
                     }
-                },
+                }
                 (_, Some(room_id_str)) => {
                     // Get room domain and its members
                     match tx.get_domain(room_id_str) {
@@ -131,12 +131,14 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                             }
                         }
                         None => Err(NetworkError::msg(format!(
-                            "Room with id {} not found", 
+                            "Room with id {} not found",
                             room_id_str
-                        )))
+                        ))),
                     }
-                },
-                _ => Err(NetworkError::msg("Must specify either office_id or room_id"))
+                }
+                _ => Err(NetworkError::msg(
+                    "Must specify either office_id or room_id",
+                )),
             }
         })
     }

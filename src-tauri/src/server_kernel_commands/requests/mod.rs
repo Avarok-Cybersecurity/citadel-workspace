@@ -34,7 +34,7 @@ pub async fn handle(
             WorkspaceProtocolRequest::CreateWorkspace { .. } => "CreateWorkspace",
             WorkspaceProtocolRequest::GetWorkspace => "GetWorkspace",
             WorkspaceProtocolRequest::UpdateWorkspace { .. } => "UpdateWorkspace",
-            WorkspaceProtocolRequest::DeleteWorkspace => "DeleteWorkspace",
+            WorkspaceProtocolRequest::DeleteWorkspace { .. } => "DeleteWorkspace",
             WorkspaceProtocolRequest::CreateOffice { .. } => "CreateOffice",
             WorkspaceProtocolRequest::GetOffice { .. } => "GetOffice",
             WorkspaceProtocolRequest::UpdateOffice { .. } => "UpdateOffice",

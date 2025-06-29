@@ -1,5 +1,5 @@
-use crate::kernel::WorkspaceServerKernel;
 use crate::handlers::domain::DomainOperations;
+use crate::kernel::WorkspaceServerKernel;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::Room;
 
@@ -14,12 +14,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         mdx_content: Option<&str>,
     ) -> Result<Room, NetworkError> {
         // Call the domain operation to update the room
-        self.domain_ops().update_room(
-            actor_user_id,
-            room_id,
-            name,
-            description,
-            mdx_content,
-        )
+        self.domain_ops()
+            .update_room(actor_user_id, room_id, name, description, mdx_content)
     }
 }

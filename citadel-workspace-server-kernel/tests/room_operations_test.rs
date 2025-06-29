@@ -2,6 +2,7 @@ use citadel_sdk::prelude::{NetworkError, StackedRatchet};
 use citadel_workspace_server_kernel::handlers::domain::{
     server_ops::DomainServerOperations, DomainOperations,
 };
+use citadel_workspace_server_kernel::kernel::transaction::{Transaction, TransactionManagerExt};
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::{Domain, User, UserRole};

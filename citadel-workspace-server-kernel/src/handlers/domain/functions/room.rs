@@ -5,6 +5,7 @@ pub mod room_ops {
     use citadel_sdk::prelude::NetworkError;
     use citadel_workspace_types::structs::{Domain, Permission, Room, UserRole};
 
+    #[allow(dead_code)]
     pub(crate) fn create_room_inner(
         tx: &mut dyn Transaction,
         user_id: &str,   // User creating the room
@@ -75,6 +76,7 @@ pub mod room_ops {
         Ok(new_room)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn delete_room_inner(
         tx: &mut dyn Transaction,
         user_id: &str, // User performing the deletion
@@ -164,6 +166,7 @@ pub mod room_ops {
         Ok(removed_room)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn list_rooms_inner(
         tx: &dyn Transaction,
         user_id: &str,
@@ -215,6 +218,7 @@ pub mod room_ops {
         Ok(rooms)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn update_room_inner(
         tx: &mut dyn Transaction,
         user_id: &str,
