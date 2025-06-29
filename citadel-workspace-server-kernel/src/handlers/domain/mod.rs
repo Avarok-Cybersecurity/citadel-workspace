@@ -12,7 +12,6 @@ use crate::handlers::domain::functions::workspace::workspace_ops::WorkspaceDBLis
 pub mod entity;
 pub mod functions;
 pub mod server_ops;
-pub mod workspace_entity;
 
 // NetworkError helpers (using functions instead of impl extension)
 pub fn permission_denied<S: std::fmt::Display>(msg: S) -> NetworkError {

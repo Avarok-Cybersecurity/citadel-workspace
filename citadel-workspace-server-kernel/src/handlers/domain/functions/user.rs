@@ -1,3 +1,16 @@
+/// # User Operations Module
+/// 
+/// This module provides comprehensive user management operations across the domain hierarchy.
+/// The code is organized into logical sections for better maintainability:
+/// 
+/// ## Sections
+/// - **Permission Utilities**: Permission queries and role-based permission management
+/// - **Domain Helper Functions**: Domain type checking and member access utilities
+/// - **User Addition Operations**: Adding users to domains with permission validation
+/// - **User Removal Operations**: Removing users from domains with permission validation
+/// 
+/// All functions maintain backward compatibility and existing API contracts.
+
 pub mod user_ops {
     use crate::kernel::transaction::DomainType;
     use crate::kernel::transaction::Transaction;
@@ -7,12 +20,18 @@ pub mod user_ops {
     use log::{debug, info, warn};
     use std::collections::HashSet;
 
-    // For get_all_user_domain_permissions function
+    // ========================================================================
+    // PERMISSION UTILITIES
+    // ========================================================================
+
+    /// Retrieves all domain permissions for a specific user
+    /// 
+    /// Returns a list of tuples containing domain IDs and their associated permission names.
+    /// Used for permission auditing and user access reviews.
     pub fn get_all_user_domain_permissions(
         tx: &dyn Transaction,
         user_id: &str,
     ) -> Result<Vec<(String, Vec<String>)>, NetworkError> {
-        // Implement this function if not already present
         let user = tx
             .get_user(user_id)
             .ok_or_else(|| NetworkError::msg(format!("User '{}' not found", user_id)))?;
@@ -28,7 +47,10 @@ pub mod user_ops {
         Ok(result)
     }
 
-    // For update_user_domain_role function
+    /// Updates a user's role and permissions for a specific domain
+    /// 
+    /// Calculates the appropriate permissions based on the role and domain type,
+    /// then updates the user's permission set accordingly.
     pub fn update_user_domain_role(
         tx: &mut dyn Transaction,
         user_id: &str,
@@ -53,72 +75,10 @@ pub mod user_ops {
         Ok(())
     }
 
-    // Helper function to get domain type from Domain
-    fn get_domain_type_from_domain_entry(
-        domain_entry: &Domain,
-    ) -> Result<DomainType, NetworkError> {
-        match domain_entry {
-            Domain::Workspace { .. } => Ok(DomainType::Workspace),
-            Domain::Office { .. } => Ok(DomainType::Office),
-            Domain::Room { .. } => Ok(DomainType::Room),
-        }
-    }
-
-    // Helper function to get mutable members from domain
-    fn get_mutable_members_from_domain_entry(
-        domain_entry: &mut Domain,
-    ) -> Result<&mut Vec<String>, NetworkError> {
-        match domain_entry {
-            Domain::Workspace { workspace, .. } => Ok(&mut workspace.members),
-            Domain::Office { office, .. } => Ok(&mut office.members),
-            Domain::Room { room, .. } => Ok(&mut room.members),
-        }
-    }
-
-    // Helper function to get members from domain
-    fn get_members_from_domain_entry(domain_entry: &Domain) -> Result<&Vec<String>, NetworkError> {
-        match domain_entry {
-            Domain::Workspace { workspace, .. } => Ok(&workspace.members),
-            Domain::Office { office, .. } => Ok(&office.members),
-            Domain::Room { room, .. } => Ok(&room.members),
-        }
-    }
-
-    // Helper function to determine the parent domain ID for permission checking
-    fn get_permission_check_domain_id(
-        tx: &dyn Transaction,
-        domain_id: &str,
-    ) -> Result<String, NetworkError> {
-        let domain_entry = tx
-            .get_domain(domain_id)
-            .ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
-        match domain_entry {
-            Domain::Room { room, .. } => {
-                let parent = room.office_id.clone();
-                if parent.is_empty() {
-                    return Err(NetworkError::msg(
-                        "Room has no parent office ID or parent_id is empty",
-                    ));
-                }
-                Ok(parent)
-            }
-            Domain::Office { .. } => Ok(WORKSPACE_ROOT_ID.to_string()),
-            Domain::Workspace { .. } => Ok(WORKSPACE_ROOT_ID.to_string()),
-        }
-    }
-
-    // Helper function to get domain type from domain_id using Transaction
-    pub(crate) fn get_domain_type_from_id(
-        tx: &dyn Transaction,
-        domain_id: &str,
-    ) -> Result<DomainType, NetworkError> {
-        let domain_entry = tx
-            .get_domain(domain_id)
-            .ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
-        get_domain_type_from_domain_entry(domain_entry)
-    }
-
-    // Helper function to retrieve role permissions based on domain type
+    /// Calculates role-based permissions for a given role and domain type
+    /// 
+    /// Returns the appropriate permission set based on user role and domain type.
+    /// Admins and Owners get full permissions, while other roles get domain-specific permissions.
     pub fn get_role_based_permissions(
         role: &UserRole,
         domain_type: DomainType,
@@ -163,7 +123,99 @@ pub mod user_ops {
         permissions
     }
 
-    // Add a user to a domain with a specific role
+    // ========================================================================
+    // DOMAIN HELPER FUNCTIONS
+    // ========================================================================
+
+    /// Helper function to get domain type from Domain enum variant
+    /// 
+    /// Extracts the domain type to determine appropriate permission handling.
+    fn get_domain_type_from_domain_entry(
+        domain_entry: &Domain,
+    ) -> Result<DomainType, NetworkError> {
+        match domain_entry {
+            Domain::Workspace { .. } => Ok(DomainType::Workspace),
+            Domain::Office { .. } => Ok(DomainType::Office),
+            Domain::Room { .. } => Ok(DomainType::Room),
+        }
+    }
+
+    /// Helper function to get mutable reference to members from domain entry
+    /// 
+    /// Provides mutable access to the member list for adding/removing users.
+    fn get_mutable_members_from_domain_entry(
+        domain_entry: &mut Domain,
+    ) -> Result<&mut Vec<String>, NetworkError> {
+        match domain_entry {
+            Domain::Workspace { workspace, .. } => Ok(&mut workspace.members),
+            Domain::Office { office, .. } => Ok(&mut office.members),
+            Domain::Room { room, .. } => Ok(&mut room.members),
+        }
+    }
+
+    /// Helper function to get immutable reference to members from domain entry
+    /// 
+    /// Provides read-only access to the member list for membership checks.
+    fn get_members_from_domain_entry(domain_entry: &Domain) -> Result<&Vec<String>, NetworkError> {
+        match domain_entry {
+            Domain::Workspace { workspace, .. } => Ok(&workspace.members),
+            Domain::Office { office, .. } => Ok(&office.members),
+            Domain::Room { room, .. } => Ok(&room.members),
+        }
+    }
+
+    /// Helper function to determine the parent domain ID for permission checking
+    /// 
+    /// Resolves the appropriate domain to check permissions against based on
+    /// the domain hierarchy (rooms check against office, offices against workspace).
+    fn get_permission_check_domain_id(
+        tx: &dyn Transaction,
+        domain_id: &str,
+    ) -> Result<String, NetworkError> {
+        let domain_entry = tx
+            .get_domain(domain_id)
+            .ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
+        match domain_entry {
+            Domain::Room { room, .. } => {
+                let parent = room.office_id.clone();
+                if parent.is_empty() {
+                    return Err(NetworkError::msg(
+                        "Room has no parent office ID or parent_id is empty",
+                    ));
+                }
+                Ok(parent)
+            }
+            Domain::Office { .. } => Ok(WORKSPACE_ROOT_ID.to_string()),
+            Domain::Workspace { .. } => Ok(WORKSPACE_ROOT_ID.to_string()),
+        }
+    }
+
+    /// Helper function to get domain type from domain_id using Transaction
+    /// 
+    /// Looks up a domain by ID and returns its type for permission calculations.
+    pub(crate) fn get_domain_type_from_id(
+        tx: &dyn Transaction,
+        domain_id: &str,
+    ) -> Result<DomainType, NetworkError> {
+        let domain_entry = tx
+            .get_domain(domain_id)
+            .ok_or_else(|| NetworkError::msg(format!("Domain {} not found", domain_id)))?;
+        get_domain_type_from_domain_entry(domain_entry)
+    }
+
+    // ========================================================================
+    // USER ADDITION OPERATIONS
+    // ========================================================================
+
+    /// Add a user to a domain with a specific role
+    /// 
+    /// This is a complex operation that validates permissions, assigns roles,
+    /// updates user permissions, and manages domain membership atomically.
+    /// 
+    /// ## Security
+    /// - Validates actor has AddUsers permission on the appropriate parent domain
+    /// - Prevents unauthorized user additions through permission checks
+    /// - Maintains audit trail through comprehensive logging
     pub(crate) fn add_user_to_domain_inner(
         tx: &mut dyn Transaction,
         actor_user_id: &str,
@@ -259,6 +311,20 @@ pub mod user_ops {
         Ok(())
     }
 
+    // ========================================================================
+    // USER REMOVAL OPERATIONS
+    // ========================================================================
+
+    /// Remove a user from a domain
+    /// 
+    /// This is a complex operation that validates permissions, clears user permissions,
+    /// updates domain membership, and maintains consistency atomically.
+    /// 
+    /// ## Security
+    /// - Validates actor has RemoveUsers permission on the appropriate parent domain
+    /// - Prevents unauthorized user removals through permission checks
+    /// - Clears user permissions to prevent lingering access
+    /// - Maintains audit trail through comprehensive logging
     pub(crate) fn remove_user_from_domain_inner(
         tx: &mut dyn Transaction,
         actor_user_id: &str,

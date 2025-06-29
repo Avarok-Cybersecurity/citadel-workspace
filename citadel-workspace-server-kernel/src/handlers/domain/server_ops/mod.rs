@@ -5,8 +5,12 @@ use std::sync::Arc;
 use crate::kernel::transaction::TransactionManager;
 
 // Import submodules
-mod base_operations;
-mod office_operations;
+pub mod base_operations;
+pub mod permission_operations;
+pub mod domain_entity_operations;
+pub mod workspace_member_operations;
+pub mod workspace_crud_operations;
+pub mod office_operations;
 mod room_operations;
 mod user_operations;
 mod workspace_operations;
