@@ -1,317 +1,111 @@
+//! # Domain Operations Module
+//!
+//! This module provides the core domain management framework for the workspace system.
+//! It defines traits and utilities for managing domain entities (workspaces, offices, rooms)
+//! and their associated operations including CRUD, permissions, and member management.
+//!
+//! ## Architecture Overview
+//!
+//! The domain module is organized into focused sub-modules:
+//! - **`core`**: Base traits and utility functions
+//! - **`operations_trait`**: Main domain operations trait definition
+//! - **`transaction_ops`**: Transaction management operations
+//! - **`permission_ops`**: Permission and authorization operations
+//! - **`user_ops`**: User management operations
+//! - **`entity_ops`**: Generic entity CRUD operations
+//! - **`workspace_ops`**: Workspace-specific operations
+//! - **`office_ops`**: Office-specific operations
+//! - **`room_ops`**: Room-specific operations
+//!
+//! ## Key Components
+//!
+//! ### Domain Entity Framework
+//! - **`DomainEntity`**: Core trait for all domain entities with common operations
+//! - **Domain Operations**: Comprehensive trait defining all domain-level operations
+//! - **Permission System Integration**: Seamless integration with role-based access control
+//!
+//! ### Entity Types Supported
+//! - **Workspaces**: Top-level organizational units with master password protection
+//! - **Offices**: Sub-units within workspaces for team organization  
+//! - **Rooms**: Collaboration spaces within offices for specific projects/topics
+//! - **Users**: Member entities with roles and permissions across domains
+
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-// Re-export WorkspacePasswordPair publicly - REMOVING THIS LINE as it's not in citadel_workspace_types
-// Import other structs for use within the domain module
+
+// Import external dependencies
 use crate::kernel::transaction::Transaction;
 use citadel_workspace_types::structs::{
     Domain, Office, Permission, Room, User, UserRole, Workspace,
 };
 use citadel_workspace_types::UpdateOperation;
-// Corrected import path for WorkspaceDBList based on compiler suggestion
 use crate::handlers::domain::functions::workspace::workspace_ops::WorkspaceDBList;
 
+// ═══════════════════════════════════════════════════════════════════════════════════
+// MODULE DECLARATIONS
+// ═══════════════════════════════════════════════════════════════════════════════════
+
+pub mod core;
+pub mod operations_trait;
+pub mod transaction_ops;
+pub mod permission_ops;
+pub mod user_ops;
+pub mod entity_ops;
+pub mod workspace_ops;
+pub mod office_ops;
+pub mod room_ops;
+
+// Legacy module structure (preserved for compatibility)
 pub mod entity;
 pub mod functions;
 pub mod server_ops;
 
-// NetworkError helpers (using functions instead of impl extension)
-pub fn permission_denied<S: std::fmt::Display>(msg: S) -> NetworkError {
-    NetworkError::msg(format!("Permission denied: {msg}"))
-}
+// ═══════════════════════════════════════════════════════════════════════════════════
+// RE-EXPORTS FOR PUBLIC API
+// ═══════════════════════════════════════════════════════════════════════════════════
 
-/// DomainEntity trait for entities that belong to a domain
-pub trait DomainEntity: Clone + Send + Sync + 'static {
-    fn id(&self) -> String;
-    fn name(&self) -> String;
-    fn description(&self) -> String;
-    fn owner_id(&self) -> String;
-    fn domain_id(&self) -> String;
+// Core components
+pub use core::{permission_denied, DomainEntity};
 
-    // Convert to Domain enum
-    fn into_domain(self) -> Domain
-    where
-        Self: Sized;
+// Main trait definitions
+pub use operations_trait::DomainOperations;
+pub use transaction_ops::TransactionOperations;
+pub use permission_ops::PermissionOperations;
+pub use user_ops::UserManagementOperations;
+pub use entity_ops::EntityOperations;
+pub use workspace_ops::WorkspaceOperations;
+pub use office_ops::OfficeOperations;
+pub use room_ops::RoomOperations;
 
-    // Create a new entity
-    fn create(id: String, parent_id: Option<String>, name: &str, description: &str) -> Self
-    where
-        Self: Sized;
+// ═══════════════════════════════════════════════════════════════════════════════════
+// UNIFIED DOMAIN OPERATIONS TRAIT
+// ═══════════════════════════════════════════════════════════════════════════════════
 
-    // Extract from Domain enum
-    fn from_domain(domain: Domain) -> Option<Self>
-    where
-        Self: Sized;
-}
-
-/// Domain operations trait
+/// Unified trait that combines all domain operation categories.
+///
+/// This trait provides a single interface that includes all domain operations,
+/// making it easy to implement comprehensive domain functionality in one place.
+/// Implementors automatically get access to all operation categories.
+///
+/// ## Usage
+/// 
+/// Implement this trait to provide complete domain functionality:
+/// 
+/// ```rust,ignore
+/// impl<R: Ratchet + Send + Sync + 'static> CompleteDomainOperations<R> for MyDomainService {
+///     // Implement all required methods from constituent traits
+/// }
+/// ```
 #[auto_impl::auto_impl(Arc)]
-pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
-    /// Initialize domain operations
-    fn init(&self) -> Result<(), NetworkError>;
-
-    /// Check if a user is an admin
-    fn is_admin(&self, tx: &dyn Transaction, user_id: &str) -> Result<bool, NetworkError>;
-
-    /// Get a user by ID
-    fn get_user(&self, user_id: &str) -> Option<User>;
-
-    /// Execute a function with a read transaction
-    fn with_read_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
-    where
-        F: FnOnce(&dyn Transaction) -> Result<T, NetworkError>;
-
-    /// Execute a function with a write transaction
-    fn with_write_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
-    where
-        F: FnOnce(&mut dyn Transaction) -> Result<T, NetworkError>;
-
-    /// Check if a user has a specific permission for an entity
-    fn check_entity_permission(
-        &self,
-        tx: &dyn Transaction,
-        user_id: &str,
-        entity_id: &str,
-        permission: Permission,
-    ) -> Result<bool, NetworkError>;
-
-    /// Check if a user is a member of a domain
-    fn is_member_of_domain(
-        &self,
-        tx: &dyn Transaction,
-        user_id: &str,
-        domain_id: &str,
-    ) -> Result<bool, NetworkError>;
-
-    /// Get a domain by ID
-    fn get_domain(&self, domain_id: &str) -> Option<Domain>;
-
-    /// Add a user to a domain
-    fn add_user_to_domain(
-        &self,
-        admin_id: &str,
-        user_id_to_add: &str,
-        domain_id: &str,
-        role: UserRole,
-    ) -> Result<(), NetworkError>;
-
-    /// Remove a user from a domain
-    fn remove_user_from_domain(
-        &self,
-        admin_id: &str,
-        user_id_to_remove: &str,
-        domain_id: &str,
-    ) -> Result<(), NetworkError>;
-
-    /// Update a user's role in the workspace
-    fn update_workspace_member_role(
-        &self,
-        actor_user_id: &str,
-        target_user_id: &str,
-        role: UserRole,
-        metadata: Option<Vec<u8>>, // metadata might be used later for specific role features
-    ) -> Result<(), NetworkError>;
-
-    /// Update a user's permissions in a specific domain
-    fn update_member_permissions(
-        &self,
-        actor_user_id: &str,
-        target_user_id: &str,
-        domain_id: &str,
-        permissions: Vec<Permission>,
-        operation: UpdateOperation,
-    ) -> Result<(), NetworkError>;
-
-    /// Get a domain entity
-    fn get_domain_entity<T: DomainEntity + 'static>(
-        &self,
-        user_id: &str,
-        entity_id: &str,
-    ) -> Result<T, NetworkError>;
-
-    /// Create a domain entity
-    fn create_domain_entity<T: DomainEntity + 'static + serde::de::DeserializeOwned>(
-        &self,
-        user_id: &str,
-        parent_id: Option<&str>,
-        name: &str,
-        description: &str,
-        mdx_content: Option<&str>,
-    ) -> Result<T, NetworkError>;
-
-    /// Delete a domain entity
-    fn delete_domain_entity<T: DomainEntity + 'static>(
-        &self,
-        user_id: &str,
-        entity_id: &str,
-    ) -> Result<T, NetworkError>;
-
-    /// Update a domain entity
-    fn update_domain_entity<T: DomainEntity + 'static>(
-        &self,
-        user_id: &str,
-        domain_id: &str,
-        name: Option<&str>,
-        description: Option<&str>,
-        mdx_content: Option<&str>,
-    ) -> Result<T, NetworkError>;
-
-    /// List domain entities
-    fn list_domain_entities<T: DomainEntity + 'static>(
-        &self,
-        user_id: &str,
-        parent_id: Option<&str>,
-    ) -> Result<Vec<T>, NetworkError>;
-
-    /// Create an office
-    fn create_office(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-        name: &str,
-        description: &str,
-        mdx_content: Option<&str>,
-    ) -> Result<Office, NetworkError>;
-
-    /// Create a room
-    fn create_room(
-        &self,
-        user_id: &str,
-        office_id: &str,
-        name: &str,
-        description: &str,
-        mdx_content: Option<&str>,
-    ) -> Result<Room, NetworkError>;
-
-    /// Get an office
-    fn get_office(&self, user_id: &str, office_id: &str) -> Result<String, NetworkError>;
-
-    /// Get a room
-    fn get_room(&self, user_id: &str, room_id: &str) -> Result<Room, NetworkError>;
-
-    /// Delete an office
-    fn delete_office(&self, user_id: &str, office_id: &str) -> Result<Office, NetworkError>;
-
-    /// Delete a room
-    fn delete_room(&self, user_id: &str, room_id: &str) -> Result<Room, NetworkError>;
-
-    /// Update an office
-    fn update_office(
-        &self,
-        user_id: &str,
-        office_id: &str,
-        name: Option<&str>,
-        description: Option<&str>,
-        mdx_content: Option<&str>,
-    ) -> Result<Office, NetworkError>;
-
-    /// Update a room
-    fn update_room(
-        &self,
-        user_id: &str,
-        room_id: &str,
-        name: Option<&str>,
-        description: Option<&str>,
-        mdx_content: Option<&str>,
-    ) -> Result<Room, NetworkError>;
-
-    /// List offices
-    fn list_offices(
-        &self,
-        user_id: &str,
-        workspace_id: Option<String>,
-    ) -> Result<Vec<Office>, NetworkError>;
-
-    /// List rooms
-    fn list_rooms(
-        &self,
-        user_id: &str,
-        office_id: Option<String>,
-    ) -> Result<Vec<Room>, NetworkError>;
-
-    /// Get a workspace
-    fn get_workspace(&self, user_id: &str, workspace_id: &str) -> Result<Workspace, NetworkError>;
-
-    /// Get workspace details (potentially more verbose than get_workspace)
-    fn get_workspace_details(&self, user_id: &str, ws_id: &str) -> Result<Workspace, NetworkError>;
-
-    /// Create a workspace
-    fn create_workspace(
-        &self,
-        user_id: &str,
-        name: &str,
-        description: &str,
-        metadata: Option<Vec<u8>>,
-        workspace_password: String,
-    ) -> Result<Workspace, NetworkError>;
-
-    /// Delete a workspace
-    fn delete_workspace(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-        workspace_password: String,
-    ) -> Result<(), NetworkError>;
-
-    /// Update a workspace
-    fn update_workspace(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-        name: Option<&str>,
-        description: Option<&str>,
-        metadata: Option<Vec<u8>>,
-        workspace_master_password: String,
-    ) -> Result<Workspace, NetworkError>;
-
-    /// Add an office to a workspace
-    fn add_office_to_workspace(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-        office_id: &str,
-    ) -> Result<(), NetworkError>;
-
-    /// Remove an office from a workspace
-    fn remove_office_from_workspace(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-        office_id: &str,
-    ) -> Result<(), NetworkError>;
-
-    /// Add a user to a workspace
-    fn add_user_to_workspace(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-        member_id: &str,
-        role: UserRole,
-    ) -> Result<(), NetworkError>;
-
-    /// Remove a user from a workspace
-    fn remove_user_from_workspace(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-        member_id: &str,
-    ) -> Result<(), NetworkError>;
-
-    /// Load the primary workspace for a user (or a specific one if ID provided)
-    fn load_workspace(
-        &self,
-        user_id: &str,
-        workspace_id_opt: Option<&str>,
-    ) -> Result<Workspace, NetworkError>;
-
-    /// List all workspaces accessible by a user
-    fn list_workspaces(&self, user_id: &str) -> Result<Vec<Workspace>, NetworkError>;
-
-    /// Get all workspace IDs (primarily for internal server use)
-    fn get_all_workspace_ids(&self) -> Result<WorkspaceDBList, NetworkError>;
-
-    /// List offices in a specific workspace for a user
-    fn list_offices_in_workspace(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-    ) -> Result<Vec<Office>, NetworkError>;
+pub trait CompleteDomainOperations<R: Ratchet + Send + Sync + 'static>:
+    DomainOperations<R>
+    + TransactionOperations<R>
+    + PermissionOperations<R>
+    + UserManagementOperations<R>
+    + EntityOperations<R>
+    + WorkspaceOperations<R>
+    + OfficeOperations<R>
+    + RoomOperations<R>
+{
+    // This trait automatically combines all operation categories
+    // No additional methods needed - all functionality comes from constituent traits
 }
