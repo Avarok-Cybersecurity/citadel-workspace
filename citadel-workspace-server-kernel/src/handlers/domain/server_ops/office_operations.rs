@@ -46,7 +46,11 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             )?;
 
             // Add user to domain with Owner role
-            tx.add_user_to_domain(user_id, &office_id, citadel_workspace_types::structs::UserRole::Owner)?;
+            tx.add_user_to_domain(
+                user_id,
+                &office_id,
+                citadel_workspace_types::structs::UserRole::Owner,
+            )?;
 
             // Add the office to the workspace
             if let Some(mut workspace) = tx.get_workspace(workspace_id).cloned() {
@@ -225,7 +229,11 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             };
             tx.insert_domain(office_id.clone(), domain)?;
 
-            tx.add_user_to_domain(user_id, &office_id, citadel_workspace_types::structs::UserRole::Owner)?;
+            tx.add_user_to_domain(
+                user_id,
+                &office_id,
+                citadel_workspace_types::structs::UserRole::Owner,
+            )?;
 
             // Add the office to the workspace
             if let Some(mut workspace) = tx.get_workspace(workspace_id).cloned() {

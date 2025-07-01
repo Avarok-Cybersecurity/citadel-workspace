@@ -33,8 +33,11 @@
 // - System remains stable and responsive after errors
 // - No data corruption occurs during error conditions
 
-use citadel_workspace_server_kernel::handlers::domain::{TransactionOperations, PermissionOperations, UserManagementOperations, WorkspaceOperations, OfficeOperations, RoomOperations, EntityOperations, DomainOperations};
 use citadel_sdk::prelude::*;
+use citadel_workspace_server_kernel::handlers::domain::{
+    DomainOperations, EntityOperations, OfficeOperations, PermissionOperations, RoomOperations,
+    TransactionOperations, UserManagementOperations, WorkspaceOperations,
+};
 use citadel_workspace_server_kernel::kernel::transaction::{Transaction, TransactionManagerExt};
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 use citadel_workspace_types::{

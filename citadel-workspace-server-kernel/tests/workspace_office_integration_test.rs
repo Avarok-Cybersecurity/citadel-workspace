@@ -1,7 +1,11 @@
+use citadel_workspace_server_kernel::handlers::domain::{
+    DomainOperations, EntityOperations, OfficeOperations, PermissionOperations, RoomOperations,
+    TransactionOperations, UserManagementOperations, WorkspaceOperations,
+};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
-use citadel_workspace_server_kernel::handlers::domain::{TransactionOperations, PermissionOperations, UserManagementOperations, WorkspaceOperations, OfficeOperations, RoomOperations, EntityOperations, DomainOperations};
 
-#[path = "common/mod.rs"] mod common;
+#[path = "common/mod.rs"]
+mod common;
 use common::workspace_test_utils::*;
 
 /// # Workspace Office Integration Test Suite

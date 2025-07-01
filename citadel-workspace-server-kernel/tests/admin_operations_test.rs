@@ -1,4 +1,5 @@
-#[path = "common/mod.rs"] mod common;
+#[path = "common/mod.rs"]
+mod common;
 
 use common::member_test_utils::*;
 use rstest::rstest;
@@ -293,7 +294,9 @@ async fn test_non_admin_cannot_add_user_to_office() {
             WorkspaceProtocolResponse::Error(message) => {
                 if (message.to_lowercase().contains("permission denied")
                     || message.to_lowercase().contains("does not have permission")
-                    || message.to_lowercase().contains("does not have admin privileges"))
+                    || message
+                        .to_lowercase()
+                        .contains("does not have admin privileges"))
                     && message.to_lowercase().contains("add users")
                 {
                     println!("[Test NonAdmin V9] Successfully caught expected WorkspaceProtocolResponse::Error: {}", message);

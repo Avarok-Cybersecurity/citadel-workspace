@@ -1,9 +1,12 @@
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
-use citadel_workspace_server_kernel::handlers::domain::{TransactionOperations, PermissionOperations, UserManagementOperations};
+use citadel_workspace_server_kernel::handlers::domain::{
+    PermissionOperations, TransactionOperations, UserManagementOperations,
+};
 use citadel_workspace_server_kernel::kernel::transaction::{Transaction, TransactionManagerExt};
 use citadel_workspace_types::structs::{User, UserRole};
 
-#[path = "common/mod.rs"] mod common;
+#[path = "common/mod.rs"]
+mod common;
 use common::permissions_test_utils::*;
 
 /// # Admin Check Test Suite
