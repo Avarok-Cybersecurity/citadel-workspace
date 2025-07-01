@@ -3,15 +3,14 @@
 //! This module defines transaction management operations for the domain system,
 //! providing safe read and write transaction handling with automatic rollback on errors.
 
-use citadel_sdk::prelude::{NetworkError, Ratchet};
 use crate::kernel::transaction::Transaction;
+use citadel_sdk::prelude::{NetworkError, Ratchet};
 
 /// Transaction management operations for the domain operations trait.
 ///
 /// This module provides extension methods for handling database transactions
 /// safely within the domain operations system.
 pub trait TransactionOperations<R: Ratchet + Send + Sync + 'static> {
-    
     // ────────────────────────────────────────────────────────────────────────────
     // TRANSACTION MANAGEMENT OPERATIONS
     // ────────────────────────────────────────────────────────────────────────────

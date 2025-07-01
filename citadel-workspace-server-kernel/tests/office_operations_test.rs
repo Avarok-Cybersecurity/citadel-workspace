@@ -7,7 +7,7 @@ mod common;
 use common::integration_test_utils::*;
 
 /// # Office Operations Integration Test
-/// 
+///
 /// Tests comprehensive office CRUD operations including:
 /// - Creating offices with workspace validation
 /// - Retrieving office details
@@ -15,14 +15,14 @@ use common::integration_test_utils::*;
 /// - Listing all offices
 /// - Deleting offices and verification
 /// - Error handling for wrong workspace passwords
-/// 
+///
 /// ## Test Workflow
 /// ```
-/// Setup Environment → Connect Admin → Test Wrong Password → 
-/// Create Office → Get Office → Update Office → List Offices → 
+/// Setup Environment → Connect Admin → Test Wrong Password →
+/// Create Office → Get Office → Update Office → List Offices →
 /// Delete Office → Verify Deletion
 /// ```
-/// 
+///
 /// **Expected Outcome:** All office operations succeed, wrong password fails gracefully
 #[rstest]
 #[tokio::test]
@@ -225,4 +225,4 @@ async fn test_office_operations() {
     }
 
     println!("Test complete.");
-} 
+}

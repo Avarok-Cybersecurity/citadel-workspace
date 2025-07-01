@@ -1,14 +1,14 @@
 /// # User Operations Module
-/// 
+///
 /// This module provides comprehensive user management operations across the domain hierarchy.
 /// The code is organized into logical sections for better maintainability:
-/// 
+///
 /// ## Sections
 /// - **Permission Utilities**: Permission queries and role-based permission management
 /// - **Domain Helper Functions**: Domain type checking and member access utilities
 /// - **User Addition Operations**: Adding users to domains with permission validation
 /// - **User Removal Operations**: Removing users from domains with permission validation
-/// 
+///
 /// All functions maintain backward compatibility and existing API contracts.
 
 pub mod user_ops {
@@ -25,7 +25,7 @@ pub mod user_ops {
     // ========================================================================
 
     /// Retrieves all domain permissions for a specific user
-    /// 
+    ///
     /// Returns a list of tuples containing domain IDs and their associated permission names.
     /// Used for permission auditing and user access reviews.
     pub fn get_all_user_domain_permissions(
@@ -48,7 +48,7 @@ pub mod user_ops {
     }
 
     /// Updates a user's role and permissions for a specific domain
-    /// 
+    ///
     /// Calculates the appropriate permissions based on the role and domain type,
     /// then updates the user's permission set accordingly.
     pub fn update_user_domain_role(
@@ -76,7 +76,7 @@ pub mod user_ops {
     }
 
     /// Calculates role-based permissions for a given role and domain type
-    /// 
+    ///
     /// Returns the appropriate permission set based on user role and domain type.
     /// Admins and Owners get full permissions, while other roles get domain-specific permissions.
     pub fn get_role_based_permissions(
@@ -128,7 +128,7 @@ pub mod user_ops {
     // ========================================================================
 
     /// Helper function to get domain type from Domain enum variant
-    /// 
+    ///
     /// Extracts the domain type to determine appropriate permission handling.
     fn get_domain_type_from_domain_entry(
         domain_entry: &Domain,
@@ -141,7 +141,7 @@ pub mod user_ops {
     }
 
     /// Helper function to get mutable reference to members from domain entry
-    /// 
+    ///
     /// Provides mutable access to the member list for adding/removing users.
     fn get_mutable_members_from_domain_entry(
         domain_entry: &mut Domain,
@@ -154,7 +154,7 @@ pub mod user_ops {
     }
 
     /// Helper function to get immutable reference to members from domain entry
-    /// 
+    ///
     /// Provides read-only access to the member list for membership checks.
     fn get_members_from_domain_entry(domain_entry: &Domain) -> Result<&Vec<String>, NetworkError> {
         match domain_entry {
@@ -165,7 +165,7 @@ pub mod user_ops {
     }
 
     /// Helper function to determine the parent domain ID for permission checking
-    /// 
+    ///
     /// Resolves the appropriate domain to check permissions against based on
     /// the domain hierarchy (rooms check against office, offices against workspace).
     fn get_permission_check_domain_id(
@@ -191,7 +191,7 @@ pub mod user_ops {
     }
 
     /// Helper function to get domain type from domain_id using Transaction
-    /// 
+    ///
     /// Looks up a domain by ID and returns its type for permission calculations.
     pub(crate) fn get_domain_type_from_id(
         tx: &dyn Transaction,
@@ -208,10 +208,10 @@ pub mod user_ops {
     // ========================================================================
 
     /// Add a user to a domain with a specific role
-    /// 
+    ///
     /// This is a complex operation that validates permissions, assigns roles,
     /// updates user permissions, and manages domain membership atomically.
-    /// 
+    ///
     /// ## Security
     /// - Validates actor has AddUsers permission on the appropriate parent domain
     /// - Prevents unauthorized user additions through permission checks
@@ -316,10 +316,10 @@ pub mod user_ops {
     // ========================================================================
 
     /// Remove a user from a domain
-    /// 
+    ///
     /// This is a complex operation that validates permissions, clears user permissions,
     /// updates domain membership, and maintains consistency atomically.
-    /// 
+    ///
     /// ## Security
     /// - Validates actor has RemoveUsers permission on the appropriate parent domain
     /// - Prevents unauthorized user removals through permission checks

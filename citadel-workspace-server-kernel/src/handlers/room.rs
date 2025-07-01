@@ -1,4 +1,4 @@
-use crate::handlers::domain::DomainOperations;
+use crate::handlers::domain::{DomainOperations, EntityOperations};
 use crate::kernel::WorkspaceServerKernel;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::Room;

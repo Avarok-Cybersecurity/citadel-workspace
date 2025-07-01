@@ -178,10 +178,7 @@ pub async fn send_workspace_command(
     cid: u64,
     command: WorkspaceProtocolRequest,
 ) -> Result<WorkspaceProtocolResponse, Box<dyn Error>> {
-    println!(
-        "Sending command: {:?} for CID: {}",
-        command, cid
-    );
+    println!("Sending command: {:?} for CID: {}", command, cid);
     let request_id = Uuid::new_v4();
     let payload = WorkspaceProtocolPayload::Request(command.clone());
     let message_bytes = serde_json::to_vec(&payload).map_err(|e| Box::new(e) as Box<dyn Error>)?;
@@ -205,17 +202,22 @@ pub async fn send_workspace_command(
 
     while let Some(response) = from_service.recv().await {
         match response {
-            citadel_internal_service_types::InternalServiceResponse::MessageSendSuccess(msg_success) => {
+            citadel_internal_service_types::InternalServiceResponse::MessageSendSuccess(
+                msg_success,
+            ) => {
                 if msg_success.request_id.as_ref() == Some(&request_id) {
                     println!("Received MessageSendSuccess for request_id: {}", request_id);
                     // Continue waiting for the actual response
                     continue;
                 }
             }
-            citadel_internal_service_types::InternalServiceResponse::MessageNotification(msg_notification) => {
+            citadel_internal_service_types::InternalServiceResponse::MessageNotification(
+                msg_notification,
+            ) => {
                 println!("Received MessageNotification: {:?}", msg_notification);
-                let response: WorkspaceProtocolPayload = serde_json::from_slice(&msg_notification.message)
-                    .map_err(|e| Box::new(e) as Box<dyn Error>)?;
+                let response: WorkspaceProtocolPayload =
+                    serde_json::from_slice(&msg_notification.message)
+                        .map_err(|e| Box::new(e) as Box<dyn Error>)?;
 
                 match response {
                     WorkspaceProtocolPayload::Response(workspace_response) => {
@@ -235,4 +237,4 @@ pub async fn send_workspace_command(
     }
 
     Err("No response received".into())
-} 
+}

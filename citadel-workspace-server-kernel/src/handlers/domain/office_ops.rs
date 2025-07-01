@@ -11,7 +11,6 @@ use citadel_workspace_types::structs::Office;
 /// This module provides extension methods for office management,
 /// including CRUD operations and listing within workspaces.
 pub trait OfficeOperations<R: Ratchet + Send + Sync + 'static> {
-    
     // ────────────────────────────────────────────────────────────────────────────
     // OFFICE-SPECIFIC OPERATIONS
     // ────────────────────────────────────────────────────────────────────────────

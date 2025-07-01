@@ -1,10 +1,101 @@
-use crate::handlers::domain::DomainOperations;
+use crate::handlers::domain::{DomainOperations, WorkspaceOperations};
 use crate::kernel::transaction::Transaction;
 use crate::kernel::WorkspaceServerKernel;
+use crate::WorkspaceProtocolResponse;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::Workspace;
 
 impl<R: Ratchet> WorkspaceServerKernel<R> {
+    // ═══════════════════════════════════════════════════════════════════════════════════
+    // WORKSPACE COMMAND HANDLERS
+    // ═══════════════════════════════════════════════════════════════════════════════════
+
+    /// Handle LoadWorkspace command
+    pub(crate) fn handle_load_workspace(
+        &self,
+        actor_user_id: &str,
+    ) -> Result<WorkspaceProtocolResponse, NetworkError> {
+        Self::handle_result(
+            self.load_workspace(actor_user_id, None),
+            WorkspaceProtocolResponse::Workspace,
+            "Failed to load workspace",
+        )
+    }
+
+    /// Handle CreateWorkspace command  
+    pub(crate) fn handle_create_workspace(
+        &self,
+        actor_user_id: &str,
+        name: String,
+        description: String,
+        metadata: Option<Vec<u8>>,
+        workspace_master_password: String,
+    ) -> Result<WorkspaceProtocolResponse, NetworkError> {
+        Self::handle_result(
+            self.create_workspace(
+                actor_user_id,
+                &name,
+                &description,
+                metadata,
+                workspace_master_password,
+            ),
+            WorkspaceProtocolResponse::Workspace,
+            "Failed to create workspace",
+        )
+    }
+
+    /// Handle GetWorkspace command
+    pub(crate) fn handle_get_workspace(
+        &self,
+        actor_user_id: &str,
+    ) -> Result<WorkspaceProtocolResponse, NetworkError> {
+        Self::handle_result(
+            self.get_workspace(actor_user_id, crate::WORKSPACE_ROOT_ID),
+            WorkspaceProtocolResponse::Workspace,
+            "Failed to get workspace",
+        )
+    }
+
+    /// Handle UpdateWorkspace command
+    pub(crate) fn handle_update_workspace(
+        &self,
+        actor_user_id: &str,
+        name: Option<String>,
+        description: Option<String>,
+        metadata: Option<Vec<u8>>,
+        workspace_master_password: String,
+    ) -> Result<WorkspaceProtocolResponse, NetworkError> {
+        Self::handle_result(
+            self.update_workspace(
+                actor_user_id,
+                crate::WORKSPACE_ROOT_ID,
+                name.as_deref(),
+                description.as_deref(),
+                metadata,
+                workspace_master_password,
+            ),
+            WorkspaceProtocolResponse::Workspace,
+            "Failed to update workspace",
+        )
+    }
+
+    /// Handle DeleteWorkspace command
+    pub(crate) fn handle_delete_workspace(
+        &self,
+        actor_user_id: &str,
+        workspace_master_password: String,
+    ) -> Result<WorkspaceProtocolResponse, NetworkError> {
+        Self::handle_result(
+            self.delete_workspace(actor_user_id, workspace_master_password),
+            |_| WorkspaceProtocolResponse::Success("Workspace deleted successfully".to_string()),
+            "Failed to delete workspace",
+        )
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════════
+    // EXISTING WORKSPACE OPERATIONS (kept for backward compatibility)
+    // ═══════════════════════════════════════════════════════════════════════════════════
+
     /// Load a workspace by ID or use the default workspace if none specified
     pub(crate) fn load_workspace(
         &self,
@@ -86,7 +177,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         room_id: Option<&str>,
     ) -> Result<Vec<(String, String)>, NetworkError> {
         // Use the transaction manager to directly access the members
-        use crate::kernel::TransactionManagerExt;
+        use crate::kernel::transaction::TransactionManagerExt;
 
         self.tx_manager().with_read_transaction(|tx| {
             let mut member_names = Vec::new();

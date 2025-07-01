@@ -1,17 +1,17 @@
 use super::core::WorkspaceServerKernel;
-use crate::kernel::transaction::rbac::transaction_operations::TransactionManagerExt;
+use crate::kernel::transaction::{Transaction, TransactionManagerExt};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{User, UserRole};
 
 impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Inject a user for testing purposes
-    /// 
+    ///
     /// This method provides a simple way to add users to the system for testing:
     /// - Creates a user with the specified username and role
     /// - Uses username for both ID and display name for simplicity
     /// - Is idempotent - won't error if the user already exists
     /// - Provides console output for test debugging
-    /// 
+    ///
     /// **Note:** This method is intended for testing only and should not be used in production.
     pub fn inject_user_for_test(&self, username: &str, role: UserRole) -> Result<(), NetworkError> {
         self.tx_manager().with_write_transaction(|tx| {
@@ -36,4 +36,4 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             Ok(())
         })
     }
-} 
+}

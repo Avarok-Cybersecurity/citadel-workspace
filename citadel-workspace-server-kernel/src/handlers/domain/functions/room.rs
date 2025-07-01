@@ -83,7 +83,7 @@ pub mod room_ops {
         let user = tx
             .get_user(user_id)
             .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
-        
+
         // Permission Validation: User must have CreateRoom permission in the target office
         if !user.has_permission(office_id, Permission::CreateRoom) {
             return Err(permission_denied(format!(
@@ -128,7 +128,7 @@ pub mod room_ops {
         if !office_obj.rooms.contains(&room_id_string) {
             office_obj.rooms.push(room_id_string);
         }
-        
+
         // Database Update: Update office domain to reflect the new room association
         tx.update_domain(office_id, office_owned_domain)?;
 
@@ -177,7 +177,7 @@ pub mod room_ops {
         let user = tx
             .get_user(user_id)
             .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
-        
+
         // Permission Validation: User must have DeleteRoom permission for the target room
         if !user.has_permission(room_id, Permission::DeleteRoom) {
             return Err(permission_denied(format!(
@@ -231,7 +231,7 @@ pub mod room_ops {
                         // Log error but continue with room deletion
                     }
                 }
-                
+
                 // Database Update: Update office domain (with error handling for partial failures)
                 if let Err(e) = tx.update_domain(parent_office_id_str, office_owned_domain) {
                     error!(error = ?e, parent_office_id = parent_office_id_str, room_id, "Failed to update parent office while deleting room. Manual cleanup may be required.");
@@ -305,7 +305,7 @@ pub mod room_ops {
 
         if let Some(off_id) = office_id {
             // Office-Specific Mode: List rooms within a specific office
-            
+
             // Permission Validation: User must be a member of the specified office
             if !tx.is_member_of_domain(&user.id, &off_id)? {
                 return Err(permission_denied(format!(
@@ -335,7 +335,7 @@ pub mod room_ops {
             }
         } else {
             // Cross-Office Mode: List all rooms the user is a member of across all offices
-            
+
             // Permission Scanning: Check all domains where user has permissions
             for domain_id_key in user.permissions.keys() {
                 if let Some(Domain::Room { room, .. }) = tx.get_domain(domain_id_key) {
@@ -346,7 +346,7 @@ pub mod room_ops {
                 }
             }
         }
-        
+
         info!(user_id = user_id, count = rooms.len(), "Listed rooms");
         Ok(rooms)
     }
@@ -395,7 +395,7 @@ pub mod room_ops {
         let user = tx
             .get_user(user_id)
             .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
-        
+
         // Permission Validation: User must have UpdateRoom permission for the target room
         if !user.has_permission(room_id, Permission::UpdateRoom) {
             return Err(permission_denied(format!(
@@ -433,7 +433,7 @@ pub mod room_ops {
 
         // Result Preparation: Clone updated room for return value
         let updated_room_clone = room_to_update.clone();
-        
+
         // Database Update: Apply changes to domain entry
         tx.update_domain(room_id, owned_domain)?;
 
@@ -453,7 +453,7 @@ pub mod room_ops {
     // TODO: Implement room-specific settings management functionality
     // This would include features like:
     // - Room-specific access policies and permissions
-    // - Room notification and announcement settings  
+    // - Room notification and announcement settings
     // - Room-level integrations and custom features
     // - Advanced room metadata and configuration options
 }

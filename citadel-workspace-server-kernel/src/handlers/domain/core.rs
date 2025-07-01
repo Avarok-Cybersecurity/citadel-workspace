@@ -5,7 +5,7 @@
 //! entities must implement.
 
 use citadel_sdk::prelude::NetworkError;
-use citadel_workspace_types::structs::Domain;
+use citadel_workspace_types::structs::{Domain, Office, Room, Workspace};
 
 // ═══════════════════════════════════════════════════════════════════════════════════
 // UTILITY FUNCTIONS
@@ -48,18 +48,23 @@ pub fn permission_denied<S: std::fmt::Display>(msg: S) -> NetworkError {
 pub trait DomainEntity: Clone + Send + Sync + 'static {
     /// Returns the unique identifier for this entity
     fn id(&self) -> String;
-    
+
     /// Returns the display name for this entity
     fn name(&self) -> String;
-    
+
     /// Returns the detailed description of this entity
     fn description(&self) -> String;
-    
+
     /// Returns the ID of the user who owns this entity
     fn owner_id(&self) -> String;
-    
+
     /// Returns the ID of the domain this entity belongs to
     fn domain_id(&self) -> String;
+
+    /// Returns the entity type as a string ("workspace", "office", "room")
+    fn entity_type() -> &'static str
+    where
+        Self: Sized;
 
     /// Converts this entity into its corresponding Domain enum variant.
     ///
@@ -96,6 +101,42 @@ pub trait DomainEntity: Clone + Send + Sync + 'static {
     /// * `Some(Self)` - Successfully extracted entity
     /// * `None` - Domain variant doesn't match this entity type
     fn from_domain(domain: Domain) -> Option<Self>
+    where
+        Self: Sized;
+
+    /// Attempts to convert from a Workspace entity.
+    ///
+    /// # Arguments
+    /// * `workspace` - Workspace entity to convert
+    ///
+    /// # Returns
+    /// * `Ok(Self)` - Successfully converted entity
+    /// * `Err(NetworkError)` - Conversion failed (entity type mismatch)
+    fn try_from_workspace(workspace: Workspace) -> Result<Self, NetworkError>
+    where
+        Self: Sized;
+
+    /// Attempts to convert from an Office entity.
+    ///
+    /// # Arguments
+    /// * `office` - Office entity to convert
+    ///
+    /// # Returns
+    /// * `Ok(Self)` - Successfully converted entity
+    /// * `Err(NetworkError)` - Conversion failed (entity type mismatch)
+    fn try_from_office(office: Office) -> Result<Self, NetworkError>
+    where
+        Self: Sized;
+
+    /// Attempts to convert from a Room entity.
+    ///
+    /// # Arguments
+    /// * `room` - Room entity to convert
+    ///
+    /// # Returns
+    /// * `Ok(Self)` - Successfully converted entity
+    /// * `Err(NetworkError)` - Conversion failed (entity type mismatch)
+    fn try_from_room(room: Room) -> Result<Self, NetworkError>
     where
         Self: Sized;
 }

@@ -4,19 +4,19 @@ mod common;
 use common::workspace_test_utils::*;
 
 /// # Workspace Office Integration Test Suite
-/// 
+///
 /// Tests workspace-office integration functionality including:
 /// - Creating offices within workspaces
 /// - Retrieving office details
 /// - Listing offices within a workspace
 /// - Verifying office-workspace relationships
-/// 
+///
 /// ## Test Workflow
 /// ```
-/// Setup Environment → Create Office in Workspace → 
+/// Setup Environment → Create Office in Workspace →
 /// Get Office → List Offices → Verify Integration
 /// ```
-/// 
+///
 /// **Expected Outcome:** Office operations work correctly within workspace context
 
 #[test]
@@ -63,4 +63,4 @@ fn test_add_office_to_workspace() {
         }
         _ => panic!("Expected Offices response, got {:?}", list_offices_result),
     }
-} 
+}

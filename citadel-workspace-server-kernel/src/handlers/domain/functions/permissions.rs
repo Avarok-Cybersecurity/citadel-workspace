@@ -1,5 +1,5 @@
 use crate::handlers::domain::server_ops::DomainServerOperations;
-use crate::handlers::domain::{permission_denied, DomainOperations};
+use crate::handlers::domain::{permission_denied, DomainOperations, PermissionOperations};
 use crate::kernel::transaction::Transaction;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{Permission, UserRole};

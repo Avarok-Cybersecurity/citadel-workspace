@@ -5,13 +5,13 @@ use std::sync::Arc;
 use tempfile::TempDir;
 
 /// Helper function to create a test kernel with an admin user
-/// 
+///
 /// Creates a complete test environment with:
 /// - A temporary RocksDB database
 /// - A WorkspaceServerKernel with admin user pre-configured
 /// - Admin user: "admin-user" with password "admin-password"
 /// - Root workspace pre-created and ready for operations
-/// 
+///
 /// Returns the kernel instance and temp directory (must be kept alive for test duration)
 pub fn create_test_kernel() -> (Arc<WorkspaceServerKernel<MonoRatchet>>, TempDir) {
     let db_temp_dir = TempDir::new().expect("Failed to create temp dir for DB");
@@ -26,4 +26,4 @@ pub fn create_test_kernel() -> (Arc<WorkspaceServerKernel<MonoRatchet>>, TempDir
     ));
 
     (kernel, db_temp_dir)
-} 
+}

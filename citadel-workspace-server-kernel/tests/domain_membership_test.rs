@@ -8,21 +8,21 @@ mod common;
 use common::permission_test_utils::*;
 
 /// # Domain Membership Behavior Test Suite
-/// 
+///
 /// Tests domain membership behavior and inheritance patterns including:
 /// - Verifying initial non-membership of users
 /// - Adding users to office domains
 /// - Testing implicit room membership through office membership
 /// - Verifying inheritance-based domain access
 /// - Ensuring proper membership cascade behavior
-/// 
+///
 /// ## Membership Inheritance Flow
 /// ```
-/// User (Not Member) → 
-/// Add to Office (Explicit Member) → 
+/// User (Not Member) →
+/// Add to Office (Explicit Member) →
 /// Room Access (Implicit Member via inheritance)
 /// ```
-/// 
+///
 /// **Expected Outcome:** Domain membership properly cascades through hierarchy
 
 #[test]
@@ -121,4 +121,4 @@ fn test_is_member_of_domain_behavior() {
         has_room_access_via_inheritance,
         "User should have room access because they're in the parent office"
     );
-} 
+}

@@ -46,7 +46,8 @@ pub(crate) fn create_office_inner(
     description: &str,
     mdx_content: Option<String>, // Added mdx_content parameter
 ) -> Result<Office, NetworkError> {
-    eprintln!( // <<< NEW LOG INSERTED HERE
+    eprintln!(
+        // <<< NEW LOG INSERTED HERE
         "[CREATE_OFFICE_INNER_ENTRY_EPRINTLN] Received workspace_id: {}, office_id: {}, name: {}",
         workspace_id, office_id, name
     );

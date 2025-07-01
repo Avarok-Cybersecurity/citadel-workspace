@@ -8,19 +8,19 @@ mod common;
 use common::member_test_utils::*;
 
 /// # Member Command Processing Test Suite
-/// 
+///
 /// Tests protocol-level member operations through command processing including:
 /// - Processing AddMember commands through the protocol layer
 /// - Processing RemoveMember commands through the protocol layer
 /// - Verifying command responses and success status
 /// - Testing complete workflow from command to persistence
 /// - Validating member state changes after commands
-/// 
+///
 /// ## Command Processing Flow
 /// ```
 /// Client Command → Protocol Processing → Domain Operations → Persistence → Response
 /// ```
-/// 
+///
 /// **Expected Outcome:** Protocol commands properly handle member operations end-to-end
 
 #[test]
@@ -195,4 +195,4 @@ fn test_member_command_processing() {
         "User should not be in the office after removal"
     );
     citadel_logging::trace!(target: "citadel", "Test completed successfully");
-} 
+}

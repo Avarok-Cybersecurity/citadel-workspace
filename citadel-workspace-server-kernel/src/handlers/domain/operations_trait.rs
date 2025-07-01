@@ -3,10 +3,10 @@
 //! This module defines the comprehensive DomainOperations trait that provides
 //! the primary interface for all domain-related operations in the workspace system.
 
-use citadel_sdk::prelude::{NetworkError, Ratchet};
-use crate::kernel::transaction::Transaction;
-use citadel_workspace_types::structs::{Domain, User};
 use crate::handlers::domain::core::DomainEntity;
+use crate::kernel::transaction::Transaction;
+use citadel_sdk::prelude::{NetworkError, Ratchet};
+use citadel_workspace_types::structs::{Domain, User};
 
 /// Comprehensive trait defining all domain-level operations for the workspace system.
 ///
@@ -32,11 +32,10 @@ use crate::handlers::domain::core::DomainEntity;
 /// information including permission denials, entity not found, and validation failures.
 #[auto_impl::auto_impl(Arc)]
 pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
-    
     // ────────────────────────────────────────────────────────────────────────────
     // CORE SYSTEM OPERATIONS
     // ────────────────────────────────────────────────────────────────────────────
-    
+
     /// Initializes the domain operations system.
     ///
     /// This method performs any necessary setup for the domain operations

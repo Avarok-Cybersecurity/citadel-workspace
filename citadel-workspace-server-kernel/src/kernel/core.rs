@@ -12,7 +12,7 @@ pub enum MemberAction {
 }
 
 /// Core server kernel implementation for workspace management
-/// 
+///
 /// This struct serves as the central coordination point for all workspace operations,
 /// managing network connections, user roles, and domain operations through a
 /// transaction-based architecture.
@@ -40,7 +40,7 @@ impl<R: Ratchet> Clone for WorkspaceServerKernel<R> {
 
 impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Create a new WorkspaceServerKernel without any default users
-    /// 
+    ///
     /// This is the primary constructor for production use, requiring explicit
     /// transaction manager and admin username configuration.
     pub fn new(
@@ -65,4 +65,4 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     pub fn tx_manager(&self) -> &Arc<RwLock<TransactionManager>> {
         &self.domain_operations.tx_manager
     }
-} 
+}

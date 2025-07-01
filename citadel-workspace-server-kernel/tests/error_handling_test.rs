@@ -126,7 +126,7 @@ mod tests {
     /// 2. **Office Deletion by Unprivileged User**: Tests permission validation for destructive operations
     ///
     /// ## Expected Behavior
-    /// - All operations return `Ok(WorkspaceProtocolResponse::Error(...))` 
+    /// - All operations return `Ok(WorkspaceProtocolResponse::Error(...))`
     /// - Error messages clearly indicate permission denial and specify the missing permission
     /// - No system crashes or panics occur
     /// - System state remains unchanged after permission denials
@@ -149,7 +149,7 @@ mod tests {
             .unwrap();
 
         println!("test_command_invalid_access: Attempting CreateOffice with unprivileged user");
-        
+
         // Test Case 1: Attempt office creation without proper permissions
         let result = kernel.process_command(
             user_id,
@@ -179,7 +179,7 @@ mod tests {
         println!("test_command_invalid_access: CreateOffice permission denial validated");
 
         println!("test_command_invalid_access: Attempting DeleteOffice with unprivileged user");
-        
+
         // Test Case 2: Attempt office deletion without proper permissions
         let result = kernel.process_command(
             user_id,
@@ -225,7 +225,7 @@ mod tests {
     /// 3. **Non-Existent Member Retrieval**: Tests user lookup validation
     ///
     /// ## Expected Behavior
-    /// - All operations return `Ok(WorkspaceProtocolResponse::Error(...))` 
+    /// - All operations return `Ok(WorkspaceProtocolResponse::Error(...))`
     /// - Error messages clearly indicate the resource was not found
     /// - Admin privileges don't bypass existence validation
     /// - System performance remains optimal during failed lookups

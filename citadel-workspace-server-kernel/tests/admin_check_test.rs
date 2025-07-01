@@ -5,25 +5,26 @@ mod common;
 use common::permissions_test_utils::*;
 
 /// # Admin Check Test Suite
-/// 
+///
 /// Tests admin role verification and detection including:
 /// - Verifying custom admin users are recognized
 /// - Testing non-admin user detection
 /// - Validating multiple admin users
 /// - Ensuring admin role persistence
 /// - Testing admin role assignment verification
-/// 
+///
 /// ## Admin Detection Flow
 /// ```
 /// Admin Creation → Role Verification → Non-Admin Testing → Multi-Admin Validation
 /// ```
-/// 
+///
 /// **Expected Outcome:** Admin detection works correctly for various user roles and configurations
 
 #[test]
 fn test_admin_check() {
     let admin_id = "custom_admin";
-    let (kernel, domain_ops, _db_temp_dir, _admin_id_str) = setup_custom_admin_test_environment(admin_id);
+    let (kernel, domain_ops, _db_temp_dir, _admin_id_str) =
+        setup_custom_admin_test_environment(admin_id);
 
     // Verify that the admin check works with custom admin ID
     // is_admin needs a transaction
@@ -64,4 +65,4 @@ fn test_admin_check() {
     assert!(domain_ops
         .with_read_transaction(|tx| domain_ops.is_admin(tx, second_admin_id))
         .unwrap());
-} 
+}

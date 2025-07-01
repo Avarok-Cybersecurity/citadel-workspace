@@ -11,7 +11,7 @@ use tempfile::TempDir;
 pub const ADMIN_PASSWORD: &str = "admin_password";
 
 /// Helper function to create a test user with specified role for permission testing
-/// 
+///
 /// Creates a test user with:
 /// - Formatted name based on ID
 /// - Specified user role
@@ -28,13 +28,13 @@ pub fn create_test_user(id: &str, role: UserRole) -> User {
 }
 
 /// Helper to setup a test environment specifically for permission testing
-/// 
+///
 /// Creates a complete test environment with:
 /// - Temporary RocksDB database for isolated testing
 /// - WorkspaceServerKernel with admin user pre-configured
 /// - DomainServerOperations for domain management
 /// - Logging setup for test debugging
-/// 
+///
 /// Returns the kernel, domain operations, and temp directory (must be kept alive)
 pub fn setup_permissions_test_environment() -> (
     Arc<WorkspaceServerKernel<StackedRatchet>>,
@@ -57,12 +57,14 @@ pub fn setup_permissions_test_environment() -> (
 }
 
 /// Helper to setup a test environment with custom admin for permission testing
-/// 
+///
 /// Creates a test environment with a custom admin user instead of the default one.
 /// Useful for testing admin detection and verification functionality.
-/// 
+///
 /// Returns the kernel, domain operations, temp directory, and admin ID
-pub fn setup_custom_admin_test_environment(admin_id: &str) -> (
+pub fn setup_custom_admin_test_environment(
+    admin_id: &str,
+) -> (
     Arc<WorkspaceServerKernel<StackedRatchet>>,
     DomainServerOperations<StackedRatchet>,
     TempDir,
@@ -81,4 +83,4 @@ pub fn setup_custom_admin_test_environment(admin_id: &str) -> (
     let domain_ops = kernel.domain_ops().clone();
 
     (kernel, domain_ops, db_temp_dir, admin_id.to_string())
-} 
+}

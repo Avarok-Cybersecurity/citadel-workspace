@@ -7,19 +7,19 @@ mod common;
 use common::member_test_utils::*;
 
 /// # Member Lifecycle Test Suite
-/// 
+///
 /// Tests complete user lifecycle management including:
 /// - User creation and insertion into system
 /// - User addition to multiple domains
 /// - Complete user removal from all domains
 /// - User deletion from system
 /// - Verification of complete cleanup
-/// 
+///
 /// ## Lifecycle Flow
 /// ```
 /// User Creation → Domain Addition → Complete Removal → Verification
 /// ```
-/// 
+///
 /// **Expected Outcome:** Users can be completely removed from the system with proper cleanup
 
 #[test]
@@ -80,4 +80,4 @@ fn test_complete_user_removal() {
         .unwrap();
 
     assert!(!user_exists, "User should have been completely removed");
-} 
+}

@@ -1,4 +1,4 @@
-use crate::handlers::domain::DomainOperations;
+use crate::handlers::domain::{DomainOperations, TransactionOperations, UserManagementOperations};
 
 use crate::kernel::WorkspaceServerKernel;
 use crate::WorkspaceProtocolResponse;

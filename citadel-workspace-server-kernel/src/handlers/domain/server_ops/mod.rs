@@ -6,13 +6,13 @@ use crate::kernel::transaction::TransactionManager;
 
 // Import submodules
 pub mod base_operations;
-pub mod permission_operations;
 pub mod domain_entity_operations;
-pub mod workspace_member_operations;
-pub mod workspace_crud_operations;
 pub mod office_operations;
+pub mod permission_operations;
 mod room_operations;
 mod user_operations;
+pub mod workspace_crud_operations;
+pub mod workspace_member_operations;
 mod workspace_operations;
 
 // Re-export needed types and functions

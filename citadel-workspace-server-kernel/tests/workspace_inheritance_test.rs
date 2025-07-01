@@ -8,20 +8,20 @@ mod common;
 use common::permission_test_utils::*;
 
 /// # Workspace Inheritance Test Suite
-/// 
+///
 /// Tests permission inheritance from workspace to office including:
 /// - Adding users to workspace (parent) but not office (child)
 /// - Verifying permission inheritance from workspace to office
 /// - Testing explicit vs inherited permissions
 /// - Ensuring proper workspace-office relationship
 /// - Validating inheritance cascade behavior
-/// 
+///
 /// ## Workspace-Office Inheritance Flow
 /// ```
-/// Workspace (Member: Basic Permissions) → 
+/// Workspace (Member: Basic Permissions) →
 /// Office (Inherited: Access from workspace membership)
 /// ```
-/// 
+///
 /// **Expected Outcome:** Users in workspace inherit appropriate access to child offices
 
 #[test]
@@ -65,8 +65,7 @@ fn test_workspace_add_no_explicit_office_perms() {
     );
     debug!(
         "[TEST_LOG] About to add user_id: '{}' to workspace_id: '{}'",
-        user_id,
-        &workspace_id
+        user_id, &workspace_id
     );
     domain_ops
         .add_user_to_domain("admin", user_id, &workspace_id, UserRole::Member)
@@ -112,4 +111,4 @@ fn test_workspace_add_no_explicit_office_perms() {
         "User should have inherited access to office '{}' as a member of workspace '{}'",
         office.id, workspace_id
     );
-} 
+}

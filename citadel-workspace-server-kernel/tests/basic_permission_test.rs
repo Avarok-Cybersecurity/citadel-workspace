@@ -7,19 +7,19 @@ mod common;
 use common::permissions_test_utils::*;
 
 /// # Basic Permission Test Suite
-/// 
+///
 /// Tests fundamental permission setting and verification including:
 /// - Setting permissions for users on domains
 /// - Verifying permission checks work correctly
 /// - Testing member addition to office domains
 /// - Validating permission inheritance for members
 /// - Ensuring permission state consistency
-/// 
+///
 /// ## Permission Flow
 /// ```
 /// User Creation → Domain Creation → Member Addition → Permission Verification
 /// ```
-/// 
+///
 /// **Expected Outcome:** Basic permission operations work correctly and maintain consistent state
 
 #[test]
@@ -52,12 +52,7 @@ fn test_permission_set() {
 
     // Check that the user doesn't have permissions yet
     let result = domain_ops.with_read_transaction(|tx| {
-        domain_ops.check_entity_permission(
-            tx,
-            user_id,
-            office.id.as_str(),
-            Permission::ViewContent,
-        )
+        domain_ops.check_entity_permission(tx, user_id, office.id.as_str(), Permission::ViewContent)
     });
     assert!(result.is_ok());
     assert!(!result.unwrap()); // User isn't a member yet, so should be false
@@ -90,13 +85,8 @@ fn test_permission_set() {
 
     // Now check again - user should have permission
     let result = domain_ops.with_read_transaction(|tx| {
-        domain_ops.check_entity_permission(
-            tx,
-            user_id,
-            office.id.as_str(),
-            Permission::ViewContent,
-        )
+        domain_ops.check_entity_permission(tx, user_id, office.id.as_str(), Permission::ViewContent)
     });
     assert!(result.is_ok());
     assert!(result.unwrap(), "Member should have ViewContent permission");
-} 
+}

@@ -51,9 +51,9 @@ pub(crate) fn list_offices_inner(
             )));
         }
 
-        let workspace_domain = tx.get_domain(&ws_id).ok_or_else(|| {
-            NetworkError::msg(format!("Workspace domain {} not found", ws_id))
-        })?;
+        let workspace_domain = tx
+            .get_domain(&ws_id)
+            .ok_or_else(|| NetworkError::msg(format!("Workspace domain {} not found", ws_id)))?;
 
         let workspace = workspace_domain
             .as_workspace()

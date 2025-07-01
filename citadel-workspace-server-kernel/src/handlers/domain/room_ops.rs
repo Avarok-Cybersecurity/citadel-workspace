@@ -11,7 +11,6 @@ use citadel_workspace_types::structs::Room;
 /// This module provides extension methods for room management,
 /// including CRUD operations and listing within offices.
 pub trait RoomOperations<R: Ratchet + Send + Sync + 'static> {
-    
     // ────────────────────────────────────────────────────────────────────────────
     // ROOM-SPECIFIC OPERATIONS
     // ────────────────────────────────────────────────────────────────────────────

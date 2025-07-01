@@ -91,25 +91,25 @@ mod transaction_impl;
 pub struct WriteTransaction<'a> {
     /// Write-locked domain entities (workspaces, offices, rooms)
     pub(crate) domains: RwLockWriteGuard<'a, HashMap<String, Domain>>,
-    
+
     /// Write-locked user accounts and memberships
     pub(crate) users: RwLockWriteGuard<'a, HashMap<String, User>>,
-    
+
     /// Write-locked workspace entities
     pub(crate) workspaces: RwLockWriteGuard<'a, HashMap<String, Workspace>>,
-    
+
     /// Write-locked workspace password storage
     pub(crate) workspace_password: RwLockWriteGuard<'a, HashMap<String, String>>,
-    
+
     /// Change tracking for domain operations (for rollback support)
     pub(crate) domain_changes: Vec<DomainChange>,
-    
+
     /// Change tracking for user operations (for rollback support)
     pub(crate) user_changes: Vec<UserChange>,
-    
+
     /// Change tracking for workspace operations (for rollback support)
     pub(crate) workspace_changes: Vec<WorkspaceChange>,
-    
+
     /// Database handle for persistent storage operations
     pub(crate) db: Arc<DB>,
 }
@@ -119,11 +119,10 @@ pub struct WriteTransaction<'a> {
 // ═══════════════════════════════════════════════════════════════════════════════════
 
 impl<'a> WriteTransaction<'a> {
-    
     // ────────────────────────────────────────────────────────────────────────────
     // CONSTRUCTOR AND INITIALIZATION
     // ────────────────────────────────────────────────────────────────────────────
-    
+
     /// Creates a new write transaction with the provided write locks.
     ///
     /// This constructor initializes a new write transaction with exclusive access

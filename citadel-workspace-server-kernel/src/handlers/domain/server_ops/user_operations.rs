@@ -1,6 +1,6 @@
 use crate::handlers::domain::functions::user::user_ops;
 use crate::handlers::domain::server_ops::DomainServerOperations;
-use crate::handlers::domain::DomainOperations;
+use crate::handlers::domain::{DomainOperations, TransactionOperations, UserManagementOperations};
 use crate::kernel::transaction::DomainType;
 use crate::kernel::transaction::TransactionManagerExt;
 use crate::WORKSPACE_ROOT_ID;
@@ -16,7 +16,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         actor_user_id: &str,
         target_user_id: &str,
     ) -> Result<Vec<(String, Vec<String>)>, NetworkError> {
-        self.tx_manager.with_read_transaction(|tx| {
+        self.with_read_transaction(|tx| {
             // Admin can see any user's permissions
             let is_admin = self.is_admin(tx, actor_user_id)?;
 
@@ -52,9 +52,9 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             );
         }
 
-        self.tx_manager.with_write_transaction(|tx| {
+        self.with_write_transaction(|tx| {
             // Check if actor has permission
-            if !self.check_entity_permission(tx, actor_user_id, domain_id, Permission::All)? {
+            if !self.check_entity_permission_impl(tx, actor_user_id, domain_id, Permission::All)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to update user roles in domain '{}'",
                     actor_user_id, domain_id
@@ -80,7 +80,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         let effective_actor_id = actor_user_id.unwrap_or(user_id_to_add);
 
         // Note: As per the memory, changes are immediately applied to in-memory storage during the transaction
-        self.tx_manager.with_write_transaction(|tx| {
+        self.with_write_transaction(|tx| {
             user_ops::add_user_to_domain_inner(
                 tx,
                 effective_actor_id,

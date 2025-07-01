@@ -7,21 +7,21 @@ mod common;
 use common::permission_test_utils::*;
 
 /// # Permission Escalation Test Suite
-/// 
+///
 /// Tests permission escalation through role upgrades including:
 /// - Creating users with basic roles
 /// - Adding users to domain hierarchy
 /// - Upgrading user roles to admin
 /// - Verifying permission escalation takes effect
 /// - Testing admin-level permissions after upgrade
-/// 
+///
 /// ## Escalation Flow
 /// ```
-/// User (Member: Basic Permissions) → 
-/// Role Upgrade (Admin) → 
+/// User (Member: Basic Permissions) →
+/// Role Upgrade (Admin) →
 /// User (Admin: Management Permissions)
 /// ```
-/// 
+///
 /// **Expected Outcome:** Role upgrades grant appropriate elevated permissions
 
 #[test]
@@ -100,4 +100,4 @@ fn test_permission_escalation() {
         has_admin_permission,
         "User should have admin permission after role upgrade"
     );
-} 
+}

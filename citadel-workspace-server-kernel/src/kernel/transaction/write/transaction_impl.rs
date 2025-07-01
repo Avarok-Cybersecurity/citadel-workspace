@@ -6,7 +6,9 @@
 use super::WriteTransaction;
 use crate::kernel::transaction::Transaction;
 use citadel_sdk::prelude::NetworkError;
-use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
+use citadel_workspace_types::structs::{
+    Domain, Office, Permission, Room, User, UserRole, Workspace,
+};
 
 /// Complete implementation of the Transaction trait for WriteTransaction.
 ///
@@ -14,11 +16,10 @@ use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Works
 /// to specialized operation modules. The delegation pattern ensures clean separation
 /// of concerns while maintaining a unified transaction interface.
 impl Transaction for WriteTransaction<'_> {
-    
     // ────────────────────────────────────────────────────────────────────────────
     // PASSWORD MANAGEMENT OPERATIONS
     // ────────────────────────────────────────────────────────────────────────────
-    
+
     /// Retrieves the stored password hash for a workspace
     fn workspace_password(&self, workspace_id: &str) -> Option<String> {
         self.workspace_password.get(workspace_id).cloned()
@@ -78,6 +79,141 @@ impl Transaction for WriteTransaction<'_> {
     /// Removes a workspace from the system
     fn remove_workspace(&mut self, workspace_id: &str) -> Result<Option<Workspace>, NetworkError> {
         self.remove_workspace_internal(workspace_id)
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // OFFICE OPERATIONS
+    // ────────────────────────────────────────────────────────────────────────────
+
+    /// Retrieves an office by ID (read-only access)
+    fn get_office(&self, office_id: &str) -> Option<&Office> {
+        if let Some(domain) = self.get_domain_internal(office_id) {
+            domain.as_office()
+        } else {
+            None
+        }
+    }
+
+    /// Retrieves an office by ID (mutable access for modifications)
+    fn get_office_mut(&mut self, office_id: &str) -> Option<&mut Office> {
+        if let Some(domain) = self.get_domain_mut_internal(office_id) {
+            domain.as_office_mut()
+        } else {
+            None
+        }
+    }
+
+    /// Inserts a new office into the system via domain
+    fn insert_office(&mut self, office_id: String, office: Office) -> Result<(), NetworkError> {
+        let domain = Domain::Office { office };
+        self.insert_domain_internal(office_id, domain)
+    }
+
+    /// Removes an office from the system
+    fn remove_office(&mut self, office_id: &str) -> Result<(), NetworkError> {
+        self.remove_domain_internal(office_id)?;
+        Ok(())
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // ROOM OPERATIONS
+    // ────────────────────────────────────────────────────────────────────────────
+
+    /// Retrieves a room by ID (read-only access)
+    fn get_room(&self, room_id: &str) -> Option<&Room> {
+        if let Some(domain) = self.get_domain_internal(room_id) {
+            domain.as_room()
+        } else {
+            None
+        }
+    }
+
+    /// Retrieves a room by ID (mutable access for modifications)
+    fn get_room_mut(&mut self, room_id: &str) -> Option<&mut Room> {
+        if let Some(domain) = self.get_domain_mut_internal(room_id) {
+            domain.as_room_mut()
+        } else {
+            None
+        }
+    }
+
+    /// Inserts a new room into the system via domain
+    fn insert_room(&mut self, room_id: String, room: Room) -> Result<(), NetworkError> {
+        let domain = Domain::Room { room };
+        self.insert_domain_internal(room_id, domain)
+    }
+
+    /// Removes a room from the system
+    fn remove_room(&mut self, room_id: &str) -> Result<(), NetworkError> {
+        self.remove_domain_internal(room_id)?;
+        Ok(())
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // LISTING OPERATIONS
+    // ────────────────────────────────────────────────────────────────────────────
+
+    /// Lists workspaces accessible to a user
+    fn list_workspaces(&self, user_id: &str) -> Result<Vec<Workspace>, NetworkError> {
+        let mut workspaces = Vec::new();
+        for workspace in self.get_all_workspaces_internal().values() {
+            if workspace.members.contains(&user_id.to_string()) {
+                workspaces.push(workspace.clone());
+            }
+        }
+        Ok(workspaces)
+    }
+
+    /// Lists offices accessible to a user within a workspace
+    fn list_offices(
+        &self,
+        user_id: &str,
+        workspace_id: Option<String>,
+    ) -> Result<Vec<Office>, NetworkError> {
+        let mut offices = Vec::new();
+        let all_domains = self.get_all_domains_internal()?;
+        for (_domain_id, domain) in all_domains {
+            if let Some(office) = domain.as_office() {
+                // Check if user is a member of this office
+                if office.members.contains(&user_id.to_string()) {
+                    // If workspace_id is specified, filter by it
+                    if let Some(ref wid) = workspace_id {
+                        if office.workspace_id == *wid {
+                            offices.push(office.clone());
+                        }
+                    } else {
+                        offices.push(office.clone());
+                    }
+                }
+            }
+        }
+        Ok(offices)
+    }
+
+    /// Lists rooms accessible to a user within an office
+    fn list_rooms(
+        &self,
+        user_id: &str,
+        office_id: Option<String>,
+    ) -> Result<Vec<Room>, NetworkError> {
+        let mut rooms = Vec::new();
+        let all_domains = self.get_all_domains_internal()?;
+        for (_domain_id, domain) in all_domains {
+            if let Some(room) = domain.as_room() {
+                // Check if user is a member of this room
+                if room.members.contains(&user_id.to_string()) {
+                    // If office_id is specified, filter by it
+                    if let Some(ref oid) = office_id {
+                        if room.office_id == *oid {
+                            rooms.push(room.clone());
+                        }
+                    } else {
+                        rooms.push(room.clone());
+                    }
+                }
+            }
+        }
+        Ok(rooms)
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -221,6 +357,6 @@ impl Transaction for WriteTransaction<'_> {
 
     /// Commits all transaction changes to the persistent database
     fn commit(&self) -> Result<(), NetworkError> {
-        self.commit_internal()
+        self.commit()
     }
 }

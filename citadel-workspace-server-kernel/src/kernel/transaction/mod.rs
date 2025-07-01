@@ -1,5 +1,7 @@
 use citadel_sdk::prelude::NetworkError;
-use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
+use citadel_workspace_types::structs::{
+    Domain, Office, Permission, Room, User, UserRole, Workspace,
+};
 use parking_lot::RwLock;
 use rocksdb::DB;
 use std::collections::HashMap;
@@ -44,6 +46,18 @@ pub trait Transaction {
     /// Get all workspaces
     fn get_all_workspaces(&self) -> &HashMap<String, Workspace>;
 
+    /// Get an office by ID
+    fn get_office(&self, office_id: &str) -> Option<&Office>;
+
+    /// Get a mutable reference to an office (write transactions only)
+    fn get_office_mut(&mut self, office_id: &str) -> Option<&mut Office>;
+
+    /// Get a room by ID
+    fn get_room(&self, room_id: &str) -> Option<&Room>;
+
+    /// Get a mutable reference to a room (write transactions only)
+    fn get_room_mut(&mut self, room_id: &str) -> Option<&mut Room>;
+
     /// Get a user by ID
     fn get_user(&self, user_id: &str) -> Option<&User>;
 
@@ -65,6 +79,12 @@ pub trait Transaction {
         workspace_id: String,
         workspace: Workspace,
     ) -> Result<(), NetworkError>;
+
+    /// Insert an office
+    fn insert_office(&mut self, office_id: String, office: Office) -> Result<(), NetworkError>;
+
+    /// Insert a room
+    fn insert_room(&mut self, room_id: String, room: Room) -> Result<(), NetworkError>;
 
     /// Insert a user
     fn insert_user(&mut self, user_id: String, user: User) -> Result<(), NetworkError>;
@@ -88,8 +108,31 @@ pub trait Transaction {
     /// Remove a workspace and return it
     fn remove_workspace(&mut self, workspace_id: &str) -> Result<Option<Workspace>, NetworkError>;
 
+    /// Remove an office and return it
+    fn remove_office(&mut self, office_id: &str) -> Result<(), NetworkError>;
+
+    /// Remove a room and return it
+    fn remove_room(&mut self, room_id: &str) -> Result<(), NetworkError>;
+
     /// Remove a user and return it
     fn remove_user(&mut self, user_id: &str) -> Result<Option<User>, NetworkError>;
+
+    /// List workspaces accessible to a user
+    fn list_workspaces(&self, user_id: &str) -> Result<Vec<Workspace>, NetworkError>;
+
+    /// List offices accessible to a user within a workspace
+    fn list_offices(
+        &self,
+        user_id: &str,
+        workspace_id: Option<String>,
+    ) -> Result<Vec<Office>, NetworkError>;
+
+    /// List rooms accessible to a user within an office
+    fn list_rooms(
+        &self,
+        user_id: &str,
+        office_id: Option<String>,
+    ) -> Result<Vec<Room>, NetworkError>;
 
     /// Add a user to a domain
     fn add_user_to_domain(

@@ -1,5 +1,5 @@
 use crate::handlers::domain::server_ops::DomainServerOperations;
-use crate::handlers::domain::WorkspaceDBList;
+use crate::handlers::domain::{TransactionOperations, WorkspaceDBList};
 use crate::kernel::transaction::TransactionManagerExt;
 use bcrypt;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
@@ -7,25 +7,41 @@ use citadel_workspace_types::structs::{Office, Permission, Workspace};
 use uuid::Uuid;
 
 impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
-    pub fn get_workspace_impl(&self, user_id: &str, workspace_id: &str) -> Result<Workspace, NetworkError> {
+    pub fn get_workspace_impl(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+    ) -> Result<Workspace, NetworkError> {
         self.with_read_transaction(|tx| {
             // Check if user has permission to view this workspace
-            if !self.check_entity_permission_impl(tx, user_id, workspace_id, Permission::ViewContent)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                workspace_id,
+                Permission::ViewContent,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to view workspace '{}'",
                     user_id, workspace_id
                 )));
             }
 
-            if let Some(workspace) = tx.get_workspace(workspace_id) {
+            if let Some(workspace) = tx.get_workspace(workspace_id).cloned() {
                 Ok(workspace.clone())
             } else {
-                Err(NetworkError::msg(format!("Workspace '{}' not found", workspace_id)))
+                Err(NetworkError::msg(format!(
+                    "Workspace '{}' not found",
+                    workspace_id
+                )))
             }
         })
     }
 
-    pub fn get_workspace_details_impl(&self, user_id: &str, ws_id: &str) -> Result<Workspace, NetworkError> {
+    pub fn get_workspace_details_impl(
+        &self,
+        user_id: &str,
+        ws_id: &str,
+    ) -> Result<Workspace, NetworkError> {
         self.get_workspace_impl(user_id, ws_id)
     }
 
@@ -62,7 +78,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
             // Set metadata if provided
             if let Some(metadata) = metadata {
-                workspace.metadata.insert("custom_metadata".to_string(), metadata);
+                workspace.metadata = metadata;
             }
 
             // Insert the workspace
@@ -75,7 +91,11 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             tx.insert_domain(workspace_id.clone(), domain)?;
 
             // Add the creator as a member
-            tx.add_user_to_domain(user_id, &workspace_id, citadel_workspace_types::structs::UserRole::Owner)?;
+            tx.add_user_to_domain(
+                user_id,
+                &workspace_id,
+                citadel_workspace_types::structs::UserRole::Owner,
+            )?;
 
             Ok(workspace)
         })
@@ -89,7 +109,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     ) -> Result<(), NetworkError> {
         self.with_write_transaction(|tx| {
             // Check if user has permission to add offices to this workspace
-            if !self.check_entity_permission_impl(tx, user_id, workspace_id, Permission::AddOffice)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                workspace_id,
+                Permission::AddOffice,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to add offices to workspace '{}'",
                     user_id, workspace_id
@@ -98,7 +123,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
             // Check if the office exists
             if tx.get_office(office_id).is_none() {
-                return Err(NetworkError::msg(format!("Office '{}' not found", office_id)));
+                return Err(NetworkError::msg(format!(
+                    "Office '{}' not found",
+                    office_id
+                )));
             }
 
             // Check if the workspace exists and update it
@@ -109,7 +137,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                 }
                 Ok(())
             } else {
-                Err(NetworkError::msg(format!("Workspace '{}' not found", workspace_id)))
+                Err(NetworkError::msg(format!(
+                    "Workspace '{}' not found",
+                    workspace_id
+                )))
             }
         })
     }
@@ -122,7 +153,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     ) -> Result<(), NetworkError> {
         self.with_write_transaction(|tx| {
             // Check if user has permission to remove offices from this workspace
-            if !self.check_entity_permission_impl(tx, user_id, workspace_id, Permission::ManageDomains)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                workspace_id,
+                Permission::ManageDomains,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to remove offices from workspace '{}'",
                     user_id, workspace_id
@@ -138,15 +174,16 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                 tx.remove_office(office_id)?;
                 Ok(())
             } else {
-                Err(NetworkError::msg(format!("Workspace '{}' not found", workspace_id)))
+                Err(NetworkError::msg(format!(
+                    "Workspace '{}' not found",
+                    workspace_id
+                )))
             }
         })
     }
 
     pub fn list_workspaces_impl(&self, user_id: &str) -> Result<Vec<Workspace>, NetworkError> {
-        self.with_read_transaction(|tx| {
-            tx.list_workspaces(user_id)
-        })
+        self.with_read_transaction(|tx| tx.list_workspaces(user_id))
     }
 
     pub fn update_workspace_impl(
@@ -160,7 +197,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     ) -> Result<Workspace, NetworkError> {
         self.with_write_transaction(|tx| {
             // Check if user has permission to update this workspace
-            if !self.check_entity_permission_impl(tx, user_id, workspace_id, Permission::UpdateWorkspace)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                workspace_id,
+                Permission::UpdateWorkspace,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to update workspace '{}'",
                     user_id, workspace_id
@@ -169,7 +211,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
             // Verify the workspace password if provided
             if !workspace_master_password.is_empty() {
-                if let Some(stored_password_hash) = tx.get_workspace_password(workspace_id) {
+                if let Some(stored_password_hash) = tx.workspace_password(workspace_id) {
                     if !bcrypt::verify(&workspace_master_password, &stored_password_hash)
                         .unwrap_or(false)
                     {
@@ -189,7 +231,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                     workspace.description = description.to_string();
                 }
                 if let Some(metadata) = metadata {
-                    workspace.metadata.insert("custom_metadata".to_string(), metadata);
+                    workspace.metadata = metadata;
                 }
 
                 tx.insert_workspace(workspace_id.to_string(), workspace.clone())?;
@@ -202,7 +244,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
                 Ok(workspace)
             } else {
-                Err(NetworkError::msg(format!("Workspace '{}' not found", workspace_id)))
+                Err(NetworkError::msg(format!(
+                    "Workspace '{}' not found",
+                    workspace_id
+                )))
             }
         })
     }
@@ -226,7 +271,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     ) -> Result<(), NetworkError> {
         self.with_write_transaction(|tx| {
             // Check if user has permission to delete this workspace
-            if !self.check_entity_permission_impl(tx, user_id, workspace_id, Permission::DeleteWorkspace)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                workspace_id,
+                Permission::DeleteWorkspace,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to delete workspace '{}'",
                     user_id, workspace_id
@@ -234,7 +284,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             }
 
             // Get the workspace to check ownership
-            if let Some(workspace) = tx.get_workspace(workspace_id) {
+            if let Some(workspace) = tx.get_workspace(workspace_id).cloned() {
                 if workspace.owner_id != user_id {
                     return Err(NetworkError::msg(format!(
                         "Only the owner can delete workspace '{}'",
@@ -255,16 +305,21 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
                 Ok(())
             } else {
-                Err(NetworkError::msg(format!("Workspace '{}' not found", workspace_id)))
+                Err(NetworkError::msg(format!(
+                    "Workspace '{}' not found",
+                    workspace_id
+                )))
             }
         })
     }
 
     pub fn get_all_workspace_ids_impl(&self) -> Result<WorkspaceDBList, NetworkError> {
         self.with_read_transaction(|tx| {
-            let workspaces = tx.get_all_workspaces()?;
+            let workspaces = tx.get_all_workspaces();
             let workspace_ids: Vec<String> = workspaces.keys().cloned().collect();
-            Ok(WorkspaceDBList { workspace_ids })
+            Ok(WorkspaceDBList {
+                workspaces: workspace_ids,
+            })
         })
     }
 
@@ -275,14 +330,19 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     ) -> Result<Vec<Office>, NetworkError> {
         self.with_read_transaction(|tx| {
             // Check if user has permission to view this workspace
-            if !self.check_entity_permission_impl(tx, user_id, workspace_id, Permission::ViewContent)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                workspace_id,
+                Permission::ViewContent,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to view workspace '{}'",
                     user_id, workspace_id
                 )));
             }
 
-            if let Some(workspace) = tx.get_workspace(workspace_id) {
+            if let Some(workspace) = tx.get_workspace(workspace_id).cloned() {
                 let mut offices = Vec::new();
                 for office_id in &workspace.offices {
                     if let Some(office) = tx.get_office(office_id) {
@@ -291,8 +351,11 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                 }
                 Ok(offices)
             } else {
-                Err(NetworkError::msg(format!("Workspace '{}' not found", workspace_id)))
+                Err(NetworkError::msg(format!(
+                    "Workspace '{}' not found",
+                    workspace_id
+                )))
             }
         })
     }
-} 
+}

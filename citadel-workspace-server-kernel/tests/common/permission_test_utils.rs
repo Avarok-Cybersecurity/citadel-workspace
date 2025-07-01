@@ -11,7 +11,7 @@ use tempfile::TempDir;
 pub const ADMIN_PASSWORD: &str = "admin_password";
 
 /// Helper function to create a test user with specified role
-/// 
+///
 /// Creates a test user with:
 /// - Formatted name based on ID
 /// - Specified user role
@@ -28,13 +28,13 @@ pub fn create_test_user(id: &str, role: UserRole) -> User {
 }
 
 /// Helper to setup a test environment with admin, domains, and test infrastructure
-/// 
+///
 /// Creates a complete test environment with:
 /// - Temporary RocksDB database for isolated testing
 /// - WorkspaceServerKernel with admin user pre-configured
 /// - DomainServerOperations for domain management
 /// - Logging setup for test debugging
-/// 
+///
 /// Returns the kernel, domain operations, and temp directory (must be kept alive)
 pub fn setup_test_environment() -> (
     Arc<WorkspaceServerKernel<StackedRatchet>>,
@@ -54,4 +54,4 @@ pub fn setup_test_environment() -> (
     let domain_ops = kernel.domain_ops().clone();
 
     (kernel, domain_ops, db_temp_dir)
-} 
+}

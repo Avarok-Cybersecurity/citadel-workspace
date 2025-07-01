@@ -11,10 +11,10 @@
 //! - common/member_test_utils.rs - Shared test utilities
 
 // Import all focused test modules
+mod admin_operations_test;
 mod member_operations_test;
 mod permission_operations_test;
 mod role_operations_test;
-mod admin_operations_test;
 
 // Re-export the common module for other test files
 pub mod common;

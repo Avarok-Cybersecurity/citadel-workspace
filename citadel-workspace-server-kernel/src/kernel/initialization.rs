@@ -1,6 +1,7 @@
 use super::core::WorkspaceServerKernel;
-use crate::kernel::transaction::rbac::transaction_operations::TransactionManagerExt;
-use crate::kernel::transaction::TransactionManager;
+use crate::handlers::domain::{DomainOperations, TransactionOperations};
+use crate::kernel::transaction::TransactionManagerExt;
+use crate::kernel::transaction::{Transaction, TransactionManager};
 use crate::{WORKSPACE_MASTER_PASSWORD_KEY, WORKSPACE_ROOT_ID};
 use citadel_logging::debug;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
@@ -14,12 +15,12 @@ use std::sync::Arc;
 
 impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Convenience constructor for creating a kernel with an admin user
-    /// 
+    ///
     /// This method creates a complete workspace kernel with:
     /// - A new transaction manager backed by the provided database
     /// - An admin user with full permissions
     /// - A root workspace domain properly configured
-    /// 
+    ///
     /// Used primarily in tests and simple deployments where automatic admin setup is desired.
     pub fn with_admin(
         admin_username_str: &str,
@@ -45,13 +46,13 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     }
 
     /// Helper to inject the initial admin user into the database
-    /// 
+    ///
     /// This method performs the complete admin user and workspace setup:
     /// 1. Creates the admin user with full permissions
     /// 2. Creates the root workspace domain if it doesn't exist
     /// 3. Sets the workspace password securely
     /// 4. Adds the admin user to the root workspace domain
-    /// 
+    ///
     /// This is idempotent - can be called multiple times safely.
     pub fn inject_admin_user(
         &self,
@@ -136,7 +137,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     }
 
     /// Verifies the provided workspace password against the one stored for the admin user
-    /// 
+    ///
     /// This method provides secure password verification by:
     /// 1. Retrieving the stored password from the admin user's metadata
     /// 2. Performing secure comparison with the provided password
@@ -175,4 +176,4 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             )), // Handle missing password
         }
     }
-} 
+}

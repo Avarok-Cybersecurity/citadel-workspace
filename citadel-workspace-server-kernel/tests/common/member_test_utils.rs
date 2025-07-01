@@ -68,7 +68,7 @@ pub async fn new_internal_service_with_admin(
 }
 
 /// Helper function to create a test user with specified role
-/// 
+///
 /// Creates a test user with:
 /// - Formatted name based on ID
 /// - Specified user role
@@ -85,13 +85,13 @@ pub fn create_test_user(id: &str, role: UserRole) -> User {
 }
 
 /// Helper to setup a simple test environment for member operations
-/// 
+///
 /// Creates a lightweight test environment with:
 /// - Temporary RocksDB database for isolated testing
 /// - WorkspaceServerKernel with admin user pre-configured
 /// - DomainServerOperations for domain management
 /// - Logging setup for test debugging
-/// 
+///
 /// Returns the kernel, domain operations, and temp directory (must be kept alive)
 pub fn setup_simple_test_environment() -> (
     Arc<WorkspaceServerKernel<StackedRatchet>>,
@@ -272,4 +272,4 @@ pub async fn create_test_room(
         WorkspaceProtocolResponse::Room(room) => Ok(room.id),
         other => Err(format!("Unexpected response when creating room: {:?}", other).into()),
     }
-} 
+}

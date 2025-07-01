@@ -1,5 +1,6 @@
 use crate::handlers::domain::server_ops::DomainServerOperations;
 use crate::handlers::domain::DomainEntity;
+use crate::handlers::domain::{DomainOperations, EntityOperations, TransactionOperations};
 use crate::kernel::transaction::Transaction;
 use crate::kernel::transaction::TransactionManagerExt;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
@@ -81,7 +82,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
         self.with_read_transaction(|tx| {
             // Check if user has permission to view this entity
-            if !self.check_entity_permission_impl(tx, user_id, entity_id, Permission::ViewContent)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                entity_id,
+                Permission::ViewContent,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to view entity '{}'",
                     user_id, entity_id
@@ -107,7 +113,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                 }
             }
 
-            Err(NetworkError::msg(format!("Entity '{}' not found", entity_id)))
+            Err(NetworkError::msg(format!(
+                "Entity '{}' not found",
+                entity_id
+            )))
         })
     }
 
@@ -124,7 +133,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         self.with_write_transaction(|tx| {
             // Check if user has permission to create entities in the parent domain
             if let Some(parent_id) = parent_id {
-                if !self.check_entity_permission_impl(tx, user_id, parent_id, Permission::ManageDomains)? {
+                if !self.check_entity_permission_impl(
+                    tx,
+                    user_id,
+                    parent_id,
+                    Permission::ManageDomains,
+                )? {
                     return Err(NetworkError::msg(format!(
                         "User '{}' does not have permission to create entities in domain '{}'",
                         user_id, parent_id
@@ -163,6 +177,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                         members: vec![user_id.to_string()],
                         rooms: Vec::new(),
                         mdx_content: mdx_content.unwrap_or("").to_string(),
+                        metadata: Vec::new(),
                     };
 
                     tx.insert_office(entity_id.clone(), office.clone())?;
@@ -181,6 +196,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                         owner_id: user_id.to_string(),
                         members: vec![user_id.to_string()],
                         mdx_content: mdx_content.unwrap_or("").to_string(),
+                        metadata: Vec::new(),
                     };
 
                     tx.insert_room(entity_id.clone(), room.clone())?;
@@ -204,7 +220,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
         self.with_write_transaction(|tx| {
             // Check if user has permission to delete this entity
-            if !self.check_entity_permission_impl(tx, user_id, entity_id, Permission::ManageDomains)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                entity_id,
+                Permission::ManageDomains,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to delete entity '{}'",
                     user_id, entity_id
@@ -239,7 +260,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
         self.with_write_transaction(|tx| {
             // Check if user has permission to update this entity
-            if !self.check_entity_permission_impl(tx, user_id, domain_id, Permission::EditContent)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                domain_id,
+                Permission::EditContent,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to update entity '{}'",
                     user_id, domain_id
@@ -300,7 +326,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                 }
             }
 
-            Err(NetworkError::msg(format!("Failed to update entity '{}'", domain_id)))
+            Err(NetworkError::msg(format!(
+                "Failed to update entity '{}'",
+                domain_id
+            )))
         })
     }
 
@@ -316,7 +345,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
             // Check if user has permission to view entities in the parent domain
             if let Some(parent_id) = parent_id {
-                if !self.check_entity_permission_impl(tx, user_id, parent_id, Permission::ViewContent)? {
+                if !self.check_entity_permission_impl(
+                    tx,
+                    user_id,
+                    parent_id,
+                    Permission::ViewContent,
+                )? {
                     return Err(NetworkError::msg(format!(
                         "User '{}' does not have permission to view entities in domain '{}'",
                         user_id, parent_id
@@ -351,4 +385,4 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             Ok(entities)
         })
     }
-} 
+}

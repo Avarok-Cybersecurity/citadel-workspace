@@ -8,20 +8,20 @@ mod common;
 use common::permission_test_utils::*;
 
 /// # Office-Room Permission Inheritance Test Suite
-/// 
+///
 /// Tests hierarchical permission inheritance from office to room including:
 /// - Creating office and room hierarchy
 /// - Adding users to office (parent) but not room (child)
 /// - Verifying permission inheritance from office to room
 /// - Testing view permission inheritance
 /// - Ensuring inappropriate permissions are not inherited
-/// 
+///
 /// ## Permission Inheritance Flow
 /// ```
-/// Office (Member: ViewContent) → 
+/// Office (Member: ViewContent) →
 /// Room (Inherited: ViewContent from office membership)
 /// ```
-/// 
+///
 /// **Expected Outcome:** Users in parent office inherit appropriate permissions in child rooms
 
 #[test]
@@ -114,4 +114,4 @@ fn test_office_room_permission_inheritance() {
         !has_edit_permission,
         "User shouldn't have SendMessages permission on room"
     );
-} 
+}

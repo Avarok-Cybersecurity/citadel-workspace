@@ -12,8 +12,8 @@
 
 // Import focused workspace test modules
 mod workspace_crud_test;
-mod workspace_office_integration_test;  
-mod workspace_permissions_test;
 mod workspace_loading_test;
+mod workspace_office_integration_test;
+mod workspace_permissions_test;
 
 // All test functionality has been moved to focused modules imported above

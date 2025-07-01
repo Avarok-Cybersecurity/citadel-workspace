@@ -1,5 +1,5 @@
 use crate::handlers::domain::server_ops::DomainServerOperations;
-use crate::handlers::domain::UpdateOperation;
+use crate::handlers::domain::{TransactionOperations, UpdateOperation};
 use crate::kernel::transaction::TransactionManagerExt;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{Permission, UserRole};
@@ -14,7 +14,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     ) -> Result<(), NetworkError> {
         self.with_write_transaction(|tx| {
             // Check if the acting user has permission to add users to this workspace
-            if !self.check_entity_permission_impl(tx, user_id, workspace_id, Permission::AddUsers)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                workspace_id,
+                Permission::AddUsers,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to add users to workspace '{}'",
                     user_id, workspace_id
@@ -23,10 +28,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
             // Check if the member exists
             if tx.get_user(member_id).is_none() {
-                return Err(NetworkError::msg(format!(
-                    "User '{}' not found",
-                    member_id
-                )));
+                return Err(NetworkError::msg(format!("User '{}' not found", member_id)));
             }
 
             // Add the user to the workspace
@@ -43,7 +45,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     ) -> Result<(), NetworkError> {
         self.with_write_transaction(|tx| {
             // Check if the acting user has permission to remove users from this workspace
-            if !self.check_entity_permission_impl(tx, user_id, workspace_id, Permission::RemoveUsers)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                workspace_id,
+                Permission::RemoveUsers,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to remove users from workspace '{}'",
                     user_id, workspace_id
@@ -52,10 +59,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
             // Check if the member exists
             if tx.get_user(member_id).is_none() {
-                return Err(NetworkError::msg(format!(
-                    "User '{}' not found",
-                    member_id
-                )));
+                return Err(NetworkError::msg(format!("User '{}' not found", member_id)));
             }
 
             // Remove the user from the workspace
@@ -85,7 +89,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             // Check if the target user exists
             if let Some(mut user) = tx.get_user(target_user_id).cloned() {
                 // Update the user's role
-                user.role = role;
+                user.role = role.clone();
                 tx.insert_user(target_user_id.to_string(), user)?;
 
                 // Also update the user's role in the root workspace domain
@@ -122,7 +126,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     ) -> Result<(), NetworkError> {
         self.with_write_transaction(|tx| {
             // Check if the actor has permission to modify permissions in this domain
-            if !self.check_entity_permission_impl(tx, actor_user_id, domain_id, Permission::ManageDomains)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                actor_user_id,
+                domain_id,
+                Permission::ManageDomains,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to manage permissions in domain '{}'",
                     actor_user_id, domain_id
@@ -132,10 +141,8 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             // Check if the target user exists
             if let Some(mut user) = tx.get_user(target_user_id).cloned() {
                 // Get the current permissions for this domain
-                let current_permissions = user.permissions
-                    .get(domain_id)
-                    .cloned()
-                    .unwrap_or_default();
+                let current_permissions =
+                    user.permissions.get(domain_id).cloned().unwrap_or_default();
 
                 // Update permissions based on operation
                 let updated_permissions = match operation {
@@ -153,13 +160,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                         }
                         new_permissions
                     }
-                    UpdateOperation::Replace => {
-                        permissions.into_iter().collect()
-                    }
+                    UpdateOperation::Set => permissions.into_iter().collect(),
                 };
 
                 // Update the user's permissions
-                user.permissions.insert(domain_id.to_string(), updated_permissions);
+                user.permissions
+                    .insert(domain_id.to_string(), updated_permissions);
                 tx.insert_user(target_user_id.to_string(), user)?;
 
                 Ok(())
@@ -171,4 +177,4 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             }
         })
     }
-} 
+}

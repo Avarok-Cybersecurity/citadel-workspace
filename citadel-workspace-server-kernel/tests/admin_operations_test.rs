@@ -22,7 +22,7 @@ async fn test_admin_can_add_multiple_users_to_office() {
         _admin_password,
         _db_temp_dir,
     ) = setup_test_environment().await.unwrap();
-    
+
     let user1_id = "user1_for_multi_add_test";
     let user2_id = "user2_for_multi_add_test";
 
@@ -171,7 +171,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
         _admin_password,
         _db_temp_dir,
     ) = setup_test_environment().await.unwrap();
-    
+
     let owner_id = "owner_for_non_admin_test";
     let non_admin_id = "non_admin_for_test";
     let target_user_id = "target_user_for_non_admin_test";
@@ -310,4 +310,4 @@ async fn test_non_admin_cannot_add_user_to_office() {
         panic!("[Test NonAdmin V9] Received a direct NetworkError, which is now unexpected. Expected Ok(WorkspaceProtocolResponse::Error(...)). NetworkError: {:?}", network_error);
     }
     println!("[Test NonAdmin] test_non_admin_cannot_add_user_to_office completed successfully.");
-} 
+}

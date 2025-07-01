@@ -12,7 +12,6 @@ use citadel_workspace_types::UpdateOperation;
 /// This module provides extension methods for managing domain users,
 /// including role assignments, permission updates, and membership management.
 pub trait UserManagementOperations<R: Ratchet + Send + Sync + 'static> {
-    
     // ────────────────────────────────────────────────────────────────────────────
     // USER MANAGEMENT OPERATIONS
     // ────────────────────────────────────────────────────────────────────────────

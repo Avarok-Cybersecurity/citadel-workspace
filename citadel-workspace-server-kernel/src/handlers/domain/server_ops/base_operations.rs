@@ -1,17 +1,23 @@
+use crate::handlers::domain::functions::workspace::workspace_ops::WorkspaceDBList;
 use crate::handlers::domain::server_ops::DomainServerOperations;
-use crate::handlers::domain::{DomainEntity, DomainOperations};
-use crate::handlers::domain::{UpdateOperation, WorkspaceDBList};
-use crate::kernel::transaction::Transaction;
-use crate::kernel::transaction::TransactionManagerExt;
-use bcrypt;
+use crate::handlers::domain::{
+    DomainEntity, DomainOperations, EntityOperations, OfficeOperations, PermissionOperations,
+    RoomOperations, TransactionOperations, UserManagementOperations, WorkspaceOperations,
+};
+use crate::kernel::transaction::{Transaction, TransactionManagerExt};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{
     Domain, Office, Permission, Room, User, UserRole, Workspace,
 };
+use citadel_workspace_types::UpdateOperation;
 use std::collections::HashSet;
 
 // Re-export the permission utility function
 pub use super::permission_operations::permission_can_inherit_for_user;
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// CORE DOMAIN OPERATIONS IMPLEMENTATION
+// ═══════════════════════════════════════════════════════════════════════════════════
 
 impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOperations<R> {
     fn init(&self) -> Result<(), NetworkError> {
@@ -28,6 +34,16 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
             .unwrap_or(None)
     }
 
+    fn get_domain(&self, domain_id: &str) -> Option<Domain> {
+        self.get_domain_impl(domain_id)
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// TRANSACTION OPERATIONS IMPLEMENTATION
+// ═══════════════════════════════════════════════════════════════════════════════════
+
+impl<R: Ratchet + Send + Sync + 'static> TransactionOperations<R> for DomainServerOperations<R> {
     fn with_read_transaction<F, T>(&self, f: F) -> Result<T, NetworkError>
     where
         F: FnOnce(&dyn Transaction) -> Result<T, NetworkError>,
@@ -43,7 +59,13 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         self.tx_manager
             .with_write_transaction(|tx| f(tx as &mut dyn Transaction))
     }
+}
 
+// ═══════════════════════════════════════════════════════════════════════════════════
+// PERMISSION OPERATIONS IMPLEMENTATION
+// ═══════════════════════════════════════════════════════════════════════════════════
+
+impl<R: Ratchet + Send + Sync + 'static> PermissionOperations<R> for DomainServerOperations<R> {
     fn check_entity_permission(
         &self,
         tx: &dyn Transaction,
@@ -62,11 +84,13 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
     ) -> Result<bool, NetworkError> {
         self.is_member_of_domain_impl(tx, user_id, domain_id)
     }
+}
 
-    fn get_domain(&self, domain_id: &str) -> Option<Domain> {
-        self.get_domain_impl(domain_id)
-    }
+// ═══════════════════════════════════════════════════════════════════════════════════
+// USER MANAGEMENT OPERATIONS IMPLEMENTATION
+// ═══════════════════════════════════════════════════════════════════════════════════
 
+impl<R: Ratchet + Send + Sync + 'static> UserManagementOperations<R> for DomainServerOperations<R> {
     fn add_user_to_domain(
         &self,
         admin_id: &str,
@@ -86,6 +110,39 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         self.remove_user_from_domain_impl(admin_id, user_id_to_remove, domain_id)
     }
 
+    fn update_workspace_member_role(
+        &self,
+        actor_user_id: &str,
+        target_user_id: &str,
+        role: UserRole,
+        metadata: Option<Vec<u8>>,
+    ) -> Result<(), NetworkError> {
+        self.update_workspace_member_role_impl(actor_user_id, target_user_id, role, metadata)
+    }
+
+    fn update_member_permissions(
+        &self,
+        actor_user_id: &str,
+        target_user_id: &str,
+        domain_id: &str,
+        permissions: Vec<Permission>,
+        operation: UpdateOperation,
+    ) -> Result<(), NetworkError> {
+        self.update_member_permissions_impl(
+            actor_user_id,
+            target_user_id,
+            domain_id,
+            permissions,
+            operation,
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// ENTITY OPERATIONS IMPLEMENTATION
+// ═══════════════════════════════════════════════════════════════════════════════════
+
+impl<R: Ratchet + Send + Sync + 'static> EntityOperations<R> for DomainServerOperations<R> {
     fn get_domain_entity<T: DomainEntity + 'static>(
         &self,
         user_id: &str,
@@ -131,131 +188,21 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
     ) -> Result<Vec<T>, NetworkError> {
         self.list_domain_entities_impl(user_id, parent_id)
     }
+}
 
-    fn add_user_to_workspace(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-        member_id: &str,
-        role: UserRole,
-    ) -> Result<(), NetworkError> {
-        self.add_user_to_workspace_impl(user_id, workspace_id, member_id, role)
+// Utility helper for custom role determination
+impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
+    fn determine_custom_role_from_permissions(_user: &User) -> Option<UserRole> {
+        // TODO: Implement custom role logic based on permissions
+        None
     }
+}
 
-    fn remove_user_from_workspace(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-        member_id: &str,
-    ) -> Result<(), NetworkError> {
-        self.remove_user_from_workspace_impl(user_id, workspace_id, member_id)
-    }
+// ═══════════════════════════════════════════════════════════════════════════════════
+// OFFICE OPERATIONS IMPLEMENTATION
+// ═══════════════════════════════════════════════════════════════════════════════════
 
-    fn update_workspace_member_role(
-        &self,
-        actor_user_id: &str,
-        target_user_id: &str,
-        role: UserRole,
-        metadata: Option<Vec<u8>>,
-    ) -> Result<(), NetworkError> {
-        self.update_workspace_member_role_impl(actor_user_id, target_user_id, role, metadata)
-    }
-
-    fn update_member_permissions(
-        &self,
-        actor_user_id: &str,
-        target_user_id: &str,
-        domain_id: &str,
-        permissions: Vec<Permission>,
-        operation: UpdateOperation,
-    ) -> Result<(), NetworkError> {
-        self.update_member_permissions_impl(actor_user_id, target_user_id, domain_id, permissions, operation)
-    }
-
-    // Workspace operations
-    fn get_workspace(&self, user_id: &str, workspace_id: &str) -> Result<Workspace, NetworkError> {
-        self.get_workspace_impl(user_id, workspace_id)
-    }
-
-    fn get_workspace_details(&self, user_id: &str, ws_id: &str) -> Result<Workspace, NetworkError> {
-        self.get_workspace_details_impl(user_id, ws_id)
-    }
-
-    fn create_workspace(
-        &self,
-        user_id: &str,
-        name: &str,
-        description: &str,
-        metadata: Option<Vec<u8>>,
-        workspace_password: String,
-    ) -> Result<Workspace, NetworkError> {
-        self.create_workspace_impl(user_id, name, description, metadata, workspace_password)
-    }
-
-    fn add_office_to_workspace(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-        office_id: &str,
-    ) -> Result<(), NetworkError> {
-        self.add_office_to_workspace_impl(user_id, workspace_id, office_id)
-    }
-
-    fn remove_office_from_workspace(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-        office_id: &str,
-    ) -> Result<(), NetworkError> {
-        self.remove_office_from_workspace_impl(user_id, workspace_id, office_id)
-    }
-
-    fn list_workspaces(&self, user_id: &str) -> Result<Vec<Workspace>, NetworkError> {
-        self.list_workspaces_impl(user_id)
-    }
-
-    fn update_workspace(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-        name: Option<&str>,
-        description: Option<&str>,
-        metadata: Option<Vec<u8>>,
-        workspace_master_password: String,
-    ) -> Result<Workspace, NetworkError> {
-        self.update_workspace_impl(user_id, workspace_id, name, description, metadata, workspace_master_password)
-    }
-
-    fn load_workspace(
-        &self,
-        user_id: &str,
-        workspace_id_opt: Option<&str>,
-    ) -> Result<Workspace, NetworkError> {
-        self.load_workspace_impl(user_id, workspace_id_opt)
-    }
-
-    fn delete_workspace(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-        workspace_password: String,
-    ) -> Result<(), NetworkError> {
-        self.delete_workspace_impl(user_id, workspace_id, workspace_password)
-    }
-
-    fn get_all_workspace_ids(&self) -> Result<WorkspaceDBList, NetworkError> {
-        self.get_all_workspace_ids_impl()
-    }
-
-    fn list_offices_in_workspace(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-    ) -> Result<Vec<Office>, NetworkError> {
-        self.list_offices_in_workspace_impl(user_id, workspace_id)
-    }
-
-    // Office operations - delegating to office_operations module
+impl<R: Ratchet + Send + Sync + 'static> OfficeOperations<R> for DomainServerOperations<R> {
     fn create_office(
         &self,
         user_id: &str,
@@ -294,7 +241,20 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         self.list_offices_impl(user_id, workspace_id)
     }
 
-    // Room operations - delegating to office_operations module (since create_room is there)
+    fn list_offices_in_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+    ) -> Result<Vec<Office>, NetworkError> {
+        self.list_offices_in_workspace_impl(user_id, workspace_id)
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// ROOM OPERATIONS IMPLEMENTATION
+// ═══════════════════════════════════════════════════════════════════════════════════
+
+impl<R: Ratchet + Send + Sync + 'static> RoomOperations<R> for DomainServerOperations<R> {
     fn create_room(
         &self,
         user_id: &str,
@@ -303,31 +263,15 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         description: &str,
         mdx_content: Option<&str>,
     ) -> Result<Room, NetworkError> {
-        self.create_room_impl(user_id, office_id, name, description, mdx_content)
+        self.create_room_internal(user_id, office_id, name, description, mdx_content)
     }
 
-    // TODO: Add remaining room operations
     fn get_room(&self, user_id: &str, room_id: &str) -> Result<Room, NetworkError> {
-        // For now, return a simple implementation until room_operations module is complete
-        self.with_read_transaction(|tx| {
-            if let Some(room) = tx.get_room(room_id) {
-                Ok(room.clone())
-            } else {
-                Err(NetworkError::msg(format!("Room '{}' not found", room_id)))
-            }
-        })
+        self.get_room_internal(user_id, room_id)
     }
 
     fn delete_room(&self, user_id: &str, room_id: &str) -> Result<Room, NetworkError> {
-        // For now, return a simple implementation until room_operations module is complete
-        self.with_write_transaction(|tx| {
-            if let Some(room) = tx.get_room(room_id).cloned() {
-                tx.remove_room(room_id)?;
-                Ok(room)
-            } else {
-                Err(NetworkError::msg(format!("Room '{}' not found", room_id)))
-            }
-        })
+        self.delete_room_internal(user_id, room_id)
     }
 
     fn update_room(
@@ -338,24 +282,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         description: Option<&str>,
         mdx_content: Option<&str>,
     ) -> Result<Room, NetworkError> {
-        // For now, return a simple implementation until room_operations module is complete
-        self.with_write_transaction(|tx| {
-            if let Some(mut room) = tx.get_room(room_id).cloned() {
-                if let Some(name) = name {
-                    room.name = name.to_string();
-                }
-                if let Some(description) = description {
-                    room.description = description.to_string();
-                }
-                if let Some(mdx_content) = mdx_content {
-                    room.mdx_content = mdx_content.to_string();
-                }
-                tx.insert_room(room_id.to_string(), room.clone())?;
-                Ok(room)
-            } else {
-                Err(NetworkError::msg(format!("Room '{}' not found", room_id)))
-            }
-        })
+        self.update_room_internal(user_id, room_id, name, description, mdx_content)
     }
 
     fn list_rooms(
@@ -363,16 +290,112 @@ impl<R: Ratchet + Send + Sync + 'static> DomainOperations<R> for DomainServerOpe
         user_id: &str,
         office_id: Option<String>,
     ) -> Result<Vec<Room>, NetworkError> {
-        self.with_read_transaction(|tx| {
-            tx.list_rooms(user_id, office_id)
-        })
+        self.list_rooms_internal(user_id, office_id)
     }
 }
 
-// Utility helper for custom role determination
-impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
-    fn determine_custom_role_from_permissions(_user: &User) -> Option<UserRole> {
-        // TODO: Implement custom role logic based on permissions
-        None
+// ═══════════════════════════════════════════════════════════════════════════════════
+// WORKSPACE OPERATIONS IMPLEMENTATION
+// ═══════════════════════════════════════════════════════════════════════════════════
+
+impl<R: Ratchet + Send + Sync + 'static> WorkspaceOperations<R> for DomainServerOperations<R> {
+    fn get_workspace(&self, user_id: &str, workspace_id: &str) -> Result<Workspace, NetworkError> {
+        self.get_workspace_impl(user_id, workspace_id)
+    }
+
+    fn get_workspace_details(&self, user_id: &str, ws_id: &str) -> Result<Workspace, NetworkError> {
+        self.get_workspace_details_impl(user_id, ws_id)
+    }
+
+    fn create_workspace(
+        &self,
+        user_id: &str,
+        name: &str,
+        description: &str,
+        metadata: Option<Vec<u8>>,
+        workspace_password: String,
+    ) -> Result<Workspace, NetworkError> {
+        self.create_workspace_impl(user_id, name, description, metadata, workspace_password)
+    }
+
+    fn delete_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        workspace_password: String,
+    ) -> Result<(), NetworkError> {
+        self.delete_workspace_impl(user_id, workspace_id, workspace_password)
+    }
+
+    fn update_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        name: Option<&str>,
+        description: Option<&str>,
+        metadata: Option<Vec<u8>>,
+        workspace_master_password: String,
+    ) -> Result<Workspace, NetworkError> {
+        self.update_workspace_impl(
+            user_id,
+            workspace_id,
+            name,
+            description,
+            metadata,
+            workspace_master_password,
+        )
+    }
+
+    fn load_workspace(
+        &self,
+        user_id: &str,
+        workspace_id_opt: Option<&str>,
+    ) -> Result<Workspace, NetworkError> {
+        self.load_workspace_impl(user_id, workspace_id_opt)
+    }
+
+    fn list_workspaces(&self, user_id: &str) -> Result<Vec<Workspace>, NetworkError> {
+        self.list_workspaces_impl(user_id)
+    }
+
+    fn get_all_workspace_ids(&self) -> Result<WorkspaceDBList, NetworkError> {
+        self.get_all_workspace_ids_impl()
+    }
+
+    fn add_office_to_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        office_id: &str,
+    ) -> Result<(), NetworkError> {
+        self.add_office_to_workspace_impl(user_id, workspace_id, office_id)
+    }
+
+    fn remove_office_from_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        office_id: &str,
+    ) -> Result<(), NetworkError> {
+        self.remove_office_from_workspace_impl(user_id, workspace_id, office_id)
+    }
+
+    fn add_user_to_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        member_id: &str,
+        role: UserRole,
+    ) -> Result<(), NetworkError> {
+        self.add_user_to_workspace_impl(user_id, workspace_id, member_id, role)
+    }
+
+    fn remove_user_from_workspace(
+        &self,
+        user_id: &str,
+        workspace_id: &str,
+        member_id: &str,
+    ) -> Result<(), NetworkError> {
+        self.remove_user_from_workspace_impl(user_id, workspace_id, member_id)
     }
 }

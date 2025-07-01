@@ -7,7 +7,7 @@ mod common;
 use common::integration_test_utils::*;
 
 /// # Room Operations Integration Test
-/// 
+///
 /// Tests comprehensive room CRUD operations including:
 /// - Creating offices as prerequisites for rooms
 /// - Creating rooms within offices
@@ -15,14 +15,14 @@ use common::integration_test_utils::*;
 /// - Updating room properties (name, description, mdx_content)
 /// - Listing rooms within an office
 /// - Deleting rooms and verification
-/// 
+///
 /// ## Test Workflow
 /// ```
-/// Setup Environment → Connect Admin → Create Office → 
-/// Create Room → Get Room → Update Room → List Rooms → 
+/// Setup Environment → Connect Admin → Create Office →
+/// Create Room → Get Room → Update Room → List Rooms →
 /// Delete Room → Verify Deletion
 /// ```
-/// 
+///
 /// **Expected Outcome:** All room operations succeed with proper office hierarchy
 #[rstest]
 #[tokio::test]
@@ -203,4 +203,4 @@ async fn test_room_operations() {
     }
 
     println!("Test complete.");
-} 
+}

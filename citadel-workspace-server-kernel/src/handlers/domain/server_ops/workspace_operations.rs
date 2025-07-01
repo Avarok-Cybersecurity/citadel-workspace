@@ -1,7 +1,7 @@
 use crate::handlers::domain::functions::workspace::workspace_ops;
 use crate::handlers::domain::server_ops::DomainServerOperations;
-use crate::handlers::domain::DomainOperations;
 use crate::handlers::domain::WorkspaceDBList;
+use crate::handlers::domain::{DomainOperations, TransactionOperations};
 use crate::kernel::transaction::{Transaction, TransactionManagerExt};
 use crate::WORKSPACE_ROOT_ID;
 
@@ -20,7 +20,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         metadata: Option<Vec<u8>>,
         workspace_password: String,
     ) -> Result<Workspace, NetworkError> {
-        self.tx_manager.with_write_transaction(|tx| {
+        self.with_write_transaction(|tx| {
             self.is_admin(tx, user_id)?;
 
             let workspace_id = Uuid::new_v4().to_string();
@@ -42,8 +42,8 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         user_id: &str,
         ws_id: &str,
     ) -> Result<Workspace, NetworkError> {
-        self.tx_manager.with_read_transaction(|tx| {
-            if !self.check_entity_permission(tx, user_id, ws_id, Permission::ViewContent)? {
+        self.with_read_transaction(|tx| {
+            if !self.check_entity_permission_impl(tx, user_id, ws_id, Permission::ViewContent)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to access workspace '{}'",
                     user_id, ws_id
@@ -63,7 +63,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         workspace_id: &str,
         workspace_password: String,
     ) -> Result<(), NetworkError> {
-        self.tx_manager.with_write_transaction(|tx| {
+        self.with_write_transaction(|tx| {
             if !self.is_admin(tx, user_id)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' not allowed to delete workspace '{}'",
@@ -94,7 +94,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         _metadata: Option<Vec<u8>>,
         workspace_password: String,
     ) -> Result<Workspace, NetworkError> {
-        self.tx_manager.with_write_transaction(|tx| {
+        self.with_write_transaction(|tx| {
             if !self.is_admin(tx, user_id)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' not allowed to update workspace '{}'",
@@ -157,7 +157,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         workspace_id: &str,
         role: UserRole,
     ) -> Result<(), NetworkError> {
-        self.tx_manager.with_write_transaction(|tx| {
+        self.with_write_transaction(|tx| {
             if !self.is_admin(tx, admin_id)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to add users to workspace",
@@ -176,7 +176,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         user_id: &str,
         workspace_id: &str,
     ) -> Result<(), NetworkError> {
-        self.tx_manager.with_write_transaction(|tx| {
+        self.with_write_transaction(|tx| {
             if !self.is_admin(tx, admin_id)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to remove users from workspace",
@@ -194,9 +194,9 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         user_id: &str,
         workspace_id_opt: Option<&str>,
     ) -> Result<Workspace, NetworkError> {
-        self.tx_manager.with_read_transaction(|tx| {
+        self.with_read_transaction(|tx| {
             if let Some(workspace_id) = workspace_id_opt {
-                if !self.check_entity_permission(
+                if !self.check_entity_permission_impl(
                     tx,
                     user_id,
                     workspace_id,
@@ -226,7 +226,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         &self,
         user_id: &str,
     ) -> Result<Vec<Workspace>, NetworkError> {
-        self.tx_manager.with_read_transaction(|tx| {
+        self.with_read_transaction(|tx| {
             if tx.get_user(user_id).is_none() {
                 return Err(NetworkError::msg(format!("User '{}' not found", user_id)));
             }
@@ -235,7 +235,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
             let mut accessible_workspaces = Vec::new();
             for workspace in workspaces.values() {
-                if self.check_entity_permission(
+                if self.check_entity_permission_impl(
                     tx,
                     user_id,
                     &workspace.id,
@@ -251,7 +251,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
     /// Get all workspace IDs (internal implementation)
     pub(crate) fn get_all_workspace_ids_internal(&self) -> Result<WorkspaceDBList, NetworkError> {
-        self.tx_manager.with_read_transaction(|tx| {
+        self.with_read_transaction(|tx| {
             let workspaces = tx.get_all_workspaces();
             let workspace_ids: Vec<String> = workspaces.keys().cloned().collect();
             Ok(WorkspaceDBList {

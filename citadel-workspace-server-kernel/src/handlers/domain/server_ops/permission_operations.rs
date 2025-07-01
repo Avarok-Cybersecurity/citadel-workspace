@@ -134,7 +134,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                 let parent_id = domain.parent_id();
                 let can_inherit = permission_can_inherit_for_user(permission, &user.role);
                 if !parent_id.is_empty() && can_inherit {
-                    return self.check_entity_permission_impl(tx, actor_user_id, parent_id, permission);
+                    return self.check_entity_permission_impl(
+                        tx,
+                        actor_user_id,
+                        parent_id,
+                        permission,
+                    );
                 }
             }
         } else {
@@ -170,4 +175,4 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
         Ok(false)
     }
-} 
+}

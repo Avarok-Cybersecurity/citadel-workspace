@@ -7,7 +7,7 @@ mod common;
 use common::workspace_test_utils::*;
 
 /// # Workspace Permissions and Inheritance Test Suite
-/// 
+///
 /// Tests comprehensive permission inheritance across the workspace hierarchy including:
 /// - Creating users with different roles (Admin, Owner, Member)
 /// - Adding users to workspaces with specific roles
@@ -15,18 +15,18 @@ use common::workspace_test_utils::*;
 /// - Verifying permission inheritance from workspace down to rooms
 /// - Testing role-based access control at each level
 /// - Validating admin permissions override inheritance
-/// 
+///
 /// ## Permission Inheritance Flow
 /// ```
-/// Workspace (Member: ViewContent) → 
-/// Office (Inherited: ViewContent) → 
+/// Workspace (Member: ViewContent) →
+/// Office (Inherited: ViewContent) →
 /// Room (Inherited: ViewContent)
-/// 
+///
 /// Admin: All permissions regardless of membership
 /// Owner: All permissions on owned entities
 /// Member: ViewContent only (no EditContent)
 /// ```
-/// 
+///
 /// **Expected Outcome:** Permissions properly inherit down the hierarchy with role restrictions
 
 #[test]
@@ -246,4 +246,4 @@ fn test_permissions_inheritance() {
         admin_edit_room.unwrap(),
         "Admin should have EditContent on room"
     );
-} 
+}

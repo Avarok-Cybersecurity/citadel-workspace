@@ -5,7 +5,7 @@
 //
 // - `core`: Core struct definition, basic implementations, and constructors
 // - `network`: NetKernel trait implementation for network operations
-// - `initialization`: Admin setup and workspace initialization logic  
+// - `initialization`: Admin setup and workspace initialization logic
 // - `user_management`: User injection utilities for testing
 // - `member_operations`: Domain member add/remove operations
 
@@ -14,10 +14,10 @@ pub mod transaction;
 
 // Import focused kernel modules
 pub mod core;
-pub mod network;
 pub mod initialization;
-pub mod user_management;
 pub mod member_operations;
+pub mod network;
+pub mod user_management;
 
 // Re-export main types and traits for backward compatibility
 pub use core::{MemberAction, WorkspaceServerKernel};

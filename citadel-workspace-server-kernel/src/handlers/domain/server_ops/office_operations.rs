@@ -1,6 +1,8 @@
-use crate::handlers::domain::functions::office::office_ops;
+use crate::handlers::domain::functions::office::{
+    create_office_inner, delete_office_inner, list_offices_inner, update_office_inner,
+};
 use crate::handlers::domain::server_ops::DomainServerOperations;
-use crate::handlers::domain::DomainOperations;
+use crate::handlers::domain::{DomainOperations, TransactionOperations};
 use crate::kernel::transaction::Transaction;
 use crate::kernel::transaction::TransactionManagerExt;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
@@ -19,7 +21,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         mdx_content: Option<&str>,
     ) -> Result<Office, NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            if !self.check_entity_permission(tx, user_id, workspace_id, Permission::ViewContent)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                workspace_id,
+                Permission::ViewContent,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to create office in workspace '{}'",
                     user_id, workspace_id
@@ -28,7 +35,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
             let office_id = uuid::Uuid::new_v4().to_string();
             let mdx_content_string = mdx_content.map(|s| s.to_string());
-            let office = office_ops::create_office_inner(
+            let office = create_office_inner(
                 tx,
                 user_id,
                 workspace_id,
@@ -48,7 +55,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         user_id: &str,
         office_id: &str,
     ) -> Result<String, NetworkError> {
-        self.get_office(user_id, office_id)
+        self.get_office_impl(user_id, office_id)
     }
 
     /// Update office details (internal implementation)
@@ -61,7 +68,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         mdx_content: Option<&str>,
     ) -> Result<Office, NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            if !self.check_entity_permission(tx, user_id, office_id, Permission::ViewContent)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                office_id,
+                Permission::ViewContent,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to update office '{}'",
                     user_id, office_id
@@ -71,14 +83,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             let name_option = name.map(|s| s.to_string());
             let desc_option = description.map(|s| s.to_string());
             let mdx_option = mdx_content.map(|s| s.to_string());
-            office_ops::update_office_inner(
-                tx,
-                user_id,
-                office_id,
-                name_option,
-                desc_option,
-                mdx_option,
-            )
+            update_office_inner(tx, user_id, office_id, name_option, desc_option, mdx_option)
         })
     }
 
@@ -89,14 +94,19 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         office_id: &str,
     ) -> Result<Office, NetworkError> {
         self.tx_manager.with_write_transaction(|tx| {
-            if !self.check_entity_permission(tx, user_id, office_id, Permission::ViewContent)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                office_id,
+                Permission::ViewContent,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to delete office '{}'",
                     user_id, office_id
                 )));
             }
 
-            office_ops::delete_office_inner(tx, user_id, office_id)
+            delete_office_inner(tx, user_id, office_id)
         })
     }
 
@@ -108,7 +118,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     ) -> Result<Vec<Office>, NetworkError> {
         self.tx_manager.with_read_transaction(|tx| {
             if let Some(workspace_id) = &workspace_id_opt {
-                if !self.check_entity_permission(
+                if !self.check_entity_permission_impl(
                     tx,
                     user_id,
                     workspace_id,
@@ -122,7 +132,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             }
 
             let workspace_id_string = workspace_id_opt.map(|s| s.to_string());
-            office_ops::list_offices_inner(tx, user_id, workspace_id_string)
+            list_offices_inner(tx, user_id, workspace_id_string)
         })
     }
 
@@ -164,7 +174,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     ) -> Result<Office, NetworkError> {
         self.with_write_transaction(|tx| {
             // Check if user has permission to create offices in this workspace
-            if !self.check_entity_permission_impl(tx, user_id, workspace_id, Permission::CreateOffice)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                workspace_id,
+                Permission::CreateOffice,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to create offices in workspace '{}'",
                     user_id, workspace_id
@@ -173,7 +188,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
             // Check if the workspace exists
             if tx.get_workspace(workspace_id).is_none() {
-                return Err(NetworkError::msg(format!("Workspace '{}' not found", workspace_id)));
+                return Err(NetworkError::msg(format!(
+                    "Workspace '{}' not found",
+                    workspace_id
+                )));
             }
 
             let office_id = Uuid::new_v4().to_string();
@@ -199,7 +217,11 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             tx.insert_domain(office_id.clone(), domain)?;
 
             // Add the creator as a member
-            tx.add_user_to_domain(user_id, &office_id, citadel_workspace_types::structs::UserRole::Owner)?;
+            tx.add_user_to_domain(
+                user_id,
+                &office_id,
+                citadel_workspace_types::structs::UserRole::Owner,
+            )?;
 
             // Add the office to the workspace
             if let Some(mut workspace) = tx.get_workspace(workspace_id).cloned() {
@@ -214,7 +236,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     pub fn get_office_impl(&self, user_id: &str, office_id: &str) -> Result<String, NetworkError> {
         self.with_read_transaction(|tx| {
             // Check if user has permission to view this office
-            if !self.check_entity_permission_impl(tx, user_id, office_id, Permission::ViewContent)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                office_id,
+                Permission::ViewContent,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to view office '{}'",
                     user_id, office_id
@@ -225,15 +252,27 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                 // Return office data as JSON string for compatibility
                 Ok(serde_json::to_string(&office).unwrap_or_else(|_| "{}".to_string()))
             } else {
-                Err(NetworkError::msg(format!("Office '{}' not found", office_id)))
+                Err(NetworkError::msg(format!(
+                    "Office '{}' not found",
+                    office_id
+                )))
             }
         })
     }
 
-    pub fn delete_office_impl(&self, user_id: &str, office_id: &str) -> Result<Office, NetworkError> {
+    pub fn delete_office_impl(
+        &self,
+        user_id: &str,
+        office_id: &str,
+    ) -> Result<Office, NetworkError> {
         self.with_write_transaction(|tx| {
             // Check if user has permission to delete this office
-            if !self.check_entity_permission_impl(tx, user_id, office_id, Permission::DeleteOffice)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                office_id,
+                Permission::DeleteOffice,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to delete office '{}'",
                     user_id, office_id
@@ -261,7 +300,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
                 Ok(office)
             } else {
-                Err(NetworkError::msg(format!("Office '{}' not found", office_id)))
+                Err(NetworkError::msg(format!(
+                    "Office '{}' not found",
+                    office_id
+                )))
             }
         })
     }
@@ -276,7 +318,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     ) -> Result<Office, NetworkError> {
         self.with_write_transaction(|tx| {
             // Check if user has permission to update this office
-            if !self.check_entity_permission_impl(tx, user_id, office_id, Permission::UpdateOffice)? {
+            if !self.check_entity_permission_impl(
+                tx,
+                user_id,
+                office_id,
+                Permission::UpdateOffice,
+            )? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to update office '{}'",
                     user_id, office_id
@@ -305,7 +352,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
                 Ok(office)
             } else {
-                Err(NetworkError::msg(format!("Office '{}' not found", office_id)))
+                Err(NetworkError::msg(format!(
+                    "Office '{}' not found",
+                    office_id
+                )))
             }
         })
     }
@@ -315,9 +365,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         user_id: &str,
         workspace_id: Option<String>,
     ) -> Result<Vec<Office>, NetworkError> {
-        self.with_read_transaction(|tx| {
-            tx.list_offices(user_id, workspace_id)
-        })
+        self.with_read_transaction(|tx| tx.list_offices(user_id, workspace_id))
     }
 
     pub fn create_room_impl(
@@ -339,7 +387,10 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
             // Check if the office exists
             if tx.get_office(office_id).is_none() {
-                return Err(NetworkError::msg(format!("Office '{}' not found", office_id)));
+                return Err(NetworkError::msg(format!(
+                    "Office '{}' not found",
+                    office_id
+                )));
             }
 
             let room_id = Uuid::new_v4().to_string();
@@ -358,13 +409,15 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             tx.insert_room(room_id.clone(), room.clone())?;
 
             // Create the corresponding domain
-            let domain = citadel_workspace_types::structs::Domain::Room {
-                room: room.clone(),
-            };
+            let domain = citadel_workspace_types::structs::Domain::Room { room: room.clone() };
             tx.insert_domain(room_id.clone(), domain)?;
 
             // Add the creator as a member
-            tx.add_user_to_domain(user_id, &room_id, citadel_workspace_types::structs::UserRole::Owner)?;
+            tx.add_user_to_domain(
+                user_id,
+                &room_id,
+                citadel_workspace_types::structs::UserRole::Owner,
+            )?;
 
             // Add the room to the office
             if let Some(mut office) = tx.get_office(office_id).cloned() {

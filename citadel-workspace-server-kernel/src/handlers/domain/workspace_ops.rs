@@ -3,16 +3,15 @@
 //! This module defines workspace-specific operations for the domain system,
 //! providing functionality for workspace management, member operations, and office relationships.
 
+use crate::handlers::domain::functions::workspace::workspace_ops::WorkspaceDBList;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{UserRole, Workspace};
-use crate::handlers::domain::functions::workspace::workspace_ops::WorkspaceDBList;
 
 /// Workspace-specific operations for the domain operations trait.
 ///
 /// This module provides extension methods for workspace management,
 /// including CRUD operations, member management, and office relationships.
 pub trait WorkspaceOperations<R: Ratchet + Send + Sync + 'static> {
-    
     // ────────────────────────────────────────────────────────────────────────────
     // WORKSPACE-SPECIFIC OPERATIONS
     // ────────────────────────────────────────────────────────────────────────────
@@ -64,7 +63,7 @@ pub trait WorkspaceOperations<R: Ratchet + Send + Sync + 'static> {
 
     /// Gets all workspace IDs (primarily for internal server use).
     fn get_all_workspace_ids(&self) -> Result<WorkspaceDBList, NetworkError>;
-    
+
     // ────────────────────────────────────────────────────────────────────────────
     // WORKSPACE-OFFICE RELATIONSHIP OPERATIONS
     // ────────────────────────────────────────────────────────────────────────────
@@ -84,7 +83,7 @@ pub trait WorkspaceOperations<R: Ratchet + Send + Sync + 'static> {
         workspace_id: &str,
         office_id: &str,
     ) -> Result<(), NetworkError>;
-    
+
     // ────────────────────────────────────────────────────────────────────────────
     // WORKSPACE MEMBER MANAGEMENT OPERATIONS
     // ────────────────────────────────────────────────────────────────────────────

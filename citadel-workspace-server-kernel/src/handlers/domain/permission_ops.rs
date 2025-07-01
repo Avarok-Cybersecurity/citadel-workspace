@@ -3,8 +3,8 @@
 //! This module defines permission and authorization operations for the domain system,
 //! providing comprehensive access control and membership management.
 
-use citadel_sdk::prelude::{NetworkError, Ratchet};
 use crate::kernel::transaction::Transaction;
+use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::Permission;
 
 /// Permission and authorization operations for the domain operations trait.
@@ -12,7 +12,6 @@ use citadel_workspace_types::structs::Permission;
 /// This module provides extension methods for handling permission checks,
 /// domain membership validation, and authorization throughout the system.
 pub trait PermissionOperations<R: Ratchet + Send + Sync + 'static> {
-    
     // ────────────────────────────────────────────────────────────────────────────
     // PERMISSION AND AUTHORIZATION OPERATIONS
     // ────────────────────────────────────────────────────────────────────────────

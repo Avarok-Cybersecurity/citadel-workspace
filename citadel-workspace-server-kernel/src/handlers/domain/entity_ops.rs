@@ -3,15 +3,14 @@
 //! This module defines generic entity operations for the domain system,
 //! providing type-safe CRUD operations that work with any domain entity type.
 
-use citadel_sdk::prelude::{NetworkError, Ratchet};
 use crate::handlers::domain::core::DomainEntity;
+use citadel_sdk::prelude::{NetworkError, Ratchet};
 
 /// Generic entity operations for the domain operations trait.
 ///
 /// This module provides extension methods for generic CRUD operations
 /// that work with any type implementing the DomainEntity trait.
 pub trait EntityOperations<R: Ratchet + Send + Sync + 'static> {
-    
     // ────────────────────────────────────────────────────────────────────────────
     // GENERIC DOMAIN ENTITY OPERATIONS
     // ────────────────────────────────────────────────────────────────────────────

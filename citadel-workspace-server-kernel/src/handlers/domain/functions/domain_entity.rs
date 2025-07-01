@@ -1,4 +1,5 @@
 use crate::handlers::domain::server_ops::DomainServerOperations;
+use crate::handlers::domain::TransactionOperations;
 use crate::handlers::domain::{permission_denied, DomainEntity, DomainOperations};
 use citadel_sdk::prelude::*;
 use citadel_workspace_types::structs::Domain;

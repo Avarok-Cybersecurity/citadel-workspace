@@ -1,6 +1,6 @@
 use crate::handlers::domain::functions::room::room_ops;
 use crate::handlers::domain::server_ops::DomainServerOperations;
-use crate::handlers::domain::DomainOperations;
+use crate::handlers::domain::{DomainOperations, TransactionOperations};
 use crate::kernel::transaction::Transaction;
 use crate::kernel::transaction::TransactionManagerExt;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
@@ -17,8 +17,8 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         description: &str,
         mdx_content: Option<&str>,
     ) -> Result<Room, NetworkError> {
-        self.tx_manager.with_write_transaction(|tx| {
-            if !self.check_entity_permission(tx, user_id, office_id, Permission::CreateRoom)? {
+        self.with_write_transaction(|tx| {
+            if !self.check_entity_permission_impl(tx, user_id, office_id, Permission::CreateRoom)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to create rooms in office '{}'",
                     user_id, office_id
@@ -50,9 +50,20 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         user_id: &str,
         room_id: &str,
     ) -> Result<Room, NetworkError> {
-        // Use the trait implementation to get the room by delegating to DomainOperations::get_room
-        // This properly handles permissions and existence checks
-        self.get_room(user_id, room_id)
+        self.with_read_transaction(|tx| {
+            if !self.check_entity_permission_impl(tx, user_id, room_id, Permission::ViewContent)? {
+                return Err(NetworkError::msg(format!(
+                    "User '{}' does not have permission to view room '{}'",
+                    user_id, room_id
+                )));
+            }
+
+            if let Some(room) = tx.get_room(room_id) {
+                Ok(room.clone())
+            } else {
+                Err(NetworkError::msg(format!("Room '{}' not found", room_id)))
+            }
+        })
     }
 
     /// Update room details (internal implementation)
@@ -66,9 +77,9 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
     ) -> Result<Room, NetworkError> {
         // Remember: as per the memory, changes made during a transaction are immediately applied
         // to in-memory storage, even if the transaction later returns an error
-        self.tx_manager.with_write_transaction(|tx| {
+        self.with_write_transaction(|tx| {
             // Check if the user has permission to update this room
-            if !self.check_entity_permission(tx, user_id, room_id, Permission::ViewContent)? {
+            if !self.check_entity_permission_impl(tx, user_id, room_id, Permission::ViewContent)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to update room '{}'",
                     user_id, room_id
@@ -89,9 +100,9 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         user_id: &str,
         room_id: &str,
     ) -> Result<Room, NetworkError> {
-        self.tx_manager.with_write_transaction(|tx| {
+        self.with_write_transaction(|tx| {
             // Check if the user has permission to delete this room
-            if !self.check_entity_permission(tx, user_id, room_id, Permission::ViewContent)? {
+            if !self.check_entity_permission_impl(tx, user_id, room_id, Permission::ViewContent)? {
                 return Err(NetworkError::msg(format!(
                     "User '{}' does not have permission to delete room '{}'",
                     user_id, room_id
@@ -109,10 +120,15 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         user_id: &str,
         office_id_opt: Option<String>,
     ) -> Result<Vec<Room>, NetworkError> {
-        self.tx_manager.with_read_transaction(|tx| {
+        self.with_read_transaction(|tx| {
             // If office ID is specified, check permissions
             if let Some(office_id) = &office_id_opt {
-                if !self.check_entity_permission(tx, user_id, office_id, Permission::ViewContent)? {
+                if !self.check_entity_permission_impl(
+                    tx,
+                    user_id,
+                    office_id,
+                    Permission::ViewContent,
+                )? {
                     return Err(NetworkError::msg(format!(
                         "User '{}' does not have permission to list rooms in office '{}'",
                         user_id, office_id
@@ -132,7 +148,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         &self,
         room_id: &str,
     ) -> Result<Vec<(String, String)>, NetworkError> {
-        self.tx_manager.with_read_transaction(|tx| {
+        self.with_read_transaction(|tx| {
             // Get room and return its members
             if let Some(Domain::Room { room }) = tx.get_domain(room_id) {
                 Ok(room

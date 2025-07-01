@@ -6,13 +6,13 @@ use citadel_workspace_types::WorkspaceProtocolPayload;
 use tokio_stream::StreamExt;
 
 /// Network operations implementation for WorkspaceServerKernel
-/// 
+///
 /// This module handles all network-related functionality including connection management,
 /// message processing, and event handling through the NetKernel trait implementation.
 #[async_trait::async_trait]
 impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<R> {
     /// Load a new NodeRemote into the kernel, replacing any existing one
-    /// 
+    ///
     /// This method safely handles the replacement of the node remote by:
     /// 1. Extracting the old remote outside of any locks
     /// 2. Dropping the old remote to clean up resources
@@ -77,7 +77,7 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
     }
 
     /// Handle incoming network events, particularly connection events
-    /// 
+    ///
     /// This is the main event processing loop that:
     /// 1. Handles connection success events
     /// 2. Sets up per-connection message processing
@@ -184,7 +184,7 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
 
 impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Sets the NodeRemote after the node has been built
-    /// 
+    ///
     /// This method provides a way to set the node remote after kernel initialization,
     /// which is useful when the remote is not available during construction.
     pub async fn set_node_remote(&self, node_remote: NodeRemote<R>) {
@@ -192,4 +192,4 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         *remote_guard = Some(node_remote);
         info!(target: "citadel", "NodeRemote set for WorkspaceServerKernel");
     }
-} 
+}

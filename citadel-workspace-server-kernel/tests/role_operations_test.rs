@@ -160,7 +160,10 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
             if let UserRole::Custom(name, rank) = &member.role {
                 assert_eq!(name, "Editor");
                 assert_eq!(*rank, 16);
-                println!("Custom role assigned successfully: {} (rank {})", name, rank);
+                println!(
+                    "Custom role assigned successfully: {} (rank {})",
+                    name, rank
+                );
             } else {
                 return Err("Expected custom role".into());
             }
@@ -181,4 +184,4 @@ async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
 
     println!("[Test] test_custom_role_operations completed successfully.");
     Ok(())
-} 
+}

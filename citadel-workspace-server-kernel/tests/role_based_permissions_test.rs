@@ -6,7 +6,7 @@ mod common;
 use common::permissions_test_utils::*;
 
 /// # Role-Based Permission Test Suite
-/// 
+///
 /// Tests comprehensive role-based permission system including:
 /// - Owner permissions and capabilities
 /// - Member permissions and restrictions
@@ -14,12 +14,12 @@ use common::permissions_test_utils::*;
 /// - Permission inheritance across domain hierarchy
 /// - Role-based access control validation
 /// - Multi-user permission interaction
-/// 
+///
 /// ## Role Permission Hierarchy
 /// ```
 /// Owner (Full Control) → Member (Limited Access) → Guest (Minimal/No Access)
 /// ```
-/// 
+///
 /// **Expected Outcome:** Role-based permissions work correctly across all user roles and domain types
 
 #[test]
@@ -181,4 +181,4 @@ fn test_role_based_permissions() {
     });
     assert!(result.is_ok());
     assert!(!result.unwrap(), "Guest should not have permissions");
-} 
+}

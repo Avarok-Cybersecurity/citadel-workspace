@@ -1,7 +1,9 @@
 use crate::kernel::transaction::{Transaction, WorkspaceOperations};
 use citadel_logging::debug;
 use citadel_sdk::prelude::NetworkError;
-use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
+use citadel_workspace_types::structs::{
+    Domain, Office, Permission, Room, User, UserRole, Workspace,
+};
 use parking_lot::RwLockReadGuard;
 use std::collections::HashMap;
 
@@ -69,6 +71,32 @@ impl Transaction for ReadTransaction<'_> {
         &self.workspaces
     }
 
+    fn get_office(&self, office_id: &str) -> Option<&Office> {
+        if let Some(domain) = self.domains.get(office_id) {
+            domain.as_office()
+        } else {
+            None
+        }
+    }
+
+    fn get_office_mut(&mut self, _office_id: &str) -> Option<&mut Office> {
+        // ReadTransaction doesn't support mutable operations
+        None
+    }
+
+    fn get_room(&self, room_id: &str) -> Option<&Room> {
+        if let Some(domain) = self.domains.get(room_id) {
+            domain.as_room()
+        } else {
+            None
+        }
+    }
+
+    fn get_room_mut(&mut self, _room_id: &str) -> Option<&mut Room> {
+        // ReadTransaction doesn't support mutable operations
+        None
+    }
+
     fn get_user(&self, user_id: &str) -> Option<&User> {
         self.users.get(user_id)
     }
@@ -106,6 +134,14 @@ impl Transaction for ReadTransaction<'_> {
         Err(NetworkError::msg("Read transactions cannot modify data"))
     }
 
+    fn insert_office(&mut self, _office_id: String, _office: Office) -> Result<(), NetworkError> {
+        Err(NetworkError::msg("Read transactions cannot modify data"))
+    }
+
+    fn insert_room(&mut self, _room_id: String, _room: Room) -> Result<(), NetworkError> {
+        Err(NetworkError::msg("Read transactions cannot modify data"))
+    }
+
     fn insert_user(&mut self, _user_id: String, _user: User) -> Result<(), NetworkError> {
         Err(NetworkError::msg("Read transactions cannot modify data"))
     }
@@ -134,8 +170,74 @@ impl Transaction for ReadTransaction<'_> {
         Err(NetworkError::msg("Read transactions cannot modify data"))
     }
 
+    fn remove_office(&mut self, _office_id: &str) -> Result<(), NetworkError> {
+        Err(NetworkError::msg("Read transactions cannot modify data"))
+    }
+
+    fn remove_room(&mut self, _room_id: &str) -> Result<(), NetworkError> {
+        Err(NetworkError::msg("Read transactions cannot modify data"))
+    }
+
     fn remove_user(&mut self, _user_id: &str) -> Result<Option<User>, NetworkError> {
         Err(NetworkError::msg("Read transactions cannot modify data"))
+    }
+
+    fn list_workspaces(&self, user_id: &str) -> Result<Vec<Workspace>, NetworkError> {
+        let mut workspaces = Vec::new();
+        for workspace in self.workspaces.values() {
+            if workspace.members.contains(&user_id.to_string()) {
+                workspaces.push(workspace.clone());
+            }
+        }
+        Ok(workspaces)
+    }
+
+    fn list_offices(
+        &self,
+        user_id: &str,
+        workspace_id: Option<String>,
+    ) -> Result<Vec<Office>, NetworkError> {
+        let mut offices = Vec::new();
+        for domain in self.domains.values() {
+            if let Some(office) = domain.as_office() {
+                // Check if user is a member of this office
+                if office.members.contains(&user_id.to_string()) {
+                    // If workspace_id is specified, filter by it
+                    if let Some(ref wid) = workspace_id {
+                        if office.workspace_id == *wid {
+                            offices.push(office.clone());
+                        }
+                    } else {
+                        offices.push(office.clone());
+                    }
+                }
+            }
+        }
+        Ok(offices)
+    }
+
+    fn list_rooms(
+        &self,
+        user_id: &str,
+        office_id: Option<String>,
+    ) -> Result<Vec<Room>, NetworkError> {
+        let mut rooms = Vec::new();
+        for domain in self.domains.values() {
+            if let Some(room) = domain.as_room() {
+                // Check if user is a member of this room
+                if room.members.contains(&user_id.to_string()) {
+                    // If office_id is specified, filter by it
+                    if let Some(ref oid) = office_id {
+                        if room.office_id == *oid {
+                            rooms.push(room.clone());
+                        }
+                    } else {
+                        rooms.push(room.clone());
+                    }
+                }
+            }
+        }
+        Ok(rooms)
     }
 
     fn add_user_to_domain(

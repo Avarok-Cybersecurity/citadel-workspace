@@ -6,19 +6,19 @@ mod common;
 use common::workspace_test_utils::*;
 
 /// # Workspace CRUD Operations Test Suite
-/// 
+///
 /// Tests core workspace create, read, update, delete operations including:
 /// - Creating workspace (expected to fail for additional workspaces)
 /// - Retrieving workspace details  
 /// - Updating workspace properties (name, description)
 /// - Deleting workspace (expected to fail for root workspace)
-/// 
+///
 /// ## Test Workflow
 /// ```
-/// Setup Environment → Test Create (Fail) → Test Get → 
+/// Setup Environment → Test Create (Fail) → Test Get →
 /// Test Update → Verify Update → Test Delete (Fail) → Verify Still Exists
 /// ```
-/// 
+///
 /// **Expected Outcome:** CRUD operations work correctly with proper validation
 
 #[test]
@@ -153,4 +153,4 @@ fn test_delete_workspace() {
             Ok(())
         })
         .unwrap();
-} 
+}

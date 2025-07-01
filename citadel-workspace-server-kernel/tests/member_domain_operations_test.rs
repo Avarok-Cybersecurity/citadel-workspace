@@ -7,18 +7,18 @@ mod common;
 use common::member_test_utils::*;
 
 /// # Member Domain Operations Test Suite
-/// 
+///
 /// Tests basic member operations within domain hierarchy including:
 /// - Adding users to domains (offices, rooms, etc.)
 /// - Removing users from domains
 /// - Verifying domain membership changes
 /// - Testing proper member list updates
-/// 
+///
 /// ## Test Coverage
 /// - User addition to office domains
 /// - User removal from office domains
 /// - Membership verification after operations
-/// 
+///
 /// **Expected Outcome:** Domain membership operations work correctly and maintain consistent state
 
 #[test]
@@ -118,4 +118,4 @@ fn test_remove_user_from_domain() {
         }
         _ => panic!("Expected office domain"),
     }
-} 
+}

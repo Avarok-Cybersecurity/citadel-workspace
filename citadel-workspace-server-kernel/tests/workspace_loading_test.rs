@@ -4,18 +4,18 @@ mod common;
 use common::workspace_test_utils::*;
 
 /// # Workspace Loading Test Suite
-/// 
+///
 /// Tests workspace loading functionality including:
 /// - Loading the workspace from storage
 /// - Verifying workspace properties are correctly loaded
 /// - Ensuring single workspace model consistency
-/// 
+///
 /// ## Test Workflow
 /// ```
-/// Setup Environment → Load Workspace → 
+/// Setup Environment → Load Workspace →
 /// Verify Properties → Validate Single Workspace Model
 /// ```
-/// 
+///
 /// **Expected Outcome:** Workspace loads correctly with proper properties
 
 #[test]
@@ -37,4 +37,4 @@ fn test_load_workspace() {
     } else {
         panic!("Expected Workspace response, got {:?}", load_result);
     }
-} 
+}

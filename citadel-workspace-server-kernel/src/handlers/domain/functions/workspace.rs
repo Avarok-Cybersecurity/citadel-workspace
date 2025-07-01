@@ -227,7 +227,7 @@ pub mod workspace_ops {
 
         // Cascading Cleanup: Remove domain entry first for referential integrity
         tx.remove_domain(workspace_id)?;
-        
+
         // Primary Cleanup: Remove the workspace entity
         tx.remove_workspace(workspace_id)?;
 
@@ -331,7 +331,7 @@ pub mod workspace_ops {
 
         // Database Updates: Update workspace with modified members list
         tx.update_workspace(workspace_id, workspace.clone())?;
-        
+
         // Domain Hierarchy: Update corresponding domain entry
         tx.update_domain(
             workspace_id,
@@ -417,7 +417,7 @@ pub mod workspace_ops {
 
         // Database Updates: Update workspace with modified member list
         tx.update_workspace(workspace_id, workspace.clone())?;
-        
+
         // Domain Hierarchy: Update corresponding domain entry
         tx.update_domain(
             workspace_id,

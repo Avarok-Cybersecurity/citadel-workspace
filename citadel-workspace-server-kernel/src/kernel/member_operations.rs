@@ -1,18 +1,18 @@
 use super::core::WorkspaceServerKernel;
-use crate::kernel::transaction::rbac::transaction_operations::TransactionManagerExt;
+use crate::kernel::transaction::TransactionManagerExt;
 use crate::WORKSPACE_ROOT_ID;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::UserRole;
 
 impl<R: Ratchet> WorkspaceServerKernel<R> {
     /// Add a member to a domain (workspace, office, or room)
-    /// 
+    ///
     /// This method provides domain member management by:
     /// - Validating that a domain ID is provided
     /// - Delegating to the internal domain user operations
     /// - Ensuring transaction consistency with proper commit handling
     /// - Providing detailed error reporting for transaction failures
-    /// 
+    ///
     /// **Parameters:**
     /// - `actor_user_id`: The user performing the operation (must have appropriate permissions)
     /// - `target_user_id`: The user being added to the domain
@@ -56,16 +56,16 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
     }
 
     /// Remove a member from the root workspace domain
-    /// 
+    ///
     /// This method provides member removal functionality by:
     /// - Removing the specified user from the root workspace
     /// - Ensuring transaction consistency with proper commit handling
     /// - Delegating to the internal domain user operations
-    /// 
+    ///
     /// **Parameters:**
     /// - `actor_user_id`: The user performing the operation (must have appropriate permissions)
     /// - `target_user_id`: The user being removed from the domain
-    /// 
+    ///
     /// **Note:** Currently hardcoded to remove from WORKSPACE_ROOT_ID. Consider extending
     /// to support removing from specific domains if needed.
     pub fn remove_member(
@@ -87,4 +87,4 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
             Ok(())
         })
     }
-} 
+}
