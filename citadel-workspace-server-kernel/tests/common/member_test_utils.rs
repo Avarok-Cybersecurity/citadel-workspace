@@ -6,6 +6,7 @@ use citadel_internal_service_test_common::{
 use citadel_logging::info;
 use citadel_sdk::prelude::*;
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
+use citadel_workspace_server_kernel::handlers::domain::server_ops::DomainServerOperations;
 use citadel_workspace_server_kernel::kernel::transaction::{Transaction, TransactionManagerExt};
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;

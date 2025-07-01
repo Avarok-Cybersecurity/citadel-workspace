@@ -1,8 +1,10 @@
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
+use citadel_workspace_server_kernel::handlers::domain::OfficeOperations;
+use citadel_workspace_server_kernel::handlers::domain::{TransactionOperations, PermissionOperations, UserManagementOperations};
 use citadel_workspace_server_kernel::kernel::transaction::{Transaction, TransactionManagerExt};
 use citadel_workspace_types::structs::{Domain, Permission, UserRole, Workspace};
 
-mod common;
+#[path = "common/mod.rs"] mod common;
 use common::permissions_test_utils::*;
 
 /// # Role-Based Permission Test Suite

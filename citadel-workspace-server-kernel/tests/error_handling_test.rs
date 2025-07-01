@@ -27,12 +27,13 @@
 //! - **Parameter Format Validation**: Tests for input sanitization and validation
 //!
 //! ## Error Response Standards
-//! All tests validate that:
-//! - Operations return `Ok(WorkspaceProtocolResponse::Error(...))` instead of panicking
-//! - Error messages are informative and user-friendly
-//! - System remains stable and responsive after errors
-//! - No data corruption occurs during error conditions
+// All tests validate that:
+// - Operations return `Ok(WorkspaceProtocolResponse::Error(...))` instead of panicking
+// - Error messages are informative and user-friendly
+// - System remains stable and responsive after errors
+// - No data corruption occurs during error conditions
 
+use citadel_workspace_server_kernel::handlers::domain::{TransactionOperations, PermissionOperations, UserManagementOperations, WorkspaceOperations, OfficeOperations, RoomOperations, EntityOperations, DomainOperations};
 use citadel_sdk::prelude::*;
 use citadel_workspace_server_kernel::kernel::transaction::{Transaction, TransactionManagerExt};
 use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;

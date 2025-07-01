@@ -1,9 +1,11 @@
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
+use citadel_workspace_server_kernel::handlers::domain::OfficeOperations;
+use citadel_workspace_server_kernel::handlers::domain::{TransactionOperations, UserManagementOperations};
 use citadel_workspace_server_kernel::kernel::transaction::{Transaction, TransactionManagerExt};
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::{Domain, UserRole};
 
-mod common;
+#[path = "common/mod.rs"] mod common;
 use common::member_test_utils::*;
 
 /// # Member Lifecycle Test Suite

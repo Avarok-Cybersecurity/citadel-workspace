@@ -1,4 +1,4 @@
-mod common;
+#[path = "common/mod.rs"] mod common;
 
 use common::member_test_utils::*;
 use rstest::rstest;
@@ -286,11 +286,14 @@ async fn test_non_admin_cannot_add_user_to_office() {
 
     let cmd_result = _kernel.process_command(non_admin_id, add_target_by_non_admin_req);
 
+    println!("[DEBUG RESPONSE] cmd_result = {:?}", cmd_result);
+
     if let Ok(response) = cmd_result {
         match response {
             WorkspaceProtocolResponse::Error(message) => {
                 if (message.to_lowercase().contains("permission denied")
-                    || message.to_lowercase().contains("does not have permission"))
+                    || message.to_lowercase().contains("does not have permission")
+                    || message.to_lowercase().contains("does not have admin privileges"))
                     && message.to_lowercase().contains("add users")
                 {
                     println!("[Test NonAdmin V9] Successfully caught expected WorkspaceProtocolResponse::Error: {}", message);
@@ -301,6 +304,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
             }
             _ => {
                 // Any other Ok response variant (like Success, Member, etc.) is unexpected for a failed permission check
+                println!("[DEBUG] Received unexpected response: {:?}", response);
                 panic!("[Test NonAdmin V9] Command returned an unexpected Ok response variant for non-admin. Expected WorkspaceProtocolResponse::Error. Response: {:?}", response);
             }
         }

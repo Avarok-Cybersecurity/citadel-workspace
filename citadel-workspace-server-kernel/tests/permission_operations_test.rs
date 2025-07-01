@@ -1,4 +1,4 @@
-mod common;
+#[path = "common/mod.rs"] mod common;
 
 use common::member_test_utils::*;
 use rstest::rstest;

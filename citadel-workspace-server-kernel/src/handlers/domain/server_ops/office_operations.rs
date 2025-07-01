@@ -45,6 +45,15 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                 mdx_content_string,
             )?;
 
+            // Add user to domain with Owner role
+            tx.add_user_to_domain(user_id, &office_id, citadel_workspace_types::structs::UserRole::Owner)?;
+
+            // Add the office to the workspace
+            if let Some(mut workspace) = tx.get_workspace(workspace_id).cloned() {
+                workspace.offices.push(office_id);
+                tx.update_workspace(workspace_id, workspace)?;
+            }
+
             Ok(office)
         })
     }
@@ -216,17 +225,12 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
             };
             tx.insert_domain(office_id.clone(), domain)?;
 
-            // Add the creator as a member
-            tx.add_user_to_domain(
-                user_id,
-                &office_id,
-                citadel_workspace_types::structs::UserRole::Owner,
-            )?;
+            tx.add_user_to_domain(user_id, &office_id, citadel_workspace_types::structs::UserRole::Owner)?;
 
             // Add the office to the workspace
             if let Some(mut workspace) = tx.get_workspace(workspace_id).cloned() {
                 workspace.offices.push(office_id);
-                tx.insert_workspace(workspace_id.to_string(), workspace)?;
+                tx.update_workspace(workspace_id, workspace)?;
             }
 
             Ok(office)
@@ -289,7 +293,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                 // Remove the office from its workspace
                 if let Some(mut workspace) = tx.get_workspace(&office.workspace_id).cloned() {
                     workspace.offices.retain(|id| id != office_id);
-                    tx.insert_workspace(office.workspace_id.clone(), workspace)?;
+                    tx.update_workspace(&office.workspace_id, workspace)?;
                 }
 
                 // Remove the office

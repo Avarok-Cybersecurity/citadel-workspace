@@ -1,9 +1,10 @@
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
+use citadel_workspace_server_kernel::handlers::domain::{OfficeOperations, RoomOperations, UserManagementOperations};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use rstest::*;
 use std::time::Duration;
 
-mod common;
+#[path = "common/mod.rs"] mod common;
 use common::integration_test_utils::*;
 
 /// # Office Operations Integration Test

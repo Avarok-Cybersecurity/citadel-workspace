@@ -1,4 +1,5 @@
 use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_server_kernel::handlers::domain::{TransactionOperations, PermissionOperations, UserManagementOperations, WorkspaceOperations, OfficeOperations, RoomOperations, EntityOperations, DomainOperations};
 
 #[cfg(test)]
 mod tests {

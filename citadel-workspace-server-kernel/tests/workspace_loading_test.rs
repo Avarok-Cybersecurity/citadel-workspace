@@ -1,6 +1,7 @@
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use citadel_workspace_server_kernel::handlers::domain::{TransactionOperations, PermissionOperations, UserManagementOperations, WorkspaceOperations, OfficeOperations, RoomOperations, EntityOperations, DomainOperations};
 
-mod common;
+#[path = "common/mod.rs"] mod common;
 use common::workspace_test_utils::*;
 
 /// # Workspace Loading Test Suite

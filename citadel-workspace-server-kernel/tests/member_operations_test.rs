@@ -1,4 +1,5 @@
-mod common;
+#[path = "common/mod.rs"] mod common;
+use citadel_workspace_server_kernel::handlers::domain::{OfficeOperations, RoomOperations, UserManagementOperations};
 
 use common::member_test_utils::*;
 use rstest::rstest;

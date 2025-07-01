@@ -1,7 +1,9 @@
-use citadel_workspace_server_kernel::kernel::transaction::TransactionManagerExt;
-use citadel_workspace_types::structs::UserRole;
+use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
+use citadel_workspace_server_kernel::handlers::domain::{TransactionOperations, PermissionOperations, UserManagementOperations};
+use citadel_workspace_server_kernel::kernel::transaction::{Transaction, TransactionManagerExt};
+use citadel_workspace_types::structs::{User, UserRole};
 
-mod common;
+#[path = "common/mod.rs"] mod common;
 use common::permissions_test_utils::*;
 
 /// # Admin Check Test Suite
@@ -29,7 +31,7 @@ fn test_admin_check() {
     // Verify that the admin check works with custom admin ID
     // is_admin needs a transaction
     assert!(domain_ops
-        .with_read_transaction(|tx| domain_ops.is_admin(tx, admin_id))
+        .with_read_transaction(|tx| domain_ops.is_admin_impl(tx, admin_id))
         .unwrap());
 
     // Create a non-admin user for testing this specific check
@@ -38,14 +40,14 @@ fn test_admin_check() {
     kernel
         .tx_manager()
         .with_write_transaction(|tx| {
-            tx.insert_user(non_admin_id.to_string(), non_admin_user_obj)?;
+            tx.insert_user_internal(non_admin_id.to_string(), non_admin_user_obj)?;
             Ok(())
         })
         .unwrap();
 
     // Verify that non-admin users are recognized as such
     assert!(!domain_ops
-        .with_read_transaction(|tx| domain_ops.is_admin(tx, "non_admin_user"))
+        .with_read_transaction(|tx| domain_ops.is_admin_impl(tx, "non_admin_user"))
         .unwrap());
 
     // Create another user with admin role
@@ -56,13 +58,13 @@ fn test_admin_check() {
     kernel
         .tx_manager()
         .with_write_transaction(|tx| {
-            tx.insert_user(second_admin_id.to_string(), admin2)?;
+            tx.insert_user_internal(second_admin_id.to_string(), admin2)?;
             Ok(())
         })
         .unwrap();
 
     // Verify that the second admin is recognized
     assert!(domain_ops
-        .with_read_transaction(|tx| domain_ops.is_admin(tx, second_admin_id))
+        .with_read_transaction(|tx| domain_ops.is_admin_impl(tx, second_admin_id))
         .unwrap());
 }

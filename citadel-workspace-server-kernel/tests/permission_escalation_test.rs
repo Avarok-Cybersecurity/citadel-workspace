@@ -1,9 +1,13 @@
 use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
+use citadel_workspace_server_kernel::kernel::transaction::Transaction;
+use citadel_workspace_server_kernel::handlers::domain::{TransactionOperations, PermissionOperations, UserManagementOperations};
+use citadel_workspace_server_kernel::handlers::domain::OfficeOperations;
+use citadel_workspace_server_kernel::handlers::domain::RoomOperations;
 use citadel_workspace_server_kernel::kernel::transaction::TransactionManagerExt;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::{Permission, UserRole};
 
-mod common;
+#[path = "common/mod.rs"] mod common;
 use common::permission_test_utils::*;
 
 /// # Permission Escalation Test Suite

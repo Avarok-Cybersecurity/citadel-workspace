@@ -1,9 +1,10 @@
-use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
+use citadel_workspace_server_kernel::handlers::domain::{TransactionOperations, PermissionOperations, UserManagementOperations, WorkspaceOperations, OfficeOperations, RoomOperations, EntityOperations, DomainOperations};
 use citadel_workspace_server_kernel::kernel::transaction::TransactionManagerExt;
+use citadel_workspace_server_kernel::kernel::transaction::Transaction;
 use citadel_workspace_types::structs::{Permission, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
-mod common;
+#[path = "common/mod.rs"] mod common;
 use common::workspace_test_utils::*;
 
 /// # Workspace Permissions and Inheritance Test Suite

@@ -17,7 +17,7 @@ mod permission_operations_test;
 mod role_operations_test;
 
 // Re-export the common module for other test files
-pub mod common;
+#[path = "common/mod.rs"] pub mod common;
 
 // This file now serves as an index for the modularized member integration tests.
 // All original test coverage is preserved across the focused modules.
