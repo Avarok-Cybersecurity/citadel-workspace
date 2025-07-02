@@ -224,7 +224,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                     if !bcrypt::verify(&workspace_master_password, &stored_password_hash)
                         .unwrap_or(false)
                     {
-                        return Err(NetworkError::msg("Invalid workspace password"));
+                        return Err(NetworkError::msg("Incorrect workspace master password"));
                     }
                 } else {
                     return Err(NetworkError::msg("Workspace password required but not set"));

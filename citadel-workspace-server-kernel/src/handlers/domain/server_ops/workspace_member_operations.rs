@@ -173,7 +173,36 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
                 // Update the user's permissions
                 user.permissions
-                    .insert(domain_id.to_string(), updated_permissions);
+                    .insert(domain_id.to_string(), updated_permissions.clone());
+
+                // --- Custom Role Assignment Logic ---
+                let has_edit_mdx = updated_permissions.contains(&Permission::EditMdx);
+                let has_edit_office_config =
+                    updated_permissions.contains(&Permission::EditOfficeConfig);
+                let is_editor = has_edit_mdx && has_edit_office_config;
+
+                // Determine if the permission set matches a standard role
+                let standard_roles = [
+                    UserRole::Admin,
+                    UserRole::Owner,
+                    UserRole::Member,
+                    UserRole::Guest,
+                    UserRole::Banned,
+                ];
+                let mut matched_standard = false;
+                for role in &standard_roles {
+                    let std_perms = Permission::for_role(role);
+                    if &std_perms == &updated_permissions {
+                        user.role = role.clone();
+                        matched_standard = true;
+                        break;
+                    }
+                }
+                if !matched_standard && is_editor {
+                    user.role = UserRole::Custom("Editor".to_string(), 16);
+                }
+                // --- End Custom Role Assignment ---
+
                 tx.insert_user(target_user_id.to_string(), user)?;
 
                 Ok(())

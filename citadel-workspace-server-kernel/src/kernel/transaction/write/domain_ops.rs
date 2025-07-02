@@ -150,9 +150,7 @@ impl WriteTransaction<'_> {
             // Update the domain
             self.domains.insert(domain_id.to_string(), new_domain);
         } else {
-            println!(
-                "[DEBUG] Skipping member addition since user is already a member"
-            );
+            println!("[DEBUG] Skipping member addition since user is already a member");
         }
 
         // Update user changes list for rollback support
