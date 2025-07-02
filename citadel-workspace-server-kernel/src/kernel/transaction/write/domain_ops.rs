@@ -122,15 +122,12 @@ impl WriteTransaction<'_> {
             .push(DomainChange::Update(domain_id.to_string(), domain.clone()));
 
         // Check if user is already a member
-        if domain.members().iter().any(|m| m == user_id) {
+        let is_already_member = domain.members().iter().any(|m| m == user_id);
+        if is_already_member {
             println!(
-                "[DEBUG] User {} is already a member of domain {}",
+                "[DEBUG] User {} is already a member of domain {}, updating permissions only",
                 user_id, domain_id
             );
-            return Err(NetworkError::msg(format!(
-                "User {} is already a member of domain {}",
-                user_id, domain_id
-            )));
         }
 
         println!(
@@ -138,19 +135,25 @@ impl WriteTransaction<'_> {
             domain.members()
         );
 
-        // Add user to domain as a member
+        // Add user to domain as a member (only if not already a member)
         let mut new_domain = domain.clone();
-        let mut members = new_domain.members().clone();
-        members.push(user_id.to_string());
-        new_domain.set_members(members);
+        if !is_already_member {
+            let mut members = new_domain.members().clone();
+            members.push(user_id.to_string());
+            new_domain.set_members(members);
 
-        println!(
-            "[DEBUG] New members after adding: {:?}",
-            new_domain.members()
-        );
+            println!(
+                "[DEBUG] New members after adding: {:?}",
+                new_domain.members()
+            );
 
-        // Update the domain
-        self.domains.insert(domain_id.to_string(), new_domain);
+            // Update the domain
+            self.domains.insert(domain_id.to_string(), new_domain);
+        } else {
+            println!(
+                "[DEBUG] Skipping member addition since user is already a member"
+            );
+        }
 
         // Update user changes list for rollback support
         self.user_changes

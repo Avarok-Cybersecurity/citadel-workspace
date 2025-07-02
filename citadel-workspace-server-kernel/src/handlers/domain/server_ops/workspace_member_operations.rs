@@ -125,6 +125,14 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         operation: UpdateOperation,
     ) -> Result<(), NetworkError> {
         self.with_write_transaction(|tx| {
+            // Check if the domain exists
+            if tx.get_domain(domain_id).is_none() {
+                return Err(NetworkError::msg(format!(
+                    "Domain '{}' not found",
+                    domain_id
+                )));
+            }
+
             // Check if the actor has permission to modify permissions in this domain
             if !self.check_entity_permission_impl(
                 tx,

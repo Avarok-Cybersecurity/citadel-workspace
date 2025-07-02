@@ -194,7 +194,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                 Permission::CreateOffice,
             )? {
                 return Err(NetworkError::msg(format!(
-                    "User '{}' does not have permission to create offices in workspace '{}'",
+                    "User '{}' does not have permission to add offices to workspace '{}'",
                     user_id, workspace_id
                 )));
             }
@@ -237,7 +237,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
 
             // Add the office to the workspace
             if let Some(mut workspace) = tx.get_workspace(workspace_id).cloned() {
-                workspace.offices.push(office_id);
+                workspace.offices.push(office_id.clone());
                 tx.update_workspace(workspace_id, workspace)?;
             }
 

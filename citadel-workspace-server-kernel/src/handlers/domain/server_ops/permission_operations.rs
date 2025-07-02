@@ -38,7 +38,7 @@ pub fn permission_can_inherit_for_user(permission: Permission, user_role: &UserR
             Permission::ManageDomains => false,
             Permission::AddUsers => false,
             Permission::RemoveUsers => false,
-            Permission::CreateOffice => true,
+            Permission::CreateOffice => false,
             Permission::CreateRoom => true,
             Permission::AddOffice => true,
             Permission::AddRoom => true,

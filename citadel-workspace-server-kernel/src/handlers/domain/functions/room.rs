@@ -85,7 +85,8 @@ pub mod room_ops {
             .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
 
         // Permission Validation: User must have CreateRoom permission in the target office
-        if !user.has_permission(office_id, Permission::CreateRoom) {
+        // Check for Admin role first, then explicit permissions
+        if user.role != UserRole::Admin && !user.has_permission(office_id, Permission::CreateRoom) {
             return Err(permission_denied(format!(
                 "User {} cannot create room in office {}",
                 user_id, office_id
@@ -179,7 +180,8 @@ pub mod room_ops {
             .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
 
         // Permission Validation: User must have DeleteRoom permission for the target room
-        if !user.has_permission(room_id, Permission::DeleteRoom) {
+        // Check for Admin role first, then explicit permissions
+        if user.role != UserRole::Admin && !user.has_permission(room_id, Permission::DeleteRoom) {
             return Err(permission_denied(format!(
                 "User {} cannot delete room {}",
                 user_id, room_id
@@ -397,7 +399,8 @@ pub mod room_ops {
             .ok_or_else(|| NetworkError::msg(format!("User {} not found", user_id)))?;
 
         // Permission Validation: User must have UpdateRoom permission for the target room
-        if !user.has_permission(room_id, Permission::UpdateRoom) {
+        // Check for Admin role first, then explicit permissions
+        if user.role != UserRole::Admin && !user.has_permission(room_id, Permission::UpdateRoom) {
             return Err(permission_denied(format!(
                 "User {} cannot update room {}",
                 user_id, room_id

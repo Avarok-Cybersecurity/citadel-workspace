@@ -54,6 +54,15 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         workspace_password: String,
     ) -> Result<Workspace, NetworkError> {
         self.with_write_transaction(|tx| {
+            // Check if a root workspace already exists
+            let found_root_ws = tx.get_workspace(crate::WORKSPACE_ROOT_ID);
+            let root_ws_exists = found_root_ws.is_some();
+            if root_ws_exists {
+                return Err(NetworkError::msg(
+                    "A root workspace already exists. Cannot create another one.",
+                ));
+            }
+
             // Check if user exists
             if tx.get_user(user_id).is_none() {
                 return Err(NetworkError::msg(format!("User '{}' not found", user_id)));
@@ -234,7 +243,7 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
                     workspace.metadata = metadata;
                 }
 
-                tx.insert_workspace(workspace_id.to_string(), workspace.clone())?;
+                tx.update_workspace(workspace_id, workspace.clone())?;
 
                 // Update the corresponding domain
                 let domain = citadel_workspace_types::structs::Domain::Workspace {
@@ -270,6 +279,11 @@ impl<R: Ratchet + Send + Sync + 'static> DomainServerOperations<R> {
         _workspace_password: String,
     ) -> Result<(), NetworkError> {
         self.with_write_transaction(|tx| {
+            // System Protection: Prevent deletion of the root workspace
+            if workspace_id == crate::WORKSPACE_ROOT_ID {
+                return Err(NetworkError::msg("Cannot delete the root workspace"));
+            }
+
             // Check if user has permission to delete this workspace
             if !self.check_entity_permission_impl(
                 tx,
