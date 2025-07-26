@@ -16,11 +16,6 @@ RUN cd citadel-workspaces
 RUN npm i
 RUN cd ..
 
-# Install UI dependencies (assuming package.json is in the root or a subdir)
-# Adjust path to package.json if necessary
-# RUN npm install --prefix ./citadel-workspace-ui # Example if UI has its own package.json
-
-# Expose the UI port (default Tauri dev port is 1420)
 EXPOSE 1420
 
 # Run the UI via cargo tauri dev, accessible within Docker network

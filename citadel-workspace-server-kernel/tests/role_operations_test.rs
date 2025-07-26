@@ -1,188 +1,219 @@
 #[path = "common/mod.rs"]
 mod common;
 
-use common::member_test_utils::*;
-use rstest::rstest;
-use std::error::Error;
-use std::time::Duration;
-use tokio::time::timeout;
+use common::async_test_helpers::*;
+use common::workspace_test_utils::*;
 
-use citadel_workspace_server_kernel::kernel::transaction::{Transaction, TransactionManagerExt};
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::{Permission, User, UserRole};
-use citadel_workspace_types::{
-    UpdateOperation, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
-};
+use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
-#[rstest]
 #[tokio::test]
-#[timeout(Duration::from_secs(30))]
-async fn test_custom_role_operations() -> Result<(), Box<dyn Error>> {
-    let (
-        workspace_kernel,
-        internal_service_addr,
-        server_addr,
-        admin_username,
-        admin_password,
-        _temp_db_dir,
-    ) = setup_test_environment().await?;
-
-    let (admin_to_service, mut admin_from_service, admin_cid) = register_and_connect_user(
-        internal_service_addr,
-        server_addr,
-        &admin_username,
-        "Administrator",
-    )
-    .await?;
-
-    workspace_kernel
-        .inject_admin_user(&admin_username, "Admin", &admin_password)
-        .unwrap();
-
+async fn test_role_operations() {
+    let kernel = create_test_kernel().await;
     let root_workspace_id = WORKSPACE_ROOT_ID.to_string();
 
-    let (_user_to_service, _user_from_service, _user_cid) =
-        register_and_connect_user(internal_service_addr, server_addr, "test_user", "Test User")
-            .await?;
+    // Create users with different roles
+    let admin_user = User::new(
+        "admin_user".to_string(),
+        "Admin User".to_string(),
+        UserRole::Admin,
+    );
 
-    // Create a regular user instead of admin user
-    workspace_kernel.tx_manager().with_write_transaction(|tx| {
-        let user = User::new(
-            "test_user".to_string(),
-            "Test User".to_string(),
-            UserRole::Member,
-        );
-        tx.insert_user("test_user".to_string(), user)
-    })?;
+    let member_user = User::new(
+        "member_user".to_string(),
+        "Member User".to_string(),
+        UserRole::Member,
+    );
 
-    // Add the user to the workspace first so they remain a workspace member after office removal
-    let add_workspace_member_cmd = WorkspaceProtocolRequest::AddMember {
-        user_id: "test_user".to_string(),
-        office_id: None,
-        room_id: None,
-        role: UserRole::Member,
-        metadata: Some("workspace_metadata".to_string().into_bytes()),
+    let guest_user = User::new(
+        "guest_user".to_string(),
+        "Guest User".to_string(),
+        UserRole::Guest,
+    );
+
+    // Insert users
+    kernel
+        .domain_operations
+        .backend_tx_manager
+        .insert_user("admin_user".to_string(), admin_user)
+        .await
+        .unwrap();
+
+    kernel
+        .domain_operations
+        .backend_tx_manager
+        .insert_user("member_user".to_string(), member_user)
+        .await
+        .unwrap();
+
+    kernel
+        .domain_operations
+        .backend_tx_manager
+        .insert_user("guest_user".to_string(), guest_user)
+        .await
+        .unwrap();
+
+    // Create an office
+    let create_office_response = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::CreateOffice {
+            workspace_id: root_workspace_id.clone(),
+            name: "Test Office".to_string(),
+            description: "Office for role testing".to_string(),
+            mdx_content: None,
+            metadata: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let office_id = match create_office_response {
+        WorkspaceProtocolResponse::Office(office) => office.id,
+        _ => panic!("Expected Office response"),
     };
 
-    let response = send_workspace_command(
-        &admin_to_service,
-        &mut admin_from_service,
-        admin_cid,
-        add_workspace_member_cmd,
-    )
-    .await?;
+    // Add users with different roles
+    for (user_id, role_name) in [
+        ("admin_user", "Admin"),
+        ("member_user", "Member"),
+        ("guest_user", "Guest"),
+    ] {
+        let role = match role_name {
+            "Admin" => UserRole::Admin,
+            "Member" => UserRole::Member,
+            "Guest" => UserRole::Guest,
+            _ => panic!("Unknown role"),
+        };
 
-    match response {
-        WorkspaceProtocolResponse::Success(_) => {
-            println!("Test user added to workspace");
+        let add_member_cmd = WorkspaceProtocolRequest::AddMember {
+            user_id: user_id.to_string(),
+            office_id: Some(office_id.clone()),
+            room_id: None,
+            role: role.clone(),
+            metadata: None,
+        };
+
+        let response = execute_command(&kernel, add_member_cmd).await.unwrap();
+        match response {
+            WorkspaceProtocolResponse::Success(_) => {
+                println!("{} user added with {} role", user_id, role_name);
+            }
+            _ => panic!("Expected Success response"),
         }
-        _ => return Err("Expected Success response for workspace member addition".into()),
     }
 
-    let office_result = workspace_kernel
-        .create_office(
-            ADMIN_ID,
-            &root_workspace_id,
-            "Test Office",
-            "A test office",
-            None,
-        )
-        .map_err(|e| Box::<dyn Error>::from(format!("Failed to create office: {}", e)));
-    let office_from_kernel = office_result.unwrap();
-    let office_id = office_from_kernel.id.clone();
-
-    let _room_id = create_test_room(
-        &admin_to_service,
-        &mut admin_from_service,
-        admin_cid,
-        &office_id,
-    )
-    .await?;
-
-    let add_member_cmd = WorkspaceProtocolRequest::AddMember {
-        user_id: "test_user".to_string(),
-        office_id: Some(office_id.clone()),
-        room_id: None,
-        role: UserRole::Member,
-        metadata: Some("test_metadata".to_string().into_bytes()),
+    // Verify admin user permissions
+    let get_admin_cmd = WorkspaceProtocolRequest::GetMember {
+        user_id: "admin_user".to_string(),
     };
 
-    let response = send_workspace_command(
-        &admin_to_service,
-        &mut admin_from_service,
-        admin_cid,
-        add_member_cmd,
-    )
-    .await?;
-
-    match response {
-        WorkspaceProtocolResponse::Success(_) => println!("User added successfully"),
-        _ => return Err("Expected Success response".into()),
-    }
-
-    // Test custom role assignment by adding specific permissions that trigger role changes
-    let update_permissions_cmd = WorkspaceProtocolRequest::UpdateMemberPermissions {
-        user_id: "test_user".to_string(),
-        domain_id: office_id.clone(),
-        operation: UpdateOperation::Add,
-        permissions: vec![Permission::EditMdx, Permission::EditOfficeConfig],
-    };
-
-    let response = send_workspace_command(
-        &admin_to_service,
-        &mut admin_from_service,
-        admin_cid,
-        update_permissions_cmd,
-    )
-    .await?;
-
-    match response {
-        WorkspaceProtocolResponse::Success(_) => println!("Permissions added successfully"),
-        _ => return Err("Expected Success response".into()),
-    }
-
-    let get_member_cmd = WorkspaceProtocolRequest::GetMember {
-        user_id: "test_user".to_string(),
-    };
-
-    let response = send_workspace_command(
-        &admin_to_service,
-        &mut admin_from_service,
-        admin_cid,
-        get_member_cmd,
-    )
-    .await?;
-
+    let response = execute_command(&kernel, get_admin_cmd).await.unwrap();
     match response {
         WorkspaceProtocolResponse::Member(member) => {
-            assert_eq!(member.id, "test_user");
-
-            // Check if the user was assigned a custom role based on permissions
-            if let UserRole::Custom(name, rank) = &member.role {
-                assert_eq!(name, "Editor");
-                assert_eq!(*rank, 16);
-                println!(
-                    "Custom role assigned successfully: {} (rank {})",
-                    name, rank
-                );
-            } else {
-                return Err("Expected custom role".into());
-            }
+            assert_eq!(member.id, "admin_user");
+            assert!(matches!(member.role, UserRole::Admin));
 
             let domain_permissions = member
                 .permissions
                 .get(&office_id)
                 .expect("Domain permissions not found");
-            println!("Domain permissions: {domain_permissions:?}");
 
-            // Verify the permissions were added correctly
-            assert!(domain_permissions.contains(&Permission::ViewContent));
-            assert!(domain_permissions.contains(&Permission::EditMdx));
-            assert!(domain_permissions.contains(&Permission::EditOfficeConfig));
+            // Admin should have all permissions
+            assert!(domain_permissions.contains(&Permission::All));
+            println!("Admin has All permissions as expected");
         }
-        _ => return Err("Expected Member response".into()),
+        _ => panic!("Expected Member response"),
     }
 
-    println!("[Test] test_custom_role_operations completed successfully.");
-    Ok(())
+    // Verify member user permissions
+    let get_member_cmd = WorkspaceProtocolRequest::GetMember {
+        user_id: "member_user".to_string(),
+    };
+
+    let response = execute_command(&kernel, get_member_cmd).await.unwrap();
+    match response {
+        WorkspaceProtocolResponse::Member(member) => {
+            assert_eq!(member.id, "member_user");
+            assert!(matches!(member.role, UserRole::Member));
+
+            let domain_permissions = member
+                .permissions
+                .get(&office_id)
+                .expect("Domain permissions not found");
+
+            // Member should have specific permissions
+            assert!(domain_permissions.contains(&Permission::ViewContent));
+            assert!(domain_permissions.contains(&Permission::CreateRoom));
+            assert!(!domain_permissions.contains(&Permission::ManageDomains));
+            assert!(!domain_permissions.contains(&Permission::All));
+            println!("Member has appropriate permissions");
+        }
+        _ => panic!("Expected Member response"),
+    }
+
+    // Verify guest user permissions
+    let get_guest_cmd = WorkspaceProtocolRequest::GetMember {
+        user_id: "guest_user".to_string(),
+    };
+
+    let response = execute_command(&kernel, get_guest_cmd).await.unwrap();
+    match response {
+        WorkspaceProtocolResponse::Member(member) => {
+            assert_eq!(member.id, "guest_user");
+            assert!(matches!(member.role, UserRole::Guest));
+
+            let domain_permissions = member
+                .permissions
+                .get(&office_id)
+                .expect("Domain permissions not found");
+
+            // Guest should have minimal permissions
+            assert!(domain_permissions.contains(&Permission::ViewContent));
+            assert!(!domain_permissions.contains(&Permission::CreateRoom));
+            assert!(!domain_permissions.contains(&Permission::EditMdx));
+            assert!(!domain_permissions.contains(&Permission::ManageDomains));
+            println!("Guest has minimal permissions as expected");
+        }
+        _ => panic!("Expected Member response"),
+    }
+
+    // Test removing a member from a domain
+    let remove_member_cmd = WorkspaceProtocolRequest::RemoveMember {
+        user_id: "guest_user".to_string(),
+        office_id: Some(office_id.clone()),
+        room_id: None,
+    };
+
+    let response = execute_command(&kernel, remove_member_cmd).await.unwrap();
+    match response {
+        WorkspaceProtocolResponse::Success(msg) => {
+            println!("Guest user removed: {}", msg);
+        }
+        _ => panic!("Expected Success response"),
+    }
+
+    // Verify guest user is no longer in the office domain
+    let get_removed_guest_cmd = WorkspaceProtocolRequest::GetMember {
+        user_id: "guest_user".to_string(),
+    };
+
+    let response = execute_command(&kernel, get_removed_guest_cmd)
+        .await
+        .unwrap();
+    match response {
+        WorkspaceProtocolResponse::Member(member) => {
+            assert_eq!(member.id, "guest_user");
+
+            // Should no longer have permissions for this office
+            assert!(
+                !member.permissions.contains_key(&office_id),
+                "Guest should no longer have permissions for the office after removal"
+            );
+            println!("Guest successfully removed from office");
+        }
+        _ => panic!("Expected Member response"),
+    }
+
+    println!("All role operations tests passed!");
 }

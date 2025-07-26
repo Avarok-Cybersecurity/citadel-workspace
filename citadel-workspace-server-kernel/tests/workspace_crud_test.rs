@@ -1,13 +1,8 @@
-use citadel_workspace_server_kernel::handlers::domain::{
-    DomainOperations, EntityOperations, OfficeOperations, PermissionOperations, RoomOperations,
-    TransactionOperations, UserManagementOperations, WorkspaceOperations,
-};
-use citadel_workspace_server_kernel::kernel::transaction::Transaction;
-use citadel_workspace_server_kernel::kernel::transaction::TransactionManagerExt;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 #[path = "common/mod.rs"]
 mod common;
+use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
 /// # Workspace CRUD Operations Test Suite
@@ -26,136 +21,137 @@ use common::workspace_test_utils::*;
 ///
 /// **Expected Outcome:** CRUD operations work correctly with proper validation
 
-#[test]
-fn test_create_workspace() {
-    let (kernel, _db_temp_dir) = create_test_kernel();
-    let admin_id = "admin-user";
+#[tokio::test]
+async fn test_create_workspace() {
+    let kernel = create_test_kernel().await;
 
     // Attempt to create a second workspace, which should fail in the single-workspace model
     let workspace_name = "Another Workspace";
     let workspace_description = "This should not be created";
-    let result = kernel.process_command(
-        admin_id,
+    let result = execute_command(
+        &kernel,
         WorkspaceProtocolRequest::CreateWorkspace {
             name: workspace_name.to_string(),
             description: workspace_description.to_string(),
             workspace_master_password: "password".to_string(),
             metadata: None,
         },
-    );
+    )
+    .await;
 
     // Verify the command fails
-    assert!(
-        result.is_ok(),
-        "process_command should return Ok even for app errors"
-    );
-    match result.unwrap() {
-        WorkspaceProtocolResponse::Error(e) => {
+    match result {
+        Ok(WorkspaceProtocolResponse::Error(e)) => {
             assert_eq!(e, "Failed to create workspace: A root workspace already exists. Cannot create another one.", "Incorrect error message");
         }
-        other => panic!("Expected WorkspaceProtocolResponse::Error, got {:?}", other),
+        Ok(other) => panic!("Expected WorkspaceProtocolResponse::Error, got {:?}", other),
+        Err(e) => panic!("Command failed with error: {:?}", e),
     }
 }
 
-#[test]
-fn test_get_workspace() {
-    let (kernel, _db_temp_dir) = create_test_kernel();
-    let admin_id = "admin-user";
+#[tokio::test]
+async fn test_get_workspace() {
+    let kernel = create_test_kernel().await;
 
     // Get the pre-existing workspace
-    let get_result = kernel.process_command(admin_id, WorkspaceProtocolRequest::GetWorkspace);
+    let get_result = execute_command(&kernel, WorkspaceProtocolRequest::GetWorkspace).await;
 
     // Verify the response
-    assert!(get_result.is_ok());
-    if let Ok(WorkspaceProtocolResponse::Workspace(workspace)) = get_result {
-        assert_eq!(
-            workspace.id,
-            citadel_workspace_server_kernel::WORKSPACE_ROOT_ID
-        );
-        assert_eq!(workspace.owner_id, "admin-user"); // Default admin
-    } else {
-        panic!("Expected Workspace response, got {:?}", get_result);
+    match get_result {
+        Ok(WorkspaceProtocolResponse::Workspace(workspace)) => {
+            assert_eq!(
+                workspace.id,
+                citadel_workspace_server_kernel::WORKSPACE_ROOT_ID
+            );
+            assert_eq!(workspace.owner_id, "admin-user"); // Default admin
+        }
+        Ok(other) => panic!("Expected Workspace response, got {:?}", other),
+        Err(e) => panic!("Command failed with error: {:?}", e),
     }
 }
 
-#[test]
-fn test_update_workspace() {
-    let (kernel, _db_temp_dir) = create_test_kernel();
-    let admin_id = "admin-user";
+#[tokio::test]
+async fn test_update_workspace() {
+    let kernel = create_test_kernel().await;
 
     // Update the pre-existing workspace
     let updated_name = "Updated Workspace Name";
     let updated_description = "An updated description";
-    let update_result = kernel.process_command(
-        admin_id,
+    let update_result = execute_command(
+        &kernel,
         WorkspaceProtocolRequest::UpdateWorkspace {
             name: Some(updated_name.to_string()),
             description: Some(updated_description.to_string()),
             workspace_master_password: "admin-password".to_string(), // from create_test_kernel
             metadata: None,
         },
-    );
+    )
+    .await;
 
     // Verify the response
-    assert!(update_result.is_ok(), "Update failed: {:?}", update_result);
-    if let Ok(WorkspaceProtocolResponse::Workspace(workspace)) = update_result {
-        assert_eq!(
-            workspace.id,
-            citadel_workspace_server_kernel::WORKSPACE_ROOT_ID
-        );
-        assert_eq!(workspace.name, updated_name);
-        assert_eq!(workspace.description, updated_description);
-    } else {
-        panic!("Expected Workspace response, got {:?}", update_result);
-    }
-
-    // Verify the workspace was updated in the transaction manager
-    kernel
-        .tx_manager()
-        .with_read_transaction(|tx| {
-            let workspace = tx
-                .get_workspace(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID)
-                .unwrap();
+    match update_result {
+        Ok(WorkspaceProtocolResponse::Workspace(workspace)) => {
+            assert_eq!(
+                workspace.id,
+                citadel_workspace_server_kernel::WORKSPACE_ROOT_ID
+            );
             assert_eq!(workspace.name, updated_name);
             assert_eq!(workspace.description, updated_description);
-            Ok(())
-        })
-        .unwrap();
+        }
+        Ok(other) => panic!("Expected Workspace response, got {:?}", other),
+        Err(e) => panic!("Update failed with error: {:?}", e),
+    }
+
+    // Verify the workspace was updated in the backend
+    let workspace = kernel
+        .domain_operations
+        .backend_tx_manager
+        .get_domain(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID)
+        .await
+        .unwrap()
+        .expect("Workspace should exist");
+    assert_eq!(workspace.name(), updated_name);
+    assert_eq!(workspace.description(), updated_description);
 }
 
-#[test]
-fn test_delete_workspace() {
-    let (kernel, _db_temp_dir) = create_test_kernel();
-    let admin_id = "admin-user";
+#[tokio::test]
+async fn test_delete_workspace() {
+    let kernel = create_test_kernel().await;
 
     // Attempt to delete the root workspace, which should fail
-    let delete_result = kernel.process_command(
-        admin_id,
+    let delete_result = execute_command(
+        &kernel,
         WorkspaceProtocolRequest::DeleteWorkspace {
             workspace_master_password: "admin-password".to_string(),
         },
-    );
+    )
+    .await;
 
     // Verify the command fails as expected
     let expected_error_msg = "Failed to delete workspace: Cannot delete the root workspace";
     match delete_result {
         Ok(WorkspaceProtocolResponse::Error(msg)) => {
-            assert_eq!(msg, expected_error_msg, "Incorrect error message when attempting to delete root workspace");
+            assert_eq!(
+                msg, expected_error_msg,
+                "Incorrect error message when attempting to delete root workspace"
+            );
         }
-        Ok(other) => panic!("Expected Error response when deleting root workspace, got Ok({:?})", other),
-        Err(e) => panic!("process_command returned Err({:?}) instead of Ok(Error(...)) for root workspace deletion", e),
+        Ok(other) => panic!(
+            "Expected Error response when deleting root workspace, got {:?}",
+            other
+        ),
+        Err(e) => panic!("Command failed with error: {:?}", e),
     }
 
     // Verify the workspace still exists
-    kernel
-        .tx_manager()
-        .with_read_transaction(|tx| {
-            let workspace = tx.get_workspace(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID);
-            assert!(
-                workspace.is_some(),
-                "Root workspace should not have been deleted"
-            );
-            Ok(())
-        })
+    let workspace = kernel
+        .domain_operations
+        .backend_tx_manager
+        .get_domain(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID)
+        .await
         .unwrap();
+    assert!(
+        workspace.is_some(),
+        "Root workspace should not have been deleted"
+    );
 }

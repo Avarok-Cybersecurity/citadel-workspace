@@ -1,11 +1,8 @@
-use citadel_workspace_server_kernel::handlers::domain::{
-    DomainOperations, EntityOperations, OfficeOperations, PermissionOperations, RoomOperations,
-    TransactionOperations, UserManagementOperations, WorkspaceOperations,
-};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 #[path = "common/mod.rs"]
 mod common;
+use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
 /// # Workspace Office Integration Test Suite
@@ -24,15 +21,14 @@ use common::workspace_test_utils::*;
 ///
 /// **Expected Outcome:** Office operations work correctly within workspace context
 
-#[test]
-fn test_add_office_to_workspace() {
-    let (kernel, _db_temp_dir) = create_test_kernel();
-    let admin_id = "admin-user";
+#[tokio::test]
+async fn test_add_office_to_workspace() {
+    let kernel = create_test_kernel().await;
 
     // Create an office in the pre-existing workspace
     let office_name = "Test Office";
-    let office_result = kernel.process_command(
-        admin_id,
+    let office_result = execute_command(
+        &kernel,
         WorkspaceProtocolRequest::CreateOffice {
             workspace_id: citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string(),
             name: office_name.to_string(),
@@ -40,26 +36,26 @@ fn test_add_office_to_workspace() {
             mdx_content: None,
             metadata: None,
         },
-    );
+    )
+    .await;
 
-    let office_id = if let Ok(WorkspaceProtocolResponse::Office(office)) = office_result {
-        office.id
-    } else {
-        panic!("Expected Office response, got {:?}", office_result);
+    let office_id = match office_result {
+        Ok(WorkspaceProtocolResponse::Office(office)) => office.id,
+        _ => panic!("Expected Office response, got {:?}", office_result),
     };
 
     // Check that we can get the office
-    let get_office_result = kernel.process_command(
-        admin_id,
+    let get_office_result = execute_command(
+        &kernel,
         WorkspaceProtocolRequest::GetOffice {
             office_id: office_id.clone(),
         },
-    );
+    )
+    .await;
     assert!(get_office_result.is_ok());
 
     // Check that the office appears in the list of offices
-    let list_offices_result =
-        kernel.process_command(admin_id, WorkspaceProtocolRequest::ListOffices);
+    let list_offices_result = execute_command(&kernel, WorkspaceProtocolRequest::ListOffices).await;
 
     match list_offices_result {
         Ok(WorkspaceProtocolResponse::Offices(offices)) => {

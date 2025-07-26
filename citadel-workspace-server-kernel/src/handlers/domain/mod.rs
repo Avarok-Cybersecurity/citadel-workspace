@@ -30,15 +30,7 @@
 //! - **Rooms**: Collaboration spaces within offices for specific projects/topics
 //! - **Users**: Member entities with roles and permissions across domains
 
-use citadel_sdk::prelude::{NetworkError, Ratchet};
-
-// Import external dependencies
-use crate::handlers::domain::functions::workspace::workspace_ops::WorkspaceDBList;
-use crate::kernel::transaction::Transaction;
-use citadel_workspace_types::structs::{
-    Domain, Office, Permission, Room, User, UserRole, Workspace,
-};
-use citadel_workspace_types::UpdateOperation;
+use citadel_sdk::prelude::Ratchet;
 
 // ═══════════════════════════════════════════════════════════════════════════════════
 // MODULE DECLARATIONS
@@ -48,15 +40,14 @@ pub mod core;
 pub mod entity_ops;
 pub mod office_ops;
 pub mod operations_trait;
-pub mod permission_ops;
 pub mod room_ops;
-pub mod transaction_ops;
 pub mod user_ops;
-pub mod workspace_ops;
+
+// Async operations module
+pub mod async_ops;
 
 // Legacy module structure (preserved for compatibility)
 pub mod entity;
-pub mod functions;
 pub mod server_ops;
 
 // ═══════════════════════════════════════════════════════════════════════════════════
@@ -70,11 +61,8 @@ pub use core::{permission_denied, DomainEntity};
 pub use entity_ops::EntityOperations;
 pub use office_ops::OfficeOperations;
 pub use operations_trait::DomainOperations;
-pub use permission_ops::PermissionOperations;
 pub use room_ops::RoomOperations;
-pub use transaction_ops::TransactionOperations;
 pub use user_ops::UserManagementOperations;
-pub use workspace_ops::WorkspaceOperations;
 
 // ═══════════════════════════════════════════════════════════════════════════════════
 // UNIFIED DOMAIN OPERATIONS TRAIT
@@ -98,11 +86,8 @@ pub use workspace_ops::WorkspaceOperations;
 #[auto_impl::auto_impl(Arc)]
 pub trait CompleteDomainOperations<R: Ratchet + Send + Sync + 'static>:
     DomainOperations<R>
-    + TransactionOperations<R>
-    + PermissionOperations<R>
     + UserManagementOperations<R>
     + EntityOperations<R>
-    + WorkspaceOperations<R>
     + OfficeOperations<R>
     + RoomOperations<R>
 {

@@ -1,18 +1,13 @@
 use citadel_logging::debug;
-use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
-use citadel_workspace_server_kernel::handlers::domain::OfficeOperations;
-use citadel_workspace_server_kernel::handlers::domain::RoomOperations;
-use citadel_workspace_server_kernel::handlers::domain::{
-    PermissionOperations, TransactionOperations, UserManagementOperations,
-};
-use citadel_workspace_server_kernel::kernel::transaction::Transaction;
-use citadel_workspace_server_kernel::kernel::transaction::TransactionManagerExt;
+use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncPermissionOperations;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{Domain, Permission, UserRole};
+use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
+use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 #[path = "common/mod.rs"]
 mod common;
-use common::permission_test_utils::*;
+use common::async_test_helpers::*;
+use common::workspace_test_utils::*;
 
 /// # Office-Room Permission Inheritance Test Suite
 ///
@@ -31,54 +26,90 @@ use common::permission_test_utils::*;
 ///
 /// **Expected Outcome:** Users in parent office inherit appropriate permissions in child rooms
 
-#[test]
-fn test_office_room_permission_inheritance() {
-    let (kernel, domain_ops, _db_temp_dir) = setup_test_environment();
+#[tokio::test]
+async fn test_office_room_permission_inheritance() {
+    let kernel = create_test_kernel().await;
 
     // Create test users with different roles
     let user_id = "test_user";
-    let user = create_test_user(user_id, UserRole::Member);
+    let user = User::new(
+        user_id.to_string(),
+        "Test User".to_string(),
+        UserRole::Member,
+    );
 
     // Insert the user
     kernel
-        .tx_manager()
-        .with_write_transaction(|tx| {
-            tx.insert_user(user_id.to_string(), user)?;
-            Ok(())
-        })
+        .domain_operations
+        .backend_tx_manager
+        .insert_user(user_id.to_string(), user)
+        .await
         .unwrap();
 
     // Create an office
-    let office = domain_ops
-        .create_office(
-            "admin",
-            WORKSPACE_ROOT_ID,
-            "Test Office",
-            "For Testing",
-            None,
-        )
-        .unwrap();
+    let office_result = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::CreateOffice {
+            workspace_id: WORKSPACE_ROOT_ID.to_string(),
+            name: "Test Office".to_string(),
+            description: "For Testing".to_string(),
+            mdx_content: None,
+            metadata: None,
+        },
+    )
+    .await;
+
+    let office_id = match office_result {
+        Ok(WorkspaceProtocolResponse::Office(office)) => office.id,
+        _ => panic!("Expected Office response, got {:?}", office_result),
+    };
 
     // Create a room in the office
-    let room = domain_ops
-        .create_room("admin", &office.id, "Test Room", "Room for testing", None)
-        .unwrap();
+    let room_result = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::CreateRoom {
+            office_id: office_id.clone(),
+            name: "Test Room".to_string(),
+            description: "Room for testing".to_string(),
+            mdx_content: None,
+            metadata: None,
+        },
+    )
+    .await;
+
+    let room_id = match room_result {
+        Ok(WorkspaceProtocolResponse::Room(room)) => room.id,
+        _ => panic!("Expected Room response, got {:?}", room_result),
+    };
 
     // Add the user to the office but not the room
-    domain_ops
-        .add_user_to_domain("admin", user_id, &office.id, UserRole::Member)
-        .unwrap();
+    let add_result = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::AddMember {
+            user_id: user_id.to_string(),
+            office_id: Some(office_id.clone()),
+            room_id: None,
+            role: UserRole::Member,
+            metadata: None,
+        },
+    )
+    .await;
+    assert!(add_result.is_ok());
 
     // Verify the user is in the office
-    let office_domain_result = domain_ops
-        .with_read_transaction(|tx| Ok(tx.get_domain(&office.id).cloned()))
-        .unwrap();
-    let office_id_for_check = office.id.clone();
+    let office_domain = kernel
+        .domain_operations
+        .backend_tx_manager
+        .get_domain(&office_id)
+        .await
+        .unwrap()
+        .expect("Office domain should exist");
+
+    let office_id_for_check = office_id.clone();
     debug!(
         "[TEST_DEBUG] Created office 'OfficeInWsPermTest' with ID: {} in workspace_id: {}",
         office_id_for_check, WORKSPACE_ROOT_ID
     );
-    let office_domain = office_domain_result.expect("Office domain should exist");
 
     match office_domain {
         Domain::Office { office } => {
@@ -92,8 +123,10 @@ fn test_office_room_permission_inheritance() {
 
     // Check permission inheritance - user should have view access to the room
     // because they are a member of the parent office
-    let has_room_access = domain_ops
-        .with_read_transaction(|tx| domain_ops.is_member_of_domain(tx, user_id, &room.id))
+    let has_room_access = kernel
+        .domain_operations
+        .is_member_of_domain(user_id, &room_id)
+        .await
         .unwrap();
     assert!(
         has_room_access,
@@ -101,10 +134,10 @@ fn test_office_room_permission_inheritance() {
     );
 
     // Check view permission inheritance
-    let has_view_permission = domain_ops
-        .with_read_transaction(|tx| {
-            domain_ops.check_entity_permission(tx, user_id, &room.id, Permission::ViewContent)
-        })
+    let has_view_permission = kernel
+        .domain_operations
+        .check_entity_permission(user_id, &room_id, Permission::ViewContent)
+        .await
         .unwrap();
     assert!(
         has_view_permission,
@@ -112,10 +145,10 @@ fn test_office_room_permission_inheritance() {
     );
 
     // User shouldn't have edit permission on the room
-    let has_edit_permission = domain_ops
-        .with_read_transaction(|tx| {
-            domain_ops.check_entity_permission(tx, user_id, &room.id, Permission::SendMessages)
-        })
+    let has_edit_permission = kernel
+        .domain_operations
+        .check_entity_permission(user_id, &room_id, Permission::SendMessages)
+        .await
         .unwrap();
     assert!(
         !has_edit_permission,

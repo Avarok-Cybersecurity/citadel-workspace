@@ -5,16 +5,16 @@ use citadel_internal_service_test_common::{
 use citadel_sdk::prelude::{
     BackendType, NetworkError, NodeBuilder, NodeType, PreSharedKey, StackedRatchet,
 };
-use citadel_workspace_server_kernel::{kernel::WorkspaceServerKernel, WORKSPACE_ROOT_ID};
+use citadel_workspace_server_kernel::{
+    kernel::async_kernel::AsyncWorkspaceServerKernel, WORKSPACE_ROOT_ID,
+};
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
-use rocksdb::DB;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tempfile::TempDir;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -67,15 +67,14 @@ pub async fn new_internal_service_with_admin(
     Ok((service_handle, ADMIN_ID.to_string(), admin_password))
 }
 
-/// Sets up the complete test environment with database, internal service, and workspace kernel
+/// Sets up the complete test environment with internal service and workspace kernel
 pub async fn setup_test_environment() -> Result<
     (
-        WorkspaceServerKernel<StackedRatchet>,
+        AsyncWorkspaceServerKernel<StackedRatchet>,
         SocketAddr,
         SocketAddr,
         String,
         String,
-        TempDir,
     ),
     Box<dyn Error>,
 > {
@@ -91,20 +90,13 @@ pub async fn setup_test_environment() -> Result<
     let (_internal_service, admin_username, admin_password) =
         new_internal_service_with_admin(bind_address_internal_service).await?;
 
-    // Create a client to connect to the server, which will trigger the connection handler
+    // Create workspace kernel
     println!("Creating workspace kernel");
-    let db_temp_dir = TempDir::new().expect("Failed to create temp dir for DB");
-    let db_path = db_temp_dir.path().join("integration_test_db");
-    let db =
-        tokio::task::spawn_blocking(move || DB::open_default(&db_path).expect("Failed to open DB"))
-            .await
-            .expect("DB task panicked");
-    let workspace_kernel = WorkspaceServerKernel::<StackedRatchet>::with_admin(
-        ADMIN_ID,
-        &admin_username,
-        &admin_password,
-        Arc::new(db),
-    );
+    let workspace_kernel =
+        AsyncWorkspaceServerKernel::<StackedRatchet>::with_workspace_master_password(
+            &admin_password,
+        )
+        .await?;
 
     // TCP client (GUI, CLI) -> internal service -> empty kernel server(s)
     println!("Setting up server");
@@ -118,12 +110,8 @@ pub async fn setup_test_environment() -> Result<
     println!("Waiting for services to start");
     tokio::time::sleep(Duration::from_millis(2000)).await;
 
-    // Inject the workspace master password into the admin user's metadata
-    // This simulates what `run_server` does during actual startup
-    println!("Injecting workspace password into admin metadata...");
-    workspace_kernel
-        .inject_admin_user(&admin_username, "Admin", &admin_password)
-        .unwrap();
+    // The inject_admin_user is already called in with_admin for AsyncWorkspaceServerKernel
+    println!("Admin user already injected by with_admin");
 
     println!("Done setting up test environment");
     Ok((
@@ -132,7 +120,6 @@ pub async fn setup_test_environment() -> Result<
         server_bind_address,
         admin_username,
         admin_password,
-        db_temp_dir,
     ))
 }
 

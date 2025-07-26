@@ -1,7 +1,7 @@
 use super::core::WorkspaceServerKernel;
 use crate::handlers::domain::{DomainOperations, TransactionOperations};
-use crate::kernel::transaction::TransactionManagerExt;
-use crate::kernel::transaction::{Transaction, TransactionManager};
+// use crate::kernel::transaction::TransactionManagerExt;
+use crate::kernel::transaction::{Transaction, BackendTransactionManager};
 use crate::{WORKSPACE_MASTER_PASSWORD_KEY, WORKSPACE_ROOT_ID};
 use citadel_logging::debug;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
@@ -9,42 +9,12 @@ use citadel_workspace_types::structs::{
     MetadataValue as InternalMetadataValue, Permission, User, UserRole, WorkspaceRoles,
 };
 use parking_lot::RwLock;
-use rocksdb::DB;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+// Note: These methods have been removed. Use AsyncWorkspaceServerKernel instead.
+/*
 impl<R: Ratchet> WorkspaceServerKernel<R> {
-    /// Convenience constructor for creating a kernel with an admin user
-    ///
-    /// This method creates a complete workspace kernel with:
-    /// - A new transaction manager backed by the provided database
-    /// - An admin user with full permissions
-    /// - A root workspace domain properly configured
-    ///
-    /// Used primarily in tests and simple deployments where automatic admin setup is desired.
-    pub fn with_admin(
-        admin_username_str: &str,
-        admin_display_name: &str,
-        admin_password: &str,
-        db: Arc<DB>,
-    ) -> Self {
-        let tx_mngr = Arc::new(RwLock::new(TransactionManager::new(db)));
-        let kernel = Self {
-            roles: Arc::new(RwLock::new(WorkspaceRoles::new())),
-            node_remote: Arc::new(RwLock::new(None)),
-            admin_username: admin_username_str.to_string(),
-            domain_operations: crate::handlers::domain::server_ops::DomainServerOperations::new(
-                tx_mngr.clone(),
-            ),
-        };
-
-        kernel
-            .inject_admin_user(admin_username_str, admin_display_name, admin_password)
-            .expect("Failed to inject admin user during test setup");
-
-        kernel
-    }
-
     /// Helper to inject the initial admin user into the database
     ///
     /// This method performs the complete admin user and workspace setup:
@@ -177,3 +147,4 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
         }
     }
 }
+*/

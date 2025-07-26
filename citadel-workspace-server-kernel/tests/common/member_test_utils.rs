@@ -5,21 +5,18 @@ use citadel_internal_service_test_common::{
 };
 use citadel_logging::info;
 use citadel_sdk::prelude::*;
-use citadel_workspace_server_kernel::handlers::domain::server_ops::DomainServerOperations;
-use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
-use citadel_workspace_server_kernel::kernel::transaction::{Transaction, TransactionManagerExt};
-use citadel_workspace_server_kernel::kernel::WorkspaceServerKernel;
+use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncDomainOperations;
+use citadel_workspace_server_kernel::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
+use citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::{Office, Permission, User, UserRole};
 use citadel_workspace_types::{
     UpdateOperation, WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
-use rocksdb::DB;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tempfile::TempDir;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -88,48 +85,40 @@ pub fn create_test_user(id: &str, role: UserRole) -> User {
 /// Helper to setup a simple test environment for member operations
 ///
 /// Creates a lightweight test environment with:
-/// - Temporary RocksDB database for isolated testing
-/// - WorkspaceServerKernel with admin user pre-configured
-/// - DomainServerOperations for domain management
+/// - AsyncWorkspaceServerKernel with admin user pre-configured
+/// - AsyncDomainServerOperations for domain management
 /// - Logging setup for test debugging
 ///
-/// Returns the kernel, domain operations, and temp directory (must be kept alive)
-pub fn setup_simple_test_environment() -> (
-    Arc<WorkspaceServerKernel<StackedRatchet>>,
-    DomainServerOperations<StackedRatchet>,
-    TempDir,
+/// Returns the kernel and domain operations
+pub async fn setup_simple_test_environment() -> (
+    Arc<AsyncWorkspaceServerKernel<StackedRatchet>>,
+    AsyncDomainServerOperations<StackedRatchet>,
 ) {
     citadel_logging::setup_log();
-    let db_temp_dir = TempDir::new().expect("Failed to create temp dir for DB");
-    let db_path = db_temp_dir.path().join("test_member_db");
-    let db = DB::open_default(&db_path).expect("Failed to open DB");
-    let kernel = Arc::new(WorkspaceServerKernel::<StackedRatchet>::with_admin(
-        "admin",
-        "Administrator",
-        ADMIN_PASSWORD,
-        Arc::new(db),
-    ));
+    let kernel = Arc::new(
+        AsyncWorkspaceServerKernel::<StackedRatchet>::with_workspace_master_password(
+            ADMIN_PASSWORD,
+        )
+        .await
+        .expect("Failed to create kernel with admin"),
+    );
     let domain_ops = kernel.domain_ops().clone();
 
-    (kernel, domain_ops, db_temp_dir)
+    (kernel, domain_ops)
 }
 
-/// Sets up the complete test environment with database, internal service, and workspace kernel
+/// Sets up the complete test environment with internal service and workspace kernel
 pub async fn setup_test_environment() -> Result<
     (
-        WorkspaceServerKernel<StackedRatchet>,
+        AsyncWorkspaceServerKernel<StackedRatchet>,
         SocketAddr,
         SocketAddr,
         String,
         String,
-        TempDir,
     ),
     Box<dyn Error>,
 > {
     common::setup_log();
-
-    let temp_db_dir = TempDir::new()?;
-    let db = Arc::new(DB::open_default(temp_db_dir.path())?);
 
     let bind_address_internal_service: SocketAddr =
         format!("127.0.0.1:{}", get_free_port()).parse().unwrap();
@@ -137,12 +126,11 @@ pub async fn setup_test_environment() -> Result<
     let (_internal_service, admin_username, admin_password) =
         new_internal_service_with_admin(bind_address_internal_service).await?;
 
-    let workspace_kernel = WorkspaceServerKernel::<StackedRatchet>::with_admin(
-        ADMIN_ID,
-        &admin_username,
-        &admin_password,
-        db.clone(),
-    );
+    let workspace_kernel =
+        AsyncWorkspaceServerKernel::<StackedRatchet>::with_workspace_master_password(
+            &admin_password,
+        )
+        .await?;
 
     let (server, server_bind_address) =
         server_test_node_skip_cert_verification(workspace_kernel.clone(), |_| ());
@@ -157,7 +145,6 @@ pub async fn setup_test_environment() -> Result<
         server_bind_address,
         admin_username,
         admin_password,
-        temp_db_dir,
     ))
 }
 

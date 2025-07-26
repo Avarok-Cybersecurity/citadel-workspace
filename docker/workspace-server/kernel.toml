@@ -1,6 +1,4 @@
-admin_username = "admin"
 # Replace with a secure, randomly generated password
 workspace_master_password = "SUPER_SECRET_ADMIN_PASSWORD_CHANGE_ME" 
-bind_address = "127.0.0.1:12349"
-dangerous_skip_cert_verification = false 
-# backend = "some_backend_uri" # Optional: Defaults to in-memory if omitted
+bind_addr = "0.0.0.0:12349"
+dangerous_skip_cert_verification = true 

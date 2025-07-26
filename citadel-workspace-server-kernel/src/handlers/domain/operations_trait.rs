@@ -2,11 +2,10 @@
 //!
 //! This module defines the comprehensive DomainOperations trait that provides
 //! the primary interface for all domain-related operations in the workspace system.
-
-use crate::handlers::domain::core::DomainEntity;
-use crate::kernel::transaction::Transaction;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{Domain, User};
+
+use crate::kernel::transaction::BackendTransactionManager;
 
 /// Comprehensive trait defining all domain-level operations for the workspace system.
 ///
@@ -59,7 +58,11 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
     /// * `Ok(true)` - User has admin privileges
     /// * `Ok(false)` - User does not have admin privileges
     /// * `Err(NetworkError)` - Check failed due to system error
-    fn is_admin(&self, tx: &dyn Transaction, user_id: &str) -> Result<bool, NetworkError>;
+    fn is_admin(
+        &self,
+        tx: &BackendTransactionManager<R>,
+        user_id: &str,
+    ) -> Result<bool, NetworkError>;
 
     /// Retrieves a user entity by their unique identifier.
     ///

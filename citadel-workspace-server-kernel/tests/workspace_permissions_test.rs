@@ -1,14 +1,10 @@
-use citadel_workspace_server_kernel::handlers::domain::{
-    DomainOperations, EntityOperations, OfficeOperations, PermissionOperations, RoomOperations,
-    TransactionOperations, UserManagementOperations, WorkspaceOperations,
-};
-use citadel_workspace_server_kernel::kernel::transaction::Transaction;
-use citadel_workspace_server_kernel::kernel::transaction::TransactionManagerExt;
+use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncPermissionOperations;
 use citadel_workspace_types::structs::{Permission, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 #[path = "common/mod.rs"]
 mod common;
+use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
 /// # Workspace Permissions and Inheritance Test Suite
@@ -34,36 +30,40 @@ use common::workspace_test_utils::*;
 ///
 /// **Expected Outcome:** Permissions properly inherit down the hierarchy with role restrictions
 
-#[test]
-fn test_permissions_inheritance() {
-    let (kernel, _db_temp_dir) = create_test_kernel();
+#[tokio::test]
+async fn test_permissions_inheritance() {
+    let kernel = create_test_kernel().await;
     let admin_id = "admin-user";
     let owner_id = "owner-user";
     let member_id = "member-user";
 
     // Create additional users (admin is already created by create_test_kernel)
+    let owner = User::new(
+        owner_id.to_string(),
+        "Owner User".to_string(),
+        UserRole::Owner,
+    );
+    let member = User::new(
+        member_id.to_string(),
+        "Member User".to_string(),
+        UserRole::Guest, // Start as guest, will be promoted to Member
+    );
     kernel
-        .tx_manager()
-        .with_write_transaction(|tx| {
-            let owner = User::new(
-                owner_id.to_string(),
-                "Owner User".to_string(),
-                UserRole::Owner,
-            );
-            let member = User::new(
-                member_id.to_string(),
-                "Member User".to_string(),
-                UserRole::Guest, // Start as guest, will be promoted to Member
-            );
-            tx.insert_user(owner_id.to_string(), owner)?;
-            tx.insert_user(member_id.to_string(), member)?;
-            Ok(())
-        })
+        .domain_operations
+        .backend_tx_manager
+        .insert_user(owner_id.to_string(), owner)
+        .await
+        .unwrap();
+    kernel
+        .domain_operations
+        .backend_tx_manager
+        .insert_user(member_id.to_string(), member)
+        .await
         .unwrap();
 
     // Add owner to the workspace so they can create offices/rooms
-    let add_owner_result = kernel.process_command(
-        admin_id,
+    let add_owner_result = execute_command(
+        &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: owner_id.to_string(),
             office_id: None,
@@ -71,12 +71,13 @@ fn test_permissions_inheritance() {
             role: UserRole::Owner,
             metadata: None,
         },
-    );
+    )
+    .await;
     assert!(add_owner_result.is_ok());
 
     // Add member to the workspace
-    let add_member_result = kernel.process_command(
-        admin_id,
+    let add_member_result = execute_command(
+        &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: member_id.to_string(),
             office_id: None,
@@ -84,12 +85,13 @@ fn test_permissions_inheritance() {
             role: UserRole::Member,
             metadata: None,
         },
-    );
+    )
+    .await;
     assert!(add_member_result.is_ok());
 
     // Create an office, owned by owner_id
-    let office_result = kernel.process_command(
-        owner_id,
+    let office_result = execute_command(
+        &kernel,
         WorkspaceProtocolRequest::CreateOffice {
             workspace_id: citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string(),
             name: "Test Office".to_string(),
@@ -97,17 +99,17 @@ fn test_permissions_inheritance() {
             mdx_content: None,
             metadata: None,
         },
-    );
+    )
+    .await;
 
-    let office_id = if let Ok(WorkspaceProtocolResponse::Office(office)) = office_result {
-        office.id
-    } else {
-        panic!("Expected Office response, got {:?}", office_result);
+    let office_id = match office_result {
+        Ok(WorkspaceProtocolResponse::Office(office)) => office.id,
+        _ => panic!("Expected Office response, got {:?}", office_result),
     };
 
     // Create a room within the office
-    let room_result = kernel.process_command(
-        owner_id,
+    let room_result = execute_command(
+        &kernel,
         WorkspaceProtocolRequest::CreateRoom {
             office_id: office_id.clone(),
             name: "Test Room".to_string(),
@@ -115,93 +117,76 @@ fn test_permissions_inheritance() {
             mdx_content: None,
             metadata: None,
         },
-    );
+    )
+    .await;
 
-    let room_id = if let Ok(WorkspaceProtocolResponse::Room(room)) = room_result {
-        room.id
-    } else {
-        panic!("Expected Room response, got {:?}", room_result);
+    let room_id = match room_result {
+        Ok(WorkspaceProtocolResponse::Room(room)) => room.id,
+        _ => panic!("Expected Room response, got {:?}", room_result),
     };
 
     // Test permissions inheritance
     // 1. Member should have ViewContent permission on workspace
-    let member_workspace_perm = kernel.domain_ops().with_read_transaction(|tx| {
-        kernel.domain_ops().check_entity_permission(
-            tx,
+    let member_workspace_perm = kernel
+        .domain_operations
+        .check_entity_permission(
             member_id,
             citadel_workspace_server_kernel::WORKSPACE_ROOT_ID,
             Permission::ViewContent,
         )
-    });
+        .await;
     assert!(
         member_workspace_perm.unwrap(),
         "Member should have ViewContent on workspace"
     );
 
     // 2. Member should have ViewContent permission on office (inherited from workspace)
-    let member_office_perm = kernel.domain_ops().with_read_transaction(|tx| {
-        kernel.domain_ops().check_entity_permission(
-            tx,
-            member_id,
-            &office_id,
-            Permission::ViewContent,
-        )
-    });
+    let member_office_perm = kernel
+        .domain_operations
+        .check_entity_permission(member_id, &office_id, Permission::ViewContent)
+        .await;
     assert!(
         member_office_perm.unwrap(),
         "Member should have ViewContent on office by inheritance"
     );
 
     // 3. Member should have ViewContent permission on room (inherited from workspace -> office)
-    let member_room_perm = kernel.domain_ops().with_read_transaction(|tx| {
-        kernel.domain_ops().check_entity_permission(
-            tx,
-            member_id,
-            &room_id,
-            Permission::ViewContent,
-        )
-    });
+    let member_room_perm = kernel
+        .domain_operations
+        .check_entity_permission(member_id, &room_id, Permission::ViewContent)
+        .await;
     assert!(
         member_room_perm.unwrap(),
         "Member should have ViewContent on room by inheritance"
     );
 
     // 4. Member should NOT have EditContent permission on room (not granted to members)
-    let member_edit_perm = kernel.domain_ops().with_read_transaction(|tx| {
-        kernel.domain_ops().check_entity_permission(
-            tx,
-            member_id,
-            &room_id,
-            Permission::EditContent,
-        )
-    });
+    let member_edit_perm = kernel
+        .domain_operations
+        .check_entity_permission(member_id, &room_id, Permission::EditContent)
+        .await;
     assert!(
         !member_edit_perm.unwrap(),
         "Member should NOT have EditContent on room"
     );
 
     // 5. Owner should have all permissions on workspace, office, and room
-    let owner_edit_workspace = kernel.domain_ops().with_read_transaction(|tx| {
-        kernel.domain_ops().check_entity_permission(
-            tx,
+    let owner_edit_workspace = kernel
+        .domain_operations
+        .check_entity_permission(
             owner_id,
             citadel_workspace_server_kernel::WORKSPACE_ROOT_ID,
             Permission::EditContent,
         )
-    });
-    let owner_edit_office = kernel.domain_ops().with_read_transaction(|tx| {
-        kernel.domain_ops().check_entity_permission(
-            tx,
-            owner_id,
-            &office_id,
-            Permission::EditContent,
-        )
-    });
-    let owner_edit_room = kernel.domain_ops().with_read_transaction(|tx| {
-        kernel
-            .domain_ops()
-            .check_entity_permission(tx, owner_id, &room_id, Permission::EditContent)
-    });
+        .await;
+    let owner_edit_office = kernel
+        .domain_operations
+        .check_entity_permission(owner_id, &office_id, Permission::EditContent)
+        .await;
+    let owner_edit_room = kernel
+        .domain_operations
+        .check_entity_permission(owner_id, &room_id, Permission::EditContent)
+        .await;
 
     assert!(
         owner_edit_workspace.unwrap(),
@@ -217,27 +202,22 @@ fn test_permissions_inheritance() {
     );
 
     // 6. Admin should have all permissions regardless of membership
-    let admin_edit_workspace = kernel.domain_ops().with_read_transaction(|tx| {
-        kernel.domain_ops().check_entity_permission(
-            tx,
+    let admin_edit_workspace = kernel
+        .domain_operations
+        .check_entity_permission(
             admin_id,
             citadel_workspace_server_kernel::WORKSPACE_ROOT_ID,
             Permission::EditContent,
         )
-    });
-    let admin_edit_office = kernel.domain_ops().with_read_transaction(|tx| {
-        kernel.domain_ops().check_entity_permission(
-            tx,
-            admin_id,
-            &office_id,
-            Permission::EditContent,
-        )
-    });
-    let admin_edit_room = kernel.domain_ops().with_read_transaction(|tx| {
-        kernel
-            .domain_ops()
-            .check_entity_permission(tx, admin_id, &room_id, Permission::EditContent)
-    });
+        .await;
+    let admin_edit_office = kernel
+        .domain_operations
+        .check_entity_permission(admin_id, &office_id, Permission::EditContent)
+        .await;
+    let admin_edit_room = kernel
+        .domain_operations
+        .check_entity_permission(admin_id, &room_id, Permission::EditContent)
+        .await;
 
     assert!(
         admin_edit_workspace.unwrap(),

@@ -191,7 +191,6 @@ impl DomainEntity for Workspace {
             members: vec![],
             offices: vec![],
             metadata: Vec::new(),
-            password_protected: false,
         }
     }
 

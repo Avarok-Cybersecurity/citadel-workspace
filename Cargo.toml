@@ -3,7 +3,6 @@ members = [
     "citadel-workspace-server-kernel",
     "citadel-workspace-internal-service",
     "citadel-workspace-types",
-    "src-tauri",
 ]
 resolver = "2"
 
@@ -14,21 +13,28 @@ citadel-workspace-internal-service = { path = "./citadel-workspace-internal-serv
 citadel-workspace-types = { path = "./citadel-workspace-types" }
 
 # Secondary packages
-citadel-internal-service = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/", branch = "feat/request_cids" }
-citadel-internal-service-test-common = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/", branch = "feat/request_cids" }
-citadel-internal-service-types = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/", branch = "feat/request_cids" }
-citadel-internal-service-connector = { git = "https://github.com/Avarok-Cybersecurity/citadel-internal-service/", branch = "feat/request_cids" }
+
+# Secondary package (for dev purposes, use the local path at ../citadel-internal-service)
+citadel-internal-service = { path = "./citadel-internal-service/citadel-internal-service" }
+citadel-internal-service-test-common = { path = "./citadel-internal-service/citadel-internal-service/tests/common" }
+citadel-internal-service-types = { path = "./citadel-internal-service/citadel-internal-service-types" }
+citadel-internal-service-connector = { path = "./citadel-internal-service/citadel-internal-service-connector" }
 
 # Avarok deps
 citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "cw-debug" }
 citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "cw-debug" }
 citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "cw-debug" }
 
+# Avarok deps (for dev purposes, use the local path at ../Citadel-Protocol)
+#citadel_sdk = { path = "../Citadel-Protocol/citadel_sdk" }
+#citadel_types = { path = "../Citadel-Protocol/citadel_types" }
+#citadel_logging = { path = "../Citadel-Protocol/citadel_logging" }
+
 # Tauri plugins
-tauri = { version = "2.4.1" }
-tauri-plugin-shell = { version = "2.2.1" }
-tauri-plugin-log = { version = "2.4.0" }
-tauri-build = { version = "2.1.1" }
+#tauri = { version = "2.4.1" }
+#tauri-plugin-shell = { version = "2.2.1" }
+#tauri-plugin-log = { version = "2.4.0" }
+#tauri-build = { version = "2.1.1" }
 
 # Generic dependencies
 structopt = { version = "0.3.26" }

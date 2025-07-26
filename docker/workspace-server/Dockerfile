@@ -5,17 +5,11 @@ WORKDIR /usr/src/app
 
 # Install necessary build dependencies for crates like oqs-sys (which uses bindgen)
 RUN apt-get update && \
-    apt-get install -y cmake libclang-dev llvm clang netcat-openbsd && \
+    apt-get install -y cmake libclang-dev llvm clang netcat-openbsd curl && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy the entire workspace context
-COPY . .
-
-# Copy the server-kernel.toml file
-COPY ./docker/workspace-server/kernel.toml .
-
+COPY ./docker/workspace-server/kernel.toml /usr/src/app/kernel.toml
 # Expose port if server listens on one (replace 12349 with actual port if needed)
 EXPOSE 12349
-
 # Run the workspace server via cargo run
-CMD ["cargo", "run", "--bin", "citadel-workspace-server-kernel", "--", "--config", "kernel.toml"]
+CMD ["cargo", "run", "--bin", "citadel-workspace-server-kernel", "--", "--config", "/usr/src/app/kernel.toml"]

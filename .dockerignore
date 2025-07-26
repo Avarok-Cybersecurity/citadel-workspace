@@ -6,7 +6,6 @@
 Dockerfile
 .dockerignore
 docker-compose.yml
-docker/
 
 # Tilt file
 Tiltfile

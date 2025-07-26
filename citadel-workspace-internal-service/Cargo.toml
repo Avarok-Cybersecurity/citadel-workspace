@@ -12,10 +12,13 @@ deadlock-detection = ["parking_lot/deadlock_detection", "parking_lot", "lazy_sta
 name = "citadel-workspace-internal-service"
 path = "src/main.rs"
 
+[build-dependencies]
+# No external dependencies needed for the build script
+
 [dependencies]
 structopt = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
-citadel-internal-service = { workspace = true }
+citadel-internal-service = { workspace = true, features = ["websockets"] }
 citadel_sdk = { workspace = true, features = ["sql"]}
 citadel_types = { workspace = true }
 citadel_logging = { workspace = true }

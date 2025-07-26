@@ -3,10 +3,17 @@ name = "citadel-workspace-types"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "export-types"
+path = "src/export_types.rs"
+
 [dependencies]
-citadel_sdk = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 uuid = { workspace = true } # Added back with workspace inheritance
+ts-rs = { version = "10.0", features = ["serde-compat", "uuid"] }
+
+[build-dependencies]
+ts-rs = { version = "10.0", features = ["serde-compat", "uuid"] }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

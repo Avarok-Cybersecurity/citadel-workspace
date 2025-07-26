@@ -1,47 +1,58 @@
 services:
-  internal-service:
-    build:
-      context: .
-      dockerfile: ./docker/internal-service/Dockerfile
-    volumes:
-      - .:/usr/src/app # Mount entire codebase for live updates <-- RE-ENABLED
-      # Mount shared caches and target directory
-      - cargo_registry_cache:/usr/local/cargo/registry
-      - cargo_git_cache:/usr/local/cargo/git
-      - target_cache:/usr/src/app/target
-    environment:
-      - RUST_LOG=citadel=info
-    healthcheck:
-      test: [ "CMD", "nc", "-z", "localhost", "12345" ]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
-    network_mode: service:server # Share network namespace with server
-
   server:
     build:
       context: .
       dockerfile: ./docker/workspace-server/Dockerfile
     volumes:
-      - .:/usr/src/app # <-- RE-ENABLED
-      # Mount shared caches and target directory
+      # Mount relevant codebase for live updates
+      - ./Cargo.toml:/usr/src/app/Cargo.toml
+      - ./Cargo.lock:/usr/src/app/Cargo.lock
+      - ./citadel-workspace-types:/usr/src/app/citadel-workspace-types
+      - ./citadel-workspace-internal-service:/usr/src/app/citadel-workspace-internal-service
+      - ./citadel-workspace-server-kernel:/usr/src/app/citadel-workspace-server-kernel
+      - ./docker/workspace-server/kernel.toml:/usr/src/app/kernel.toml
       - cargo_registry_cache:/usr/local/cargo/registry
       - cargo_git_cache:/usr/local/cargo/git
       - target_cache:/usr/src/app/target
     environment:
       - RUST_LOG=citadel=info
-    healthcheck:
-      test: [ "CMD", "nc", "-z", "localhost", "12349" ]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
+    # Healthcheck disabled to avoid WebSocket handshake errors in logs
+    # healthcheck:
+    #   test: [ "CMD", "curl", "-f", "http://localhost:12349/health" ]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 5
+    #   start_period: 30s
     ports:
       - "12349:12349"
       - "12345:12345" # host:container
     networks:
       - citadel-net
+  internal-service:
+    build:
+      context: .
+      dockerfile: ./docker/internal-service/Dockerfile
+      args:
+        - INTERNAL_SERVICE_PORT=12345
+    volumes:
+      # Mount relevant codebase for live updates
+      - ./Cargo.toml:/usr/src/app/Cargo.toml
+      - ./Cargo.lock:/usr/src/app/Cargo.lock
+      - ./citadel-workspace-types:/usr/src/app/citadel-workspace-types
+      - ./citadel-workspace-internal-service:/usr/src/app/citadel-workspace-internal-service
+      - ./citadel-workspace-server-kernel:/usr/src/app/citadel-workspace-server-kernel
+
+      # Mount shared caches and target directory
+      - cargo_registry_cache:/usr/local/cargo/registry
+      - cargo_git_cache:/usr/local/cargo/git
+      - target_cache:/usr/src/app/target
+    environment:
+      - RUST_LOG=citadel=debug
+      - DOCKER_CONTAINER=1
+      - SKIP_WASM_BUILD=1
+    depends_on:
+      - server
+    network_mode: service:server # Share network namespace with server
 
 # Define named volumes for caching
 volumes:

@@ -112,6 +112,7 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
 
                     info!(target: "citadel", "User {} connected with cid {} ({})", user_id, connect_success.session_cid, user_cid);
 
+                    // TODO: Add user to workspace domain if they aren't already in it
                     let (mut tx, mut rx) = connect_success.channel.split();
 
                     // Main message processing loop for this connection

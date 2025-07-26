@@ -2,8 +2,10 @@ pub mod structs;
 
 use serde::{Deserialize, Serialize};
 use structs::{Office, Permission, Room, User, UserRole, Workspace};
+use ts_rs::TS;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum WorkspaceProtocolPayload {
     Request(WorkspaceProtocolRequest),
     Response(WorkspaceProtocolResponse),
@@ -21,10 +23,9 @@ impl From<WorkspaceProtocolResponse> for WorkspaceProtocolPayload {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum WorkspaceProtocolRequest {
-    LoadWorkspace,
-
     // Workspace commands
     CreateWorkspace {
         name: String,
@@ -129,12 +130,14 @@ pub enum WorkspaceProtocolRequest {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum WorkspaceProtocolResponse {
     Workspace(Workspace),
     // Removing Workspaces variant since there's only one workspace
     Success(String),
     Error(String),
+    WorkspaceNotInitialized,
     Offices(Vec<Office>),
     Rooms(Vec<Room>),
     Members(Vec<User>),
@@ -143,7 +146,8 @@ pub enum WorkspaceProtocolResponse {
     Member(User),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum PermissionEndowOperation {
     // Adds the associated permissions to the user
     Add,
@@ -153,14 +157,16 @@ pub enum PermissionEndowOperation {
     Replace,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum ListType {
     MembersInWorkspace,
     MembersInOffice { office_id: String },
     MembersInRoom { room_id: String },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum UpdateOperation {
     // Adds the associated permissions to the user
     Add,

@@ -1,314 +1,256 @@
-use citadel_sdk::prelude::NetworkError;
-use citadel_workspace_types::structs::{
-    Domain, Office, Permission, Room, User, UserRole, Workspace,
-};
+use citadel_sdk::prelude::{BackendHandler, NetworkError, NodeRemote, ProtocolRemoteExt, Ratchet};
+use citadel_workspace_types::structs::{Domain, User, Workspace};
 use parking_lot::RwLock;
-use rocksdb::DB;
 use std::collections::HashMap;
 use std::sync::Arc;
-pub mod rbac;
-pub mod read;
-pub mod write;
+pub mod async_transactions;
+pub mod backend_ops_simple;
+// Note: TransactionManager has been removed. Use BackendTransactionManager instead.
 
-// Re-export rbac functionality for convenience
-pub use self::rbac::retrieve_role_permissions;
-pub use self::rbac::DomainType;
-pub use self::rbac::TransactionManagerExt;
-
-// Create a prelude module for easy imports
-pub mod prelude {
-    pub use super::rbac::TransactionManagerExt;
+/// Transaction manager that uses NodeRemote backend for persistence
+pub struct BackendTransactionManager<R: Ratchet> {
+    /// NodeRemote for backend operations
+    node_remote: Arc<RwLock<Option<NodeRemote<R>>>>,
+    /// In-memory storage for testing when no NodeRemote is available
+    test_storage: Arc<RwLock<HashMap<String, Vec<u8>>>>,
 }
 
-/// Transaction trait defines common functionality for both read and write transactions
-pub trait Transaction {
-    fn workspace_password(&self, workspace_id: &str) -> Option<String>;
-    fn set_workspace_password(
-        &mut self,
-        workspace_id: &str,
-        password: &str,
-    ) -> Result<(), NetworkError>;
-    /// Get a domain by ID
-    fn get_domain(&self, domain_id: &str) -> Option<&Domain>;
-
-    /// Get a mutable reference to a domain (write transactions only)
-    fn get_domain_mut(&mut self, domain_id: &str) -> Option<&mut Domain>;
-
-    /// Get all domains
-    fn get_all_domains(&self) -> Result<Vec<(String, Domain)>, NetworkError>;
-
-    /// Get a workspace by ID
-    fn get_workspace(&self, workspace_id: &str) -> Option<&Workspace>;
-
-    /// Get a mutable reference to a workspace (write transactions only)
-    fn get_workspace_mut(&mut self, workspace_id: &str) -> Option<&mut Workspace>;
-
-    /// Get all workspaces
-    fn get_all_workspaces(&self) -> &HashMap<String, Workspace>;
-
-    /// Get an office by ID
-    fn get_office(&self, office_id: &str) -> Option<&Office>;
-
-    /// Get a mutable reference to an office (write transactions only)
-    fn get_office_mut(&mut self, office_id: &str) -> Option<&mut Office>;
-
-    /// Get a room by ID
-    fn get_room(&self, room_id: &str) -> Option<&Room>;
-
-    /// Get a mutable reference to a room (write transactions only)
-    fn get_room_mut(&mut self, room_id: &str) -> Option<&mut Room>;
-
-    /// Get a user by ID
-    fn get_user(&self, user_id: &str) -> Option<&User>;
-
-    /// Get a mutable reference to a user (write transactions only)
-    fn get_user_mut(&mut self, user_id: &str) -> Option<&mut User>;
-
-    /// Get all users
-    fn get_all_users(&self) -> &HashMap<String, User>;
-
-    /// Check if a user is a member of a domain
-    fn is_member_of_domain(&self, user_id: &str, domain_id: &str) -> Result<bool, NetworkError>;
-
-    /// Insert a domain
-    fn insert_domain(&mut self, domain_id: String, domain: Domain) -> Result<(), NetworkError>;
-
-    /// Insert a workspace
-    fn insert_workspace(
-        &mut self,
-        workspace_id: String,
-        workspace: Workspace,
-    ) -> Result<(), NetworkError>;
-
-    /// Insert an office
-    fn insert_office(&mut self, office_id: String, office: Office) -> Result<(), NetworkError>;
-
-    /// Insert a room
-    fn insert_room(&mut self, room_id: String, room: Room) -> Result<(), NetworkError>;
-
-    /// Insert a user
-    fn insert_user(&mut self, user_id: String, user: User) -> Result<(), NetworkError>;
-
-    /// Update a domain
-    fn update_domain(&mut self, domain_id: &str, new_domain: Domain) -> Result<(), NetworkError>;
-
-    /// Update a workspace
-    fn update_workspace(
-        &mut self,
-        workspace_id: &str,
-        new_workspace: Workspace,
-    ) -> Result<(), NetworkError>;
-
-    /// Update a user
-    fn update_user(&mut self, user_id: &str, new_user: User) -> Result<(), NetworkError>;
-
-    /// Remove a domain and return it
-    fn remove_domain(&mut self, domain_id: &str) -> Result<Option<Domain>, NetworkError>;
-
-    /// Remove a workspace and return it
-    fn remove_workspace(&mut self, workspace_id: &str) -> Result<Option<Workspace>, NetworkError>;
-
-    /// Remove an office and return it
-    fn remove_office(&mut self, office_id: &str) -> Result<(), NetworkError>;
-
-    /// Remove a room and return it
-    fn remove_room(&mut self, room_id: &str) -> Result<(), NetworkError>;
-
-    /// Remove a user and return it
-    fn remove_user(&mut self, user_id: &str) -> Result<Option<User>, NetworkError>;
-
-    /// List workspaces accessible to a user
-    fn list_workspaces(&self, user_id: &str) -> Result<Vec<Workspace>, NetworkError>;
-
-    /// List offices accessible to a user within a workspace
-    fn list_offices(
-        &self,
-        user_id: &str,
-        workspace_id: Option<String>,
-    ) -> Result<Vec<Office>, NetworkError>;
-
-    /// List rooms accessible to a user within an office
-    fn list_rooms(
-        &self,
-        user_id: &str,
-        office_id: Option<String>,
-    ) -> Result<Vec<Room>, NetworkError>;
-
-    /// Add a user to a domain
-    fn add_user_to_domain(
-        &mut self,
-        user_id: &str,
-        domain_id: &str,
-        role: UserRole,
-    ) -> Result<(), NetworkError>;
-
-    /// Remove a user from a domain
-    fn remove_user_from_domain(
-        &mut self,
-        user_id: &str,
-        domain_id: &str,
-    ) -> Result<(), NetworkError>;
-
-    /// Commit changes (only applies to write transactions)
-    fn commit(&self) -> Result<(), NetworkError> {
-        Ok(()) // Default implementation, will be overridden for write transactions
-    }
-
-    /// Get a user's role
-    fn get_user_role(&self, user_id: &str) -> Result<Option<UserRole>, NetworkError>;
-
-    /// Get a user's permissions
-    fn get_permissions(&self, user_id: &str) -> Result<Vec<Permission>, NetworkError>;
-
-    /// Get a role
-    fn get_role(&self, role_id: &str) -> Result<Option<UserRole>, NetworkError>;
-
-    /// Create a role
-    fn create_role(&mut self, role: UserRole) -> Result<(), NetworkError>;
-
-    /// Delete a role
-    fn delete_role(&mut self, role_id: &str) -> Result<(), NetworkError>;
-
-    /// Assign a role to a user
-    fn assign_role(&mut self, user_id: &str, role_id: &str) -> Result<(), NetworkError>;
-
-    /// Unassign a role from a user
-    fn unassign_role(&mut self, user_id: &str, role_id: &str) -> Result<(), NetworkError>;
-}
-
-/// Extended transaction interface to add, get, and remove workspaces
-pub trait WorkspaceOperations {
-    /// Get a workspace by ID
-    fn get_workspace(&self, workspace_id: &str) -> Option<&Workspace>;
-
-    /// Add a workspace with the given ID
-    fn add_workspace(
-        &mut self,
-        workspace_id: &str,
-        workspace: &mut Workspace,
-    ) -> Result<(), NetworkError>;
-
-    /// Remove a workspace
-    fn remove_workspace(&mut self, workspace_id: &str) -> Result<(), NetworkError>;
-
-    /// Update a workspace
-    fn update_workspace(
-        &mut self,
-        workspace_id: &str,
-        workspace: Workspace,
-    ) -> Result<(), NetworkError>;
-}
-
-/// Type of domain change in a transaction for rollback support
-pub enum DomainChange {
-    Insert(String),
-    Update(String, Domain),
-    Remove(String, Domain),
-}
-
-/// Type of user change in a transaction for rollback support
-pub enum UserChange {
-    Insert(String),
-    Update(String, User),
-    Remove(String, User),
-}
-
-/// Type of workspace change in a transaction for rollback support
-pub enum WorkspaceChange {
-    Insert(String),
-    Update(String, Workspace),
-    Remove(String, Workspace),
-}
-
-/// Transaction manager for creating read and write transactions
-pub struct TransactionManager {
-    pub domains: RwLock<HashMap<String, Domain>>,
-    pub users: RwLock<HashMap<String, User>>,
-    pub workspaces: RwLock<HashMap<String, Workspace>>,
-    pub workspace_password: RwLock<HashMap<String, String>>,
-    pub db: Arc<DB>,
-}
-
-impl TransactionManager {
-    pub fn new(db: Arc<DB>) -> Self {
-        let mut domains_map = HashMap::new();
-        let mut users_map = HashMap::new();
-        let mut workspaces_map = HashMap::new();
-        // workspace_password map is not persisted in this manner, handled differently or ephemeral
-
-        println!("[TM_NEW_PRINTLN] Initializing TransactionManager: Loading data from RocksDB...");
-
-        let iter = db.iterator(rocksdb::IteratorMode::Start);
-        for result in iter {
-            match result {
-                Ok((key_bytes, value_bytes)) => {
-                    let key_str = match std::str::from_utf8(&key_bytes) {
-                        Ok(s) => s,
-                        Err(e) => {
-                            eprintln!("[TM_NEW_ERROR_PRINTLN] Failed to convert key to UTF-8: {}. Skipping entry.", e);
-                            continue;
-                        }
-                    };
-
-                    if key_str.starts_with("domain::") {
-                        match bincode::deserialize::<Domain>(&value_bytes) {
-                            Ok(domain) => {
-                                let domain_id = key_str.trim_start_matches("domain::").to_string();
-                                println!("[TM_NEW_PRINTLN] Loading domain: {}", domain_id);
-                                domains_map.insert(domain_id, domain);
-                            }
-                            Err(e) => {
-                                eprintln!("[TM_NEW_ERROR_PRINTLN] Failed to deserialize domain for key {}: {}. Skipping entry.", key_str, e);
-                            }
-                        }
-                    } else if key_str.starts_with("user::") {
-                        match bincode::deserialize::<User>(&value_bytes) {
-                            Ok(user) => {
-                                let user_id = key_str.trim_start_matches("user::").to_string();
-                                println!("[TM_NEW_PRINTLN] Loading user: {}", user_id);
-                                users_map.insert(user_id, user);
-                            }
-                            Err(e) => {
-                                eprintln!("[TM_NEW_ERROR_PRINTLN] Failed to deserialize user for key {}: {}. Skipping entry.", key_str, e);
-                            }
-                        }
-                    } else if key_str.starts_with("workspace::") {
-                        match bincode::deserialize::<Workspace>(&value_bytes) {
-                            Ok(workspace) => {
-                                let workspace_id =
-                                    key_str.trim_start_matches("workspace::").to_string();
-                                println!("[TM_NEW_PRINTLN] Loading workspace: {}", workspace_id);
-                                workspaces_map.insert(workspace_id, workspace);
-                            }
-                            Err(e) => {
-                                eprintln!("[TM_NEW_ERROR_PRINTLN] Failed to deserialize workspace for key {}: {}. Skipping entry.", key_str, e);
-                            }
-                        }
-                    } else {
-                        // Optional: Log other keys if necessary, or ignore them if they are not managed by TransactionManager caches
-                        // println!("[TM_NEW_PRINTLN] Skipping unrecognized key prefix: {}", key_str);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("[TM_NEW_ERROR_PRINTLN] Error iterating RocksDB: {}. Aborting further loading.", e);
-                    break; // Or handle more gracefully, e.g., by returning a Result from new()
-                }
-            }
-        }
-
+impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
+    pub fn new() -> Self {
         println!(
-            "[TM_NEW_PRINTLN] RocksDB loading complete. Domains: {}, Users: {}, Workspaces: {}.",
-            domains_map.len(),
-            users_map.len(),
-            workspaces_map.len()
+            "[BTM_NEW_PRINTLN] Initializing BackendTransactionManager with NodeRemote backend..."
         );
 
         Self {
-            domains: RwLock::new(domains_map),
-            users: RwLock::new(users_map),
-            workspaces: RwLock::new(workspaces_map),
-            workspace_password: RwLock::new(HashMap::new()), // Remains empty, not loaded from DB this way
-            db,
+            node_remote: Arc::new(RwLock::new(None)),
+            test_storage: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    /// Set the NodeRemote instance
+    pub fn set_node_remote(&self, node_remote: NodeRemote<R>) {
+        *self.node_remote.write() = Some(node_remote);
+    }
+
+    /// Check if we're in test mode (no NodeRemote set)
+    pub fn is_test_mode(&self) -> bool {
+        self.node_remote.read().is_none()
+    }
+
+    /// Get the node remote
+    fn get_node_remote(&self) -> Result<NodeRemote<R>, NetworkError> {
+        self.node_remote
+            .read()
+            .as_ref()
+            .ok_or_else(|| NetworkError::msg("NodeRemote not set"))
+            .map(|nr| nr.clone())
+    }
+
+    /// Get all domains from backend
+    pub async fn get_all_domains(&self) -> Result<HashMap<String, Domain>, NetworkError> {
+        // Check if we're in test mode without NodeRemote
+        if self.node_remote.read().is_none() {
+            if let Some(data) = self.test_storage.read().get("citadel_workspace.domains") {
+                return serde_json::from_slice(data).map_err(|e| {
+                    NetworkError::msg(format!("Failed to deserialize domains: {}", e))
+                });
+            } else {
+                return Ok(HashMap::new());
+            }
+        }
+
+        let node_remote = self.get_node_remote()?;
+        let backend = node_remote
+            .propose_target(0, 0)
+            .await
+            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
+
+        if let Some(data) = backend.get("citadel_workspace.domains").await? {
+            serde_json::from_slice(&data)
+                .map_err(|e| NetworkError::msg(format!("Failed to deserialize domains: {}", e)))
+        } else {
+            Ok(HashMap::new())
+        }
+    }
+
+    /// Get all users from backend
+    pub async fn get_all_users(&self) -> Result<HashMap<String, User>, NetworkError> {
+        // Check if we're in test mode without NodeRemote
+        if self.node_remote.read().is_none() {
+            if let Some(data) = self.test_storage.read().get("citadel_workspace.users") {
+                return serde_json::from_slice(data)
+                    .map_err(|e| NetworkError::msg(format!("Failed to deserialize users: {}", e)));
+            } else {
+                return Ok(HashMap::new());
+            }
+        }
+
+        let node_remote = self.get_node_remote()?;
+        let backend = node_remote
+            .propose_target(0, 0)
+            .await
+            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
+
+        if let Some(data) = backend.get("citadel_workspace.users").await? {
+            serde_json::from_slice(&data)
+                .map_err(|e| NetworkError::msg(format!("Failed to deserialize users: {}", e)))
+        } else {
+            Ok(HashMap::new())
+        }
+    }
+
+    /// Get all workspaces from backend
+    pub async fn get_all_workspaces(&self) -> Result<HashMap<String, Workspace>, NetworkError> {
+        // Check if we're in test mode without NodeRemote
+        if self.node_remote.read().is_none() {
+            if let Some(data) = self.test_storage.read().get("citadel_workspace.workspaces") {
+                return serde_json::from_slice(data).map_err(|e| {
+                    NetworkError::msg(format!("Failed to deserialize workspaces: {}", e))
+                });
+            } else {
+                return Ok(HashMap::new());
+            }
+        }
+
+        let node_remote = self.get_node_remote()?;
+        let backend = node_remote
+            .propose_target(0, 0)
+            .await
+            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
+
+        if let Some(data) = backend.get("citadel_workspace.workspaces").await? {
+            serde_json::from_slice(&data)
+                .map_err(|e| NetworkError::msg(format!("Failed to deserialize workspaces: {}", e)))
+        } else {
+            Ok(HashMap::new())
+        }
+    }
+
+    /// Get all passwords from backend
+    pub async fn get_all_passwords(&self) -> Result<HashMap<String, String>, NetworkError> {
+        // Check if we're in test mode without NodeRemote
+        if self.node_remote.read().is_none() {
+            if let Some(data) = self.test_storage.read().get("citadel_workspace.passwords") {
+                return serde_json::from_slice(data).map_err(|e| {
+                    NetworkError::msg(format!("Failed to deserialize passwords: {}", e))
+                });
+            } else {
+                return Ok(HashMap::new());
+            }
+        }
+
+        let node_remote = self.get_node_remote()?;
+        let backend = node_remote
+            .propose_target(0, 0)
+            .await
+            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
+
+        if let Some(data) = backend.get("citadel_workspace.passwords").await? {
+            serde_json::from_slice(&data)
+                .map_err(|e| NetworkError::msg(format!("Failed to deserialize passwords: {}", e)))
+        } else {
+            Ok(HashMap::new())
+        }
+    }
+
+    /// Save domains to backend
+    pub async fn save_domains(
+        &self,
+        domains: &HashMap<String, Domain>,
+    ) -> Result<(), NetworkError> {
+        // Check if we're in test mode without NodeRemote
+        if self.node_remote.read().is_none() {
+            let data = serde_json::to_vec(domains)
+                .map_err(|e| NetworkError::msg(format!("Failed to serialize domains: {}", e)))?;
+            self.test_storage
+                .write()
+                .insert("citadel_workspace.domains".to_string(), data);
+            return Ok(());
+        }
+
+        let node_remote = self.get_node_remote()?;
+        let backend = node_remote
+            .propose_target(0, 0)
+            .await
+            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
+        let data = serde_json::to_vec(domains)
+            .map_err(|e| NetworkError::msg(format!("Failed to serialize domains: {}", e)))?;
+        backend.set("citadel_workspace.domains", data).await?;
+        Ok(())
+    }
+
+    /// Save users to backend
+    pub async fn save_users(&self, users: &HashMap<String, User>) -> Result<(), NetworkError> {
+        // Check if we're in test mode without NodeRemote
+        if self.node_remote.read().is_none() {
+            let data = serde_json::to_vec(users)
+                .map_err(|e| NetworkError::msg(format!("Failed to serialize users: {}", e)))?;
+            self.test_storage
+                .write()
+                .insert("citadel_workspace.users".to_string(), data);
+            return Ok(());
+        }
+
+        let node_remote = self.get_node_remote()?;
+        let backend = node_remote
+            .propose_target(0, 0)
+            .await
+            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
+        let data = serde_json::to_vec(users)
+            .map_err(|e| NetworkError::msg(format!("Failed to serialize users: {}", e)))?;
+        backend.set("citadel_workspace.users", data).await?;
+        Ok(())
+    }
+
+    /// Save workspaces to backend
+    pub async fn save_workspaces(
+        &self,
+        workspaces: &HashMap<String, Workspace>,
+    ) -> Result<(), NetworkError> {
+        // Check if we're in test mode without NodeRemote
+        if self.node_remote.read().is_none() {
+            let data = serde_json::to_vec(workspaces)
+                .map_err(|e| NetworkError::msg(format!("Failed to serialize workspaces: {}", e)))?;
+            self.test_storage
+                .write()
+                .insert("citadel_workspace.workspaces".to_string(), data);
+            return Ok(());
+        }
+
+        let node_remote = self.get_node_remote()?;
+        let backend = node_remote
+            .propose_target(0, 0)
+            .await
+            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
+        let data = serde_json::to_vec(workspaces)
+            .map_err(|e| NetworkError::msg(format!("Failed to serialize workspaces: {}", e)))?;
+        backend.set("citadel_workspace.workspaces", data).await?;
+        Ok(())
+    }
+
+    /// Save passwords to backend
+    pub async fn save_passwords(
+        &self,
+        passwords: &HashMap<String, String>,
+    ) -> Result<(), NetworkError> {
+        // Check if we're in test mode without NodeRemote
+        if self.node_remote.read().is_none() {
+            let data = serde_json::to_vec(passwords)
+                .map_err(|e| NetworkError::msg(format!("Failed to serialize passwords: {}", e)))?;
+            self.test_storage
+                .write()
+                .insert("citadel_workspace.passwords".to_string(), data);
+            return Ok(());
+        }
+
+        let node_remote = self.get_node_remote()?;
+        let backend = node_remote
+            .propose_target(0, 0)
+            .await
+            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
+        let data = serde_json::to_vec(passwords)
+            .map_err(|e| NetworkError::msg(format!("Failed to serialize passwords: {}", e)))?;
+        backend.set("citadel_workspace.passwords", data).await?;
+        Ok(())
     }
 }

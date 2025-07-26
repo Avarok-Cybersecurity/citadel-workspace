@@ -1,8 +1,3 @@
-// Modular workspace test suite
-use citadel_workspace_server_kernel::handlers::domain::{
-    DomainOperations, EntityOperations, OfficeOperations, PermissionOperations, RoomOperations,
-    TransactionOperations, UserManagementOperations, WorkspaceOperations,
-};
 //
 // This file has been refactored from a single 446-line file into focused test modules
 // to improve maintainability and code organization. Each module tests specific functionality:

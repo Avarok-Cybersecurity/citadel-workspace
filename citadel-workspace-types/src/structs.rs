@@ -2,9 +2,11 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
+use ts_rs::TS;
 
 // User management structures
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct User {
     pub id: String,
     pub name: String,
@@ -105,7 +107,8 @@ impl User {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[ts(export)]
 #[allow(dead_code)]
 pub enum UserRole {
     Admin,
@@ -206,7 +209,8 @@ impl PartialOrd for UserRole {
     }
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
+#[ts(export)]
 pub enum Permission {
     // All permissions
     All,
@@ -359,14 +363,16 @@ impl Permission {
 }
 
 /// Metadata field for storing flexible data used by the frontend
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[ts(export)]
 pub struct MetadataField {
     pub key: String,
     pub value: MetadataValue,
 }
 
 /// Value types for metadata fields
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[ts(export)]
 #[serde(tag = "type", content = "content")]
 pub enum MetadataValue {
     String(String),
@@ -378,7 +384,8 @@ pub enum MetadataValue {
 }
 
 /// A workspace is a container for offices
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[ts(export)]
 pub struct Workspace {
     pub id: String,
     pub name: String,
@@ -387,7 +394,6 @@ pub struct Workspace {
     pub members: Vec<String>,
     pub offices: Vec<String>,
     pub metadata: Vec<u8>,
-    pub password_protected: bool,
 }
 
 impl Workspace {
@@ -395,7 +401,8 @@ impl Workspace {
 }
 
 // Workspace entity structures
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
+#[ts(export)]
 pub struct Office {
     pub id: String,
     pub owner_id: String,
@@ -410,7 +417,8 @@ pub struct Office {
     pub metadata: Vec<u8>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct Room {
     pub id: String,
     pub owner_id: String,
@@ -422,7 +430,8 @@ pub struct Room {
     pub metadata: Vec<MetadataField>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum Domain {
     Workspace { workspace: Workspace },
     Office { office: Office },

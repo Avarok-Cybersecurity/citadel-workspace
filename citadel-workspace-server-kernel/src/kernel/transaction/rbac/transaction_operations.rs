@@ -23,7 +23,7 @@ impl TransactionManager {
     ///
     /// Note: As per the Citadel Workspace transaction system behavior, changes made during a
     /// transaction are immediately applied to the in-memory storage. The commit() method
-    /// only syncs these changes to the backend store (RocksDB in this case).
+    /// is a no-op for in-memory storage.
     ///
     /// If the transaction returns an error, the changes are NOT automatically rolled back
     /// from the in-memory storage. This must be handled explicitly if rollback behavior
@@ -39,7 +39,6 @@ impl TransactionManager {
             users,
             workspaces,
             workspace_password,
-            Arc::clone(&self.db),
         )
     }
 

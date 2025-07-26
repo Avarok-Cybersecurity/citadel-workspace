@@ -1,25 +1,21 @@
 //! Member Integration Tests
 //!
-//! This module organizes member-related integration tests into focused modules
-//! for better maintainability and readability.
+//! This file serves as documentation for the member-related integration tests.
 //!
-//! Original file was 1248 lines and has been broken down into:
+//! The member integration tests have been organized into separate test files:
 //! - member_operations_test.rs - Member CRUD operations
 //! - permission_operations_test.rs - Permission management
 //! - role_operations_test.rs - Custom role operations  
 //! - admin_operations_test.rs - Admin multi-user and access control
-//! - common/member_test_utils.rs - Shared test utilities
+//!
+//! Each test file runs independently and contains focused test cases.
 
-// Import all focused test modules
-mod admin_operations_test;
-mod member_operations_test;
-mod permission_operations_test;
-mod role_operations_test;
-
-// Re-export the common module for other test files
-#[path = "common/mod.rs"]
-pub mod common;
-
-// This file now serves as an index for the modularized member integration tests.
-// All original test coverage is preserved across the focused modules.
-// Each module is under 250 lines and has a single, clear responsibility.
+#[test]
+fn test_member_integration_tests_organized() {
+    println!("Member integration tests have been organized into separate files:");
+    println!("- member_operations_test.rs");
+    println!("- permission_operations_test.rs");
+    println!("- role_operations_test.rs");
+    println!("- admin_operations_test.rs");
+    println!("\nEach file contains focused, independent test cases.");
+}

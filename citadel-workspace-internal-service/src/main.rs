@@ -8,7 +8,7 @@ use structopt::StructOpt;
 async fn main() -> Result<(), Box<dyn Error>> {
     citadel_logging::setup_log();
     let opts: Options = Options::from_args();
-    let service = CitadelWorkspaceService::new_tcp(opts.bind).await?;
+    let service = CitadelWorkspaceService::new_websocket(opts.bind).await?;
 
     // Initialize the node builder with StackedRatchet, which is a concrete implementation of the Ratchet trait
     let mut node_builder = NodeBuilder::<StackedRatchet>::default();

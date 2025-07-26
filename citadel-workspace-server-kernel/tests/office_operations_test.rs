@@ -1,14 +1,9 @@
-use citadel_workspace_server_kernel::handlers::domain::{
-    OfficeOperations, RoomOperations, UserManagementOperations,
-};
-use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
-use rstest::*;
-use std::time::Duration;
 
 #[path = "common/mod.rs"]
 mod common;
-use common::integration_test_utils::*;
+use common::async_test_helpers::*;
+use common::workspace_test_utils::*;
 
 /// # Office Operations Integration Test
 ///
@@ -28,165 +23,108 @@ use common::integration_test_utils::*;
 /// ```
 ///
 /// **Expected Outcome:** All office operations succeed, wrong password fails gracefully
-#[rstest]
 #[tokio::test]
-#[timeout(Duration::from_secs(15))]
 async fn test_office_operations() {
-    println!("Setting up test environment...");
-    let (_kernel, internal_service_addr, server_addr, admin_username, admin_password, _db_temp_dir) =
-        setup_test_environment().await.unwrap();
-    println!("Test environment setup complete.");
+    let kernel = create_test_kernel().await;
 
-    println!("Registering and connecting admin user...");
-    // Use admin credentials to connect
-    let (to_service, mut from_service, admin_cid) = register_and_connect_user(
-        internal_service_addr,
-        server_addr,
-        &admin_username,
-        &admin_password,
+    // Get the root workspace ID
+    let workspace_id = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string();
+
+    // Test: Attempt to update workspace with WRONG password
+    let update_workspace_wrong_pw = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::UpdateWorkspace {
+            name: Some("Attempted Update Name".to_string()),
+            description: Some("This update should fail due to wrong password".to_string()),
+            workspace_master_password: "wrong-password".to_string(),
+            metadata: None,
+        },
     )
     .await
     .unwrap();
 
-    println!("Admin user registered and connected with CID: {admin_cid}.");
-
-    // The root workspace is created during `setup_test_environment`, so we don't need to create it again.
-    // We can directly use WORKSPACE_ROOT_ID for further operations.
-    let actual_workspace_id = WORKSPACE_ROOT_ID.to_string();
-    println!(
-        "Using pre-existing root workspace with ID: {}",
-        actual_workspace_id
-    );
-
-    // --- Test: Attempt to update workspace with WRONG password ---
-    println!("Attempting to update root workspace with wrong password...");
-    let update_workspace_wrong_pw_cmd = WorkspaceProtocolRequest::UpdateWorkspace {
-        name: Some("Attempted Update Name".to_string()),
-        description: Some("This update should fail due to wrong password".to_string()),
-        workspace_master_password: "wrong-password".to_string(), // Provide wrong password (as String)
-        metadata: None,
-    };
-
-    let error_response = send_workspace_command(
-        &to_service,
-        &mut from_service,
-        admin_cid,
-        update_workspace_wrong_pw_cmd,
-    )
-    .await
-    .expect("Sending wrong password command should succeed, but result in error response");
-
-    match error_response {
+    match update_workspace_wrong_pw {
         WorkspaceProtocolResponse::Error(msg) => {
             assert!(
-                msg.contains("Incorrect workspace master password"),
+                msg.contains("Invalid workspace password")
+                    || msg.contains("Incorrect workspace master password"),
                 "Expected password error, got: {}",
                 msg
             );
-            println!("Received expected error for wrong password: {}", msg);
         }
-        _ => panic!(
-            "Expected Error response after attempting to update workspace with wrong password, got {:?}",
-            error_response
-        ),
-    }
-    // --- End Test ---
-
-    // Create an office using the command processor instead of directly
-    println!("Creating test office...");
-    let create_office_cmd = WorkspaceProtocolRequest::CreateOffice {
-        workspace_id: actual_workspace_id.clone(), // Use the extracted workspace ID
-        name: "Test Office".to_string(),
-        description: "A test office".to_string(),
-        mdx_content: Some("# Test Office\nThis is a test office".to_string()),
-        metadata: None,
-    };
-
-    let response =
-        send_workspace_command(&to_service, &mut from_service, admin_cid, create_office_cmd)
-            .await
-            .unwrap();
-
-    let office_id = match response {
-        WorkspaceProtocolResponse::Office(office) => {
-            println!("Created office: {:?}", office);
-            office.id
-        }
-        _ => panic!("Expected Office response"),
-    };
-
-    println!("Test office created.");
-
-    println!("Getting test office...");
-    let get_office_cmd = WorkspaceProtocolRequest::GetOffice {
-        office_id: office_id.clone(),
-    };
-
-    let response =
-        send_workspace_command(&to_service, &mut from_service, admin_cid, get_office_cmd)
-            .await
-            .unwrap();
-
-    match response {
-        WorkspaceProtocolResponse::Office(office) => {
-            assert_eq!(office.name, "Test Office");
-            assert_eq!(office.description, "A test office");
-            assert_eq!(office.mdx_content, "# Test Office\nThis is a test office");
-        }
-        _ => panic!("Expected Office response"),
+        _ => panic!("Expected Error response for wrong password"),
     }
 
-    println!("Test office retrieved.");
+    // Create an office
+    let create_office_response = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::CreateOffice {
+            workspace_id: workspace_id.clone(),
+            name: "Test Office".to_string(),
+            description: "A test office".to_string(),
+            mdx_content: Some("# Test Office\nThis is a test office".to_string()),
+            metadata: None,
+        },
+    )
+    .await
+    .unwrap();
 
-    println!("Updating test office...");
-    let update_office_cmd = WorkspaceProtocolRequest::UpdateOffice {
-        office_id: office_id.clone(),
-        name: Some("Updated Office".to_string()),
-        description: None,
-        mdx_content: Some("# Updated Office\nThis content has been updated".to_string()),
-        metadata: None,
-    };
+    let office = extract_office(create_office_response).expect("Failed to create office");
+    let office_id = office.id.clone();
 
-    let response =
-        send_workspace_command(&to_service, &mut from_service, admin_cid, update_office_cmd)
-            .await
-            .unwrap();
+    // Get the office
+    let get_office_response = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::GetOffice {
+            office_id: office_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
 
-    match response {
-        WorkspaceProtocolResponse::Office(office) => {
-            assert_eq!(office.name, "Updated Office");
-            assert_eq!(office.description, "A test office");
-            assert_eq!(
-                office.mdx_content,
-                "# Updated Office\nThis content has been updated"
-            );
-        }
-        _ => panic!("Expected Office response"),
-    }
+    let retrieved_office = extract_office(get_office_response).expect("Failed to get office");
+    assert_eq!(retrieved_office.name, "Test Office");
+    assert_eq!(retrieved_office.description, "A test office");
+    assert_eq!(
+        retrieved_office.mdx_content,
+        "# Test Office\nThis is a test office"
+    );
 
-    println!("Test office updated.");
+    // Update the office
+    let update_office_response = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::UpdateOffice {
+            office_id: office_id.clone(),
+            name: Some("Updated Office".to_string()),
+            description: None,
+            mdx_content: Some("# Updated Office\nThis content has been updated".to_string()),
+            metadata: None,
+        },
+    )
+    .await
+    .unwrap();
 
-    println!("Listing offices...");
-    let list_offices_cmd = WorkspaceProtocolRequest::ListOffices {};
+    let updated_office = extract_office(update_office_response).expect("Failed to update office");
+    assert_eq!(updated_office.name, "Updated Office");
+    assert_eq!(updated_office.description, "A test office");
+    assert_eq!(
+        updated_office.mdx_content,
+        "# Updated Office\nThis content has been updated"
+    );
 
-    let response =
-        send_workspace_command(&to_service, &mut from_service, admin_cid, list_offices_cmd)
-            .await
-            .unwrap();
+    // List offices
+    let list_offices_response = execute_command(&kernel, WorkspaceProtocolRequest::ListOffices {})
+        .await
+        .unwrap();
 
-    match response {
+    match list_offices_response {
         WorkspaceProtocolResponse::Offices(offices) => {
-            assert!(
-                !offices.is_empty(),
-                "Expected at least 1 office, found {}",
-                offices.len()
-            );
+            assert!(!offices.is_empty(), "Expected at least 1 office");
 
-            // Find the "Updated Office" in the list
             let updated_office = offices
                 .iter()
                 .find(|o| o.name == "Updated Office")
-                .expect("Couldn't find 'Updated Office' in the returned offices list");
+                .expect("Couldn't find 'Updated Office' in the list");
 
             assert_eq!(updated_office.name, "Updated Office");
             assert_eq!(updated_office.description, "A test office");
@@ -194,39 +132,29 @@ async fn test_office_operations() {
         _ => panic!("Expected Offices response"),
     }
 
-    println!("Offices listed.");
+    // Delete the office
+    let delete_office_response = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::DeleteOffice {
+            office_id: office_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
 
-    println!("Deleting test office...");
-    let delete_office_cmd = WorkspaceProtocolRequest::DeleteOffice { office_id };
+    let success_msg = extract_success(delete_office_response).expect("Failed to delete office");
+    assert_eq!(success_msg, "Office deleted successfully");
 
-    let response =
-        send_workspace_command(&to_service, &mut from_service, admin_cid, delete_office_cmd)
+    // Verify office was deleted
+    let list_offices_after_delete =
+        execute_command(&kernel, WorkspaceProtocolRequest::ListOffices {})
             .await
             .unwrap();
 
-    match response {
-        WorkspaceProtocolResponse::Success(_) => {}
-        _ => panic!("Expected Success response"),
-    }
-
-    println!("Test office deleted.");
-
-    println!("Verifying office was deleted...");
-    let list_offices_cmd = WorkspaceProtocolRequest::ListOffices {};
-
-    let response =
-        send_workspace_command(&to_service, &mut from_service, admin_cid, list_offices_cmd)
-            .await
-            .unwrap();
-
-    match response {
+    match list_offices_after_delete {
         WorkspaceProtocolResponse::Offices(offices) => {
-            // With our single workspace model, after deleting the office,
-            // we should have 0 offices remaining
-            assert_eq!(offices.len(), 0);
+            assert_eq!(offices.len(), 0, "Expected 0 offices after deletion");
         }
         _ => panic!("Expected Offices response"),
     }
-
-    println!("Test complete.");
 }

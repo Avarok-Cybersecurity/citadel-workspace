@@ -1,8 +1,5 @@
-use citadel_workspace_server_kernel::handlers::domain::DomainOperations;
-use citadel_workspace_server_kernel::handlers::domain::{
-    PermissionOperations, TransactionOperations, UserManagementOperations,
-};
-use citadel_workspace_server_kernel::kernel::transaction::{Transaction, TransactionManagerExt};
+use citadel_sdk::prelude::StackedRatchet;
+use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncDomainOperations;
 use citadel_workspace_types::structs::{User, UserRole};
 
 #[path = "common/mod.rs"]
@@ -25,33 +22,26 @@ use common::permissions_test_utils::*;
 ///
 /// **Expected Outcome:** Admin detection works correctly for various user roles and configurations
 
-#[test]
-fn test_admin_check() {
+#[tokio::test]
+async fn test_admin_check() {
     let admin_id = "custom_admin";
-    let (kernel, domain_ops, _db_temp_dir, _admin_id_str) =
-        setup_custom_admin_test_environment(admin_id);
+    let (kernel, domain_ops, _admin_id_str) = setup_custom_admin_test_environment(admin_id).await;
 
     // Verify that the admin check works with custom admin ID
-    // is_admin needs a transaction
-    assert!(domain_ops
-        .with_read_transaction(|tx| domain_ops.is_admin_impl(tx, admin_id))
-        .unwrap());
+    assert!(domain_ops.is_admin(admin_id).await.unwrap());
 
     // Create a non-admin user for testing this specific check
     let non_admin_id = "non_admin_user";
     let non_admin_user_obj = create_test_user(non_admin_id, UserRole::Member);
     kernel
-        .tx_manager()
-        .with_write_transaction(|tx| {
-            tx.insert_user_internal(non_admin_id.to_string(), non_admin_user_obj)?;
-            Ok(())
-        })
+        .domain_operations
+        .backend_tx_manager
+        .insert_user(non_admin_id.to_string(), non_admin_user_obj)
+        .await
         .unwrap();
 
     // Verify that non-admin users are recognized as such
-    assert!(!domain_ops
-        .with_read_transaction(|tx| domain_ops.is_admin_impl(tx, "non_admin_user"))
-        .unwrap());
+    assert!(!domain_ops.is_admin("non_admin_user").await.unwrap());
 
     // Create another user with admin role
     let second_admin_id = "second_admin";
@@ -59,15 +49,12 @@ fn test_admin_check() {
 
     // Add the user to the kernel
     kernel
-        .tx_manager()
-        .with_write_transaction(|tx| {
-            tx.insert_user_internal(second_admin_id.to_string(), admin2)?;
-            Ok(())
-        })
+        .domain_operations
+        .backend_tx_manager
+        .insert_user(second_admin_id.to_string(), admin2)
+        .await
         .unwrap();
 
     // Verify that the second admin is recognized
-    assert!(domain_ops
-        .with_read_transaction(|tx| domain_ops.is_admin_impl(tx, second_admin_id))
-        .unwrap());
+    assert!(domain_ops.is_admin(second_admin_id).await.unwrap());
 }

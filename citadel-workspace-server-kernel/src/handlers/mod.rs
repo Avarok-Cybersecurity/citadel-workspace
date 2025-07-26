@@ -1,6 +1,6 @@
 // Module declarations
 pub mod domain;
-pub mod office;
-pub mod permissions;
-pub mod query;
-pub mod room;
+// pub mod office;  // Commented out - depends on sync WorkspaceServerKernel
+// pub mod permissions;  // Commented out - depends on sync WorkspaceServerKernel
+// pub mod query;  // Commented out - depends on sync WorkspaceServerKernel
+// pub mod room;  // Commented out - depends on sync WorkspaceServerKernel
