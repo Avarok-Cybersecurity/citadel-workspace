@@ -29,3 +29,4 @@ bun.lockb
 /target_ide/
 .archive
 target
+.playwright-mcp/
