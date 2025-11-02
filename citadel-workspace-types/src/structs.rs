@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use ts_rs::TS;
+use custom_debug::Debug;
 
 // User management structures
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -393,6 +394,7 @@ pub struct Workspace {
     pub owner_id: String,
     pub members: Vec<String>,
     pub offices: Vec<String>,
+    #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
     pub metadata: Vec<u8>,
 }
 
@@ -412,8 +414,10 @@ pub struct Office {
     // workspace_id field added - all offices belong to the single workspace
     pub members: Vec<String>, // User IDs
     pub rooms: Vec<String>,   // Room IDs
+    #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
     pub mdx_content: String,
     // Can be used to add any type of data by the UI
+    #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
     pub metadata: Vec<u8>,
 }
 
@@ -426,6 +430,7 @@ pub struct Room {
     pub name: String,
     pub description: String,
     pub members: Vec<String>, // User IDs
+    #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
     pub mdx_content: String,
     pub metadata: Vec<MetadataField>,
 }

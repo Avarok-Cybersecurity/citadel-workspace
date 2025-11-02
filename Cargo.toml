@@ -4,7 +4,10 @@ members = [
     "citadel-workspace-internal-service",
     "citadel-workspace-types",
 ]
-resolver = "2"
+
+exclude = ["./citadel-internal-service"]
+
+resolver = "3"
 
 [workspace.dependencies]
 # Workspace-specific packages
@@ -14,16 +17,12 @@ citadel-workspace-types = { path = "./citadel-workspace-types" }
 
 # Secondary packages
 
-# Secondary package (for dev purposes, use the local path at ../citadel-internal-service)
-citadel-internal-service = { path = "./citadel-internal-service/citadel-internal-service" }
-citadel-internal-service-test-common = { path = "./citadel-internal-service/citadel-internal-service/tests/common" }
-citadel-internal-service-types = { path = "./citadel-internal-service/citadel-internal-service-types" }
-citadel-internal-service-connector = { path = "./citadel-internal-service/citadel-internal-service-connector" }
+# Secondary package (for dev purposes, use the local path at ./citadel-internal-service)
 
 # Avarok deps
-citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "cw-debug" }
-citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "cw-debug" }
-citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "cw-debug" }
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "stability-improvements" }
+citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "stability-improvements" }
+citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "stability-improvements" }
 
 # Avarok deps (for dev purposes, use the local path at ../Citadel-Protocol)
 #citadel_sdk = { path = "../Citadel-Protocol/citadel_sdk" }
@@ -47,7 +46,7 @@ serde = { version = "1.0.219" }
 serde_json = { version = "1.0.140" }
 futures = { version = "0.3.31" }
 async-trait = { version = "0.1.88" }
+async-recursion = { version = "1.0" }
 rstest = { version = "0.25.0" }
-bincode = "1.3.3"
-rocksdb = "0.21.0"
+bincode = "2.0.1"
 chrono = { version = "0.4.34", features = ["serde"] }

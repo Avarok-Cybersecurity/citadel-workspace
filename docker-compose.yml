@@ -5,27 +5,19 @@ services:
       dockerfile: ./docker/workspace-server/Dockerfile
     volumes:
       # Mount relevant codebase for live updates
-      - ./Cargo.toml:/usr/src/app/Cargo.toml
-      - ./Cargo.lock:/usr/src/app/Cargo.lock
-      - ./citadel-workspace-types:/usr/src/app/citadel-workspace-types
-      - ./citadel-workspace-internal-service:/usr/src/app/citadel-workspace-internal-service
-      - ./citadel-workspace-server-kernel:/usr/src/app/citadel-workspace-server-kernel
-      - ./docker/workspace-server/kernel.toml:/usr/src/app/kernel.toml
-      - cargo_registry_cache:/usr/local/cargo/registry
-      - cargo_git_cache:/usr/local/cargo/git
       - target_cache:/usr/src/app/target
     environment:
       - RUST_LOG=citadel=info
     # Healthcheck disabled to avoid WebSocket handshake errors in logs
-    # healthcheck:
-    #   test: [ "CMD", "curl", "-f", "http://localhost:12349/health" ]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 5
-    #   start_period: 30s
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "127.0.0.1", "12349" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     ports:
       - "12349:12349"
-      - "12345:12345" # host:container
+      - "12345:12345"  # Internal service WebSocket port (shared network namespace)
     networks:
       - citadel-net
   internal-service:
@@ -33,31 +25,27 @@ services:
       context: .
       dockerfile: ./docker/internal-service/Dockerfile
       args:
-        - INTERNAL_SERVICE_PORT=12345
+        - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT}
     volumes:
-      # Mount relevant codebase for live updates
-      - ./Cargo.toml:/usr/src/app/Cargo.toml
-      - ./Cargo.lock:/usr/src/app/Cargo.lock
-      - ./citadel-workspace-types:/usr/src/app/citadel-workspace-types
-      - ./citadel-workspace-internal-service:/usr/src/app/citadel-workspace-internal-service
-      - ./citadel-workspace-server-kernel:/usr/src/app/citadel-workspace-server-kernel
-
       # Mount shared caches and target directory
-      - cargo_registry_cache:/usr/local/cargo/registry
-      - cargo_git_cache:/usr/local/cargo/git
       - target_cache:/usr/src/app/target
     environment:
       - RUST_LOG=citadel=debug
       - DOCKER_CONTAINER=1
       - SKIP_WASM_BUILD=1
+    healthcheck:
+      test: ["CMD-SHELL", "netstat -tuln | grep -q \":$${INTERNAL_SERVICE_PORT}\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
     depends_on:
-      - server
-    network_mode: service:server # Share network namespace with server
+      server:
+        condition: service_healthy
+    network_mode: service:server
 
 # Define named volumes for caching
 volumes:
-  cargo_registry_cache:
-  cargo_git_cache:
   target_cache:
 
 # Define the network

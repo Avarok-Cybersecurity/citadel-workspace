@@ -3,6 +3,7 @@ pub mod structs;
 use serde::{Deserialize, Serialize};
 use structs::{Office, Permission, Room, User, UserRole, Workspace};
 use ts_rs::TS;
+use custom_debug::Debug;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -23,6 +24,14 @@ impl From<WorkspaceProtocolResponse> for WorkspaceProtocolPayload {
     }
 }
 
+pub fn bytes_opt_debug_fmt<T: std::fmt::Debug + AsRef<[u8]>>(val: &Option<T>, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    if let Some(val) = val {
+        citadel_internal_service_types::bytes_debug_fmt(val, f)
+    } else {
+        write!(f, "None")
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub enum WorkspaceProtocolRequest {
@@ -31,6 +40,7 @@ pub enum WorkspaceProtocolRequest {
         name: String,
         description: String,
         workspace_master_password: String,
+        #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
     },
     GetWorkspace,
@@ -38,6 +48,7 @@ pub enum WorkspaceProtocolRequest {
         name: Option<String>,
         description: Option<String>,
         workspace_master_password: String,
+        #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
     },
     DeleteWorkspace {
@@ -49,7 +60,9 @@ pub enum WorkspaceProtocolRequest {
         workspace_id: String,
         name: String,
         description: String,
+        #[debug(with = bytes_opt_debug_fmt)]
         mdx_content: Option<String>,
+        #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
     },
     GetOffice {
@@ -59,7 +72,9 @@ pub enum WorkspaceProtocolRequest {
         office_id: String,
         name: Option<String>,
         description: Option<String>,
+        #[debug(with = bytes_opt_debug_fmt)]
         mdx_content: Option<String>,
+        #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
     },
     DeleteOffice {
@@ -72,7 +87,9 @@ pub enum WorkspaceProtocolRequest {
         office_id: String,
         name: String,
         description: String,
+        #[debug(with = bytes_opt_debug_fmt)]
         mdx_content: Option<String>,
+        #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
     },
     GetRoom {
@@ -82,7 +99,9 @@ pub enum WorkspaceProtocolRequest {
         room_id: String,
         name: Option<String>,
         description: Option<String>,
+        #[debug(with = bytes_opt_debug_fmt)]
         mdx_content: Option<String>,
+        #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
     },
     DeleteRoom {
@@ -98,6 +117,7 @@ pub enum WorkspaceProtocolRequest {
         office_id: Option<String>,
         room_id: Option<String>,
         role: UserRole,
+        #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
     },
     GetMember {
@@ -106,6 +126,7 @@ pub enum WorkspaceProtocolRequest {
     UpdateMemberRole {
         user_id: String,
         role: UserRole,
+        #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
     },
     UpdateMemberPermissions {
@@ -126,6 +147,7 @@ pub enum WorkspaceProtocolRequest {
     Message {
         // UI can inscribe whatever subprotocol it wishes on this for e.g., the actual message contents,
         // read receipts, typing indicators, etc, likely using an enum.
+        #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
         contents: Vec<u8>,
     },
 }

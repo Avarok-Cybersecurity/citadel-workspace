@@ -19,17 +19,37 @@
 #    resource_deps=['server'],
 #)
 
-docker_compose('./docker-compose.yml')
-dc_resource('server',labels=['backend'])
-dc_resource('internal-service',labels=['backend'])
+local_resource(
+    name='sync-wasm-client',
+    cmd='./sync-wasm-clients.sh',
+    labels=['init'],
+)
 
+docker_compose('./docker-compose.yml')
+
+# Configure Docker Compose resources to only rebuild manually
+# This prevents losing in-memory state during development
+dc_resource(
+    'server',
+    labels=['backend'],
+    resource_deps=['sync-wasm-client'],
+    trigger_mode=TRIGGER_MODE_MANUAL  # Only rebuild when explicitly triggered
+)
+
+dc_resource(
+    'internal-service',
+    labels=['backend'],
+    resource_deps=['sync-wasm-client'],
+    trigger_mode=TRIGGER_MODE_MANUAL  # Only rebuild when explicitly triggered
+)
+
+# "dev": "vite build --mode development && vite --force",
 # Define a local resource to run the React development server
 local_resource(
     name='ui',
-    serve_cmd='npm install && npm run dev',
+    serve_cmd='npm install && vite build --mode development && vite --force',
     serve_dir='citadel-workspaces',
-    deps=["citadel-workspaces/src", "citadel-workspace-client-ts/src", "../citadel-internal-service/typescript-client/src"],
     # Make the UI resource depend on the successful completion of the backend services
-    resource_deps=['internal-service', 'server'],
+    resource_deps=['internal-service', 'server', 'sync-wasm-client'],
     labels=['frontend']
 )

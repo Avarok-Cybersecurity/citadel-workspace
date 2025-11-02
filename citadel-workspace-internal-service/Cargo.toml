@@ -18,7 +18,7 @@ path = "src/main.rs"
 [dependencies]
 structopt = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
-citadel-internal-service = { workspace = true, features = ["websockets"] }
+citadel-internal-service = { path = "../citadel-internal-service/citadel-internal-service", features = ["websockets"] }
 citadel_sdk = { workspace = true, features = ["sql"]}
 citadel_types = { workspace = true }
 citadel_logging = { workspace = true }
