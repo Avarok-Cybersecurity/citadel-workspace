@@ -29,21 +29,31 @@ echo ""
 
 # Use git submodule foreach to process all submodules recursively
 git submodule foreach --recursive "
-    echo -e '${YELLOW}Pushing submodule:${NC} \$name at \$sm_path'
+    printf '\033[1;33mPushing submodule:\033[0m %s at %s\n' \"\$name\" \"\$sm_path\"
 
     # Get current branch
     BRANCH=\$(git rev-parse --abbrev-ref HEAD)
-    echo -e '${YELLOW}Branch:${NC} \$BRANCH'
+
+    # Check if we're in detached HEAD state
+    if [ \"\$BRANCH\" = \"HEAD\" ]; then
+        printf '\033[1;33mWarning:\033[0m Submodule is in detached HEAD state. Skipping push.\n'
+        printf '\033[1;33mInfo:\033[0m To push this submodule, checkout a branch first:\n'
+        printf '  cd %s && git checkout <branch-name>\n' \"\$sm_path\"
+        printf '\n'
+        exit 0
+    fi
+
+    printf '\033[1;33mBranch:\033[0m %s\n' \"\$BRANCH\"
 
     # Push to remote
-    if git push origin \$BRANCH; then
-        echo -e '${GREEN}✓ Pushed:${NC} \$name'
+    if git push origin \"\$BRANCH\"; then
+        printf '\033[0;32m✓ Pushed:\033[0m %s\n' \"\$name\"
     else
-        echo -e '${RED}✗ Push failed:${NC} \$name'
+        printf '\033[0;31m✗ Push failed:\033[0m %s\n' \"\$name\"
         exit 1
     fi
 
-    echo ''
+    printf '\n'
 "
 
 # Then push the main repo
