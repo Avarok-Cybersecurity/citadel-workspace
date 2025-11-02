@@ -4,3 +4,4 @@
 [submodule "citadel-internal-service"]
 	path = citadel-internal-service
 	url = https://github.com/Avarok-Cybersecurity/citadel-internal-service
+	branch = internal-service-mvp

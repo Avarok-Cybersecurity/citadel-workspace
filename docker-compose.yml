@@ -1,4 +1,24 @@
 services:
+  sync-wasm-client:
+    build:
+      context: .
+      dockerfile: ./docker/sync/Dockerfile
+    volumes:
+      # Mount source code from host (read-write for npm builds)
+      - ./citadel-internal-service:/workspace/citadel-internal-service:rw
+      - ./citadel-workspace-client-ts:/workspace/citadel-workspace-client-ts:rw
+      - ./citadel-workspaces:/workspace/citadel-workspaces:rw
+      # Cache volumes for faster rebuilds
+      - rust_cache:/root/.cargo
+      - sync_node_modules:/workspace/node_modules
+      - sync_target_cache:/workspace/target
+    environment:
+      - CONTAINER_MODE=1
+    # This is a one-shot service that exits after syncing
+    restart: "no"
+    networks:
+      - citadel-net
+
   server:
     build:
       context: .
@@ -18,6 +38,9 @@ services:
     ports:
       - "12349:12349"
       - "12345:12345"  # Internal service WebSocket port (shared network namespace)
+    depends_on:
+      sync-wasm-client:
+        condition: service_completed_successfully
     networks:
       - citadel-net
   internal-service:
@@ -40,6 +63,8 @@ services:
       retries: 3
       start_period: 5s
     depends_on:
+      sync-wasm-client:
+        condition: service_completed_successfully
       server:
         condition: service_healthy
     network_mode: service:server
@@ -47,6 +72,9 @@ services:
 # Define named volumes for caching
 volumes:
   target_cache:
+  rust_cache:
+  sync_node_modules:
+  sync_target_cache:
 
 # Define the network
 networks:

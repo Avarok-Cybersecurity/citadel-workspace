@@ -34,6 +34,14 @@ if [ "$1" == "--no-restart" ]; then
     NO_RESTART=true
 fi
 
+# Detect container mode
+if [ -n "$CONTAINER_MODE" ] && [ "$CONTAINER_MODE" = "1" ]; then
+    print_status "Running in container mode"
+    IN_CONTAINER=true
+else
+    IN_CONTAINER=false
+fi
+
 if [ ! -d "$INTERNAL_SERVICE_ROOT" ]; then
     print_error "citadel-internal-service directory not found at $INTERNAL_SERVICE_ROOT"
     print_error "Make sure to git submodule pull resursively"
@@ -43,9 +51,14 @@ if [ ! -d "$INTERNAL_SERVICE_ROOT" ]; then
     exit 1
 fi
 
+# Set destination paths - same for both container and local mode
+# In container mode, these paths will be mounted from the host
 DEST1="$INTERNAL_SERVICE_ROOT/typescript-client"
 DEST2="$WORKSPACE_ROOT/citadel-workspaces/public/wasm"
 DEST3="$WORKSPACE_ROOT/citadel-workspace-client-ts/"
+
+# Ensure destination directories exist
+mkdir -p "$DEST1" "$DEST2" "$DEST3"
 
 # Define the correct package.json content for typescript-client
 TYPESCRIPT_CLIENT_PACKAGE_JSON=$(cat << 'EOF'

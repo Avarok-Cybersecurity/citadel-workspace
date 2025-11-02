@@ -19,16 +19,16 @@
 #    resource_deps=['server'],
 #)
 
-local_resource(
-    name='sync-wasm-client',
-    cmd='./sync-wasm-clients.sh',
-    labels=['init'],
-)
-
 docker_compose('./docker-compose.yml')
 
 # Configure Docker Compose resources to only rebuild manually
 # This prevents losing in-memory state during development
+dc_resource(
+    'sync-wasm-client',
+    labels=['init'],
+    trigger_mode=TRIGGER_MODE_MANUAL  # Only rebuild when explicitly triggered
+)
+
 dc_resource(
     'server',
     labels=['backend'],
