@@ -67,10 +67,10 @@ junit.xml
 internal-service.log
 citadel-server.log
 
-# UI directories - exclude to prevent rebuilds on UI changes
-citadel-workspaces/
-citadel-workspace-client-ts/
-wasm-client-ts/
+# UI directories - NOTE: citadel-workspaces is needed for UI container build
+# citadel-workspaces/
+# citadel-workspace-client-ts/
+# wasm-client-ts/
 test_*.html
 test_*.js
 .claude

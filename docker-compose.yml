@@ -69,12 +69,64 @@ services:
         condition: service_healthy
     network_mode: service:server
 
+  ui:
+    build:
+      context: .
+      dockerfile: ./docker/ui/Dockerfile
+      target: dev
+    volumes:
+      # CRITICAL: Anonymous volume for node_modules MUST be first
+      # This prevents host's node_modules from overwriting container's
+      - ui_node_modules:/app/node_modules
+
+      # Mount source code for HMR (read-write)
+      - ./citadel-workspaces/src:/app/src:rw
+      - ./citadel-workspaces/public:/app/public:rw
+      - ./citadel-workspaces/index.html:/app/index.html:rw
+
+      # Mount config files (read-write for hot reload)
+      - ./citadel-workspaces/vite.config.ts:/app/vite.config.ts:rw
+      - ./citadel-workspaces/tsconfig.json:/app/tsconfig.json:ro
+      - ./citadel-workspaces/tsconfig.node.json:/app/tsconfig.node.json:ro
+      - ./citadel-workspaces/tsconfig.app.json:/app/tsconfig.app.json:ro
+      - ./citadel-workspaces/tailwind.config.ts:/app/tailwind.config.ts:rw
+      - ./citadel-workspaces/postcss.config.js:/app/postcss.config.js:ro
+      - ./citadel-workspaces/components.json:/app/components.json:ro
+
+      # CRITICAL: Mount WASM client dependencies (read-only)
+      # These are file dependencies that get updated by sync-wasm-client
+      - ./citadel-workspace-client-ts:/workspace/citadel-workspace-client-ts:ro
+      - ./citadel-internal-service/typescript-client:/workspace/citadel-internal-service-wasm-client:ro
+
+      # Create symlinks for the file dependencies in node_modules
+      # This allows the UI to import from these packages
+      - ./citadel-workspace-client-ts:/app/node_modules/citadel-workspace-client-ts:ro
+      - ./citadel-internal-service/typescript-client:/app/node_modules/citadel-internal-service-wasm-client:ro
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=100
+    ports:
+      - "5173:5173"
+    depends_on:
+      sync-wasm-client:
+        condition: service_completed_successfully
+      internal-service:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    networks:
+      - citadel-net
+    labels:
+      - "frontend"
+
 # Define named volumes for caching
 volumes:
   target_cache:
   rust_cache:
   sync_node_modules:
   sync_target_cache:
+  ui_node_modules:
 
 # Define the network
 networks:

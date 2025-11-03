@@ -73,12 +73,15 @@ TYPESCRIPT_CLIENT_PACKAGE_JSON=$(cat << 'EOF'
     "src/**/*",
     "dist/**/*"
   ],
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
@@ -190,8 +193,12 @@ if [ -d "$DEST1" ]; then
     # Add cache busting to WASM loader
     TIMESTAMP=$(date +%s)
     if [ -f "$DEST1/citadel_internal_service_wasm_client.js" ]; then
-        # Add timestamp query parameter to WASM URL
-        sed -i '' "s/citadel_internal_service_wasm_client_bg\.wasm/citadel_internal_service_wasm_client_bg.wasm?v=$TIMESTAMP/g" "$DEST1/citadel_internal_service_wasm_client.js"
+        # Add timestamp query parameter to WASM URL (cross-platform sed)
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s/citadel_internal_service_wasm_client_bg\.wasm/citadel_internal_service_wasm_client_bg.wasm?v=$TIMESTAMP/g" "$DEST1/citadel_internal_service_wasm_client.js"
+        else
+            sed -i "s/citadel_internal_service_wasm_client_bg\.wasm/citadel_internal_service_wasm_client_bg.wasm?v=$TIMESTAMP/g" "$DEST1/citadel_internal_service_wasm_client.js"
+        fi
     fi
     
     # Rebuild TypeScript client after copying new WASM files
@@ -217,8 +224,12 @@ if [ -d "$DEST2" ]; then
     print_status "Adding cache busting to WASM loader..."
     TIMESTAMP=$(date +%s)
     if [ -f "$DEST2/citadel_internal_service_wasm_client.js" ]; then
-        # Add timestamp query parameter to WASM URL
-        sed -i '' "s/citadel_internal_service_wasm_client_bg\.wasm/citadel_internal_service_wasm_client_bg.wasm?v=$TIMESTAMP/g" "$DEST2/citadel_internal_service_wasm_client.js"
+        # Add timestamp query parameter to WASM URL (cross-platform sed)
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s/citadel_internal_service_wasm_client_bg\.wasm/citadel_internal_service_wasm_client_bg.wasm?v=$TIMESTAMP/g" "$DEST2/citadel_internal_service_wasm_client.js"
+        else
+            sed -i "s/citadel_internal_service_wasm_client_bg\.wasm/citadel_internal_service_wasm_client_bg.wasm?v=$TIMESTAMP/g" "$DEST2/citadel_internal_service_wasm_client.js"
+        fi
     fi
 fi
 
@@ -271,7 +282,7 @@ rm -rf ./dist ./node_modules
 
 print_status "Installing dependencies for citadel-workspaces.."
 npm install
-vite build --mode development
+npx vite build --mode development
 
 print_status "WASM client synchronization complete!"
 print_status ""

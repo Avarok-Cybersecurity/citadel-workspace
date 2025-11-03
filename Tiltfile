@@ -43,13 +43,11 @@ dc_resource(
     trigger_mode=TRIGGER_MODE_MANUAL  # Only rebuild when explicitly triggered
 )
 
-# "dev": "vite build --mode development && vite --force",
-# Define a local resource to run the React development server
-local_resource(
-    name='ui',
-    serve_cmd='npm install && vite build --mode development && vite --force',
-    serve_dir='citadel-workspaces',
-    # Make the UI resource depend on the successful completion of the backend services
+# UI service now runs in Docker container with HMR support
+# File watching uses polling to detect changes in Docker volume mounts
+dc_resource(
+    'ui',
+    labels=['frontend'],
     resource_deps=['internal-service', 'server', 'sync-wasm-client'],
-    labels=['frontend']
+    trigger_mode=TRIGGER_MODE_AUTO  # Auto-rebuild on Dockerfile changes
 )
