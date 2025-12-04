@@ -1,0 +1,15 @@
+{
+  "name": "citadel-internal-service-wasm-client",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "citadel_internal_service_wasm_client_bg.wasm",
+    "citadel_internal_service_wasm_client.js",
+    "citadel_internal_service_wasm_client.d.ts"
+  ],
+  "main": "citadel_internal_service_wasm_client.js",
+  "types": "citadel_internal_service_wasm_client.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

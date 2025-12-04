@@ -204,6 +204,13 @@ if [ -d "$DEST1" ]; then
     # Rebuild TypeScript client after copying new WASM files
     print_status "Rebuilding TypeScript client in $DEST1..."
     cd "$DEST1"
+
+    # Verify package.json has build script (resilience check)
+    if ! grep -q '"build"' package.json; then
+        print_warning "package.json missing 'build' script - regenerating..."
+        echo "$TYPESCRIPT_CLIENT_PACKAGE_JSON" > package.json
+    fi
+
     if [ ! -d "node_modules" ]; then
         npm install
     fi

@@ -1,7 +1,7 @@
 ---
 name: workspace-developer
 description: Use this agent when you need to develop, debug, or enhance features in the Citadel workspace system. This includes implementing new workspace functionality, fixing issues with the multi-layered protocol stack (Internal Service, Workspace Protocol, or Messaging Protocol), working with the tilt-based development environment, or validating features using Playwright MCP.
-model: sonnet
+model: opus
 color: blue
 ---
 

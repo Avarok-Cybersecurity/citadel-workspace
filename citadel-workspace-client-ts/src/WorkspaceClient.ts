@@ -260,17 +260,32 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   }
 
   /**
-   * Open a P2P connection with a peer
-   * @param peerCid The CID of the peer to connect to
+   * Open a messenger handle for the given CID.
+   * Creates an ISM (InterSession Messaging) channel for reliable-ordered messaging.
+   * @param cid The CID to open the messenger for
    */
-  async openP2PConnection(peerCid: string): Promise<void> {
+  async openMessengerFor(cid: string): Promise<void> {
     const wasmModule = this.getWasmModule();
     if (!wasmModule) {
       throw new Error('WASM module not initialized');
     }
-    
-    // Call the WASM function directly
-    await wasmModule.open_p2p_connection(peerCid);
+
+    await wasmModule.open_messenger_for(cid);
+  }
+
+  /**
+   * Ensures a messenger handle is open for the given CID.
+   * Returns true if the messenger was just opened, false if already open.
+   * Use this for polling to maintain messenger handles across leader/follower tab transitions.
+   * @param cid The CID to ensure messenger is open for
+   */
+  async ensureMessengerOpen(cid: string): Promise<boolean> {
+    const wasmModule = this.getWasmModule();
+    if (!wasmModule) {
+      throw new Error('WASM module not initialized');
+    }
+
+    return await wasmModule.ensure_messenger_open(cid);
   }
 
   /**

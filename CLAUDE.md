@@ -346,3 +346,25 @@ The "Session Already Connected" bug was a **session lifecycle bug**, not a tradi
 2. Wait for services to fully restart (check logs)
 3. Re-run tests
 4. If still failing, check for breaking changes in protocol types
+- Architecture Insight: The key is to have both tabs open simultaneously with their respective users, rather than switching sessions via
+  ClaimSession (which orphans the previous session).
+- The internal service IS designed to multiplex multiple sessions over one WebSocket. Add to memory
+- Architecture Context:
+ - Internal service acts as a smart proxy/multiplexer
+ - One WebSocket from frontend → internal service → multiple Citadel protocol connections
+ - Multiple sessions (user1, user2, user3) SHOULD share one WebSocket
+ - Sessions persist in server_connection_map across reconnections (orphan mode enabled)
+- Testing plan for p2p:
+     ☐ Create user1 account in Tab 1
+     ☐ Create user2 account in Tab 2
+     ☐ Create user3 account in Tab 3
+     ☐ P2P register user1 ↔ user2
+     ☐ P2P register user1 ↔ user3
+     ☐ P2P register user2 ↔ user3
+     ☐ Test messaging user1 → user2
+     ☐ Test messaging user2 → user1
+     ☐ Test messaging user1 → user3
+     ☐ Test messaging user3 → user1
+     ☐ Test messaging user2 → user3
+     ☐ Test messaging user3 → user2
+     ☐ Document UX issues and errors
