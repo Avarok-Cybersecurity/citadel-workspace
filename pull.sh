@@ -33,8 +33,28 @@ echo ""
 # Get the root directory
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Step 1: Pull all submodules recursively
-echo -e "${GREEN}=== Step 1: Pulling submodules recursively ===${NC}"
+# Step 1: Fetch all submodules recursively
+echo -e "${GREEN}=== Step 1: Fetching submodules recursively ===${NC}"
+echo ""
+
+git submodule foreach --recursive "
+    printf '\033[0;36mFetching submodule:\033[0m %s at %s\n' \"\$name\" \"\$sm_path\"
+
+    # Fetch all remotes
+    if git fetch --all; then
+        printf '\033[0;32m✓ Fetched:\033[0m %s\n' \"\$name\"
+    else
+        printf '\033[0;31m✗ Fetch failed:\033[0m %s\n' \"\$name\"
+        exit 1
+    fi
+
+    printf '\n'
+"
+
+echo ""
+
+# Step 2: Pull all submodules recursively
+echo -e "${GREEN}=== Step 2: Pulling submodules recursively ===${NC}"
 echo ""
 
 # Use git submodule foreach to process all submodules recursively
@@ -73,11 +93,27 @@ git submodule foreach --recursive "
     printf '\n'
 "
 
-# Step 2: Pull the main repo
-echo -e "${GREEN}=== Step 2: Pulling main repository ===${NC}"
+# Step 3: Fetch the main repo
+echo -e "${GREEN}=== Step 3: Fetching main repository ===${NC}"
 echo ""
 
 cd "$ROOT_DIR"
+
+echo -e "${CYAN}Fetching:${NC} Main repository"
+
+# Fetch all remotes
+if git fetch --all; then
+    echo -e "${GREEN}✓ Fetched:${NC} Main repository"
+else
+    echo -e "${RED}✗ Fetch failed:${NC} Main repository"
+    exit 1
+fi
+
+echo ""
+
+# Step 4: Pull the main repo
+echo -e "${GREEN}=== Step 4: Pulling main repository ===${NC}"
+echo ""
 
 # Get current branch
 MAIN_BRANCH=$(git rev-parse --abbrev-ref HEAD)
@@ -107,8 +143,8 @@ fi
 
 echo ""
 
-# Step 3: Update submodules to match main repo's commit references
-echo -e "${GREEN}=== Step 3: Syncing submodules to main repo references ===${NC}"
+# Step 5: Update submodules to match main repo's commit references
+echo -e "${GREEN}=== Step 5: Syncing submodules to main repo references ===${NC}"
 echo ""
 
 echo -e "${YELLOW}Running git submodule update --init --recursive...${NC}"
@@ -125,10 +161,9 @@ echo -e "${GREEN}║  All pulls complete!                                     �
 echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "${GREEN}Summary:${NC}"
-echo -e "  • All submodules (recursive) pulled successfully"
-echo -e "  • Main repository pulled successfully"
+echo -e "  • All submodules (recursive) fetched and pulled successfully"
+echo -e "  • Main repository fetched and pulled successfully"
 echo -e "  • Submodules synced to main repo commit references"
 echo ""
 echo -e "${CYAN}Note:${NC} If submodules are on tracking branches, they may be ahead"
 echo -e "      of the commit referenced by main repo. This is normal."
-echo -e "      Use ${CYAN}./check-submodule-status.sh${NC} to see current state."
