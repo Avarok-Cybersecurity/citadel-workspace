@@ -210,9 +210,9 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
                 .delete_office(actor_user_id, office_id)
                 .await
             {
-                Ok(_) => Ok(WorkspaceProtocolResponse::Success(
-                    "Office deleted successfully".to_string(),
-                )),
+                Ok(_) => Ok(WorkspaceProtocolResponse::DeleteOffice {
+                    office_id: office_id.clone(),
+                }),
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to delete office: {}",
                     e
@@ -304,9 +304,9 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
                 .delete_room(actor_user_id, room_id)
                 .await
             {
-                Ok(_) => Ok(WorkspaceProtocolResponse::Success(
-                    "Room deleted successfully".to_string(),
-                )),
+                Ok(_) => Ok(WorkspaceProtocolResponse::DeleteRoom {
+                    room_id: room_id.clone(),
+                }),
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to delete room: {}",
                     e

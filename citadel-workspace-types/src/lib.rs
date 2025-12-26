@@ -229,6 +229,16 @@ pub enum WorkspaceProtocolResponse {
         new_role: UserRole,
     },
 
+    /// Confirmation that an office was deleted
+    DeleteOffice {
+        office_id: String,
+    },
+
+    /// Confirmation that a room was deleted
+    DeleteRoom {
+        room_id: String,
+    },
+
     // ========== Group Messaging Responses ==========
 
     /// Notification of a new group message (broadcast to all group members)
