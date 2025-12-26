@@ -1,6 +1,6 @@
 use crate::handlers::domain::DomainEntity;
 use citadel_sdk::prelude::NetworkError;
-use citadel_workspace_types::structs::{Domain, Office, Room, Workspace};
+use citadel_workspace_types::structs::{Domain, DomainPermissions, Office, Room, Workspace};
 use uuid::Uuid;
 
 /// Implement DomainEntity for Office
@@ -47,9 +47,12 @@ impl DomainEntity for Office {
             description: description.to_string(),
             owner_id: "".to_string(),
             members: vec![],
-            // denylist: Vec::new(),
             rooms: Vec::new(),
             mdx_content: String::new(),
+            rules: None,
+            chat_enabled: false,
+            chat_channel_id: None,
+            default_permissions: DomainPermissions::default(),
             metadata: Vec::new(),
         }
     }
@@ -120,8 +123,11 @@ impl DomainEntity for Room {
             office_id,
             owner_id: "".to_string(),
             members: vec![],
-            // denylist: Vec::new(),
             mdx_content: String::new(),
+            rules: None,
+            chat_enabled: false,
+            chat_channel_id: None,
+            default_permissions: DomainPermissions::default(),
             metadata: Vec::new(),
         }
     }

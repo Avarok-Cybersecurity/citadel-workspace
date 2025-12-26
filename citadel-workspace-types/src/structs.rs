@@ -363,6 +363,245 @@ impl Permission {
     }
 }
 
+/// Default permissions for a domain (Office or Room).
+/// These define what actions are allowed by default for users in that domain.
+/// Read operations default to `true`, write/admin operations default to `false`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
+#[ts(export)]
+pub struct DomainPermissions {
+    // === Read Permissions (default: true) ===
+    /// Whether users can view content in this domain
+    pub view_content: bool,
+    /// Whether users can read messages in group chat
+    pub read_messages: bool,
+    /// Whether users can download files
+    pub download_files: bool,
+
+    // === Write Permissions (default: false) ===
+    /// Whether users can edit content (documents, etc.)
+    pub edit_content: bool,
+    /// Whether users can edit MDX content
+    pub edit_mdx: bool,
+    /// Whether users can send messages in group chat
+    pub send_messages: bool,
+    /// Whether users can upload files
+    pub upload_files: bool,
+
+    // === Room Management (default: false) ===
+    /// Whether users can create rooms in this office
+    pub create_room: bool,
+    /// Whether users can delete rooms
+    pub delete_room: bool,
+    /// Whether users can update room settings
+    pub update_room: bool,
+    /// Whether users can add rooms
+    pub add_room: bool,
+    /// Whether users can edit room configuration
+    pub edit_room_config: bool,
+    /// Whether users can update room settings
+    pub update_room_settings: bool,
+    /// Whether users can manage room members
+    pub manage_room_members: bool,
+
+    // === Office Management (default: false) ===
+    /// Whether users can create offices
+    pub create_office: bool,
+    /// Whether users can delete offices
+    pub delete_office: bool,
+    /// Whether users can update offices
+    pub update_office: bool,
+    /// Whether users can add offices
+    pub add_office: bool,
+    /// Whether users can edit office configuration
+    pub edit_office_config: bool,
+    /// Whether users can update office settings
+    pub update_office_settings: bool,
+    /// Whether users can manage office members
+    pub manage_office_members: bool,
+
+    // === Workspace Management (default: false) ===
+    /// Whether users can create workspaces
+    pub create_workspace: bool,
+    /// Whether users can update workspaces
+    pub update_workspace: bool,
+    /// Whether users can delete workspaces
+    pub delete_workspace: bool,
+    /// Whether users can edit workspace configuration
+    pub edit_workspace_config: bool,
+
+    // === User Management (default: false) ===
+    /// Whether users can add other users to this domain
+    pub add_users: bool,
+    /// Whether users can remove users from this domain
+    pub remove_users: bool,
+    /// Whether users can ban users from this domain
+    pub ban_user: bool,
+
+    // === System/Admin (default: false) ===
+    /// Whether users can manage domains
+    pub manage_domains: bool,
+    /// Whether users can configure system settings
+    pub configure_system: bool,
+}
+
+impl Default for DomainPermissions {
+    fn default() -> Self {
+        Self {
+            // Read permissions - enabled by default
+            view_content: true,
+            read_messages: true,
+            download_files: true,
+
+            // Write permissions - disabled by default
+            edit_content: false,
+            edit_mdx: false,
+            send_messages: false,
+            upload_files: false,
+
+            // Room management - disabled by default
+            create_room: false,
+            delete_room: false,
+            update_room: false,
+            add_room: false,
+            edit_room_config: false,
+            update_room_settings: false,
+            manage_room_members: false,
+
+            // Office management - disabled by default
+            create_office: false,
+            delete_office: false,
+            update_office: false,
+            add_office: false,
+            edit_office_config: false,
+            update_office_settings: false,
+            manage_office_members: false,
+
+            // Workspace management - disabled by default
+            create_workspace: false,
+            update_workspace: false,
+            delete_workspace: false,
+            edit_workspace_config: false,
+
+            // User management - disabled by default
+            add_users: false,
+            remove_users: false,
+            ban_user: false,
+
+            // System/Admin - disabled by default
+            manage_domains: false,
+            configure_system: false,
+        }
+    }
+}
+
+impl DomainPermissions {
+    /// Create a new DomainPermissions with default values
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create permissions with all read access enabled
+    pub fn read_only() -> Self {
+        Self::default()
+    }
+
+    /// Create permissions with read and basic write access (for members)
+    pub fn member_access() -> Self {
+        Self {
+            edit_content: true,
+            edit_mdx: true,
+            send_messages: true,
+            upload_files: true,
+            ..Self::default()
+        }
+    }
+
+    /// Create permissions with full access (for admins/owners)
+    pub fn full_access() -> Self {
+        Self {
+            view_content: true,
+            read_messages: true,
+            download_files: true,
+            edit_content: true,
+            edit_mdx: true,
+            send_messages: true,
+            upload_files: true,
+            create_room: true,
+            delete_room: true,
+            update_room: true,
+            add_room: true,
+            edit_room_config: true,
+            update_room_settings: true,
+            manage_room_members: true,
+            create_office: true,
+            delete_office: true,
+            update_office: true,
+            add_office: true,
+            edit_office_config: true,
+            update_office_settings: true,
+            manage_office_members: true,
+            create_workspace: true,
+            update_workspace: true,
+            delete_workspace: true,
+            edit_workspace_config: true,
+            add_users: true,
+            remove_users: true,
+            ban_user: true,
+            manage_domains: true,
+            configure_system: true,
+        }
+    }
+
+    /// Check if a specific permission is granted
+    pub fn has_permission(&self, permission: &Permission) -> bool {
+        match permission {
+            Permission::All => {
+                // Check if all permissions are granted
+                self.view_content
+                    && self.read_messages
+                    && self.download_files
+                    && self.edit_content
+                    && self.send_messages
+                    && self.upload_files
+                    && self.create_room
+                    && self.delete_room
+                    && self.manage_domains
+                    && self.configure_system
+            }
+            Permission::ViewContent => self.view_content,
+            Permission::ReadMessages => self.read_messages,
+            Permission::DownloadFiles => self.download_files,
+            Permission::EditContent => self.edit_content,
+            Permission::EditMdx => self.edit_mdx,
+            Permission::SendMessages => self.send_messages,
+            Permission::UploadFiles => self.upload_files,
+            Permission::CreateRoom => self.create_room,
+            Permission::DeleteRoom => self.delete_room,
+            Permission::UpdateRoom => self.update_room,
+            Permission::AddRoom => self.add_room,
+            Permission::EditRoomConfig => self.edit_room_config,
+            Permission::UpdateRoomSettings => self.update_room_settings,
+            Permission::ManageRoomMembers => self.manage_room_members,
+            Permission::CreateOffice => self.create_office,
+            Permission::DeleteOffice => self.delete_office,
+            Permission::UpdateOffice => self.update_office,
+            Permission::AddOffice => self.add_office,
+            Permission::EditOfficeConfig => self.edit_office_config,
+            Permission::UpdateOfficeSettings => self.update_office_settings,
+            Permission::ManageOfficeMembers => self.manage_office_members,
+            Permission::CreateWorkspace => self.create_workspace,
+            Permission::UpdateWorkspace => self.update_workspace,
+            Permission::DeleteWorkspace => self.delete_workspace,
+            Permission::EditWorkspaceConfig => self.edit_workspace_config,
+            Permission::AddUsers => self.add_users,
+            Permission::RemoveUsers => self.remove_users,
+            Permission::BanUser => self.ban_user,
+            Permission::ManageDomains => self.manage_domains,
+            Permission::ConfigureSystem => self.configure_system,
+        }
+    }
+}
+
 /// Metadata field for storing flexible data used by the frontend
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[ts(export)]
@@ -416,6 +655,14 @@ pub struct Office {
     pub rooms: Vec<String>,   // Room IDs
     #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
     pub mdx_content: String,
+    /// Rules for this office (displayed to users)
+    pub rules: Option<String>,
+    /// Whether group chat is enabled for this office
+    pub chat_enabled: bool,
+    /// UUID for the group chat channel (assigned when chat_enabled is true)
+    pub chat_channel_id: Option<String>,
+    /// Default permissions for users in this office
+    pub default_permissions: DomainPermissions,
     // Can be used to add any type of data by the UI
     #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
     pub metadata: Vec<u8>,
@@ -432,6 +679,14 @@ pub struct Room {
     pub members: Vec<String>, // User IDs
     #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
     pub mdx_content: String,
+    /// Rules for this room (displayed to users)
+    pub rules: Option<String>,
+    /// Whether group chat is enabled for this room
+    pub chat_enabled: bool,
+    /// UUID for the group chat channel (assigned when chat_enabled is true)
+    pub chat_channel_id: Option<String>,
+    /// Default permissions for users in this room
+    pub default_permissions: DomainPermissions,
     pub metadata: Vec<MetadataField>,
 }
 

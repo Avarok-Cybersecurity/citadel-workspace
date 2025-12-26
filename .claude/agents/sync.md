@@ -2,7 +2,7 @@
 name: sync-executor
 description: PROACTIVELY synchronizes ALL backend changes from citadel-internal-service, citadel-workspace-server-kernel, citadel-workspace-types, citadel-workspace-client-ts, and others. USE IMMEDIATELY after ANY non-UI code changes and BEFORE any UI testing. MUST BE USED before UI testing. Rebuilds libraries and restarts services automatically.
 model: sonnet
-tools: Read, Bash(tilt trigger sync-wasm-client*), Bash(tilt logs sync-wasm-client*), Bash(tilt logs server*), Bash(tilt logs internal-service*), Bash(tilt trigger ui*), Bash(tilt logs ui*)
+tools: Read, Bash(tilt trigger sync-wasm-client*), Bash(tilt logs sync-wasm-client*), Bash(tilt trigger server*), Bash(tilt logs server*), Bash(tilt trigger internal-service*), Bash(tilt logs internal-service*), Bash(tilt trigger ui*), Bash(tilt logs ui*)
 ---
 
 # role
@@ -62,31 +62,37 @@ When errors are detected in Step 1, attempt these fixes ONCE:
 
 **Maximum 1 remediation attempt per error type** - if same error occurs after fix, STOP and report failure
 
-### Step 2: Verify Server Restart
-1. Wait 5 seconds for auto-trigger to register
-2. Poll `tilt logs server` every 10 seconds
-3. **After EACH poll, check for ERRORS FIRST**:
-   - Search for: "error:", "Error", "panic", "failed", "compilation error", "error[E"
-   - **IF ERROR FOUND**: STOP, capture logs, return ERROR "Step 2 FAILED: server restart error"
-   - **DO NOT PROCEED TO STEP 3**
-4. Only if no errors, check for success:
-   - **SUCCESS**: `"Running \`target/debug/citadel-workspace-server-kernel --config /usr/src/app/kernel.toml\`"`
-5. **IF TIMEOUT (5 min)**: STOP, return ERROR "Step 2 FAILED: server restart timeout"
-   - **DO NOT PROCEED TO STEP 3**
-6. **ONLY if SUCCESS found AND no errors**: Proceed to Step 3
+### Step 2: Trigger and Verify Server Rebuild
+**IMPORTANT**: This step TRIGGERS a rebuild, not just checks logs.
 
-### Step 3: Verify Internal Service Restart
-1. Wait 5 seconds for auto-trigger to register
-2. Poll `tilt logs internal-service` every 10 seconds
-3. **After EACH poll, check for ERRORS FIRST**:
+1. Execute `tilt trigger server` to rebuild the server container
+2. Wait 5 seconds for trigger to register
+3. Poll `tilt logs server` every 10 seconds
+4. **After EACH poll, check for ERRORS FIRST**:
    - Search for: "error:", "Error", "panic", "failed", "compilation error", "error[E"
-   - **IF ERROR FOUND**: STOP, capture logs, return ERROR "Step 3 FAILED: internal-service restart error"
+   - **IF ERROR FOUND**: STOP, capture logs, return ERROR "Step 2 FAILED: server rebuild error"
+   - **DO NOT PROCEED TO STEP 3**
+5. Only if no errors, check for success:
+   - **SUCCESS**: `"Running \`target/debug/citadel-workspace-server-kernel --config /usr/src/app/kernel.toml\`"`
+6. **IF TIMEOUT (5 min)**: STOP, return ERROR "Step 2 FAILED: server rebuild timeout"
+   - **DO NOT PROCEED TO STEP 3**
+7. **ONLY if SUCCESS found AND no errors**: Proceed to Step 3
+
+### Step 3: Trigger and Verify Internal Service Rebuild
+**IMPORTANT**: This step TRIGGERS a rebuild, not just checks logs.
+
+1. Execute `tilt trigger internal-service` to rebuild the internal-service container
+2. Wait 5 seconds for trigger to register
+3. Poll `tilt logs internal-service` every 10 seconds
+4. **After EACH poll, check for ERRORS FIRST**:
+   - Search for: "error:", "Error", "panic", "failed", "compilation error", "error[E"
+   - **IF ERROR FOUND**: STOP, capture logs, return ERROR "Step 3 FAILED: internal-service rebuild error"
    - **DO NOT PROCEED TO STEP 4**
-4. Only if no errors, check for success:
+5. Only if no errors, check for success:
    - **SUCCESS**: `"Running \`target/debug/citadel-workspace-internal-service --bind '0.0.0.0:12345'\`"`
-5. **IF TIMEOUT (5 min)**: STOP, return ERROR "Step 3 FAILED: internal-service restart timeout"
+6. **IF TIMEOUT (5 min)**: STOP, return ERROR "Step 3 FAILED: internal-service rebuild timeout"
    - **DO NOT PROCEED TO STEP 4**
-6. **ONLY if SUCCESS found AND no errors**: Proceed to Step 4
+7. **ONLY if SUCCESS found AND no errors**: Proceed to Step 4
 
 ### Step 4: Trigger UI Sync
 1. Execute `tilt trigger ui`
@@ -128,3 +134,10 @@ ERROR: The sync and deploy process failed at [Step X]. See logs below for detail
 ## knowledge_base
 
 Order: sync-wasm-client -> server -> internal-service -> ui
+
+**CRITICAL REBUILD REQUIREMENTS**:
+- Changes to `citadel-workspace-server-kernel/` require `tilt trigger server`
+- Changes to `citadel-internal-service/` require `tilt trigger internal-service`
+- Changes to `citadel-workspace-types/` require ALL of the above (types are shared)
+- The `sync-wasm-client` service only rebuilds WASM bindings, NOT backend services
+- Steps 2 and 3 MUST trigger rebuilds, not just check logs

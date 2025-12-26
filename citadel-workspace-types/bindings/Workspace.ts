@@ -3,4 +3,4 @@
 /**
  * A workspace is a container for offices
  */
-export type Workspace = { id: string, name: string, description: string, owner_id: string, members: Array<string>, offices: Array<string>, metadata: Array<number>, password_protected: boolean, };
+export type Workspace = { id: string, name: string, description: string, owner_id: string, members: Array<string>, offices: Array<string>, metadata: Array<number>, };

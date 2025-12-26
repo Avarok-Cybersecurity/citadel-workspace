@@ -73,6 +73,13 @@ impl TransactionManager {
                 )));
             };
 
+            // Check if user is the owner of the domain - owners have full permissions
+            let is_owner = domain.owner_id() == user_id;
+            if is_owner {
+                debug!(target: "citadel", "[RBAC] User {} is owner of domain {}, granting all permissions", user_id, entity_id);
+                return Ok(true);
+            }
+
             let is_member = domain
                 .members()
                 .iter()

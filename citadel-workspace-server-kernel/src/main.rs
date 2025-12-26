@@ -28,7 +28,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!(?config, "Loaded server configuration");
 
-    citadel_workspace_server_kernel::run_server(config).await?;
+    // Get the directory containing the config file for resolving relative paths
+    let config_base_path = options.config.parent();
+
+    citadel_workspace_server_kernel::run_server_with_base_path(config, config_base_path).await?;
 
     Ok(())
 }

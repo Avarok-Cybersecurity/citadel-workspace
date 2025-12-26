@@ -31,15 +31,20 @@ When you edit code in:
 - Any Rust backend crates
 
 **You MUST run the sync-executor agent to:**
-1. Rebuild WASM clients (`sync-wasm-client` service)
-2. Sync TypeScript bindings (regenerate types)
-3. Restart backend services in order: `server` → `internal-service` → `ui`
-4. Ensure all changes are propagated through the entire stack
+1. Rebuild WASM clients (`tilt trigger sync-wasm-client`)
+2. **Rebuild server container** (`tilt trigger server`) - compiles Rust code in citadel-workspace-server-kernel
+3. **Rebuild internal-service container** (`tilt trigger internal-service`) - compiles Rust code in citadel-internal-service
+4. Sync UI (`tilt trigger ui`)
 
 **Sync Executor Workflow:**
 ```
-sync-wasm-client → server → internal-service → ui
+tilt trigger sync-wasm-client → tilt trigger server → tilt trigger internal-service → tilt trigger ui
 ```
+
+**CRITICAL**: The sync-executor MUST trigger rebuilds, not just check logs. Each step runs `tilt trigger <service>` to recompile and restart:
+- Changes to `citadel-workspace-server-kernel/` require `tilt trigger server`
+- Changes to `citadel-internal-service/` require `tilt trigger internal-service`
+- Changes to `citadel-workspace-types/` require ALL of the above (shared types)
 
 The agent polls services every 10s, waiting for success indicators like:
 - `Running target/debug/citadel-workspace-internal-service --bind '0.0.0.0:12345'`

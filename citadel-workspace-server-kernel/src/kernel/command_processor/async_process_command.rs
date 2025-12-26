@@ -397,9 +397,10 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
                 )
                 .await
             {
-                Ok(_) => Ok(WorkspaceProtocolResponse::Success(
-                    "Member role updated successfully".to_string(),
-                )),
+                Ok(_) => Ok(WorkspaceProtocolResponse::MemberRoleUpdated {
+                    user_id: user_id.clone(),
+                    new_role: role.clone(),
+                }),
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to update member role: {}",
                     e
@@ -541,10 +542,274 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
             }
         }
 
+        WorkspaceProtocolRequest::GetUserPermissions { user_id, domain_id } => {
+            use citadel_workspace_types::structs::Permission;
+
+            // Check if requester has permission to view (must be admin or requesting own permissions)
+            let is_admin = {
+                use crate::handlers::domain::async_ops::AsyncDomainOperations;
+                kernel.domain_ops().is_admin(actor_user_id).await.unwrap_or(false)
+            };
+
+            if actor_user_id != user_id && !is_admin {
+                return Ok(WorkspaceProtocolResponse::Error(
+                    "Permission denied: Can only view own permissions or must be admin".to_string(),
+                ));
+            }
+
+            // Get the user
+            match kernel
+                .domain_operations
+                .backend_tx_manager
+                .get_user(user_id)
+                .await
+            {
+                Ok(Some(user)) => {
+                    // Get permissions for the specific domain
+                    let permissions: Vec<Permission> = user
+                        .get_permissions(domain_id)
+                        .map(|p| p.iter().cloned().collect())
+                        .unwrap_or_default();
+
+                    Ok(WorkspaceProtocolResponse::UserPermissions {
+                        domain_id: domain_id.clone(),
+                        user_id: user_id.clone(),
+                        role: user.role.clone(),
+                        permissions,
+                    })
+                }
+                Ok(None) => Ok(WorkspaceProtocolResponse::Error(
+                    "User not found".to_string(),
+                )),
+                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
+                    "Failed to get user: {}",
+                    e
+                ))),
+            }
+        }
+
         // Message command is not supported by server
         WorkspaceProtocolRequest::Message { .. } => Ok(WorkspaceProtocolResponse::Error(
             "Message command is not supported by server. Only peers may receive this type"
                 .to_string(),
         )),
+
+        // ========== Group Messaging Commands ==========
+
+        WorkspaceProtocolRequest::SendGroupMessage {
+            group_id,
+            message_type,
+            content,
+            reply_to,
+            mentions,
+        } => {
+            use citadel_workspace_types::{GroupMessage, GroupMessageType};
+            use uuid::Uuid;
+
+            // Get sender name from user
+            let sender_name = match kernel
+                .domain_operations
+                .backend_tx_manager
+                .get_user(actor_user_id)
+                .await
+            {
+                Ok(Some(user)) => user.name,
+                _ => actor_user_id.to_string(),
+            };
+
+            // Create the message
+            let message = GroupMessage {
+                id: Uuid::new_v4().to_string(),
+                group_id: group_id.clone(),
+                sender_id: actor_user_id.to_string(),
+                sender_name,
+                message_type: message_type.clone(),
+                content: content.clone(),
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64,
+                reply_to: reply_to.clone(),
+                reply_count: 0,
+                mentions: mentions.clone().unwrap_or_default(),
+                edited_at: None,
+            };
+
+            // Store the message
+            match kernel
+                .domain_operations
+                .backend_tx_manager
+                .store_group_message(message.clone())
+                .await
+            {
+                Ok(_) => {
+                    // Return the notification so it can be broadcast
+                    Ok(WorkspaceProtocolResponse::GroupMessageNotification {
+                        group_id: group_id.clone(),
+                        message,
+                    })
+                }
+                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
+                    "Failed to send message: {}",
+                    e
+                ))),
+            }
+        }
+
+        WorkspaceProtocolRequest::EditGroupMessage {
+            group_id,
+            message_id,
+            new_content,
+        } => {
+            // Get the original message to verify ownership
+            match kernel
+                .domain_operations
+                .backend_tx_manager
+                .get_group_message(group_id, message_id)
+                .await
+            {
+                Ok(Some(msg)) => {
+                    // Check if user is sender or admin
+                    use crate::handlers::domain::async_ops::AsyncDomainOperations;
+                    let is_admin = kernel.domain_ops().is_admin(actor_user_id).await.unwrap_or(false);
+                    if msg.sender_id != actor_user_id && !is_admin {
+                        return Ok(WorkspaceProtocolResponse::Error(
+                            "Permission denied: Can only edit own messages".to_string(),
+                        ));
+                    }
+
+                    let edited_at = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as u64;
+
+                    match kernel
+                        .domain_operations
+                        .backend_tx_manager
+                        .update_group_message(group_id, message_id, new_content.clone(), edited_at)
+                        .await
+                    {
+                        Ok(Some(_)) => Ok(WorkspaceProtocolResponse::GroupMessageEdited {
+                            group_id: group_id.clone(),
+                            message_id: message_id.clone(),
+                            new_content: new_content.clone(),
+                            edited_at,
+                        }),
+                        Ok(None) => Ok(WorkspaceProtocolResponse::Error(
+                            "Message not found".to_string(),
+                        )),
+                        Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
+                            "Failed to edit message: {}",
+                            e
+                        ))),
+                    }
+                }
+                Ok(None) => Ok(WorkspaceProtocolResponse::Error(
+                    "Message not found".to_string(),
+                )),
+                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
+                    "Failed to get message: {}",
+                    e
+                ))),
+            }
+        }
+
+        WorkspaceProtocolRequest::DeleteGroupMessage {
+            group_id,
+            message_id,
+        } => {
+            // Get the original message to verify ownership
+            match kernel
+                .domain_operations
+                .backend_tx_manager
+                .get_group_message(group_id, message_id)
+                .await
+            {
+                Ok(Some(msg)) => {
+                    // Check if user is sender or admin
+                    use crate::handlers::domain::async_ops::AsyncDomainOperations;
+                    let is_admin = kernel.domain_ops().is_admin(actor_user_id).await.unwrap_or(false);
+                    if msg.sender_id != actor_user_id && !is_admin {
+                        return Ok(WorkspaceProtocolResponse::Error(
+                            "Permission denied: Can only delete own messages".to_string(),
+                        ));
+                    }
+
+                    match kernel
+                        .domain_operations
+                        .backend_tx_manager
+                        .delete_group_message(group_id, message_id)
+                        .await
+                    {
+                        Ok(Some(_)) => Ok(WorkspaceProtocolResponse::GroupMessageDeleted {
+                            group_id: group_id.clone(),
+                            message_id: message_id.clone(),
+                            deleted_by: actor_user_id.to_string(),
+                        }),
+                        Ok(None) => Ok(WorkspaceProtocolResponse::Error(
+                            "Message not found".to_string(),
+                        )),
+                        Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
+                            "Failed to delete message: {}",
+                            e
+                        ))),
+                    }
+                }
+                Ok(None) => Ok(WorkspaceProtocolResponse::Error(
+                    "Message not found".to_string(),
+                )),
+                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
+                    "Failed to get message: {}",
+                    e
+                ))),
+            }
+        }
+
+        WorkspaceProtocolRequest::GetGroupMessages {
+            group_id,
+            before_timestamp,
+            limit,
+        } => {
+            let limit = limit.unwrap_or(50).min(100); // Default 50, max 100
+
+            match kernel
+                .domain_operations
+                .backend_tx_manager
+                .get_group_messages_paginated(group_id, *before_timestamp, limit)
+                .await
+            {
+                Ok((messages, has_more)) => Ok(WorkspaceProtocolResponse::GroupMessages {
+                    group_id: group_id.clone(),
+                    messages,
+                    has_more,
+                }),
+                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
+                    "Failed to get messages: {}",
+                    e
+                ))),
+            }
+        }
+
+        WorkspaceProtocolRequest::GetThreadMessages {
+            group_id,
+            parent_message_id,
+        } => {
+            match kernel
+                .domain_operations
+                .backend_tx_manager
+                .get_thread_messages(group_id, parent_message_id)
+                .await
+            {
+                Ok(messages) => Ok(WorkspaceProtocolResponse::GroupMessages {
+                    group_id: group_id.clone(),
+                    messages,
+                    has_more: false, // Thread messages are always returned fully
+                }),
+                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
+                    "Failed to get thread messages: {}",
+                    e
+                ))),
+            }
+        }
     }
 }

@@ -9,7 +9,7 @@ use crate::kernel::transaction::BackendTransactionManager;
 use async_trait::async_trait;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, Ratchet};
 use citadel_workspace_types::structs::{
-    Domain, Office, Permission, Room, User, UserRole, Workspace,
+    Domain, DomainPermissions, Office, Permission, Room, User, UserRole, Workspace,
 };
 use citadel_workspace_types::UpdateOperation;
 use parking_lot::RwLock;
@@ -361,13 +361,24 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         role: UserRole,
         metadata: Option<Vec<u8>>,
     ) -> Result<(), NetworkError> {
+        // Check if actor has admin permission
+        if !self.is_admin(actor_user_id).await? {
+            return Err(NetworkError::msg(
+                "Permission denied: Only admins can update member roles",
+            ));
+        }
+
         // Get user and update role
         let mut user = match self.backend_tx_manager.get_user(target_user_id).await? {
             Some(u) => u,
             None => return Err(NetworkError::msg("User not found")),
         };
 
+        // Update the role
         user.role = role;
+
+        // Update permissions for the workspace domain based on the new role
+        user.set_role_permissions(crate::WORKSPACE_ROOT_ID);
 
         // Handle metadata if provided
         if let Some(_metadata_bytes) = metadata {
@@ -930,6 +941,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncOfficeOperations<R>
             members: vec![user_id.to_string()],
             rooms: Vec::new(),
             mdx_content: mdx_content.unwrap_or_default().to_string(),
+            rules: None,
+            chat_enabled: false,
+            chat_channel_id: None,
+            default_permissions: DomainPermissions::default(),
             metadata: Default::default(),
         };
 
@@ -1105,6 +1120,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncRoomOperations<R> for AsyncDomainS
             description: description.to_string(),
             members: vec![user_id.to_string()],
             mdx_content: mdx_content.unwrap_or_default().to_string(),
+            rules: None,
+            chat_enabled: false,
+            chat_channel_id: None,
+            default_permissions: DomainPermissions::default(),
             metadata: Default::default(),
         };
 

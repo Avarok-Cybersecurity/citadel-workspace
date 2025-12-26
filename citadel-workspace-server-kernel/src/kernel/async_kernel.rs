@@ -3,12 +3,14 @@
 //! This module provides the async version of WorkspaceServerKernel that uses
 //! the BackendTransactionManager for all persistence operations.
 
+use crate::config::WorkspaceStructureConfig;
 use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
 use crate::kernel::transaction::BackendTransactionManager;
 use citadel_logging::info;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, Ratchet};
 use citadel_workspace_types::structs::UserRole;
 use parking_lot::RwLock;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Async version of WorkspaceServerKernel that uses backend persistence
@@ -19,6 +21,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     pub domain_operations: AsyncDomainServerOperations<R>,
     /// Workspace password (stored temporarily for on_start)
     workspace_password: Option<String>,
+    /// Workspace structure config (stored temporarily for on_start)
+    workspace_structure: Option<(WorkspaceStructureConfig, Option<PathBuf>)>,
 }
 
 // The default. This is not a protocol account, just an account that has the ability to run
@@ -31,6 +35,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             node_remote: self.node_remote.clone(),
             domain_operations: self.domain_operations.clone(),
             workspace_password: self.workspace_password.clone(),
+            workspace_structure: self.workspace_structure.clone(),
         }
     }
 }
@@ -58,6 +63,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             node_remote: node_remote_arc,
             domain_operations,
             workspace_password: None,
+            workspace_structure: None,
         }
     }
 
@@ -65,12 +71,21 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     pub async fn with_workspace_master_password(
         admin_password: &str,
     ) -> Result<Self, NetworkError> {
+        Self::with_workspace_master_password_and_structure(admin_password, None).await
+    }
+
+    /// Create a kernel with admin user and optional workspace structure config
+    pub async fn with_workspace_master_password_and_structure(
+        admin_password: &str,
+        workspace_structure: Option<(WorkspaceStructureConfig, Option<PathBuf>)>,
+    ) -> Result<Self, NetworkError> {
         println!("[ASYNC_KERNEL] Creating AsyncWorkspaceServerKernel with admin user");
 
         let mut kernel = Self::new(None);
 
         // Store the workspace password for later use in on_start
         kernel.workspace_password = Some(admin_password.to_string());
+        kernel.workspace_structure = workspace_structure;
 
         // Initialize the backend
         kernel.domain_operations.backend_tx_manager.init().await?;
@@ -217,6 +232,216 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .get_domain(domain_id)
             .await
     }
+
+    /// Initialize workspace structure from configuration
+    ///
+    /// Creates offices and rooms as defined in the WorkspaceStructureConfig.
+    /// Each office/room with chat_enabled=true gets a UUID for its chat channel.
+    pub async fn initialize_workspace_structure(
+        &self,
+        config: &WorkspaceStructureConfig,
+        base_path: Option<&std::path::Path>,
+    ) -> Result<(), NetworkError> {
+        use citadel_workspace_types::structs::{Domain, Office, Room};
+        use uuid::Uuid;
+
+        println!(
+            "[ASYNC_KERNEL] Initializing workspace structure: {} with {} offices",
+            config.name,
+            config.offices.len()
+        );
+
+        for office_config in &config.offices {
+            // Generate UUID for the office
+            let office_id = Uuid::new_v4().to_string();
+
+            // Load markdown content if path is specified
+            let mdx_content = if let Some(md_path) = &office_config.markdown_file {
+                let full_path = if let Some(base) = base_path {
+                    base.join(md_path)
+                } else {
+                    std::path::PathBuf::from(md_path)
+                };
+
+                match std::fs::read_to_string(&full_path) {
+                    Ok(content) => {
+                        println!("[ASYNC_KERNEL] Loaded markdown for office '{}': {:?}", office_config.name, full_path);
+                        content
+                    }
+                    Err(e) => {
+                        println!("[ASYNC_KERNEL] Warning: Failed to load markdown for office '{}': {}", office_config.name, e);
+                        String::new()
+                    }
+                }
+            } else {
+                String::new()
+            };
+
+            // Assign chat channel ID if chat is enabled
+            let chat_channel_id = if office_config.chat_enabled {
+                Some(Uuid::new_v4().to_string())
+            } else {
+                None
+            };
+
+            // Create office struct
+            let office = Office {
+                id: office_id.clone(),
+                owner_id: ADMIN_ROOT_USER_ID.to_string(),
+                workspace_id: crate::WORKSPACE_ROOT_ID.to_string(),
+                name: office_config.name.clone(),
+                description: office_config.description.clone().unwrap_or_default(),
+                members: vec![ADMIN_ROOT_USER_ID.to_string()],
+                rooms: Vec::new(),
+                mdx_content,
+                rules: office_config.rules.clone(),
+                chat_enabled: office_config.chat_enabled,
+                chat_channel_id,
+                default_permissions: office_config.default_permissions.clone(),
+                metadata: Vec::new(),
+            };
+
+            println!(
+                "[ASYNC_KERNEL] Creating office '{}' (id: {}, chat_enabled: {})",
+                office_config.name, office_id, office_config.chat_enabled
+            );
+
+            // Insert office
+            self.domain_operations
+                .backend_tx_manager
+                .insert_office(office_id.clone(), office.clone())
+                .await?;
+
+            // Insert domain
+            let domain = Domain::Office {
+                office: office.clone(),
+            };
+            self.domain_operations
+                .backend_tx_manager
+                .insert_domain(office_id.clone(), domain)
+                .await?;
+
+            // Add office to workspace
+            let mut workspace = self
+                .domain_operations
+                .backend_tx_manager
+                .get_workspace(crate::WORKSPACE_ROOT_ID)
+                .await?
+                .ok_or_else(|| NetworkError::msg("Root workspace not found"))?;
+
+            workspace.offices.push(office_id.clone());
+            self.domain_operations
+                .backend_tx_manager
+                .insert_workspace(crate::WORKSPACE_ROOT_ID.to_string(), workspace.clone())
+                .await?;
+
+            // Update workspace domain
+            let ws_domain = Domain::Workspace { workspace };
+            self.domain_operations
+                .backend_tx_manager
+                .insert_domain(crate::WORKSPACE_ROOT_ID.to_string(), ws_domain)
+                .await?;
+
+            // Create rooms within this office
+            let mut office_rooms = Vec::new();
+            for room_config in &office_config.rooms {
+                let room_id = Uuid::new_v4().to_string();
+
+                // Load room markdown content
+                let room_mdx_content = if let Some(md_path) = &room_config.markdown_file {
+                    let full_path = if let Some(base) = base_path {
+                        base.join(md_path)
+                    } else {
+                        std::path::PathBuf::from(md_path)
+                    };
+
+                    match std::fs::read_to_string(&full_path) {
+                        Ok(content) => {
+                            println!("[ASYNC_KERNEL] Loaded markdown for room '{}': {:?}", room_config.name, full_path);
+                            content
+                        }
+                        Err(e) => {
+                            println!("[ASYNC_KERNEL] Warning: Failed to load markdown for room '{}': {}", room_config.name, e);
+                            String::new()
+                        }
+                    }
+                } else {
+                    String::new()
+                };
+
+                // Assign chat channel ID if chat is enabled
+                let room_chat_channel_id = if room_config.chat_enabled {
+                    Some(Uuid::new_v4().to_string())
+                } else {
+                    None
+                };
+
+                // Create room struct
+                let room = Room {
+                    id: room_id.clone(),
+                    owner_id: ADMIN_ROOT_USER_ID.to_string(),
+                    office_id: office_id.clone(),
+                    name: room_config.name.clone(),
+                    description: room_config.description.clone().unwrap_or_default(),
+                    members: vec![ADMIN_ROOT_USER_ID.to_string()],
+                    mdx_content: room_mdx_content,
+                    rules: room_config.rules.clone(),
+                    chat_enabled: room_config.chat_enabled,
+                    chat_channel_id: room_chat_channel_id,
+                    default_permissions: room_config.default_permissions.clone(),
+                    metadata: Vec::new(),
+                };
+
+                println!(
+                    "[ASYNC_KERNEL] Creating room '{}' in office '{}' (id: {}, chat_enabled: {})",
+                    room_config.name, office_config.name, room_id, room_config.chat_enabled
+                );
+
+                // Insert room
+                self.domain_operations
+                    .backend_tx_manager
+                    .insert_room(room_id.clone(), room.clone())
+                    .await?;
+
+                // Insert domain
+                let room_domain = Domain::Room { room };
+                self.domain_operations
+                    .backend_tx_manager
+                    .insert_domain(room_id.clone(), room_domain)
+                    .await?;
+
+                office_rooms.push(room_id);
+            }
+
+            // Update office with room IDs
+            if !office_rooms.is_empty() {
+                let mut updated_office = self
+                    .domain_operations
+                    .backend_tx_manager
+                    .get_office(&office_id)
+                    .await?
+                    .ok_or_else(|| NetworkError::msg("Office not found after creation"))?;
+
+                updated_office.rooms = office_rooms;
+                self.domain_operations
+                    .backend_tx_manager
+                    .insert_office(office_id.clone(), updated_office.clone())
+                    .await?;
+
+                // Update office domain
+                let updated_domain = Domain::Office {
+                    office: updated_office,
+                };
+                self.domain_operations
+                    .backend_tx_manager
+                    .insert_domain(office_id.clone(), updated_domain)
+                    .await?;
+            }
+        }
+
+        println!("[ASYNC_KERNEL] Workspace structure initialization complete");
+        Ok(())
+    }
 }
 
 // Implement NetKernel for AsyncWorkspaceServerKernel
@@ -246,6 +471,13 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
             println!("[ASYNC_KERNEL] NodeRemote is available, injecting admin and workspace");
             // Inject admin now that we have backend storage
             self.inject_admin_user(workspace_password).await?;
+
+            // Initialize workspace structure from config if provided
+            if let Some((structure, base_path)) = &self.workspace_structure {
+                println!("[ASYNC_KERNEL] Initializing workspace structure from config");
+                self.initialize_workspace_structure(structure, base_path.as_deref())
+                    .await?;
+            }
         }
 
         Ok(())

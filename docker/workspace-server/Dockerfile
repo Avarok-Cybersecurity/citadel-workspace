@@ -10,6 +10,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY ./docker/workspace-server/kernel.toml /usr/src/app/kernel.toml
+COPY ./docker/workspace-server/documents /usr/src/app/documents
 COPY ./Cargo.toml /usr/src/app/Cargo.toml
 COPY ./Cargo.lock /usr/src/app/Cargo.lock
 COPY ./citadel-workspace-server-kernel /usr/src/app/citadel-workspace-server-kernel

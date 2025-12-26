@@ -1,4 +1,15 @@
 # Replace with a secure, randomly generated password
-workspace_master_password = "SUPER_SECRET_ADMIN_PASSWORD_CHANGE_ME" 
+workspace_master_password = "SUPER_SECRET_ADMIN_PASSWORD_CHANGE_ME"
 bind_addr = "0.0.0.0:12349"
-dangerous_skip_cert_verification = true 
+dangerous_skip_cert_verification = true
+
+# Path to directory-based workspace content (recommended)
+# The directory must contain:
+#   - workspace.json: Workspace metadata
+#   - Subdirectories: Each becomes an office
+#   - Nested subdirectories: Each becomes a room
+#   - CONTENT.md: Required for each office and room
+content_base_dir = "./documents/defaults/root"
+
+# Legacy: Path to workspace structure JSON (deprecated, use content_base_dir)
+# workspace_structure = "./workspaces.json"
