@@ -30,4 +30,4 @@ bun.lockb
 .archive
 target
 .playwright-mcp/
-.screenshots/*
+screenshots/*
