@@ -63,6 +63,33 @@ Timeout: 5 minutes per service. Errors captured to `./logs/sync-error-[timestamp
 - "Session Already Connected" errors (if session management changes weren't synced)
 - Undefined function errors in browser console
 
+## Updating citadel-sdk Dependencies - CRITICAL
+
+**⚠️ The sync-executor agent only RESTARTS containers - it does NOT rebuild Docker images.**
+
+When you update `citadel-sdk` dependencies via `cargo update citadel_sdk`, you MUST force a Docker rebuild:
+
+```bash
+# 1. Update dependencies in both workspaces
+cargo update citadel_sdk
+cd citadel-internal-service && cargo update citadel_sdk && cd ..
+
+# 2. Force Docker rebuild (REQUIRED - sync-executor won't do this!)
+docker compose down
+docker compose build --no-cache internal-service server
+docker compose up -d
+
+# 3. Verify the new SDK version is being used
+docker compose logs internal-service | grep -E "citadel-protocol.*#[a-f0-9]+" | head -1
+# Should show the new commit hash (e.g., #3493f51b)
+```
+
+**Why this matters:**
+- Docker containers cache the compiled Rust binaries
+- `sync-executor` only triggers `docker compose restart`, not `build`
+- Without `--no-cache`, Docker may reuse cached layers with old SDK
+- Symptoms of stale SDK: rekey timeouts, P2P connection hangs, protocol errors
+
 ## Available Agents
 
 Use these agents to automate complex workflows. Call them via the Task tool with appropriate subagent_type.

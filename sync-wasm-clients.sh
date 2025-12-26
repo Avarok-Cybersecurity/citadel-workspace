@@ -108,15 +108,16 @@ EOF
 print_status "Starting WASM client synchronization..."
 
 # Step 0: Clean
-if rm -f $DEST1/*.wasm $DEST1/*.d.ts $DEST1/*.js 2>/dev/null ; then 
-    rm -rf $DEST1/dist/*
-    rm -rf $DEST1/node_modules/*
-    echo "Cleaned $DEST1"
-fi
+print_status "Cleaning previous build artifacts..."
+rm -f "$DEST1"/*.wasm "$DEST1"/*.d.ts "$DEST1"/*.js 2>/dev/null || true
+rm -rf "$DEST1/dist" 2>/dev/null || true
+rm -rf "$DEST1/node_modules" 2>/dev/null || true
+# Explicitly remove old package.json to ensure we write fresh
+rm -f "$DEST1/package.json" 2>/dev/null || true
+echo "Cleaned $DEST1"
 
-if rm -rf $DEST2/* 2>/dev/null ; then 
-    echo "Cleaned $DEST2"
-fi
+rm -rf "$DEST2"/* 2>/dev/null || true
+echo "Cleaned $DEST2"
 
 # Step 1: Build the WASM client
 print_status "Building WASM client from citadel-internal-service..."
@@ -187,9 +188,66 @@ if [ -d "$DEST1" ]; then
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.wasm "$DEST1/"
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.js "$DEST1/"
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.d.ts "$DEST1/"
-    # Restore the correct package.json
-    echo "$TYPESCRIPT_CLIENT_PACKAGE_JSON" > "$DEST1/package.json"
-    
+    # Restore the correct package.json (use printf for reliability with multiline content)
+    print_status "Writing package.json to $DEST1..."
+    printf '%s\n' "$TYPESCRIPT_CLIENT_PACKAGE_JSON" > "$DEST1/package.json"
+
+    # Verify package.json was written correctly
+    if ! grep -q '"build"' "$DEST1/package.json"; then
+        print_error "Failed to write package.json correctly! Trying alternative method..."
+        cat > "$DEST1/package.json" << 'PKGJSON'
+{
+  "name": "citadel-internal-service-wasm-client",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "citadel_internal_service_wasm_client_bg.wasm",
+    "citadel_internal_service_wasm_client.js",
+    "citadel_internal_service_wasm_client.d.ts",
+    "src/**/*",
+    "dist/**/*"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "sideEffects": [
+    "./snippets/*"
+  ],
+  "dependencies": {
+    "ws": "^8.0.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.0.0",
+    "@types/uuid": "^9.0.0"
+  }
+}
+PKGJSON
+    fi
+
+    # Final verification
+    if grep -q '"build"' "$DEST1/package.json"; then
+        print_status "package.json verified - contains build script"
+    else
+        print_error "CRITICAL: package.json still missing build script after all attempts!"
+        cat "$DEST1/package.json"
+        exit 1
+    fi
+
     # Add cache busting to WASM loader
     TIMESTAMP=$(date +%s)
     if [ -f "$DEST1/citadel_internal_service_wasm_client.js" ]; then
@@ -205,15 +263,11 @@ if [ -d "$DEST1" ]; then
     print_status "Rebuilding TypeScript client in $DEST1..."
     cd "$DEST1"
 
-    # Verify package.json has build script (resilience check)
-    if ! grep -q '"build"' package.json; then
-        print_warning "package.json missing 'build' script - regenerating..."
-        echo "$TYPESCRIPT_CLIENT_PACKAGE_JSON" > package.json
-    fi
+    # Always install dependencies (since we clean node_modules in step 0)
+    print_status "Installing npm dependencies..."
+    npm install
 
-    if [ ! -d "node_modules" ]; then
-        npm install
-    fi
+    print_status "Running TypeScript build..."
     npm run build
 fi
 
