@@ -17,12 +17,18 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Get commit message from parameter or use default
-COMMIT_MSG="${1:-Update}"
+# Get commit message from parameter or use default with timestamp
+if [ -z "$1" ]; then
+    TIMESTAMP=$(date "+%Y-%m-%d-%H-%M-%S")
+    COMMIT_MSG="sync at $TIMESTAMP"
+else
+    COMMIT_MSG="$1"
+fi
 
-# Add timestamp to commit message
-TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S %Z")
-FULL_MSG="$COMMIT_MSG [$TIMESTAMP]"
+# Add co-author line
+FULL_MSG="$COMMIT_MSG
+
+Co-Authored-By: Warp <agent@warp.dev>"
 
 echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║  Committing to all submodules recursively + main repo   ║${NC}"
@@ -117,7 +123,7 @@ SUBMODULE_STATUS=$(git submodule foreach --recursive --quiet "
 
 if echo "$SUBMODULE_STATUS" | grep -q "HAS_CHANGES"; then
     echo ""
-    echo -e "${YELLOW}Run './check-submodule-status.sh' to see details${NC}"
+    echo -e "${YELLOW}Run 'git status' in each submodule to see details${NC}"
 fi
 
 echo ""

@@ -957,9 +957,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncOfficeOperations<R>
         self.add_office_to_workspace(user_id, workspace_id, &office_id)
             .await?;
 
-        // Grant creator permissions
-        self.add_user_to_domain(user_id, user_id, &office_id, UserRole::Member)
-            .await?;
+        // Note: Creator is already added to members in the Office struct initialization above
 
         Ok(office)
     }
@@ -1143,9 +1141,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncRoomOperations<R> for AsyncDomainS
             .insert_office(office_id.to_string(), office)
             .await?;
 
-        // Grant creator permissions
-        self.add_user_to_domain(user_id, user_id, &room_id, UserRole::Member)
-            .await?;
+        // Note: Creator is already added to members in the Room struct initialization above
 
         Ok(room)
     }

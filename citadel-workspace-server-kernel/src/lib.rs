@@ -12,7 +12,7 @@ pub const WORKSPACE_ROOT_ID: &str = "workspace-root";
 pub const WORKSPACE_MASTER_PASSWORD_KEY: &str = "workspace_master_password";
 
 pub mod config {
-    use citadel_workspace_types::DomainPermissions;
+    use citadel_workspace_types::structs::DomainPermissions;
     use serde::Deserialize;
 
     /// Main server configuration from kernel.toml
