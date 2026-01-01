@@ -21,7 +21,7 @@ env:
   RUST_BACKTRACE: full
   RUST_MIN_STACK: 40971520
   BINARY_NAME: citadel-workspace-internal-service
-  DOCKER_IMAGE: avarokcybersecurity/citadel-workspace-internal-service
+  DOCKER_IMAGE: avarok/citadel-hub
 
 jobs:
   build-binaries:
