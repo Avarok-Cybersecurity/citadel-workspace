@@ -1,0 +1,212 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g., 0.1.0) - used for Docker tagging"
+        required: false
+        type: string
+        default: "dev"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  RUST_MIN_STACK: 40971520
+  BINARY_NAME: citadel-workspace-internal-service
+  DOCKER_IMAGE: avarokcybersecurity/citadel-workspace-internal-service
+
+jobs:
+  build-binaries:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux targets
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: citadel-workspace-internal-service
+            asset_name: citadel-workspace-internal-service-linux-amd64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name: citadel-workspace-internal-service
+            asset_name: citadel-workspace-internal-service-linux-arm64
+            cross: true
+          # macOS targets
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: citadel-workspace-internal-service
+            asset_name: citadel-workspace-internal-service-darwin-amd64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: citadel-workspace-internal-service
+            asset_name: citadel-workspace-internal-service-darwin-arm64
+          # Windows targets
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: citadel-workspace-internal-service.exe
+            asset_name: citadel-workspace-internal-service-windows-amd64.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Rust
+        uses: Avarok-Cybersecurity/gh-actions-deps@master
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v0-rust"
+          shared-key: ${{ matrix.target }}
+          cache-on-failure: true
+
+      - name: Install target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Install Dependencies (Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake libclang-dev llvm clang
+          # Cross-compilation tools for ARM64
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+            echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+            echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          fi
+
+      - name: Install Dependencies (Windows)
+        if: startsWith(matrix.os, 'windows')
+        run: |
+          vcpkg install openssl:x64-windows-static-md
+          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build release binary
+        run: cargo build --release --bin ${{ env.BINARY_NAME }} --target ${{ matrix.target }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          if-no-files-found: error
+          retention-days: 7
+
+  build-docker:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: build-binaries
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download Linux AMD64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: citadel-workspace-internal-service-linux-amd64
+          path: ./binaries/linux-amd64
+
+      - name: Download Linux ARM64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: citadel-workspace-internal-service-linux-arm64
+          path: ./binaries/linux-arm64
+
+      - name: Prepare binaries
+        run: |
+          chmod +x ./binaries/linux-amd64/citadel-workspace-internal-service
+          chmod +x ./binaries/linux-arm64/citadel-workspace-internal-service
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=sha,prefix=
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/internal-service/Dockerfile.release
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            INTERNAL_SERVICE_PORT=12345
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-binaries, build-docker]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          for dir in ./artifacts/*/; do
+            name=$(basename "$dir")
+            if [[ "$name" == *".exe" ]]; then
+              cp "$dir"/*.exe "release/$name"
+            else
+              cp "$dir"/* "release/$name"
+              chmod +x "release/$name"
+            fi
+          done
+          ls -la release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
