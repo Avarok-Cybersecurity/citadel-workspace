@@ -214,28 +214,57 @@ jobs:
                 content: ($prompt + "\n\nLast version: " + $last + "\nNew version: " + $new + "\nCommits:\n" + ($commits | tostring))
               }],
               temperature: 0.7,
-              max_tokens: 2000
+              max_tokens: 4000
             }')
           
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -X POST "https://openrouter.ai/api/v1/chat/completions" \
-            -H "Authorization: Bearer $OPENROUTER_API_KEY" \
-            -H "Content-Type: application/json" \
-            -H "HTTP-Referer: https://github.com/Avarok-Cybersecurity/citadel-workspace" \
-            -H "X-Title: Citadel Workspace Release Notes" \
-            -d "$PAYLOAD" 2>&1)
+          # Exponential backoff wrapper
+          call_api() {
+            local max_attempts=5
+            local attempt=1
+            local delay=2
           
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
+            while [ $attempt -le $max_attempts ]; do
+              echo "API call attempt $attempt of $max_attempts..."
           
-          if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "::warning::API call failed (HTTP $HTTP_CODE), using fallback"
+              RESPONSE=$(curl -s -w "\n%{http_code}" \
+                -X POST "https://openrouter.ai/api/v1/chat/completions" \
+                -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+                -H "Content-Type: application/json" \
+                -H "HTTP-Referer: https://github.com/Avarok-Cybersecurity/citadel-workspace" \
+                -H "X-Title: Citadel Workspace Release Notes" \
+                -d "$PAYLOAD" 2>&1)
+          
+              HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+              BODY=$(echo "$RESPONSE" | sed '$d')
+          
+              if [ "$HTTP_CODE" -eq 200 ]; then
+                echo "$BODY"
+                return 0
+              fi
+          
+              echo "Attempt $attempt failed with HTTP $HTTP_CODE"
+              echo "Response: $BODY"
+              echo "Retrying in ${delay}s..."
+              sleep $delay
+              attempt=$((attempt + 1))
+              delay=$((delay * 2))
+            done
+          
+            echo "::error::OpenRouter API call failed after $max_attempts attempts"
+            return 1
+          }
+          
+          RESULT=$(call_api)
+          API_STATUS=$?
+          
+          if [ $API_STATUS -ne 0 ]; then
+            echo "::warning::AI generation failed, using fallback"
             echo "title=v$NEW_VERSION" >> $GITHUB_OUTPUT
             echo "body=Release v$NEW_VERSION" >> $GITHUB_OUTPUT
             exit 0
           fi
           
-          CONTENT=$(echo "$BODY" | jq -r '.choices[0].message.content // empty')
+          CONTENT=$(echo "$RESULT" | jq -r '.choices[0].message.content // empty')
           
           if [[ -z "$CONTENT" ]]; then
             echo "::warning::Empty AI response, using fallback"
