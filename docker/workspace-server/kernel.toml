@@ -13,3 +13,27 @@ content_base_dir = "./documents/defaults/root"
 
 # Legacy: Path to workspace structure JSON (deprecated, use content_base_dir)
 # workspace_structure = "./workspaces.json"
+
+# =============================================================================
+# File Transfer Configuration
+# =============================================================================
+[file_transfer]
+# Enable server-mediated file transfers (async mode)
+# When enabled, files can be uploaded to the server for later download
+allow_server_file_transfer = true
+
+# Enable RE-VFS (Remote Encrypted Virtual File System) storage
+# When enabled, peers can store encrypted files on each other's devices
+allow_server_revfs_storage = true
+
+# Maximum file size for transfers (in megabytes)
+# Users can set lower limits per-peer, but not exceed this value
+max_file_transfer_size_mb = 100
+
+# Default RE-VFS storage quota per peer (in megabytes)
+# Users can adjust per-peer quotas via Chat Settings, but not exceed this value
+revfs_storage_quota_mb = 100
+
+# File transfer request TTL (in days)
+# Pending transfer requests expire after this period
+file_ttl_days = 7

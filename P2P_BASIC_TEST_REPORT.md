@@ -1,119 +1,187 @@
 # P2P Basic Test Report
 
-**Date:** 2025-12-24
-**Timestamp:** 1766628128
-**SDK Commit:** 868f119c (prevents redundant connection attempts)
+**Date:** 2025-12-30
+**Timestamp:** 1767145425 (Tenth Test Run - WebSocket Stability & Ratchet Issue Investigation)
+**Previous Tests:** 1767116718, 1767117890, 1767119011, 1767120295, 1767138623, 1767139596, 1767140756, 1767141450, 1767143134
 
-## Accounts Created
-- User 1: p2ptest1_1766628128
-- User 2: p2ptest2_1766628128
+## Accounts Used
+- **User 1 (Alice):** alice_1767144257 (CID: 2140228971562830034) - Tab 0
+- **User 2 (Bob):** bob_1767144257 (CID: 4926344781773734389) - Tab 1
+- Server: 127.0.0.1:12349
+- Password: test12345
 
 ## Test Results
 
 | Test | Status | Notes |
 |------|--------|-------|
-| Account Creation | PASS | Both accounts created successfully |
-| Workspace Load | PASS | No "Initialize Workspace" modal for User 2 |
-| P2P Registration Send | PASS | Request sent from User 1 to User 2 |
-| P2P Registration Accept | PASS | User 2 accepted request, notification shown |
-| PeerConnect | FAIL | Peer connections not being established |
-| Message User1->User2 | NOT TESTED | Blocked by PeerConnect failure |
-| Message User2->User1 | NOT TESTED | Blocked by PeerConnect failure |
+| Account Creation (Alice) | PASS | Used existing account from previous test |
+| Account Creation (Bob) | PASS | Used existing account from previous test |
+| P2P Registration | PASS | Already registered from previous session |
+| P2P Connection Establishment | PASS | Auto-connected; Bob shows "Online" status |
+| Message Alice -> Bob (Send) | PASS | Message "Hello from Alice!" sent successfully |
+| Message Alice -> Bob (Receive) | **FAIL** | Message NOT received - **CRITICAL: WebSocket died on leader tab** |
+| Message Bob -> Alice | NOT TESTED | WebSocket connection lost before testing |
 
-## SDK Fix Verification
+## CRITICAL FINDINGS
 
-**CONFIRMED WORKING:** The SDK fix (commit 868f119c) is preventing "Session Already Connected" errors during the initial connection phase.
+### 1. Cryptographic Ratchet Version Mismatch
 
-**Evidence:**
-- No "Session Already Connected" errors during account creation
-- Both users successfully registered and connected to workspace
-- P2P registration (PeerRegister) succeeded on both sides
-
-## Issue Found: PeerConnect Not Populating conn.peers
-
-### Problem
-After P2P registration, the `conn.peers` HashMap remains empty. This prevents P2P messages from being sent.
-
-### Logs Showing the Issue
-
+**ERROR from internal-service logs:**
 ```
-[P2P-MSG] Sending message from 9024291364759186747 to peer 11374561820947984246
-[P2P-MSG] Available peers in conn.peers: []
-[P2P-MSG] Peer connection not found for peer_cid=11374561820947984246
+Attempted to get ratchet v9 for cid=4926344781773734389, but does not exist! len: 1. Oldest: 0. Newest: 0
+Attempted to get ratchet v8 for cid=4926344781773734389, but does not exist! len: 1. Oldest: 0. Newest: 0
 ```
 
+The system is trying to access ratchet versions 8 and 9 for Bob's session, but only version 0 exists. This indicates a cryptographic key synchronization failure.
+
+### 2. PANIC in Internal Service
+
+**CRITICAL ERROR:**
 ```
-GetSessionsResponse shows:
-- p2ptest1_1766628128 (CID 11374561820947984246): peer_connections: {}
-- p2ptest2_1766628128 session disconnected during accept flow
+Panic occurred: panicked at /usr/local/cargo/git/checkouts/citadel-protocol-5ed557508e8a0da8/7a040b2/citadel_proto/src/proto/session.rs:2254:18:
+called `Option::unwrap()` on a `None` value
 ```
 
-### Root Cause Analysis
+This panic caused the WebSocket connection to die, which explains why:
+- Messages stopped being delivered
+- The leader tab became unresponsive
+- All P2P connections failed with "channel closed" errors
 
-1. **PeerRegisterNotification** is received successfully by both peers
-2. **PeerConnectNotification** is received, triggering auto-connect
-3. **PeerConnect request times out** - the backend doesn't establish the actual peer channel
-4. The `conn.peers` map in internal-service never gets populated
+### 3. WebSocket Connection Death
 
-### Console Warnings
+**Console errors observed:**
 ```
-P2PAutoConnect: Local connectedPeers has 11374561... but backend shows not connected
-ServerAutoConnect: Connection failure: Session Already Connected
-P2PAutoConnect: Failed to establish reverse channel to 11374561...: Error: PeerConnect request timed out
-P2PAutoConnect: Connect failed for 11374561..., retry in 1s (attempt 1)
+Error sending WebSocket message: ConnectionNotOpen
+WebSocket communication task ended
+Failed to send message to WebSocket channel: SendError { .. }
+PeerConnect request timed out (multiple occurrences)
+ListAllPeers request timed out
+ConnectionManager: Failed to get active sessions Failed to send message: channel closed
 ```
+
+### 4. Connection Retry Attempts Failed
+
+The P2PAutoConnect service attempted retries with exponential backoff:
+```
+P2PAutoConnect: Connect failed for 21402289..., retry in 1s (attempt 1)
+P2PAutoConnect: Connect failed for 21402289..., retry in 2s (attempt 2)
+P2PAutoConnect: Connect failed for 21402289..., retry in 4s (attempt 3)
+P2PAutoConnect: Connect failed for 21402289..., retry in 8s (attempt 4)
+P2PAutoConnect: Connect failed for 21402289..., retry in 16s (attempt 5)
+P2PAutoConnect: Connect failed for 21402289..., retry in 32s (attempt 6)
+```
+
+All retries failed because the underlying WebSocket was dead.
+
+## Console Log Analysis
+
+### Message Send (Successful from Alice's perspective):
+```
+[P2P] *** sendMessage ENTRY *** recipientCid=49263447..., content="Hello from Alice!..."
+Peer 4926344781773734389 already connected, skipping registration
+[P2P] Peer already marked as ready: 4926344781773734389
+[P2PChat] onMessage received: {messageId: 97d21b6a, messageType: text, senderCid: 214022897156...
+[P2P] Sending message 97d21b6a-c372-47ee-be3f-fd8e4e59cd3e to 49263447...
+Sending reliable P2P message from 2140228971562830034 to 4926344781773734389
+Reliable P2P message sent from 2140228971562830034 to 4926344781773734389
+[P2P] Message 97d21b6a-c372-47ee-be3f-fd8e4e59cd3e sent successfully in 14ms
+```
+
+### Message Receive (Failed on Bob's side):
+The message was never received because:
+1. The ratchet version mismatch occurred during P2P operations
+2. A panic crashed the protocol layer
+3. The WebSocket connection died
+4. All subsequent message routing failed
 
 ## UX/UI Issues Discovered
 
 | Severity | Issue |
 |----------|-------|
-| Medium | "CONNECTED PEERS" shows logged-in user's name instead of actual connected peers |
-| Low | Peers from old sessions (667440) remain in sidebar after sessions are gone |
-| Medium | After P2P accept, session gets disconnected (possible session claim race) |
+| **CRITICAL** | Panic in citadel_proto session.rs:2254 causes complete WebSocket failure |
+| **CRITICAL** | Ratchet version mismatch (v8/v9 requested but only v0 exists) |
+| **HIGH** | No automatic WebSocket reconnection after panic |
+| **HIGH** | Leader tab becomes completely unresponsive after WebSocket death |
+| **MEDIUM** | Page hangs requiring manual refresh after WebSocket failure |
+| Low | React Router Future Flag Warnings |
+| Low | Deprecated WASM initialization parameters |
 
-## Screenshots Captured
+## Root Cause Analysis
 
-1. `01-user1-workspace.png` - User 1 logged into workspace
-2. `02-user2-workspace.png` - User 2 logged into workspace
-3. `03-user1-sends-invite.png` - P2P discovery modal with "Awaiting Response"
-4. `04-user2-accepts.png` - User 2 after accepting connection
+### Primary Issue: Cryptographic Ratchet Desynchronization
 
-## Overall Result: PARTIAL PASS
+The P2P connection between Alice and Bob had a cryptographic key synchronization issue:
+1. Bob's session (CID 4926344781773734389) has only ratchet version 0
+2. The system attempted to access versions 8 and 9
+3. This caused an `unwrap()` on `None` in session.rs:2254
+4. The panic propagated and killed the WebSocket connection
 
-**What Works:**
-- Account creation (SDK fix confirmed)
-- P2P registration flow (PeerRegister/PeerRegisterNotification)
-- UI notifications for connection requests
+### Why This Happened
 
-**What Fails:**
-- PeerConnect not establishing actual peer channels
-- conn.peers map stays empty
-- P2P messaging cannot be tested
+Possible causes:
+1. **Session persistence issue** - Ratchet state not properly persisted across reconnections
+2. **Re-keying failure** - The automatic re-keying process may have failed silently
+3. **Orphan session state** - When sessions go into orphan mode, ratchet state may not be preserved
+4. **Multiple connection attempts** - Frequent connect/disconnect cycles may desync the ratchet
 
-## Comparison with Previous Test (1766627106)
+## Backend Logs Summary
 
-| Aspect | Previous Test | Current Test |
-|--------|---------------|--------------|
-| Account Creation | PASS | PASS |
-| P2P Registration | PASS | PASS |
-| PeerConnect | Succeeded (had peer_connections) | FAIL (empty peer_connections) |
-| Messaging | PARTIAL (sent but not received) | NOT TESTED |
+```
+[ListAllPeers] Handling request for cid=4926344781773734389
+[ListAllPeers] Calling get_local_group_peers for cid=4926344781773734389
+GetSessions: Found 14 total sessions in server_connection_map
+ERROR: Attempted to get ratchet v9 for cid=4926344781773734389, but does not exist!
+ERROR: Attempted to get ratchet v8 for cid=4926344781773734389, but does not exist!
+ERROR: Panic occurred at session.rs:2254:18: called `Option::unwrap()` on a `None` value
+```
 
-**Key Difference:** In the previous test, `peer_connections` was populated in the GetSessionsResponse. In this test, `peer_connections: {}` for the new users while old sessions still show their peer connections.
+## Test History Summary
 
-## Next Steps
+| Test Run | Timestamp | Direction Tested | Result | Root Cause |
+|----------|-----------|------------------|--------|------------|
+| 1-6 | Various | Both | Mixed | Various issues |
+| 7 | 1767140756 | Both | Asymmetric | Delivery issue |
+| 8 | 1767141450 | Both | Asymmetric | Delivery issue |
+| 9 | 1767143134 | Both | Asymmetric | Delivery issue |
+| **10** | **1767145425** | **Alice->Bob** | **FAIL** | **Ratchet panic** |
 
-1. **Investigate PeerConnect handler** in `citadel-internal-service/src/kernel/requests/peer_connect.rs`
-   - Verify it's correctly populating `conn.peers`
-   - Check if the peer is online when PeerConnect is called
+## Recommendations
 
-2. **Check SDK PeerConnect implementation**
-   - The SDK updated (868f119c) prevents redundant connections but may have affected PeerConnect
+### Immediate Fixes Required
 
-3. **Verify timing between PeerRegister and PeerConnect**
-   - PeerRegisterNotification triggers auto-connect immediately
-   - May need a delay or confirmation before attempting PeerConnect
+1. **Fix the unwrap() panic in session.rs:2254**
+   - Add proper error handling instead of `.unwrap()`
+   - Return an error or use `.unwrap_or_default()` with logging
 
-4. **Review session claim during P2P accept**
-   - Session disconnection during accept flow suggests race condition
-   - ClaimSession before PeerRegister may be disrupting the connection
+2. **Handle ratchet version mismatches gracefully**
+   - When requested ratchet version doesn't exist, trigger re-keying
+   - Add fallback to oldest available ratchet version
+
+3. **Add WebSocket reconnection logic**
+   - Detect WebSocket death and automatically reconnect
+   - Preserve session state during reconnection
+
+### Investigation Needed
+
+1. **Why is ratchet v0 the only version?**
+   - Check if re-keying is being triggered
+   - Verify ratchet state is persisted correctly
+
+2. **Why does orphan mode affect ratchet state?**
+   - Review how orphan sessions preserve cryptographic state
+   - Ensure reconnection restores proper ratchet versions
+
+3. **Multi-tab ratchet coordination**
+   - Verify each tab/session has correct ratchet state
+   - Check for race conditions in ratchet updates
+
+## Overall Result: **FAIL**
+
+The test revealed a **critical bug** in the Citadel protocol layer where a ratchet version mismatch causes a panic that kills the entire WebSocket connection, making P2P messaging impossible.
+
+---
+
+## Files Referenced
+
+- `/usr/local/cargo/git/checkouts/citadel-protocol-5ed557508e8a0da8/7a040b2/citadel_proto/src/proto/session.rs:2254`
+- `/usr/local/cargo/git/checkouts/citadel-protocol-5ed557508e8a0da8/7a040b2/citadel_crypt/src/toolset.rs:252`

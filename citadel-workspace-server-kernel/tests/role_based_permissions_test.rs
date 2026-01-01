@@ -2,10 +2,7 @@ use citadel_workspace_server_kernel::handlers::domain::async_ops::{
     AsyncOfficeOperations, AsyncPermissionOperations,
 };
 use citadel_workspace_types::structs::{Domain, Permission, UserRole, Workspace};
-use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
-#[path = "common/mod.rs"]
-mod common;
 use common::permissions_test_utils::*;
 
 /// # Role-Based Permission Test Suite
@@ -132,6 +129,7 @@ async fn test_role_based_permissions() {
             "Test Office",
             "Test Description",
             None,
+            None, // is_default
         )
         .await
         .unwrap();

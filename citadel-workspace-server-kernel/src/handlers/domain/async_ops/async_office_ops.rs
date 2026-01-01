@@ -18,6 +18,7 @@ pub trait AsyncOfficeOperations<R: Ratchet + Send + Sync + 'static>: Send + Sync
         name: &str,
         description: &str,
         mdx_content: Option<&str>,
+        is_default: Option<bool>,
     ) -> Result<Office, NetworkError>;
 
     /// Retrieves an office by ID with permission validation
@@ -34,6 +35,7 @@ pub trait AsyncOfficeOperations<R: Ratchet + Send + Sync + 'static>: Send + Sync
         name: Option<&str>,
         description: Option<&str>,
         mdx_content: Option<&str>,
+        is_default: Option<bool>,
     ) -> Result<Office, NetworkError>;
 
     /// Lists offices accessible to a user, optionally filtered by workspace

@@ -5,15 +5,12 @@ use citadel_internal_service_test_common::{
 use citadel_sdk::prelude::{
     BackendType, NetworkError, NodeBuilder, NodeType, PreSharedKey, StackedRatchet,
 };
-use citadel_workspace_server_kernel::{
-    kernel::async_kernel::AsyncWorkspaceServerKernel, WORKSPACE_ROOT_ID,
-};
+use citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
 use std::error::Error;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task::JoinHandle;

@@ -22,6 +22,9 @@ pub struct AsyncDomainServerOperations<R: Ratchet> {
 }
 
 pub struct WorkspaceDBList {
+    #[allow(dead_code)]
+    /// Note: We will eventually expand to allowing multiple workspaces per server/kernel. For now, we just have
+    /// one element: the root workspace
     workspaces: Vec<String>,
 }
 
@@ -33,13 +36,40 @@ impl<R: Ratchet> Clone for AsyncDomainServerOperations<R> {
     }
 }
 
-impl<R: Ratchet> AsyncDomainServerOperations<R> {
+impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
     /// Create a new AsyncDomainServerOperations instance
     pub fn new(
         backend_tx_manager: Arc<BackendTransactionManager<R>>,
-        node_remote: Arc<RwLock<Option<NodeRemote<R>>>>,
+        _node_remote: Arc<RwLock<Option<NodeRemote<R>>>>,
     ) -> Self {
         Self { backend_tx_manager }
+    }
+
+    /// Clear the default flag on all offices in a workspace
+    /// Used when setting a new default office
+    async fn clear_default_office_in_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> Result<(), NetworkError> {
+        // Get workspace to find all offices
+        let workspace = match self.backend_tx_manager.get_workspace(workspace_id).await? {
+            Some(w) => w,
+            None => return Ok(()), // No workspace means no offices to clear
+        };
+
+        // Clear is_default on all offices
+        for office_id in &workspace.offices {
+            if let Some(mut office) = self.backend_tx_manager.get_office(office_id).await? {
+                if office.is_default {
+                    office.is_default = false;
+                    self.backend_tx_manager
+                        .insert_office(office_id.clone(), office)
+                        .await?;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -147,16 +177,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
                 }
 
                 // Check workspace permissions through office
-                if let Some(office_domain) =
+                if let Some(Domain::Office { office }) =
                     self.backend_tx_manager.get_domain(&room.office_id).await?
                 {
-                    if let Domain::Office { office } = office_domain {
-                        if let Some(workspace_perms) = user.permissions.get(&office.workspace_id) {
-                            if workspace_perms.contains(&permission)
-                                || workspace_perms.contains(&Permission::All)
-                            {
-                                return Ok(true);
-                            }
+                    if let Some(workspace_perms) = user.permissions.get(&office.workspace_id) {
+                        if workspace_perms.contains(&permission)
+                            || workspace_perms.contains(&Permission::All)
+                        {
+                            return Ok(true);
                         }
                     }
                 }
@@ -295,7 +323,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
 
         // Set the user's role
         user.role = role;
-        
+
         // Use the set_role_permissions method to properly set permissions for this domain
         user.set_role_permissions(domain_id);
 
@@ -449,6 +477,38 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             .await?;
         Ok(())
     }
+
+    async fn update_user_profile(
+        &self,
+        user_id: &str,
+        name: Option<String>,
+        avatar_data: Option<String>,
+    ) -> Result<User, NetworkError> {
+        // Get the user
+        let mut user = match self.backend_tx_manager.get_user(user_id).await? {
+            Some(u) => u,
+            None => return Err(NetworkError::msg("User not found")),
+        };
+
+        // Update name if provided
+        if let Some(new_name) = name {
+            user.name = new_name;
+        }
+
+        // Update avatar if provided (store in metadata)
+        if let Some(avatar) = avatar_data {
+            use citadel_workspace_types::structs::MetadataValue;
+            user.metadata
+                .insert("avatar".to_string(), MetadataValue::String(avatar));
+        }
+
+        // Save the updated user
+        self.backend_tx_manager
+            .insert_user(user_id.to_string(), user.clone())
+            .await?;
+
+        Ok(user)
+    }
 }
 
 // Continue with other trait implementations...
@@ -461,8 +521,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncEntityOperations<R>
 {
     async fn get_domain_entity<T: DomainEntity + 'static + Send>(
         &self,
-        user_id: &str,
-        entity_id: &str,
+        _user_id: &str,
+        _entity_id: &str,
     ) -> Result<T, NetworkError> {
         Err(NetworkError::msg("Not implemented yet"))
     }
@@ -471,38 +531,38 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncEntityOperations<R>
         T: DomainEntity + 'static + serde::de::DeserializeOwned + Send,
     >(
         &self,
-        user_id: &str,
-        parent_id: Option<&str>,
-        name: &str,
-        description: &str,
-        mdx_content: Option<&str>,
+        _user_id: &str,
+        _parent_id: Option<&str>,
+        _name: &str,
+        _description: &str,
+        _mdx_content: Option<&str>,
     ) -> Result<T, NetworkError> {
         Err(NetworkError::msg("Not implemented yet"))
     }
 
     async fn delete_domain_entity<T: DomainEntity + 'static + Send>(
         &self,
-        user_id: &str,
-        entity_id: &str,
+        _user_id: &str,
+        _entity_id: &str,
     ) -> Result<T, NetworkError> {
         Err(NetworkError::msg("Not implemented yet"))
     }
 
     async fn update_domain_entity<T: DomainEntity + 'static + Send>(
         &self,
-        user_id: &str,
-        domain_id: &str,
-        name: Option<&str>,
-        description: Option<&str>,
-        mdx_content: Option<&str>,
+        _user_id: &str,
+        _domain_id: &str,
+        _name: Option<&str>,
+        _description: Option<&str>,
+        _mdx_content: Option<&str>,
     ) -> Result<T, NetworkError> {
         Err(NetworkError::msg("Not implemented yet"))
     }
 
     async fn list_domain_entities<T: DomainEntity + 'static + Send>(
         &self,
-        user_id: &str,
-        parent_id: Option<&str>,
+        _user_id: &str,
+        _parent_id: Option<&str>,
     ) -> Result<Vec<T>, NetworkError> {
         Err(NetworkError::msg("Not implemented yet"))
     }
@@ -566,7 +626,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         }
 
         // Verify master access password
-        let mut passwords = self.backend_tx_manager.get_all_passwords().await?;
+        let passwords = self.backend_tx_manager.get_all_passwords().await?;
         if !passwords
             .get(workspace_id)
             .map(|p| p == &workspace_master_password)
@@ -628,13 +688,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
                 }
             }
         };
-        
+
         // Set user role to Admin for workspace creators
         user.role = UserRole::Admin;
-        
+
         // Set permissions for this workspace using the role
         user.set_role_permissions(workspace_id);
-        
+
         // Save updated user
         self.backend_tx_manager
             .insert_user(user_id.to_string(), user)
@@ -645,7 +705,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
 
     async fn delete_workspace(
         &self,
-        user_id: &str,
+        _user_id: &str,
         workspace_id: &str,
         workspace_master_password: String,
     ) -> Result<(), NetworkError> {
@@ -751,13 +811,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
                 }
             }
         };
-        
+
         // Set user role to Admin
         user.role = UserRole::Admin;
-        
+
         // Set permissions for this workspace using the role
         user.set_role_permissions(workspace_id);
-        
+
         // Save updated user
         self.backend_tx_manager
             .insert_user(user_id.to_string(), user)
@@ -919,6 +979,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncOfficeOperations<R>
         name: &str,
         description: &str,
         mdx_content: Option<&str>,
+        is_default: Option<bool>,
     ) -> Result<Office, NetworkError> {
         // Check permission
         if !self
@@ -930,6 +991,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncOfficeOperations<R>
 
         // Generate unique ID
         let office_id = uuid::Uuid::new_v4().to_string();
+
+        // If setting as default, clear default on other offices
+        let set_as_default = is_default.unwrap_or(false);
+        if set_as_default {
+            self.clear_default_office_in_workspace(workspace_id).await?;
+        }
 
         // Create office struct
         let office = Office {
@@ -945,6 +1012,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncOfficeOperations<R>
             chat_enabled: false,
             chat_channel_id: None,
             default_permissions: DomainPermissions::default(),
+            is_default: set_as_default,
             metadata: Default::default(),
         };
 
@@ -1018,6 +1086,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncOfficeOperations<R>
         name: Option<&str>,
         description: Option<&str>,
         mdx_content: Option<&str>,
+        is_default: Option<bool>,
     ) -> Result<Office, NetworkError> {
         // Check permission
         if !self
@@ -1041,6 +1110,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncOfficeOperations<R>
         }
         if let Some(new_mdx) = mdx_content {
             office.mdx_content = new_mdx.to_string();
+        }
+        if let Some(new_is_default) = is_default {
+            // If setting as default, clear default on other offices first
+            if new_is_default {
+                self.clear_default_office_in_workspace(&office.workspace_id)
+                    .await?;
+            }
+            office.is_default = new_is_default;
         }
 
         // Save updated office

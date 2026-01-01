@@ -1,9 +1,9 @@
+use custom_debug::Debug;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use ts_rs::TS;
-use custom_debug::Debug;
 
 // User management structures
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -663,6 +663,9 @@ pub struct Office {
     pub chat_channel_id: Option<String>,
     /// Default permissions for users in this office
     pub default_permissions: DomainPermissions,
+    /// Whether this is the default office for the workspace (navigated to on login)
+    #[serde(default)]
+    pub is_default: bool,
     // Can be used to add any type of data by the UI
     #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
     pub metadata: Vec<u8>,

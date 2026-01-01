@@ -16,6 +16,12 @@ pub struct BackendTransactionManager<R: Ratchet> {
     test_storage: Arc<RwLock<HashMap<String, Vec<u8>>>>,
 }
 
+impl<R: Ratchet + Send + Sync + 'static> Default for BackendTransactionManager<R> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     pub fn new() -> Self {
         println!(
@@ -44,7 +50,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             .read()
             .as_ref()
             .ok_or_else(|| NetworkError::msg("NodeRemote not set"))
-            .map(|nr| nr.clone())
+            .cloned()
     }
 
     /// Get all domains from backend
@@ -286,8 +292,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
 
         if let Some(data) = backend.get(&key).await? {
-            serde_json::from_slice(&data)
-                .map_err(|e| NetworkError::msg(format!("Failed to deserialize group messages: {}", e)))
+            serde_json::from_slice(&data).map_err(|e| {
+                NetworkError::msg(format!("Failed to deserialize group messages: {}", e))
+            })
         } else {
             Ok(Vec::new())
         }
@@ -353,8 +360,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         let key = Self::group_messages_key(group_id);
 
         if self.node_remote.read().is_none() {
-            let data = serde_json::to_vec(messages)
-                .map_err(|e| NetworkError::msg(format!("Failed to serialize group messages: {}", e)))?;
+            let data = serde_json::to_vec(messages).map_err(|e| {
+                NetworkError::msg(format!("Failed to serialize group messages: {}", e))
+            })?;
             self.test_storage.write().insert(key, data);
             return Ok(());
         }

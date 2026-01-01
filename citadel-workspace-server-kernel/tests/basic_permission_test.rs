@@ -1,8 +1,6 @@
 use citadel_workspace_types::structs::{Permission, UserRole};
-use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use citadel_workspace_types::WorkspaceProtocolRequest;
 
-#[path = "common/mod.rs"]
-mod common;
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
@@ -38,6 +36,7 @@ async fn test_permission_set() {
             description: "Test office for permissions".to_string(),
             mdx_content: None,
             metadata: None,
+            is_default: None,
         },
     )
     .await
@@ -114,6 +113,7 @@ async fn test_permission_inheritance() {
             description: "Office for admin member test".to_string(),
             mdx_content: None,
             metadata: None,
+            is_default: None,
         },
     )
     .await
@@ -148,6 +148,7 @@ async fn test_permission_inheritance() {
             description: "Office created by admin member".to_string(),
             mdx_content: None,
             metadata: None,
+            is_default: None,
         },
     )
     .await
@@ -173,6 +174,7 @@ async fn test_permission_denial() {
             description: "Office for guest member test".to_string(),
             mdx_content: None,
             metadata: None,
+            is_default: None,
         },
     )
     .await

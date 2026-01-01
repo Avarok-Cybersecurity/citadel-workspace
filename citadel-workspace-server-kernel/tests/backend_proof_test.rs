@@ -53,6 +53,7 @@ async fn test_backend_is_being_used() -> Result<(), Box<dyn std::error::Error>> 
             "Test Office",
             "An office in our test workspace",
             None,
+            None, // is_default
         )
         .await?;
 
@@ -173,6 +174,7 @@ async fn test_backend_persistence_across_instances() -> Result<(), Box<dyn std::
             "Persistent Office",
             "This office should persist",
             None,
+            None, // is_default
         )
         .await?;
 

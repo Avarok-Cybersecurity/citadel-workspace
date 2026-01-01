@@ -6,12 +6,23 @@
 use crate::config::WorkspaceStructureConfig;
 use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
 use crate::kernel::transaction::BackendTransactionManager;
+use crate::WorkspaceProtocolResponse;
 use citadel_logging::info;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, Ratchet};
 use citadel_workspace_types::structs::UserRole;
 use parking_lot::RwLock;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::sync::broadcast;
+
+/// Message for broadcasting workspace updates to connected clients
+#[derive(Clone, Debug)]
+pub struct BroadcastMessage {
+    /// The response to broadcast
+    pub response: WorkspaceProtocolResponse,
+    /// The CID to exclude from the broadcast (the originator)
+    pub exclude_cid: Option<u64>,
+}
 
 /// Async version of WorkspaceServerKernel that uses backend persistence
 pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
@@ -23,6 +34,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     workspace_password: Option<String>,
     /// Workspace structure config (stored temporarily for on_start)
     workspace_structure: Option<(WorkspaceStructureConfig, Option<PathBuf>)>,
+    /// Broadcast channel for sending updates to all connected clients
+    broadcast_tx: broadcast::Sender<BroadcastMessage>,
 }
 
 // The default. This is not a protocol account, just an account that has the ability to run
@@ -36,6 +49,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             domain_operations: self.domain_operations.clone(),
             workspace_password: self.workspace_password.clone(),
             workspace_structure: self.workspace_structure.clone(),
+            broadcast_tx: self.broadcast_tx.clone(),
         }
     }
 }
@@ -59,12 +73,31 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         let domain_operations =
             AsyncDomainServerOperations::new(backend_tx_manager, node_remote_arc.clone());
 
+        // Create broadcast channel with capacity for 100 messages
+        let (broadcast_tx, _) = broadcast::channel(100);
+
         Self {
             node_remote: node_remote_arc,
             domain_operations,
             workspace_password: None,
             workspace_structure: None,
+            broadcast_tx,
         }
+    }
+
+    /// Get a new receiver for broadcast messages
+    pub fn subscribe_broadcast(&self) -> broadcast::Receiver<BroadcastMessage> {
+        self.broadcast_tx.subscribe()
+    }
+
+    /// Broadcast a response to all connected clients (except the excluded CID)
+    pub fn broadcast(&self, response: WorkspaceProtocolResponse, exclude_cid: Option<u64>) {
+        let msg = BroadcastMessage {
+            response,
+            exclude_cid,
+        };
+        // Ignore errors (no receivers is fine)
+        let _ = self.broadcast_tx.send(msg);
     }
 
     /// Create a kernel with admin user for testing
@@ -233,6 +266,69 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .await
     }
 
+    /// Get the content base path if available
+    pub fn get_content_base_path(&self) -> Option<PathBuf> {
+        self.workspace_structure
+            .as_ref()
+            .and_then(|(_, path)| path.clone())
+    }
+
+    /// Persist office MDX content to file
+    ///
+    /// Writes the content to `{content_base_path}/{office_name}/CONTENT.md`
+    pub async fn persist_office_content(
+        &self,
+        office_name: &str,
+        mdx_content: &str,
+    ) -> Result<(), NetworkError> {
+        let Some(base_path) = self.get_content_base_path() else {
+            // No content base path configured, skip file persistence
+            return Ok(());
+        };
+
+        let office_content_path = base_path.join(office_name).join("CONTENT.md");
+        info!(target: "citadel", "[ASYNC_KERNEL] Persisting office content to {:?}", office_content_path);
+
+        tokio::fs::write(&office_content_path, mdx_content)
+            .await
+            .map_err(|e| {
+                NetworkError::msg(format!(
+                    "Failed to persist office content to {:?}: {}",
+                    office_content_path, e
+                ))
+            })
+    }
+
+    /// Persist room MDX content to file
+    ///
+    /// Writes the content to `{content_base_path}/{office_name}/{room_name}/CONTENT.md`
+    pub async fn persist_room_content(
+        &self,
+        office_name: &str,
+        room_name: &str,
+        mdx_content: &str,
+    ) -> Result<(), NetworkError> {
+        let Some(base_path) = self.get_content_base_path() else {
+            // No content base path configured, skip file persistence
+            return Ok(());
+        };
+
+        let room_content_path = base_path
+            .join(office_name)
+            .join(room_name)
+            .join("CONTENT.md");
+        info!(target: "citadel", "[ASYNC_KERNEL] Persisting room content to {:?}", room_content_path);
+
+        tokio::fs::write(&room_content_path, mdx_content)
+            .await
+            .map_err(|e| {
+                NetworkError::msg(format!(
+                    "Failed to persist room content to {:?}: {}",
+                    room_content_path, e
+                ))
+            })
+    }
+
     /// Initialize workspace structure from configuration
     ///
     /// Creates offices and rooms as defined in the WorkspaceStructureConfig.
@@ -251,7 +347,24 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             config.offices.len()
         );
 
-        for office_config in &config.offices {
+        // Validate default office configuration
+        let default_count = config.offices.iter().filter(|o| o.is_default).count();
+        if default_count > 1 {
+            return Err(NetworkError::msg(format!(
+                "Multiple default offices found ({}). Only one office can be marked as default.",
+                default_count
+            )));
+        }
+        // If no default is set, the first office will be the default
+        let first_office_is_default = default_count == 0;
+
+        for (idx, office_config) in config.offices.iter().enumerate() {
+            // Determine if this office should be the default
+            let is_default = if first_office_is_default {
+                idx == 0 // First office becomes default if none specified
+            } else {
+                office_config.is_default
+            };
             // Generate UUID for the office
             let office_id = Uuid::new_v4().to_string();
 
@@ -265,11 +378,17 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
                 match std::fs::read_to_string(&full_path) {
                     Ok(content) => {
-                        println!("[ASYNC_KERNEL] Loaded markdown for office '{}': {:?}", office_config.name, full_path);
+                        println!(
+                            "[ASYNC_KERNEL] Loaded markdown for office '{}': {:?}",
+                            office_config.name, full_path
+                        );
                         content
                     }
                     Err(e) => {
-                        println!("[ASYNC_KERNEL] Warning: Failed to load markdown for office '{}': {}", office_config.name, e);
+                        println!(
+                            "[ASYNC_KERNEL] Warning: Failed to load markdown for office '{}': {}",
+                            office_config.name, e
+                        );
                         String::new()
                     }
                 }
@@ -298,12 +417,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 chat_enabled: office_config.chat_enabled,
                 chat_channel_id,
                 default_permissions: office_config.default_permissions.clone(),
+                is_default,
                 metadata: Vec::new(),
             };
 
             println!(
-                "[ASYNC_KERNEL] Creating office '{}' (id: {}, chat_enabled: {})",
-                office_config.name, office_id, office_config.chat_enabled
+                "[ASYNC_KERNEL] Creating office '{}' (id: {}, chat_enabled: {}, is_default: {})",
+                office_config.name, office_id, office_config.chat_enabled, is_default
             );
 
             // Insert office
@@ -357,11 +477,17 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
                     match std::fs::read_to_string(&full_path) {
                         Ok(content) => {
-                            println!("[ASYNC_KERNEL] Loaded markdown for room '{}': {:?}", room_config.name, full_path);
+                            println!(
+                                "[ASYNC_KERNEL] Loaded markdown for room '{}': {:?}",
+                                room_config.name, full_path
+                            );
                             content
                         }
                         Err(e) => {
-                            println!("[ASYNC_KERNEL] Warning: Failed to load markdown for room '{}': {}", room_config.name, e);
+                            println!(
+                                "[ASYNC_KERNEL] Warning: Failed to load markdown for room '{}': {}",
+                                room_config.name, e
+                            );
                             String::new()
                         }
                     }
@@ -596,58 +722,107 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     }
 
                     let (mut tx, mut rx) = connect_success.channel.split();
+                    let current_cid = user_cid;
+
+                    // Subscribe to broadcast channel for this connection
+                    let mut broadcast_rx = this.subscribe_broadcast();
 
                     // Main message processing loop for this connection
-                    while let Some(msg) = rx.next().await {
-                        match serde_json::from_slice::<WorkspaceProtocolPayload>(msg.as_ref()) {
-                            Ok(command_payload) => {
-                                if let WorkspaceProtocolPayload::Request(request) = command_payload
-                                {
-                                    // Process command using async command processor with user context
-                                    use crate::kernel::command_processor::async_process_command::process_command_with_user;
-                                    let response =
-                                        process_command_with_user(&this, &request, &user_id)
-                                            .await
-                                            .unwrap_or_else(|e| {
-                                                WorkspaceProtocolResponse::Error(e.to_string())
-                                            });
+                    // Uses select! to handle both incoming messages and broadcasts
+                    loop {
+                        tokio::select! {
+                            // Handle incoming messages from client
+                            msg_opt = rx.next() => {
+                                let Some(msg) = msg_opt else {
+                                    // Connection closed
+                                    break;
+                                };
 
-                                    let response_wrapped =
-                                        WorkspaceProtocolPayload::Response(response);
-                                    match serde_json::to_vec(&response_wrapped) {
-                                        Ok(serialized_response) => {
-                                            if let Err(e) = tx.send(serialized_response).await {
-                                                error!(target: "citadel", "[ASYNC_KERNEL] Failed to send response: {:?}", e);
-                                                break;
+                                match serde_json::from_slice::<WorkspaceProtocolPayload>(msg.as_ref()) {
+                                    Ok(command_payload) => {
+                                        if let WorkspaceProtocolPayload::Request(request) = command_payload
+                                        {
+                                            // Process command using async command processor with user context and CID
+                                            use crate::kernel::command_processor::async_process_command::process_command_with_user_and_cid;
+                                            let response =
+                                                process_command_with_user_and_cid(&this, &request, &user_id, Some(current_cid))
+                                                    .await
+                                                    .unwrap_or_else(|e| {
+                                                        WorkspaceProtocolResponse::Error(e.to_string())
+                                                    });
+
+                                            let response_wrapped =
+                                                WorkspaceProtocolPayload::Response(response);
+                                            match serde_json::to_vec(&response_wrapped) {
+                                                Ok(serialized_response) => {
+                                                    if let Err(e) = tx.send(serialized_response).await {
+                                                        error!(target: "citadel", "[ASYNC_KERNEL] Failed to send response: {:?}", e);
+                                                        break;
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    error!(target: "citadel", "[ASYNC_KERNEL] Failed to serialize response with serde_json: {:?}", e);
+                                                }
+                                            }
+                                        } else {
+                                            warn!(target: "citadel", "[ASYNC_KERNEL] Server received a WorkspaceProtocolPayload::Response when it expected a Request: {:?}", command_payload);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!(target: "citadel", "[ASYNC_KERNEL] Failed to deserialize command with serde_json: {:?}. Message (first 50 bytes): {:?}", e, msg.as_ref().iter().take(50).collect::<Vec<_>>());
+                                        let error_response = WorkspaceProtocolResponse::Error(format!(
+                                            "Invalid command. Failed serde_json deserialization: {}",
+                                            e
+                                        ));
+                                        let response_wrapped =
+                                            WorkspaceProtocolPayload::Response(error_response);
+                                        match serde_json::to_vec(&response_wrapped) {
+                                            Ok(serialized_error_response) => {
+                                                if let Err(send_err) =
+                                                    tx.send(serialized_error_response).await
+                                                {
+                                                    error!(target: "citadel", "[ASYNC_KERNEL] Failed to send deserialization error response: {:?}", send_err);
+                                                    break;
+                                                }
+                                            }
+                                            Err(serialize_err) => {
+                                                error!(target: "citadel", "[ASYNC_KERNEL] Failed to serialize deserialization error response with serde_json: {:?}", serialize_err);
                                             }
                                         }
-                                        Err(e) => {
-                                            error!(target: "citadel", "[ASYNC_KERNEL] Failed to serialize response with serde_json: {:?}", e);
-                                        }
                                     }
-                                } else {
-                                    warn!(target: "citadel", "[ASYNC_KERNEL] Server received a WorkspaceProtocolPayload::Response when it expected a Request: {:?}", command_payload);
                                 }
                             }
-                            Err(e) => {
-                                error!(target: "citadel", "[ASYNC_KERNEL] Failed to deserialize command with serde_json: {:?}. Message (first 50 bytes): {:?}", e, msg.as_ref().iter().take(50).collect::<Vec<_>>());
-                                let error_response = WorkspaceProtocolResponse::Error(format!(
-                                    "Invalid command. Failed serde_json deserialization: {}",
-                                    e
-                                ));
-                                let response_wrapped =
-                                    WorkspaceProtocolPayload::Response(error_response);
-                                match serde_json::to_vec(&response_wrapped) {
-                                    Ok(serialized_error_response) => {
-                                        if let Err(send_err) =
-                                            tx.send(serialized_error_response).await
-                                        {
-                                            error!(target: "citadel", "[ASYNC_KERNEL] Failed to send deserialization error response: {:?}", send_err);
-                                            break;
+
+                            // Handle broadcast messages from other connections
+                            broadcast_result = broadcast_rx.recv() => {
+                                match broadcast_result {
+                                    Ok(broadcast_msg) => {
+                                        // Skip if this connection is excluded (the originator)
+                                        if broadcast_msg.exclude_cid == Some(current_cid) {
+                                            continue;
+                                        }
+
+                                        // Forward the broadcast to this client
+                                        let response_wrapped =
+                                            WorkspaceProtocolPayload::Response(broadcast_msg.response);
+                                        match serde_json::to_vec(&response_wrapped) {
+                                            Ok(serialized_response) => {
+                                                if let Err(e) = tx.send(serialized_response).await {
+                                                    error!(target: "citadel", "[ASYNC_KERNEL] Failed to send broadcast: {:?}", e);
+                                                    break;
+                                                }
+                                            }
+                                            Err(e) => {
+                                                error!(target: "citadel", "[ASYNC_KERNEL] Failed to serialize broadcast with serde_json: {:?}", e);
+                                            }
                                         }
                                     }
-                                    Err(serialize_err) => {
-                                        error!(target: "citadel", "[ASYNC_KERNEL] Failed to serialize deserialization error response with serde_json: {:?}", serialize_err);
+                                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                                        warn!(target: "citadel", "[ASYNC_KERNEL] Broadcast receiver lagged by {} messages", n);
+                                    }
+                                    Err(broadcast::error::RecvError::Closed) => {
+                                        // Broadcast channel closed, shouldn't happen during normal operation
+                                        break;
                                     }
                                 }
                             }

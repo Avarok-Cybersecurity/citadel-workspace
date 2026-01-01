@@ -1,7 +1,5 @@
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
-#[path = "common/mod.rs"]
-mod common;
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 

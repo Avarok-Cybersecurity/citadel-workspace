@@ -1,9 +1,9 @@
 pub mod structs;
 
+use custom_debug::Debug;
 use serde::{Deserialize, Serialize};
 use structs::{Office, Permission, Room, User, UserRole, Workspace};
 use ts_rs::TS;
-use custom_debug::Debug;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -24,7 +24,10 @@ impl From<WorkspaceProtocolResponse> for WorkspaceProtocolPayload {
     }
 }
 
-pub fn bytes_opt_debug_fmt<T: std::fmt::Debug + AsRef<[u8]>>(val: &Option<T>, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+pub fn bytes_opt_debug_fmt<T: std::fmt::Debug + AsRef<[u8]>>(
+    val: &Option<T>,
+    f: &mut std::fmt::Formatter,
+) -> std::fmt::Result {
     if let Some(val) = val {
         citadel_internal_service_types::bytes_debug_fmt(val, f)
     } else {
@@ -64,6 +67,8 @@ pub enum WorkspaceProtocolRequest {
         mdx_content: Option<String>,
         #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
+        /// Whether this should be the default office (only one allowed per workspace)
+        is_default: Option<bool>,
     },
     GetOffice {
         office_id: String,
@@ -76,6 +81,8 @@ pub enum WorkspaceProtocolRequest {
         mdx_content: Option<String>,
         #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
+        /// Set this office as the default (clears default on other offices)
+        is_default: Option<bool>,
     },
     DeleteOffice {
         office_id: String,
@@ -149,6 +156,15 @@ pub enum WorkspaceProtocolRequest {
         user_id: String,
         domain_id: String,
     },
+
+    /// Update the current user's profile (name and/or avatar)
+    UpdateUserProfile {
+        /// New display name (optional)
+        name: Option<String>,
+        /// Base64-encoded avatar image data (WebP format, max 256x256)
+        avatar_data: Option<String>,
+    },
+
     Message {
         // UI can inscribe whatever subprotocol it wishes on this for e.g., the actual message contents,
         // read receipts, typing indicators, etc, likely using an enum.
@@ -157,7 +173,6 @@ pub enum WorkspaceProtocolRequest {
     },
 
     // ========== Group Messaging Commands ==========
-
     /// Send a message to a group chat channel (office or room)
     SendGroupMessage {
         /// UUID of the group chat channel (office.chat_channel_id or room.chat_channel_id)
@@ -229,6 +244,9 @@ pub enum WorkspaceProtocolResponse {
         new_role: UserRole,
     },
 
+    /// Response after user profile was updated
+    UserProfileUpdated(User),
+
     /// Confirmation that an office was deleted
     DeleteOffice {
         office_id: String,
@@ -239,8 +257,25 @@ pub enum WorkspaceProtocolResponse {
         room_id: String,
     },
 
-    // ========== Group Messaging Responses ==========
+    // ========== Content Broadcast Responses ==========
+    /// Notification that office content was updated (broadcast to all workspace members)
+    OfficeContentUpdated {
+        office_id: String,
+        mdx_content: String,
+        updated_by: String,
+        timestamp: u64,
+    },
 
+    /// Notification that room content was updated (broadcast to all workspace members)
+    RoomContentUpdated {
+        room_id: String,
+        office_id: String,
+        mdx_content: String,
+        updated_by: String,
+        timestamp: u64,
+    },
+
+    // ========== Group Messaging Responses ==========
     /// Notification of a new group message (broadcast to all group members)
     GroupMessageNotification {
         group_id: String,

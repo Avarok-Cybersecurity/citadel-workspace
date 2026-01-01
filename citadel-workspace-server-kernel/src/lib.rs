@@ -53,6 +53,9 @@ pub mod config {
         /// Default permissions for users in this office
         #[serde(default)]
         pub default_permissions: DomainPermissions,
+        /// Whether this is the default office for the workspace (navigated to on login)
+        #[serde(default)]
+        pub is_default: bool,
         /// Nested rooms within this office
         #[serde(default)]
         pub rooms: Vec<RoomConfig>,
@@ -96,7 +99,10 @@ pub mod config {
 
             // Validate base directory exists
             if !base_dir.is_dir() {
-                return Err(format!("Content base directory does not exist: {:?}", base_dir));
+                return Err(format!(
+                    "Content base directory does not exist: {:?}",
+                    base_dir
+                ));
             }
 
             // Load workspace.json for metadata
@@ -108,15 +114,18 @@ pub mod config {
             let workspace_json_content = fs::read_to_string(&workspace_json_path)
                 .map_err(|e| format!("Failed to read workspace.json: {}", e))?;
 
-            let workspace_meta: serde_json::Value = serde_json::from_str(&workspace_json_content)
-                .map_err(|e| format!("Failed to parse workspace.json: {}", e))?;
+            let workspace_meta: serde_json::Value =
+                serde_json::from_str(&workspace_json_content)
+                    .map_err(|e| format!("Failed to parse workspace.json: {}", e))?;
 
-            let workspace_name = workspace_meta.get("name")
+            let workspace_name = workspace_meta
+                .get("name")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Workspace")
                 .to_string();
 
-            let workspace_description = workspace_meta.get("description")
+            let workspace_description = workspace_meta
+                .get("description")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
 
@@ -146,8 +155,9 @@ pub mod config {
                 }
 
                 // Load office CONTENT.md
-                let office_content = fs::read_to_string(&office_content_path)
-                    .map_err(|e| format!("Failed to read {}: {}", office_content_path.display(), e))?;
+                let office_content = fs::read_to_string(&office_content_path).map_err(|e| {
+                    format!("Failed to read {}: {}", office_content_path.display(), e)
+                })?;
 
                 // Scan for rooms (subdirectories)
                 let mut rooms = Vec::new();
@@ -155,11 +165,14 @@ pub mod config {
                     .map_err(|e| format!("Failed to read office directory {:?}: {}", path, e))?;
 
                 for room_entry in room_entries {
-                    let room_entry = room_entry.map_err(|e| format!("Failed to read room entry: {}", e))?;
+                    let room_entry =
+                        room_entry.map_err(|e| format!("Failed to read room entry: {}", e))?;
                     let room_path = room_entry.path();
 
                     // Skip non-directories and hidden files
-                    if !room_path.is_dir() || room_entry.file_name().to_string_lossy().starts_with('.') {
+                    if !room_path.is_dir()
+                        || room_entry.file_name().to_string_lossy().starts_with('.')
+                    {
                         continue;
                     }
 
@@ -168,13 +181,17 @@ pub mod config {
                     // Validate CONTENT.md exists for room
                     let room_content_path = room_path.join("CONTENT.md");
                     if !room_content_path.exists() {
-                        errors.push(format!("Missing CONTENT.md for room '{}' in office '{}'", room_name, office_name));
+                        errors.push(format!(
+                            "Missing CONTENT.md for room '{}' in office '{}'",
+                            room_name, office_name
+                        ));
                         continue;
                     }
 
                     // Load room CONTENT.md
-                    let room_content = fs::read_to_string(&room_content_path)
-                        .map_err(|e| format!("Failed to read {}: {}", room_content_path.display(), e))?;
+                    let room_content = fs::read_to_string(&room_content_path).map_err(|e| {
+                        format!("Failed to read {}: {}", room_content_path.display(), e)
+                    })?;
 
                     // Extract first paragraph as description
                     let room_description = Self::extract_description(&room_content);
@@ -203,6 +220,7 @@ pub mod config {
                     rules: None,
                     default_permissions: DomainPermissions::default(),
                     rooms,
+                    is_default: false, // Will be set based on validation in initialize_workspace_structure
                 });
             }
 
@@ -315,7 +333,8 @@ pub async fn run_server_with_base_path(
             }
             Err(e) => {
                 return Err(NetworkError::msg(format!(
-                    "Failed to load workspace structure from directory: {}", e
+                    "Failed to load workspace structure from directory: {}",
+                    e
                 )));
             }
         }

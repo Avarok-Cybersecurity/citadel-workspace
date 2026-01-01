@@ -1,7 +1,5 @@
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
-#[path = "common/mod.rs"]
-mod common;
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
@@ -64,6 +62,7 @@ async fn test_office_operations() {
             description: "A test office".to_string(),
             mdx_content: Some("# Test Office\nThis is a test office".to_string()),
             metadata: None,
+            is_default: None,
         },
     )
     .await
@@ -99,6 +98,7 @@ async fn test_office_operations() {
             description: None,
             mdx_content: Some("# Updated Office\nThis content has been updated".to_string()),
             metadata: None,
+            is_default: None,
         },
     )
     .await

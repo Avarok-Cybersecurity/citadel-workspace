@@ -3,9 +3,9 @@ FROM node:20-alpine AS dev
 
 WORKDIR /app
 
-# Copy package files for dependency installation
-COPY citadel-workspaces/package*.json ./
-RUN npm ci
+# Copy package.json only (not package-lock.json to avoid platform-specific deps)
+COPY citadel-workspaces/package.json ./
+RUN npm install --package-lock-only && npm install
 
 # Note: Configuration files (vite.config.ts, tsconfig.json, etc.)
 # are mounted via volumes at runtime, not copied at build time.

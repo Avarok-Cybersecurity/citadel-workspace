@@ -1,6 +1,3 @@
-#[path = "common/mod.rs"]
-mod common;
-
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
@@ -32,13 +29,14 @@ async fn test_admin_can_add_multiple_users_to_office() {
         description: String::new(),
         mdx_content: None,
         metadata: None,
+            is_default: None,
     };
 
     let office: Office = match execute_command(&kernel, create_office_req).await.unwrap() {
         WorkspaceProtocolResponse::Office(o) => {
             println!(
-                "[Test MultiAdd] Office {:?} created successfully by actor {}.",
-                o.id, "admin"
+                "[Test MultiAdd] Office {:?} created successfully by actor admin.",
+                o.id
             );
             o
         }
@@ -60,8 +58,8 @@ async fn test_admin_can_add_multiple_users_to_office() {
     match execute_command(&kernel, add_user1_req).await.unwrap() {
         WorkspaceProtocolResponse::Success(_) => {
             println!(
-                "[Test MultiAdd] User {} added to office {} successfully by admin {}.",
-                user1_id, office.id, "admin"
+                "[Test MultiAdd] User {} added to office {} successfully by admin admin.",
+                user1_id, office.id
             );
         }
         other => panic!(
@@ -82,8 +80,8 @@ async fn test_admin_can_add_multiple_users_to_office() {
     match execute_command(&kernel, add_user2_req).await.unwrap() {
         WorkspaceProtocolResponse::Success(_) => {
             println!(
-                "[Test MultiAdd] User {} added to office {} successfully by admin {}.",
-                user2_id, office.id, "admin"
+                "[Test MultiAdd] User {} added to office {} successfully by admin admin.",
+                user2_id, office.id
             );
         }
         other => panic!(
@@ -144,13 +142,14 @@ async fn test_non_admin_cannot_add_user_to_office() {
         description: String::new(),
         mdx_content: None,
         metadata: None,
+            is_default: None,
     };
 
     let office: Office = match execute_command(&kernel, create_office_req).await.unwrap() {
         WorkspaceProtocolResponse::Office(o) => {
             println!(
-                "[Test NonAdmin] Office {:?} created successfully by actor {}.",
-                o.id, "admin"
+                "[Test NonAdmin] Office {:?} created successfully by actor admin.",
+                o.id
             );
             o
         }
@@ -172,8 +171,8 @@ async fn test_non_admin_cannot_add_user_to_office() {
     match execute_command(&kernel, add_owner_req).await.unwrap() {
         WorkspaceProtocolResponse::Success(_) => {
             println!(
-                "[Test NonAdmin] Owner {} added to office {} successfully by admin {}.",
-                owner_id, office.id, "admin"
+                "[Test NonAdmin] Owner {} added to office {} successfully by admin admin.",
+                owner_id, office.id
             );
         }
         other => panic!(
@@ -193,7 +192,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
 
     match execute_command(&kernel, add_non_admin_req).await.unwrap() {
         WorkspaceProtocolResponse::Success(_) => {
-            println!("[Test NonAdmin] NonAdmin {} added to office {} successfully by admin {}.", non_admin_id, office.id, "admin");
+            println!("[Test NonAdmin] NonAdmin {} added to office {} successfully by admin admin.", non_admin_id, office.id);
         }
         other => panic!("[Test NonAdmin] AddMember for non_admin {} by admin {} returned unexpected response: {:?}", non_admin_id, "admin", other),
     }

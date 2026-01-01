@@ -38,17 +38,8 @@ use citadel_workspace_types::{
     UpdateOperation, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
 
-#[path = "common/mod.rs"]
-mod common;
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
-
-// ════════════════════════════════════════════════════════════════════════════
-// TEST CONFIGURATION AND CONSTANTS
-// ════════════════════════════════════════════════════════════════════════════
-
-/// Master password for admin user in test environments
-const ADMIN_PASSWORD: &str = "admin_password";
 
 // ════════════════════════════════════════════════════════════════════════════
 // TEST UTILITY FUNCTIONS
@@ -121,6 +112,7 @@ async fn test_command_invalid_access() {
             description: "Office 1 Description".to_string(),
             mdx_content: None,
             metadata: None,
+            is_default: None,
         },
     )
     .await

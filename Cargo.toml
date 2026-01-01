@@ -3,6 +3,7 @@ members = [
     "citadel-workspace-server-kernel",
     "citadel-workspace-internal-service",
     "citadel-workspace-types",
+    "citadel-workspace-server-kernel/tests/common",
 ]
 
 exclude = ["./citadel-internal-service"]
@@ -12,6 +13,7 @@ resolver = "3"
 [workspace.dependencies]
 # Workspace-specific packages
 citadel-workspace-server-kernel = { path = "./citadel-workspace-server-kernel" }
+citadel-workspace-server-kernel-test-common = { path = "./citadel-workspace-server-kernel/tests/common" }
 citadel-workspace-internal-service = { path = "./citadel-workspace-internal-service" }
 citadel-workspace-types = { path = "./citadel-workspace-types" }
 

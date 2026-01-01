@@ -9,7 +9,6 @@
 // - `user_management`: User injection utilities for testing
 // - `member_operations`: Domain member add/remove operations
 
-pub mod backend;
 pub mod command_processor;
 pub mod transaction;
 

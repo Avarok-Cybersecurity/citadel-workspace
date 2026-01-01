@@ -342,7 +342,8 @@ cd "$WORKSPACE_ROOT/citadel-workspaces"
 rm -rf ./dist ./node_modules
 
 print_status "Installing dependencies for citadel-workspaces.."
-npm install
+# Use --package-lock=false to avoid platform-specific lockfile issues when running in Docker
+npm install --package-lock=false
 npx vite build --mode development
 
 print_status "WASM client synchronization complete!"

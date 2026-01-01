@@ -1,8 +1,6 @@
 // Removed unused imports - test now uses async command processor directly
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
-#[path = "common/mod.rs"]
-mod common;
 use common::workspace_test_utils::*;
 
 /// # Workspace Loading Test Suite

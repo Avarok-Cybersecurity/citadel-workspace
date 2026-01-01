@@ -7,12 +7,25 @@ use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::Office;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Process a command asynchronously with a specific user context
+///
+/// The `requester_cid` is used to exclude the requester from broadcast messages
 pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     command: &WorkspaceProtocolRequest,
     actor_user_id: &str,
+) -> Result<WorkspaceProtocolResponse, NetworkError> {
+    process_command_with_user_and_cid(kernel, command, actor_user_id, None).await
+}
+
+/// Process a command asynchronously with a specific user context and CID for broadcast exclusion
+pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'static>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    command: &WorkspaceProtocolRequest,
+    actor_user_id: &str,
+    requester_cid: Option<u64>,
 ) -> Result<WorkspaceProtocolResponse, NetworkError> {
     println!("[ASYNC_PROCESS_COMMAND] Processing command: {command:?} for user: {actor_user_id}");
 
@@ -25,7 +38,7 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
             );
             match kernel
                 .domain_ops()
-                .get_workspace(&actor_user_id, crate::WORKSPACE_ROOT_ID)
+                .get_workspace(actor_user_id, crate::WORKSPACE_ROOT_ID)
                 .await
             {
                 Ok(workspace) => {
@@ -130,7 +143,8 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
             name,
             description,
             mdx_content,
-            metadata,
+            metadata: _,
+            is_default,
         } => {
             use crate::handlers::domain::async_ops::AsyncOfficeOperations;
             match kernel
@@ -141,6 +155,7 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
                     name,
                     description,
                     mdx_content.as_deref(),
+                    *is_default,
                 )
                 .await
             {
@@ -181,7 +196,8 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
             name,
             description,
             mdx_content,
-            metadata,
+            metadata: _,
+            is_default,
         } => {
             use crate::handlers::domain::async_ops::AsyncOfficeOperations;
             match kernel
@@ -192,10 +208,36 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
                     name.as_deref(),
                     description.as_deref(),
                     mdx_content.as_deref(),
+                    *is_default,
                 )
                 .await
             {
-                Ok(office) => Ok(WorkspaceProtocolResponse::Office(office)),
+                Ok(office) => {
+                    // If mdx_content was updated, broadcast to other clients and persist to file
+                    if let Some(content) = mdx_content {
+                        let timestamp = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs();
+
+                        let broadcast_response = WorkspaceProtocolResponse::OfficeContentUpdated {
+                            office_id: office_id.clone(),
+                            mdx_content: content.clone(),
+                            updated_by: actor_user_id.to_string(),
+                            timestamp,
+                        };
+
+                        kernel.broadcast(broadcast_response, requester_cid);
+                        println!("[ASYNC_PROCESS_COMMAND] Broadcast OfficeContentUpdated for office {}", office_id);
+
+                        // Persist to file (non-blocking, log errors but don't fail)
+                        if let Err(e) = kernel.persist_office_content(&office.name, content).await {
+                            println!("[ASYNC_PROCESS_COMMAND] Warning: Failed to persist office content: {}", e);
+                        }
+                    }
+
+                    Ok(WorkspaceProtocolResponse::Office(office))
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to update office: {}",
                     e
@@ -222,7 +264,7 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
 
         WorkspaceProtocolRequest::ListOffices => {
             use crate::handlers::domain::async_ops::AsyncOfficeOperations;
-            match kernel.domain_ops().list_offices(&actor_user_id, None).await {
+            match kernel.domain_ops().list_offices(actor_user_id, None).await {
                 Ok(offices) => Ok(WorkspaceProtocolResponse::Offices(offices)),
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to list offices: {}",
@@ -237,7 +279,7 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
             name,
             description,
             mdx_content,
-            metadata,
+            metadata: _,
         } => {
             use crate::handlers::domain::async_ops::AsyncRoomOperations;
             match kernel
@@ -275,7 +317,7 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
             name,
             description,
             mdx_content,
-            metadata,
+            metadata: _,
         } => {
             use crate::handlers::domain::async_ops::AsyncRoomOperations;
             match kernel
@@ -289,7 +331,46 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
                 )
                 .await
             {
-                Ok(room) => Ok(WorkspaceProtocolResponse::Room(room)),
+                Ok(room) => {
+                    // If mdx_content was updated, broadcast to other clients and persist to file
+                    if let Some(content) = mdx_content {
+                        let timestamp = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs();
+
+                        let broadcast_response = WorkspaceProtocolResponse::RoomContentUpdated {
+                            room_id: room_id.clone(),
+                            office_id: room.office_id.clone(),
+                            mdx_content: content.clone(),
+                            updated_by: actor_user_id.to_string(),
+                            timestamp,
+                        };
+
+                        kernel.broadcast(broadcast_response, requester_cid);
+                        println!(
+                            "[ASYNC_PROCESS_COMMAND] Broadcast RoomContentUpdated for room {}",
+                            room_id
+                        );
+
+                        // Persist to file (need to look up office name first)
+                        if let Ok(Some(citadel_workspace_types::structs::Domain::Office { office })) =
+                            kernel.get_domain(&room.office_id).await
+                        {
+                            if let Err(e) = kernel
+                                .persist_room_content(&office.name, &room.name, content)
+                                .await
+                            {
+                                println!(
+                                    "[ASYNC_PROCESS_COMMAND] Warning: Failed to persist room content: {}",
+                                    e
+                                );
+                            }
+                        }
+                    }
+
+                    Ok(WorkspaceProtocolResponse::Room(room))
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to update room: {}",
                     e
@@ -335,7 +416,7 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
             office_id,
             room_id,
             role,
-            metadata,
+            metadata: _,
         } => {
             use crate::handlers::domain::async_ops::AsyncUserManagementOperations;
             // Determine the domain_id based on room_id or office_id
@@ -431,6 +512,21 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
                 )),
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to update member permissions: {}",
+                    e
+                ))),
+            }
+        }
+
+        WorkspaceProtocolRequest::UpdateUserProfile { name, avatar_data } => {
+            use crate::handlers::domain::async_ops::AsyncUserManagementOperations;
+            match kernel
+                .domain_ops()
+                .update_user_profile(actor_user_id, name.clone(), avatar_data.clone())
+                .await
+            {
+                Ok(user) => Ok(WorkspaceProtocolResponse::UserProfileUpdated(user)),
+                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
+                    "Failed to update user profile: {}",
                     e
                 ))),
             }
@@ -548,7 +644,11 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
             // Check if requester has permission to view (must be admin or requesting own permissions)
             let is_admin = {
                 use crate::handlers::domain::async_ops::AsyncDomainOperations;
-                kernel.domain_ops().is_admin(actor_user_id).await.unwrap_or(false)
+                kernel
+                    .domain_ops()
+                    .is_admin(actor_user_id)
+                    .await
+                    .unwrap_or(false)
             };
 
             if actor_user_id != user_id && !is_admin {
@@ -595,7 +695,6 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
         )),
 
         // ========== Group Messaging Commands ==========
-
         WorkspaceProtocolRequest::SendGroupMessage {
             group_id,
             message_type,
@@ -603,7 +702,7 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
             reply_to,
             mentions,
         } => {
-            use citadel_workspace_types::{GroupMessage, GroupMessageType};
+            use citadel_workspace_types::GroupMessage;
             use uuid::Uuid;
 
             // Get sender name from user
@@ -671,7 +770,11 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
                 Ok(Some(msg)) => {
                     // Check if user is sender or admin
                     use crate::handlers::domain::async_ops::AsyncDomainOperations;
-                    let is_admin = kernel.domain_ops().is_admin(actor_user_id).await.unwrap_or(false);
+                    let is_admin = kernel
+                        .domain_ops()
+                        .is_admin(actor_user_id)
+                        .await
+                        .unwrap_or(false);
                     if msg.sender_id != actor_user_id && !is_admin {
                         return Ok(WorkspaceProtocolResponse::Error(
                             "Permission denied: Can only edit own messages".to_string(),
@@ -728,7 +831,11 @@ pub async fn process_command_with_user<R: Ratchet + Send + Sync + 'static>(
                 Ok(Some(msg)) => {
                     // Check if user is sender or admin
                     use crate::handlers::domain::async_ops::AsyncDomainOperations;
-                    let is_admin = kernel.domain_ops().is_admin(actor_user_id).await.unwrap_or(false);
+                    let is_admin = kernel
+                        .domain_ops()
+                        .is_admin(actor_user_id)
+                        .await
+                        .unwrap_or(false);
                     if msg.sender_id != actor_user_id && !is_admin {
                         return Ok(WorkspaceProtocolResponse::Error(
                             "Permission denied: Can only delete own messages".to_string(),

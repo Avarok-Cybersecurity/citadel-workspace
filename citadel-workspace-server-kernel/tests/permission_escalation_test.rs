@@ -3,8 +3,6 @@ use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::{Permission, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
-#[path = "common/mod.rs"]
-mod common;
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
@@ -55,6 +53,7 @@ async fn test_permission_escalation() {
             description: "For Testing".to_string(),
             mdx_content: None,
             metadata: None,
+            is_default: None,
         },
     )
     .await;

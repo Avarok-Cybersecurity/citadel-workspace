@@ -1,6 +1,3 @@
-#[path = "common/mod.rs"]
-mod common;
-
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
@@ -38,6 +35,7 @@ async fn test_permission_operations() {
             description: "Office for permission testing".to_string(),
             mdx_content: None,
             metadata: None,
+            is_default: None,
         },
     )
     .await

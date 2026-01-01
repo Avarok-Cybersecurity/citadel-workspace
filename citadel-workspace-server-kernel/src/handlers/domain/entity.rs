@@ -54,6 +54,7 @@ impl DomainEntity for Office {
             chat_channel_id: None,
             default_permissions: DomainPermissions::default(),
             metadata: Vec::new(),
+            is_default: false,
         }
     }
 

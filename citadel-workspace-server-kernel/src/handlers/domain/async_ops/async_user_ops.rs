@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::{Permission, User, UserRole};
 use citadel_workspace_types::UpdateOperation;
 
 /// Async user management operations
@@ -46,4 +46,12 @@ pub trait AsyncUserManagementOperations<R: Ratchet + Send + Sync + 'static>: Sen
         permissions: Vec<Permission>,
         operation: UpdateOperation,
     ) -> Result<(), NetworkError>;
+
+    /// Updates a user's profile (name and/or avatar)
+    async fn update_user_profile(
+        &self,
+        user_id: &str,
+        name: Option<String>,
+        avatar_data: Option<String>,
+    ) -> Result<User, NetworkError>;
 }

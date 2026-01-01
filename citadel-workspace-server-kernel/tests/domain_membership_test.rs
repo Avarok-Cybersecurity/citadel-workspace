@@ -4,8 +4,6 @@ use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::{User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
-#[path = "common/mod.rs"]
-mod common;
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
@@ -61,6 +59,7 @@ async fn test_is_member_of_domain_behavior() {
             description: "For Testing".to_string(),
             mdx_content: None,
             metadata: None,
+            is_default: None,
         },
     )
     .await;

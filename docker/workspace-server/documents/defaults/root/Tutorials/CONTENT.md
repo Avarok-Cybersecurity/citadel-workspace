@@ -13,6 +13,9 @@ Understanding offices, rooms, and navigation.
 ### Advanced Features
 Live documents, P2P messaging, and more.
 
+### File Transfer & RE-VFS
+Secure file sharing with post-quantum encryption and decentralized storage.
+
 ---
 
 *Select a tutorial room from the sidebar to begin.*

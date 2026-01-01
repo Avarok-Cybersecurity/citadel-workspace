@@ -2,8 +2,6 @@ use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncPermissio
 use citadel_workspace_types::structs::{Permission, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
-#[path = "common/mod.rs"]
-mod common;
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
@@ -98,6 +96,7 @@ async fn test_permissions_inheritance() {
             description: "Test Office Description".to_string(),
             mdx_content: None,
             metadata: None,
+            is_default: None,
         },
     )
     .await;
