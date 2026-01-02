@@ -143,14 +143,14 @@ async fn test_office_room_permission_inheritance() {
         "User should inherit view permission on room from parent office"
     );
 
-    // User shouldn't have edit permission on the room
+    // User shouldn't have edit permission on the room (Members don't have EditContent)
     let has_edit_permission = kernel
         .domain_operations
-        .check_entity_permission(user_id, &room_id, Permission::SendMessages)
+        .check_entity_permission(user_id, &room_id, Permission::EditContent)
         .await
         .unwrap();
     assert!(
         !has_edit_permission,
-        "User shouldn't have SendMessages permission on room"
+        "User shouldn't have EditContent permission on room"
     );
 }

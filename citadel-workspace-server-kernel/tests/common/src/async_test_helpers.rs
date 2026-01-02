@@ -14,7 +14,7 @@
 
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_server_kernel::kernel::{
-    async_kernel::{AsyncWorkspaceServerKernel, ADMIN_ROOT_USER_ID},
+    async_kernel::AsyncWorkspaceServerKernel,
     command_processor::async_process_command::process_command_with_user,
 };
 use citadel_workspace_types::{
@@ -22,11 +22,14 @@ use citadel_workspace_types::{
     WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
 
+// Re-export TEST_ADMIN_USER_ID from workspace_test_utils
+pub use super::workspace_test_utils::TEST_ADMIN_USER_ID;
+
 pub async fn execute_command<R: Ratchet>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     request: WorkspaceProtocolRequest,
 ) -> Result<WorkspaceProtocolResponse, NetworkError> {
-    process_command_with_user(kernel, &request, ADMIN_ROOT_USER_ID).await
+    process_command_with_user(kernel, &request, TEST_ADMIN_USER_ID).await
 }
 
 pub fn extract_success(message: WorkspaceProtocolResponse) -> Option<String> {

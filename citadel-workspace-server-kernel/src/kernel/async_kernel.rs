@@ -9,7 +9,6 @@ use crate::kernel::transaction::BackendTransactionManager;
 use crate::WorkspaceProtocolResponse;
 use citadel_logging::info;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, Ratchet};
-use citadel_workspace_types::structs::UserRole;
 use parking_lot::RwLock;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -38,9 +37,9 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     broadcast_tx: broadcast::Sender<BroadcastMessage>,
 }
 
-// The default. This is not a protocol account, just an account that has the ability to run
-// workspace-level commands via just the workspace master password
-pub const ADMIN_ROOT_USER_ID: &str = "__admin_user";
+// Placeholder for entities that don't have an owner yet.
+// The first user to provide the master password via UpdateWorkspace becomes the owner.
+pub const UNASSIGNED_OWNER: &str = "";
 
 impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
     fn clone(&self) -> Self {
@@ -138,22 +137,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .set_node_remote(node_remote);
     }
 
-    /// Inject admin user (async version). Note that this is NOT the protocol user.
-    /// In fact, any protocol user can take the admin role provided they have the workspace
-    /// master password
+    /// Initialize the root workspace. Note that this does NOT create any admin user.
+    /// The first real user to provide the master password via UpdateWorkspace becomes the admin/owner.
     pub async fn inject_admin_user(
         &self,
         workspace_master_password: &str,
     ) -> Result<(), NetworkError> {
-        use citadel_workspace_types::structs::{
-            MetadataValue as InternalMetadataValue, Permission, User,
-        };
-        use std::collections::HashSet;
-
-        println!(
-            "[ASYNC_KERNEL] Injecting admin user: {}",
-            ADMIN_ROOT_USER_ID
-        );
+        println!("[ASYNC_KERNEL] Initializing root workspace (no pre-created admin user)");
 
         // Pre-populate the master password BEFORE any workspace checks
         // This ensures first-time initialization via CreateWorkspace can validate the password
@@ -165,40 +155,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 .await?;
         }
 
-        // Check if user already exists
-        let user_exists = self.get_user(ADMIN_ROOT_USER_ID).await?.is_some();
-
-        if !user_exists {
-            let mut user = User::new(
-                ADMIN_ROOT_USER_ID.to_string(),
-                ADMIN_ROOT_USER_ID.to_string(),
-                UserRole::Admin,
-            );
-
-            // Add primary_workspace_id to admin user's metadata
-            user.metadata.insert(
-                "primary_workspace_id".to_string(),
-                InternalMetadataValue::String(crate::WORKSPACE_ROOT_ID.to_string()),
-            );
-
-            // Grant the admin user all permissions on the root workspace
-            let mut root_permissions = HashSet::new();
-            root_permissions.insert(Permission::All);
-            user.permissions
-                .insert(crate::WORKSPACE_ROOT_ID.to_string(), root_permissions);
-
-            // Insert user using backend
-            self.domain_operations
-                .backend_tx_manager
-                .insert_user(ADMIN_ROOT_USER_ID.to_string(), user)
-                .await?;
-        }
-
         // Check if root workspace exists
         let workspace_exists = self.get_domain(crate::WORKSPACE_ROOT_ID).await?.is_some();
 
         if !workspace_exists {
-            println!("[ASYNC_KERNEL] Creating root workspace");
+            println!("[ASYNC_KERNEL] Creating root workspace with no owner (first user with master password becomes admin)");
 
             // Debug: Check current storage mode
             if self.domain_operations.backend_tx_manager.is_test_mode() {
@@ -207,13 +168,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 println!("[ASYNC_KERNEL] Creating workspace in backend storage mode");
             }
 
-            // Create root workspace object
+            // Create root workspace object with no owner - first user with master password claims it
             let root_workspace_obj = citadel_workspace_types::structs::Workspace {
                 id: crate::WORKSPACE_ROOT_ID.to_string(),
                 name: "Root Workspace".to_string(),
                 description: "The main workspace for this instance.".to_string(),
-                owner_id: ADMIN_ROOT_USER_ID.to_string(),
-                members: vec![ADMIN_ROOT_USER_ID.to_string()],
+                owner_id: UNASSIGNED_OWNER.to_string(),
+                members: vec![],
                 offices: vec![],
                 metadata: vec![],
             };
@@ -243,7 +204,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 .set_workspace_password(crate::WORKSPACE_ROOT_ID, workspace_master_password)
                 .await?;
 
-            println!("[ASYNC_KERNEL] Root workspace created successfully");
+            println!("[ASYNC_KERNEL] Root workspace created successfully (awaiting first admin)");
         }
 
         Ok(())
@@ -413,14 +374,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 None
             };
 
-            // Create office struct
+            // Create office struct - no owner initially, first admin user claims it
             let office = Office {
                 id: office_id.clone(),
-                owner_id: ADMIN_ROOT_USER_ID.to_string(),
+                owner_id: UNASSIGNED_OWNER.to_string(),
                 workspace_id: crate::WORKSPACE_ROOT_ID.to_string(),
                 name: office_config.name.clone(),
                 description: office_config.description.clone().unwrap_or_default(),
-                members: vec![ADMIN_ROOT_USER_ID.to_string()],
+                members: vec![],
                 rooms: Vec::new(),
                 mdx_content,
                 rules: office_config.rules.clone(),
@@ -512,14 +473,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                     None
                 };
 
-                // Create room struct
+                // Create room struct - no owner initially, first admin user claims it
                 let room = Room {
                     id: room_id.clone(),
-                    owner_id: ADMIN_ROOT_USER_ID.to_string(),
+                    owner_id: UNASSIGNED_OWNER.to_string(),
                     office_id: office_id.clone(),
                     name: room_config.name.clone(),
                     description: room_config.description.clone().unwrap_or_default(),
-                    members: vec![ADMIN_ROOT_USER_ID.to_string()],
+                    members: vec![],
                     mdx_content: room_mdx_content,
                     rules: room_config.rules.clone(),
                     chat_enabled: room_config.chat_enabled,
@@ -716,17 +677,28 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                 .await?;
                         }
 
-                        // Add user to workspace using admin privileges
-                        use crate::handlers::domain::async_ops::AsyncUserManagementOperations;
-                        use citadel_workspace_types::structs::UserRole;
-                        this.domain_operations
-                            .add_user_to_domain(
-                                ADMIN_ROOT_USER_ID,
-                                &user_id,
-                                crate::WORKSPACE_ROOT_ID,
-                                UserRole::Member,
-                            )
-                            .await?;
+                        // Add user directly to workspace members (no admin required for initial connection)
+                        // This bypasses the permission check since authenticated users should be allowed
+                        let mut ws = this.domain_operations
+                            .backend_tx_manager
+                            .get_workspace(crate::WORKSPACE_ROOT_ID)
+                            .await?
+                            .ok_or_else(|| NetworkError::msg("Root workspace not found"))?;
+
+                        if !ws.members.contains(&user_id) {
+                            ws.members.push(user_id.clone());
+                            this.domain_operations
+                                .backend_tx_manager
+                                .insert_workspace(crate::WORKSPACE_ROOT_ID.to_string(), ws.clone())
+                                .await?;
+
+                            // Update domain as well
+                            let ws_domain = citadel_workspace_types::structs::Domain::Workspace { workspace: ws };
+                            this.domain_operations
+                                .backend_tx_manager
+                                .insert_domain(crate::WORKSPACE_ROOT_ID.to_string(), ws_domain)
+                                .await?;
+                        }
 
                         info!(target: "citadel", "[ASYNC_KERNEL] User {} added to workspace domain", user_id);
                     }

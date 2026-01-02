@@ -300,8 +300,8 @@ impl Permission {
             }
             UserRole::Member => {
                 // Basic member permissions
+                // Note: Members do NOT have EditContent - that requires Owner or Admin role
                 permissions.insert(Self::ViewContent);
-                permissions.insert(Self::EditContent);
                 permissions.insert(Self::SendMessages);
                 permissions.insert(Self::ReadMessages);
                 permissions.insert(Self::UploadFiles);

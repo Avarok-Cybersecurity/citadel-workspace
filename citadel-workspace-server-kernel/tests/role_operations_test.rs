@@ -140,9 +140,13 @@ async fn test_role_operations() {
                 .get(&office_id)
                 .expect("Domain permissions not found");
 
-            // Member should have specific permissions
+            // Member should have specific explicit permissions
+            // Note: CreateRoom is granted at check-time based on domain type (Office),
+            // not stored as an explicit permission
             assert!(domain_permissions.contains(&Permission::ViewContent));
-            assert!(domain_permissions.contains(&Permission::CreateRoom));
+            assert!(domain_permissions.contains(&Permission::SendMessages));
+            assert!(domain_permissions.contains(&Permission::ReadMessages));
+            assert!(!domain_permissions.contains(&Permission::EditContent)); // Members don't have EditContent
             assert!(!domain_permissions.contains(&Permission::ManageDomains));
             assert!(!domain_permissions.contains(&Permission::All));
             println!("Member has appropriate permissions");

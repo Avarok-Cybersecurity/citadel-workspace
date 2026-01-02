@@ -31,7 +31,8 @@ use common::workspace_test_utils::*;
 #[tokio::test]
 async fn test_permissions_inheritance() {
     let kernel = create_test_kernel().await;
-    let admin_id = "admin-user";
+    // Use the test admin user created by create_test_kernel()
+    let admin_id = TEST_ADMIN_USER_ID;
     let owner_id = "owner-user";
     let member_id = "member-user";
 

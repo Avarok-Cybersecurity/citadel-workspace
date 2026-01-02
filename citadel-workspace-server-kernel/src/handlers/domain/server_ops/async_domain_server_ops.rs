@@ -782,6 +782,15 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             workspace.members.push(user_id.to_string());
         }
 
+        // If workspace has no owner, the first user with master password becomes the owner
+        if workspace.owner_id.is_empty() {
+            println!(
+                "[UPDATE_WORKSPACE] No owner set - assigning {} as workspace owner",
+                user_id
+            );
+            workspace.owner_id = user_id.to_string();
+        }
+
         // Save updated workspace
         self.backend_tx_manager
             .insert_workspace(workspace_id.to_string(), workspace.clone())

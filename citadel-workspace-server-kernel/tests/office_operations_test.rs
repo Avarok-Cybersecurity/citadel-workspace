@@ -45,7 +45,8 @@ async fn test_office_operations() {
         WorkspaceProtocolResponse::Error(msg) => {
             assert!(
                 msg.contains("Invalid workspace password")
-                    || msg.contains("Incorrect workspace master password"),
+                    || msg.contains("Incorrect workspace master password")
+                    || msg.contains("Invalid workspace master access password"),
                 "Expected password error, got: {}",
                 msg
             );
@@ -142,8 +143,12 @@ async fn test_office_operations() {
     .await
     .unwrap();
 
-    let success_msg = extract_success(delete_office_response).expect("Failed to delete office");
-    assert_eq!(success_msg, "Office deleted successfully");
+    match delete_office_response {
+        WorkspaceProtocolResponse::DeleteOffice { office_id: deleted_id } => {
+            assert_eq!(deleted_id, office_id, "Deleted office ID should match");
+        }
+        other => panic!("Expected DeleteOffice response, got: {:?}", other),
+    }
 
     // Verify office was deleted
     let list_offices_after_delete =

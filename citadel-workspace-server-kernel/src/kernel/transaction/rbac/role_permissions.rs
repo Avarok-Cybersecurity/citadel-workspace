@@ -36,8 +36,8 @@ pub fn retrieve_role_permissions(role: &UserRole, domain_type: &DomainType) -> V
         }
         UserRole::Member => {
             // Member role has moderate permissions that vary by domain type
+            // Note: Members do NOT have EditContent by default - that requires Owner or Admin role
             permissions.push(Permission::ViewContent);
-            permissions.push(Permission::EditContent);
             permissions.push(Permission::SendMessages);
             permissions.push(Permission::ReadMessages);
 

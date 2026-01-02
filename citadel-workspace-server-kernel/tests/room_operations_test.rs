@@ -134,8 +134,12 @@ async fn test_room_operations() {
     .await
     .unwrap();
 
-    let success_msg = extract_success(delete_room_response).expect("Failed to delete room");
-    assert_eq!(success_msg, "Room deleted successfully");
+    match delete_room_response {
+        WorkspaceProtocolResponse::DeleteRoom { room_id: deleted_id } => {
+            assert_eq!(deleted_id, room_id, "Deleted room ID should match");
+        }
+        other => panic!("Expected DeleteRoom response, got: {:?}", other),
+    }
 
     // Verify room was deleted
     let list_rooms_after_delete = execute_command(
