@@ -155,6 +155,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             ADMIN_ROOT_USER_ID
         );
 
+        // Pre-populate the master password BEFORE any workspace checks
+        // This ensures first-time initialization via CreateWorkspace can validate the password
+        if !workspace_master_password.is_empty() {
+            println!("[ASYNC_KERNEL] Pre-populating master password for root workspace");
+            self.domain_operations
+                .backend_tx_manager
+                .set_workspace_password(crate::WORKSPACE_ROOT_ID, workspace_master_password)
+                .await?;
+        }
+
         // Check if user already exists
         let user_exists = self.get_user(ADMIN_ROOT_USER_ID).await?.is_some();
 
