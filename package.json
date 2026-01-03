@@ -2,5 +2,8 @@
   "dependencies": {
     "uuid": "^13.0.0",
     "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "playwright": "^1.57.0"
   }
 }
