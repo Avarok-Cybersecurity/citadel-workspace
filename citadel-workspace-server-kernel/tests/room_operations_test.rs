@@ -135,7 +135,9 @@ async fn test_room_operations() {
     .unwrap();
 
     match delete_room_response {
-        WorkspaceProtocolResponse::DeleteRoom { room_id: deleted_id } => {
+        WorkspaceProtocolResponse::DeleteRoom {
+            room_id: deleted_id,
+        } => {
             assert_eq!(deleted_id, room_id, "Deleted room ID should match");
         }
         other => panic!("Expected DeleteRoom response, got: {:?}", other),

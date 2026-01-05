@@ -29,7 +29,7 @@ async fn test_admin_can_add_multiple_users_to_office() {
         description: String::new(),
         mdx_content: None,
         metadata: None,
-            is_default: None,
+        is_default: None,
     };
 
     let office: Office = match execute_command(&kernel, create_office_req).await.unwrap() {
@@ -142,7 +142,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
         description: String::new(),
         mdx_content: None,
         metadata: None,
-            is_default: None,
+        is_default: None,
     };
 
     let office: Office = match execute_command(&kernel, create_office_req).await.unwrap() {

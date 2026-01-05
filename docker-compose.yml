@@ -16,8 +16,7 @@ services:
       - CONTAINER_MODE=1
     # This is a one-shot service that exits after syncing
     restart: "no"
-    networks:
-      - citadel-net
+    network_mode: host
 
   server:
     build:
@@ -28,21 +27,17 @@ services:
       - target_cache:/usr/src/app/target
     environment:
       - RUST_LOG=citadel=info
-    # Healthcheck disabled to avoid WebSocket handshake errors in logs
     healthcheck:
       test: [ "CMD", "nc", "-z", "127.0.0.1", "12349" ]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 30s
-    ports:
-      - "12349:12349"
-      - "12345:12345"  # Internal service WebSocket port (shared network namespace)
     depends_on:
       sync-wasm-client:
         condition: service_completed_successfully
-    networks:
-      - citadel-net
+    network_mode: host
+
   internal-service:
     build:
       context: .
@@ -67,7 +62,7 @@ services:
         condition: service_completed_successfully
       server:
         condition: service_healthy
-    network_mode: service:server
+    network_mode: host
 
   ui:
     build:
@@ -106,8 +101,6 @@ services:
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
       - CHOKIDAR_INTERVAL=100
-    ports:
-      - "5173:5173"
     depends_on:
       sync-wasm-client:
         condition: service_completed_successfully
@@ -115,8 +108,7 @@ services:
         condition: service_healthy
       server:
         condition: service_healthy
-    networks:
-      - citadel-net
+    network_mode: host
     labels:
       - "frontend"
 
@@ -127,8 +119,3 @@ volumes:
   sync_node_modules:
   sync_target_cache:
   ui_node_modules:
-
-# Define the network
-networks:
-  citadel-net:
-    driver: bridge

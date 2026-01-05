@@ -86,7 +86,12 @@ async fn test_backend_is_being_used() -> Result<(), Box<dyn std::error::Error>> 
     println!("\n7. Adding user to workspace using backend...");
     kernel
         .domain_ops()
-        .add_user_to_domain(TEST_ADMIN_USER_ID, "test_user", workspace_id, UserRole::Member)
+        .add_user_to_domain(
+            TEST_ADMIN_USER_ID,
+            "test_user",
+            workspace_id,
+            UserRole::Member,
+        )
         .await?;
 
     println!("   ✓ User added to workspace");

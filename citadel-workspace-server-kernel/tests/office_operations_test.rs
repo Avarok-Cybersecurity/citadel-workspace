@@ -144,7 +144,9 @@ async fn test_office_operations() {
     .unwrap();
 
     match delete_office_response {
-        WorkspaceProtocolResponse::DeleteOffice { office_id: deleted_id } => {
+        WorkspaceProtocolResponse::DeleteOffice {
+            office_id: deleted_id,
+        } => {
             assert_eq!(deleted_id, office_id, "Deleted office ID should match");
         }
         other => panic!("Expected DeleteOffice response, got: {:?}", other),

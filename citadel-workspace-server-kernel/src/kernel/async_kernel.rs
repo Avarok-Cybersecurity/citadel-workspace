@@ -679,7 +679,8 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
 
                         // Add user directly to workspace members (no admin required for initial connection)
                         // This bypasses the permission check since authenticated users should be allowed
-                        let mut ws = this.domain_operations
+                        let mut ws = this
+                            .domain_operations
                             .backend_tx_manager
                             .get_workspace(crate::WORKSPACE_ROOT_ID)
                             .await?
@@ -693,7 +694,9 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                 .await?;
 
                             // Update domain as well
-                            let ws_domain = citadel_workspace_types::structs::Domain::Workspace { workspace: ws };
+                            let ws_domain = citadel_workspace_types::structs::Domain::Workspace {
+                                workspace: ws,
+                            };
                             this.domain_operations
                                 .backend_tx_manager
                                 .insert_domain(crate::WORKSPACE_ROOT_ID.to_string(), ws_domain)

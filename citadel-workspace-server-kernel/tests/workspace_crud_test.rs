@@ -61,7 +61,10 @@ async fn test_get_workspace() {
                 workspace.id,
                 citadel_workspace_server_kernel::WORKSPACE_ROOT_ID
             );
-            assert_eq!(workspace.owner_id, common::workspace_test_utils::TEST_ADMIN_USER_ID); // Test admin
+            assert_eq!(
+                workspace.owner_id,
+                common::workspace_test_utils::TEST_ADMIN_USER_ID
+            ); // Test admin
         }
         Ok(other) => panic!("Expected Workspace response, got {:?}", other),
         Err(e) => panic!("Command failed with error: {:?}", e),

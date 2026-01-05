@@ -228,7 +228,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         };
 
                         kernel.broadcast(broadcast_response, requester_cid);
-                        println!("[ASYNC_PROCESS_COMMAND] Broadcast OfficeContentUpdated for office {}", office_id);
+                        println!(
+                            "[ASYNC_PROCESS_COMMAND] Broadcast OfficeContentUpdated for office {}",
+                            office_id
+                        );
 
                         // Persist to file (non-blocking, log errors but don't fail)
                         if let Err(e) = kernel.persist_office_content(&office.name, content).await {
@@ -354,8 +357,9 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         );
 
                         // Persist to file (need to look up office name first)
-                        if let Ok(Some(citadel_workspace_types::structs::Domain::Office { office })) =
-                            kernel.get_domain(&room.office_id).await
+                        if let Ok(Some(citadel_workspace_types::structs::Domain::Office {
+                            office,
+                        })) = kernel.get_domain(&room.office_id).await
                         {
                             if let Err(e) = kernel
                                 .persist_room_content(&office.name, &room.name, content)

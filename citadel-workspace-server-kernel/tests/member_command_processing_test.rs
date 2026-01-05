@@ -72,7 +72,7 @@ async fn test_member_command_processing() {
         description: "Test Office Description".to_string(),
         mdx_content: None,
         metadata: None,
-            is_default: None,
+        is_default: None,
     };
 
     let office_response = execute_command(&kernel, create_office_req).await.unwrap();
