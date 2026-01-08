@@ -313,6 +313,107 @@ P2P messaging uses triple-nested protocols:
 - P2P messaging requires proper WASM bindings for send_p2p_message
 - Domain permissions inherit: Workspace → Office → Room
 
+## Citadel SDK Reconnection Behavior
+
+Understanding SDK reconnection patterns is critical for debugging session/P2P issues. This knowledge comes from the SDK reconnection test suite (`citadel_sdk/tests/reconnection_*.rs`).
+
+### Connection Lifecycle
+
+```
+Register → Connect → rekey() → [use connection] → disconnect() → reconnect → rekey() → [use connection]
+```
+
+**Key APIs:**
+- `remote.register_with_defaults(addr, username, full_name, password)` - One-time account creation
+- `remote.connect_with_defaults(AuthenticationRequest::credentialed(username, password))` - Login (can reconnect)
+- `conn.disconnect()` - Graceful C2S disconnect
+- `conn.rekey()` - Rotate encryption keys (should work across reconnections)
+
+### P2P Lifecycle
+
+```
+C2S Connect → propose_target(cid, peer_username) → register_to_peer() → connect_to_peer() → rekey() → [messaging]
+```
+
+**Critical: P2P uses usernames, NOT CIDs or UUIDs:**
+```rust
+// ✅ CORRECT - Use peer's username
+let peer_handle = conn.propose_target(my_cid, "peer_username".to_string()).await?;
+
+// ❌ WRONG - Using UUID or CID won't work
+let peer_handle = conn.propose_target(my_cid, peer_uuid).await?;  // Fails!
+```
+
+**P2P Reconnection after C2S disconnect:**
+```rust
+// After C2S reconnect, use find_target (already registered)
+let peer_handle = conn.find_target(conn.cid, peer_username).await?;
+let p2p = peer_handle.connect_to_peer().await?;
+```
+
+### Disconnect Signal Types
+
+The SDK uses `NodeResult::Disconnect` for BOTH C2S and P2P disconnects. Distinguish via `v_conn_type`:
+
+| v_conn_type | Meaning |
+|-------------|---------|
+| `LocalGroupServer` / `ExternalGroupServer` / `None` | C2S disconnect |
+| `LocalGroupPeer` / `ExternalGroupPeer` | P2P disconnect |
+
+**Example handler:**
+```rust
+match event {
+    NodeResult::Disconnect(Disconnect { v_conn_type, .. }) => {
+        match v_conn_type {
+            Some(VirtualTargetType::LocalGroupPeer { .. }) |
+            Some(VirtualTargetType::ExternalGroupPeer { .. }) => {
+                // P2P peer disconnected
+            }
+            _ => {
+                // C2S server disconnected
+            }
+        }
+    }
+}
+```
+
+### Reconnection Scenarios (from SDK tests)
+
+| Scenario | What Happens | P2P Impact |
+|----------|--------------|------------|
+| C2S disconnect + reconnect | Same CID preserved, rekey works | P2P must reconnect via `find_target` |
+| P2P disconnect (C2S active) | C2S stays connected | Other peer receives `NodeResult::Disconnect` with `LocalGroupPeer` |
+| One peer C2S disconnects | Other peer receives P2P disconnect signal | P2P auto-terminated when C2S drops |
+| Both peers C2S disconnect | Both must reconnect C2S first | Then reconnect P2P via `find_target` |
+
+### Rekey Behavior
+
+- **C2S rekey:** `conn.rekey().await?` - Rotates encryption keys with server
+- **P2P rekey:** `p2p.remote.rekey().await?` - Rotates encryption keys with peer
+- **After reconnect:** Rekey should work normally (version tracking reset on session init)
+- **Version mismatch fix:** SDK's `on_session_init()` now properly resets `latest_usable_version` and `declared_next_version`
+
+### Synchronization for P2P Tests
+
+When testing P2P with multiple clients, use `wait_for_peers()` to ensure both are ready:
+
+```rust
+// Both peers must complete C2S setup before P2P operations
+wait_for_peers().await;
+
+// NOW safe to do P2P registration
+let peer_handle = conn.propose_target(cid, peer_username).await?;
+```
+
+### Common Issues
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| "CID is not registered locally" | Using UUID instead of username for P2P | Use `peer_username` string |
+| P2P connect hangs | Missing `wait_for_peers()` synchronization | Add barrier before P2P ops |
+| Ratchet version mismatch | Stale version counters after reconnect | SDK fix: `replace_toolset_and_reset()` |
+| Double disconnect signals | Counting both `NodeResult::Disconnect` and `PeerEvent::Disconnect` | Only count `NodeResult::Disconnect` |
+
 ## Session Management & Resource Cleanup
 
 ### Session Lifecycle
