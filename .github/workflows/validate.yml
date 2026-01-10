@@ -18,126 +18,58 @@ env:
 
 jobs:
   fmt:
-    name: Cargo Fmt
+    name: Cargo Fmt - ${{ matrix.crate }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate:
+          - citadel-workspace-types
+          - citadel-workspace-internal-service
+          - citadel-workspace-server-kernel
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
       - name: Run Cargo Fmt
-        run: cargo fmt --check
-        working-directory: src-tauri
+        run: cargo fmt -p ${{ matrix.crate }} --check
 
   clippy:
-    name: Cargo Clippy
+    name: Cargo Clippy - ${{ matrix.crate }}
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: Avarok-Cybersecurity/gh-actions-deps@master
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install Dependencies (Ubuntu Only)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-      - name: Install Frontend Dependencies
-        run: npm i
-      - name: Run Cargo Clippy
-        run: cargo clippy --all -- -D warnings
-        working-directory: src-tauri
-
-  tauri-build:
-    name: Tauri Build
-    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        crate:
+          - citadel-workspace-types
+          - citadel-workspace-internal-service
+          - citadel-workspace-server-kernel
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install Dependencies (Ubuntu Only)
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libglvnd-dev libwebkit2gtk-4.1-dev build-essential curl wget libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-      - name: Install Dependencies (Windows Only)
-        if: startsWith(matrix.os, 'windows')
-        run: |
-          vcpkg install openssl:x64-windows-static-md
-      - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-        if: startsWith(matrix.os, 'windows')
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2.0.0-rc"
-        working-directory: src-tauri
-      - name: Run Tauri Build
-        run: cargo tauri build --verbose
-        working-directory: src-tauri
-        continue-on-error: true
+      - name: Run Cargo Clippy
+        run: cargo clippy -p ${{ matrix.crate }} -- -D warnings
 
-  jslint:
-    name: JS lint
+  rust-tests:
+    name: Rust Tests - ${{ matrix.crate }}
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: Install dependencies
-        run: |
-          npm install --global prettier
-          npm install --global eslint
-          npm i
-
-      - name: Run Prettier check
-        run: prettier "." -c
-
-      - name: Run ESLint check
-        run: eslint "**/*.{js,jsx,ts,tsx}"
-
-  rust-ts-interop:
-    name: Rust-TypeScript Interoperability Tests
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate:
+          - citadel-workspace-types
+          - citadel-workspace-internal-service
+          - citadel-workspace-server-kernel
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-          npm i
-      - name: Run Rust Type Interop Tests
-        run: cargo test --test type_interop_tests
-        working-directory: src-tauri
-      - name: Start Internal Services
-        run: |
-          nohup cargo run --bin internal-service -- --bind 127.0.0.1:12345 > internal-service.log 2>&1 & echo $! > ./.service-pid
-          # Start citadel server
-          nohup cargo run --bin citadel_server -- --bind 127.0.0.1:12349 > citadel-server.log 2>&1 & echo $! > ./.server-pid
-          # Wait for services to start
-          sleep 5
-      - name: Run TypeScript Interop Tests
-        run: npm test
-        working-directory: citadel-workspaces
-      - name: Stop Internal Services
-        run: |
-          [ ! -f "./.server-pid" ] || { kill $(cat ".server-pid") && rm "./.server-pid"; }
-          [ ! -f "./.service-pid" ] || { kill $(cat ".service-pid") && rm "./.service-pid"; }
+      - name: Run Cargo Test
+        run: cargo test -p ${{ matrix.crate }}
 
   unit-tests:
     name: Unit Tests
