@@ -25,6 +25,11 @@ COPY ./citadel-internal-service /usr/src/app/citadel-internal-service
 # Dynamically expose the port from the build argument
 EXPOSE ${INTERNAL_SERVICE_PORT}
 
-# Run the internal service via cargo run, using sh -c for variable expansion
-# Enable deadlock-detection feature for debugging purposes
-CMD ["sh", "-c", "cargo run --bin citadel-workspace-internal-service --features deadlock-detection -- --bind 0.0.0.0:${INTERNAL_SERVICE_PORT}"]
+# Build release binary during docker build (not at container startup)
+RUN cargo build --release --bin citadel-workspace-internal-service --features deadlock-detection
+
+# Copy binary to /usr/local/bin to avoid being shadowed by target_cache volume mount
+RUN cp ./target/release/citadel-workspace-internal-service /usr/local/bin/
+
+# Run the pre-built internal service binary
+CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind 0.0.0.0:${INTERNAL_SERVICE_PORT}"]
