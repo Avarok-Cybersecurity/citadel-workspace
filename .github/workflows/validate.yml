@@ -188,8 +188,9 @@ jobs:
         run: npm ci
         working-directory: citadel-workspaces/integration-tests
       - name: Start Services
+        env:
+          INTERNAL_SERVICE_PORT: '12345'
         run: docker compose up -d --wait
-        working-directory: citadel-workspaces
       - name: Run Integration Test
         env:
           IN_CI: 'true'
