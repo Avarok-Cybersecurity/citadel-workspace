@@ -96,19 +96,31 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test:
-          - test:p2p
-          - test:live-doc
-          - test:group
-          - test:group-multiuser
-          - test:crud
-          - test:login
-          - test:prev-sessions
-          - test:file-transfer
-          - test:offline
-          - test:hard-disconnect
-          - test:permissions
-          - test:admin-modal
+        include:
+          - test: test:p2p
+            artifact: p2p
+          - test: test:live-doc
+            artifact: live-doc
+          - test: test:group
+            artifact: group
+          - test: test:group-multiuser
+            artifact: group-multiuser
+          - test: test:crud
+            artifact: crud
+          - test: test:login
+            artifact: login
+          - test: test:prev-sessions
+            artifact: prev-sessions
+          - test: test:file-transfer
+            artifact: file-transfer
+          - test: test:offline
+            artifact: offline
+          - test: test:hard-disconnect
+            artifact: hard-disconnect
+          - test: test:permissions
+            artifact: permissions
+          - test: test:admin-modal
+            artifact: admin-modal
     steps:
       - uses: actions/checkout@v4
         with:
@@ -134,5 +146,5 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots-${{ matrix.test }}
+          name: screenshots-${{ matrix.artifact }}
           path: citadel-workspaces/integration-tests/screenshots/
