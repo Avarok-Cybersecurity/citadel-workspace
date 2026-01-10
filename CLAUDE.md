@@ -286,6 +286,41 @@ const name = message.PeerRegisterNotification.peer_username;
 2. Verify `peer_username` (not `username`) is used in event handlers
 3. Regenerate TypeScript bindings if needed
 
+## CID (Client ID) Lifecycle - CRITICAL
+
+**CID is PERMANENT per account.** Once assigned during C2S (Client-to-Server) registration, it NEVER changes. This is a fundamental concept that affects session management, P2P messaging, and multi-tab coordination.
+
+### CID Behavior by Operation
+
+| Operation | CID Behavior |
+|-----------|-------------|
+| **Register** (new account) | NEW CID assigned |
+| **Login** (credentials) | SAME CID preserved |
+| **ClaimSession** (orphan) | SAME CID preserved |
+| **C2S disconnect + reconnect** | SAME CID preserved |
+| **TCP drop with orphan** | SAME CID, session persists |
+
+### Key Implications
+
+1. **P2P Registration Persists**: Peer relationships are stored by CID pairs. After disconnect/reconnect, the same P2P registrations exist on the server.
+
+2. **ILM (Intersession Layer Messaging)**: Messages are queued by recipient CID. Since CID doesn't change, offline messages are delivered to the same CID when user reconnects.
+
+3. **Multi-Tab Testing**: All tabs share ONE WebSocket and ONE ILM. Session filtering by `notification.cid === currentCid` is REQUIRED to route messages to the correct tab. **Never process messages where CID doesn't match** - that would cause the wrong tab to handle them.
+
+4. **"Peer Already Registered" is NOT an Error**: When local state is stale after reconnection, attempting to register an already-registered peer is normal. Treat this as success, not failure.
+
+### Common Misconceptions
+
+❌ **WRONG**: "Login gives a new CID"
+✅ **CORRECT**: Login preserves the same CID from registration
+
+❌ **WRONG**: "Offline messages won't be delivered because CID changed"
+✅ **CORRECT**: CID doesn't change, so offline messages ARE delivered to the same CID
+
+❌ **WRONG**: "Process messages even if notification.cid doesn't match (for offline delivery)"
+✅ **CORRECT**: CID doesn't change, so notification.cid WILL match. If it doesn't, the message is for a different session/tab.
+
 ## Protocol Architecture
 
 The Citadel workspace system uses a layered protocol architecture where WorkspaceProtocol is a subprotocol inscribed within InternalServiceRequest messages:

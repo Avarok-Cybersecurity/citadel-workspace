@@ -16,7 +16,7 @@ echo "==> Rebuilding Docker image..."
 ssh $SERVER "cd $REMOTE_DIR && docker build --network=host -t $IMAGE_NAME -f docker/workspace-server/Dockerfile ."
 
 echo "==> Starting new container..."
-ssh $SERVER "docker run -d --name $CONTAINER_NAME --restart unless-stopped -p 0.0.0.0:12349:12349 $IMAGE_NAME"
+ssh $SERVER "docker run -d --name $CONTAINER_NAME --restart unless-stopped --network host $IMAGE_NAME"
 
 echo "==> Waiting for server to start..."
 sleep 3
