@@ -180,7 +180,8 @@ jobs:
         with:
           node-version: '20'
       - name: Install Playwright Browsers
-        run: npx playwright install chromium --with-deps
+        # Note: --with-deps skipped on self-hosted runner (system deps pre-installed)
+        run: npx playwright install chromium
       - name: Install Dependencies
         run: npm ci
         working-directory: citadel-workspaces/integration-tests
