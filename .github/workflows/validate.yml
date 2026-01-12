@@ -92,7 +92,7 @@ jobs:
 
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
