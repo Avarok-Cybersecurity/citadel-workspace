@@ -124,6 +124,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Free Disk Space
+        run: |
+          # Remove unnecessary pre-installed tools (frees 10-20 GB)
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
+          df -h
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -136,6 +146,11 @@ jobs:
         env:
           INTERNAL_SERVICE_PORT: '12345'
         run: docker compose up -d --wait
+      - name: Clean Docker Build Cache
+        run: |
+          docker builder prune -af
+          docker image prune -af
+          df -h
       - name: Run Integration Test
         env:
           IN_CI: 'true'
