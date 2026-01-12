@@ -187,17 +187,10 @@ jobs:
       - name: Clean Up Previous Containers
         run: |
           # Stop any existing docker-compose services from previous runs
-          docker compose down --volumes --remove-orphans 2>/dev/null || true
-          # Kill any processes using our required ports
-          for port in 12345 12349; do
-            pid=$(sudo lsof -t -i:$port 2>/dev/null || true)
-            if [ -n "$pid" ]; then
-              echo "Killing process $pid on port $port"
-              sudo kill -9 $pid 2>/dev/null || true
-            fi
-          done
+          # Using --timeout 0 to force immediate stop
+          docker compose down --volumes --remove-orphans --timeout 0 2>/dev/null || true
           # Clean up any dangling containers
-          docker container prune -f
+          docker container prune -f 2>/dev/null || true
       - name: Start Services
         env:
           INTERNAL_SERVICE_PORT: '12345'
