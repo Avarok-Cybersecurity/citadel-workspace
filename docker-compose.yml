@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: ./docker/sync/Dockerfile
+      network: host
     volumes:
       # Mount source code from host (read-write for npm builds)
       - ./citadel-internal-service:/workspace/citadel-internal-service:rw
@@ -22,6 +23,7 @@ services:
     build:
       context: .
       dockerfile: ./docker/workspace-server/Dockerfile
+      network: host
     volumes:
       # Mount relevant codebase for live updates
       - target_cache:/usr/src/app/target
@@ -42,6 +44,7 @@ services:
     build:
       context: .
       dockerfile: ./docker/internal-service/Dockerfile
+      network: host
       args:
         - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT}
     volumes:
@@ -68,6 +71,7 @@ services:
     build:
       context: .
       dockerfile: ./docker/ui/Dockerfile
+      network: host
       target: dev
     volumes:
       # CRITICAL: Anonymous volume for node_modules MUST be first
