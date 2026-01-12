@@ -109,8 +109,7 @@ jobs:
             artifact: crud
           - test: test:login
             artifact: login
-          - test: test:prev-sessions
-            artifact: prev-sessions
+          # test:prev-sessions moved to heavy-integration-tests (self-hosted runner)
           - test: test:file-transfer
             artifact: file-transfer
           - test: test:offline
@@ -147,4 +146,42 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: screenshots-${{ matrix.artifact }}
+          path: citadel-workspaces/integration-tests/screenshots/
+
+  # Heavy integration tests run on self-hosted runner (more resources)
+  # Only auto-runs for CODEOWNERS, otherwise requires workflow_dispatch approval
+  heavy-integration-tests:
+    name: Heavy Integration Tests (Self-Hosted)
+    runs-on: [self-hosted, heavy-tests]
+    # Only run for CODEOWNERS or workflow_dispatch (manual trigger with approval)
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(fromJSON('["nologik", "Raduc4", "Tjemmmic"]'), github.actor)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright Browsers
+        run: npx playwright install chromium --with-deps
+      - name: Install Dependencies
+        run: npm ci
+        working-directory: citadel-workspaces/integration-tests
+      - name: Start Services
+        env:
+          INTERNAL_SERVICE_PORT: '12345'
+        run: docker compose up -d --wait
+      - name: Run Heavy Integration Tests
+        env:
+          IN_CI: 'true'
+        run: npm run test:prev-sessions
+        working-directory: citadel-workspaces/integration-tests
+        timeout-minutes: 15
+      - name: Upload Screenshots on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-prev-sessions
           path: citadel-workspaces/integration-tests/screenshots/

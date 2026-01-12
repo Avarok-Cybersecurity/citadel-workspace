@@ -23,5 +23,6 @@ sleep 3
 
 echo "==> Verifying server is up..."
 ssh $SERVER "nc -zv 127.0.0.1 12349"
+nc -zv 51.81.107.44 12349
 
 echo "==> Done! Server is running at 51.81.107.44:12349"
