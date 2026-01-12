@@ -25,10 +25,8 @@ else
     COMMIT_MSG="$1"
 fi
 
-# Add co-author line
-FULL_MSG="$COMMIT_MSG
-
-Co-Authored-By: Warp <agent@warp.dev>"
+# Use commit message directly
+FULL_MSG="$COMMIT_MSG"
 
 echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║  Committing to all submodules recursively + main repo   ║${NC}"

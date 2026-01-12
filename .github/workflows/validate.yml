@@ -156,7 +156,7 @@ jobs:
     # Only run for CODEOWNERS or workflow_dispatch (manual trigger with approval)
     if: |
       github.event_name == 'workflow_dispatch' ||
-      contains(fromJSON('["nologik", "Raduc4", "Tjemmmic"]'), github.actor)
+      contains(fromJSON('["tbraun96", "Raduc4", "Tjemmmic"]'), github.actor)
     steps:
       - uses: actions/checkout@v4
         with:
