@@ -177,9 +177,23 @@ jobs:
         run: |
           # Docker containers create files as root, which prevents checkout cleanup
           # Fix ownership before checkout so actions/checkout can clean properly
-          if [ -d "${{ github.workspace }}" ]; then
-            sudo chown -R $(whoami):$(whoami) "${{ github.workspace }}" 2>/dev/null || true
+          WORKSPACE_ROOT="${{ github.workspace }}"
+          echo "Fixing ownership in: $WORKSPACE_ROOT"
+
+          # Fix the main workspace
+          if [ -d "$WORKSPACE_ROOT" ]; then
+            sudo chown -R $(whoami):$(whoami) "$WORKSPACE_ROOT" 2>/dev/null || true
           fi
+
+          # Also fix parent directory in case of nested repos
+          PARENT_DIR=$(dirname "$WORKSPACE_ROOT")
+          if [ -d "$PARENT_DIR" ]; then
+            sudo chown -R $(whoami):$(whoami) "$PARENT_DIR" 2>/dev/null || true
+          fi
+
+          # List any remaining root-owned files for debugging
+          echo "Checking for root-owned files..."
+          sudo find "$WORKSPACE_ROOT" -user root -type f 2>/dev/null | head -5 || echo "None found"
       - uses: actions/checkout@v4
         with:
           submodules: recursive
