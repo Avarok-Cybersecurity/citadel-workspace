@@ -177,30 +177,34 @@ jobs:
         run: |
           # Docker containers create files as root, which prevents checkout cleanup
           # Fix ownership before checkout so actions/checkout can clean properly
-          # Use GITHUB_WORKSPACE env var which is set by the runner
-          WORKSPACE_ROOT="${GITHUB_WORKSPACE:-${{ github.workspace }}}"
-          echo "Fixing ownership in: $WORKSPACE_ROOT"
-          echo "Current user: $(whoami)"
+          # Self-hosted runner has a known workspace path structure
+          RUNNER_WORK_DIR="/home/ubuntu/actions-runner-workspace/_work"
+          REPO_DIR="$RUNNER_WORK_DIR/citadel-workspace/citadel-workspace"
 
-          # Fix the main workspace and all parent directories up to _work
-          if [ -d "$WORKSPACE_ROOT" ]; then
-            echo "Running: sudo chown -R $(whoami):$(whoami) $WORKSPACE_ROOT"
-            sudo chown -R $(whoami):$(whoami) "$WORKSPACE_ROOT" || true
+          echo "Current user: $(whoami)"
+          echo "Fixing ownership in: $REPO_DIR"
+
+          # Fix the repo directory if it exists
+          if [ -d "$REPO_DIR" ]; then
+            echo "Found repo dir, fixing ownership..."
+            sudo chown -R $(whoami):$(whoami) "$REPO_DIR" 2>&1 || true
           fi
 
-          # Also fix the runner's _work directory structure
-          WORK_DIR="${RUNNER_WORKSPACE:-$(dirname "$WORKSPACE_ROOT")}"
-          if [ -d "$WORK_DIR" ]; then
-            echo "Also fixing: $WORK_DIR"
-            sudo chown -R $(whoami):$(whoami) "$WORK_DIR" || true
+          # Also fix the parent citadel-workspace directory
+          PARENT_DIR="$RUNNER_WORK_DIR/citadel-workspace"
+          if [ -d "$PARENT_DIR" ]; then
+            echo "Fixing parent: $PARENT_DIR"
+            sudo chown -R $(whoami):$(whoami) "$PARENT_DIR" 2>&1 || true
           fi
 
           # Verify fix worked
           echo "Checking for remaining root-owned files..."
-          ROOT_FILES=$(sudo find "$WORKSPACE_ROOT" -user root -type f 2>/dev/null | wc -l)
-          echo "Root-owned files remaining: $ROOT_FILES"
-          if [ "$ROOT_FILES" -gt 0 ]; then
-            sudo find "$WORKSPACE_ROOT" -user root -type f 2>/dev/null | head -5
+          if [ -d "$REPO_DIR" ]; then
+            ROOT_FILES=$(sudo find "$REPO_DIR" -user root -type f 2>/dev/null | wc -l)
+            echo "Root-owned files remaining: $ROOT_FILES"
+            if [ "$ROOT_FILES" -gt 0 ]; then
+              sudo find "$REPO_DIR" -user root -type f 2>/dev/null | head -5
+            fi
           fi
       - uses: actions/checkout@v4
         with:
