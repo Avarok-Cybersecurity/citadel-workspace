@@ -177,23 +177,31 @@ jobs:
         run: |
           # Docker containers create files as root, which prevents checkout cleanup
           # Fix ownership before checkout so actions/checkout can clean properly
-          WORKSPACE_ROOT="${{ github.workspace }}"
+          # Use GITHUB_WORKSPACE env var which is set by the runner
+          WORKSPACE_ROOT="${GITHUB_WORKSPACE:-${{ github.workspace }}}"
           echo "Fixing ownership in: $WORKSPACE_ROOT"
+          echo "Current user: $(whoami)"
 
-          # Fix the main workspace
+          # Fix the main workspace and all parent directories up to _work
           if [ -d "$WORKSPACE_ROOT" ]; then
-            sudo chown -R $(whoami):$(whoami) "$WORKSPACE_ROOT" 2>/dev/null || true
+            echo "Running: sudo chown -R $(whoami):$(whoami) $WORKSPACE_ROOT"
+            sudo chown -R $(whoami):$(whoami) "$WORKSPACE_ROOT" || true
           fi
 
-          # Also fix parent directory in case of nested repos
-          PARENT_DIR=$(dirname "$WORKSPACE_ROOT")
-          if [ -d "$PARENT_DIR" ]; then
-            sudo chown -R $(whoami):$(whoami) "$PARENT_DIR" 2>/dev/null || true
+          # Also fix the runner's _work directory structure
+          WORK_DIR="${RUNNER_WORKSPACE:-$(dirname "$WORKSPACE_ROOT")}"
+          if [ -d "$WORK_DIR" ]; then
+            echo "Also fixing: $WORK_DIR"
+            sudo chown -R $(whoami):$(whoami) "$WORK_DIR" || true
           fi
 
-          # List any remaining root-owned files for debugging
-          echo "Checking for root-owned files..."
-          sudo find "$WORKSPACE_ROOT" -user root -type f 2>/dev/null | head -5 || echo "None found"
+          # Verify fix worked
+          echo "Checking for remaining root-owned files..."
+          ROOT_FILES=$(sudo find "$WORKSPACE_ROOT" -user root -type f 2>/dev/null | wc -l)
+          echo "Root-owned files remaining: $ROOT_FILES"
+          if [ "$ROOT_FILES" -gt 0 ]; then
+            sudo find "$WORKSPACE_ROOT" -user root -type f 2>/dev/null | head -5
+          fi
       - uses: actions/checkout@v4
         with:
           submodules: recursive
