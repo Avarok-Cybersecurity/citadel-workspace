@@ -173,6 +173,13 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       contains(fromJSON('["tbraun96", "Raduc4", "Tjemmmic"]'), github.actor)
     steps:
+      - name: Fix Docker-created root-owned files
+        run: |
+          # Docker containers create files as root, which prevents checkout cleanup
+          # Fix ownership before checkout so actions/checkout can clean properly
+          if [ -d "${{ github.workspace }}" ]; then
+            sudo chown -R $(whoami):$(whoami) "${{ github.workspace }}" 2>/dev/null || true
+          fi
       - uses: actions/checkout@v4
         with:
           submodules: recursive
