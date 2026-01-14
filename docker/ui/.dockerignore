@@ -1,0 +1,27 @@
+# UI-specific dockerignore
+# Only exclude large directories, allow config files to be copied
+
+# Exclude node_modules (will be installed in container)
+**/node_modules/
+
+# Exclude build artifacts (will be built in container)
+**/dist/
+**/build/
+
+# Exclude logs
+**/*.log
+
+# Exclude OS files
+.DS_Store
+Thumbs.db
+
+# Exclude test files
+**/coverage/
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Exclude git
+.git
+.gitignore

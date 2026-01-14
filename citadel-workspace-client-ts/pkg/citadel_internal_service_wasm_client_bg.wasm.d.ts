@@ -1,0 +1,30 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const close_connection: () => any;
+export const ensure_messenger_open: (a: number, b: number) => any;
+export const get_version: () => [number, number];
+export const init: (a: number, b: number) => any;
+export const is_initialized: () => number;
+export const main: () => void;
+export const next_message: () => any;
+export const open_messenger_for: (a: number, b: number) => any;
+export const restart: (a: number, b: number) => any;
+export const send_direct_to_internal_service: (a: any) => any;
+export const send_p2p_message_reliable: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => any;
+export const wasm_bindgen__convert__closures_____invoke__hf095ff2d1da45b9e: (a: number, b: number, c: any) => void;
+export const wasm_bindgen__closure__destroy__hc9af4afded1a73a4: (a: number, b: number) => void;
+export const wasm_bindgen__convert__closures_____invoke__h8694f7ac45eec474: (a: number, b: number) => void;
+export const wasm_bindgen__closure__destroy__h741e60dc9e5caeff: (a: number, b: number) => void;
+export const wasm_bindgen__convert__closures_____invoke__h6cdb3d6fcbc06fee: (a: number, b: number, c: any) => void;
+export const wasm_bindgen__closure__destroy__h3c271164398b7865: (a: number, b: number) => void;
+export const wasm_bindgen__convert__closures_____invoke__h97832b5dcd7f5e25: (a: number, b: number, c: any) => void;
+export const wasm_bindgen__closure__destroy__h8fd2fce0c02f2ae8: (a: number, b: number) => void;
+export const wasm_bindgen__convert__closures_____invoke__h8047af3e43e11ee6: (a: number, b: number, c: any, d: any) => void;
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_exn_store: (a: number) => void;
+export const __externref_table_alloc: () => number;
+export const __wbindgen_externrefs: WebAssembly.Table;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __wbindgen_start: () => void;

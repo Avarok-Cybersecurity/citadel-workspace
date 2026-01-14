@@ -1,0 +1,7 @@
+[submodule "citadel-workspaces"]
+	path = citadel-workspaces
+	url = https://github.com/Avarok-Cybersecurity/citadel-workspace-ui
+[submodule "citadel-internal-service"]
+	path = citadel-internal-service
+	url = https://github.com/Avarok-Cybersecurity/citadel-internal-service
+	branch = master

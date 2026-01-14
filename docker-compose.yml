@@ -1,0 +1,125 @@
+services:
+  sync-wasm-client:
+    build:
+      context: .
+      dockerfile: ./docker/sync/Dockerfile
+      network: host
+    volumes:
+      # Mount source code from host (read-write for npm builds)
+      - ./citadel-internal-service:/workspace/citadel-internal-service:rw
+      - ./citadel-workspace-client-ts:/workspace/citadel-workspace-client-ts:rw
+      - ./citadel-workspaces:/workspace/citadel-workspaces:rw
+      # Cache volumes for faster rebuilds
+      - rust_cache:/root/.cargo
+      - sync_node_modules:/workspace/node_modules
+      - sync_target_cache:/workspace/target
+    environment:
+      - CONTAINER_MODE=1
+    # This is a one-shot service that exits after syncing
+    restart: "no"
+    network_mode: host
+
+  server:
+    build:
+      context: .
+      dockerfile: ./docker/workspace-server/Dockerfile
+      network: host
+    volumes:
+      # Mount relevant codebase for live updates
+      - target_cache:/usr/src/app/target
+    environment:
+      - RUST_LOG=citadel=info
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "127.0.0.1", "12349" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      sync-wasm-client:
+        condition: service_completed_successfully
+    network_mode: host
+
+  internal-service:
+    build:
+      context: .
+      dockerfile: ./docker/internal-service/Dockerfile
+      network: host
+      args:
+        - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT}
+    volumes:
+      # Mount shared caches and target directory
+      - target_cache:/usr/src/app/target
+    environment:
+      - RUST_LOG=citadel=debug
+      - DOCKER_CONTAINER=1
+      - SKIP_WASM_BUILD=1
+    healthcheck:
+      test: ["CMD-SHELL", "netstat -tuln | grep -q \":$${INTERNAL_SERVICE_PORT}\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      sync-wasm-client:
+        condition: service_completed_successfully
+      server:
+        condition: service_healthy
+    network_mode: host
+
+  ui:
+    build:
+      context: .
+      dockerfile: ./docker/ui/Dockerfile
+      network: host
+      target: dev
+    volumes:
+      # CRITICAL: Anonymous volume for node_modules MUST be first
+      # This prevents host's node_modules from overwriting container's
+      - ui_node_modules:/app/node_modules
+
+      # Mount source code for HMR (read-write)
+      - ./citadel-workspaces/src:/app/src:rw
+      - ./citadel-workspaces/public:/app/public:rw
+      - ./citadel-workspaces/index.html:/app/index.html:rw
+
+      # Mount config files (read-write for hot reload)
+      - ./citadel-workspaces/vite.config.ts:/app/vite.config.ts:rw
+      - ./citadel-workspaces/tsconfig.json:/app/tsconfig.json:ro
+      - ./citadel-workspaces/tsconfig.node.json:/app/tsconfig.node.json:ro
+      - ./citadel-workspaces/tsconfig.app.json:/app/tsconfig.app.json:ro
+      - ./citadel-workspaces/tailwind.config.ts:/app/tailwind.config.ts:rw
+      - ./citadel-workspaces/postcss.config.js:/app/postcss.config.js:ro
+      - ./citadel-workspaces/components.json:/app/components.json:ro
+
+      # CRITICAL: Mount WASM client dependencies (read-only)
+      # These are file dependencies that get updated by sync-wasm-client
+      - ./citadel-workspace-client-ts:/workspace/citadel-workspace-client-ts:ro
+      - ./citadel-internal-service/typescript-client:/workspace/citadel-internal-service-wasm-client:ro
+
+      # Create symlinks for the file dependencies in node_modules
+      # This allows the UI to import from these packages
+      - ./citadel-workspace-client-ts:/app/node_modules/citadel-workspace-client-ts:ro
+      - ./citadel-internal-service/typescript-client:/app/node_modules/citadel-internal-service-wasm-client:ro
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=100
+    depends_on:
+      sync-wasm-client:
+        condition: service_completed_successfully
+      internal-service:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    network_mode: host
+    labels:
+      - "frontend"
+
+# Define named volumes for caching
+volumes:
+  target_cache:
+  rust_cache:
+  sync_node_modules:
+  sync_target_cache:
+  ui_node_modules:

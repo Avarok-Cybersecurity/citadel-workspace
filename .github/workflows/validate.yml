@@ -15,83 +15,234 @@ env:
   # 40 MiB stack
   RUST_MIN_STACK: 40971520
   RUST_LOG: "citadel=warn"
+  # Skip WASM build in CI (no wasm-pack installed)
+  SKIP_WASM_BUILD: "1"
 
 jobs:
   fmt:
-    name: Cargo Fmt
+    name: Cargo Fmt - ${{ matrix.crate }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate:
+          - citadel-workspace-types
+          - citadel-workspace-internal-service
+          - citadel-workspace-server-kernel
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
       - name: Run Cargo Fmt
-        run: cargo fmt --check
-        working-directory: src-tauri
+        run: cargo fmt -p ${{ matrix.crate }} --check
 
   clippy:
-    name: Cargo Clippy
+    name: Cargo Clippy - ${{ matrix.crate }}
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: Avarok-Cybersecurity/gh-actions-deps@master
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install Dependencies (Ubuntu Only)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-      - name: Install Frontend Dependencies
-        run: npm i
-      - name: Run Cargo Clippy
-        run: cargo clippy --all -- -D warnings
-        working-directory: src-tauri
-
-  tauri-build:
-    name: Tauri Build
-    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        crate:
+          - citadel-workspace-types
+          - citadel-workspace-internal-service
+          - citadel-workspace-server-kernel
     steps:
-      - uses: actions/checkout@v2
-      - uses: Avarok-Cybersecurity/gh-actions-deps@master
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
         with:
-          node-version: 20
-      - name: Install Dependencies (Ubuntu Only)
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libglvnd-dev libwebkit2gtk-4.1-dev build-essential curl wget libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-      - name: Install Dependencies (Windows Only)
-        if: startsWith(matrix.os, 'windows')
-        run: |
-          vcpkg install openssl:x64-windows-static-md
-      - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-        if: startsWith(matrix.os, 'windows')
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2.0.0-rc"
-        working-directory: src-tauri
-      - name: Run Tauri Build
-        run: cargo tauri build --verbose
-        working-directory: src-tauri
-        continue-on-error: true
+          submodules: recursive
+      - uses: Avarok-Cybersecurity/gh-actions-deps@master
+      - name: Run Cargo Clippy
+        run: cargo clippy -p ${{ matrix.crate }} -- -D warnings
 
-  jslint:
-    name: JS lint
+  rust-tests:
+    name: Rust Tests - ${{ matrix.crate }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate:
+          - citadel-workspace-types
+          - citadel-workspace-internal-service
+          - citadel-workspace-server-kernel
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: Avarok-Cybersecurity/gh-actions-deps@master
+      - name: Run Cargo Test
+        run: cargo test -p ${{ matrix.crate }}
+
+  unit-tests:
+    name: Unit Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Install dependencies
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Dependencies
+        run: npm ci
+        working-directory: citadel-workspaces
+      - name: Run Unit Tests
+        run: npm test
+        working-directory: citadel-workspaces
+
+  integration-tests:
+    name: Integration Test - ${{ matrix.test }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - test: test:p2p
+            artifact: p2p
+          - test: test:live-doc
+            artifact: live-doc
+          - test: test:group
+            artifact: group
+          - test: test:group-multiuser
+            artifact: group-multiuser
+          - test: test:crud
+            artifact: crud
+          - test: test:login
+            artifact: login
+          # test:prev-sessions moved to heavy-integration-tests (self-hosted runner)
+          - test: test:file-transfer
+            artifact: file-transfer
+          - test: test:offline
+            artifact: offline
+          - test: test:hard-disconnect
+            artifact: hard-disconnect
+          - test: test:permissions
+            artifact: permissions
+          - test: test:admin-modal
+            artifact: admin-modal
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Free Disk Space
         run: |
-          npm install --global prettier
-          npm install --global eslint
-          npm i
+          # Remove unnecessary pre-installed tools (frees 10-20 GB)
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
+          df -h
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright Browsers
+        run: npx playwright install chromium --with-deps
+      - name: Install Dependencies
+        run: npm ci
+        working-directory: citadel-workspaces/integration-tests
+      - name: Start Services
+        env:
+          INTERNAL_SERVICE_PORT: '12345'
+        run: docker compose up -d --wait
+      - name: Clean Docker Build Cache
+        run: |
+          docker builder prune -af
+          docker image prune -af
+          df -h
+      - name: Run Integration Test
+        env:
+          IN_CI: 'true'
+        run: npm run ${{ matrix.test }}
+        working-directory: citadel-workspaces/integration-tests
+      - name: Upload Screenshots on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.artifact }}
+          path: citadel-workspaces/integration-tests/screenshots/
 
-      - name: Run Prettier check
-        run: prettier "." -c
+  # Heavy integration tests run on self-hosted runner (more resources)
+  # Only auto-runs for CODEOWNERS, otherwise requires workflow_dispatch approval
+  heavy-integration-tests:
+    name: Heavy Integration Tests (Self-Hosted)
+    runs-on: [self-hosted, heavy-tests]
+    # Only run for CODEOWNERS or workflow_dispatch (manual trigger with approval)
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      contains(fromJSON('["tbraun96", "Raduc4", "Tjemmmic"]'), github.actor)
+    steps:
+      - name: Fix Docker-created root-owned files
+        run: |
+          # Docker containers create files as root, which prevents checkout cleanup
+          # Fix ownership before checkout so actions/checkout can clean properly
+          # Self-hosted runner has a known workspace path structure
+          RUNNER_WORK_DIR="/home/ubuntu/actions-runner-workspace/_work"
+          REPO_DIR="$RUNNER_WORK_DIR/citadel-workspace/citadel-workspace"
 
-      - name: Run ESLint check
-        run: eslint "**/*.{js,jsx,ts,tsx}"
+          echo "Current user: $(whoami)"
+          echo "Fixing ownership in: $REPO_DIR"
+
+          # Fix the repo directory if it exists
+          if [ -d "$REPO_DIR" ]; then
+            echo "Found repo dir, fixing ownership..."
+            sudo chown -R $(whoami):$(whoami) "$REPO_DIR" 2>&1 || true
+          fi
+
+          # Also fix the parent citadel-workspace directory
+          PARENT_DIR="$RUNNER_WORK_DIR/citadel-workspace"
+          if [ -d "$PARENT_DIR" ]; then
+            echo "Fixing parent: $PARENT_DIR"
+            sudo chown -R $(whoami):$(whoami) "$PARENT_DIR" 2>&1 || true
+          fi
+
+          # Verify fix worked
+          echo "Checking for remaining root-owned files..."
+          if [ -d "$REPO_DIR" ]; then
+            ROOT_FILES=$(sudo find "$REPO_DIR" -user root -type f 2>/dev/null | wc -l)
+            echo "Root-owned files remaining: $ROOT_FILES"
+            if [ "$ROOT_FILES" -gt 0 ]; then
+              sudo find "$REPO_DIR" -user root -type f 2>/dev/null | head -5
+            fi
+          fi
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright Browsers
+        # Note: --with-deps skipped on self-hosted runner (system deps pre-installed)
+        run: npx playwright install chromium
+      - name: Install Dependencies
+        run: npm ci
+        working-directory: citadel-workspaces/integration-tests
+      - name: Clean Up Previous Containers
+        run: |
+          # Stop any existing docker-compose services from previous runs
+          docker compose down --volumes --remove-orphans --timeout 0 2>/dev/null || true
+          # Stop any standalone citadel containers that might conflict
+          docker ps -q --filter "name=citadel" | xargs -r docker stop 2>/dev/null || true
+          docker ps -aq --filter "name=citadel" | xargs -r docker rm 2>/dev/null || true
+          # Clean up any dangling containers
+          docker container prune -f 2>/dev/null || true
+      - name: Start Services
+        env:
+          INTERNAL_SERVICE_PORT: '12345'
+        run: docker compose up -d --wait
+      - name: Run Heavy Integration Tests
+        env:
+          IN_CI: 'true'
+        run: npm run test:prev-sessions
+        working-directory: citadel-workspaces/integration-tests
+        timeout-minutes: 15
+      - name: Upload Screenshots on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-prev-sessions
+          path: citadel-workspaces/integration-tests/screenshots/
+      - name: Stop Services
+        if: always()
+        run: docker compose down --volumes --remove-orphans 2>/dev/null || true

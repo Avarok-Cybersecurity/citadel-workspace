@@ -1,0 +1,27 @@
+[package]
+name = "citadel-workspace-internal-service"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+deadlock-detection = ["parking_lot/deadlock_detection", "parking_lot", "lazy_static"]
+native-dialogs = ["citadel-internal-service/native-dialogs"]
+
+[[bin]]
+name = "citadel-workspace-internal-service"
+path = "src/main.rs"
+
+[build-dependencies]
+# No external dependencies needed for the build script
+
+[dependencies]
+structopt = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+citadel-internal-service = { path = "../citadel-internal-service/citadel-internal-service", features = ["websockets"] }
+citadel_sdk = { workspace = true, features = ["sql"]}
+citadel_types = { workspace = true }
+citadel_logging = { workspace = true }
+parking_lot = { workspace = true, optional = true }
+lazy_static = { workspace = true, optional = true }

@@ -1,0 +1,2 @@
+# The WASM websocket modeule in the frontend should have an auto-reconnect mechanism w/ exponential backoff that way the internal service can be tilt triggered while the ui
+is up and not be disconnected. Ideally, if the internal service is restarted, the wasm module just reconnects w/o page reload.

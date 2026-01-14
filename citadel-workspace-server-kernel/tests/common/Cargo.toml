@@ -1,0 +1,23 @@
+[package]
+name = "citadel-workspace-server-kernel-test-common"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+citadel_sdk = { workspace = true, features = ["localhost-testing", "multi-threaded"] }
+citadel_logging = { workspace = true }
+citadel-workspace-server-kernel = { path = "../../" }
+citadel-internal-service = { path = "../../../citadel-internal-service/citadel-internal-service" }
+citadel-internal-service-types = { path = "../../../citadel-internal-service/citadel-internal-service-types" }
+citadel-internal-service-connector = { path = "../../../citadel-internal-service/citadel-internal-service-connector" }
+citadel-internal-service-test-common = { path = "../../../citadel-internal-service/citadel-internal-service/tests/common" }
+citadel-workspace-types = { path = "../../../citadel-workspace-types" }
+
+
+#rstest = { workspace = true }
+#bincode = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
