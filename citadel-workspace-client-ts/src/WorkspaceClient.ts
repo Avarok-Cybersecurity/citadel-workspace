@@ -242,6 +242,38 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   }
 
   /**
+   * Override sendDirectToInternalService to automatically convert CID fields to BigInt
+   * This ensures all requests sent to WASM have proper BigInt CIDs
+   */
+  override async sendDirectToInternalService(request: any): Promise<void> {
+    const converted = this.convertCidsToBigInt(request);
+    await super.sendDirectToInternalService(converted);
+  }
+
+  /**
+   * Recursively converts cid, peer_cid, and session_cid fields to BigInt
+   * for WASM compatibility (serde-wasm-bindgen expects BigInt for u64 fields)
+   */
+  private convertCidsToBigInt(obj: any): any {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(item => this.convertCidsToBigInt(item));
+
+    const result: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if ((key === 'cid' || key === 'peer_cid' || key === 'session_cid') && value !== null) {
+        // Convert string/number CID to BigInt
+        result[key] = typeof value === 'bigint' ? value : BigInt(value as string | number);
+      } else if (typeof value === 'object') {
+        result[key] = this.convertCidsToBigInt(value);
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
+  }
+
+  /**
    * Get the WASM module instance from parent class
    */
   getWasmModule(): any {
