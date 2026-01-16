@@ -113,8 +113,13 @@ jobs:
       - name: Install Workspace Dependencies
         # Install from root to resolve file: dependencies between workspaces
         run: npm ci
+      - name: Build citadel-internal-service typescript-client
+        # Build the WASM client's TypeScript wrapper first (innermost dependency)
+        # Note: This is not in the npm workspaces, so we need to install deps separately
+        run: npm ci && npm run build
+        working-directory: citadel-internal-service/typescript-client
       - name: Build citadel-workspace-client-ts
-        # Build client-ts first to generate dist/ with TypeScript declarations
+        # Build client-ts to generate dist/ with TypeScript declarations
         run: npm run build
         working-directory: citadel-workspace-client-ts
       - name: Run Type Check
