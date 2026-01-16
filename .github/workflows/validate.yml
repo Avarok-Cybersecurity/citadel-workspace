@@ -134,6 +134,41 @@ jobs:
         run: npm run typecheck
         working-directory: ${{ matrix.path }}
 
+  lint:
+    name: ESLint - ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: citadel-workspaces
+            path: citadel-workspaces
+          - project: citadel-workspace-client-ts
+            path: citadel-workspace-client-ts
+          - project: integration-tests
+            path: citadel-workspaces/integration-tests
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Workspace Dependencies
+        # Install from root to resolve file: dependencies between workspaces
+        run: npm ci
+      - name: Build citadel-internal-service typescript-client
+        # Build the WASM client's TypeScript wrapper first (innermost dependency)
+        run: npm ci && npm run build
+        working-directory: citadel-internal-service/typescript-client
+      - name: Build citadel-workspace-client-ts
+        # Build client-ts to generate dist/ with TypeScript declarations
+        run: npm run build
+        working-directory: citadel-workspace-client-ts
+      - name: Run ESLint
+        run: npm run lint
+        working-directory: ${{ matrix.path }}
+
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
     runs-on: ubuntu-latest
