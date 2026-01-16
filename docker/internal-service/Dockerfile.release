@@ -1,0 +1,51 @@
+# syntax=docker/dockerfile:1
+# Multi-arch release Dockerfile for citadel-workspace-internal-service
+# Uses pre-compiled binaries from the build matrix
+
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+ARG TARGETPLATFORM
+ARG INTERNAL_SERVICE_PORT=12345
+
+ENV INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT}
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install minimal runtime dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        libssl3 \
+        netcat-openbsd && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
+
+# Create non-root user for security
+RUN groupadd --gid 1000 citadel && \
+    useradd --uid 1000 --gid citadel --shell /bin/sh --create-home citadel
+
+# Copy the appropriate binary based on target platform
+COPY binaries/linux-amd64/citadel-workspace-internal-service /app/binary-amd64
+COPY binaries/linux-arm64/citadel-workspace-internal-service /app/binary-arm64
+
+# Select the correct binary based on platform
+RUN case "${TARGETPLATFORM}" in \
+        "linux/amd64") mv /app/binary-amd64 /app/citadel-workspace-internal-service && rm -f /app/binary-arm64 ;; \
+        "linux/arm64") mv /app/binary-arm64 /app/citadel-workspace-internal-service && rm -f /app/binary-amd64 ;; \
+        *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
+    esac && \
+    chmod +x /app/citadel-workspace-internal-service
+
+# Set ownership and switch to non-root user
+RUN chown -R citadel:citadel /app
+USER citadel
+
+EXPOSE ${INTERNAL_SERVICE_PORT}
+
+# Health check using TCP connection (more reliable than HTTP endpoint)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD nc -z localhost ${INTERNAL_SERVICE_PORT} || exit 1
+
+ENTRYPOINT ["/bin/sh", "-c"]
+CMD ["/app/citadel-workspace-internal-service --bind 0.0.0.0:${INTERNAL_SERVICE_PORT}"]

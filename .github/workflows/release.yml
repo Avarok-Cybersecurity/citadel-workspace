@@ -1,0 +1,449 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g., 0.1.0) - used for Docker tagging"
+        required: false
+        type: string
+        default: "dev"
+      skip_ai_notes:
+        description: "Skip AI-generated release notes"
+        required: false
+        default: false
+        type: boolean
+      release_title:
+        description: "Custom release title (leave empty for AI-generated)"
+        required: false
+        type: string
+      release_body:
+        description: "Custom release body (leave empty for AI-generated)"
+        required: false
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  RUST_MIN_STACK: 40971520
+  BINARY_NAME: citadel-workspace-internal-service
+  DOCKER_IMAGE: avarok/citadel-hub
+
+jobs:
+  build-binaries:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux targets
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: citadel-workspace-internal-service
+            asset_name: citadel-workspace-internal-service-linux-amd64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name: citadel-workspace-internal-service
+            asset_name: citadel-workspace-internal-service-linux-arm64
+            cross: true
+          # macOS targets
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: citadel-workspace-internal-service
+            asset_name: citadel-workspace-internal-service-darwin-amd64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: citadel-workspace-internal-service
+            asset_name: citadel-workspace-internal-service-darwin-arm64
+          # Windows targets
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: citadel-workspace-internal-service.exe
+            asset_name: citadel-workspace-internal-service-windows-amd64.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Rust
+        uses: Avarok-Cybersecurity/gh-actions-deps@master
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v0-rust"
+          shared-key: ${{ matrix.target }}
+          cache-on-failure: true
+
+      - name: Install target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Install Dependencies (Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake libclang-dev llvm clang
+          # Cross-compilation tools for ARM64
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+            echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+            echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          fi
+
+      - name: Install Dependencies (Windows)
+        if: startsWith(matrix.os, 'windows')
+        run: |
+          vcpkg install openssl:x64-windows-static-md
+          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build release binary
+        run: cargo build --release --bin ${{ env.BINARY_NAME }} --target ${{ matrix.target }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          if-no-files-found: error
+          retention-days: 7
+
+  generate-notes:
+    name: Generate AI Release Notes
+    runs-on: ubuntu-latest
+    if: github.event.inputs.skip_ai_notes != 'true'
+    outputs:
+      title: ${{ steps.ai.outputs.title }}
+      body: ${{ steps.ai.outputs.body }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Get commits since last release
+        id: commits
+        run: |
+          LATEST_TAG=$(git describe --tags --match "v*" --abbrev=0 2>/dev/null || echo "")
+          
+          if [[ -n "$LATEST_TAG" ]]; then
+            echo "last_version=${LATEST_TAG#v}" >> $GITHUB_OUTPUT
+            echo "Found latest tag: $LATEST_TAG"
+            COMMITS=$(git log --pretty=format:'{"sha":"%h","message":"%s"}' ${LATEST_TAG}..HEAD | jq -s '.')
+          else
+            echo "last_version=initial" >> $GITHUB_OUTPUT
+            echo "No previous tags found, using recent commits"
+            COMMITS=$(git log -50 --pretty=format:'{"sha":"%h","message":"%s"}' | jq -s '.')
+          fi
+          
+          echo "$COMMITS" > /tmp/commits.json
+          echo "Found $(echo "$COMMITS" | jq length) commits"
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate AI release notes
+        id: ai
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_FREE }}
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.version }}"
+          LAST_VERSION="${{ steps.commits.outputs.last_version }}"
+          COMMITS=$(cat /tmp/commits.json)
+          
+          # Check if API key is available
+          if [[ -z "$OPENROUTER_API_KEY" ]]; then
+            echo "::warning::OPENROUTER_API_KEY not set, using fallback"
+            echo "title=v$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "body=Release v$NEW_VERSION" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          read -r -d '' PROMPT << 'PROMPT_EOF' || true
+          You are a technical writer creating release notes for "Citadel Workspace" - a secure, peer-to-peer collaborative workspace platform.
+          Generate professional release notes based on the commits provided.
+          
+          REQUIREMENTS:
+          1. Title: "v{VERSION}: Brief Summary" (max 60 chars for summary)
+          2. Body structure in markdown:
+             - Overview paragraph (2-3 sentences)
+             - Sections with emoji icons (skip empty categories):
+               🚀 New Features
+               🐛 Bug Fixes
+               ⚡ Performance Improvements
+               🔧 Maintenance
+               📚 Documentation
+               🔒 Security
+             - Format items as: "- **Description** - Additional context"
+          3. Be concise and focus on user impact
+          
+          Respond with ONLY valid JSON (no markdown fences):
+          {"title": "vVERSION: Summary", "body": "markdown body"}
+          PROMPT_EOF
+          
+          PAYLOAD=$(jq -n \
+            --arg model "z-ai/glm-4.5-air:free" \
+            --arg prompt "$PROMPT" \
+            --arg last "$LAST_VERSION" \
+            --arg new "$NEW_VERSION" \
+            --argjson commits "$COMMITS" \
+            '{
+              model: $model,
+              messages: [{
+                role: "user",
+                content: ($prompt + "\n\nLast version: " + $last + "\nNew version: " + $new + "\nCommits:\n" + ($commits | tostring))
+              }],
+              temperature: 0.7,
+              max_tokens: 4000
+            }')
+          
+          # Exponential backoff wrapper
+          call_api() {
+            local max_attempts=5
+            local attempt=1
+            local delay=2
+          
+            while [ $attempt -le $max_attempts ]; do
+              echo "API call attempt $attempt of $max_attempts..."
+          
+              RESPONSE=$(curl -s -w "\n%{http_code}" \
+                -X POST "https://openrouter.ai/api/v1/chat/completions" \
+                -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+                -H "Content-Type: application/json" \
+                -H "HTTP-Referer: https://github.com/Avarok-Cybersecurity/citadel-workspace" \
+                -H "X-Title: Citadel Workspace Release Notes" \
+                -d "$PAYLOAD" 2>&1)
+          
+              HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+              BODY=$(echo "$RESPONSE" | sed '$d')
+          
+              if [ "$HTTP_CODE" -eq 200 ]; then
+                echo "$BODY"
+                return 0
+              fi
+          
+              echo "Attempt $attempt failed with HTTP $HTTP_CODE"
+              echo "Response: $BODY"
+              echo "Retrying in ${delay}s..."
+              sleep $delay
+              attempt=$((attempt + 1))
+              delay=$((delay * 2))
+            done
+          
+            echo "::error::OpenRouter API call failed after $max_attempts attempts"
+            return 1
+          }
+          
+          RESULT=$(call_api)
+          API_STATUS=$?
+          
+          if [ $API_STATUS -ne 0 ]; then
+            echo "::warning::AI generation failed, using fallback"
+            echo "title=v$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "body=Release v$NEW_VERSION" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          CONTENT=$(echo "$RESULT" | jq -r '.choices[0].message.content // empty')
+          
+          if [[ -z "$CONTENT" ]]; then
+            echo "::warning::Empty AI response, using fallback"
+            echo "title=v$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "body=Release v$NEW_VERSION" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Clean and parse response
+          CLEAN_CONTENT=$(echo "$CONTENT" | sed 's/^```json//g' | sed 's/^```//g' | sed 's/```$//g')
+          TITLE=$(echo "$CLEAN_CONTENT" | jq -r '.title // empty' 2>/dev/null)
+          BODY_TEXT=$(echo "$CLEAN_CONTENT" | jq -r '.body // empty' 2>/dev/null)
+          
+          if [[ -z "$TITLE" ]]; then
+            TITLE="v$NEW_VERSION"
+          fi
+          
+          if [[ -z "$BODY_TEXT" ]]; then
+            BODY_TEXT="Release v$NEW_VERSION"
+          fi
+          
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+          # Use heredoc for multiline body
+          {
+            echo 'body<<EOF'
+            echo "$BODY_TEXT"
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+
+      - name: Debug - Print generated notes
+        run: |
+          echo "=== AI-Generated Release Notes ==="
+          echo "Title: ${{ steps.ai.outputs.title }}"
+          echo "--- Body ---"
+          echo "${{ steps.ai.outputs.body }}"
+
+  build-docker:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: build-binaries
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Download Linux AMD64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: citadel-workspace-internal-service-linux-amd64
+          path: ./binaries/linux-amd64
+
+      - name: Download Linux ARM64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: citadel-workspace-internal-service-linux-arm64
+          path: ./binaries/linux-arm64
+
+      - name: Prepare binaries
+        run: |
+          chmod +x ./binaries/linux-amd64/citadel-workspace-internal-service
+          chmod +x ./binaries/linux-arm64/citadel-workspace-internal-service
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=sha,prefix=
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/internal-service/Dockerfile.release
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            INTERNAL_SERVICE_PORT=12345
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-binaries, build-docker, generate-notes]
+    if: always() && needs.build-binaries.result == 'success' && needs.build-docker.result == 'success'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          for dir in ./artifacts/*/; do
+            name=$(basename "$dir")
+            if [[ "$name" == *".exe" ]]; then
+              cp "$dir"/*.exe "release/$name"
+            else
+              cp "$dir"/* "release/$name"
+              chmod +x "release/$name"
+            fi
+          done
+          ls -la release/
+
+      - name: Determine release metadata
+        id: meta
+        run: |
+          # Title priority: input > AI-generated > default
+          if [[ -n "${{ inputs.release_title }}" ]]; then
+            TITLE="${{ inputs.release_title }}"
+          elif [[ -n "${{ needs.generate-notes.outputs.title }}" ]]; then
+            TITLE="${{ needs.generate-notes.outputs.title }}"
+          else
+            TITLE="Release ${GITHUB_REF#refs/tags/}"
+          fi
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+          
+          # Body priority: input > AI-generated > auto-generate
+          if [[ -n "${{ inputs.release_body }}" ]]; then
+            echo "${{ inputs.release_body }}" > /tmp/release_body.md
+            echo "use_body_file=true" >> $GITHUB_OUTPUT
+          elif [[ -n "${{ needs.generate-notes.outputs.body }}" ]]; then
+            cat << 'BODY_EOF' > /tmp/release_body.md
+          ${{ needs.generate-notes.outputs.body }}
+          BODY_EOF
+            echo "use_body_file=true" >> $GITHUB_OUTPUT
+          else
+            echo "use_body_file=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release (with AI notes)
+        if: steps.meta.outputs.use_body_file == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.meta.outputs.title }}
+          body_path: /tmp/release_body.md
+          files: release/*
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release (with auto-generated notes)
+        if: steps.meta.outputs.use_body_file != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.meta.outputs.title }}
+          files: release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
