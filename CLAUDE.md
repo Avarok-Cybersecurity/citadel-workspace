@@ -59,6 +59,99 @@ const session = connectionManager.getTabSelectedSession();  // Returns Promise!
 - Null/undefined must be explicitly handled
 - ESLint `no-floating-promises` is enabled - always await or assign to `const _ =` for intentional fire-and-forget
 
+## Repository Structure & Git Submodules
+
+This repository uses **nested git submodules**. Understanding the hierarchy is critical for the merge/commit process.
+
+### Dependency Hierarchy
+
+```mermaid
+graph TB
+    subgraph main["citadel-workspace (main repo)"]
+        CWC["citadel-workspace-client-ts<br/>(directory in main repo)"]
+
+        subgraph sub_cw["📦 citadel-workspaces (git submodule)"]
+            UI["React UI Application"]
+            UI -->|"imports"| CWC
+        end
+
+        subgraph sub_cis["📦 citadel-internal-service (git submodule)"]
+            TSC["typescript-client<br/>(WASM bindings + types)"]
+            RUST_CIS["Rust Internal Service"]
+
+            subgraph sub_ilm["📦 intersession-layer-messaging<br/>(nested git submodule)"]
+                ILM["P2P Messaging Layer"]
+            end
+
+            RUST_CIS --> ILM
+        end
+
+        CWC -->|"imports"| TSC
+    end
+
+    style main fill:#e8f4f8,stroke:#0077b6
+    style sub_cw fill:#fff3cd,stroke:#ffc107
+    style sub_cis fill:#fff3cd,stroke:#ffc107
+    style sub_ilm fill:#ffcccb,stroke:#dc3545
+```
+
+### Submodule URLs
+
+| Submodule | Path | Remote URL |
+|-----------|------|------------|
+| citadel-workspaces | `citadel-workspaces/` | https://github.com/Avarok-Cybersecurity/citadel-workspace-ui |
+| citadel-internal-service | `citadel-internal-service/` | https://github.com/Avarok-Cybersecurity/citadel-internal-service |
+| intersession-layer-messaging | `citadel-internal-service/intersession-layer-messaging/` | https://github.com/tbraun96/intersession-layer-messaging |
+
+### Commit/Merge Order (Bottom-Up)
+
+**CRITICAL**: When making changes across multiple repos, you MUST commit and push in dependency order (innermost first):
+
+1. **intersession-layer-messaging** (if changed)
+   - Innermost nested submodule
+   - Commit → Push → Update parent's submodule reference
+
+2. **citadel-internal-service** (if changed)
+   - Contains typescript-client and Rust services
+   - Commit (including submodule pointer update if #1 changed) → Push
+
+3. **citadel-workspaces** (if changed)
+   - The React UI application
+   - Commit → Push
+
+4. **citadel-workspace** (main repo - LAST)
+   - Update submodule pointers for any changed submodules
+   - Commit → Push
+
+### Example Workflow
+
+```bash
+# 1. If intersession-layer-messaging changed
+cd citadel-internal-service/intersession-layer-messaging
+git add . && git commit -m "Fix: ..." && git push
+
+# 2. Update citadel-internal-service
+cd ..
+git add intersession-layer-messaging  # Update submodule pointer
+git add -A && git commit -m "Update: ..." && git push
+
+# 3. If citadel-workspaces changed
+cd ../citadel-workspaces
+git add . && git commit -m "Feature: ..." && git push
+
+# 4. Update main repo (LAST)
+cd ..
+git add citadel-internal-service citadel-workspaces  # Update submodule pointers
+git commit -m "Sync submodules" && git push
+```
+
+### CI Build Order
+
+The CI pipeline builds TypeScript dependencies in this order:
+1. `citadel-internal-service/typescript-client` (WASM types)
+2. `citadel-workspace-client-ts` (depends on #1)
+3. Then typecheck runs on `citadel-workspaces` and `integration-tests`
+
 ## Development Notes
 
 - When testing/debugging, keep in mind that this is a tilt project with everything already running. Use tilt logs <service-name>, where service-name can be anything defined in the docker-compose.yml file and/or the Tiltfile: ui, internal-service, server.

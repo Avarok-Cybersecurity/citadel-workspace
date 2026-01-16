@@ -83,9 +83,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install Dependencies
+      - name: Install Workspace Dependencies
+        # Install from root to resolve file: dependencies between workspaces
         run: npm ci
-        working-directory: citadel-workspaces
+      - name: Build citadel-internal-service typescript-client
+        # Build the WASM client's TypeScript wrapper first (innermost dependency)
+        run: npm ci && npm run build
+        working-directory: citadel-internal-service/typescript-client
+      - name: Build citadel-workspace-client-ts
+        # Build client-ts to generate dist/ with TypeScript declarations
+        run: npm run build
+        working-directory: citadel-workspace-client-ts
       - name: Run Unit Tests
         run: npm test
         working-directory: citadel-workspaces
