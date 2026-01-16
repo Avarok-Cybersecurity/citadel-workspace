@@ -113,6 +113,10 @@ jobs:
       - name: Install Workspace Dependencies
         # Install from root to resolve file: dependencies between workspaces
         run: npm ci
+      - name: Build citadel-workspace-client-ts
+        # Build client-ts first to generate dist/ with TypeScript declarations
+        run: npm run build
+        working-directory: citadel-workspace-client-ts
       - name: Run Type Check
         run: npm run typecheck
         working-directory: ${{ matrix.path }}
