@@ -110,9 +110,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install Dependencies
+      - name: Install Workspace Dependencies
+        # Install from root to resolve file: dependencies between workspaces
         run: npm ci
-        working-directory: ${{ matrix.path }}
       - name: Run Type Check
         run: npm run typecheck
         working-directory: ${{ matrix.path }}

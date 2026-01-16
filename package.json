@@ -1,4 +1,9 @@
 {
+  "workspaces": [
+    "citadel-workspace-client-ts",
+    "citadel-workspaces",
+    "citadel-workspaces/integration-tests"
+  ],
   "dependencies": {
     "@rollup/rollup-darwin-arm64": "^4.55.1",
     "uuid": "^13.0.0",
