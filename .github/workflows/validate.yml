@@ -90,6 +90,33 @@ jobs:
         run: npm test
         working-directory: citadel-workspaces
 
+  typecheck:
+    name: TypeScript Type Check - ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: citadel-workspaces
+            path: citadel-workspaces
+          - project: citadel-workspace-client-ts
+            path: citadel-workspace-client-ts
+          - project: integration-tests
+            path: citadel-workspaces/integration-tests
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Dependencies
+        run: npm ci
+        working-directory: ${{ matrix.path }}
+      - name: Run Type Check
+        run: npm run typecheck
+        working-directory: ${{ matrix.path }}
+
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
     runs-on: ubuntu-latest

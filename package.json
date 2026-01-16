@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@rollup/rollup-darwin-arm64": "^4.55.1",
     "uuid": "^13.0.0",
     "ws": "^8.18.3"
   },

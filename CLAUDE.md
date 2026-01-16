@@ -9,6 +9,56 @@ The skill provides guidance on:
 
 To invoke: Use the Skill tool with command `programming-principles`.
 
+## Strict TypeScript Policy
+
+**All TypeScript code uses strict type checking.** Enforced in CI.
+
+### Required tsconfig Settings
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true
+  }
+}
+```
+
+### CID Type Rules
+- CID canonical type is `bigint`
+- Convert to string **ONLY** when necessary:
+  - React JSX display: `{cid.toString()}`
+  - React keys: `key={cid.toString()}`
+  - Debug logging
+- **NEVER** use string CIDs in:
+  - Function parameters
+  - Interface definitions
+  - Map/Set keys
+  - Serialization boundaries
+
+### Serialization
+- **P2P wire format**: CBOR (cbor-x) - native BigInt support
+- **Browser storage**: IndexedDB (Structured Clone handles BigInt natively)
+- **NO** JSON.stringify for data containing BigInt
+- **NO** bigIntReviver/bigIntReplacer workarounds
+
+### Async Storage
+All browser storage is async via IndexedDB:
+```typescript
+// ✅ CORRECT - Use await
+const session = await connectionManager.getTabSelectedSession();
+const user = await getSelectedUser();
+
+// ❌ WRONG - Synchronous access (no longer works)
+const session = connectionManager.getTabSelectedSession();  // Returns Promise!
+```
+
+### Type Guidelines
+- Avoid `any` - use `unknown` with type guards
+- All function parameters must have explicit types
+- Null/undefined must be explicitly handled
+- ESLint `no-floating-promises` is enabled - always await or assign to `const _ =` for intentional fire-and-forget
+
 ## Development Notes
 
 - When testing/debugging, keep in mind that this is a tilt project with everything already running. Use tilt logs <service-name>, where service-name can be anything defined in the docker-compose.yml file and/or the Tiltfile: ui, internal-service, server.

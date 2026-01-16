@@ -17,10 +17,11 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "clean": "rm -rf dist/"
+    "clean": "rm -rf dist/",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@avarok/citadel-protocol-types": "0.13.0",
+    "@avarok/citadel-protocol-types": "^0.13.1",
     "citadel-internal-service-wasm-client": "file:../citadel-internal-service/typescript-client"
   },
   "devDependencies": {
