@@ -5,9 +5,11 @@
     "citadel-workspaces/integration-tests"
   ],
   "dependencies": {
-    "@rollup/rollup-darwin-arm64": "^4.55.1",
     "uuid": "^13.0.0",
     "ws": "^8.18.3"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-darwin-arm64": "^4.55.1"
   },
   "devDependencies": {
     "playwright": "^1.57.0"
