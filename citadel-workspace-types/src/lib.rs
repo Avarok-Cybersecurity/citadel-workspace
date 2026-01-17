@@ -263,6 +263,7 @@ pub enum WorkspaceProtocolResponse {
         office_id: String,
         mdx_content: String,
         updated_by: String,
+        #[ts(type = "bigint")]
         timestamp: u64,
     },
 
@@ -272,6 +273,7 @@ pub enum WorkspaceProtocolResponse {
         office_id: String,
         mdx_content: String,
         updated_by: String,
+        #[ts(type = "bigint")]
         timestamp: u64,
     },
 
@@ -294,6 +296,7 @@ pub enum WorkspaceProtocolResponse {
         group_id: String,
         message_id: String,
         new_content: String,
+        #[ts(type = "bigint")]
         edited_at: u64,
     },
 
@@ -337,6 +340,7 @@ pub struct GroupMessage {
     /// Message content
     pub content: String,
     /// Unix timestamp in milliseconds
+    #[ts(type = "bigint")]
     pub timestamp: u64,
     /// ID of parent message if this is a thread reply
     pub reply_to: Option<String>,
@@ -345,6 +349,7 @@ pub struct GroupMessage {
     /// List of mentioned usernames
     pub mentions: Vec<String>,
     /// Unix timestamp of last edit (None if never edited)
+    #[ts(type = "bigint | null")]
     pub edited_at: Option<u64>,
 }
 
