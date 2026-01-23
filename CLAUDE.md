@@ -491,6 +491,121 @@ P2P messaging uses triple-nested protocols:
 - P2P messaging requires proper WASM bindings for send_p2p_message
 - Domain permissions inherit: Workspace → Office → Room
 
+## P2P Message Flow: Complete Causal Chain
+
+This documents the full code path when Alice sends a P2P message to Bob. Understanding this flow is critical for debugging message delivery issues.
+
+**Key Architecture Note**: The Internal Service (`citadel-internal-service`) is a **local agent** running on localhost that manages Citadel Protocol connections for local applications. It is NOT a remote server - each user runs their own Internal Service locally.
+
+### Outbound Path (Alice Sends)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PHASE 1: UI INPUT (Alice's Browser)                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ P2PChat.tsx:558 handleSendMessage()                                         │
+│   → p2p-messenger-manager.ts:1029 sendMessage()                             │
+│   → p2p-messenger-manager.ts:1580 sendP2PCommand()  [cbor-x serialize]      │
+│   → websocket-service.ts:909 sendP2PMessageReliable()                       │
+│     (If follower tab: proxies via InstanceChannel to leader)                │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PHASE 2: WASM CLIENT LAYER (Browser)                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ lib.rs:690 send_p2p_message_reliable()                                      │
+│   → messenger/mod.rs:849 MessengerTx::send_message_to_with_security_level() │
+│   → messenger/mod.rs:891 send_message_to_ism()  [ILM handles reliability]   │
+│   → messenger/mod.rs:564 WireWrapper::Message serialization                 │
+│   → messenger/mod.rs:586 InternalServiceRequest::Message                    │
+│   → WebSocket sink.send() → Internal Service                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                              [WebSocket to localhost:12345]
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PHASE 3: ALICE'S INTERNAL SERVICE (Local Agent)                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ requests/message.rs:11 handle()                                             │
+│   → Lookup Alice's connection in server_connection_map                      │
+│   → Find P2P peer sink for Bob in conn.peers[bob_cid]                       │
+│   → message.rs:64 sink_guard.send(message)                                  │
+│   → Citadel SDK encrypts with double-ratchet                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                      [Citadel Protocol P2P Channel - TCP/UDP]
+                      [Encrypted end-to-end between Alice ↔ Bob]
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PHASE 4: BOB'S INTERNAL SERVICE (Local Agent)                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ peer_channel_created.rs:75 stream.next()  [P2P read stream]                 │
+│   → Citadel SDK decrypts message                                            │
+│   → peer_channel_created.rs:78 Creates MessageNotification {                │
+│       cid: bob_session_cid,      // RECIPIENT's CID                         │
+│       peer_cid: alice_cid,       // SENDER's CID                            │
+│       message: decrypted_bytes                                              │
+│     }                                                                       │
+│   → peer_channel_created.rs:97 entry.send(notification) → WebSocket         │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                              [WebSocket to Bob's Browser]
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PHASE 5: WASM CLIENT LAYER (Bob's Browser)                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ messenger/mod.rs:341 MessageNotification received                           │
+│   → messenger/mod.rs:346 WireWrapper deserialization                        │
+│   → messenger/mod.rs:376 Forward to JavaScript via channel                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PHASE 6: MULTI-TAB ROUTING (Bob's Browser)                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ instance-inbound-router.ts:132 routeMessage()                               │
+│   → CRITICAL: Routes by CID field, NOT request_id                           │
+│   → instance-inbound-router.ts:248 CID_ROUTED_NOTIFICATIONS includes        │
+│     'MessageNotification' - ensures routing by notification.cid             │
+│   → If Bob's tab is leader: processLocalMessage()                           │
+│   → If Bob's tab is follower: forwards via BroadcastChannel                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PHASE 7: MESSAGE PROCESSING (Bob's Tab)                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ p2p-messenger-manager.ts:432 handleWebSocketMessage()                       │
+│   → Verifies notification.cid matches Bob's current session CID             │
+│   → cbor-x decodes P2PCommand                                               │
+│   → addMessage() to conversation cache (IndexedDB)                          │
+│   → Event emission: 'p2p:message-received'                                  │
+│   → P2PChat.tsx re-renders with new message                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Network Boundaries
+
+| Boundary | Technology | What Crosses |
+|----------|------------|--------------|
+| Browser → Internal Service | WebSocket (localhost:12345) | InternalServiceRequest::Message |
+| Alice's IS → Bob's IS | Citadel P2P Channel (TCP/UDP) | Encrypted message bytes |
+| Internal Service → Browser | WebSocket | MessageNotification |
+| Leader Tab → Follower Tab | BroadcastChannel | Serialized message |
+
+### Critical Routing Fix
+
+`MessageNotification` must be routed by `cid` field (recipient), not `request_id` (sender's original request). This is configured in `instance-inbound-router.ts:248`:
+
+```typescript
+private static readonly CID_ROUTED_NOTIFICATIONS = new Set([
+  'PeerRegisterNotification',
+  'PeerConnectNotification',
+  'MessageNotification',  // Routes by cid (recipient), not request_id
+]);
+```
+
 ## Citadel SDK Reconnection Behavior
 
 Understanding SDK reconnection patterns is critical for debugging session/P2P issues. This knowledge comes from the SDK reconnection test suite (`citadel_sdk/tests/reconnection_*.rs`).
