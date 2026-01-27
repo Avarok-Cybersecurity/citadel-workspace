@@ -1,0 +1,17 @@
+[book]
+title = "Citadel Workspace Plugins"
+authors = ["Avarok Team"]
+description = "Complete specification for the Citadel Workspace plugin system"
+language = "en"
+
+[build]
+build-dir = "book"
+
+[output.html]
+default-theme = "rust"
+preferred-dark-theme = "ayu"
+git-repository-url = "https://github.com/avarok/citadel-workspace"
+edit-url-template = "https://github.com/avarok/citadel-workspace/edit/main/docs/plugins/{path}"
+
+[output.html.search]
+enable = true

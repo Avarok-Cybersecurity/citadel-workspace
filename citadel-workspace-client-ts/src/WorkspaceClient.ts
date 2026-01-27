@@ -136,7 +136,8 @@ export class WorkspaceClient extends InternalServiceWasmClient {
     // Convert cid to BigInt if it's a string
     const cidBigInt = typeof cid === 'string' ? BigInt(cid) : cid;
 
-    // Create the internal service request
+    // Create the internal service request with BigInt CID
+    // serde-wasm-bindgen handles BigInt natively for u64 fields
     const internalRequest: InternalServiceRequest = {
       Message: {
         request_id: crypto.randomUUID(),
@@ -147,19 +148,8 @@ export class WorkspaceClient extends InternalServiceWasmClient {
       }
     };
 
-    // Create a JSON-serializable version for the WASM client
-    const jsonSerializableRequest = {
-      Message: {
-        request_id: internalRequest.Message.request_id,
-        message: internalRequest.Message.message,
-        cid: cidBigInt.toString(), // Convert BigInt to string for JSON serialization
-        peer_cid: internalRequest.Message.peer_cid,
-        security_level: internalRequest.Message.security_level
-      }
-    };
-
-    // Send the JSON-serializable version directly using the underlying client method
-    await this.sendDirectToInternalService(jsonSerializableRequest as any);
+    // Send directly - serde-wasm-bindgen handles BigInt natively
+    await this.sendDirectToInternalService(internalRequest);
   }
 
   /**
@@ -249,6 +239,38 @@ export class WorkspaceClient extends InternalServiceWasmClient {
         contents: Array.from(contents)
       }
     });
+  }
+
+  /**
+   * Override sendDirectToInternalService to automatically convert CID fields to BigInt
+   * This ensures all requests sent to WASM have proper BigInt CIDs
+   */
+  override async sendDirectToInternalService(request: any): Promise<void> {
+    const converted = this.convertCidsToBigInt(request);
+    await super.sendDirectToInternalService(converted);
+  }
+
+  /**
+   * Recursively converts cid, peer_cid, and session_cid fields to BigInt
+   * for WASM compatibility (serde-wasm-bindgen expects BigInt for u64 fields)
+   */
+  private convertCidsToBigInt(obj: any): any {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(item => this.convertCidsToBigInt(item));
+
+    const result: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if ((key === 'cid' || key === 'peer_cid' || key === 'session_cid') && value !== null) {
+        // Convert string/number CID to BigInt
+        result[key] = typeof value === 'bigint' ? value : BigInt(value as string | number);
+      } else if (typeof value === 'object') {
+        result[key] = this.convertCidsToBigInt(value);
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
   }
 
   /**
