@@ -746,11 +746,14 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 .await
             {
                 Ok(_) => {
-                    // Return the notification so it can be broadcast
-                    Ok(WorkspaceProtocolResponse::GroupMessageNotification {
+                    // Create the notification and broadcast to all connected clients
+                    let notification = WorkspaceProtocolResponse::GroupMessageNotification {
                         group_id: group_id.clone(),
-                        message,
-                    })
+                        message: message.clone(),
+                    };
+                    // Broadcast to all clients except the sender
+                    kernel.broadcast(notification.clone(), requester_cid);
+                    Ok(notification)
                 }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to send message: {}",
@@ -796,12 +799,17 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         .update_group_message(group_id, message_id, new_content.clone(), edited_at)
                         .await
                     {
-                        Ok(Some(_)) => Ok(WorkspaceProtocolResponse::GroupMessageEdited {
-                            group_id: group_id.clone(),
-                            message_id: message_id.clone(),
-                            new_content: new_content.clone(),
-                            edited_at,
-                        }),
+                        Ok(Some(_)) => {
+                            let notification = WorkspaceProtocolResponse::GroupMessageEdited {
+                                group_id: group_id.clone(),
+                                message_id: message_id.clone(),
+                                new_content: new_content.clone(),
+                                edited_at,
+                            };
+                            // Broadcast to all clients except the sender
+                            kernel.broadcast(notification.clone(), requester_cid);
+                            Ok(notification)
+                        }
                         Ok(None) => Ok(WorkspaceProtocolResponse::Error(
                             "Message not found".to_string(),
                         )),
@@ -852,11 +860,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         .delete_group_message(group_id, message_id)
                         .await
                     {
-                        Ok(Some(_)) => Ok(WorkspaceProtocolResponse::GroupMessageDeleted {
-                            group_id: group_id.clone(),
-                            message_id: message_id.clone(),
-                            deleted_by: actor_user_id.to_string(),
-                        }),
+                        Ok(Some(_)) => {
+                            let notification = WorkspaceProtocolResponse::GroupMessageDeleted {
+                                group_id: group_id.clone(),
+                                message_id: message_id.clone(),
+                                deleted_by: actor_user_id.to_string(),
+                            };
+                            // Broadcast to all clients except the sender
+                            kernel.broadcast(notification.clone(), requester_cid);
+                            Ok(notification)
+                        }
                         Ok(None) => Ok(WorkspaceProtocolResponse::Error(
                             "Message not found".to_string(),
                         )),
