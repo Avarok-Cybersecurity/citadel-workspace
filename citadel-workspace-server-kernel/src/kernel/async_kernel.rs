@@ -3,12 +3,12 @@
 //! This module provides the async version of WorkspaceServerKernel that uses
 //! the BackendTransactionManager for all persistence operations.
 
-use crate::config::WorkspaceStructureConfig;
+use crate::config::{FileTransferConfig, WorkspaceStructureConfig};
 use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
 use crate::kernel::transaction::BackendTransactionManager;
 use crate::WorkspaceProtocolResponse;
-use citadel_logging::info;
-use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, Ratchet};
+use citadel_logging::{debug, error, info, warn};
+use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, ObjectTransferStatus, Ratchet};
 use parking_lot::RwLock;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -35,6 +35,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     workspace_structure: Option<(WorkspaceStructureConfig, Option<PathBuf>)>,
     /// Broadcast channel for sending updates to all connected clients
     broadcast_tx: broadcast::Sender<BroadcastMessage>,
+    /// File transfer configuration
+    file_transfer_config: FileTransferConfig,
 }
 
 // Placeholder for entities that don't have an owner yet.
@@ -49,6 +51,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             workspace_password: self.workspace_password.clone(),
             workspace_structure: self.workspace_structure.clone(),
             broadcast_tx: self.broadcast_tx.clone(),
+            file_transfer_config: self.file_transfer_config.clone(),
         }
     }
 }
@@ -81,7 +84,35 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             workspace_password: None,
             workspace_structure: None,
             broadcast_tx,
+            file_transfer_config: FileTransferConfig::default(),
         }
+    }
+
+    /// Create a new kernel with file transfer configuration
+    pub fn with_file_transfer_config(
+        node_remote: Option<NodeRemote<R>>,
+        file_transfer_config: Option<FileTransferConfig>,
+    ) -> Self {
+        let mut kernel = Self::new(node_remote);
+        if let Some(config) = file_transfer_config {
+            kernel.file_transfer_config = config;
+        }
+        kernel
+    }
+
+    /// Get the file transfer configuration
+    pub fn file_transfer_config(&self) -> &FileTransferConfig {
+        &self.file_transfer_config
+    }
+
+    /// Check if server file transfer is enabled
+    pub fn is_server_file_transfer_enabled(&self) -> bool {
+        self.file_transfer_config.allow_server_file_transfer
+    }
+
+    /// Check if server RE-VFS storage is enabled
+    pub fn is_server_revfs_enabled(&self) -> bool {
+        self.file_transfer_config.allow_server_revfs_storage
     }
 
     /// Get a new receiver for broadcast messages
@@ -103,7 +134,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     pub async fn with_workspace_master_password(
         admin_password: &str,
     ) -> Result<Self, NetworkError> {
-        Self::with_workspace_master_password_and_structure(admin_password, None).await
+        Self::with_workspace_master_password_and_structure_and_file_transfer(
+            admin_password,
+            None,
+            None,
+        )
+        .await
     }
 
     /// Create a kernel with admin user and optional workspace structure config
@@ -111,9 +147,32 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         admin_password: &str,
         workspace_structure: Option<(WorkspaceStructureConfig, Option<PathBuf>)>,
     ) -> Result<Self, NetworkError> {
+        Self::with_workspace_master_password_and_structure_and_file_transfer(
+            admin_password,
+            workspace_structure,
+            None,
+        )
+        .await
+    }
+
+    /// Create a kernel with admin user, workspace structure, and file transfer config
+    pub async fn with_workspace_master_password_and_structure_and_file_transfer(
+        admin_password: &str,
+        workspace_structure: Option<(WorkspaceStructureConfig, Option<PathBuf>)>,
+        file_transfer_config: Option<FileTransferConfig>,
+    ) -> Result<Self, NetworkError> {
         println!("[ASYNC_KERNEL] Creating AsyncWorkspaceServerKernel with admin user");
 
-        let mut kernel = Self::new(None);
+        let mut kernel = Self::with_file_transfer_config(None, file_transfer_config);
+
+        // Log file transfer config
+        println!(
+            "[ASYNC_KERNEL] File transfer config: allow_server_file_transfer={}, allow_server_revfs_storage={}, max_size={}MB, quota={}MB",
+            kernel.file_transfer_config.allow_server_file_transfer,
+            kernel.file_transfer_config.allow_server_revfs_storage,
+            kernel.file_transfer_config.max_file_transfer_size_mb,
+            kernel.file_transfer_config.revfs_storage_quota_mb,
+        );
 
         // Store the workspace password for later use in on_start
         kernel.workspace_password = Some(admin_password.to_string());
@@ -821,6 +880,64 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
 
             NodeResult::Disconnect { .. } => {
                 debug!(target: "citadel", "[ASYNC_KERNEL] Client disconnected");
+            }
+
+            NodeResult::ObjectTransferHandle(mut object_transfer_handle) => {
+                // Handle file transfer events for server storage (RE-VFS)
+                info!(target: "citadel", "[ASYNC_KERNEL] Received ObjectTransferHandle event");
+
+                // Check if server file transfers are enabled
+                let ft_config = self.file_transfer_config.clone();
+                if !ft_config.allow_server_file_transfer {
+                    warn!(target: "citadel", "[ASYNC_KERNEL] Server file transfers are disabled, declining transfer");
+                    if let Err(e) = object_transfer_handle.handle.decline() {
+                        error!(target: "citadel", "[ASYNC_KERNEL] Failed to decline file transfer: {:?}", e);
+                    }
+                    return Ok(());
+                }
+
+                tokio::spawn(async move {
+                    use tokio_stream::StreamExt;
+
+                    let mut handle = object_transfer_handle.handle;
+                    let orientation = handle.orientation;
+
+                    info!(target: "citadel", "[ASYNC_KERNEL] File transfer orientation: {:?}", orientation);
+
+                    // Auto-accept incoming transfers for server storage
+                    if let Err(e) = handle.accept() {
+                        error!(target: "citadel", "[ASYNC_KERNEL] Failed to accept file transfer: {:?}", e);
+                        return;
+                    }
+
+                    info!(target: "citadel", "[ASYNC_KERNEL] File transfer accepted, processing...");
+
+                    // Process transfer status events
+                    while let Some(status) = handle.next().await {
+                        match status {
+                            ObjectTransferStatus::ReceptionBeginning(file_path, transfer_type) => {
+                                info!(target: "citadel", "[ASYNC_KERNEL] File transfer beginning: {:?}, type: {:?}", file_path, transfer_type);
+                            }
+                            ObjectTransferStatus::ReceptionTick(_cid, _rel_group_id, percent) => {
+                                debug!(target: "citadel", "[ASYNC_KERNEL] File transfer progress: {}%", percent);
+                            }
+                            ObjectTransferStatus::ReceptionComplete => {
+                                info!(target: "citadel", "[ASYNC_KERNEL] File transfer reception complete");
+                            }
+                            ObjectTransferStatus::TransferComplete => {
+                                info!(target: "citadel", "[ASYNC_KERNEL] File transfer (send) complete");
+                            }
+                            ObjectTransferStatus::Fail(err) => {
+                                error!(target: "citadel", "[ASYNC_KERNEL] File transfer failed: {}", err);
+                            }
+                            _ => {
+                                debug!(target: "citadel", "[ASYNC_KERNEL] File transfer status: {:?}", status);
+                            }
+                        }
+                    }
+
+                    info!(target: "citadel", "[ASYNC_KERNEL] File transfer handle completed");
+                });
             }
 
             evt => {

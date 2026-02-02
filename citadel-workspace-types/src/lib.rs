@@ -215,6 +215,11 @@ pub enum WorkspaceProtocolRequest {
         /// The parent message ID
         parent_message_id: String,
     },
+
+    // ========== Server Capabilities ==========
+    /// Query server file transfer and storage capabilities.
+    /// Returns configuration limits for RE-VFS storage, file transfers, etc.
+    GetServerCapabilities,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -309,6 +314,21 @@ pub enum WorkspaceProtocolResponse {
 
     /// Single group message response
     GroupMessage(GroupMessage),
+
+    // ========== Server Capabilities Response ==========
+    /// Server file transfer and storage capabilities
+    ServerCapabilities {
+        /// Whether server-mediated file transfers are enabled
+        allow_server_file_transfer: bool,
+        /// Whether RE-VFS (server-side encrypted storage) is enabled
+        allow_server_revfs_storage: bool,
+        /// Maximum file size for transfers (in megabytes)
+        #[ts(type = "bigint")]
+        max_file_transfer_size_mb: u64,
+        /// RE-VFS storage quota per user (in megabytes)
+        #[ts(type = "bigint")]
+        revfs_storage_quota_mb: u64,
+    },
 }
 
 /// Type of group message
