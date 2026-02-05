@@ -52,10 +52,18 @@ pub mod config {
         pub file_ttl_days: u32,
     }
 
-    fn default_true() -> bool { true }
-    fn default_max_file_size() -> u64 { 100 }
-    fn default_revfs_quota() -> u64 { 100 }
-    fn default_file_ttl() -> u32 { 7 }
+    fn default_true() -> bool {
+        true
+    }
+    fn default_max_file_size() -> u64 {
+        100
+    }
+    fn default_revfs_quota() -> u64 {
+        100
+    }
+    fn default_file_ttl() -> u32 {
+        7
+    }
 
     impl Default for FileTransferConfig {
         fn default() -> Self {

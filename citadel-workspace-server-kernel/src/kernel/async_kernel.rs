@@ -796,7 +796,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                                     });
 
                                             let response_wrapped =
-                                                WorkspaceProtocolPayload::Response(response);
+                                                WorkspaceProtocolPayload::Response(Box::new(response));
                                             match serde_json::to_vec(&response_wrapped) {
                                                 Ok(serialized_response) => {
                                                     if let Err(e) = tx.send(serialized_response).await {
@@ -819,7 +819,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                             e
                                         ));
                                         let response_wrapped =
-                                            WorkspaceProtocolPayload::Response(error_response);
+                                            WorkspaceProtocolPayload::Response(Box::new(error_response));
                                         match serde_json::to_vec(&response_wrapped) {
                                             Ok(serialized_error_response) => {
                                                 if let Err(send_err) =
@@ -848,7 +848,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
 
                                         // Forward the broadcast to this client
                                         let response_wrapped =
-                                            WorkspaceProtocolPayload::Response(broadcast_msg.response);
+                                            WorkspaceProtocolPayload::Response(Box::new(broadcast_msg.response));
                                         match serde_json::to_vec(&response_wrapped) {
                                             Ok(serialized_response) => {
                                                 if let Err(e) = tx.send(serialized_response).await {

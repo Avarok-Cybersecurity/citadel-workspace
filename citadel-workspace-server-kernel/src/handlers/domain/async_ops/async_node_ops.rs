@@ -37,9 +37,7 @@ fn current_timestamp() -> u64 {
 }
 
 #[async_trait]
-impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R>
-    for AsyncDomainServerOperations<R>
-{
+impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainServerOperations<R> {
     async fn create_node(
         &self,
         user_id: &str,
@@ -57,14 +55,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R>
 
         // Validate: Non-workspace types require a parent
         if !entity_type.is_workspace() && parent_id.is_none() {
-            return Err(NetworkError::msg(
-                "Non-workspace nodes must have a parent",
-            ));
+            return Err(NetworkError::msg("Non-workspace nodes must have a parent"));
         }
 
         // Check permission - need EditTreeStructure permission on the workspace
         if !self
-            .check_entity_permission(user_id, crate::WORKSPACE_ROOT_ID, Permission::EditTreeStructure)
+            .check_entity_permission(
+                user_id,
+                crate::WORKSPACE_ROOT_ID,
+                Permission::EditTreeStructure,
+            )
             .await?
         {
             return Err(NetworkError::msg(
@@ -93,7 +93,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R>
                 // Parent is a workspace ID (multi-workspace mode)
                 (1, type_names::WORKSPACE)
             } else {
-                return Err(NetworkError::msg(format!("Parent node '{}' not found", pid)));
+                return Err(NetworkError::msg(format!(
+                    "Parent node '{}' not found",
+                    pid
+                )));
             }
         } else {
             (0, "")
@@ -110,9 +113,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R>
             depth,
         };
 
-        TreeValidator::validate_mutation_with_schema(&nodes, &mutation, &schema).map_err(|e| {
-            NetworkError::msg(format!("Tree validation failed: {}", e))
-        })?;
+        TreeValidator::validate_mutation_with_schema(&nodes, &mutation, &schema)
+            .map_err(|e| NetworkError::msg(format!("Tree validation failed: {}", e)))?;
 
         // Also check schema child type rules if parent exists
         if !parent_node_type.is_empty()
@@ -250,7 +252,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R>
     ) -> Result<DomainNode, NetworkError> {
         // Check permission
         if !self
-            .check_entity_permission(user_id, crate::WORKSPACE_ROOT_ID, Permission::EditTreeStructure)
+            .check_entity_permission(
+                user_id,
+                crate::WORKSPACE_ROOT_ID,
+                Permission::EditTreeStructure,
+            )
             .await?
         {
             return Err(NetworkError::msg(
@@ -289,7 +295,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R>
         node.updated_at = current_timestamp();
 
         // Save the updated node
-        self.backend_tx_manager.update_node(node_id, node.clone()).await?;
+        self.backend_tx_manager
+            .update_node(node_id, node.clone())
+            .await?;
 
         Ok(node)
     }
@@ -302,7 +310,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R>
     ) -> Result<Vec<String>, NetworkError> {
         // Check permission
         if !self
-            .check_entity_permission(user_id, crate::WORKSPACE_ROOT_ID, Permission::EditTreeStructure)
+            .check_entity_permission(
+                user_id,
+                crate::WORKSPACE_ROOT_ID,
+                Permission::EditTreeStructure,
+            )
             .await?
         {
             return Err(NetworkError::msg(
@@ -317,9 +329,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R>
         let mutation = NodeMutation::Delete {
             node_id: String::from(node_id),
         };
-        TreeValidator::validate_mutation(&nodes, &mutation).map_err(|e| {
-            NetworkError::msg(format!("Tree validation failed: {}", e))
-        })?;
+        TreeValidator::validate_mutation(&nodes, &mutation)
+            .map_err(|e| NetworkError::msg(format!("Tree validation failed: {}", e)))?;
 
         // Get the node to delete
         let node = nodes
@@ -374,7 +385,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R>
     ) -> Result<DomainNode, NetworkError> {
         // Check permission
         if !self
-            .check_entity_permission(user_id, crate::WORKSPACE_ROOT_ID, Permission::EditTreeStructure)
+            .check_entity_permission(
+                user_id,
+                crate::WORKSPACE_ROOT_ID,
+                Permission::EditTreeStructure,
+            )
             .await?
         {
             return Err(NetworkError::msg(
@@ -398,9 +413,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R>
             node_id: String::from(node_id),
             new_parent_id: String::from(new_parent_id),
         };
-        TreeValidator::validate_mutation_with_schema(&nodes, &mutation, &schema).map_err(|e| {
-            NetworkError::msg(format!("Tree validation failed: {}", e))
-        })?;
+        TreeValidator::validate_mutation_with_schema(&nodes, &mutation, &schema)
+            .map_err(|e| NetworkError::msg(format!("Tree validation failed: {}", e)))?;
 
         // Get the node being moved
         let node = nodes
@@ -560,9 +574,17 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R>
             // Handle special case for workspace-root sentinel
             if rid == crate::WORKSPACE_ROOT_ID {
                 // Return a synthetic workspace root node
-                let workspace = self.backend_tx_manager.get_workspace(crate::WORKSPACE_ROOT_ID).await?;
+                let workspace = self
+                    .backend_tx_manager
+                    .get_workspace(crate::WORKSPACE_ROOT_ID)
+                    .await?;
                 let (name, description, owner_id, members) = if let Some(ws) = workspace {
-                    (ws.name.clone(), ws.description.clone(), ws.owner_id.clone(), ws.members.clone())
+                    (
+                        ws.name.clone(),
+                        ws.description.clone(),
+                        ws.owner_id.clone(),
+                        ws.members.clone(),
+                    )
                 } else {
                     // Fallback for missing workspace
                     (
@@ -670,7 +692,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R>
 }
 
 /// Filter nodes by entity type if filter is specified
-fn filter_by_type(nodes: Vec<DomainNode>, entity_types: Option<&[NodeEntityType]>) -> Vec<DomainNode> {
+fn filter_by_type(
+    nodes: Vec<DomainNode>,
+    entity_types: Option<&[NodeEntityType]>,
+) -> Vec<DomainNode> {
     match entity_types {
         Some(types) if !types.is_empty() => nodes
             .into_iter()

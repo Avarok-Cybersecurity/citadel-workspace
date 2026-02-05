@@ -12,7 +12,7 @@ use ts_rs::TS;
 #[ts(export)]
 pub enum WorkspaceProtocolPayload {
     Request(WorkspaceProtocolRequest),
-    Response(WorkspaceProtocolResponse),
+    Response(Box<WorkspaceProtocolResponse>),
 }
 
 impl From<WorkspaceProtocolRequest> for WorkspaceProtocolPayload {
@@ -23,7 +23,7 @@ impl From<WorkspaceProtocolRequest> for WorkspaceProtocolPayload {
 
 impl From<WorkspaceProtocolResponse> for WorkspaceProtocolPayload {
     fn from(response: WorkspaceProtocolResponse) -> Self {
-        WorkspaceProtocolPayload::Response(response)
+        WorkspaceProtocolPayload::Response(Box::new(response))
     }
 }
 
@@ -244,7 +244,9 @@ pub enum WorkspaceProtocolRequest {
     },
 
     /// Get a specific node by ID
-    GetNode { node_id: String },
+    GetNode {
+        node_id: String,
+    },
 
     /// Update an existing node's properties
     UpdateNode {
@@ -257,7 +259,10 @@ pub enum WorkspaceProtocolRequest {
     },
 
     /// Delete a node. If cascade is true, also deletes all descendants.
-    DeleteNode { node_id: String, cascade: bool },
+    DeleteNode {
+        node_id: String,
+        cascade: bool,
+    },
 
     /// Move a node to a new parent. If new_parent_id is None, moves to root level.
     MoveNode {
@@ -288,7 +293,9 @@ pub enum WorkspaceProtocolRequest {
     GetTreeSchema,
 
     /// Update the tree schema (admin only)
-    UpdateTreeSchema { schema: TreeSchema },
+    UpdateTreeSchema {
+        schema: TreeSchema,
+    },
 
     // ========== Custom Node Type Operations ==========
     /// Create a new custom node type
@@ -420,7 +427,9 @@ pub enum WorkspaceProtocolResponse {
     Nodes(Vec<DomainNode>),
 
     /// Full tree structure with nested children
-    TreeStructure { root: TreeNode },
+    TreeStructure {
+        root: TreeNode,
+    },
 
     /// Tree schema (nesting rules) response
     TreeSchema(TreeSchema),

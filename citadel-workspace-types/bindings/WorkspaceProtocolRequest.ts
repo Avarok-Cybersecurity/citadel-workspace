@@ -6,7 +6,19 @@ import type { TreeSchema } from "./TreeSchema";
 import type { UpdateOperation } from "./UpdateOperation";
 import type { UserRole } from "./UserRole";
 
-export type WorkspaceProtocolRequest = { "CreateWorkspace": { name: string, description: string, workspace_master_password: string, metadata: Array<number> | null, } } | "GetWorkspace" | { "UpdateWorkspace": { name: string | null, description: string | null, workspace_master_password: string, metadata: Array<number> | null, } } | { "DeleteWorkspace": { workspace_master_password: string, } } | { "CreateOffice": { workspace_id: string, name: string, description: string, mdx_content: string | null, metadata: Array<number> | null, 
+export type WorkspaceProtocolRequest = { "CreateWorkspace": { name: string, description: string, workspace_master_password: string, metadata: Array<number> | null, } } | { "GetWorkspace": { 
+/**
+ * Workspace ID to retrieve. None defaults to the sentinel workspace-root.
+ */
+workspace_id: string | null, } } | "ListWorkspaces" | { "UpdateWorkspace": { 
+/**
+ * Workspace ID to update. None defaults to the sentinel workspace-root.
+ */
+workspace_id: string | null, name: string | null, description: string | null, workspace_master_password: string, metadata: Array<number> | null, } } | { "DeleteWorkspace": { 
+/**
+ * Workspace ID to delete. None defaults to the sentinel workspace-root.
+ */
+workspace_id: string | null, workspace_master_password: string, } } | { "CreateOffice": { workspace_id: string, name: string, description: string, mdx_content: string | null, metadata: Array<number> | null, 
 /**
  * Whether this should be the default office (only one allowed per workspace)
  */

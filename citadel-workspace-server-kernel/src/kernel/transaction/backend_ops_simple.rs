@@ -4,7 +4,9 @@
 
 use crate::kernel::transaction::BackendTransactionManager;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{Domain, DomainNode, Office, Room, TreeSchema, User, Workspace};
+use citadel_workspace_types::structs::{
+    Domain, DomainNode, Office, Room, TreeSchema, User, Workspace,
+};
 
 impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// Initialize the backend transaction manager
@@ -214,11 +216,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     }
 
     /// Insert a DomainNode
-    pub async fn insert_node(
-        &self,
-        node_id: String,
-        node: DomainNode,
-    ) -> Result<(), NetworkError> {
+    pub async fn insert_node(&self, node_id: String, node: DomainNode) -> Result<(), NetworkError> {
         let mut nodes = self.get_all_nodes().await?;
         nodes.insert(node_id, node);
         self.save_nodes(&nodes).await

@@ -230,7 +230,7 @@ pub async fn send_workspace_command(
             let WorkspaceProtocolPayload::Response(response) = response else {
                 panic!("Expected WorkspaceProtocolPayload::Response")
             };
-            return Ok(response);
+            return Ok(*response);
         }
     }
 

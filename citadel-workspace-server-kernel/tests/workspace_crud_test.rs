@@ -90,7 +90,11 @@ async fn test_get_workspace() {
     let kernel = create_test_kernel().await;
 
     // Get the pre-existing workspace
-    let get_result = execute_command(&kernel, WorkspaceProtocolRequest::GetWorkspace { workspace_id: None }).await;
+    let get_result = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::GetWorkspace { workspace_id: None },
+    )
+    .await;
 
     // Verify the response
     match get_result {
@@ -202,8 +206,7 @@ async fn test_list_workspaces() {
     let kernel = create_test_kernel().await;
 
     // List workspaces - should return at least the root workspace
-    let result =
-        execute_command(&kernel, WorkspaceProtocolRequest::ListWorkspaces).await;
+    let result = execute_command(&kernel, WorkspaceProtocolRequest::ListWorkspaces).await;
 
     match result {
         Ok(WorkspaceProtocolResponse::Workspaces(workspaces)) => {
@@ -214,7 +217,10 @@ async fn test_list_workspaces() {
                 .iter()
                 .find(|ws| ws.id == citadel_workspace_server_kernel::WORKSPACE_ROOT_ID);
             assert!(root.is_some(), "Root workspace should be in the list");
-            assert!(root.unwrap().is_default, "Root workspace should be marked as default");
+            assert!(
+                root.unwrap().is_default,
+                "Root workspace should be marked as default"
+            );
         }
         Ok(other) => panic!("Expected Workspaces response, got {:?}", other),
         Err(e) => panic!("Command failed: {:?}", e),

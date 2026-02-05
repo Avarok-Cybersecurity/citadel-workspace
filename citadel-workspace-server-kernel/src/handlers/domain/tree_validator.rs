@@ -589,12 +589,18 @@ impl TreeValidator {
             return false;
         }
         // Check length of each part: 8-4-4-4-12
-        if parts[0].len() != 8 || parts[1].len() != 4 || parts[2].len() != 4
-           || parts[3].len() != 4 || parts[4].len() != 12 {
+        if parts[0].len() != 8
+            || parts[1].len() != 4
+            || parts[2].len() != 4
+            || parts[3].len() != 4
+            || parts[4].len() != 12
+        {
             return false;
         }
         // Check all parts are hex
-        parts.iter().all(|p| p.chars().all(|c| c.is_ascii_hexdigit()))
+        parts
+            .iter()
+            .all(|p| p.chars().all(|c| c.is_ascii_hexdigit()))
     }
 
     /// Validate a move mutation

@@ -6,7 +6,9 @@ use crate::handlers::domain::async_ops::AsyncWorkspaceOperations;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{DomainNode, NodeEntityType, Office, Room, WorkspaceMetadata};
+use citadel_workspace_types::structs::{
+    DomainNode, NodeEntityType, Office, Room, WorkspaceMetadata,
+};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Convert an Office to a generic DomainNode
@@ -56,8 +58,8 @@ fn room_to_domain_node(room: Room, parent_id: String) -> DomainNode {
         default_permissions: room.default_permissions,
         metadata,
         allowed_child_types: None, // Rooms are leaf nodes
-        is_default: false, // Room struct doesn't have is_default field
-        created_at: 0, // Room struct doesn't have timestamps, use 0
+        is_default: false,         // Room struct doesn't have is_default field
+        created_at: 0,             // Room struct doesn't have timestamps, use 0
         updated_at: 0,
     }
 }
@@ -123,11 +125,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 "[ASYNC_PROCESS_COMMAND] ListWorkspaces for user: {}",
                 actor_user_id
             );
-            match kernel
-                .domain_ops()
-                .list_workspaces(actor_user_id)
-                .await
-            {
+            match kernel.domain_ops().list_workspaces(actor_user_id).await {
                 Ok(workspaces) => {
                     println!(
                         "[ASYNC_PROCESS_COMMAND] Found {} accessible workspaces",
@@ -204,16 +202,12 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             let target_id = workspace_id.as_deref().unwrap_or(crate::WORKSPACE_ROOT_ID);
             match kernel
                 .domain_ops()
-                .delete_workspace(
-                    actor_user_id,
-                    target_id,
-                    workspace_master_password.clone(),
-                )
+                .delete_workspace(actor_user_id, target_id, workspace_master_password.clone())
                 .await
             {
-                Ok(_) => Ok(WorkspaceProtocolResponse::Success(
-                    String::from("Workspace deleted successfully"),
-                )),
+                Ok(_) => Ok(WorkspaceProtocolResponse::Success(String::from(
+                    "Workspace deleted successfully",
+                ))),
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to delete workspace: {}",
                     e
@@ -1070,7 +1064,6 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         // ========== Tree Node Operations (Generalized Hierarchy) ==========
         // These handlers support the generalized workspace tree structure
         // where any node can have child nodes of any type
-
         WorkspaceProtocolRequest::CreateNode {
             parent_id,
             entity_type,
@@ -1099,11 +1092,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
 
         WorkspaceProtocolRequest::GetNode { node_id } => {
             use crate::handlers::domain::node_ops::AsyncNodeOperations;
-            match kernel
-                .domain_ops()
-                .get_node(actor_user_id, node_id)
-                .await
-            {
+            match kernel.domain_ops().get_node(actor_user_id, node_id).await {
                 Ok(node) => Ok(WorkspaceProtocolResponse::Node(node)),
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to get node: {}",
@@ -1151,10 +1140,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             {
                 Ok(deleted_ids) => Ok(WorkspaceProtocolResponse::NodeDeleted {
                     node_id: node_id.clone(),
-                    children_deleted: deleted_ids
-                        .into_iter()
-                        .filter(|id| id != node_id)
-                        .collect(),
+                    children_deleted: deleted_ids.into_iter().filter(|id| id != node_id).collect(),
                 }),
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to delete node: {}",
@@ -1178,13 +1164,11 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 .move_node(actor_user_id, node_id, new_parent_id.as_deref())
                 .await
             {
-                Ok(node) => {
-                    Ok(WorkspaceProtocolResponse::NodeMoved {
-                        node_id: node_id.clone(),
-                        old_parent_id,
-                        new_parent_id: node.parent_id,
-                    })
-                }
+                Ok(node) => Ok(WorkspaceProtocolResponse::NodeMoved {
+                    node_id: node_id.clone(),
+                    old_parent_id,
+                    new_parent_id: node.parent_id,
+                }),
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to move node: {}",
                     e
@@ -1250,7 +1234,11 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         WorkspaceProtocolRequest::UpdateTreeSchema { schema } => {
             use crate::handlers::domain::async_ops::AsyncDomainOperations;
             // Check if user is admin
-            let is_admin = kernel.domain_ops().is_admin(actor_user_id).await.unwrap_or(false);
+            let is_admin = kernel
+                .domain_ops()
+                .is_admin(actor_user_id)
+                .await
+                .unwrap_or(false);
             if !is_admin {
                 return Ok(WorkspaceProtocolResponse::Error(
                     "Permission denied: Only admins can update tree schema".to_string(),
@@ -1281,7 +1269,11 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             use citadel_workspace_types::structs::CustomNodeType;
 
             // Check if user has ManageNodeTypes permission
-            let is_admin = kernel.domain_ops().is_admin(actor_user_id).await.unwrap_or(false);
+            let is_admin = kernel
+                .domain_ops()
+                .is_admin(actor_user_id)
+                .await
+                .unwrap_or(false);
             if !is_admin {
                 return Ok(WorkspaceProtocolResponse::Error(
                     "Permission denied: Only admins can create custom node types".to_string(),
@@ -1308,7 +1300,11 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             use citadel_workspace_types::structs::NestingRule;
             for parent_type in allowed_parents {
                 // Find or create rule for each allowed parent
-                if let Some(rule) = schema.rules.iter_mut().find(|r| &r.parent_type == parent_type) {
+                if let Some(rule) = schema
+                    .rules
+                    .iter_mut()
+                    .find(|r| &r.parent_type == parent_type)
+                {
                     if !rule.allowed_child_types.contains(name) {
                         rule.allowed_child_types.push(name.clone());
                     }

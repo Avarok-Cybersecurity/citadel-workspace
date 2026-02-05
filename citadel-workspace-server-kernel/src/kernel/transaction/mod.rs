@@ -479,9 +479,8 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     pub async fn get_all_nodes(&self) -> Result<HashMap<String, DomainNode>, NetworkError> {
         if self.node_remote.read().is_none() {
             if let Some(data) = self.test_storage.read().get("citadel_workspace.nodes") {
-                return serde_json::from_slice(data).map_err(|e| {
-                    NetworkError::msg(format!("Failed to deserialize nodes: {}", e))
-                });
+                return serde_json::from_slice(data)
+                    .map_err(|e| NetworkError::msg(format!("Failed to deserialize nodes: {}", e)));
             } else {
                 return Ok(HashMap::new());
             }
@@ -529,7 +528,11 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// Get the tree schema from backend
     pub async fn get_tree_schema(&self) -> Result<Option<TreeSchema>, NetworkError> {
         if self.node_remote.read().is_none() {
-            if let Some(data) = self.test_storage.read().get("citadel_workspace.tree_schema") {
+            if let Some(data) = self
+                .test_storage
+                .read()
+                .get("citadel_workspace.tree_schema")
+            {
                 return serde_json::from_slice(data).map_err(|e| {
                     NetworkError::msg(format!("Failed to deserialize tree schema: {}", e))
                 });
@@ -545,8 +548,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
 
         if let Some(data) = backend.get("citadel_workspace.tree_schema").await? {
-            let schema: TreeSchema = serde_json::from_slice(&data)
-                .map_err(|e| NetworkError::msg(format!("Failed to deserialize tree schema: {}", e)))?;
+            let schema: TreeSchema = serde_json::from_slice(&data).map_err(|e| {
+                NetworkError::msg(format!("Failed to deserialize tree schema: {}", e))
+            })?;
             Ok(Some(schema))
         } else {
             Ok(None)
@@ -556,8 +560,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// Save the tree schema to backend
     pub async fn save_tree_schema(&self, schema: &TreeSchema) -> Result<(), NetworkError> {
         if self.node_remote.read().is_none() {
-            let data = serde_json::to_vec(schema)
-                .map_err(|e| NetworkError::msg(format!("Failed to serialize tree schema: {}", e)))?;
+            let data = serde_json::to_vec(schema).map_err(|e| {
+                NetworkError::msg(format!("Failed to serialize tree schema: {}", e))
+            })?;
             self.test_storage
                 .write()
                 .insert("citadel_workspace.tree_schema".to_string(), data);
