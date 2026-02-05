@@ -166,8 +166,7 @@ jobs:
         run: npm run build
         working-directory: citadel-workspace-client-ts
       - name: Run ESLint
-        run: npm run lint
-        working-directory: ${{ matrix.path }}
+        run: npm run lint -w ${{ matrix.project }}
 
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
