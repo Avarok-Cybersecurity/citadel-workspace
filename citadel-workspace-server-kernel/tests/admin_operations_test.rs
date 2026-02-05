@@ -2,7 +2,7 @@ use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{Office, UserRole};
+use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 #[tokio::test]
@@ -32,13 +32,13 @@ async fn test_admin_can_add_multiple_users_to_office() {
         is_default: None,
     };
 
-    let office: Office = match execute_command(&kernel, create_office_req).await.unwrap() {
-        WorkspaceProtocolResponse::Office(o) => {
+    let node = match execute_command(&kernel, create_office_req).await.unwrap() {
+        WorkspaceProtocolResponse::Node(node) => {
             println!(
                 "[Test MultiAdd] Office {:?} created successfully by actor admin.",
-                o.id
+                node.id
             );
-            o
+            node
         }
         other => panic!(
             "[Test MultiAdd] CreateOffice by actor {} returned unexpected response: {:?}",
@@ -49,7 +49,7 @@ async fn test_admin_can_add_multiple_users_to_office() {
     // Test adding first user
     let add_user1_req = WorkspaceProtocolRequest::AddMember {
         user_id: user1_id.to_string(),
-        office_id: Some(office.id.clone()),
+        office_id: Some(node.id.clone()),
         room_id: None,
         role: UserRole::Member,
         metadata: None,
@@ -59,19 +59,19 @@ async fn test_admin_can_add_multiple_users_to_office() {
         WorkspaceProtocolResponse::Success(_) => {
             println!(
                 "[Test MultiAdd] User {} added to office {} successfully by admin admin.",
-                user1_id, office.id
+                user1_id, node.id
             );
         }
         other => panic!(
             "[Test MultiAdd] AddMember for user1 {} to office {} returned unexpected response: {:?}",
-            user1_id, office.id, other
+            user1_id, node.id, other
         ),
     }
 
     // Test adding second user
     let add_user2_req = WorkspaceProtocolRequest::AddMember {
         user_id: user2_id.to_string(),
-        office_id: Some(office.id.clone()),
+        office_id: Some(node.id.clone()),
         room_id: None,
         role: UserRole::Member,
         metadata: None,
@@ -81,31 +81,31 @@ async fn test_admin_can_add_multiple_users_to_office() {
         WorkspaceProtocolResponse::Success(_) => {
             println!(
                 "[Test MultiAdd] User {} added to office {} successfully by admin admin.",
-                user2_id, office.id
+                user2_id, node.id
             );
         }
         other => panic!(
             "[Test MultiAdd] AddMember for user2 {} to office {} returned unexpected response: {:?}",
-            user2_id, office.id, other
+            user2_id, node.id, other
         ),
     }
 
     // Verify both users are in the office
     let get_office_req = WorkspaceProtocolRequest::GetOffice {
-        office_id: office.id.clone(),
+        office_id: node.id.clone(),
     };
 
-    let office_details: Office = match execute_command(&kernel, get_office_req).await.unwrap() {
-        WorkspaceProtocolResponse::Office(o) => {
+    let office_details = match execute_command(&kernel, get_office_req).await.unwrap() {
+        WorkspaceProtocolResponse::Node(node) => {
             println!(
                 "[Test MultiAdd] Office details for {} retrieved successfully.",
-                o.id
+                node.id
             );
-            o
+            node
         }
         other => panic!(
             "[Test MultiAdd] GetOffice for {} returned unexpected response: {:?}",
-            office.id, other
+            node.id, other
         ),
     };
 
@@ -145,13 +145,13 @@ async fn test_non_admin_cannot_add_user_to_office() {
         is_default: None,
     };
 
-    let office: Office = match execute_command(&kernel, create_office_req).await.unwrap() {
-        WorkspaceProtocolResponse::Office(o) => {
+    let node = match execute_command(&kernel, create_office_req).await.unwrap() {
+        WorkspaceProtocolResponse::Node(node) => {
             println!(
                 "[Test NonAdmin] Office {:?} created successfully by actor admin.",
-                o.id
+                node.id
             );
-            o
+            node
         }
         other => panic!(
             "[Test NonAdmin] CreateOffice by actor {} returned unexpected response: {:?}",
@@ -162,7 +162,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
     // Add owner to office
     let add_owner_req = WorkspaceProtocolRequest::AddMember {
         user_id: owner_id.to_string(),
-        office_id: Some(office.id.clone()),
+        office_id: Some(node.id.clone()),
         room_id: None,
         role: UserRole::Owner,
         metadata: None,
@@ -172,7 +172,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
         WorkspaceProtocolResponse::Success(_) => {
             println!(
                 "[Test NonAdmin] Owner {} added to office {} successfully by admin admin.",
-                owner_id, office.id
+                owner_id, node.id
             );
         }
         other => panic!(
@@ -184,7 +184,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
     // Add non-admin to office
     let add_non_admin_req = WorkspaceProtocolRequest::AddMember {
         user_id: non_admin_id.to_string(),
-        office_id: Some(office.id.clone()),
+        office_id: Some(node.id.clone()),
         room_id: None,
         role: UserRole::Member,
         metadata: None,
@@ -192,7 +192,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
 
     match execute_command(&kernel, add_non_admin_req).await.unwrap() {
         WorkspaceProtocolResponse::Success(_) => {
-            println!("[Test NonAdmin] NonAdmin {} added to office {} successfully by admin admin.", non_admin_id, office.id);
+            println!("[Test NonAdmin] NonAdmin {} added to office {} successfully by admin admin.", non_admin_id, node.id);
         }
         other => panic!("[Test NonAdmin] AddMember for non_admin {} by admin {} returned unexpected response: {:?}", non_admin_id, "admin", other),
     }

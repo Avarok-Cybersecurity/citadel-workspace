@@ -2,7 +2,8 @@
   "workspaces": [
     "citadel-workspace-client-ts",
     "citadel-workspaces",
-    "citadel-workspaces/integration-tests"
+    "citadel-workspaces/integration-tests",
+    "citadel-internal-service/typescript-client"
   ],
   "dependencies": {
     "uuid": "^13.0.0",

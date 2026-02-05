@@ -55,8 +55,8 @@ async fn test_add_user_to_domain() {
     .await;
 
     let office_id = match office_result {
-        Ok(WorkspaceProtocolResponse::Office(office)) => office.id,
-        _ => panic!("Expected Office response, got {:?}", office_result),
+        Ok(WorkspaceProtocolResponse::Node(node)) => node.id,
+        _ => panic!("Expected Node response, got {:?}", office_result),
     };
 
     // Add the user to the office
@@ -128,8 +128,8 @@ async fn test_remove_user_from_domain() {
     .await;
 
     let office_id = match office_result {
-        Ok(WorkspaceProtocolResponse::Office(office)) => office.id,
-        _ => panic!("Expected Office response, got {:?}", office_result),
+        Ok(WorkspaceProtocolResponse::Node(node)) => node.id,
+        _ => panic!("Expected Node response, got {:?}", office_result),
     };
 
     // Add the user to the office first

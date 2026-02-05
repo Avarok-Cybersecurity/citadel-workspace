@@ -52,7 +52,7 @@ async fn test_member_command_processing() {
     citadel_logging::trace!(target: "citadel", "Inserted test user");
 
     // Verify workspace exists from the test kernel setup
-    let get_workspace_req = WorkspaceProtocolRequest::GetWorkspace;
+    let get_workspace_req = WorkspaceProtocolRequest::GetWorkspace { workspace_id: None };
     match execute_command(&kernel, get_workspace_req).await.unwrap() {
         WorkspaceProtocolResponse::Workspace(_ws) => {
             citadel_logging::trace!(target: "citadel", "Workspace exists as expected");
@@ -77,9 +77,9 @@ async fn test_member_command_processing() {
 
     let office_response = execute_command(&kernel, create_office_req).await.unwrap();
     let office_id = match office_response {
-        WorkspaceProtocolResponse::Office(office) => {
-            citadel_logging::trace!(target: "citadel", "Office created with ID: {}", office.id);
-            office.id
+        WorkspaceProtocolResponse::Node(node) => {
+            citadel_logging::trace!(target: "citadel", "Office created with ID: {}", node.id);
+            node.id
         }
         _ => panic!("Failed to create office: {:?}", office_response),
     };

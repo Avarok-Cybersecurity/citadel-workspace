@@ -8,6 +8,7 @@ use citadel_sdk::prelude::Ratchet;
 
 pub mod async_domain_ops;
 pub mod async_entity_ops;
+pub mod async_node_ops;
 pub mod async_office_ops;
 pub mod async_permission_ops;
 pub mod async_room_ops;

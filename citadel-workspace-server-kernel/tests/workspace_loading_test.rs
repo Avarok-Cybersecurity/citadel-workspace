@@ -27,7 +27,7 @@ async fn test_load_workspace() {
     // Load the workspace (should return the single pre-existing workspace)
     let load_result = process_command_with_user(
         &*kernel,
-        &WorkspaceProtocolRequest::GetWorkspace,
+        &WorkspaceProtocolRequest::GetWorkspace { workspace_id: None },
         TEST_ADMIN_USER_ID,
     )
     .await;

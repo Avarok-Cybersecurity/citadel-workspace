@@ -103,8 +103,8 @@ async fn test_permissions_inheritance() {
     .await;
 
     let office_id = match office_result {
-        Ok(WorkspaceProtocolResponse::Office(office)) => office.id,
-        _ => panic!("Expected Office response, got {:?}", office_result),
+        Ok(WorkspaceProtocolResponse::Node(node)) => node.id,
+        _ => panic!("Expected Node response, got {:?}", office_result),
     };
 
     // Create a room within the office
@@ -121,8 +121,8 @@ async fn test_permissions_inheritance() {
     .await;
 
     let room_id = match room_result {
-        Ok(WorkspaceProtocolResponse::Room(room)) => room.id,
-        _ => panic!("Expected Room response, got {:?}", room_result),
+        Ok(WorkspaceProtocolResponse::Node(node)) => node.id,
+        _ => panic!("Expected Node response, got {:?}", room_result),
     };
 
     // Test permissions inheritance

@@ -7,7 +7,7 @@ use crate::config::{FileTransferConfig, WorkspaceStructureConfig};
 use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
 use crate::kernel::transaction::BackendTransactionManager;
 use crate::WorkspaceProtocolResponse;
-use citadel_logging::{debug, error, info, warn};
+use citadel_logging::info;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, ObjectTransferStatus, Ratchet};
 use parking_lot::RwLock;
 use std::path::PathBuf;

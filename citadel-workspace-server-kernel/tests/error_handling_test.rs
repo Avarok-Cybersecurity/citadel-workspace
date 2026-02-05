@@ -121,7 +121,7 @@ async fn test_command_invalid_access() {
     // Since we're using admin kernel, office creation should succeed
     // The permission testing would need to be done differently in async context
     match result {
-        WorkspaceProtocolResponse::Office(_) => {
+        WorkspaceProtocolResponse::Node(_) => {
             // Expected - admin can create offices
         }
         _ => panic!("Expected office creation to succeed for admin"),

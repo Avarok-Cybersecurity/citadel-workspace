@@ -20,30 +20,68 @@ use common::workspace_test_utils::*;
 /// **Expected Outcome:** CRUD operations work correctly with proper validation
 
 #[tokio::test]
-async fn test_create_workspace() {
+async fn test_create_workspace_wrong_password() {
     let kernel = create_test_kernel().await;
 
-    // Attempt to create a second workspace, which should fail in the single-workspace model
-    let workspace_name = "Another Workspace";
-    let workspace_description = "This should not be created";
+    // Attempt to create a second workspace with wrong password
     let result = execute_command(
         &kernel,
         WorkspaceProtocolRequest::CreateWorkspace {
-            name: workspace_name.to_string(),
-            description: workspace_description.to_string(),
-            workspace_master_password: "password".to_string(),
+            name: "Another Workspace".to_string(),
+            description: "Should fail with wrong password".to_string(),
+            workspace_master_password: "wrong-password".to_string(),
             metadata: None,
         },
     )
     .await;
 
-    // Verify the command fails
+    // Verify the command fails with invalid password error
     match result {
         Ok(WorkspaceProtocolResponse::Error(e)) => {
-            assert_eq!(e, "Failed to create workspace: A root workspace already exists. Cannot create another one.", "Incorrect error message");
+            assert!(
+                e.contains("Invalid workspace master password"),
+                "Expected password error, got: {}",
+                e
+            );
         }
-        Ok(other) => panic!("Expected WorkspaceProtocolResponse::Error, got {:?}", other),
-        Err(e) => panic!("Command failed with error: {:?}", e),
+        Ok(other) => panic!("Expected Error response, got {:?}", other),
+        Err(e) => panic!("Command failed unexpectedly: {:?}", e),
+    }
+}
+
+#[tokio::test]
+async fn test_create_additional_workspace() {
+    let kernel = create_test_kernel().await;
+
+    // Create a second workspace with the correct master password
+    let result = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::CreateWorkspace {
+            name: "Second Workspace".to_string(),
+            description: "A second workspace for testing".to_string(),
+            workspace_master_password: "admin-password".to_string(),
+            metadata: None,
+        },
+    )
+    .await;
+
+    // Verify the workspace was created with a UUID (not the sentinel)
+    match result {
+        Ok(WorkspaceProtocolResponse::Workspace(workspace)) => {
+            assert_ne!(
+                workspace.id,
+                citadel_workspace_server_kernel::WORKSPACE_ROOT_ID,
+                "Additional workspace should have a UUID, not the sentinel ID"
+            );
+            assert_eq!(workspace.name, "Second Workspace");
+            assert_eq!(workspace.description, "A second workspace for testing");
+            assert_eq!(
+                workspace.owner_id,
+                common::workspace_test_utils::TEST_ADMIN_USER_ID
+            );
+        }
+        Ok(other) => panic!("Expected Workspace response, got {:?}", other),
+        Err(e) => panic!("Command failed unexpectedly: {:?}", e),
     }
 }
 
@@ -52,7 +90,7 @@ async fn test_get_workspace() {
     let kernel = create_test_kernel().await;
 
     // Get the pre-existing workspace
-    let get_result = execute_command(&kernel, WorkspaceProtocolRequest::GetWorkspace).await;
+    let get_result = execute_command(&kernel, WorkspaceProtocolRequest::GetWorkspace { workspace_id: None }).await;
 
     // Verify the response
     match get_result {
@@ -81,6 +119,7 @@ async fn test_update_workspace() {
     let update_result = execute_command(
         &kernel,
         WorkspaceProtocolRequest::UpdateWorkspace {
+            workspace_id: None,
             name: Some(updated_name.to_string()),
             description: Some(updated_description.to_string()),
             workspace_master_password: "admin-password".to_string(), // from create_test_kernel
@@ -123,6 +162,7 @@ async fn test_delete_workspace() {
     let delete_result = execute_command(
         &kernel,
         WorkspaceProtocolRequest::DeleteWorkspace {
+            workspace_id: None,
             workspace_master_password: "admin-password".to_string(),
         },
     )
@@ -155,4 +195,28 @@ async fn test_delete_workspace() {
         workspace.is_some(),
         "Root workspace should not have been deleted"
     );
+}
+
+#[tokio::test]
+async fn test_list_workspaces() {
+    let kernel = create_test_kernel().await;
+
+    // List workspaces - should return at least the root workspace
+    let result =
+        execute_command(&kernel, WorkspaceProtocolRequest::ListWorkspaces).await;
+
+    match result {
+        Ok(WorkspaceProtocolResponse::Workspaces(workspaces)) => {
+            assert!(!workspaces.is_empty(), "Should have at least one workspace");
+
+            // Find the root workspace
+            let root = workspaces
+                .iter()
+                .find(|ws| ws.id == citadel_workspace_server_kernel::WORKSPACE_ROOT_ID);
+            assert!(root.is_some(), "Root workspace should be in the list");
+            assert!(root.unwrap().is_default, "Root workspace should be marked as default");
+        }
+        Ok(other) => panic!("Expected Workspaces response, got {:?}", other),
+        Err(e) => panic!("Command failed: {:?}", e),
+    }
 }

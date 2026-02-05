@@ -18,7 +18,7 @@ use citadel_workspace_server_kernel::kernel::{
     command_processor::async_process_command::process_command_with_user,
 };
 use citadel_workspace_types::{
-    structs::{Office, Room},
+    structs::DomainNode,
     WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
 
@@ -39,16 +39,18 @@ pub fn extract_success(message: WorkspaceProtocolResponse) -> Option<String> {
     Some(success)
 }
 
-pub fn extract_room(message: WorkspaceProtocolResponse) -> Option<Room> {
-    let WorkspaceProtocolResponse::Room(room) = message else {
+/// Extract a DomainNode from a Node response (used for both offices and rooms)
+pub fn extract_node(message: WorkspaceProtocolResponse) -> Option<DomainNode> {
+    let WorkspaceProtocolResponse::Node(node) = message else {
         return None;
     };
-    Some(room)
+    Some(node)
 }
 
-pub fn extract_office(message: WorkspaceProtocolResponse) -> Option<Office> {
-    let WorkspaceProtocolResponse::Office(office) = message else {
+/// Extract a list of DomainNodes from a Nodes response
+pub fn extract_nodes(message: WorkspaceProtocolResponse) -> Option<Vec<DomainNode>> {
+    let WorkspaceProtocolResponse::Nodes(nodes) = message else {
         return None;
     };
-    Some(office)
+    Some(nodes)
 }

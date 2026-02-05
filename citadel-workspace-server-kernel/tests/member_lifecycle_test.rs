@@ -56,8 +56,8 @@ async fn test_complete_user_removal() {
     .await;
 
     let office_id = match office_result {
-        Ok(WorkspaceProtocolResponse::Office(office)) => office.id,
-        _ => panic!("Expected Office response, got {:?}", office_result),
+        Ok(WorkspaceProtocolResponse::Node(node)) => node.id,
+        _ => panic!("Expected Node response, got {:?}", office_result),
     };
 
     // Add the user to the office

@@ -608,52 +608,71 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         metadata: Option<Vec<u8>>,
         workspace_master_password: String,
     ) -> Result<Workspace, NetworkError> {
-        // Check if a root workspace already exists
-        // TODO: In future, remove WORKSPACE_ROOT_ID and allow multiple workspaces
-        // Generate unique ID - for now, always use the root workspace ID in single-workspace model
-        let workspace_id = crate::WORKSPACE_ROOT_ID;
-
-        // Check if a root workspace already exists
-        if self
+        let root_exists = self
             .backend_tx_manager
-            .get_domain(workspace_id)
+            .get_domain(crate::WORKSPACE_ROOT_ID)
             .await?
-            .is_some()
-        {
-            return Err(NetworkError::msg(
-                "A root workspace already exists. Cannot create another one.",
-            ));
-        }
+            .is_some();
 
-        // Verify master access password
-        let passwords = self.backend_tx_manager.get_all_passwords().await?;
-        if !passwords
-            .get(workspace_id)
-            .map(|p| p == &workspace_master_password)
-            .unwrap_or(false)
-        {
-            return Err(NetworkError::msg("Invalid workspace password"));
-        }
+        // Determine workspace ID: use sentinel for first workspace, UUID for additional
+        let workspace_id = if root_exists {
+            // Creating a non-root workspace: verify against root workspace password
+            let passwords = self.backend_tx_manager.get_all_passwords().await?;
+            if !passwords
+                .get(crate::WORKSPACE_ROOT_ID)
+                .map(|p| p == &workspace_master_password)
+                .unwrap_or(false)
+            {
+                return Err(NetworkError::msg("Invalid workspace master password"));
+            }
+
+            // Verify the creator has CreateWorkspace permission on the root workspace
+            if !self
+                .check_entity_permission(
+                    user_id,
+                    crate::WORKSPACE_ROOT_ID,
+                    Permission::CreateWorkspace,
+                )
+                .await?
+            {
+                return Err(NetworkError::msg(
+                    "Only root workspace admins can create additional workspaces",
+                ));
+            }
+
+            uuid::Uuid::new_v4().to_string()
+        } else {
+            // First workspace: verify password against pre-seeded entry
+            let passwords = self.backend_tx_manager.get_all_passwords().await?;
+            if !passwords
+                .get(crate::WORKSPACE_ROOT_ID)
+                .map(|p| p == &workspace_master_password)
+                .unwrap_or(false)
+            {
+                return Err(NetworkError::msg("Invalid workspace password"));
+            }
+
+            String::from(crate::WORKSPACE_ROOT_ID)
+        };
 
         // Create workspace struct
         let mut workspace = Workspace {
-            id: workspace_id.to_string(),
-            name: name.to_string(),
-            description: description.to_string(),
-            owner_id: user_id.to_string(),
-            members: vec![user_id.to_string()],
+            id: workspace_id.clone(),
+            name: String::from(name),
+            description: String::from(description),
+            owner_id: String::from(user_id),
+            members: vec![String::from(user_id)],
             offices: Vec::new(),
             metadata: Default::default(),
         };
 
-        // Add metadata if provided
         if let Some(meta_bytes) = metadata {
             workspace.metadata = meta_bytes;
         }
 
         // Save workspace
         self.backend_tx_manager
-            .insert_workspace(workspace_id.to_string(), workspace.clone())
+            .insert_workspace(workspace_id.clone(), workspace.clone())
             .await?;
 
         // Create domain entry
@@ -661,43 +680,33 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             workspace: workspace.clone(),
         };
         self.backend_tx_manager
-            .insert_domain(workspace_id.to_string(), domain)
+            .insert_domain(workspace_id.clone(), domain)
             .await?;
 
-        // Save password if provided
-        // TODO: In future, the workspace master password will be shared for all workspaces.
-        // For now, set the password to the current workspace master password to reflect this intent.
+        // Save password for this workspace (same master password)
         if !workspace_master_password.is_empty() {
             let mut passwords = self.backend_tx_manager.get_all_passwords().await?;
-            passwords.insert(workspace_id.to_string(), workspace_master_password);
+            passwords.insert(workspace_id.clone(), workspace_master_password);
             self.backend_tx_manager.save_passwords(&passwords).await?;
         }
 
         // Grant creator admin permissions
-        // For workspace creation, we need to directly set permissions since the user isn't admin yet
         let mut user = match self.backend_tx_manager.get_user(user_id).await? {
             Some(u) => u,
-            None => {
-                // Create user if doesn't exist
-                User {
-                    id: user_id.to_string(),
-                    name: user_id.to_string(),
-                    role: UserRole::Admin,
-                    permissions: Default::default(),
-                    metadata: Default::default(),
-                }
-            }
+            None => User {
+                id: String::from(user_id),
+                name: String::from(user_id),
+                role: UserRole::Admin,
+                permissions: Default::default(),
+                metadata: Default::default(),
+            },
         };
 
-        // Set user role to Admin for workspace creators
         user.role = UserRole::Admin;
+        user.set_role_permissions(&workspace_id);
 
-        // Set permissions for this workspace using the role
-        user.set_role_permissions(workspace_id);
-
-        // Save updated user
         self.backend_tx_manager
-            .insert_user(user_id.to_string(), user)
+            .insert_user(String::from(user_id), user)
             .await?;
 
         Ok(workspace)

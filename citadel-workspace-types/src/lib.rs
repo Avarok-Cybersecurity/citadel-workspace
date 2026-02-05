@@ -2,7 +2,10 @@ pub mod structs;
 
 use custom_debug::Debug;
 use serde::{Deserialize, Serialize};
-use structs::{Office, Permission, Room, User, UserRole, Workspace};
+use structs::{
+    CustomNodeType, DomainNode, NodeEntityType, Office, Permission, Room, TreeNode, TreeSchema,
+    User, UserRole, Workspace, WorkspaceMetadata,
+};
 use ts_rs::TS;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -46,8 +49,15 @@ pub enum WorkspaceProtocolRequest {
         #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
     },
-    GetWorkspace,
+    GetWorkspace {
+        /// Workspace ID to retrieve. None defaults to the sentinel workspace-root.
+        workspace_id: Option<String>,
+    },
+    /// List all workspaces the requesting user has access to
+    ListWorkspaces,
     UpdateWorkspace {
+        /// Workspace ID to update. None defaults to the sentinel workspace-root.
+        workspace_id: Option<String>,
         name: Option<String>,
         description: Option<String>,
         workspace_master_password: String,
@@ -55,6 +65,8 @@ pub enum WorkspaceProtocolRequest {
         metadata: Option<Vec<u8>>,
     },
     DeleteWorkspace {
+        /// Workspace ID to delete. None defaults to the sentinel workspace-root.
+        workspace_id: Option<String>,
         workspace_master_password: String,
     },
 
@@ -220,13 +232,83 @@ pub enum WorkspaceProtocolRequest {
     /// Query server file transfer and storage capabilities.
     /// Returns configuration limits for RE-VFS storage, file transfers, etc.
     GetServerCapabilities,
+
+    // ========== Generic Tree Node Operations ==========
+    /// Create a new node in the workspace hierarchy tree.
+    /// If parent_id is None, creates at workspace root level.
+    CreateNode {
+        parent_id: Option<String>,
+        entity_type: NodeEntityType,
+        name: String,
+        description: String,
+    },
+
+    /// Get a specific node by ID
+    GetNode { node_id: String },
+
+    /// Update an existing node's properties
+    UpdateNode {
+        node_id: String,
+        name: Option<String>,
+        description: Option<String>,
+        mdx_content: Option<String>,
+        rules: Option<String>,
+        chat_enabled: Option<bool>,
+    },
+
+    /// Delete a node. If cascade is true, also deletes all descendants.
+    DeleteNode { node_id: String, cascade: bool },
+
+    /// Move a node to a new parent. If new_parent_id is None, moves to root level.
+    MoveNode {
+        node_id: String,
+        new_parent_id: Option<String>,
+    },
+
+    /// List nodes with optional filtering.
+    /// If parent_id is None, lists from workspace root.
+    /// If depth is None or 0, returns only direct children.
+    /// If entity_types is provided, filters to only those types.
+    ListNodes {
+        parent_id: Option<String>,
+        depth: Option<u32>,
+        entity_types: Option<Vec<NodeEntityType>>,
+    },
+
+    // ========== Tree Structure Operations ==========
+    /// Get the full tree structure starting from a node.
+    /// If root_id is None, starts from workspace root.
+    /// max_depth limits how deep to traverse (None = unlimited).
+    GetTreeStructure {
+        root_id: Option<String>,
+        max_depth: Option<u32>,
+    },
+
+    /// Get the current tree schema (nesting rules)
+    GetTreeSchema,
+
+    /// Update the tree schema (admin only)
+    UpdateTreeSchema { schema: TreeSchema },
+
+    // ========== Custom Node Type Operations ==========
+    /// Create a new custom node type
+    CreateNodeType {
+        name: String,
+        display_name: String,
+        icon: Option<String>,
+        allowed_parents: Vec<String>,
+    },
+
+    /// List all available node types (built-in and custom)
+    ListNodeTypes,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub enum WorkspaceProtocolResponse {
     Workspace(Workspace),
-    // Removing Workspaces variant since there's only one workspace
+    /// List of workspaces the user has access to (for multi-workspace support)
+    Workspaces(Vec<WorkspaceMetadata>),
     Success(String),
     Error(String),
     WorkspaceNotInitialized,
@@ -328,6 +410,36 @@ pub enum WorkspaceProtocolResponse {
         /// RE-VFS storage quota per user (in megabytes)
         #[ts(type = "bigint")]
         revfs_storage_quota_mb: u64,
+    },
+
+    // ========== Tree Node Responses ==========
+    /// Single node response
+    Node(DomainNode),
+
+    /// List of nodes response
+    Nodes(Vec<DomainNode>),
+
+    /// Full tree structure with nested children
+    TreeStructure { root: TreeNode },
+
+    /// Tree schema (nesting rules) response
+    TreeSchema(TreeSchema),
+
+    /// List of available node types
+    NodeTypes(Vec<CustomNodeType>),
+
+    /// Confirmation that a node was deleted
+    NodeDeleted {
+        node_id: String,
+        /// IDs of child nodes that were also deleted (if cascade was true)
+        children_deleted: Vec<String>,
+    },
+
+    /// Confirmation that a node was moved
+    NodeMoved {
+        node_id: String,
+        old_parent_id: Option<String>,
+        new_parent_id: Option<String>,
     },
 }
 

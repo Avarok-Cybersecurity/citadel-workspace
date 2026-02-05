@@ -275,6 +275,10 @@ pub enum Permission {
     EditWorkspaceConfig,
     // Ban a user from a domain
     BanUser,
+    // Edit tree structure (add/remove/rearrange nodes)
+    EditTreeStructure,
+    // Manage custom node types
+    ManageNodeTypes,
 }
 
 impl Permission {
@@ -297,6 +301,9 @@ impl Permission {
                 permissions.insert(Self::DeleteOffice);
                 permissions.insert(Self::CreateWorkspace);
                 permissions.insert(Self::DeleteWorkspace);
+                // Tree structure permissions
+                permissions.insert(Self::EditTreeStructure);
+                permissions.insert(Self::ManageNodeTypes);
             }
             UserRole::Member => {
                 // Basic member permissions
@@ -442,6 +449,12 @@ pub struct DomainPermissions {
     pub manage_domains: bool,
     /// Whether users can configure system settings
     pub configure_system: bool,
+
+    // === Tree Structure (default: false) ===
+    /// Whether users can edit tree structure (add/remove/rearrange nodes)
+    pub edit_tree_structure: bool,
+    /// Whether users can manage custom node types
+    pub manage_node_types: bool,
 }
 
 impl Default for DomainPermissions {
@@ -490,6 +503,10 @@ impl Default for DomainPermissions {
             // System/Admin - disabled by default
             manage_domains: false,
             configure_system: false,
+
+            // Tree structure - disabled by default
+            edit_tree_structure: false,
+            manage_node_types: false,
         }
     }
 }
@@ -549,6 +566,8 @@ impl DomainPermissions {
             ban_user: true,
             manage_domains: true,
             configure_system: true,
+            edit_tree_structure: true,
+            manage_node_types: true,
         }
     }
 
@@ -598,9 +617,222 @@ impl DomainPermissions {
             Permission::BanUser => self.ban_user,
             Permission::ManageDomains => self.manage_domains,
             Permission::ConfigureSystem => self.configure_system,
+            Permission::EditTreeStructure => self.edit_tree_structure,
+            Permission::ManageNodeTypes => self.manage_node_types,
         }
     }
 }
+
+// =============================================================================
+// GENERALIZED TREE HIERARCHY TYPES
+// =============================================================================
+// The workspace hierarchy uses an arbitrary-depth tree structure where:
+// - Root is always Workspace (depth 0, special case)
+// - All children are Child(String) type (e.g., "Office", "Room", "Department")
+// - Default tree: Workspace → Child("Office") → Child("Room")
+// - Permission inheritance works at any depth
+
+/// Entity type for nodes in the workspace hierarchy tree.
+/// Workspace is special (root only), all other nodes are Child types.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
+#[ts(export)]
+pub enum NodeEntityType {
+    /// Root node only - the workspace itself
+    Workspace,
+    /// Any child node type: "Office", "Room", "Department", "Team", etc.
+    Child(String),
+}
+
+impl NodeEntityType {
+    /// Check if this is the root workspace type
+    pub fn is_workspace(&self) -> bool {
+        matches!(self, NodeEntityType::Workspace)
+    }
+
+    /// Check if this is a child type with the given name
+    pub fn is_child_of_type(&self, type_name: &str) -> bool {
+        matches!(self, NodeEntityType::Child(name) if name == type_name)
+    }
+
+    /// Get the type name as a string
+    pub fn type_name(&self) -> &str {
+        match self {
+            NodeEntityType::Workspace => "Workspace",
+            NodeEntityType::Child(name) => name,
+        }
+    }
+}
+
+impl fmt::Display for NodeEntityType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            NodeEntityType::Workspace => write!(f, "Workspace"),
+            NodeEntityType::Child(name) => write!(f, "{}", name),
+        }
+    }
+}
+
+/// A unified node in the workspace hierarchy tree.
+/// Replaces the separate Workspace/Office/Room structs with a single generalized type.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct DomainNode {
+    /// Unique identifier for this node
+    pub id: String,
+    /// Parent node ID. None = this is the workspace root
+    pub parent_id: Option<String>,
+    /// Type of this node (Workspace or Child("Office"), Child("Room"), etc.)
+    pub entity_type: NodeEntityType,
+    /// Depth in the tree (0=workspace root, 1=office-level, 2=room-level, etc.)
+    pub depth: u32,
+
+    // Core properties
+    pub name: String,
+    pub description: String,
+    pub owner_id: String,
+    pub members: Vec<String>,
+    /// IDs of child nodes
+    pub children: Vec<String>,
+
+    // Content
+    #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
+    pub mdx_content: String,
+    /// Rules displayed to users
+    pub rules: Option<String>,
+    /// Whether group chat is enabled for this node
+    pub chat_enabled: bool,
+    /// UUID for the group chat channel (assigned when chat_enabled is true)
+    pub chat_channel_id: Option<String>,
+    /// Default permissions for users in this node
+    pub default_permissions: DomainPermissions,
+    /// Flexible metadata for frontend use
+    #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
+    pub metadata: Vec<u8>,
+
+    // Schema constraints
+    /// If set, only these child types are allowed under this node
+    pub allowed_child_types: Option<Vec<String>>,
+    /// Whether this is the default node at its level (navigated to on login)
+    pub is_default: bool,
+
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+impl DomainNode {
+    /// Check if this node is the workspace root
+    pub fn is_root(&self) -> bool {
+        self.parent_id.is_none() && self.entity_type.is_workspace()
+    }
+
+    /// Check if this node can have children of the given type
+    pub fn can_have_child_type(&self, child_type: &str) -> bool {
+        match &self.allowed_child_types {
+            Some(allowed) => allowed.iter().any(|t| t == child_type),
+            None => true, // No restrictions
+        }
+    }
+}
+
+/// Recursive tree structure for representing the full hierarchy
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TreeNode {
+    pub node: DomainNode,
+    pub children: Vec<TreeNode>,
+}
+
+/// Rule defining what child types are allowed under a parent type
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct NestingRule {
+    /// Parent node type (use "Workspace" for root, or child type names)
+    pub parent_type: String,
+    /// Allowed child type names under this parent
+    pub allowed_child_types: Vec<String>,
+}
+
+/// Schema defining the structure rules for a workspace tree
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TreeSchema {
+    pub id: String,
+    pub name: String,
+    /// Nesting rules defining valid parent-child relationships
+    pub rules: Vec<NestingRule>,
+    /// Maximum allowed depth (None = unlimited)
+    pub max_depth: Option<u32>,
+}
+
+impl Default for TreeSchema {
+    /// Default schema: Workspace → Office → Room (traditional 3-level hierarchy)
+    fn default() -> Self {
+        Self {
+            id: "default".to_string(),
+            name: "Default Schema".to_string(),
+            rules: vec![
+                NestingRule {
+                    parent_type: "Workspace".to_string(),
+                    allowed_child_types: vec!["Office".to_string()],
+                },
+                NestingRule {
+                    parent_type: "Office".to_string(),
+                    allowed_child_types: vec!["Room".to_string()],
+                },
+                NestingRule {
+                    parent_type: "Room".to_string(),
+                    allowed_child_types: vec![], // Rooms are leaf nodes by default
+                },
+            ],
+            max_depth: Some(3), // Workspace(0) → Office(1) → Room(2)
+        }
+    }
+}
+
+impl TreeSchema {
+    /// Check if a child type is allowed under the given parent type.
+    /// If no rules are defined for the parent type, allows all child types by default.
+    pub fn is_child_allowed(&self, parent_type: &str, child_type: &str) -> bool {
+        // If no rules are defined at all, allow everything
+        if self.rules.is_empty() {
+            return true;
+        }
+
+        self.rules
+            .iter()
+            .find(|r| r.parent_type == parent_type)
+            .map(|r| r.allowed_child_types.contains(&child_type.to_string()))
+            // If no rule exists for this parent type, allow all children by default
+            .unwrap_or(true)
+    }
+
+    /// Get allowed child types for a parent type
+    pub fn get_allowed_children(&self, parent_type: &str) -> Vec<String> {
+        self.rules
+            .iter()
+            .find(|r| r.parent_type == parent_type)
+            .map(|r| r.allowed_child_types.clone())
+            .unwrap_or_default()
+    }
+}
+
+/// Custom node type definition for user-created types
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CustomNodeType {
+    /// Internal name (e.g., "Department", "Team")
+    pub name: String,
+    /// Display name shown in UI
+    pub display_name: String,
+    /// Optional icon identifier
+    pub icon: Option<String>,
+    /// Which parent types can contain this type
+    pub allowed_parents: Vec<String>,
+}
+
+// =============================================================================
+// END GENERALIZED TREE HIERARCHY TYPES
+// =============================================================================
 
 /// Metadata field for storing flexible data used by the frontend
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
@@ -639,6 +871,33 @@ pub struct Workspace {
 
 impl Workspace {
     // ...
+}
+
+/// Lightweight workspace metadata for listing multiple workspaces.
+/// Excludes large fields like office lists to reduce payload size.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[ts(export)]
+pub struct WorkspaceMetadata {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub owner_id: String,
+    /// Whether this is the default (sentinel) workspace
+    pub is_default: bool,
+    pub member_count: u32,
+}
+
+impl From<&Workspace> for WorkspaceMetadata {
+    fn from(ws: &Workspace) -> Self {
+        Self {
+            id: ws.id.clone(),
+            name: ws.name.clone(),
+            description: ws.description.clone(),
+            owner_id: ws.owner_id.clone(),
+            is_default: ws.id == "workspace-root",
+            member_count: ws.members.len() as u32,
+        }
+    }
 }
 
 // Workspace entity structures

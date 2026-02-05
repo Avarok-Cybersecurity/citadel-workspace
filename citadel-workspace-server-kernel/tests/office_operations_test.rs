@@ -32,6 +32,7 @@ async fn test_office_operations() {
     let update_workspace_wrong_pw = execute_command(
         &kernel,
         WorkspaceProtocolRequest::UpdateWorkspace {
+            workspace_id: None,
             name: Some("Attempted Update Name".to_string()),
             description: Some("This update should fail due to wrong password".to_string()),
             workspace_master_password: "wrong-password".to_string(),
@@ -69,7 +70,7 @@ async fn test_office_operations() {
     .await
     .unwrap();
 
-    let office = extract_office(create_office_response).expect("Failed to create office");
+    let office = extract_node(create_office_response).expect("Failed to create office");
     let office_id = office.id.clone();
 
     // Get the office
@@ -82,7 +83,7 @@ async fn test_office_operations() {
     .await
     .unwrap();
 
-    let retrieved_office = extract_office(get_office_response).expect("Failed to get office");
+    let retrieved_office = extract_node(get_office_response).expect("Failed to get office");
     assert_eq!(retrieved_office.name, "Test Office");
     assert_eq!(retrieved_office.description, "A test office");
     assert_eq!(
@@ -105,7 +106,7 @@ async fn test_office_operations() {
     .await
     .unwrap();
 
-    let updated_office = extract_office(update_office_response).expect("Failed to update office");
+    let updated_office = extract_node(update_office_response).expect("Failed to update office");
     assert_eq!(updated_office.name, "Updated Office");
     assert_eq!(updated_office.description, "A test office");
     assert_eq!(
@@ -119,7 +120,7 @@ async fn test_office_operations() {
         .unwrap();
 
     match list_offices_response {
-        WorkspaceProtocolResponse::Offices(offices) => {
+        WorkspaceProtocolResponse::Nodes(offices) => {
             assert!(!offices.is_empty(), "Expected at least 1 office");
 
             let updated_office = offices
@@ -130,7 +131,7 @@ async fn test_office_operations() {
             assert_eq!(updated_office.name, "Updated Office");
             assert_eq!(updated_office.description, "A test office");
         }
-        _ => panic!("Expected Offices response"),
+        _ => panic!("Expected Nodes response"),
     }
 
     // Delete the office
@@ -159,9 +160,9 @@ async fn test_office_operations() {
             .unwrap();
 
     match list_offices_after_delete {
-        WorkspaceProtocolResponse::Offices(offices) => {
+        WorkspaceProtocolResponse::Nodes(offices) => {
             assert_eq!(offices.len(), 0, "Expected 0 offices after deletion");
         }
-        _ => panic!("Expected Offices response"),
+        _ => panic!("Expected Nodes response"),
     }
 }

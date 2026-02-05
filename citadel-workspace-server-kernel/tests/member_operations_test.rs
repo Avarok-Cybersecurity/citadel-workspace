@@ -59,7 +59,7 @@ async fn test_member_operations() {
     .await
     .unwrap();
 
-    let office = extract_office(create_office_response).expect("Failed to create office");
+    let office = extract_node(create_office_response).expect("Failed to create office");
     let office_id = office.id.clone();
 
     // Create a room
@@ -76,7 +76,7 @@ async fn test_member_operations() {
     .await
     .unwrap();
 
-    let room = extract_room(create_room_response).expect("Failed to create room");
+    let room = extract_node(create_room_response).expect("Failed to create room");
     let room_id = room.id.clone();
 
     // Add test user to office
@@ -163,7 +163,7 @@ async fn test_member_operations() {
     .await
     .unwrap();
 
-    let room = extract_room(get_room_response).expect("Failed to get room");
+    let room = extract_node(get_room_response).expect("Failed to get room");
     assert!(
         room.members.contains(&"test_user".to_string()),
         "Test user should be in room"
@@ -195,7 +195,7 @@ async fn test_member_operations() {
     .await
     .unwrap();
 
-    let room = extract_room(get_room_response).expect("Failed to get room");
+    let room = extract_node(get_room_response).expect("Failed to get room");
     assert!(
         !room.members.contains(&"test_user".to_string()),
         "Test user should not be in room"

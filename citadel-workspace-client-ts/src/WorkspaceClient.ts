@@ -175,8 +175,17 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   /**
    * Helper method to get the workspace
    */
-  async getWorkspace(cid: string | bigint): Promise<void> {
-    await this.sendWorkspaceRequest(cid, { GetWorkspace: null } as any);
+  async getWorkspace(cid: string | bigint, workspaceId?: string): Promise<void> {
+    await this.sendWorkspaceRequest(cid, {
+      GetWorkspace: { workspace_id: workspaceId ?? null }
+    });
+  }
+
+  /**
+   * Helper method to list all workspaces the user has access to
+   */
+  async listWorkspaces(cid: string | bigint): Promise<void> {
+    await this.sendWorkspaceRequest(cid, 'ListWorkspaces');
   }
 
   /**
