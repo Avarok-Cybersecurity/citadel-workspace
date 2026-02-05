@@ -19,7 +19,7 @@
     "dev": "tsc --watch",
     "clean": "rm -rf dist/",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "npx eslint ."
   },
   "dependencies": {
     "@avarok/citadel-protocol-types": "^0.13.1",
