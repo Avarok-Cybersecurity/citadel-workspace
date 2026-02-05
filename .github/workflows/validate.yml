@@ -166,11 +166,14 @@ jobs:
         run: npm run build
         working-directory: citadel-workspace-client-ts
       - name: Run ESLint
-        # Run from workspace but ensure Node can find hoisted modules via NODE_PATH
-        run: npx eslint .
-        working-directory: ${{ matrix.path }}
-        env:
-          NODE_PATH: ${{ github.workspace }}/node_modules
+        # Symlink hoisted ESLint packages to workspace (ES modules ignore NODE_PATH)
+        run: |
+          cd ${{ matrix.path }}
+          mkdir -p node_modules/@eslint
+          ln -sf ${{ github.workspace }}/node_modules/@eslint/js node_modules/@eslint/js
+          ln -sf ${{ github.workspace }}/node_modules/globals node_modules/globals
+          ln -sf ${{ github.workspace }}/node_modules/typescript-eslint node_modules/typescript-eslint
+          npx eslint .
 
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
