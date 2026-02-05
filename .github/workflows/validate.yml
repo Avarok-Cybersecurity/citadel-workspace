@@ -166,13 +166,16 @@ jobs:
         run: npm run build
         working-directory: citadel-workspace-client-ts
       - name: Run ESLint
-        # Symlink hoisted packages and use root eslint binary directly
+        # Symlink hoisted packages and use root eslint binary via .bin
         run: |
           mkdir -p node_modules/@eslint
           ln -sf ${{ github.workspace }}/node_modules/@eslint/js node_modules/@eslint/js
           ln -sf ${{ github.workspace }}/node_modules/globals node_modules/globals
           ln -sf ${{ github.workspace }}/node_modules/typescript-eslint node_modules/typescript-eslint
-          node ${{ github.workspace }}/node_modules/eslint/bin/eslint.js .
+          # Debug: Show what's in root node_modules
+          ls ${{ github.workspace }}/node_modules/.bin/eslint* || echo "No eslint in .bin"
+          ls ${{ github.workspace }}/node_modules/eslint/bin/ || echo "No eslint bin dir"
+          ${{ github.workspace }}/node_modules/.bin/eslint .
         working-directory: ${{ matrix.path }}
 
   integration-tests:
