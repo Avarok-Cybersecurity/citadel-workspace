@@ -130,6 +130,13 @@ jobs:
         # Build client-ts to generate dist/ with TypeScript declarations
         run: npm run build
         working-directory: citadel-workspace-client-ts
+      - name: Debug Node Modules
+        run: |
+          echo "Root node_modules contents:"
+          ls node_modules/ | head -20
+          echo "Checking for react-router-dom:"
+          ls -la node_modules/react-router-dom 2>&1 || echo "Not found at root"
+          ls -la ${{ matrix.path }}/node_modules/react-router-dom 2>&1 || echo "Not found in workspace"
       - name: Run Type Check
         run: |
           if [ "${{ matrix.project }}" = "citadel-workspaces" ]; then
