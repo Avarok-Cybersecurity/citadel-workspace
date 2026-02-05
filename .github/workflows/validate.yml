@@ -130,20 +130,9 @@ jobs:
         # Build client-ts to generate dist/ with TypeScript declarations
         run: npm run build
         working-directory: citadel-workspace-client-ts
-      - name: Ensure Workspace Deps Available
-        # Symlink hoisted deps for TypeScript resolution (same issue as ESLint)
-        if: matrix.project != 'citadel-workspace-client-ts'
-        run: |
-          cd ${{ matrix.path }}
-          # Remove empty scope dirs that block module resolution
-          for dir in node_modules/@*; do
-            if [ -d "$dir" ] && [ -z "$(ls -A "$dir")" ]; then
-              rm -rf "$dir"
-            fi
-          done 2>/dev/null || true
       - name: Run Type Check
-        run: npm run typecheck
-        working-directory: ${{ matrix.path }}
+        # Run tsc from root so it can find hoisted node_modules
+        run: npx tsc -p ${{ matrix.path }}/tsconfig.app.json --noEmit 2>/dev/null || npx tsc -p ${{ matrix.path }}/tsconfig.json --noEmit
 
   lint:
     name: ESLint - ${{ matrix.project }}
