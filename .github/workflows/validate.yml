@@ -130,9 +130,19 @@ jobs:
         # Build client-ts to generate dist/ with TypeScript declarations
         run: npm run build
         working-directory: citadel-workspace-client-ts
+      - name: Symlink Hoisted Dependencies
+        # For projects that need playwright or react, symlink from root
+        if: matrix.project == 'integration-tests' || matrix.project == 'citadel-workspaces'
+        run: |
+          cd ${{ matrix.path }}
+          mkdir -p node_modules
+          # Symlink common hoisted packages
+          ln -sf ${{ github.workspace }}/node_modules/playwright node_modules/playwright 2>/dev/null || true
+          ln -sf ${{ github.workspace }}/node_modules/react node_modules/react 2>/dev/null || true
+          ln -sf ${{ github.workspace }}/node_modules/@types node_modules/@types 2>/dev/null || true
       - name: Run Type Check
-        # Run tsc from root so it can find hoisted node_modules
-        run: npx tsc -p ${{ matrix.path }}/tsconfig.app.json --noEmit 2>/dev/null || npx tsc -p ${{ matrix.path }}/tsconfig.json --noEmit
+        run: npm run typecheck
+        working-directory: ${{ matrix.path }}
 
   lint:
     name: ESLint - ${{ matrix.project }}
