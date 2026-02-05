@@ -166,7 +166,15 @@ jobs:
         run: npm run build
         working-directory: citadel-workspace-client-ts
       - name: Run ESLint
-        run: npm run lint -w ${{ matrix.project }}
+        # Remove empty scope dirs in workspace node_modules that block module resolution
+        # When npm hoists packages, it leaves empty @scope dirs that prevent walking up to root
+        run: |
+          for dir in ${{ matrix.path }}/node_modules/@*; do
+            if [ -d "$dir" ] && [ -z "$(ls -A "$dir")" ]; then
+              rm -rf "$dir"
+            fi
+          done 2>/dev/null || true
+          npx eslint ${{ matrix.path }}
 
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
