@@ -88,15 +88,18 @@ jobs:
         run: npm ci
       - name: Build citadel-internal-service typescript-client
         # Build the WASM client's TypeScript wrapper first (innermost dependency)
-        run: npm ci && npm run build
+        run: npm run build
         working-directory: citadel-internal-service/typescript-client
       - name: Build citadel-workspace-client-ts
         # Build client-ts to generate dist/ with TypeScript declarations
         run: npm run build
         working-directory: citadel-workspace-client-ts
+      - name: Install Vitest
+        # Ensure vitest is available at root for workspace to use
+        run: npm install vitest@3.0.7 --save-dev
       - name: Run Unit Tests
-        run: npm test
-        working-directory: citadel-workspaces
+        # Run via npm workspace command
+        run: npm test -w citadel-workspaces
 
   typecheck:
     name: TypeScript Type Check - ${{ matrix.project }}
