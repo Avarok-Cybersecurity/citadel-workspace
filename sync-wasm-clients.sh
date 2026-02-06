@@ -345,9 +345,14 @@ print_status "Installing dependencies for citadel-workspaces.."
 # Use --package-lock=false to avoid platform-specific lockfile issues when running in Docker
 npm install --package-lock=false
 
-# Recreate symlink for WASM client (removed when node_modules was deleted)
-print_status "Recreating symlink for citadel-internal-service-wasm-client..."
+# Recreate symlinks for WASM client (removed when node_modules was deleted)
+print_status "Recreating symlinks for citadel-internal-service-wasm-client..."
 ln -sf ../../citadel-internal-service/typescript-client node_modules/citadel-internal-service-wasm-client
+
+# Also create symlink at root node_modules for Vite resolution
+# (Vite resolves imports from citadel-workspace-client-ts/dist/ up to /workspace/node_modules/)
+mkdir -p "$WORKSPACE_ROOT/node_modules"
+ln -sf ../citadel-internal-service/typescript-client "$WORKSPACE_ROOT/node_modules/citadel-internal-service-wasm-client"
 
 npx vite build --mode development
 
