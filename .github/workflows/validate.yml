@@ -98,8 +98,9 @@ jobs:
         # Ensure vitest is available at root for workspace to use
         run: npm install vitest@3.0.7 --save-dev
       - name: Run Unit Tests
-        # Run via npm workspace command
-        run: npm test -w citadel-workspaces
+        # Run vitest directly to avoid npm -w matching nested integration-tests workspace
+        run: npx vitest run
+        working-directory: citadel-workspaces
 
   typecheck:
     name: TypeScript Type Check - ${{ matrix.project }}
