@@ -247,6 +247,15 @@ jobs:
         env:
           INTERNAL_SERVICE_PORT: '12345'
         run: docker compose up -d --wait
+      - name: Dump Service Logs on Start Failure
+        if: failure()
+        run: |
+          echo "=== sync-wasm-client logs ==="
+          docker compose logs sync-wasm-client 2>&1 | tail -200
+          echo "=== server logs ==="
+          docker compose logs server 2>&1 | tail -50
+          echo "=== internal-service logs ==="
+          docker compose logs internal-service 2>&1 | tail -50
       - name: Clean Docker Build Cache
         run: |
           docker builder prune -af
