@@ -343,6 +343,9 @@ jobs:
       - name: Force Rebuild Docker Images
         # Self-hosted runners cache Docker images from previous runs, which may
         # have stale WASM builds or outdated code. Force rebuild to ensure fresh.
+        # INTERNAL_SERVICE_PORT is a build arg for the internal-service Dockerfile
+        env:
+          INTERNAL_SERVICE_PORT: '12345'
         run: docker compose build --no-cache
       - name: Start Services
         env:
