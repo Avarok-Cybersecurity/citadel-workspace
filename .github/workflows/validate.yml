@@ -328,30 +328,22 @@ jobs:
         with:
           node-version: '20'
       - name: Install Dependencies
-        run: npm ci
+        # Self-hosted runners persist node_modules between runs, causing version
+        # mismatches. Clean root node_modules first to ensure fresh install.
+        run: |
+          rm -rf "${{ github.workspace }}/node_modules"
+          npm ci
         working-directory: citadel-workspaces/integration-tests
       - name: Install Playwright Browsers
         # Note: --with-deps skipped on self-hosted runner (system deps pre-installed)
         # Use node_modules/.bin/playwright directly to ensure we use the exact
         # playwright version installed by npm ci (npx may resolve differently)
         # Clean stale browsers first (self-hosted runners persist /tmp/pw-browsers)
+        # npm workspaces hoist binaries to repo root node_modules/.bin
         run: |
           rm -rf "$PLAYWRIGHT_BROWSERS_PATH"
-          # Find playwright binary (npm workspaces may hoist to root or keep local)
-          if [ -x "./node_modules/.bin/playwright" ]; then
-            echo "Found playwright at root node_modules"
-            ./node_modules/.bin/playwright --version
-            ./node_modules/.bin/playwright install chromium
-          elif [ -x "citadel-workspaces/integration-tests/node_modules/.bin/playwright" ]; then
-            echo "Found playwright in integration-tests node_modules"
-            citadel-workspaces/integration-tests/node_modules/.bin/playwright --version
-            citadel-workspaces/integration-tests/node_modules/.bin/playwright install chromium
-          else
-            echo "ERROR: playwright binary not found in expected locations"
-            echo "Searching for playwright binary..."
-            find . -name "playwright" -path "*/node_modules/.bin/*" -type f 2>/dev/null | head -5
-            exit 1
-          fi
+          ./node_modules/.bin/playwright --version
+          ./node_modules/.bin/playwright install chromium chromium-headless-shell
       - name: Clean Up Previous Containers
         run: |
           # Stop any existing docker-compose services from previous runs
