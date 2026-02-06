@@ -332,9 +332,10 @@ jobs:
         working-directory: citadel-workspaces/integration-tests
       - name: Install Playwright Browsers
         # Note: --with-deps skipped on self-hosted runner (system deps pre-installed)
-        # Must run after npm ci so npx can find the installed playwright package
-        # (self-hosted runners don't auto-download packages via npx like ubuntu-latest does)
+        # Must run from integration-tests dir so npx uses the same playwright version
+        # as the test code (root may have a different version with different browser builds)
         run: npx playwright install chromium
+        working-directory: citadel-workspaces/integration-tests
       - name: Clean Up Previous Containers
         run: |
           # Stop any existing docker-compose services from previous runs
