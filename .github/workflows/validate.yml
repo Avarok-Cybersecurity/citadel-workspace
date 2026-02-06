@@ -336,16 +336,6 @@ jobs:
           find "${{ github.workspace }}" -name node_modules -type d -prune -exec rm -rf {} + 2>/dev/null || true
           npm ci
         working-directory: citadel-workspaces/integration-tests
-      - name: Install Playwright Browsers
-        # Note: --with-deps skipped on self-hosted runner (system deps pre-installed)
-        # Use node_modules/.bin/playwright directly to ensure we use the exact
-        # playwright version installed by npm ci (npx may resolve differently)
-        # Clean stale browsers first (self-hosted runners persist /tmp/pw-browsers)
-        # npm workspaces hoist binaries to repo root node_modules/.bin
-        run: |
-          rm -rf "$PLAYWRIGHT_BROWSERS_PATH"
-          ./node_modules/.bin/playwright --version
-          ./node_modules/.bin/playwright install chromium chromium-headless-shell
       - name: Clean Up Previous Containers
         run: |
           # Stop any existing docker-compose services from previous runs
@@ -375,6 +365,20 @@ jobs:
           docker compose logs server 2>&1 | tail -50
           echo "=== internal-service logs ==="
           docker compose logs internal-service 2>&1 | tail -50
+      - name: Install Playwright Browsers
+        # IMPORTANT: Must run AFTER docker compose up, not before.
+        # The sync-wasm-client container bind-mounts ./citadel-workspaces and runs
+        # `npm install --package-lock=false`, which installs the latest playwright
+        # (e.g. 1.58.x) to citadel-workspaces/node_modules/ on the host.
+        # The test resolves playwright-core from that directory (not root node_modules).
+        # So we must install browsers matching THAT version, not root's lockfile version.
+        # Running from integration-tests dir ensures npx resolves the same playwright.
+        run: |
+          rm -rf "$PLAYWRIGHT_BROWSERS_PATH"
+          echo "=== playwright-core version the test will use ==="
+          node -e "console.log(require('playwright-core/package.json').version)"
+          npx playwright install chromium chromium-headless-shell
+        working-directory: citadel-workspaces/integration-tests
       - name: Run Heavy Integration Tests
         env:
           IN_CI: 'true'
