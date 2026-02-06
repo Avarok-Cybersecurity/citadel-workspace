@@ -332,9 +332,9 @@ jobs:
         working-directory: citadel-workspaces/integration-tests
       - name: Install Playwright Browsers
         # Note: --with-deps skipped on self-hosted runner (system deps pre-installed)
-        # Use node_modules/.bin/playwright directly to ensure we use the exact
-        # playwright version installed by npm ci (npx may resolve differently)
-        run: ./node_modules/.bin/playwright install chromium
+        # npm workspaces may hoist binaries to root, so run from integration-tests
+        # dir where npx will check local then walk up to root node_modules/.bin
+        run: npx playwright install chromium
         working-directory: citadel-workspaces/integration-tests
       - name: Clean Up Previous Containers
         run: |
