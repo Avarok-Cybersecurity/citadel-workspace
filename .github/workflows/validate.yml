@@ -283,6 +283,10 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' ||
       contains(fromJSON('["tbraun96", "Raduc4", "Tjemmmic"]'), github.actor)
+    env:
+      # Self-hosted runner may have mismatched home dirs between install and test steps.
+      # Use explicit path so playwright install and test both find the same browsers.
+      PLAYWRIGHT_BROWSERS_PATH: /tmp/pw-browsers
     steps:
       - name: Fix Docker-created root-owned files
         run: |
