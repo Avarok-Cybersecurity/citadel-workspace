@@ -365,14 +365,17 @@ jobs:
           docker compose logs server 2>&1 | tail -50
           echo "=== internal-service logs ==="
           docker compose logs internal-service 2>&1 | tail -50
-      - name: Clean Docker-modified node_modules
+      - name: Clean Docker-modified playwright
         # sync-wasm-client bind-mounts ./citadel-workspaces and runs
         # `npm install --package-lock=false`, installing latest playwright (1.58.x)
         # to citadel-workspaces/node_modules/ on the host. This shadows the
         # lockfile-pinned version in root/node_modules/ (1.57.0).
-        # Remove it so both npx and test resolve from root (consistent versions).
-        # The test only needs playwright from node_modules; Docker UI has its own.
-        run: rm -rf citadel-workspaces/node_modules
+        # Remove only playwright packages so test resolves from root (consistent).
+        # Keep other packages (@types/node etc.) needed by tsc compilation.
+        run: |
+          rm -rf citadel-workspaces/node_modules/playwright
+          rm -rf citadel-workspaces/node_modules/playwright-core
+          rm -f citadel-workspaces/node_modules/.bin/playwright
       - name: Install Playwright Browsers
         # Note: --with-deps skipped on self-hosted runner (system deps pre-installed)
         # Clean stale browsers first (self-hosted runners persist /tmp/pw-browsers)
