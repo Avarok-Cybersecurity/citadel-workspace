@@ -329,9 +329,11 @@ jobs:
           node-version: '20'
       - name: Install Dependencies
         # Self-hosted runners persist node_modules between runs, causing version
-        # mismatches. Clean root node_modules first to ensure fresh install.
+        # mismatches. Clean ALL node_modules first to ensure fresh install.
+        # npm workspaces hoist to root, but stale packages in workspace member
+        # dirs (e.g. citadel-workspaces/node_modules) cause resolution conflicts.
         run: |
-          rm -rf "${{ github.workspace }}/node_modules"
+          find "${{ github.workspace }}" -name node_modules -type d -prune -exec rm -rf {} + 2>/dev/null || true
           npm ci
         working-directory: citadel-workspaces/integration-tests
       - name: Install Playwright Browsers
