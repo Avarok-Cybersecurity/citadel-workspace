@@ -65,8 +65,8 @@ async fn test_is_member_of_domain_behavior() {
     .await;
 
     let office_id = match office_result {
-        Ok(WorkspaceProtocolResponse::Office(office)) => office.id,
-        _ => panic!("Expected Office response, got {:?}", office_result),
+        Ok(WorkspaceProtocolResponse::Node(node)) => node.id,
+        _ => panic!("Expected Node response, got {:?}", office_result),
     };
 
     // Create a room in the office
@@ -83,8 +83,8 @@ async fn test_is_member_of_domain_behavior() {
     .await;
 
     let room_id = match room_result {
-        Ok(WorkspaceProtocolResponse::Room(room)) => room.id,
-        _ => panic!("Expected Room response, got {:?}", room_result),
+        Ok(WorkspaceProtocolResponse::Node(node)) => node.id,
+        _ => panic!("Expected Node response, got {:?}", room_result),
     };
 
     // Initially user is not a member of any domain

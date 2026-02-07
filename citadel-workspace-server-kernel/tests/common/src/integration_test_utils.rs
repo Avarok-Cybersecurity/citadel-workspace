@@ -206,7 +206,7 @@ pub async fn send_workspace_command(
                 match response {
                     WorkspaceProtocolPayload::Response(workspace_response) => {
                         println!("Received workspace response: {:?}", workspace_response);
-                        return Ok(workspace_response);
+                        return Ok(*workspace_response);
                     }
                     _ => {
                         return Err("Expected WorkspaceProtocolPayload::Response".into());

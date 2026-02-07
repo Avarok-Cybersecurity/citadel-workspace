@@ -43,7 +43,7 @@ async fn test_room_operations() {
     .await
     .unwrap();
 
-    let office = extract_office(create_office_response).expect("Failed to create office");
+    let office = extract_node(create_office_response).expect("Failed to create office");
     let office_id = office.id.clone();
 
     // Create a room in the office
@@ -60,7 +60,7 @@ async fn test_room_operations() {
     .await
     .unwrap();
 
-    let room = extract_room(create_room_response).expect("Failed to create room");
+    let room = extract_node(create_room_response).expect("Failed to create room");
     assert_eq!(room.name, "Test Room");
     assert_eq!(room.description, "A test room");
     assert_eq!(room.mdx_content, "# Test Room\nThis is a test room");
@@ -76,7 +76,7 @@ async fn test_room_operations() {
     .await
     .unwrap();
 
-    let retrieved_room = extract_room(get_room_response).expect("Failed to get room");
+    let retrieved_room = extract_node(get_room_response).expect("Failed to get room");
     assert_eq!(retrieved_room.name, "Test Room");
     assert_eq!(retrieved_room.description, "A test room");
     assert_eq!(
@@ -98,7 +98,7 @@ async fn test_room_operations() {
     .await
     .unwrap();
 
-    let updated_room = extract_room(update_room_response).expect("Failed to update room");
+    let updated_room = extract_node(update_room_response).expect("Failed to update room");
     assert_eq!(updated_room.name, "Updated Room");
     assert_eq!(updated_room.description, "A test room");
     assert_eq!(
@@ -117,11 +117,11 @@ async fn test_room_operations() {
     .unwrap();
 
     match list_rooms_response {
-        WorkspaceProtocolResponse::Rooms(rooms) => {
+        WorkspaceProtocolResponse::Nodes(rooms) => {
             assert_eq!(rooms.len(), 1);
             assert_eq!(rooms[0].name, "Updated Room");
         }
-        _ => panic!("Expected Rooms response"),
+        _ => panic!("Expected Nodes response"),
     }
 
     // Delete the room
@@ -154,9 +154,9 @@ async fn test_room_operations() {
     .unwrap();
 
     match list_rooms_after_delete {
-        WorkspaceProtocolResponse::Rooms(rooms) => {
+        WorkspaceProtocolResponse::Nodes(rooms) => {
             assert_eq!(rooms.len(), 0, "Expected 0 rooms after deletion");
         }
-        _ => panic!("Expected Rooms response"),
+        _ => panic!("Expected Nodes response"),
     }
 }

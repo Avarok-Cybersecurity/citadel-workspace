@@ -39,8 +39,8 @@ async fn test_add_office_to_workspace() {
     .await;
 
     let office_id = match office_result {
-        Ok(WorkspaceProtocolResponse::Office(office)) => office.id,
-        _ => panic!("Expected Office response, got {:?}", office_result),
+        Ok(WorkspaceProtocolResponse::Node(node)) => node.id,
+        _ => panic!("Expected Node response, got {:?}", office_result),
     };
 
     // Check that we can get the office
@@ -57,10 +57,10 @@ async fn test_add_office_to_workspace() {
     let list_offices_result = execute_command(&kernel, WorkspaceProtocolRequest::ListOffices).await;
 
     match list_offices_result {
-        Ok(WorkspaceProtocolResponse::Offices(offices)) => {
+        Ok(WorkspaceProtocolResponse::Nodes(offices)) => {
             assert_eq!(offices.len(), 1);
             assert_eq!(offices[0].name, office_name);
         }
-        _ => panic!("Expected Offices response, got {:?}", list_offices_result),
+        _ => panic!("Expected Nodes response, got {:?}", list_offices_result),
     }
 }

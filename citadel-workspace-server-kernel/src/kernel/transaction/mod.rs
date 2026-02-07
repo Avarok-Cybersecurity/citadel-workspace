@@ -1,5 +1,5 @@
 use citadel_sdk::prelude::{BackendHandler, NetworkError, NodeRemote, ProtocolRemoteExt, Ratchet};
-use citadel_workspace_types::structs::{Domain, User, Workspace};
+use citadel_workspace_types::structs::{Domain, DomainNode, TreeSchema, User, Workspace};
 use citadel_workspace_types::GroupMessage;
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -471,5 +471,112 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     ) -> Result<Option<GroupMessage>, NetworkError> {
         let messages = self.get_group_messages(group_id).await?;
         Ok(messages.into_iter().find(|m| m.id == message_id))
+    }
+
+    // ========== DomainNode (Generalized Tree Hierarchy) Storage ==========
+
+    /// Get all DomainNodes from backend
+    pub async fn get_all_nodes(&self) -> Result<HashMap<String, DomainNode>, NetworkError> {
+        if self.node_remote.read().is_none() {
+            if let Some(data) = self.test_storage.read().get("citadel_workspace.nodes") {
+                return serde_json::from_slice(data)
+                    .map_err(|e| NetworkError::msg(format!("Failed to deserialize nodes: {}", e)));
+            } else {
+                return Ok(HashMap::new());
+            }
+        }
+
+        let node_remote = self.get_node_remote()?;
+        let backend = node_remote
+            .propose_target(0, 0)
+            .await
+            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
+
+        if let Some(data) = backend.get("citadel_workspace.nodes").await? {
+            serde_json::from_slice(&data)
+                .map_err(|e| NetworkError::msg(format!("Failed to deserialize nodes: {}", e)))
+        } else {
+            Ok(HashMap::new())
+        }
+    }
+
+    /// Save all DomainNodes to backend
+    pub async fn save_nodes(
+        &self,
+        nodes: &HashMap<String, DomainNode>,
+    ) -> Result<(), NetworkError> {
+        if self.node_remote.read().is_none() {
+            let data = serde_json::to_vec(nodes)
+                .map_err(|e| NetworkError::msg(format!("Failed to serialize nodes: {}", e)))?;
+            self.test_storage
+                .write()
+                .insert("citadel_workspace.nodes".to_string(), data);
+            return Ok(());
+        }
+
+        let node_remote = self.get_node_remote()?;
+        let backend = node_remote
+            .propose_target(0, 0)
+            .await
+            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
+        let data = serde_json::to_vec(nodes)
+            .map_err(|e| NetworkError::msg(format!("Failed to serialize nodes: {}", e)))?;
+        backend.set("citadel_workspace.nodes", data).await?;
+        Ok(())
+    }
+
+    /// Get the tree schema from backend
+    pub async fn get_tree_schema(&self) -> Result<Option<TreeSchema>, NetworkError> {
+        if self.node_remote.read().is_none() {
+            if let Some(data) = self
+                .test_storage
+                .read()
+                .get("citadel_workspace.tree_schema")
+            {
+                return serde_json::from_slice(data).map_err(|e| {
+                    NetworkError::msg(format!("Failed to deserialize tree schema: {}", e))
+                });
+            } else {
+                return Ok(None);
+            }
+        }
+
+        let node_remote = self.get_node_remote()?;
+        let backend = node_remote
+            .propose_target(0, 0)
+            .await
+            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
+
+        if let Some(data) = backend.get("citadel_workspace.tree_schema").await? {
+            let schema: TreeSchema = serde_json::from_slice(&data).map_err(|e| {
+                NetworkError::msg(format!("Failed to deserialize tree schema: {}", e))
+            })?;
+            Ok(Some(schema))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Save the tree schema to backend
+    pub async fn save_tree_schema(&self, schema: &TreeSchema) -> Result<(), NetworkError> {
+        if self.node_remote.read().is_none() {
+            let data = serde_json::to_vec(schema).map_err(|e| {
+                NetworkError::msg(format!("Failed to serialize tree schema: {}", e))
+            })?;
+            self.test_storage
+                .write()
+                .insert("citadel_workspace.tree_schema".to_string(), data);
+            return Ok(());
+        }
+
+        let node_remote = self.get_node_remote()?;
+        let backend = node_remote
+            .propose_target(0, 0)
+            .await
+            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
+        let data = serde_json::to_vec(schema)
+            .map_err(|e| NetworkError::msg(format!("Failed to serialize tree schema: {}", e)))?;
+        backend.set("citadel_workspace.tree_schema", data).await?;
+        Ok(())
     }
 }

@@ -67,8 +67,8 @@ async fn test_role_operations() {
     .unwrap();
 
     let office_id = match create_office_response {
-        WorkspaceProtocolResponse::Office(office) => office.id,
-        _ => panic!("Expected Office response"),
+        WorkspaceProtocolResponse::Node(node) => node.id,
+        _ => panic!("Expected Node response"),
     };
 
     // Add users with different roles

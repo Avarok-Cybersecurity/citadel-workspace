@@ -1,9 +1,21 @@
 {
+  "workspaces": [
+    "citadel-workspace-client-ts",
+    "citadel-workspaces",
+    "citadel-workspaces/integration-tests",
+    "citadel-internal-service/typescript-client"
+  ],
   "dependencies": {
     "uuid": "^13.0.0",
     "ws": "^8.18.3"
   },
+  "optionalDependencies": {
+    "@rollup/rollup-darwin-arm64": "^4.55.1"
+  },
   "devDependencies": {
-    "playwright": "^1.57.0"
+    "@eslint/js": "^9.18.0",
+    "eslint": "^9.18.0",
+    "playwright": "^1.57.0",
+    "typescript-eslint": "^8.20.0"
   }
 }

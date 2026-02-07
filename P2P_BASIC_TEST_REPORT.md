@@ -1,23 +1,23 @@
 # P2P Basic Test Report
 
-**Date:** 2026-01-05
-**Timestamp:** 1767648035
-**Test Type:** P2P Basic Bidirectional Messaging Test
+**Date:** 2026-01-23
+**Timestamp:** 1769211951
+**Test Type:** P2P Basic Bidirectional Messaging Test (Headless)
 
 ## Test Objective
 
 Validate P2P messaging works correctly between two users:
 1. Create 2 users and establish P2P connection
-2. Send P2P message from User 1 to User 2 - verify receipt
-3. Send P2P message from User 2 to User 1 - verify bidirectional messaging
-4. Document UX issues and console warnings
+2. Send P2P messages bidirectionally
+3. Document UX issues and console warnings
 
 ## Accounts Created
 
-| User | Username | CID | Tab |
-|------|----------|-----|-----|
-| User 1 | p2ptest1_1767648035 | 15627944488637335986 | Tab 0 |
-| User 2 | p2ptest2_1767648035 | 5521168870191771248 | Tab 2 |
+| User | Username | CID | Status |
+|------|----------|-----|--------|
+| User 1 | p2ptest1_1769211951 | 13052662023604289317 | CREATED |
+| User 2 | p2ptest2_1769211951 | 6422049600014401439 | CREATED |
+| (Pre-existing) | msg_alice_1769211576262 | 4478910565930616664 | EXISTING |
 
 **Password:** test12345
 **Workspace Location:** 127.0.0.1:12349
@@ -27,154 +27,144 @@ Validate P2P messaging works correctly between two users:
 | Phase | Test | Status | Notes |
 |-------|------|--------|-------|
 | **Phase 0** | Prerequisites Check | PASS | All services running |
-| **Phase 1** | Account Creation (User 1) | PASS | Workspace initialized as admin |
-| **Phase 1** | Account Creation (User 2) | PASS | No initialization modal (correct) |
-| **Phase 2** | P2P Peer Discovery | PASS | User 2 found in discovery list |
-| **Phase 2** | P2P Connection Request | PASS | Request sent from User 1 |
-| **Phase 2** | P2P Connection Accept | PASS | User 2 accepted, PeerConnectSuccess |
-| **Phase 3** | Message User1 -> User2 | PASS | "Hello from user1!" delivered at 04:27 PM |
-| **Phase 3** | Message Receipt (User 2) | PASS | Message appeared on LEFT side with timestamp |
-| **Phase 3** | Message User2 -> User1 | PARTIAL | "Hello back from user2!" sent at 04:29 PM |
-| **Phase 3** | Message Receipt (User 1) | ISSUE | Message NOT displayed in User 1's chat view |
+| **Phase 1** | Account Creation (User 1) | PASS | Account registered successfully |
+| **Phase 1** | Account Creation (User 2) | PASS | Account registered successfully |
+| **Phase 1** | Session Persistence | PASS | All 3 sessions visible in "Previous Sessions" |
+| **Phase 1** | Session Claim | PARTIAL | Session claim works, navigation fails |
+| **Phase 1** | Workspace Load | **FAIL** | **CRITICAL BUG - WorkspaceSwitcher crashes** |
+| **Phase 2** | P2P Registration | NOT TESTED | Blocked by workspace load failure |
+| **Phase 3** | Message User1->User2 | NOT TESTED | Blocked by workspace load failure |
+| **Phase 3** | Message User2->User1 | NOT TESTED | Blocked by workspace load failure |
 
-## Overall Result: PARTIAL PASS
+## Overall Result: FAIL
 
-Basic P2P messaging works (User 1 -> User 2 direction confirmed). However, there is a UI synchronization issue where User 1's chat view did not display the reply from User 2, even though the message was successfully sent from User 2's side (confirmed by logs showing `Message sent successfully in 62ms`).
+**BLOCKED BY CRITICAL UI BUG:** The WorkspaceSwitcher component crashes when rendering, preventing access to the workspace UI and blocking all P2P tests.
 
-## Key Findings
+## CRITICAL UX/UI Bugs Discovered
 
-### P2P Connection Established Successfully
+| Severity | Issue | Location | Error |
+|----------|-------|----------|-------|
+| **CRITICAL** | WorkspaceSwitcher component crashes when rendering | `WorkspaceSwitcher.tsx:433` | `TypeError: Cannot read properties of undefined (reading 'charAt')` |
+| **HIGH** | Navigation fails after session claim | `OrphanSessionsNavbar.tsx` | `ReferenceError: eventEmitter is not defined` |
+| **MEDIUM** | Initialize Workspace modal shows "No active connection" error | `WorkspaceInitializationModal.tsx` | Connection not properly established before modal appears |
 
-Both users successfully established a P2P connection:
+## Console Errors
 
+### Critical Error (Blocking Test)
 ```
-getPeersForSession(15627944...): 1 peers [55211688...]
-getPeersForSession(55211688...): 1 peers [15627944...]
-PeerConnectSuccess
-```
-
-### Message Delivery (User 1 -> User 2) - SUCCESS
-
-The first message from User 1 to User 2 was delivered successfully:
-
-```
-[P2P] *** sendMessage ENTRY *** recipientCid=55211688..., content="Hello from user1!"
-P2P message received: 258 bytes
-P2P MessageNotification received from peer: 15627944488637335986 for session: 5521168870191771248
+[ERROR] Cannot read properties of undefined (reading 'charAt')
+    at WorkspaceSwitcher.tsx:433:152
+    at Array.map (<anonymous>)
+    at WorkspaceSwitcher.tsx:426:52
+    at Array.map (<anonymous>)
+    at WorkspaceSwitcher (WorkspaceSwitcher.tsx:399:37)
 ```
 
-User 2's view correctly showed the message on the LEFT side (received messages).
+This error occurs in the `WorkspaceSwitcher` component when:
+1. A session is claimed
+2. The workspace page loads
+3. The component tries to render workspace member avatars but encounters undefined values
 
-### Message Delivery (User 2 -> User 1) - PARTIAL SUCCESS
-
-The reply from User 2 was sent successfully but not displayed in User 1's view:
-
-**Sender logs (User 2):**
+### Navigation Error
 ```
-[P2P] *** sendMessage ENTRY *** recipientCid=15627944..., content="Hello back from user..."
-[P2P] Sending to 15627944488637335986 without CheckState confirmation
-[P2P] Message 54d3d7ef-f3f3-401d-ba5a-25b3e986a585 sent successfully in 62ms
+[ERROR] OrphanSessionsNavbar: Failed to navigate to workspace: ReferenceError: eventEmitter is not defined
 ```
 
-**Issue:** The message was sent but User 1's chat view only showed their original outgoing message, not the received reply.
+This error prevents automatic navigation to the workspace after session claim from the landing page.
 
-### UI Synchronization Issue Identified
+## Console Warnings (Non-blocking)
 
-When Tab 2 (User 2) was opened via URL navigation, it triggered a complex session state involving:
-1. CheckState handshake timeout
-2. Message sent without CheckState confirmation
-3. Tab was "Follower" not "Leader"
+| Warning | Impact |
+|---------|--------|
+| `[WARNING] PeerRegistrationStore: Failed to load from LocalDB` | Key not found (expected on fresh install) |
+| `[WARNING] ServerAutoConnect: Failed to load enabled setting` | Key not found (expected on fresh install) |
+| `[WARNING] React Router Future Flag Warning` | Deprecation warnings for React Router v7 |
+| `[WARNING] using deprecated parameters for the initialization function` | WASM initialization deprecation |
 
-The warning `getPeersForSession(55211688...): 0 peers (none)` appeared multiple times for User 2's session after navigation, suggesting P2P state may have been lost during tab switching.
+## Backend Status
 
-## Screenshots Captured
+**Backend services are working correctly:**
+- Internal service running
+- Server running
+- All 3 sessions properly maintained
+- Session orphan mode working correctly
+- WebSocket connections stable
 
-| Screenshot | Description | Path |
-|------------|-------------|------|
-| 01-user1-workspace.png | User 1 workspace after initialization | `.playwright-mcp/01-user1-workspace.png` |
-| 02-user2-workspace.png | User 2 workspace loaded | `.playwright-mcp/02-user2-workspace.png` |
-| 03-user1-sends-invite.png | User 1 sending P2P connection request | `.playwright-mcp/03-user1-sends-invite.png` |
-| 04-user2-accepts.png | User 2 accepting connection request | `.playwright-mcp/04-user2-accepts.png` |
-| 05-message-sent-user1.png | Message sent from User 1 | `.playwright-mcp/05-message-sent-user1.png` |
-| 06-message-received-user2.png | User 2 received message from User 1 | `.playwright-mcp/06-message-received-user2.png` |
-| 07-message-sent-user2.png | User 2 sent reply (both messages visible) | `.playwright-mcp/07-message-sent-user2.png` |
-| 08-user1-final.png | User 1 view - missing reply from User 2 | `.playwright-mcp/08-user1-final.png` |
+Backend logs confirm:
+```
+GetSessions: Found 3 total sessions in server_connection_map
+- Session 6422049600014401439 for user p2ptest2_1769211951
+- Session 4478910565930616664 for user msg_alice_1769211576262
+- Session 13052662023604289317 for user p2ptest1_1769211951
+[TCP_DISCONNECT] Preserved 1 sessions for reconnection
+```
 
-## UX/UI Issues Discovered
+## What Works
 
-| Severity | Issue | Details |
-|----------|-------|---------|
-| **HIGH** | Bidirectional message display issue | User 1 did not see reply from User 2, even though it was sent successfully |
-| Medium | CheckState timeout | "CheckState timeout for peer, proceeding with send anyway" |
-| Medium | Tab navigation disrupts P2P state | `getPeersForSession` returned 0 peers after tab navigation |
-| Low | React Router Future Flag Warnings | Deprecation warnings about v7 migration flags |
-| Low | WASM Initialization | "using deprecated parameters for the initialization function" |
+1. **Account Creation**: Both accounts created successfully via UI
+2. **Session Registration**: Sessions properly registered on backend
+3. **Session Orphan Mode**: Sessions persist after browser navigation
+4. **Session Listing**: All sessions visible in "Previous Sessions" on landing page
+5. **Session Claim**: ClaimSession protocol works (ConnectionManagementSuccess received)
+6. **Backend Services**: Internal service and server operating normally
+7. **WebSocket Communication**: All messages routing correctly through WebSocket
+8. **Leader/Follower Election**: Multi-tab coordination working
 
-## Console Warnings/Errors
+## What Fails
 
-### Critical Warnings
+1. **Workspace UI Loading**: WorkspaceSwitcher crashes before workspace renders
+2. **Navigation After Claim**: eventEmitter reference error breaks navigation flow
+3. **P2P Features**: Cannot be tested due to workspace not loading
 
-| Warning | Frequency | Impact |
-|---------|-----------|--------|
-| `[P2P] CheckState timeout for X, proceeding with send anyway` | Multiple | Messages sent without peer state confirmation |
-| `[P2P][WasmPeerBridge] CALL #X getPeersForSession(55211688...): 0 peers (none)` | Many | P2P state lost on Tab 2 after navigation |
-| `[InstanceInboundRouter] No instance owns CID 0, message may be lost` | Multiple | Potential message routing issues |
+## Root Cause Analysis
 
-### Expected/Benign Warnings
+### WorkspaceSwitcher Crash
+The crash at `WorkspaceSwitcher.tsx:433` suggests:
+1. The component is mapping over workspace members or sessions
+2. One of the items has an undefined property (likely `username` or `full_name`)
+3. The code calls `.charAt()` on this undefined value without null checking
 
-| Warning | Explanation |
-|---------|-------------|
-| `ServerAutoConnect: Skipping X (already active)` | Normal - sessions already connected |
-| `BroadcastChannelService: leader-election` | Normal tab coordination |
+### eventEmitter Undefined
+The `eventEmitter` variable is referenced in `OrphanSessionsNavbar` but not properly imported or initialized.
 
-## Key Metrics
+## Recommended Actions
 
-| Metric | Value |
-|--------|-------|
-| Active Sessions | 6 (from previous tests + current) |
-| P2P Connections | Active bidirectionally |
-| Messages Sent (User 1 -> User 2) | 1 (delivered) |
-| Messages Sent (User 2 -> User 1) | 1 (sent but not displayed) |
-| Session Errors | 0 |
-| Ratchet Errors | 0 |
+1. **IMMEDIATE**: Fix `WorkspaceSwitcher.tsx:433` - Add null/undefined checks before calling `.charAt()`
+2. **HIGH**: Fix `eventEmitter` reference in `OrphanSessionsNavbar.tsx`
+3. **MEDIUM**: Add error boundary around `WorkspaceSwitcher` component to prevent full page crash
+4. **LOW**: Add proper loading states for session data before rendering avatar components
 
-## No "Ratchet does not exist" Errors
+## Files to Investigate
 
-**IMPORTANT**: No "Ratchet does not exist" errors were observed during the entire test. This confirms the cryptographic ratchet state is properly maintained.
+- `/Users/nologik/avarok/citadel-workspace/citadel-workspaces/src/components/layout/sidebar/WorkspaceSwitcher.tsx` (line 433)
+- `/Users/nologik/avarok/citadel-workspace/citadel-workspaces/src/components/OrphanSessionsNavbar.tsx`
 
-## Test Execution Timeline
+## Screenshots
 
-1. **04:27 PM**: User 1 created (p2ptest1_1767648035)
-2. **04:27 PM**: User 2 created (p2ptest2_1767648035)
-3. **04:27 PM**: P2P Registration completed (User 1 invited, User 2 accepted)
-4. **04:27 PM**: Message sent from User 1 "Hello from user1!"
-5. **04:27 PM**: Message received by User 2 (confirmed via screenshot)
-6. **04:29 PM**: Reply sent from User 2 "Hello back from user2!"
-7. **04:29 PM**: User 2 shows both messages correctly
-8. **04:30 PM**: User 1 view only shows sent message (missing reply)
+1. `01-user1-workspace.png` - Landing page showing previous sessions (M, P)
+2. `03-all-sessions-visible.png` - All 3 sessions visible (P, P, M)
 
-## Conclusion
+## Test Environment
 
-### What Works
-1. **Account Creation**: Both accounts created successfully
-2. **P2P Registration**: Connection established and accepted
-3. **Unidirectional Messaging (User 1 -> User 2)**: Messages delivered and displayed correctly
-4. **No Ratchet Errors**: Cryptographic state maintained
+- UI URL: http://localhost:5173/
+- Internal Service: ws://localhost:12345
+- Workspace Server: 127.0.0.1:12349
+- Browser: Headless Chromium via Playwright MCP
+- Test Duration: ~5 minutes
 
-### What Needs Investigation
-1. **Bidirectional Messaging Issue**: Messages from User 2 to User 1 are sent successfully but not displayed in User 1's view
-2. **Tab Navigation P2P State**: Navigating between tabs appears to disrupt P2P connection state
-3. **CheckState Handshake**: Timeouts occurring before message send
+## Comparison with Previous Test (1769187266)
 
-### Recommendations
+| Aspect | Previous Test | Current Test |
+|--------|---------------|--------------|
+| Account Creation | PASS | PASS |
+| Workspace Loading | PASS | **FAIL** |
+| P2P Registration | PASS | NOT TESTED |
+| Bidirectional Messaging | PASS | NOT TESTED |
 
-1. **Investigate bidirectional message delivery**: The logs show messages are sent successfully, but not rendered in the recipient's view. This could be:
-   - Message routing issue between tabs
-   - React state not updating when receiving messages
-   - BroadcastChannel not propagating MessageNotification to correct tab
+**Regression Detected:** The WorkspaceSwitcher crash is a new issue not present in the previous test run.
 
-2. **P2P state synchronization on tab switch**: When a user switches tabs, the P2P connection state should be properly synchronized
+## Final Verdict
 
-3. **CheckState handshake reliability**: The CheckState timeout suggests peer state verification is failing, though messages are still delivered
+**FAIL - Test blocked by UI regression in WorkspaceSwitcher component.**
 
-The basic P2P infrastructure is working, but there are UI/state synchronization issues that need to be addressed for reliable bidirectional messaging in multi-tab scenarios.
+The backend P2P functionality is likely still working (based on previous test results), but cannot be verified due to the critical UI bug preventing workspace access.

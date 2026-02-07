@@ -33,6 +33,9 @@ pub fn retrieve_role_permissions(role: &UserRole, domain_type: &DomainType) -> V
             permissions.push(Permission::ReadMessages);
             permissions.push(Permission::ManageDomains);
             permissions.push(Permission::ConfigureSystem);
+            // Tree structure permissions
+            permissions.push(Permission::EditTreeStructure);
+            permissions.push(Permission::ManageNodeTypes);
         }
         UserRole::Member => {
             // Member role has moderate permissions that vary by domain type
@@ -57,6 +60,17 @@ pub fn retrieve_role_permissions(role: &UserRole, domain_type: &DomainType) -> V
                     // Room members can send messages
                     permissions.push(Permission::UploadFiles);
                     permissions.push(Permission::DownloadFiles);
+                }
+                DomainType::Child(type_name) => {
+                    // Custom child types get intermediate permissions
+                    // Similar to Office-level permissions by default
+                    permissions.push(Permission::UploadFiles);
+                    permissions.push(Permission::DownloadFiles);
+                    // If it looks like an office-level type, add create child permissions
+                    if type_name != "Room" {
+                        permissions.push(Permission::CreateRoom);
+                        permissions.push(Permission::AddRoom);
+                    }
                 }
             }
         }
@@ -85,6 +99,9 @@ pub fn retrieve_role_permissions(role: &UserRole, domain_type: &DomainType) -> V
             permissions.push(Permission::SendMessages);
             permissions.push(Permission::ReadMessages);
             permissions.push(Permission::ManageDomains);
+            // Tree structure permissions
+            permissions.push(Permission::EditTreeStructure);
+            permissions.push(Permission::ManageNodeTypes);
         }
         UserRole::Custom(_, _) => {
             // Custom roles should have manually assigned permissions

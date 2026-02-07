@@ -83,12 +83,114 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install Dependencies
+      - name: Install Workspace Dependencies
+        # Install from root to resolve file: dependencies between workspaces
         run: npm ci
-        working-directory: citadel-workspaces
+      - name: Build citadel-internal-service typescript-client
+        # Build the WASM client's TypeScript wrapper first (innermost dependency)
+        run: npm run build
+        working-directory: citadel-internal-service/typescript-client
+      - name: Build citadel-workspace-client-ts
+        # Build client-ts to generate dist/ with TypeScript declarations
+        run: npm run build
+        working-directory: citadel-workspace-client-ts
+      - name: Install Vitest
+        # Ensure vitest is available at root for workspace to use
+        run: npm install vitest@3.0.7 --save-dev
       - name: Run Unit Tests
-        run: npm test
+        # Run vitest directly to avoid npm -w matching nested integration-tests workspace
+        run: npx vitest run
         working-directory: citadel-workspaces
+
+  typecheck:
+    name: TypeScript Type Check - ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: citadel-workspaces
+            path: citadel-workspaces
+          - project: citadel-workspace-client-ts
+            path: citadel-workspace-client-ts
+          - project: integration-tests
+            path: citadel-workspaces/integration-tests
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Workspace Dependencies
+        # Install from root to resolve file: dependencies between workspaces
+        run: npm ci
+      - name: Build citadel-internal-service typescript-client
+        # Build the WASM client's TypeScript wrapper first (innermost dependency)
+        # Now part of npm workspaces, so deps installed by root npm ci
+        run: npm run build
+        working-directory: citadel-internal-service/typescript-client
+      - name: Build citadel-workspace-client-ts
+        # Build client-ts to generate dist/ with TypeScript declarations
+        run: npm run build
+        working-directory: citadel-workspace-client-ts
+      - name: Run Type Check
+        run: |
+          if [ "${{ matrix.project }}" = "citadel-workspaces" ]; then
+            # Run from root for bundler moduleResolution (needs hoisted react)
+            npx tsc -p ${{ matrix.path }}/tsconfig.app.json --noEmit
+          elif [ "${{ matrix.project }}" = "integration-tests" ]; then
+            # Symlink playwright for NodeNext resolution
+            mkdir -p ${{ matrix.path }}/node_modules
+            ln -sf ${{ github.workspace }}/node_modules/playwright ${{ matrix.path }}/node_modules/playwright
+            npm run typecheck -w cw-integration-tests
+          else
+            npm run typecheck -w ${{ matrix.project }}
+          fi
+
+  lint:
+    name: ESLint - ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: citadel-workspaces
+            path: citadel-workspaces
+          - project: citadel-workspace-client-ts
+            path: citadel-workspace-client-ts
+          - project: integration-tests
+            path: citadel-workspaces/integration-tests
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Workspace Dependencies
+        # Install from root to resolve file: dependencies between workspaces
+        run: npm ci
+      - name: Build citadel-internal-service typescript-client
+        # Build the WASM client's TypeScript wrapper first (innermost dependency)
+        run: npm ci && npm run build
+        working-directory: citadel-internal-service/typescript-client
+      - name: Build citadel-workspace-client-ts
+        # Build client-ts to generate dist/ with TypeScript declarations
+        run: npm run build
+        working-directory: citadel-workspace-client-ts
+      - name: Install ESLint at root (workspaces hoisting issue)
+        # Workspaces may hoist eslint to workspace dirs instead of root
+        run: npm install eslint@9.39.2 --save-dev
+      - name: Run ESLint
+        # Symlink hoisted packages and use root eslint binary via .bin
+        run: |
+          mkdir -p node_modules/@eslint
+          ln -sf ${{ github.workspace }}/node_modules/@eslint/js node_modules/@eslint/js
+          ln -sf ${{ github.workspace }}/node_modules/globals node_modules/globals
+          ln -sf ${{ github.workspace }}/node_modules/typescript-eslint node_modules/typescript-eslint
+          ${{ github.workspace }}/node_modules/.bin/eslint .
+        working-directory: ${{ matrix.path }}
 
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
@@ -146,6 +248,15 @@ jobs:
         env:
           INTERNAL_SERVICE_PORT: '12345'
         run: docker compose up -d --wait
+      - name: Dump Service Logs on Start Failure
+        if: failure()
+        run: |
+          echo "=== sync-wasm-client logs ==="
+          docker compose logs sync-wasm-client 2>&1 | tail -200
+          echo "=== server logs ==="
+          docker compose logs server 2>&1 | tail -50
+          echo "=== internal-service logs ==="
+          docker compose logs internal-service 2>&1 | tail -50
       - name: Clean Docker Build Cache
         run: |
           docker builder prune -af
@@ -172,6 +283,10 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' ||
       contains(fromJSON('["tbraun96", "Raduc4", "Tjemmmic"]'), github.actor)
+    env:
+      # Self-hosted runner may have mismatched home dirs between install and test steps.
+      # Use explicit path so playwright install and test both find the same browsers.
+      PLAYWRIGHT_BROWSERS_PATH: /tmp/pw-browsers
     steps:
       - name: Fix Docker-created root-owned files
         run: |
@@ -212,11 +327,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install Playwright Browsers
-        # Note: --with-deps skipped on self-hosted runner (system deps pre-installed)
-        run: npx playwright install chromium
       - name: Install Dependencies
-        run: npm ci
+        # Self-hosted runners persist node_modules between runs, causing version
+        # mismatches. Clean ALL node_modules first to ensure fresh install.
+        # npm workspaces hoist to root, but stale packages in workspace member
+        # dirs (e.g. citadel-workspaces/node_modules) cause resolution conflicts.
+        run: |
+          find "${{ github.workspace }}" -name node_modules -type d -prune -exec rm -rf {} + 2>/dev/null || true
+          npm ci
         working-directory: citadel-workspaces/integration-tests
       - name: Clean Up Previous Containers
         run: |
@@ -227,10 +345,44 @@ jobs:
           docker ps -aq --filter "name=citadel" | xargs -r docker rm 2>/dev/null || true
           # Clean up any dangling containers
           docker container prune -f 2>/dev/null || true
+      - name: Force Rebuild Docker Images
+        # Self-hosted runners cache Docker images from previous runs, which may
+        # have stale WASM builds or outdated code. Force rebuild to ensure fresh.
+        # INTERNAL_SERVICE_PORT is a build arg for the internal-service Dockerfile
+        env:
+          INTERNAL_SERVICE_PORT: '12345'
+        run: docker compose build --no-cache
       - name: Start Services
         env:
           INTERNAL_SERVICE_PORT: '12345'
         run: docker compose up -d --wait
+      - name: Dump Service Logs on Start Failure
+        if: failure()
+        run: |
+          echo "=== sync-wasm-client logs ==="
+          docker compose logs sync-wasm-client 2>&1 | tail -200
+          echo "=== server logs ==="
+          docker compose logs server 2>&1 | tail -50
+          echo "=== internal-service logs ==="
+          docker compose logs internal-service 2>&1 | tail -50
+      - name: Clean Docker-modified playwright
+        # sync-wasm-client bind-mounts ./citadel-workspaces and runs
+        # `npm install --package-lock=false`, installing latest playwright (1.58.x)
+        # to citadel-workspaces/node_modules/ on the host. This shadows the
+        # lockfile-pinned version in root/node_modules/ (1.57.0).
+        # Remove only playwright packages so test resolves from root (consistent).
+        # Keep other packages (@types/node etc.) needed by tsc compilation.
+        run: |
+          rm -rf citadel-workspaces/node_modules/playwright
+          rm -rf citadel-workspaces/node_modules/playwright-core
+          rm -f citadel-workspaces/node_modules/.bin/playwright
+      - name: Install Playwright Browsers
+        # Note: --with-deps skipped on self-hosted runner (system deps pre-installed)
+        # Clean stale browsers first (self-hosted runners persist /tmp/pw-browsers)
+        run: |
+          rm -rf "$PLAYWRIGHT_BROWSERS_PATH"
+          echo "playwright version: $(npx playwright --version)"
+          npx playwright install chromium chromium-headless-shell
       - name: Run Heavy Integration Tests
         env:
           IN_CI: 'true'

@@ -9,6 +9,149 @@ The skill provides guidance on:
 
 To invoke: Use the Skill tool with command `programming-principles`.
 
+## Strict TypeScript Policy
+
+**All TypeScript code uses strict type checking.** Enforced in CI.
+
+### Required tsconfig Settings
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true
+  }
+}
+```
+
+### CID Type Rules
+- CID canonical type is `bigint`
+- Convert to string **ONLY** when necessary:
+  - React JSX display: `{cid.toString()}`
+  - React keys: `key={cid.toString()}`
+  - Debug logging
+- **NEVER** use string CIDs in:
+  - Function parameters
+  - Interface definitions
+  - Map/Set keys
+  - Serialization boundaries
+
+### Serialization
+- **P2P wire format**: CBOR (cbor-x) - native BigInt support
+- **Browser storage**: IndexedDB (Structured Clone handles BigInt natively)
+- **NO** JSON.stringify for data containing BigInt
+- **NO** bigIntReviver/bigIntReplacer workarounds
+
+### Async Storage
+All browser storage is async via IndexedDB:
+```typescript
+// ✅ CORRECT - Use await
+const session = await connectionManager.getTabSelectedSession();
+const user = await getSelectedUser();
+
+// ❌ WRONG - Synchronous access (no longer works)
+const session = connectionManager.getTabSelectedSession();  // Returns Promise!
+```
+
+### Type Guidelines
+- Avoid `any` - use `unknown` with type guards
+- All function parameters must have explicit types
+- Null/undefined must be explicitly handled
+- ESLint `no-floating-promises` is enabled - always await or assign to `const _ =` for intentional fire-and-forget
+
+## Repository Structure & Git Submodules
+
+This repository uses **nested git submodules**. Understanding the hierarchy is critical for the merge/commit process.
+
+### Dependency Hierarchy
+
+```mermaid
+graph TB
+    subgraph main["citadel-workspace (main repo)"]
+        CWC["citadel-workspace-client-ts<br/>(directory in main repo)"]
+
+        subgraph sub_cw["📦 citadel-workspaces (git submodule)"]
+            UI["React UI Application"]
+            UI -->|"imports"| CWC
+        end
+
+        subgraph sub_cis["📦 citadel-internal-service (git submodule)"]
+            TSC["typescript-client<br/>(WASM bindings + types)"]
+            RUST_CIS["Rust Internal Service"]
+
+            subgraph sub_ilm["📦 intersession-layer-messaging<br/>(nested git submodule)"]
+                ILM["P2P Messaging Layer"]
+            end
+
+            RUST_CIS --> ILM
+        end
+
+        CWC -->|"imports"| TSC
+    end
+
+    style main fill:#e8f4f8,stroke:#0077b6
+    style sub_cw fill:#fff3cd,stroke:#ffc107
+    style sub_cis fill:#fff3cd,stroke:#ffc107
+    style sub_ilm fill:#ffcccb,stroke:#dc3545
+```
+
+### Submodule URLs
+
+| Submodule | Path | Remote URL |
+|-----------|------|------------|
+| citadel-workspaces | `citadel-workspaces/` | https://github.com/Avarok-Cybersecurity/citadel-workspace-ui |
+| citadel-internal-service | `citadel-internal-service/` | https://github.com/Avarok-Cybersecurity/citadel-internal-service |
+| intersession-layer-messaging | `citadel-internal-service/intersession-layer-messaging/` | https://github.com/tbraun96/intersession-layer-messaging |
+
+### Commit/Merge Order (Bottom-Up)
+
+**CRITICAL**: When making changes across multiple repos, you MUST commit and push in dependency order (innermost first):
+
+1. **intersession-layer-messaging** (if changed)
+   - Innermost nested submodule
+   - Commit → Push → Update parent's submodule reference
+
+2. **citadel-internal-service** (if changed)
+   - Contains typescript-client and Rust services
+   - Commit (including submodule pointer update if #1 changed) → Push
+
+3. **citadel-workspaces** (if changed)
+   - The React UI application
+   - Commit → Push
+
+4. **citadel-workspace** (main repo - LAST)
+   - Update submodule pointers for any changed submodules
+   - Commit → Push
+
+### Example Workflow
+
+```bash
+# 1. If intersession-layer-messaging changed
+cd citadel-internal-service/intersession-layer-messaging
+git add . && git commit -m "Fix: ..." && git push
+
+# 2. Update citadel-internal-service
+cd ..
+git add intersession-layer-messaging  # Update submodule pointer
+git add -A && git commit -m "Update: ..." && git push
+
+# 3. If citadel-workspaces changed
+cd ../citadel-workspaces
+git add . && git commit -m "Feature: ..." && git push
+
+# 4. Update main repo (LAST)
+cd ..
+git add citadel-internal-service citadel-workspaces  # Update submodule pointers
+git commit -m "Sync submodules" && git push
+```
+
+### CI Build Order
+
+The CI pipeline builds TypeScript dependencies in this order:
+1. `citadel-internal-service/typescript-client` (WASM types)
+2. `citadel-workspace-client-ts` (depends on #1)
+3. Then typecheck runs on `citadel-workspaces` and `integration-tests`
+
 ## Development Notes
 
 - When testing/debugging, keep in mind that this is a tilt project with everything already running. Use tilt logs <service-name>, where service-name can be anything defined in the docker-compose.yml file and/or the Tiltfile: ui, internal-service, server.
@@ -347,6 +490,121 @@ P2P messaging uses triple-nested protocols:
 - All workspace operations go through WorkspaceProtocol inscribed in InternalService::Message
 - P2P messaging requires proper WASM bindings for send_p2p_message
 - Domain permissions inherit: Workspace → Office → Room
+
+## P2P Message Flow: Complete Causal Chain
+
+This documents the full code path when Alice sends a P2P message to Bob. Understanding this flow is critical for debugging message delivery issues.
+
+**Key Architecture Note**: The Internal Service (`citadel-internal-service`) is a **local agent** running on localhost that manages Citadel Protocol connections for local applications. It is NOT a remote server - each user runs their own Internal Service locally.
+
+### Outbound Path (Alice Sends)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PHASE 1: UI INPUT (Alice's Browser)                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ P2PChat.tsx:558 handleSendMessage()                                         │
+│   → p2p-messenger-manager.ts:1029 sendMessage()                             │
+│   → p2p-messenger-manager.ts:1580 sendP2PCommand()  [cbor-x serialize]      │
+│   → websocket-service.ts:909 sendP2PMessageReliable()                       │
+│     (If follower tab: proxies via InstanceChannel to leader)                │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PHASE 2: WASM CLIENT LAYER (Browser)                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ lib.rs:690 send_p2p_message_reliable()                                      │
+│   → messenger/mod.rs:849 MessengerTx::send_message_to_with_security_level() │
+│   → messenger/mod.rs:891 send_message_to_ism()  [ILM handles reliability]   │
+│   → messenger/mod.rs:564 WireWrapper::Message serialization                 │
+│   → messenger/mod.rs:586 InternalServiceRequest::Message                    │
+│   → WebSocket sink.send() → Internal Service                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                              [WebSocket to localhost:12345]
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PHASE 3: ALICE'S INTERNAL SERVICE (Local Agent)                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ requests/message.rs:11 handle()                                             │
+│   → Lookup Alice's connection in server_connection_map                      │
+│   → Find P2P peer sink for Bob in conn.peers[bob_cid]                       │
+│   → message.rs:64 sink_guard.send(message)                                  │
+│   → Citadel SDK encrypts with double-ratchet                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                      [Citadel Protocol P2P Channel - TCP/UDP]
+                      [Encrypted end-to-end between Alice ↔ Bob]
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PHASE 4: BOB'S INTERNAL SERVICE (Local Agent)                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ peer_channel_created.rs:75 stream.next()  [P2P read stream]                 │
+│   → Citadel SDK decrypts message                                            │
+│   → peer_channel_created.rs:78 Creates MessageNotification {                │
+│       cid: bob_session_cid,      // RECIPIENT's CID                         │
+│       peer_cid: alice_cid,       // SENDER's CID                            │
+│       message: decrypted_bytes                                              │
+│     }                                                                       │
+│   → peer_channel_created.rs:97 entry.send(notification) → WebSocket         │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                              [WebSocket to Bob's Browser]
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PHASE 5: WASM CLIENT LAYER (Bob's Browser)                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ messenger/mod.rs:341 MessageNotification received                           │
+│   → messenger/mod.rs:346 WireWrapper deserialization                        │
+│   → messenger/mod.rs:376 Forward to JavaScript via channel                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PHASE 6: MULTI-TAB ROUTING (Bob's Browser)                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ instance-inbound-router.ts:132 routeMessage()                               │
+│   → CRITICAL: Routes by CID field, NOT request_id                           │
+│   → instance-inbound-router.ts:248 CID_ROUTED_NOTIFICATIONS includes        │
+│     'MessageNotification' - ensures routing by notification.cid             │
+│   → If Bob's tab is leader: processLocalMessage()                           │
+│   → If Bob's tab is follower: forwards via BroadcastChannel                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PHASE 7: MESSAGE PROCESSING (Bob's Tab)                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ p2p-messenger-manager.ts:432 handleWebSocketMessage()                       │
+│   → Verifies notification.cid matches Bob's current session CID             │
+│   → cbor-x decodes P2PCommand                                               │
+│   → addMessage() to conversation cache (IndexedDB)                          │
+│   → Event emission: 'p2p:message-received'                                  │
+│   → P2PChat.tsx re-renders with new message                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Network Boundaries
+
+| Boundary | Technology | What Crosses |
+|----------|------------|--------------|
+| Browser → Internal Service | WebSocket (localhost:12345) | InternalServiceRequest::Message |
+| Alice's IS → Bob's IS | Citadel P2P Channel (TCP/UDP) | Encrypted message bytes |
+| Internal Service → Browser | WebSocket | MessageNotification |
+| Leader Tab → Follower Tab | BroadcastChannel | Serialized message |
+
+### Critical Routing Fix
+
+`MessageNotification` must be routed by `cid` field (recipient), not `request_id` (sender's original request). This is configured in `instance-inbound-router.ts:248`:
+
+```typescript
+private static readonly CID_ROUTED_NOTIFICATIONS = new Set([
+  'PeerRegisterNotification',
+  'PeerConnectNotification',
+  'MessageNotification',  // Routes by cid (recipient), not request_id
+]);
+```
 
 ## Citadel SDK Reconnection Behavior
 

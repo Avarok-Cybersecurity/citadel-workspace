@@ -42,7 +42,7 @@ async fn test_permission_set() {
     .await
     .unwrap();
 
-    let office = extract_office(create_office_response).expect("Failed to create office");
+    let office = extract_node(create_office_response).expect("Failed to create office");
 
     // Add a member to the office
     let add_member_response = execute_command(
@@ -93,7 +93,7 @@ async fn test_permission_set() {
     .unwrap();
 
     // Should succeed since we're using admin user in test kernel
-    let room = extract_room(create_room_response).expect("Failed to create room");
+    let room = extract_node(create_room_response).expect("Failed to create room");
     assert_eq!(room.name, "Test Room");
 }
 
@@ -119,7 +119,7 @@ async fn test_permission_inheritance() {
     .await
     .unwrap();
 
-    let office = extract_office(create_office_response).expect("Failed to create office");
+    let office = extract_node(create_office_response).expect("Failed to create office");
 
     // Add a member with Admin role to office
     let add_member_response = execute_command(
@@ -154,7 +154,7 @@ async fn test_permission_inheritance() {
     .await
     .unwrap();
 
-    let office = extract_office(create_office_response).expect("Failed to create office");
+    let office = extract_node(create_office_response).expect("Failed to create office");
     assert_eq!(office.name, "Admin Created Office");
 }
 
@@ -180,7 +180,7 @@ async fn test_permission_denial() {
     .await
     .unwrap();
 
-    let office = extract_office(create_office_response).expect("Failed to create office");
+    let office = extract_node(create_office_response).expect("Failed to create office");
 
     // Add a guest member
     let add_member_response = execute_command(

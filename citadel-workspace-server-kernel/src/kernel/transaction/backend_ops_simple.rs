@@ -4,7 +4,9 @@
 
 use crate::kernel::transaction::BackendTransactionManager;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{Domain, Office, Room, User, Workspace};
+use citadel_workspace_types::structs::{
+    Domain, DomainNode, Office, Room, TreeSchema, User, Workspace,
+};
 
 impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// Initialize the backend transaction manager
@@ -203,5 +205,46 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         users.insert(user_id.to_string(), user);
         self.save_users(&users).await?;
         Ok(())
+    }
+
+    // ========== DomainNode (Generalized Tree Hierarchy) Operations ==========
+
+    /// Get a single DomainNode by ID
+    pub async fn get_node(&self, node_id: &str) -> Result<Option<DomainNode>, NetworkError> {
+        let nodes = self.get_all_nodes().await?;
+        Ok(nodes.get(node_id).cloned())
+    }
+
+    /// Insert a DomainNode
+    pub async fn insert_node(&self, node_id: String, node: DomainNode) -> Result<(), NetworkError> {
+        let mut nodes = self.get_all_nodes().await?;
+        nodes.insert(node_id, node);
+        self.save_nodes(&nodes).await
+    }
+
+    /// Remove a DomainNode
+    pub async fn remove_node(&self, node_id: &str) -> Result<Option<DomainNode>, NetworkError> {
+        let mut nodes = self.get_all_nodes().await?;
+        let removed = nodes.remove(node_id);
+        if removed.is_some() {
+            self.save_nodes(&nodes).await?;
+        }
+        Ok(removed)
+    }
+
+    /// Update a DomainNode
+    pub async fn update_node(&self, node_id: &str, node: DomainNode) -> Result<(), NetworkError> {
+        let mut nodes = self.get_all_nodes().await?;
+        nodes.insert(node_id.to_string(), node);
+        self.save_nodes(&nodes).await?;
+        Ok(())
+    }
+
+    /// Get the tree schema, returning default if not set
+    pub async fn get_tree_schema_or_default(&self) -> Result<TreeSchema, NetworkError> {
+        match self.get_tree_schema().await? {
+            Some(schema) => Ok(schema),
+            None => Ok(TreeSchema::default()),
+        }
     }
 }

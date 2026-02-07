@@ -28,6 +28,53 @@ pub mod config {
         /// Path to directory containing workspace.json and office/room CONTENT.md files
         /// The directory structure defines offices (subdirs) and rooms (nested subdirs)
         pub content_base_dir: Option<String>,
+        /// File transfer configuration
+        pub file_transfer: Option<FileTransferConfig>,
+    }
+
+    /// File transfer configuration section
+    #[derive(Deserialize, Debug, Clone)]
+    pub struct FileTransferConfig {
+        /// Enable server-mediated file transfers
+        #[serde(default = "default_true")]
+        pub allow_server_file_transfer: bool,
+        /// Enable RE-VFS (Remote Encrypted Virtual File System) storage
+        #[serde(default = "default_true")]
+        pub allow_server_revfs_storage: bool,
+        /// Maximum file size for transfers (in megabytes)
+        #[serde(default = "default_max_file_size")]
+        pub max_file_transfer_size_mb: u64,
+        /// RE-VFS storage quota per peer (in megabytes)
+        #[serde(default = "default_revfs_quota")]
+        pub revfs_storage_quota_mb: u64,
+        /// File transfer request TTL (in days)
+        #[serde(default = "default_file_ttl")]
+        pub file_ttl_days: u32,
+    }
+
+    fn default_true() -> bool {
+        true
+    }
+    fn default_max_file_size() -> u64 {
+        100
+    }
+    fn default_revfs_quota() -> u64 {
+        100
+    }
+    fn default_file_ttl() -> u32 {
+        7
+    }
+
+    impl Default for FileTransferConfig {
+        fn default() -> Self {
+            Self {
+                allow_server_file_transfer: true,
+                allow_server_revfs_storage: true,
+                max_file_transfer_size_mb: 100,
+                revfs_storage_quota_mb: 100,
+                file_ttl_days: 7,
+            }
+        }
     }
 
     /// Workspace structure configuration from workspaces.json
@@ -366,10 +413,22 @@ pub async fn run_server_with_base_path(
     // Always use in-memory backend for now
     let backend_type_for_node_builder = BackendType::InMemory;
 
+    // Log file transfer config
+    if let Some(ref ft_config) = config.file_transfer {
+        info!(target: "citadel", "File transfer config: server_transfer={}, revfs_storage={}, max_size={}MB, quota={}MB",
+            ft_config.allow_server_file_transfer,
+            ft_config.allow_server_revfs_storage,
+            ft_config.max_file_transfer_size_mb,
+            ft_config.revfs_storage_quota_mb);
+    } else {
+        info!(target: "citadel", "No file transfer config specified, using defaults");
+    }
+
     // Create AsyncWorkspaceServerKernel with admin user from config
-    let kernel = kernel::async_kernel::AsyncWorkspaceServerKernel::<StackedRatchet>::with_workspace_master_password_and_structure(
+    let kernel = kernel::async_kernel::AsyncWorkspaceServerKernel::<StackedRatchet>::with_workspace_master_password_and_structure_and_file_transfer(
         &workspace_password,
         workspace_structure,
+        config.file_transfer.clone(),
     ).await?;
 
     let node_type = NodeType::server(bind_address)?;

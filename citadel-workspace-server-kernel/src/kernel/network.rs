@@ -126,7 +126,7 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
                                             |e| WorkspaceProtocolResponse::Error(e.to_string()),
                                         );
                                     let response_wrapped =
-                                        WorkspaceProtocolPayload::Response(response);
+                                        WorkspaceProtocolPayload::Response(Box::new(response));
                                     match serde_json::to_vec(&response_wrapped) {
                                         Ok(serialized_response) => {
                                             if let Err(e) = tx.send(serialized_response).await {
@@ -149,7 +149,7 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
                                     e
                                 ));
                                 let response_wrapped =
-                                    WorkspaceProtocolPayload::Response(error_response);
+                                    WorkspaceProtocolPayload::Response(Box::new(error_response));
                                 match serde_json::to_vec(&response_wrapped) {
                                     Ok(serialized_error_response) => {
                                         if let Err(send_err) =

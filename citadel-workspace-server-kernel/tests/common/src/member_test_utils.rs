@@ -230,7 +230,7 @@ pub async fn send_workspace_command(
             let WorkspaceProtocolPayload::Response(response) = response else {
                 panic!("Expected WorkspaceProtocolPayload::Response")
             };
-            return Ok(response);
+            return Ok(*response);
         }
     }
 
@@ -255,7 +255,7 @@ pub async fn create_test_room(
     };
 
     match send_workspace_command(to_service, from_service, cid, create_room_command).await? {
-        WorkspaceProtocolResponse::Room(room) => Ok(room.id),
+        WorkspaceProtocolResponse::Node(node) => Ok(node.id),
         other => Err(format!("Unexpected response when creating room: {:?}", other).into()),
     }
 }

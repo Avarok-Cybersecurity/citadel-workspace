@@ -1,0 +1,3660 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Citadel Workspace Plugins</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Complete specification for the Citadel Workspace plugin system">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-2459343d.css">
+        <link rel="stylesheet" href="css/chrome-ae938929.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "rust";
+            const default_dark_theme = "ayu";
+            window.path_to_searchindex_js = "searchindex-3acaf80f.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc-a7873e91.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Citadel Workspace Plugins</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://github.com/avarok/citadel-workspace" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="citadel-workspace-plugins"><a class="header" href="#citadel-workspace-plugins">Citadel Workspace Plugins</a></h1>
+<blockquote>
+<p><strong>Vision</strong>: Transform Citadel Workspaces from a collaboration platform into a <strong>programmable canvas</strong> where organizations mirror their entire infrastructure, tooling, and workflows into secure, extensible virtual spaces.</p>
+</blockquote>
+<p>This specification defines the complete plugin system for Citadel Workspaces, covering:</p>
+<ul>
+<li><a href="#philosophy--design-principles">Philosophy &amp; Principles</a> - Core design principles</li>
+<li><a href="#architecture-overview">Architecture Overview</a> - System architecture and communication flows</li>
+<li><a href="#plugin-lifecycle">Plugin Development</a> - Building plugins from scratch</li>
+<li><a href="#permission-model">Capabilities &amp; Permissions</a> - The 5-level permission model</li>
+<li><a href="#hierarchical-signal-propagation">Signal System</a> - Hierarchical signal propagation</li>
+<li><a href="#plugin-types--categories">Plugin Types</a> - Frontend and backend plugin categories</li>
+<li><a href="#plugin-marketplace">Distribution</a> - Marketplace and installation flows</li>
+<li><a href="#security-model">Security Model</a> - Sandboxing and audit systems</li>
+<li><a href="#in-browser-ide">Examples</a> - Real-world use cases</li>
+<li><a href="#implementation-roadmap">Implementation Roadmap</a> - 6-phase delivery plan</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="philosophy--design-principles"><a class="header" href="#philosophy--design-principles">Philosophy &amp; Design Principles</a></h1>
+<h2 id="core-philosophy"><a class="header" href="#core-philosophy">Core Philosophy</a></h2>
+<p><strong>“The workspace becomes the canvas which the company reflects their structure onto.”</strong></p>
+<p>Citadel Workspaces should be:</p>
+<ul>
+<li><strong>Bare-boned by default</strong> — No plugins, minimal overhead, pure collaboration</li>
+<li><strong>Infinitely extensible</strong> — Plugins transform workspaces into anything: IDEs, dashboards, control centers</li>
+<li><strong>Permission-first</strong> — Every plugin capability is explicitly granted, never assumed</li>
+<li><strong>Hierarchical</strong> — Signals flow up and down the domain tree (Workspace ↔ Office ↔ Room)</li>
+</ul>
+<h2 id="design-principles"><a class="header" href="#design-principles">Design Principles</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Principle</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Explicit over Implicit</strong></td><td>Plugins declare all capabilities upfront; no runtime permission escalation</td></tr>
+<tr><td><strong>Sandbox First</strong></td><td>Plugins run in isolated contexts; escape requires explicit grants</td></tr>
+<tr><td><strong>Composable</strong></td><td>Plugins can depend on and extend other plugins</td></tr>
+<tr><td><strong>Observable</strong></td><td>All plugin actions are auditable and traceable</td></tr>
+<tr><td><strong>Graceful Degradation</strong></td><td>Plugin failures never crash the workspace</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="what-plugins-enable"><a class="header" href="#what-plugins-enable">What Plugins Enable</a></h2>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│  WORKSPACE WITHOUT PLUGINS          │  WORKSPACE WITH PLUGINS               │
+├─────────────────────────────────────┼───────────────────────────────────────┤
+│  • Basic P2P messaging              │  • In-browser IDE with compiler       │
+│  • Simple project management        │  • Real SSH access to Server Room A   │
+│  • Text/MDX content                 │  • Live dashboard mirroring prod      │
+│  • Role-based permissions           │  • Automated incident escalation      │
+│                                     │  • Custom workflow automation         │
+│                                     │  • Third-party integrations           │
+│                                     │  • Domain-specific applications       │
+└─────────────────────────────────────┴───────────────────────────────────────┘
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="architecture-overview"><a class="header" href="#architecture-overview">Architecture Overview</a></h1>
+<h2 id="system-architecture"><a class="header" href="#system-architecture">System Architecture</a></h2>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│                              FRONTEND (Browser)                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+│  │ UI Plugin A  │  │ UI Plugin B  │  │ UI Plugin C  │  │     ...      │    │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────────────┘    │
+│         │                 │                 │                               │
+│  ┌──────▼─────────────────▼─────────────────▼──────────────────────────┐   │
+│  │                     Plugin Host (Sandbox)                            │   │
+│  │  • IFrame isolation  • Permission enforcement  • Message routing     │   │
+│  └──────────────────────────────┬───────────────────────────────────────┘   │
+│                                 │                                           │
+│  ┌──────────────────────────────▼───────────────────────────────────────┐   │
+│  │                     Plugin Handle (API Surface)                       │   │
+│  │  • UI Manipulation  • MDX Access  • Signal Emission  • Data Access   │   │
+│  └──────────────────────────────┬───────────────────────────────────────┘   │
+│                                 │                                           │
+│  ┌──────────────────────────────▼───────────────────────────────────────┐   │
+│  │                     Core Workspace UI (React)                         │   │
+│  │  • Event Emitter  • MDX Renderer  • Component Registry               │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │ WebSocket
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              BACKEND (Server)                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                     Internal Service (Rust)                           │   │
+│  │  • Session Management  • P2P Brokering  • Plugin Request Routing     │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│                                      │                                      │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                     Workspace Server Kernel                           │   │
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐       │   │
+│  │  │ Backend Plugin  │  │ Backend Plugin  │  │       ...       │       │   │
+│  │  │       A         │  │       B         │  │                 │       │   │
+│  │  └────────┬────────┘  └────────┬────────┘  └─────────────────┘       │   │
+│  │           │                    │                                      │   │
+│  │  ┌────────▼────────────────────▼─────────────────────────────────┐   │   │
+│  │  │              Plugin Runtime (Sandboxed WASM or Native)         │   │   │
+│  │  │  • Capability grants  • Resource limits  • Syscall filtering  │   │   │
+│  │  └───────────────────────────────────────────────────────────────┘   │   │
+│  │                                      │                               │   │
+│  │  ┌───────────────────────────────────▼───────────────────────────┐   │   │
+│  │  │              Backend Plugin Handle (API Surface)               │   │   │
+│  │  │  • Filesystem  • Network  • Process  • Signals  • Data        │   │   │
+│  │  └───────────────────────────────────────────────────────────────┘   │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="plugin-communication-flow"><a class="header" href="#plugin-communication-flow">Plugin Communication Flow</a></h2>
+<pre><code>┌─────────────┐      ┌─────────────┐      ┌─────────────┐
+│  UI Plugin  │ ──── │   Signal    │ ──── │  Backend    │
+│             │      │   Bridge    │      │   Plugin    │
+└─────────────┘      └─────────────┘      └─────────────┘
+      │                    │                    │
+      │                    ▼                    │
+      │         ┌─────────────────┐             │
+      │         │  Signal Router  │             │
+      │         │   (Hierarchy)   │             │
+      │         └─────────────────┘             │
+      │                    │                    │
+      ▼                    ▼                    ▼
+┌─────────────────────────────────────────────────────┐
+│              Workspace Domain Tree                   │
+│                                                      │
+│    Workspace                                         │
+│    ├── Office A                                      │
+│    │   ├── Room A1  ◄─── Signal originates here     │
+│    │   └── Room A2                                   │
+│    └── Office B                                      │
+│        └── Room B1                                   │
+└─────────────────────────────────────────────────────┘
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="plugin-lifecycle"><a class="header" href="#plugin-lifecycle">Plugin Lifecycle</a></h1>
+<h2 id="lifecycle-phases"><a class="header" href="#lifecycle-phases">Lifecycle Phases</a></h2>
+<pre><code>┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
+│ DISCOVER │ → │ INSTALL  │ → │  INIT    │ → │  ACTIVE  │ → │ UNLOAD   │
+└──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘
+     │              │              │              │              │
+     ▼              ▼              ▼              ▼              ▼
+  Registry      Admin UI      Permission      Event Loop    Cleanup
+  Lookup        Approval      Validation      + Signals     Resources
+</code></pre>
+<h2 id="phase-details"><a class="header" href="#phase-details">Phase Details</a></h2>
+<h3 id="discovery"><a class="header" href="#discovery">Discovery</a></h3>
+<pre><code class="language-typescript">interface PluginManifest {
+  id: string;                    // Unique identifier (e.g., "com.company.ide")
+  name: string;                  // Human-readable name
+  version: string;               // SemVer version
+  author: string;                // Plugin author/organization
+  description: string;           // What this plugin does
+  homepage?: string;             // Documentation URL
+
+  // Capability declarations (permission requests)
+  capabilities: PluginCapability[];
+
+  // Dependencies on other plugins
+  dependencies?: PluginDependency[];
+
+  // Entry points
+  frontend?: {
+    entrypoint: string;          // JavaScript bundle URL
+    styles?: string;             // CSS bundle URL
+  };
+  backend?: {
+    entrypoint: string;          // WASM module URL or native path
+    runtime: "wasm" | "native";  // Execution environment
+  };
+
+  // Domain scope (where this plugin can be installed)
+  scope: "workspace" | "office" | "room";
+}
+</code></pre>
+<h3 id="installation"><a class="header" href="#installation">Installation</a></h3>
+<pre><code class="language-typescript">// Admin initiates installation
+async function installPlugin(
+  workspaceId: string,
+  pluginId: string,
+  config: PluginConfig
+): Promise&lt;InstallResult&gt; {
+  // 1. Fetch manifest from registry
+  const manifest = await pluginRegistry.getManifest(pluginId);
+
+  // 2. Validate capability requests against workspace policy
+  const validation = await validateCapabilities(workspaceId, manifest.capabilities);
+  if (!validation.approved) {
+    return { status: "denied", reason: validation.reason };
+  }
+
+  // 3. Download plugin artifacts
+  const artifacts = await downloadPluginArtifacts(manifest);
+
+  // 4. Store in workspace metadata
+  await workspaceStore.addPlugin(workspaceId, {
+    manifest,
+    artifacts,
+    config,
+    installedAt: Date.now(),
+    installedBy: getCurrentUserId()
+  });
+
+  // 5. Initialize plugin
+  return initializePlugin(workspaceId, pluginId);
+}
+</code></pre>
+<h3 id="initialization"><a class="header" href="#initialization">Initialization</a></h3>
+<pre><code class="language-typescript">interface PluginInitContext {
+  // Granted capabilities (subset of requested)
+  grantedCapabilities: PluginCapability[];
+
+  // Configuration provided by admin
+  config: Record&lt;string, unknown&gt;;
+
+  // Domain context
+  domain: {
+    type: "workspace" | "office" | "room";
+    id: string;
+    path: string[];  // e.g., ["workspace-123", "office-456", "room-789"]
+  };
+
+  // The plugin handle (API surface)
+  handle: PluginHandle;
+}
+
+// Plugin entry point signature
+type PluginEntryPoint = (context: PluginInitContext) =&gt; Promise&lt;PluginInstance&gt;;
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="citadelworkspaceplugin-abstract-class"><a class="header" href="#citadelworkspaceplugin-abstract-class">CitadelWorkspacePlugin Abstract Class</a></h1>
+<p>All plugins must implement the <code>CitadelWorkspacePlugin</code> interface. Two implementations are provided: TypeScript for open-source distribution and Rust for closed-source WASM compilation.</p>
+<h2 id="typescript-implementation-open-source"><a class="header" href="#typescript-implementation-open-source">TypeScript Implementation (Open Source)</a></h2>
+<pre><code class="language-typescript">/**
+ * Abstract base class that all Citadel Workspace plugins must implement.
+ *
+ * Plugins can be implemented in TypeScript for open-source distribution
+ * or compiled to WASM from Rust for closed-source distribution.
+ *
+ * @example
+ * ```typescript
+ * class MyPlugin extends CitadelWorkspacePlugin {
+ *   readonly metadata = {
+ *     id: "com.example.my-plugin",
+ *     name: "My Plugin",
+ *     version: "1.0.0"
+ *   };
+ *
+ *   async init(context: PluginInitContext): Promise&lt;void&gt; {
+ *     this.handle = context.handle;
+ *     // Initialize plugin...
+ *   }
+ *
+ *   async destroy(): Promise&lt;void&gt; {
+ *     // Cleanup resources...
+ *   }
+ *
+ *   healthCheck(): PluginHealth {
+ *     return { status: "healthy" };
+ *   }
+ * }
+ * ```
+ */
+export abstract class CitadelWorkspacePlugin {
+  /**
+   * Plugin metadata from manifest.
+   * Must be defined by implementing class.
+   */
+  abstract readonly metadata: PluginMetadata;
+
+  /**
+   * Plugin handle provided by host.
+   * Set during init() via context.handle.
+   */
+  protected handle!: PluginHandle;
+
+  /**
+   * Initialize the plugin with the granted capabilities.
+   * Called once when plugin is loaded into workspace.
+   *
+   * @param context - Initialization context with handle and config
+   * @throws PluginError if initialization fails
+   */
+  abstract init(context: PluginInitContext): Promise&lt;void&gt;;
+
+  /**
+   * Clean up resources when plugin is unloaded.
+   * Must release all handles, subscriptions, and timers.
+   */
+  abstract destroy(): Promise&lt;void&gt;;
+
+  /**
+   * Health check - return current plugin status.
+   * Called periodically by the plugin host.
+   */
+  abstract healthCheck(): PluginHealth;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // OPTIONAL LIFECYCLE HOOKS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Called when the plugin is activated (user enters plugin's domain).
+   * Use for lazy initialization of resources.
+   */
+  onActivate?(): Promise&lt;void&gt;;
+
+  /**
+   * Called when the plugin is deactivated (user leaves plugin's domain).
+   * Use to pause expensive operations.
+   */
+  onDeactivate?(): Promise&lt;void&gt;;
+
+  /**
+   * Called when plugin configuration changes.
+   * Allows dynamic reconfiguration without full reload.
+   */
+  onConfigChange?(config: Record&lt;string, unknown&gt;): Promise&lt;void&gt;;
+
+  /**
+   * Called when a signal is received in this plugin's subscribed patterns.
+   * Override to handle signals reactively.
+   */
+  onSignal?(signal: Signal): Promise&lt;void&gt;;
+}
+
+interface PluginMetadata {
+  id: string;
+  name: string;
+  version: string;
+}
+
+interface PluginInitContext {
+  /** Granted capabilities (may be subset of requested) */
+  grantedCapabilities: ScopedCapability[];
+
+  /** Plugin configuration provided by admin */
+  config: Record&lt;string, unknown&gt;;
+
+  /** Domain context where plugin is installed */
+  domain: {
+    type: "workspace" | "office" | "room";
+    id: string;
+    path: string[];  // Full path from workspace root
+  };
+
+  /** The plugin handle (API surface) */
+  handle: PluginHandle;
+}
+
+interface PluginHealth {
+  status: "healthy" | "degraded" | "unhealthy";
+  message?: string;
+  lastCheck?: number;
+  metrics?: Record&lt;string, number&gt;;
+}
+</code></pre>
+<h2 id="rust-implementation-closed-source-wasm"><a class="header" href="#rust-implementation-closed-source-wasm">Rust Implementation (Closed Source WASM)</a></h2>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>//! Abstract trait that all Citadel Workspace plugins must implement.
+//!
+//! Compile to WASM for closed-source distribution using:
+//! ```bash
+//! cargo build --target wasm32-unknown-unknown --release
+//! ```
+
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+
+/// Core trait that all Citadel Workspace plugins must implement.
+///
+/// # Example
+///
+/// ```rust
+/// use citadel_plugin_sdk::prelude::*;
+///
+/// pub struct MyPlugin {
+///     handle: Option&lt;PluginHandle&gt;,
+///     config: serde_json::Value,
+/// }
+///
+/// #[async_trait]
+/// impl CitadelWorkspacePlugin for MyPlugin {
+///     fn metadata(&amp;self) -&gt; &amp;PluginMetadata {
+///         &amp;PluginMetadata {
+///             id: "com.example.my-plugin".into(),
+///             name: "My Plugin".into(),
+///             version: "1.0.0".into(),
+///         }
+///     }
+///
+///     async fn init(&amp;mut self, ctx: PluginInitContext) -&gt; Result&lt;(), PluginError&gt; {
+///         self.handle = Some(ctx.handle);
+///         self.config = ctx.config;
+///         Ok(())
+///     }
+///
+///     async fn destroy(&amp;mut self) -&gt; Result&lt;(), PluginError&gt; {
+///         self.handle = None;
+///         Ok(())
+///     }
+///
+///     fn health_check(&amp;self) -&gt; PluginHealth {
+///         PluginHealth::healthy()
+///     }
+/// }
+/// ```
+#[async_trait]
+pub trait CitadelWorkspacePlugin: Send + Sync {
+    /// Plugin metadata (id, name, version)
+    fn metadata(&amp;self) -&gt; &amp;PluginMetadata;
+
+    /// Initialize the plugin with granted capabilities.
+    ///
+    /// Called once when plugin is loaded. Store the handle for later use.
+    async fn init(&amp;mut self, context: PluginInitContext) -&gt; Result&lt;(), PluginError&gt;;
+
+    /// Clean up resources when plugin is unloaded.
+    ///
+    /// Must release all handles, subscriptions, and timers.
+    async fn destroy(&amp;mut self) -&gt; Result&lt;(), PluginError&gt;;
+
+    /// Health check - return current plugin status.
+    ///
+    /// Called periodically by the plugin host.
+    fn health_check(&amp;self) -&gt; PluginHealth;
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // OPTIONAL LIFECYCLE HOOKS (default implementations provided)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// Called when the plugin is activated (user enters plugin's domain).
+    async fn on_activate(&amp;mut self) -&gt; Result&lt;(), PluginError&gt; {
+        Ok(())
+    }
+
+    /// Called when the plugin is deactivated (user leaves plugin's domain).
+    async fn on_deactivate(&amp;mut self) -&gt; Result&lt;(), PluginError&gt; {
+        Ok(())
+    }
+
+    /// Called when plugin configuration changes.
+    async fn on_config_change(
+        &amp;mut self,
+        _config: serde_json::Value,
+    ) -&gt; Result&lt;(), PluginError&gt; {
+        Ok(())
+    }
+
+    /// Called when a signal is received in subscribed patterns.
+    async fn on_signal(&amp;mut self, _signal: Signal) -&gt; Result&lt;(), PluginError&gt; {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginMetadata {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct PluginInitContext {
+    pub granted_capabilities: Vec&lt;ScopedCapability&gt;,
+    pub config: serde_json::Value,
+    pub domain: DomainContext,
+    pub handle: PluginHandle,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DomainContext {
+    pub domain_type: DomainType,
+    pub id: String,
+    pub path: Vec&lt;String&gt;,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum DomainType {
+    Workspace,
+    Office,
+    Room,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginHealth {
+    pub status: HealthStatus,
+    pub message: Option&lt;String&gt;,
+    pub last_check: Option&lt;i64&gt;,
+    pub metrics: Option&lt;std::collections::HashMap&lt;String, f64&gt;&gt;,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum HealthStatus {
+    Healthy,
+    Degraded,
+    Unhealthy,
+}
+
+impl PluginHealth {
+    pub fn healthy() -&gt; Self {
+        Self {
+            status: HealthStatus::Healthy,
+            message: None,
+            last_check: Some(chrono::Utc::now().timestamp()),
+            metrics: None,
+        }
+    }
+
+    pub fn degraded(message: impl Into&lt;String&gt;) -&gt; Self {
+        Self {
+            status: HealthStatus::Degraded,
+            message: Some(message.into()),
+            last_check: Some(chrono::Utc::now().timestamp()),
+            metrics: None,
+        }
+    }
+
+    pub fn unhealthy(message: impl Into&lt;String&gt;) -&gt; Self {
+        Self {
+            status: HealthStatus::Unhealthy,
+            message: Some(message.into()),
+            last_check: Some(chrono::Utc::now().timestamp()),
+            metrics: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum PluginError {
+    #[error("Initialization failed: {0}")]
+    InitFailed(String),
+
+    #[error("Capability not granted: {0}")]
+    CapabilityDenied(String),
+
+    #[error("Handle operation failed: {0}")]
+    HandleError(String),
+
+    #[error("Internal error: {0}")]
+    Internal(String),
+}
+<span class="boring">}</span></code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="plugin-handle-api"><a class="header" href="#plugin-handle-api">Plugin Handle API</a></h1>
+<p>The Plugin Handle is the primary API surface exposed to plugins. It provides capability-gated access to workspace functionality.</p>
+<h2 id="handle-architecture"><a class="header" href="#handle-architecture">Handle Architecture</a></h2>
+<pre><code class="language-typescript">interface PluginHandle {
+  // Identity
+  readonly pluginId: string;
+  readonly instanceId: string;
+  readonly domain: DomainContext;
+
+  // Capability checking
+  hasCapability(capability: PluginCapability): boolean;
+  requestCapability(capability: PluginCapability): Promise&lt;boolean&gt;;
+
+  // Sub-handles (capability-gated)
+  readonly ui: UIHandle | null;
+  readonly mdx: MDXHandle | null;
+  readonly signals: SignalHandle | null;
+  readonly data: DataHandle | null;
+  readonly members: MembersHandle | null;
+  readonly fs: FileSystemHandle | null;      // Level 4
+  readonly process: ProcessHandle | null;    // Level 4
+  readonly network: NetworkHandle | null;    // Level 4
+}
+</code></pre>
+<h2 id="ui-handle"><a class="header" href="#ui-handle">UI Handle</a></h2>
+<pre><code class="language-typescript">interface UIHandle {
+  // Component Registration (Level 1)
+  registerComponent(name: string, component: React.ComponentType&lt;any&gt;): void;
+  unregisterComponent(name: string): void;
+
+  // Panel Registration (Level 1)
+  registerPanel(config: PanelConfig): PanelInstance;
+
+  // DOM Injection (Level 2)
+  inject(selector: string, content: InjectableContent): InjectionHandle;
+
+  // Event Observation (Level 0)
+  onEvent&lt;T extends UIEvent&gt;(
+    event: T["type"],
+    handler: (event: T) =&gt; void
+  ): () =&gt; void;
+
+  // State Reading (Level 0)
+  getState(): UIState;
+
+  // Theming (Level 1)
+  registerTheme(theme: ThemeDefinition): void;
+}
+
+interface PanelConfig {
+  id: string;
+  title: string;
+  location: "sidebar-left" | "sidebar-right" | "bottom" | "modal" | "floating";
+  component: React.ComponentType&lt;PanelProps&gt;;
+  icon?: React.ComponentType;
+  defaultVisible?: boolean;
+  resizable?: boolean;
+  minWidth?: number;
+  maxWidth?: number;
+}
+
+type InjectableContent =
+  | { type: "html"; html: string }
+  | { type: "component"; component: React.ComponentType&lt;any&gt;; props?: any }
+  | { type: "widget"; widgetId: string; config?: any };
+
+interface InjectionHandle {
+  update(content: InjectableContent): void;
+  remove(): void;
+  readonly isActive: boolean;
+}
+</code></pre>
+<h2 id="mdx-handle"><a class="header" href="#mdx-handle">MDX Handle</a></h2>
+<pre><code class="language-typescript">interface MDXHandle {
+  // Reading (Level 0)
+  getContent(domainId: string): Promise&lt;string&gt;;
+
+  // Editing (Level 2)
+  setContent(domainId: string, content: string): Promise&lt;void&gt;;
+  patchContent(domainId: string, patches: MDXPatch[]): Promise&lt;void&gt;;
+
+  // Live Editing (Level 2)
+  createEditSession(domainId: string): MDXEditSession;
+
+  // Component Context (Level 1)
+  registerMdxComponent(name: string, component: React.ComponentType&lt;any&gt;): void;
+
+  // Transformation (Level 2)
+  registerTransformer(transformer: MDXTransformer): void;
+}
+
+interface MDXPatch {
+  type: "insert" | "delete" | "replace";
+  range: { start: number; end: number };
+  content?: string;
+}
+
+interface MDXEditSession {
+  readonly domainId: string;
+  readonly content: string;
+
+  onChange(handler: (content: string) =&gt; void): () =&gt; void;
+  applyPatch(patch: MDXPatch): void;
+  save(): Promise&lt;void&gt;;
+  discard(): void;
+}
+
+interface MDXTransformer {
+  name: string;
+  priority: number;  // Higher runs first
+  transform(ast: MDXAst, context: TransformContext): MDXAst;
+}
+</code></pre>
+<h2 id="signal-handle"><a class="header" href="#signal-handle">Signal Handle</a></h2>
+<pre><code class="language-typescript">interface SignalHandle {
+  // Subscription (Level 0)
+  subscribe&lt;T extends Signal&gt;(
+    pattern: string,
+    handler: (signal: T) =&gt; void
+  ): () =&gt; void;
+
+  // Emission (Level 1)
+  emit&lt;T extends Signal&gt;(signal: T): void;
+
+  // Propagation (Level 2)
+  propagate&lt;T extends Signal&gt;(
+    signal: T,
+    direction: PropagationDirection,
+    options?: PropagationOptions
+  ): void;
+
+  // Broadcast (Level 4)
+  broadcast&lt;T extends Signal&gt;(signal: T): void;
+}
+
+type PropagationDirection = "up" | "down" | "both" | "siblings";
+
+interface PropagationOptions {
+  stopAt?: string[];        // Domain IDs to stop at
+  skipDomains?: string[];   // Domain IDs to skip
+  transform?: (signal: Signal, domain: Domain) =&gt; Signal | null;
+}
+</code></pre>
+<h2 id="data-handle"><a class="header" href="#data-handle">Data Handle</a></h2>
+<pre><code class="language-typescript">interface DataHandle {
+  // Domain Data (Level 0/2)
+  getWorkspace(): Promise&lt;Workspace&gt;;
+  getOffice(officeId: string): Promise&lt;Office&gt;;
+  getRoom(roomId: string): Promise&lt;Room&gt;;
+
+  // Updates require Level 2
+  updateWorkspace(updates: Partial&lt;WorkspaceUpdate&gt;): Promise&lt;void&gt;;
+  updateOffice(officeId: string, updates: Partial&lt;OfficeUpdate&gt;): Promise&lt;void&gt;;
+  updateRoom(roomId: string, updates: Partial&lt;RoomUpdate&gt;): Promise&lt;void&gt;;
+
+  // Plugin-specific storage
+  readonly storage: PluginStorage;
+}
+
+interface PluginStorage {
+  // Scoped to plugin + domain
+  get&lt;T&gt;(key: string): Promise&lt;T | null&gt;;
+  set&lt;T&gt;(key: string, value: T): Promise&lt;void&gt;;
+  delete(key: string): Promise&lt;void&gt;;
+  list(prefix?: string): Promise&lt;string[]&gt;;
+
+  // Cross-domain storage (requires Level 3)
+  global: GlobalPluginStorage;
+}
+</code></pre>
+<h2 id="filesystem-handle-level-4"><a class="header" href="#filesystem-handle-level-4">FileSystem Handle (Level 4)</a></h2>
+<pre><code class="language-typescript">interface FileSystemHandle {
+  // Scoped to allowed paths only
+  readonly allowedPaths: readonly string[];
+
+  // Reading
+  readFile(path: string): Promise&lt;Uint8Array&gt;;
+  readTextFile(path: string): Promise&lt;string&gt;;
+  readDir(path: string): Promise&lt;DirEntry[]&gt;;
+  stat(path: string): Promise&lt;FileStat&gt;;
+  exists(path: string): Promise&lt;boolean&gt;;
+
+  // Writing (if fs:write granted)
+  writeFile(path: string, content: Uint8Array): Promise&lt;void&gt;;
+  writeTextFile(path: string, content: string): Promise&lt;void&gt;;
+  mkdir(path: string, options?: MkdirOptions): Promise&lt;void&gt;;
+  remove(path: string, options?: RemoveOptions): Promise&lt;void&gt;;
+  rename(from: string, to: string): Promise&lt;void&gt;;
+
+  // Watching
+  watch(path: string, handler: (event: FsEvent) =&gt; void): () =&gt; void;
+}
+</code></pre>
+<h2 id="process-handle-level-4"><a class="header" href="#process-handle-level-4">Process Handle (Level 4)</a></h2>
+<pre><code class="language-typescript">interface ProcessHandle {
+  // Scoped to allowlisted executables only
+  readonly allowedExecutables: readonly ProcessAllowEntry[];
+
+  spawn(config: SpawnConfig): Promise&lt;ProcessInstance&gt;;
+}
+
+interface SpawnConfig {
+  executable: string;
+  args?: string[];
+  cwd?: string;
+  env?: Record&lt;string, string&gt;;
+  stdin?: "pipe" | "inherit" | "null";
+  stdout?: "pipe" | "inherit" | "null";
+  stderr?: "pipe" | "inherit" | "null";
+}
+
+interface ProcessInstance {
+  readonly pid: number;
+  readonly stdin: WritableStream&lt;Uint8Array&gt; | null;
+  readonly stdout: ReadableStream&lt;Uint8Array&gt; | null;
+  readonly stderr: ReadableStream&lt;Uint8Array&gt; | null;
+
+  wait(): Promise&lt;ProcessOutput&gt;;
+  kill(signal?: number): void;
+}
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="plugin-packaging-formats"><a class="header" href="#plugin-packaging-formats">Plugin Packaging Formats</a></h1>
+<p>Citadel supports two plugin packaging formats to accommodate different development and distribution models.</p>
+<h2 id="typescript-package-open-source"><a class="header" href="#typescript-package-open-source">TypeScript Package (Open Source)</a></h2>
+<p>TypeScript packages allow community inspection, contribution, and trust through transparency.</p>
+<pre><code>my-plugin/
+├── package.json              # npm package metadata
+├── citadel.manifest.json     # Citadel-specific metadata &amp; capabilities
+├── dist/
+│   ├── index.js              # Bundled plugin code (ES modules)
+│   ├── index.js.map          # Source maps for debugging
+│   ├── index.d.ts            # TypeScript type definitions
+│   └── styles.css            # Optional plugin styles
+├── src/
+│   ├── index.ts              # Entry point (exports CitadelWorkspacePlugin)
+│   ├── components/           # React components
+│   └── utils/                # Helper utilities
+├── tests/
+│   └── plugin.test.ts        # Plugin tests
+├── README.md                 # Documentation
+├── CHANGELOG.md              # Version history
+└── LICENSE                   # License file
+</code></pre>
+<p><strong>citadel.manifest.json:</strong></p>
+<pre><code class="language-json">{
+  "$schema": "https://citadel.dev/schemas/plugin-manifest.json",
+  "id": "com.example.my-plugin",
+  "name": "My Plugin",
+  "version": "1.0.0",
+  "description": "A sample Citadel workspace plugin",
+  "publisher": {
+    "id": "example",
+    "name": "Example Corp"
+  },
+  "category": "ui",
+  "tags": ["widget", "dashboard", "example"],
+  "license": "MIT",
+  "citadelVersion": "&gt;=1.0.0",
+  "capabilities": [
+    { "type": "ui:components", "scope": { "component_names": ["MyWidget"] } },
+    { "type": "signals:subscribe", "scope": { "patterns": ["workspace.*"] } }
+  ],
+  "capabilityJustifications": {
+    "ui:components": "Register the MyWidget component for use in MDX",
+    "signals:subscribe": "Listen to workspace events for real-time updates"
+  },
+  "artifacts": {
+    "frontend": {
+      "bundle": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "styles": "./dist/styles.css"
+    }
+  }
+}
+</code></pre>
+<h2 id="wasm-binary-closed-source"><a class="header" href="#wasm-binary-closed-source">WASM Binary (Closed Source)</a></h2>
+<p>WASM packages allow proprietary distribution while maintaining security through sandboxing.</p>
+<pre><code>my-plugin/
+├── citadel.manifest.json     # Citadel-specific metadata &amp; capabilities
+├── plugin.wasm               # Compiled WASM binary
+├── frontend/                 # Optional frontend bundle (if plugin has UI)
+│   ├── bundle.js             # UI components
+│   ├── bundle.js.map         # Source maps
+│   └── styles.css            # Styles
+├── README.md                 # Documentation
+├── CHANGELOG.md              # Version history
+└── LICENSE                   # License file (may be proprietary)
+</code></pre>
+<p><strong>Build process for Rust → WASM:</strong></p>
+<pre><code class="language-bash"># Install wasm-pack
+cargo install wasm-pack
+
+# Build the plugin
+wasm-pack build --target web --release
+
+# Output structure:
+# pkg/
+#   ├── plugin.wasm
+#   ├── plugin.js        # JS bindings
+#   └── plugin.d.ts      # TypeScript types
+</code></pre>
+<h2 id="manifest-comparison"><a class="header" href="#manifest-comparison">Manifest Comparison</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>TypeScript</th><th>WASM</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>packageType</code></td><td><code>"typescript"</code></td><td><code>"wasm"</code></td><td>Required</td></tr>
+<tr><td><code>artifacts.frontend.bundle</code></td><td>JS file path</td><td>JS file path</td><td>Optional for backend-only</td></tr>
+<tr><td><code>artifacts.backend.bundle</code></td><td>N/A</td><td>WASM file path</td><td>Required for backend plugins</td></tr>
+<tr><td><code>repository</code></td><td>Often provided</td><td>Often omitted</td><td>Open source indicator</td></tr>
+<tr><td>Source inspection</td><td>Full source available</td><td>Binary only</td><td>Trust model differs</td></tr>
+</tbody>
+</table>
+</div>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="permission-model"><a class="header" href="#permission-model">Permission Model</a></h1>
+<h2 id="capability-categories"><a class="header" href="#capability-categories">Capability Categories</a></h2>
+<p>Capabilities are organized into hierarchical categories with increasing privilege levels:</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│  CAPABILITY HIERARCHY (Increasing Privilege)                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Level 0: OBSERVE (Read-Only)                                               │
+│  ├── ui:read           Read UI state, observe events                        │
+│  ├── domain:read       Read workspace/office/room data                      │
+│  ├── members:read      Read member list and roles                           │
+│  └── signals:subscribe Listen to signals in current domain                  │
+│                                                                             │
+│  Level 1: INTERACT (User-Scoped)                                            │
+│  ├── ui:components     Register custom MDX components                       │
+│  ├── ui:panels         Add sidebar/panel UI                                 │
+│  ├── messages:send     Send P2P messages as current user                    │
+│  └── signals:emit      Emit signals within current domain                   │
+│                                                                             │
+│  Level 2: MODIFY (Domain-Scoped)                                            │
+│  ├── ui:inject         Modify existing UI elements (innerHTML)              │
+│  ├── mdx:edit          Edit MDX content in offices/rooms                    │
+│  ├── domain:write      Update domain metadata                               │
+│  └── signals:propagate Propagate signals up/down hierarchy                  │
+│                                                                             │
+│  Level 3: MANAGE (Admin-Scoped)                                             │
+│  ├── members:manage    Add/remove members, change roles                     │
+│  ├── domain:create     Create offices/rooms                                 │
+│  ├── domain:delete     Delete offices/rooms                                 │
+│  └── plugins:configure Configure other plugins                              │
+│                                                                             │
+│  Level 4: SYSTEM (Server-Scoped) ⚠️ HIGH PRIVILEGE                          │
+│  ├── fs:read           Read server filesystem (scoped paths)                │
+│  ├── fs:write          Write server filesystem (scoped paths)               │
+│  ├── process:spawn     Spawn server processes (allowlisted)                 │
+│  ├── network:connect   Make external network connections                    │
+│  └── signals:broadcast Broadcast signals across all domains                 │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="capability-definition"><a class="header" href="#capability-definition">Capability Definition</a></h2>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Backend capability definitions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PluginCapability {
+    // Level 0: Observe
+    UiRead,
+    DomainRead { domain_ids: Vec&lt;String&gt; },
+    MembersRead { domain_ids: Vec&lt;String&gt; },
+    SignalsSubscribe { patterns: Vec&lt;String&gt; },
+
+    // Level 1: Interact
+    UiComponents { component_names: Vec&lt;String&gt; },
+    UiPanels { panel_locations: Vec&lt;PanelLocation&gt; },
+    MessagesSend { peer_cids: Option&lt;Vec&lt;u64&gt;&gt; },  // None = all peers
+    SignalsEmit { patterns: Vec&lt;String&gt; },
+
+    // Level 2: Modify
+    UiInject { selectors: Vec&lt;String&gt; },
+    MdxEdit { domain_ids: Vec&lt;String&gt; },
+    DomainWrite { domain_ids: Vec&lt;String&gt; },
+    SignalsPropagate { directions: Vec&lt;PropagationDirection&gt; },
+
+    // Level 3: Manage
+    MembersManage { domain_ids: Vec&lt;String&gt; },
+    DomainCreate { parent_ids: Vec&lt;String&gt; },
+    DomainDelete { domain_ids: Vec&lt;String&gt; },
+    PluginsConfigure { plugin_ids: Vec&lt;String&gt; },
+
+    // Level 4: System (requires explicit admin approval)
+    FsRead { paths: Vec&lt;PathBuf&gt;, recursive: bool },
+    FsWrite { paths: Vec&lt;PathBuf&gt; },
+    ProcessSpawn { allowlist: Vec&lt;ProcessAllowEntry&gt; },
+    NetworkConnect { hosts: Vec&lt;String&gt;, ports: Vec&lt;u16&gt; },
+    SignalsBroadcast,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProcessAllowEntry {
+    pub executable: String,
+    pub args_pattern: Option&lt;String&gt;,  // Regex for allowed arguments
+    pub working_dir: Option&lt;PathBuf&gt;,
+    pub env_allowlist: Vec&lt;String&gt;,
+}
+<span class="boring">}</span></code></pre>
+<h2 id="permission-inheritance"><a class="header" href="#permission-inheritance">Permission Inheritance</a></h2>
+<pre><code>┌─────────────────────────────────────────────────────────────────┐
+│  PERMISSION INHERITANCE MODEL                                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Workspace Plugin Permissions                                    │
+│       │                                                          │
+│       ├──► Office A (inherits workspace perms by default)        │
+│       │         │                                                │
+│       │         ├──► Room A1 (inherits office perms)             │
+│       │         │         Plugin can access if:                  │
+│       │         │         - Workspace granted capability         │
+│       │         │         - Office didn't revoke                 │
+│       │         │         - Room didn't revoke                   │
+│       │         │                                                │
+│       │         └──► Room A2 (can override/restrict)             │
+│       │                     Office admin blocked plugin          │
+│       │                                                          │
+│       └──► Office B (admin restricted plugin scope)              │
+│                 Plugin cannot access Office B domains            │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="scoped-capabilities"><a class="header" href="#scoped-capabilities">Scoped Capabilities</a></h1>
+<p>Capabilities can be <strong>scoped</strong> for fine-grained security. Unscoped capabilities grant broad access; scoped capabilities are restricted to specific resources.</p>
+<h2 id="scoped-capability-types"><a class="header" href="#scoped-capability-types">Scoped Capability Types</a></h2>
+<pre><code class="language-typescript">// ═══════════════════════════════════════════════════════════════════════════
+// NETWORK CAPABILITY
+// ═══════════════════════════════════════════════════════════════════════════
+interface NetworkCapability {
+  type: "network";
+  scope?: {
+    ip_addresses: string[];      // CIDR notation: ["10.0.0.0/8", "192.168.1.0/24"]
+    ports?: number[];            // Specific ports: [22, 443, 8080]
+    protocols?: ("tcp" | "udp" | "tls")[];
+  };
+}
+// Unscoped: Can connect to any host/port
+// Scoped: Can only connect to specified IP ranges and ports
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FILESYSTEM CAPABILITY
+// ═══════════════════════════════════════════════════════════════════════════
+interface FilesystemCapability {
+  type: "fs:read" | "fs:write";
+  scope?: {
+    paths: string[];             // Glob patterns: ["/projects/*", "/tmp/plugin-*"]
+    recursive?: boolean;         // Allow subdirectory access
+  };
+}
+// Unscoped: Can access any filesystem path
+// Scoped: Can only access specified paths
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UI INJECTION CAPABILITY
+// ═══════════════════════════════════════════════════════════════════════════
+interface UiInjectCapability {
+  type: "ui:inject";
+  scope?: {
+    selectors: string[];         // CSS selectors: [".plugin-zone-*", "#extension-panel"]
+    allowed_tags?: string[];     // HTML tags: ["div", "span", "button"]
+  };
+}
+// Unscoped: Can inject into any DOM element
+// Scoped: Can only inject into specified selectors with specified tags
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PROCESS SPAWN CAPABILITY
+// ═══════════════════════════════════════════════════════════════════════════
+interface ProcessSpawnCapability {
+  type: "process:spawn";
+  scope?: {
+    executables: string[];       // Allowed binaries: ["cargo", "npm", "node"]
+    args_patterns?: string[];    // Regex for allowed arguments
+    env_allowlist?: string[];    // Allowed environment variables
+  };
+}
+// Unscoped: Can spawn any process
+// Scoped: Can only spawn specified executables with restricted args/env
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SIGNAL CAPABILITY
+// ═══════════════════════════════════════════════════════════════════════════
+interface SignalCapability {
+  type: "signals:subscribe" | "signals:emit" | "signals:propagate";
+  scope?: {
+    patterns: string[];          // Signal patterns: ["infrastructure.*", "build.*"]
+  };
+}
+// Unscoped: Can interact with all signals
+// Scoped: Can only interact with matching signal patterns
+</code></pre>
+<h2 id="capability--permission-mapping"><a class="header" href="#capability--permission-mapping">Capability → Permission Mapping</a></h2>
+<pre><code class="language-typescript">// ═══════════════════════════════════════════════════════════════════════════
+// UNSCOPED CAPABILITY → BROAD PERMISSION
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Plugin manifest:
+{
+  "capabilities": [
+    { "type": "network" }  // No scope = any network access
+  ]
+}
+
+// Maps to Permission:
+{
+  "type": "network",
+  "scope": null  // No restrictions - DANGEROUS
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SCOPED CAPABILITY → RESTRICTED PERMISSION
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Plugin manifest:
+{
+  "capabilities": [
+    {
+      "type": "network",
+      "scope": {
+        "ip_addresses": ["10.0.0.0/8"],
+        "ports": [22, 443]
+      }
+    }
+  ]
+}
+
+// Maps to Permission:
+{
+  "type": "network",
+  "scope": {
+    "ip_addresses": ["10.0.0.0/8"],
+    "ports": [22, 443]
+  }
+}
+// Plugin can ONLY connect to 10.x.x.x addresses on ports 22 or 443
+</code></pre>
+<h2 id="scope-enforcement-at-runtime"><a class="header" href="#scope-enforcement-at-runtime">Scope Enforcement at Runtime</a></h2>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl PluginHandle {
+    /// Make a network connection (scope-enforced)
+    pub async fn connect(&amp;self, host: &amp;str, port: u16) -&gt; Result&lt;Connection, PluginError&gt; {
+        // Check against granted scope
+        if let Some(ref scope) = self.network_scope {
+            // Validate IP is in allowed ranges
+            let ip = resolve_host(host).await?;
+            if !scope.ip_addresses.iter().any(|cidr| cidr.contains(ip)) {
+                return Err(PluginError::CapabilityDenied(
+                    format!("Host {} ({}) not in allowed IP ranges", host, ip)
+                ));
+            }
+
+            // Validate port is allowed
+            if let Some(ref ports) = scope.ports {
+                if !ports.contains(&amp;port) {
+                    return Err(PluginError::CapabilityDenied(
+                        format!("Port {} not in allowed ports", port)
+                    ));
+                }
+            }
+        } else {
+            // No network capability at all
+            return Err(PluginError::CapabilityDenied(
+                "Network capability not granted".into()
+            ));
+        }
+
+        // Scope validated - proceed with connection
+        self.runtime.connect(host, port).await
+    }
+}
+<span class="boring">}</span></code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="workspace-permission-policy"><a class="header" href="#workspace-permission-policy">Workspace Permission Policy</a></h1>
+<p>Workspace owners can define what plugin capabilities are allowed through a <strong>permission policy</strong>. This policy is stored in workspace metadata and enforced at plugin installation time.</p>
+<h2 id="policy-configuration-schema"><a class="header" href="#policy-configuration-schema">Policy Configuration Schema</a></h2>
+<pre><code class="language-json">{
+  "id": "workspace-123",
+  "name": "Engineering",
+  "plugin_policy": {
+    "enabled": true,
+    "max_permission_level": 4,
+
+    "allowed_capabilities": {
+      "ui:read": { "enabled": true },
+      "ui:components": { "enabled": true },
+      "ui:panels": { "enabled": true },
+      "ui:inject": {
+        "enabled": true,
+        "scope_required": true,
+        "allowed_selectors": [".plugin-zone-*", "#extension-panel"]
+      },
+      "mdx:edit": { "enabled": true },
+      "signals:emit": { "enabled": true },
+      "signals:propagate": { "enabled": true },
+      "signals:broadcast": { "enabled": false },
+      "network": {
+        "enabled": true,
+        "scope_required": true,
+        "allowed_ip_ranges": ["10.0.0.0/8", "192.168.0.0/16"],
+        "denied_ip_ranges": ["0.0.0.0/0"],
+        "allowed_ports": [22, 80, 443, 8080, 8443]
+      },
+      "fs:read": {
+        "enabled": true,
+        "scope_required": true,
+        "allowed_paths": ["/projects", "/shared", "/tmp"]
+      },
+      "fs:write": {
+        "enabled": true,
+        "scope_required": true,
+        "allowed_paths": ["/projects", "/tmp"]
+      },
+      "process:spawn": {
+        "enabled": true,
+        "scope_required": true,
+        "allowed_executables": ["cargo", "npm", "node", "python3", "git"]
+      }
+    },
+
+    "blocked_publishers": ["untrusted-corp"],
+    "trusted_publishers": ["citadel-labs", "company-internal"],
+    "require_source_available": false,
+
+    "plugin_blacklist": [
+      "com.untrusted.malicious-plugin",
+      "com.deprecated.old-plugin"
+    ],
+
+    "plugin_whitelist": [
+      {
+        "plugin_id": "com.company.internal-ide",
+        "reason": "Internal tool - pre-approved by security team",
+        "approved_by": "security@company.com",
+        "approved_at": "2024-01-15T10:30:00Z"
+      },
+      {
+        "plugin_id": "com.citadel-labs.enterprise-monitor",
+        "reason": "Enterprise license includes elevated permissions",
+        "approved_by": "admin@company.com",
+        "approved_at": "2024-02-01T14:00:00Z"
+      }
+    ]
+  }
+}
+</code></pre>
+<h2 id="new-domain-permissions"><a class="header" href="#new-domain-permissions">New Domain Permissions</a></h2>
+<p>Add to the existing <code>Permission</code> enum:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub enum Permission {
+    // ... existing permissions ...
+
+    /// Can install, uninstall, and configure plugins.
+    /// Subject to workspace plugin_policy restrictions.
+    ManagePlugins,
+
+    /// Can modify workspace plugin_policy.
+    /// Typically reserved for workspace owner.
+    ConfigurePluginPolicy,
+}
+
+impl Permission {
+    pub fn for_role(role: &amp;UserRole) -&gt; HashSet&lt;Self&gt; {
+        let mut permissions = HashSet::new();
+
+        match role {
+            UserRole::Owner =&gt; {
+                // Owners get both plugin permissions
+                permissions.insert(Self::ManagePlugins);
+                permissions.insert(Self::ConfigurePluginPolicy);
+            }
+            UserRole::Admin =&gt; {
+                // Admins can manage plugins but NOT change policy
+                permissions.insert(Self::ManagePlugins);
+                // ConfigurePluginPolicy NOT granted
+            }
+            UserRole::Member | UserRole::Guest =&gt; {
+                // Members and guests cannot manage plugins
+            }
+            UserRole::Custom(_, rank) =&gt; {
+                // Custom roles: ManagePlugins if rank &gt;= 8 (out of 10)
+                if *rank &gt;= 8 {
+                    permissions.insert(Self::ManagePlugins);
+                }
+            }
+        }
+
+        permissions
+    }
+}
+<span class="boring">}</span></code></pre>
+<h2 id="policy-validation-pipeline"><a class="header" href="#policy-validation-pipeline">Policy Validation Pipeline</a></h2>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct PluginPolicyValidator {
+    workspace_policy: PluginPolicy,
+}
+
+impl PluginPolicyValidator {
+    pub fn validate_installation(
+        &amp;self,
+        manifest: &amp;PluginManifest,
+        installer: &amp;User,
+    ) -&gt; Result&lt;ValidationResult, PolicyViolation&gt; {
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 1: Check if plugins are enabled
+        // ═══════════════════════════════════════════════════════════════════
+        if !self.workspace_policy.enabled {
+            return Err(PolicyViolation::PluginsDisabled);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 2: Check installer permissions
+        // ═══════════════════════════════════════════════════════════════════
+        if !installer.has_permission(Permission::ManagePlugins) {
+            return Err(PolicyViolation::InsufficientPermissions);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 3: BLACKLIST CHECK (highest priority - always blocked)
+        // ═══════════════════════════════════════════════════════════════════
+        if self.workspace_policy.plugin_blacklist.contains(&amp;manifest.id) {
+            return Err(PolicyViolation::PluginBlacklisted(manifest.id.clone()));
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 4: WHITELIST CHECK (supersedes all other policy checks)
+        // ═══════════════════════════════════════════════════════════════════
+        if let Some(entry) = self.find_whitelist_entry(&amp;manifest.id) {
+            return Ok(ValidationResult::WhitelistApproved {
+                reason: entry.reason.clone(),
+                approved_by: entry.approved_by.clone(),
+                approved_at: entry.approved_at,
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 5: Check publisher trust
+        // ═══════════════════════════════════════════════════════════════════
+        if self.workspace_policy.blocked_publishers.contains(&amp;manifest.publisher.id) {
+            return Err(PolicyViolation::PublisherBlocked(manifest.publisher.id.clone()));
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 6: Validate each capability against policy
+        // ═══════════════════════════════════════════════════════════════════
+        for cap in &amp;manifest.capabilities {
+            self.validate_capability(cap)?;
+        }
+
+        Ok(ValidationResult::PolicyCompliant)
+    }
+
+    fn find_whitelist_entry(&amp;self, plugin_id: &amp;str) -&gt; Option&lt;&amp;WhitelistEntry&gt; {
+        self.workspace_policy.plugin_whitelist
+            .iter()
+            .find(|e| e.plugin_id == plugin_id)
+    }
+
+    fn validate_capability(&amp;self, cap: &amp;ScopedCapability) -&gt; Result&lt;(), PolicyViolation&gt; {
+        let policy = match self.workspace_policy.allowed_capabilities.get(&amp;cap.type_name()) {
+            Some(p) =&gt; p,
+            None =&gt; return Err(PolicyViolation::CapabilityNotAllowed(cap.type_name())),
+        };
+
+        if !policy.enabled {
+            return Err(PolicyViolation::CapabilityDisabled(cap.type_name()));
+        }
+
+        // Check if scope is required but not provided
+        if policy.scope_required &amp;&amp; cap.scope.is_none() {
+            return Err(PolicyViolation::ScopeRequired(cap.type_name()));
+        }
+
+        // Validate scope against policy limits
+        if let Some(ref scope) = cap.scope {
+            self.validate_scope(&amp;cap.type_name(), scope, policy)?;
+        }
+
+        Ok(())
+    }
+
+    fn validate_scope(
+        &amp;self,
+        cap_type: &amp;str,
+        scope: &amp;CapabilityScope,
+        policy: &amp;CapabilityPolicy,
+    ) -&gt; Result&lt;(), PolicyViolation&gt; {
+        match cap_type {
+            "network" =&gt; self.validate_network_scope(scope, policy),
+            "fs:read" | "fs:write" =&gt; self.validate_fs_scope(scope, policy),
+            "process:spawn" =&gt; self.validate_process_scope(scope, policy),
+            "ui:inject" =&gt; self.validate_ui_inject_scope(scope, policy),
+            _ =&gt; Ok(()),
+        }
+    }
+
+    fn validate_network_scope(
+        &amp;self,
+        scope: &amp;CapabilityScope,
+        policy: &amp;CapabilityPolicy,
+    ) -&gt; Result&lt;(), PolicyViolation&gt; {
+        let CapabilityScope::Network { ip_addresses, ports, .. } = scope else {
+            return Ok(());
+        };
+
+        // Check each IP against allowed/denied ranges
+        for ip in ip_addresses {
+            if !self.ip_in_ranges(ip, &amp;policy.allowed_ip_ranges) {
+                return Err(PolicyViolation::IpNotAllowed(ip.clone()));
+            }
+            if self.ip_in_ranges(ip, &amp;policy.denied_ip_ranges) {
+                return Err(PolicyViolation::IpDenied(ip.clone()));
+            }
+        }
+
+        // Check ports
+        if let (Some(requested_ports), Some(allowed_ports)) = (ports, &amp;policy.allowed_ports) {
+            for port in requested_ports {
+                if !allowed_ports.contains(port) {
+                    return Err(PolicyViolation::PortNotAllowed(*port));
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Result of successful policy validation
+#[derive(Debug, Clone)]
+pub enum ValidationResult {
+    /// Plugin complies with all workspace policies
+    PolicyCompliant,
+    /// Plugin is explicitly whitelisted - bypassed policy checks
+    WhitelistApproved {
+        reason: String,
+        approved_by: String,
+        approved_at: chrono::DateTime&lt;chrono::Utc&gt;,
+    },
+}
+
+/// Whitelist entry stored in workspace policy
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WhitelistEntry {
+    pub plugin_id: String,
+    pub reason: String,
+    pub approved_by: String,
+    pub approved_at: chrono::DateTime&lt;chrono::Utc&gt;,
+}
+
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum PolicyViolation {
+    #[error("Plugins are disabled for this workspace")]
+    PluginsDisabled,
+
+    #[error("User does not have ManagePlugins permission")]
+    InsufficientPermissions,
+
+    #[error("Plugin {0} is blacklisted")]
+    PluginBlacklisted(String),
+
+    #[error("Publisher {0} is blocked")]
+    PublisherBlocked(String),
+
+    #[error("Capability {0} is not allowed by policy")]
+    CapabilityNotAllowed(String),
+
+    #[error("Capability {0} is disabled")]
+    CapabilityDisabled(String),
+
+    #[error("Capability {0} requires a scope but none provided")]
+    ScopeRequired(String),
+
+    #[error("IP range {0} is not in allowed list")]
+    IpNotAllowed(String),
+
+    #[error("IP range {0} is explicitly denied")]
+    IpDenied(String),
+
+    #[error("Port {0} is not in allowed list")]
+    PortNotAllowed(u16),
+
+    #[error("Path {0} is not in allowed list")]
+    PathNotAllowed(String),
+
+    #[error("Executable {0} is not in allowed list")]
+    ExecutableNotAllowed(String),
+
+    #[error("Selector {0} is not in allowed list")]
+    SelectorNotAllowed(String),
+}
+<span class="boring">}</span></code></pre>
+<h2 id="validation-precedence-order"><a class="header" href="#validation-precedence-order">Validation Precedence Order</a></h2>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│  PLUGIN INSTALLATION VALIDATION PIPELINE                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. BLACKLIST CHECK (Highest Priority)                                       │
+│     │                                                                        │
+│     ├── Plugin ID in blacklist? ──► BLOCKED (always)                        │
+│     │                                                                        │
+│     ▼                                                                        │
+│  2. WHITELIST CHECK (Supersedes Policy)                                      │
+│     │                                                                        │
+│     ├── Plugin ID in whitelist? ──► APPROVED (bypass all other checks)      │
+│     │                                                                        │
+│     ▼                                                                        │
+│  3. PUBLISHER TRUST CHECK                                                    │
+│     │                                                                        │
+│     ├── Publisher in blocked list? ──► BLOCKED                              │
+│     │                                                                        │
+│     ▼                                                                        │
+│  4. CAPABILITY POLICY VALIDATION                                             │
+│     │                                                                        │
+│     ├── For each capability:                                                 │
+│     │   ├── Capability type allowed? ──► NO: BLOCKED                        │
+│     │   ├── Capability enabled? ──► NO: BLOCKED                             │
+│     │   ├── Scope required but missing? ──► BLOCKED                         │
+│     │   └── Scope within policy limits? ──► NO: BLOCKED                     │
+│     │                                                                        │
+│     ▼                                                                        │
+│  5. APPROVED (Policy Compliant)                                              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="hierarchical-signal-propagation"><a class="header" href="#hierarchical-signal-propagation">Hierarchical Signal Propagation</a></h1>
+<h2 id="signal-system-overview"><a class="header" href="#signal-system-overview">Signal System Overview</a></h2>
+<p>The signal system enables event-driven communication across the domain hierarchy. This is critical for:</p>
+<ul>
+<li><strong>Incident escalation</strong> (Room → Office → Workspace)</li>
+<li><strong>Command delegation</strong> (Workspace → Office → Room)</li>
+<li><strong>Cross-domain coordination</strong> (Sibling offices/rooms)</li>
+<li><strong>Audit trails</strong> (All signals logged)</li>
+</ul>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│                        SIGNAL PROPAGATION FLOW                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   UPWARD (Escalation)              DOWNWARD (Delegation)                    │
+│                                                                             │
+│   ┌──────────────┐                 ┌──────────────┐                         │
+│   │  Workspace   │ ◄───────────── │  Workspace   │                         │
+│   │   Admin      │    Escalated   │   Admin      │                         │
+│   └──────┬───────┘    Signal      └──────┬───────┘                         │
+│          │                               │                                  │
+│   ┌──────┴───────┐    Queued      ┌──────▼───────┐    Command              │
+│   │   Office A   │ ◄─ for ─────── │   Office A   │                         │
+│   │   Manager    │   Review       │   Manager    │                         │
+│   └──────┬───────┘                └──────┬───────┘                         │
+│          │                               │                                  │
+│   ┌──────┴───────┐    Signal      ┌──────▼───────┐    Delegated            │
+│   │   Room A1    │ ◄─ Origin ──── │   Room A1    │ ◄─ Task                 │
+│   │   (Issue!)   │                │   (Execute)  │                         │
+│   └──────────────┘                └──────────────┘                         │
+│                                                                             │
+│   SIBLING (Coordination)           BROADCAST (Announcement)                 │
+│                                                                             │
+│   ┌──────────────┐                 ┌──────────────┐                         │
+│   │   Office A   │ ◄───────────── │  Workspace   │ ────► All Domains       │
+│   └──────────────┘    Sibling     └──────────────┘                         │
+│          │            Signal                                                │
+│   ┌──────▼───────┐                                                          │
+│   │   Office B   │                                                          │
+│   └──────────────┘                                                          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="signal-definition"><a class="header" href="#signal-definition">Signal Definition</a></h2>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Signal structure for hierarchical propagation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Signal {
+    /// Unique signal identifier
+    pub id: Uuid,
+
+    /// Signal type (namespaced, e.g., "plugin.ide.compile-error")
+    pub signal_type: String,
+
+    /// Origin domain
+    pub origin: DomainPath,
+
+    /// Current domain (changes as signal propagates)
+    pub current: DomainPath,
+
+    /// Signal payload (arbitrary JSON)
+    pub payload: serde_json::Value,
+
+    /// Signal metadata
+    pub metadata: SignalMetadata,
+
+    /// Propagation history
+    pub history: Vec&lt;PropagationEntry&gt;,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignalMetadata {
+    pub created_at: i64,
+    pub created_by: UserId,
+    pub priority: SignalPriority,
+    pub ttl: Option&lt;i64&gt;,  // Time-to-live in ms
+    pub requires_ack: bool,
+    pub tags: Vec&lt;String&gt;,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum SignalPriority {
+    Low,
+    Normal,
+    High,
+    Critical,  // Bypasses queues, immediate delivery
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PropagationEntry {
+    pub domain: DomainPath,
+    pub action: PropagationAction,
+    pub timestamp: i64,
+    pub actor: Option&lt;UserId&gt;,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PropagationAction {
+    Received,
+    Queued,
+    Acknowledged,
+    Escalated { reason: String },
+    Delegated { assignee: UserId },
+    Completed { result: serde_json::Value },
+    Dropped { reason: String },
+}
+<span class="boring">}</span></code></pre>
+<h2 id="signal-router"><a class="header" href="#signal-router">Signal Router</a></h2>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Signal routing engine
+pub struct SignalRouter {
+    /// Domain hierarchy index
+    hierarchy: DomainHierarchy,
+
+    /// Active subscriptions
+    subscriptions: HashMap&lt;String, Vec&lt;Subscription&gt;&gt;,
+
+    /// Signal queues per domain
+    queues: HashMap&lt;DomainPath, SignalQueue&gt;,
+
+    /// Audit log
+    audit_log: AuditLog,
+}
+
+impl SignalRouter {
+    /// Emit a signal within a domain
+    pub async fn emit(&amp;self, signal: Signal) -&gt; Result&lt;(), SignalError&gt; {
+        // 1. Validate signal
+        self.validate_signal(&amp;signal)?;
+
+        // 2. Deliver to local subscribers
+        self.deliver_local(&amp;signal).await?;
+
+        // 3. Log to audit trail
+        self.audit_log.record(&amp;signal, PropagationAction::Received).await?;
+
+        Ok(())
+    }
+
+    /// Propagate a signal through the hierarchy
+    pub async fn propagate(
+        &amp;self,
+        signal: Signal,
+        direction: PropagationDirection,
+        options: PropagationOptions,
+    ) -&gt; Result&lt;PropagationResult, SignalError&gt; {
+        match direction {
+            PropagationDirection::Up =&gt; self.propagate_up(signal, options).await,
+            PropagationDirection::Down =&gt; self.propagate_down(signal, options).await,
+            PropagationDirection::Siblings =&gt; self.propagate_siblings(signal, options).await,
+            PropagationDirection::Both =&gt; {
+                let up = self.propagate_up(signal.clone(), options.clone()).await?;
+                let down = self.propagate_down(signal, options).await?;
+                Ok(PropagationResult::merge(up, down))
+            }
+        }
+    }
+
+    async fn propagate_up(
+        &amp;self,
+        mut signal: Signal,
+        options: PropagationOptions,
+    ) -&gt; Result&lt;PropagationResult, SignalError&gt; {
+        let mut result = PropagationResult::new();
+        let mut current = signal.current.clone();
+
+        while let Some(parent) = self.hierarchy.parent(&amp;current) {
+            // Check stop conditions
+            if options.stop_at.contains(&amp;parent) {
+                break;
+            }
+            if options.skip_domains.contains(&amp;parent) {
+                current = parent;
+                continue;
+            }
+
+            // Apply transformation
+            if let Some(ref transform) = options.transform {
+                let domain = self.hierarchy.get(&amp;parent)?;
+                match transform(&amp;signal, &amp;domain) {
+                    Some(transformed) =&gt; signal = transformed,
+                    None =&gt; break,  // Transform returned None, stop propagation
+                }
+            }
+
+            // Update signal location
+            signal.current = parent.clone();
+            signal.history.push(PropagationEntry {
+                domain: parent.clone(),
+                action: PropagationAction::Received,
+                timestamp: now(),
+                actor: None,
+            });
+
+            // Queue for admin review or deliver immediately
+            if signal.metadata.requires_ack {
+                self.queue_for_review(&amp;parent, &amp;signal).await?;
+                result.queued.push(parent.clone());
+            } else {
+                self.deliver_local(&amp;signal).await?;
+                result.delivered.push(parent.clone());
+            }
+
+            current = parent;
+        }
+
+        Ok(result)
+    }
+}
+<span class="boring">}</span></code></pre>
+<h2 id="signal-patterns-for-common-use-cases"><a class="header" href="#signal-patterns-for-common-use-cases">Signal Patterns for Common Use Cases</a></h2>
+<h3 id="incident-escalation"><a class="header" href="#incident-escalation">Incident Escalation</a></h3>
+<pre><code class="language-typescript">// Room-level: Server alert detected
+signals.emit({
+  type: "infrastructure.alert",
+  payload: {
+    severity: "critical",
+    server: "prod-db-01",
+    message: "High CPU usage (95%)",
+    metrics: { cpu: 95, memory: 78 }
+  },
+  metadata: { priority: "critical", requires_ack: true }
+});
+
+// Propagate upward for escalation
+signals.propagate(signal, "up", {
+  transform: (signal, domain) =&gt; {
+    // Enrich with domain context
+    return {
+      ...signal,
+      payload: {
+        ...signal.payload,
+        escalation_path: [...signal.payload.escalation_path, domain.name]
+      }
+    };
+  }
+});
+</code></pre>
+<h3 id="command-delegation"><a class="header" href="#command-delegation">Command Delegation</a></h3>
+<pre><code class="language-typescript">// Workspace-level: Deploy command from admin
+signals.emit({
+  type: "deployment.trigger",
+  payload: {
+    version: "2.3.0",
+    environment: "production",
+    rollback_on_failure: true
+  }
+});
+
+// Propagate downward to relevant rooms
+signals.propagate(signal, "down", {
+  stopAt: ["room-staging"],  // Don't propagate to staging
+  transform: (signal, domain) =&gt; {
+    // Only propagate to rooms with deployment capability
+    if (domain.metadata.has_deployment_plugin) {
+      return signal;
+    }
+    return null;  // Skip this domain
+  }
+});
+</code></pre>
+<h3 id="cross-office-coordination"><a class="header" href="#cross-office-coordination">Cross-Office Coordination</a></h3>
+<pre><code class="language-typescript">// Engineering office signals to QA office
+signals.propagate({
+  type: "build.ready-for-qa",
+  payload: {
+    build_id: "build-12345",
+    branch: "feature/new-login",
+    test_plan_url: "https://..."
+  }
+}, "siblings", {
+  filter: (domain) =&gt; domain.name.includes("QA")
+});
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="plugin-types--categories"><a class="header" href="#plugin-types--categories">Plugin Types &amp; Categories</a></h1>
+<h2 id="plugin-type-taxonomy"><a class="header" href="#plugin-type-taxonomy">Plugin Type Taxonomy</a></h2>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│                           PLUGIN TYPE TAXONOMY                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────────────────┐                                                   │
+│  │   UI PLUGINS         │  Frontend-only, extend visual interface           │
+│  │   (Level 0-2)        │                                                   │
+│  ├──────────────────────┤                                                   │
+│  │  • Dashboard widgets │                                                   │
+│  │  • Custom panels     │                                                   │
+│  │  • Theme extensions  │                                                   │
+│  │  • MDX components    │                                                   │
+│  └──────────────────────┘                                                   │
+│                                                                             │
+│  ┌──────────────────────┐                                                   │
+│  │   SERVICE PLUGINS    │  Backend services, process data                   │
+│  │   (Level 2-4)        │                                                   │
+│  ├──────────────────────┤                                                   │
+│  │  • Data processors   │                                                   │
+│  │  • API gateways      │                                                   │
+│  │  • Storage backends  │                                                   │
+│  │  • Cron schedulers   │                                                   │
+│  └──────────────────────┘                                                   │
+│                                                                             │
+│  ┌──────────────────────┐                                                   │
+│  │   INTEGRATION        │  Bridge external systems                          │
+│  │   PLUGINS (Level 3-4)│                                                   │
+│  ├──────────────────────┤                                                   │
+│  │  • SSH connectors    │                                                   │
+│  │  • Cloud API bridges │                                                   │
+│  │  • Database links    │                                                   │
+│  │  • Webhook handlers  │                                                   │
+│  └──────────────────────┘                                                   │
+│                                                                             │
+│  ┌──────────────────────┐                                                   │
+│  │   WORKFLOW PLUGINS   │  Automation and orchestration                     │
+│  │   (Level 2-3)        │                                                   │
+│  ├──────────────────────┤                                                   │
+│  │  • Approval flows    │                                                   │
+│  │  • Notification bots │                                                   │
+│  │  • Incident routing  │                                                   │
+│  │  • Auto-responders   │                                                   │
+│  └──────────────────────┘                                                   │
+│                                                                             │
+│  ┌──────────────────────┐                                                   │
+│  │   COMPOSITE PLUGINS  │  Full applications built from others              │
+│  │   (Variable levels)  │                                                   │
+│  ├──────────────────────┤                                                   │
+│  │  • In-browser IDE    │                                                   │
+│  │  • DevOps dashboard  │                                                   │
+│  │  • Project manager   │                                                   │
+│  │  • Monitoring suite  │                                                   │
+│  └──────────────────────┘                                                   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="plugin-examples-by-category"><a class="header" href="#plugin-examples-by-category">Plugin Examples by Category</a></h2>
+<h3 id="ui-plugin-custom-dashboard-widget"><a class="header" href="#ui-plugin-custom-dashboard-widget">UI Plugin: Custom Dashboard Widget</a></h3>
+<pre><code class="language-typescript">// Manifest
+{
+  id: "com.example.server-status-widget",
+  name: "Server Status Widget",
+  capabilities: [
+    { type: "ui:components", component_names: ["ServerStatusWidget"] },
+    { type: "signals:subscribe", patterns: ["infrastructure.*"] }
+  ],
+  frontend: { entrypoint: "/plugins/server-status/bundle.js" }
+}
+
+// Implementation
+export default async function init(ctx: PluginInitContext): Promise&lt;PluginInstance&gt; {
+  const { handle } = ctx;
+
+  // Register the MDX component
+  handle.ui.registerComponent("ServerStatusWidget", ({ serverId }) =&gt; {
+    const [status, setStatus] = useState&lt;ServerStatus | null&gt;(null);
+
+    useEffect(() =&gt; {
+      return handle.signals.subscribe("infrastructure.status.*", (signal) =&gt; {
+        if (signal.payload.serverId === serverId) {
+          setStatus(signal.payload);
+        }
+      });
+    }, [serverId]);
+
+    return (
+      &lt;Card&gt;
+        &lt;CardHeader&gt;Server: {serverId}&lt;/CardHeader&gt;
+        &lt;CardContent&gt;
+          &lt;StatusIndicator status={status?.health} /&gt;
+          &lt;Metrics cpu={status?.cpu} memory={status?.memory} /&gt;
+        &lt;/CardContent&gt;
+      &lt;/Card&gt;
+    );
+  });
+
+  return { cleanup: () =&gt; handle.ui.unregisterComponent("ServerStatusWidget") };
+}
+</code></pre>
+<h3 id="service-plugin-build-compiler"><a class="header" href="#service-plugin-build-compiler">Service Plugin: Build Compiler</a></h3>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Manifest
+{
+  id: "com.example.rust-compiler",
+  name: "Rust Compiler Service",
+  capabilities: [
+    { type: "fs:read", paths: ["/workspace/src"], recursive: true },
+    { type: "fs:write", paths: ["/workspace/target"] },
+    { type: "process:spawn", allowlist: [
+      { executable: "cargo", args_pattern: "build.*|check.*|clippy.*" }
+    ]},
+    { type: "signals:emit", patterns: ["build.*"] }
+  ],
+  backend: { entrypoint: "/plugins/rust-compiler/plugin.wasm", runtime: "wasm" }
+}
+
+// Implementation (Rust compiled to WASM)
+pub struct RustCompilerPlugin {
+    handle: PluginHandle,
+}
+
+impl Plugin for RustCompilerPlugin {
+    async fn init(ctx: PluginInitContext) -&gt; Result&lt;Self, PluginError&gt; {
+        let plugin = Self { handle: ctx.handle };
+
+        // Subscribe to build requests
+        plugin.handle.signals.subscribe("build.request.rust", |signal| {
+            let build_config: BuildConfig = serde_json::from_value(signal.payload)?;
+            plugin.compile(build_config).await
+        });
+
+        Ok(plugin)
+    }
+
+    async fn compile(&amp;self, config: BuildConfig) -&gt; Result&lt;(), PluginError&gt; {
+        // Emit build started
+        self.handle.signals.emit(Signal {
+            signal_type: "build.started".into(),
+            payload: json!({ "config": config }),
+            ..Default::default()
+        });
+
+        // Spawn cargo build
+        let process = self.handle.process.spawn(SpawnConfig {
+            executable: "cargo".into(),
+            args: vec!["build".into(), "--release".into()],
+            cwd: Some("/workspace".into()),
+            ..Default::default()
+        }).await?;
+
+        let output = process.wait().await?;
+
+        // Emit result
+        self.handle.signals.emit(Signal {
+            signal_type: if output.success { "build.succeeded" } else { "build.failed" }.into(),
+            payload: json!({
+                "exit_code": output.code,
+                "stdout": String::from_utf8_lossy(&amp;output.stdout),
+                "stderr": String::from_utf8_lossy(&amp;output.stderr),
+            }),
+            ..Default::default()
+        });
+
+        Ok(())
+    }
+}
+<span class="boring">}</span></code></pre>
+<h3 id="integration-plugin-ssh-connector"><a class="header" href="#integration-plugin-ssh-connector">Integration Plugin: SSH Connector</a></h3>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Manifest
+{
+  id: "com.example.ssh-connector",
+  name: "SSH Server Connector",
+  capabilities: [
+    { type: "network:connect", hosts: ["10.0.0.*"], ports: [22] },
+    { type: "ui:panels", panel_locations: ["sidebar-right"] },
+    { type: "signals:emit", patterns: ["ssh.*"] }
+  ],
+  frontend: { entrypoint: "/plugins/ssh/ui.js" },
+  backend: { entrypoint: "/plugins/ssh/connector.wasm", runtime: "wasm" }
+}
+
+// This plugin enables:
+// - Real SSH terminal in the workspace UI
+// - Server health monitoring
+// - Command execution with audit logging
+// - Integration with incident escalation signals
+<span class="boring">}</span></code></pre>
+<h3 id="workflow-plugin-incident-router"><a class="header" href="#workflow-plugin-incident-router">Workflow Plugin: Incident Router</a></h3>
+<pre><code class="language-typescript">// Manifest
+{
+  id: "com.example.incident-router",
+  name: "Incident Routing Bot",
+  capabilities: [
+    { type: "signals:subscribe", patterns: ["infrastructure.alert.*"] },
+    { type: "signals:propagate", directions: ["up", "siblings"] },
+    { type: "members:read" },
+    { type: "messages:send" }
+  ]
+}
+
+// Implementation
+export default async function init(ctx: PluginInitContext): Promise&lt;PluginInstance&gt; {
+  const { handle } = ctx;
+
+  // Subscribe to infrastructure alerts
+  handle.signals.subscribe("infrastructure.alert.*", async (signal) =&gt; {
+    const severity = signal.payload.severity;
+
+    if (severity === "critical") {
+      // Immediately escalate critical alerts
+      handle.signals.propagate(signal, "up", {
+        transform: (s, domain) =&gt; ({
+          ...s,
+          metadata: { ...s.metadata, requires_ack: true }
+        })
+      });
+
+      // Notify on-call engineer
+      const oncall = await getOncallEngineer(handle);
+      await handle.messages.sendDirect(oncall.cid, {
+        type: "alert",
+        content: `Critical alert: ${signal.payload.message}`
+      });
+    } else if (severity === "warning") {
+      // Queue for review, don't escalate immediately
+      handle.signals.emit({
+        ...signal,
+        signal_type: "incident.queued",
+        metadata: { ...signal.metadata, requires_ack: true }
+      });
+    }
+  });
+
+  return { cleanup: () =&gt; {} };
+}
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="frontend-plugin-system"><a class="header" href="#frontend-plugin-system">Frontend Plugin System</a></h1>
+<h2 id="plugin-host-architecture"><a class="header" href="#plugin-host-architecture">Plugin Host Architecture</a></h2>
+<pre><code class="language-typescript">// Plugin isolation using iframes with controlled message passing
+class PluginHost {
+  private plugins: Map&lt;string, PluginInstance&gt; = new Map();
+  private sandbox: HTMLIFrameElement;
+  private messageChannel: MessageChannel;
+
+  async loadPlugin(manifest: PluginManifest): Promise&lt;void&gt; {
+    // Create sandboxed iframe
+    this.sandbox = document.createElement("iframe");
+    this.sandbox.sandbox.add("allow-scripts");
+    this.sandbox.sandbox.add("allow-same-origin");  // Required for WASM
+
+    // Set up secure message channel
+    this.messageChannel = new MessageChannel();
+
+    // Load plugin bundle
+    const response = await fetch(manifest.frontend.entrypoint);
+    const code = await response.text();
+
+    // Inject into sandbox with controlled API surface
+    const wrappedCode = this.wrapPluginCode(code, manifest.capabilities);
+    this.sandbox.srcdoc = `
+      &lt;script type="module"&gt;
+        ${wrappedCode}
+      &lt;/script&gt;
+    `;
+
+    document.body.appendChild(this.sandbox);
+
+    // Wait for plugin to signal ready
+    await this.waitForReady();
+  }
+
+  private wrapPluginCode(code: string, capabilities: PluginCapability[]): string {
+    // Generate capability-filtered API
+    const apiSurface = this.generateApiSurface(capabilities);
+
+    return `
+      const __pluginHandle = ${JSON.stringify(apiSurface)};
+      const __pluginApi = new PluginApi(__pluginHandle);
+
+      ${code}
+
+      // Initialize plugin with filtered handle
+      if (typeof init === 'function') {
+        init({ handle: __pluginApi });
+      }
+    `;
+  }
+}
+</code></pre>
+<h2 id="mdx-component-registry-integration"><a class="header" href="#mdx-component-registry-integration">MDX Component Registry Integration</a></h2>
+<pre><code class="language-typescript">// Integration with existing MDX component registry
+// File: citadel-workspaces/src/components/office/mdxComponents.tsx
+
+import { pluginComponents } from "@/lib/plugin-registry";
+
+export const components = {
+  // Core components
+  h1, h2, p, ul, li, a, img,
+  table, thead, tbody, tr, th, td,
+
+  // Built-in custom components
+  Card, Alert, Badge,
+  code, pre,
+
+  // Plugin-provided components (dynamically registered)
+  ...pluginComponents.getAll()
+};
+
+// Plugin registry
+// File: citadel-workspaces/src/lib/plugin-registry.ts
+
+class PluginComponentRegistry {
+  private components: Map&lt;string, React.ComponentType&lt;any&gt;&gt; = new Map();
+  private listeners: Set&lt;() =&gt; void&gt; = new Set();
+
+  register(name: string, component: React.ComponentType&lt;any&gt;, pluginId: string): void {
+    // Validate component name doesn't conflict with built-ins
+    if (BUILTIN_COMPONENTS.has(name)) {
+      throw new Error(`Cannot override built-in component: ${name}`);
+    }
+
+    // Namespace plugin components to prevent conflicts
+    const namespacedName = `${pluginId}.${name}`;
+    this.components.set(namespacedName, component);
+
+    // Also register short name if unambiguous
+    if (!this.components.has(name)) {
+      this.components.set(name, component);
+    }
+
+    this.notifyListeners();
+  }
+
+  getAll(): Record&lt;string, React.ComponentType&lt;any&gt;&gt; {
+    return Object.fromEntries(this.components);
+  }
+
+  onChange(listener: () =&gt; void): () =&gt; void {
+    this.listeners.add(listener);
+    return () =&gt; this.listeners.delete(listener);
+  }
+}
+
+export const pluginComponents = new PluginComponentRegistry();
+</code></pre>
+<h2 id="event-integration"><a class="header" href="#event-integration">Event Integration</a></h2>
+<pre><code class="language-typescript">// Integration with existing event emitter system
+// File: citadel-workspaces/src/lib/plugin-events.ts
+
+import { eventEmitter } from "./event-emitter";
+
+// Bridge between plugin signals and workspace events
+class PluginEventBridge {
+  private subscriptions: Map&lt;string, () =&gt; void&gt; = new Map();
+
+  // Forward workspace events to plugin signal system
+  forwardToPlugin(workspaceEvent: string, signalPattern: string): void {
+    const unsubscribe = eventEmitter.on(workspaceEvent, (payload) =&gt; {
+      signalRouter.emit({
+        signal_type: signalPattern,
+        payload,
+        origin: getCurrentDomain(),
+        current: getCurrentDomain(),
+        metadata: {
+          created_at: Date.now(),
+          created_by: getCurrentUserId(),
+          priority: "normal"
+        }
+      });
+    });
+
+    this.subscriptions.set(`${workspaceEvent}-&gt;${signalPattern}`, unsubscribe);
+  }
+
+  // Forward plugin signals to workspace events
+  forwardToWorkspace(signalPattern: string, workspaceEvent: string): void {
+    signalRouter.subscribe(signalPattern, (signal) =&gt; {
+      eventEmitter.emit(workspaceEvent, signal.payload);
+    });
+  }
+}
+
+export const pluginEventBridge = new PluginEventBridge();
+
+// Default bridges for common events
+pluginEventBridge.forwardToPlugin("office-content-updated", "workspace.office.content-updated");
+pluginEventBridge.forwardToPlugin("room-content-updated", "workspace.room.content-updated");
+pluginEventBridge.forwardToPlugin("member-joined", "workspace.member.joined");
+pluginEventBridge.forwardToPlugin("message-received", "workspace.message.received");
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="backend-plugin-system"><a class="header" href="#backend-plugin-system">Backend Plugin System</a></h1>
+<h2 id="plugin-runtime-architecture"><a class="header" href="#plugin-runtime-architecture">Plugin Runtime Architecture</a></h2>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Plugin runtime supporting both WASM and native plugins
+// File: citadel-workspace-server-kernel/src/plugins/runtime.rs
+
+pub enum PluginRuntime {
+    Wasm(WasmPluginRuntime),
+    Native(NativePluginRuntime),
+}
+
+pub struct WasmPluginRuntime {
+    engine: wasmtime::Engine,
+    store: wasmtime::Store&lt;PluginState&gt;,
+    module: wasmtime::Module,
+    instance: wasmtime::Instance,
+}
+
+impl WasmPluginRuntime {
+    pub async fn new(
+        wasm_bytes: &amp;[u8],
+        capabilities: &amp;[PluginCapability],
+    ) -&gt; Result&lt;Self, PluginError&gt; {
+        let mut config = wasmtime::Config::new();
+        config.async_support(true);
+        config.consume_fuel(true);  // Resource limiting
+
+        let engine = wasmtime::Engine::new(&amp;config)?;
+        let module = wasmtime::Module::new(&amp;engine, wasm_bytes)?;
+
+        let mut store = wasmtime::Store::new(&amp;engine, PluginState::new(capabilities));
+        store.add_fuel(INITIAL_FUEL)?;
+
+        // Link capability-filtered host functions
+        let linker = Self::create_linker(&amp;engine, capabilities)?;
+        let instance = linker.instantiate_async(&amp;mut store, &amp;module).await?;
+
+        Ok(Self { engine, store, module, instance })
+    }
+
+    fn create_linker(
+        engine: &amp;wasmtime::Engine,
+        capabilities: &amp;[PluginCapability],
+    ) -&gt; Result&lt;wasmtime::Linker&lt;PluginState&gt;, PluginError&gt; {
+        let mut linker = wasmtime::Linker::new(engine);
+
+        // Always available: logging, time
+        linker.func_wrap_async("env", "log", |caller, level: i32, msg_ptr: i32, msg_len: i32| {
+            Box::new(async move { /* ... */ })
+        })?;
+
+        // Capability-gated functions
+        if capabilities.contains(&amp;PluginCapability::FsRead { .. }) {
+            linker.func_wrap_async("fs", "read_file", |caller, path_ptr, path_len| {
+                Box::new(async move { /* ... */ })
+            })?;
+        }
+
+        if capabilities.contains(&amp;PluginCapability::ProcessSpawn { .. }) {
+            linker.func_wrap_async("process", "spawn", |caller, config_ptr, config_len| {
+                Box::new(async move { /* ... */ })
+            })?;
+        }
+
+        // ... more capability-gated functions
+
+        Ok(linker)
+    }
+}
+<span class="boring">}</span></code></pre>
+<h2 id="plugin-trait-definition"><a class="header" href="#plugin-trait-definition">Plugin Trait Definition</a></h2>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Core plugin trait
+// File: citadel-workspace-server-kernel/src/plugins/traits.rs
+
+#[async_trait]
+pub trait Plugin: Send + Sync {
+    /// Plugin metadata
+    fn manifest(&amp;self) -&gt; &amp;PluginManifest;
+
+    /// Initialize the plugin with granted capabilities
+    async fn init(&amp;mut self, ctx: PluginContext) -&gt; Result&lt;(), PluginError&gt;;
+
+    /// Shutdown the plugin gracefully
+    async fn shutdown(&amp;mut self) -&gt; Result&lt;(), PluginError&gt;;
+
+    /// Health check
+    async fn health_check(&amp;self) -&gt; PluginHealth;
+}
+
+/// Plugin hooks for workspace events
+#[async_trait]
+pub trait PluginHooks: Plugin {
+    /// Called before a workspace request is processed
+    async fn on_before_request(
+        &amp;self,
+        request: &amp;WorkspaceProtocolRequest,
+        user: &amp;User,
+    ) -&gt; Result&lt;HookResult, PluginError&gt; {
+        Ok(HookResult::Continue)
+    }
+
+    /// Called after a workspace request is processed
+    async fn on_after_request(
+        &amp;self,
+        request: &amp;WorkspaceProtocolRequest,
+        response: &amp;WorkspaceProtocolResponse,
+        user: &amp;User,
+    ) -&gt; Result&lt;(), PluginError&gt; {
+        Ok(())
+    }
+
+    /// Called when a member is added to a domain
+    async fn on_member_added(
+        &amp;self,
+        user: &amp;User,
+        domain: &amp;Domain,
+    ) -&gt; Result&lt;(), PluginError&gt; {
+        Ok(())
+    }
+
+    /// Called when a signal is received in this plugin's domain
+    async fn on_signal(&amp;self, signal: &amp;Signal) -&gt; Result&lt;(), PluginError&gt; {
+        Ok(())
+    }
+}
+
+pub enum HookResult {
+    Continue,                           // Proceed with normal processing
+    Intercept(WorkspaceProtocolResponse), // Return this response instead
+    Reject(String),                     // Reject the request with error
+}
+<span class="boring">}</span></code></pre>
+<h2 id="plugin-registry"><a class="header" href="#plugin-registry">Plugin Registry</a></h2>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Plugin registry for the workspace server kernel
+// File: citadel-workspace-server-kernel/src/plugins/registry.rs
+
+pub struct PluginRegistry {
+    plugins: RwLock&lt;HashMap&lt;String, Arc&lt;dyn Plugin&gt;&gt;&gt;,
+    manifests: RwLock&lt;HashMap&lt;String, PluginManifest&gt;&gt;,
+    hooks: RwLock&lt;HookRegistry&gt;,
+}
+
+impl PluginRegistry {
+    pub async fn install(
+        &amp;self,
+        manifest: PluginManifest,
+        workspace_id: &amp;str,
+        admin_user_id: &amp;str,
+    ) -&gt; Result&lt;(), PluginError&gt; {
+        // 1. Validate capabilities against workspace policy
+        self.validate_capabilities(&amp;manifest, workspace_id).await?;
+
+        // 2. Load plugin runtime
+        let runtime = match &amp;manifest.backend {
+            Some(backend) =&gt; match backend.runtime {
+                PluginRuntimeType::Wasm =&gt; {
+                    let bytes = self.fetch_plugin_bytes(&amp;backend.entrypoint).await?;
+                    Some(PluginRuntime::Wasm(
+                        WasmPluginRuntime::new(&amp;bytes, &amp;manifest.capabilities).await?
+                    ))
+                }
+                PluginRuntimeType::Native =&gt; {
+                    // Native plugins require additional security review
+                    if !self.is_native_plugin_allowed(workspace_id) {
+                        return Err(PluginError::NativePluginsDisabled);
+                    }
+                    Some(PluginRuntime::Native(
+                        NativePluginRuntime::load(&amp;backend.entrypoint).await?
+                    ))
+                }
+            }
+            None =&gt; None,  // Frontend-only plugin
+        };
+
+        // 3. Create plugin instance
+        let plugin = PluginInstance::new(manifest.clone(), runtime);
+
+        // 4. Initialize plugin
+        let ctx = PluginContext {
+            workspace_id: workspace_id.to_string(),
+            capabilities: manifest.capabilities.clone(),
+            handle: self.create_handle(&amp;manifest).await?,
+        };
+        plugin.init(ctx).await?;
+
+        // 5. Register hooks
+        if let Some(hooks) = plugin.hooks() {
+            self.hooks.write().await.register(&amp;manifest.id, hooks);
+        }
+
+        // 6. Store in registry
+        self.plugins.write().await.insert(manifest.id.clone(), Arc::new(plugin));
+        self.manifests.write().await.insert(manifest.id.clone(), manifest);
+
+        Ok(())
+    }
+
+    pub async fn execute_before_hooks(
+        &amp;self,
+        request: &amp;WorkspaceProtocolRequest,
+        user: &amp;User,
+    ) -&gt; Result&lt;Option&lt;WorkspaceProtocolResponse&gt;, PluginError&gt; {
+        let hooks = self.hooks.read().await;
+
+        for (plugin_id, hook) in hooks.before_request.iter() {
+            match hook.on_before_request(request, user).await? {
+                HookResult::Continue =&gt; continue,
+                HookResult::Intercept(response) =&gt; return Ok(Some(response)),
+                HookResult::Reject(reason) =&gt; {
+                    return Ok(Some(WorkspaceProtocolResponse::Error(reason)));
+                }
+            }
+        }
+
+        Ok(None)
+    }
+}
+<span class="boring">}</span></code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="plugin-marketplace"><a class="header" href="#plugin-marketplace">Plugin Marketplace</a></h1>
+<h2 id="marketplace-metadata-schema"><a class="header" href="#marketplace-metadata-schema">Marketplace Metadata Schema</a></h2>
+<p>Every plugin submitted to the marketplace must include comprehensive metadata for discovery, categorization, and security review.</p>
+<pre><code class="language-typescript">interface MarketplaceMetadata {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // IDENTITY
+  // ═══════════════════════════════════════════════════════════════════════════
+  id: string;                     // Unique ID (e.g., "com.company.plugin-name")
+  name: string;                   // Human-readable display name
+  version: string;                // SemVer version (e.g., "2.1.0")
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PUBLISHER INFO
+  // ═══════════════════════════════════════════════════════════════════════════
+  publisher: {
+    id: string;                   // Publisher unique ID
+    name: string;                 // Publisher display name
+    verified: boolean;            // Has passed verification process
+    website?: string;             // Publisher website URL
+    support_email?: string;       // Support contact
+  };
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DESCRIPTION
+  // ═══════════════════════════════════════════════════════════════════════════
+  description: string;            // Short description (max 200 chars)
+  longDescription?: string;       // Full description (Markdown supported)
+  changelog?: string;             // Version changelog (Markdown)
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CATEGORIZATION
+  // ═══════════════════════════════════════════════════════════════════════════
+  category: PluginCategory;       // Primary category
+  tags: string[];                 // Searchable tags (max 10)
+  license: string;                // SPDX license identifier (e.g., "MIT", "proprietary")
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ASSETS
+  // ═══════════════════════════════════════════════════════════════════════════
+  icon: string;                   // URL to icon (256x256 PNG)
+  banner?: string;                // URL to banner image (1200x400)
+  screenshots?: string[];         // URLs to screenshots (max 5)
+  documentation?: string;         // URL to documentation
+  repository?: string;            // URL to source code (for open source)
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PACKAGE TYPE &amp; ARTIFACTS
+  // ═══════════════════════════════════════════════════════════════════════════
+  packageType: "typescript" | "wasm";
+
+  artifacts: {
+    frontend?: {
+      bundle: string;             // URL to JS bundle
+      types?: string;             // URL to .d.ts type definitions
+      styles?: string;            // URL to CSS bundle
+      integrity?: string;         // SRI hash for bundle verification
+    };
+    backend?: {
+      bundle: string;             // URL to WASM binary
+      runtime: "wasm";
+      integrity?: string;         // SRI hash for WASM verification
+    };
+  };
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // REQUIREMENTS &amp; CAPABILITIES
+  // ═══════════════════════════════════════════════════════════════════════════
+  capabilities: ScopedCapability[];
+  capabilityJustifications?: Record&lt;string, string&gt;;  // Why each capability is needed
+  dependencies?: PluginDependency[];
+  citadelVersion: string;         // Minimum Citadel version required
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MARKETPLACE STATS (populated by marketplace, not plugin author)
+  // ═══════════════════════════════════════════════════════════════════════════
+  stats?: {
+    downloads: number;
+    weeklyDownloads: number;
+    rating: number;               // 1-5 stars
+    reviewCount: number;
+    firstPublished: string;       // ISO date
+    lastUpdated: string;          // ISO date
+  };
+}
+
+type PluginCategory =
+  | "ide"               // Code editors, compilers, debuggers
+  | "infrastructure"    // Server monitoring, DevOps tools
+  | "workflow"          // Automation, bots, schedulers
+  | "integration"       // Third-party service connectors
+  | "ui"                // Themes, widgets, dashboards
+  | "communication"     // Chat enhancements, notifications
+  | "project"           // Project management, kanban, sprints
+  | "security"          // Auth, audit, compliance
+  | "analytics"         // Metrics, reporting, visualization
+  | "other";            // Miscellaneous
+
+interface PluginDependency {
+  pluginId: string;               // Required plugin ID
+  version: string;                // SemVer range (e.g., "^2.0.0")
+  optional?: boolean;             // If true, enhances functionality but not required
+}
+</code></pre>
+<h2 id="marketplace-categories"><a class="header" href="#marketplace-categories">Marketplace Categories</a></h2>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│  PLUGIN MARKETPLACE CATEGORIES                                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  IDE                         │  Code editors, syntax highlighting, compilers,│
+│                              │  debuggers, language servers, formatters      │
+│                                                                             │
+│  Infrastructure              │  Server monitoring, SSH connectors, metrics,  │
+│                              │  alerts, on-call management, dashboards       │
+│                                                                             │
+│  Workflow                    │  Automation bots, scheduled tasks, approval   │
+│                              │  flows, incident routing, notifications       │
+│                                                                             │
+│  Integration                 │  GitHub, GitLab, Jira, Slack, AWS, GCP,       │
+│                              │  database connectors, API bridges             │
+│                                                                             │
+│  UI                          │  Themes, custom widgets, dashboard panels,    │
+│                              │  MDX components, layout extensions            │
+│                                                                             │
+│  Communication               │  Chat enhancements, message formatting,       │
+│                              │  translation, voice/video extensions          │
+│                                                                             │
+│  Project                     │  Kanban boards, sprint planning, time         │
+│                              │  tracking, resource allocation, reports       │
+│                                                                             │
+│  Security                    │  SSO integrations, audit logging, compliance, │
+│                              │  encryption, access control extensions        │
+│                                                                             │
+│  Analytics                   │  Custom metrics, data visualization,          │
+│                              │  reporting, BI integrations, exports          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="admin--user-ux-flows"><a class="header" href="#admin--user-ux-flows">Admin &amp; User UX Flows</a></h1>
+<h2 id="admin-plugin-installation-flow"><a class="header" href="#admin-plugin-installation-flow">Admin: Plugin Installation Flow</a></h2>
+<p>When a workspace admin installs a plugin, they see a detailed permission review:</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│  INSTALL PLUGIN: "Server Monitor Pro"                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  com.citadel-labs.server-monitor-pro                                │   │
+│  │                                                                      │   │
+│  │  Publisher: Citadel Labs (Verified)                                 │   │
+│  │  Version: 2.1.0                                                      │   │
+│  │  Category: Infrastructure                                            │   │
+│  │  License: Commercial                                                 │   │
+│  │  Downloads: 12,345  4.8 (234 reviews)                               │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  REQUIRED PERMISSIONS                                                │   │
+│  ├─────────────────────────────────────────────────────────────────────┤   │
+│  │                                                                       │   │
+│  │  This plugin requires the following capabilities:                    │   │
+│  │                                                                       │   │
+│  │  ┌──────────────────────┬──────────────┬─────────────────────────┐  │   │
+│  │  │ Permission           │ Level        │ Justification           │  │   │
+│  │  ├──────────────────────┼──────────────┼─────────────────────────┤  │   │
+│  │  │ ui:panels            │ Interact     │ Display monitoring panel│  │   │
+│  │  │ ui:components        │ Interact     │ ServerStatus widget     │  │   │
+│  │  │ signals:emit         │ Interact     │ Emit server alerts      │  │   │
+│  │  │ signals:propagate    │ Modify       │ Escalate incidents      │  │   │
+│  │  │ network:connect      │ System       │ Connect to servers      │  │   │
+│  │  │   → 10.0.0.0/8:22    │              │   (SSH monitoring)      │  │   │
+│  │  │   → 10.0.0.0/8:443   │              │   (HTTPS metrics)       │  │   │
+│  │  └──────────────────────┴──────────────┴─────────────────────────┘  │   │
+│  │                                                                       │   │
+│  │  Level Legend: Observe  Interact  Modify  Manage  System             │   │
+│  │                                                                       │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  All requested capabilities are within workspace policy              │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  [ View Source ]  [ View Reviews ]  [ Cancel ]  [ Approve &amp; Install ]      │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="user-first-join-securityprivacy-modal"><a class="header" href="#user-first-join-securityprivacy-modal">User: First-Join Security/Privacy Modal</a></h2>
+<p>When a user first joins a workspace with plugins installed:</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│  WORKSPACE SECURITY &amp; PRIVACY                                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  You're joining "Engineering" workspace.                                    │
+│  This workspace has 3 plugins that request the following permissions.       │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  PERMISSION SUMMARY                                                  │   │
+│  ├───────────────────────┬──────────┬───────────────────────────────────┤   │
+│  │ Permission            │ Required │ Source                            │   │
+│  ├───────────────────────┼──────────┼───────────────────────────────────┤   │
+│  │ Read workspace data   │    Y     │ All plugins                       │   │
+│  │ Display UI panels     │    Y     │ Server Monitor, IDE               │   │
+│  │ Register MDX          │    Y     │ IDE, Kanban Board                 │   │
+│  │   components          │          │                                   │   │
+│  │ Emit signals          │    Y     │ Server Monitor, Incident Router   │   │
+│  │ Propagate signals     │    Y     │ Incident Router                   │   │
+│  │ Send P2P messages     │    Y     │ Incident Router                   │   │
+│  │ Edit MDX content      │    Y     │ IDE                               │   │
+│  │ Read filesystem       │    !     │ IDE                               │   │
+│  │   /projects/*         │          │   (scoped to project files)       │   │
+│  │ Write filesystem      │    !     │ IDE                               │   │
+│  │   /projects/*         │          │   (scoped to project files)       │   │
+│  │ Spawn processes       │    !     │ IDE                               │   │
+│  │   cargo, npm, node    │          │   (build tools only)              │   │
+│  │ Network connections   │    !     │ Server Monitor                    │   │
+│  │   10.0.0.0/8          │          │   (internal network only)         │   │
+│  └───────────────────────┴──────────┴───────────────────────────────────┘   │
+│                                                                             │
+│  Legend:  Y = Standard permission    ! = Elevated (Level 4) permission     │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  Your data is protected:                                            │   │
+│  │  • Plugins cannot access your credentials or private messages        │   │
+│  │  • All plugin actions are logged and auditable                       │   │
+│  │  • You can revoke plugin access at any time in Settings              │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  [ View Plugin Details ]    [ Leave Workspace ]    [ Accept &amp; Continue ]   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="admin-policy-violation-on-install"><a class="header" href="#admin-policy-violation-on-install">Admin: Policy Violation on Install</a></h2>
+<p>When a secondary admin (with <code>ManagePlugins</code> but not <code>ConfigurePluginPolicy</code>) tries to install a plugin that exceeds the workspace policy:</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│  INSTALLATION BLOCKED                                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  "Server Monitor Pro" cannot be installed due to workspace policy           │
+│  restrictions.                                                              │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  POLICY VIOLATIONS                                                   │   │
+│  ├───────────────────────┬───────────────────┬─────────────────────────┤   │
+│  │ Requested             │ Policy Allows     │ Status                  │   │
+│  ├───────────────────────┼───────────────────┼─────────────────────────┤   │
+│  │ network: 0.0.0.0/0    │ 10.0.0.0/8 only   │ Scope too broad         │   │
+│  │ fs:write: /           │ /projects, /tmp   │ Path not allowed        │   │
+│  │ process: any          │ cargo, npm, node  │ Scope required          │   │
+│  └───────────────────────┴───────────────────┴─────────────────────────┘   │
+│                                                                             │
+│  Contact the workspace owner to either:                                     │
+│  • Update the workspace plugin policy                                       │
+│  • Request a custom-scoped version of this plugin                          │
+│  • Add this plugin to the workspace whitelist                              │
+│                                                                             │
+│  [ View Full Policy ]    [ Request Policy Change ]    [ Close ]            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="permission-aggregation-logic"><a class="header" href="#permission-aggregation-logic">Permission Aggregation Logic</a></h2>
+<pre><code class="language-typescript">interface AggregatedPermission {
+  permission: ScopedCapability;
+  required: boolean;
+  level: PermissionLevel;      // 0-4
+  sources: PluginSource[];     // Which plugins require this
+  scope?: string;              // Human-readable scope (e.g., "/projects/*")
+  justification?: string;      // Combined justifications
+}
+
+interface PluginSource {
+  pluginId: string;
+  pluginName: string;
+  icon?: string;
+}
+
+/**
+ * Aggregate permissions from multiple plugins for display.
+ * Groups similar permissions and tracks which plugins require each.
+ */
+function aggregatePermissions(plugins: InstalledPlugin[]): AggregatedPermission[] {
+  const permMap = new Map&lt;string, AggregatedPermission&gt;();
+
+  for (const plugin of plugins) {
+    for (const cap of plugin.capabilities) {
+      const key = getCapabilityKey(cap);  // Normalize for grouping
+
+      if (permMap.has(key)) {
+        // Add to existing sources
+        const existing = permMap.get(key)!;
+        existing.sources.push({
+          pluginId: plugin.id,
+          pluginName: plugin.name,
+          icon: plugin.icon
+        });
+      } else {
+        // New permission entry
+        permMap.set(key, {
+          permission: cap,
+          required: true,
+          level: getCapabilityLevel(cap),
+          sources: [{
+            pluginId: plugin.id,
+            pluginName: plugin.name,
+            icon: plugin.icon
+          }],
+          scope: formatScope(cap.scope),
+          justification: plugin.manifest.capabilityJustifications?.[key]
+        });
+      }
+    }
+  }
+
+  // Sort by level (highest first) then alphabetically
+  return Array.from(permMap.values())
+    .sort((a, b) =&gt; b.level - a.level || a.permission.type.localeCompare(b.permission.type));
+}
+
+function formatScope(scope: CapabilityScope | undefined): string | undefined {
+  if (!scope) return undefined;
+
+  if ('ip_addresses' in scope) {
+    return scope.ip_addresses.join(', ');
+  }
+  if ('paths' in scope) {
+    return scope.paths.join(', ');
+  }
+  if ('executables' in scope) {
+    return scope.executables.join(', ');
+  }
+  return undefined;
+}
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="security-model"><a class="header" href="#security-model">Security Model</a></h1>
+<h2 id="security-principles"><a class="header" href="#security-principles">Security Principles</a></h2>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│                         PLUGIN SECURITY MODEL                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  PRINCIPLE 1: Least Privilege                                               │
+│  ─────────────────────────────                                              │
+│  • Plugins request only capabilities they need                              │
+│  • Admins can deny any capability                                           │
+│  • Capabilities cannot be escalated at runtime                              │
+│                                                                             │
+│  PRINCIPLE 2: Defense in Depth                                              │
+│  ─────────────────────────────                                              │
+│  • WASM sandbox for code isolation                                          │
+│  • Capability filtering at API boundary                                     │
+│  • Resource limits (CPU, memory, network)                                   │
+│  • Audit logging of all plugin actions                                      │
+│                                                                             │
+│  PRINCIPLE 3: Fail Secure                                                   │
+│  ─────────────────────────────                                              │
+│  • Plugin failures don't crash workspace                                    │
+│  • Undefined capabilities default to denied                                 │
+│  • Network failures don't leak internal state                               │
+│                                                                             │
+│  PRINCIPLE 4: Auditability                                                  │
+│  ─────────────────────────────                                              │
+│  • All plugin actions logged with timestamps                                │
+│  • Signal propagation history preserved                                     │
+│  • Capability usage metrics tracked                                         │
+│  • Admin can review plugin activity                                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="capability-validation"><a class="header" href="#capability-validation">Capability Validation</a></h2>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Capability validation pipeline
+// File: citadel-workspace-server-kernel/src/plugins/security.rs
+
+pub struct CapabilityValidator {
+    workspace_policy: WorkspacePolicy,
+    plugin_manifest: PluginManifest,
+}
+
+impl CapabilityValidator {
+    pub fn validate(&amp;self) -&gt; ValidationResult {
+        let mut result = ValidationResult::new();
+
+        for capability in &amp;self.plugin_manifest.capabilities {
+            match self.validate_capability(capability) {
+                Ok(()) =&gt; result.approved.push(capability.clone()),
+                Err(reason) =&gt; result.denied.push((capability.clone(), reason)),
+            }
+        }
+
+        result
+    }
+
+    fn validate_capability(&amp;self, cap: &amp;PluginCapability) -&gt; Result&lt;(), String&gt; {
+        match cap {
+            // Level 0-2: Generally allowed with policy check
+            PluginCapability::UiRead
+            | PluginCapability::DomainRead { .. }
+            | PluginCapability::UiComponents { .. }
+            | PluginCapability::MdxEdit { .. } =&gt; {
+                if self.workspace_policy.allows_ui_plugins {
+                    Ok(())
+                } else {
+                    Err("UI plugins disabled by workspace policy".into())
+                }
+            }
+
+            // Level 3: Requires admin role
+            PluginCapability::MembersManage { .. }
+            | PluginCapability::DomainCreate { .. }
+            | PluginCapability::DomainDelete { .. } =&gt; {
+                if self.workspace_policy.admin_plugins_enabled {
+                    Ok(())
+                } else {
+                    Err("Admin-level plugins require explicit enablement".into())
+                }
+            }
+
+            // Level 4: Requires explicit allowlist
+            PluginCapability::FsRead { paths, .. } =&gt; {
+                for path in paths {
+                    if !self.workspace_policy.allowed_fs_paths.iter().any(|p| path.starts_with(p)) {
+                        return Err(format!("Path not in allowlist: {:?}", path));
+                    }
+                }
+                Ok(())
+            }
+
+            PluginCapability::ProcessSpawn { allowlist } =&gt; {
+                for entry in allowlist {
+                    if !self.workspace_policy.allowed_executables.contains(&amp;entry.executable) {
+                        return Err(format!("Executable not allowed: {}", entry.executable));
+                    }
+                }
+                Ok(())
+            }
+
+            PluginCapability::NetworkConnect { hosts, ports } =&gt; {
+                for host in hosts {
+                    if !self.workspace_policy.allowed_network_hosts.iter().any(|h| {
+                        glob_match(h, host)
+                    }) {
+                        return Err(format!("Host not in allowlist: {}", host));
+                    }
+                }
+                Ok(())
+            }
+
+            _ =&gt; Ok(())
+        }
+    }
+}
+<span class="boring">}</span></code></pre>
+<h2 id="resource-limits"><a class="header" href="#resource-limits">Resource Limits</a></h2>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Resource limiting for plugins
+#[derive(Debug, Clone)]
+pub struct PluginResourceLimits {
+    /// Maximum CPU time per request (ms)
+    pub cpu_time_ms: u64,
+
+    /// Maximum memory (bytes)
+    pub memory_bytes: u64,
+
+    /// Maximum concurrent network connections
+    pub max_connections: u32,
+
+    /// Maximum filesystem operations per minute
+    pub fs_ops_per_minute: u32,
+
+    /// Maximum signal emissions per minute
+    pub signals_per_minute: u32,
+}
+
+impl Default for PluginResourceLimits {
+    fn default() -&gt; Self {
+        Self {
+            cpu_time_ms: 5000,        // 5 seconds
+            memory_bytes: 64 * 1024 * 1024,  // 64 MB
+            max_connections: 10,
+            fs_ops_per_minute: 1000,
+            signals_per_minute: 100,
+        }
+    }
+}
+
+// Resource enforcement in WASM runtime
+impl WasmPluginRuntime {
+    pub async fn call_with_limits&lt;T&gt;(
+        &amp;mut self,
+        func_name: &amp;str,
+        args: &amp;[wasmtime::Val],
+        limits: &amp;PluginResourceLimits,
+    ) -&gt; Result&lt;T, PluginError&gt; {
+        // Set fuel limit for CPU time
+        self.store.set_fuel(limits.cpu_time_ms * FUEL_PER_MS)?;
+
+        // Set memory limit
+        let memory = self.instance.get_memory(&amp;mut self.store, "memory")
+            .ok_or(PluginError::NoMemory)?;
+        // Note: Memory limiting requires WASM memory64 or custom allocator
+
+        // Execute with timeout
+        let result = tokio::time::timeout(
+            Duration::from_millis(limits.cpu_time_ms),
+            self.call_func(func_name, args)
+        ).await??;
+
+        Ok(result)
+    }
+}
+<span class="boring">}</span></code></pre>
+<h2 id="audit-logging"><a class="header" href="#audit-logging">Audit Logging</a></h2>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Audit log for plugin actions
+#[derive(Debug, Serialize)]
+pub struct PluginAuditEntry {
+    pub timestamp: i64,
+    pub plugin_id: String,
+    pub action: PluginAction,
+    pub capability_used: PluginCapability,
+    pub user_id: Option&lt;String&gt;,
+    pub domain_path: Vec&lt;String&gt;,
+    pub result: ActionResult,
+    pub metadata: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+pub enum PluginAction {
+    UiComponentRegistered { name: String },
+    MdxContentModified { domain_id: String },
+    SignalEmitted { signal_type: String },
+    SignalPropagated { signal_type: String, direction: String },
+    FileRead { path: String },
+    FileWritten { path: String },
+    ProcessSpawned { executable: String },
+    NetworkConnected { host: String, port: u16 },
+    MemberModified { user_id: String, action: String },
+}
+
+pub struct PluginAuditLog {
+    entries: RwLock&lt;VecDeque&lt;PluginAuditEntry&gt;&gt;,
+    max_entries: usize,
+    persistent_log: Option&lt;PathBuf&gt;,
+}
+
+impl PluginAuditLog {
+    pub async fn record(&amp;self, entry: PluginAuditEntry) {
+        // Add to in-memory buffer
+        let mut entries = self.entries.write().await;
+        entries.push_back(entry.clone());
+        if entries.len() &gt; self.max_entries {
+            entries.pop_front();
+        }
+
+        // Persist if configured
+        if let Some(ref path) = self.persistent_log {
+            let line = serde_json::to_string(&amp;entry).unwrap();
+            tokio::fs::OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(path)
+                .await
+                .unwrap()
+                .write_all(format!("{}\n", line).as_bytes())
+                .await
+                .unwrap();
+        }
+    }
+
+    pub async fn query(&amp;self, filter: AuditFilter) -&gt; Vec&lt;PluginAuditEntry&gt; {
+        let entries = self.entries.read().await;
+        entries.iter()
+            .filter(|e| filter.matches(e))
+            .cloned()
+            .collect()
+    }
+}
+<span class="boring">}</span></code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="in-browser-ide"><a class="header" href="#in-browser-ide">In-Browser IDE</a></h1>
+<p><strong>Vision</strong>: Transform a workspace room into a full-featured IDE with:</p>
+<ul>
+<li>Code editor with syntax highlighting</li>
+<li>File explorer connected to server filesystem</li>
+<li>Build system integration (compile, test, run)</li>
+<li>Terminal emulator with SSH</li>
+<li>Collaborative editing</li>
+</ul>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│  WORKSPACE: "Engineering"                                                    │
+│  └── OFFICE: "Development"                                                   │
+│      └── ROOM: "Project Alpha IDE"  [Plugins: IDE Suite]                    │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  ┌─────────────┐  ┌────────────────────────────────────────────┐   │   │
+│  │  │ File        │  │ Editor: main.rs                             │   │   │
+│  │  │ Explorer    │  │ ─────────────────────────────────────────── │   │   │
+│  │  │             │  │ 1 │ use std::collections::HashMap;          │   │   │
+│  │  │ 📁 src      │  │ 2 │                                         │   │   │
+│  │  │   📄 main.rs│  │ 3 │ fn main() {                             │   │   │
+│  │  │   📄 lib.rs │  │ 4 │     println!("Hello, Citadel!");        │   │   │
+│  │  │ 📁 tests    │  │ 5 │ }                                       │   │   │
+│  │  │ 📄 Cargo.tom│  │                                             │   │   │
+│  │  └─────────────┘  └────────────────────────────────────────────┘   │   │
+│  │                                                                     │   │
+│  │  ┌─────────────────────────────────────────────────────────────┐   │   │
+│  │  │ Terminal (SSH: prod-server-01)                               │   │   │
+│  │  │ $ cargo build --release                                      │   │   │
+│  │  │    Compiling project-alpha v0.1.0                            │   │   │
+│  │  │    Finished release [optimized] target(s) in 2.34s           │   │   │
+│  │  │ $                                                            │   │   │
+│  │  └─────────────────────────────────────────────────────────────┘   │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="plugins-required"><a class="header" href="#plugins-required">Plugins Required</a></h2>
+<pre><code class="language-yaml">plugins:
+  - id: "com.citadel.code-editor"
+    capabilities: [ui:components, ui:panels, mdx:edit]
+
+  - id: "com.citadel.file-explorer"
+    capabilities: [fs:read, fs:write, ui:panels]
+    config:
+      root_path: "/projects/alpha"
+
+  - id: "com.citadel.rust-compiler"
+    capabilities: [fs:read, fs:write, process:spawn]
+    config:
+      toolchain: "stable"
+
+  - id: "com.citadel.ssh-terminal"
+    capabilities: [network:connect, ui:panels]
+    config:
+      allowed_hosts: ["10.0.0.0/8"]
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="infrastructure-mirror-server-room"><a class="header" href="#infrastructure-mirror-server-room">Infrastructure Mirror (Server Room)</a></h1>
+<p><strong>Vision</strong>: A workspace that mirrors physical/cloud infrastructure with:</p>
+<ul>
+<li>Real-time server status dashboards</li>
+<li>SSH access to servers</li>
+<li>Incident escalation system</li>
+<li>On-call rotation management</li>
+</ul>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│  WORKSPACE: "Operations"                                                     │
+│  └── OFFICE: "Server Room A"  [Plugins: Infrastructure Suite]               │
+│      ├── ROOM: "Production Cluster"                                          │
+│      ├── ROOM: "Database Servers"                                            │
+│      └── ROOM: "Network Equipment"                                           │
+│                                                                             │
+│  SIGNAL FLOW (Incident Escalation):                                          │
+│                                                                             │
+│  1. Alert detected in "Database Servers" room                                │
+│     └─► Signal: infrastructure.alert.critical                                │
+│         └─► Payload: { server: "db-01", cpu: 95%, issue: "high load" }      │
+│                                                                             │
+│  2. Signal propagates UP to "Server Room A" office                           │
+│     └─► Office admin receives notification                                   │
+│     └─► Signal queued for review                                             │
+│                                                                             │
+│  3. Admin escalates to "Operations" workspace                                │
+│     └─► On-call engineer notified via P2P message                           │
+│     └─► Incident ticket created                                              │
+│                                                                             │
+│  4. Admin delegates fix to "Database Servers" room                           │
+│     └─► Signal: incident.assigned                                            │
+│     └─► Payload: { assignee: "dba-team", priority: "p1" }                   │
+│                                                                             │
+│  5. Resolution signal propagates UP                                          │
+│     └─► Signal: incident.resolved                                            │
+│     └─► Audit trail complete                                                 │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="plugins-required-1"><a class="header" href="#plugins-required-1">Plugins Required</a></h2>
+<pre><code class="language-yaml">plugins:
+  - id: "com.citadel.server-monitor"
+    capabilities: [network:connect, ui:components, signals:emit]
+    config:
+      poll_interval: 30s
+      alert_thresholds:
+        cpu: 90
+        memory: 85
+        disk: 95
+
+  - id: "com.citadel.incident-router"
+    capabilities: [signals:subscribe, signals:propagate, messages:send]
+    config:
+      escalation_rules:
+        - severity: critical
+          action: immediate_escalate
+        - severity: warning
+          action: queue_for_review
+
+  - id: "com.citadel.oncall-manager"
+    capabilities: [members:read, signals:subscribe, ui:panels]
+    config:
+      schedule_source: "pagerduty"  # or internal
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="more-examples"><a class="header" href="#more-examples">More Examples</a></h1>
+<h2 id="project-management-hub"><a class="header" href="#project-management-hub">Project Management Hub</a></h2>
+<p><strong>Vision</strong>: Workspace rooms as project boards with:</p>
+<ul>
+<li>Kanban/Scrum boards</li>
+<li>Sprint planning</li>
+<li>Time tracking</li>
+<li>Integration with GitHub/GitLab</li>
+</ul>
+<pre><code class="language-yaml">plugins:
+  - id: "com.citadel.kanban-board"
+    capabilities: [ui:components, mdx:edit, domain:write]
+
+  - id: "com.citadel.github-integration"
+    capabilities: [network:connect, signals:emit, ui:panels]
+    config:
+      repos: ["org/project-alpha", "org/project-beta"]
+
+  - id: "com.citadel.sprint-planner"
+    capabilities: [domain:write, members:read, signals:emit]
+
+  - id: "com.citadel.time-tracker"
+    capabilities: [domain:write, ui:panels]
+</code></pre>
+<h2 id="customer-support-center"><a class="header" href="#customer-support-center">Customer Support Center</a></h2>
+<p><strong>Vision</strong>: Workspace as a support ticketing system with:</p>
+<ul>
+<li>Ticket queue management</li>
+<li>Customer chat integration</li>
+<li>Knowledge base (MDX content)</li>
+<li>SLA tracking</li>
+</ul>
+<pre><code class="language-yaml">plugins:
+  - id: "com.citadel.ticket-queue"
+    capabilities: [ui:panels, signals:subscribe, domain:write]
+
+  - id: "com.citadel.customer-chat"
+    capabilities: [messages:send, network:connect, ui:panels]
+
+  - id: "com.citadel.knowledge-base"
+    capabilities: [mdx:edit, ui:components]
+
+  - id: "com.citadel.sla-monitor"
+    capabilities: [signals:subscribe, signals:emit, ui:components]
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="implementation-roadmap"><a class="header" href="#implementation-roadmap">Implementation Roadmap</a></h1>
+<h2 id="phase-1-foundation-core-infrastructure"><a class="header" href="#phase-1-foundation-core-infrastructure">Phase 1: Foundation (Core Infrastructure)</a></h2>
+<p><strong>Goal</strong>: Establish plugin system foundation without breaking existing functionality.</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 1: FOUNDATION                                                         │
+│  Duration: Core infrastructure                                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1.1 Plugin Manifest &amp; Registry                                              │
+│      □ Define PluginManifest struct (Rust + TypeScript)                     │
+│      □ Create plugin registry storage in workspace metadata                  │
+│      □ Add WorkspaceProtocolRequest variants for plugin management          │
+│        - InstallPlugin, UninstallPlugin, ListPlugins, GetPluginStatus       │
+│                                                                             │
+│  1.2 Capability System                                                       │
+│      □ Define PluginCapability enum with all levels                         │
+│      □ Implement capability validation pipeline                              │
+│      □ Add workspace policy settings for capability allowlists              │
+│                                                                             │
+│  1.3 Plugin Handle (Level 0-1 only)                                          │
+│      □ Implement basic PluginHandle interface                                │
+│      □ UIHandle: registerComponent, onEvent, getState                       │
+│      □ DataHandle: read-only workspace/office/room access                   │
+│      □ SignalHandle: subscribe only                                          │
+│                                                                             │
+│  1.4 Frontend Plugin Host                                                    │
+│      □ Create PluginHost class with iframe sandboxing                       │
+│      □ Implement message passing between host and plugins                   │
+│      □ Integrate with MDX component registry                                 │
+│                                                                             │
+│  Deliverables:                                                               │
+│      ✓ Plugins can be installed/uninstalled via admin UI                    │
+│      ✓ Plugins can register custom MDX components                           │
+│      ✓ Plugins can read workspace data (read-only)                          │
+│      ✓ Plugins can subscribe to signals                                      │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="phase-2-interactivity-level-1-2-capabilities"><a class="header" href="#phase-2-interactivity-level-1-2-capabilities">Phase 2: Interactivity (Level 1-2 Capabilities)</a></h2>
+<p><strong>Goal</strong>: Enable plugins to modify workspace state and interact with users.</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 2: INTERACTIVITY                                                      │
+│  Depends on: Phase 1                                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  2.1 UI Manipulation                                                         │
+│      □ UIHandle: registerPanel (sidebar, bottom, modal, floating)           │
+│      □ UIHandle: inject (DOM manipulation with selector constraints)        │
+│      □ Theme extension support                                               │
+│                                                                             │
+│  2.2 MDX Editing                                                             │
+│      □ MDXHandle: setContent, patchContent                                  │
+│      □ MDXHandle: createEditSession (collaborative editing)                 │
+│      □ MDX transformer pipeline                                              │
+│                                                                             │
+│  2.3 Signal Emission                                                         │
+│      □ SignalHandle: emit (local domain)                                    │
+│      □ Signal validation and rate limiting                                   │
+│      □ Signal audit logging                                                  │
+│                                                                             │
+│  2.4 Messaging                                                               │
+│      □ MessagesHandle: send P2P messages as plugin                          │
+│      □ Message attribution (from: plugin-id)                                 │
+│                                                                             │
+│  Deliverables:                                                               │
+│      ✓ Plugins can add custom panels to UI                                  │
+│      ✓ Plugins can modify MDX content                                       │
+│      ✓ Plugins can emit signals within their domain                         │
+│      ✓ Plugins can send messages on behalf of users                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="phase-3-signal-propagation-hierarchical-events"><a class="header" href="#phase-3-signal-propagation-hierarchical-events">Phase 3: Signal Propagation (Hierarchical Events)</a></h2>
+<p><strong>Goal</strong>: Implement the hierarchical signal propagation system.</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 3: SIGNAL PROPAGATION                                                 │
+│  Depends on: Phase 2                                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  3.1 Signal Router                                                           │
+│      □ Implement SignalRouter with domain hierarchy awareness               │
+│      □ Upward propagation (escalation)                                       │
+│      □ Downward propagation (delegation)                                     │
+│      □ Sibling propagation (coordination)                                    │
+│                                                                             │
+│  3.2 Signal Queuing                                                          │
+│      □ Per-domain signal queues                                              │
+│      □ Admin review interface                                                │
+│      □ Signal acknowledgment system                                          │
+│                                                                             │
+│  3.3 Signal Transforms                                                       │
+│      □ Transform functions during propagation                                │
+│      □ Filter functions (stop/skip conditions)                               │
+│                                                                             │
+│  3.4 Broadcast (Level 4)                                                     │
+│      □ Workspace-wide broadcast capability                                   │
+│      □ Rate limiting and admin approval                                      │
+│                                                                             │
+│  Deliverables:                                                               │
+│      ✓ Signals propagate up/down domain hierarchy                           │
+│      ✓ Admins can review queued signals                                     │
+│      ✓ Incident escalation pattern works end-to-end                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="phase-4-backend-plugins-wasm-runtime"><a class="header" href="#phase-4-backend-plugins-wasm-runtime">Phase 4: Backend Plugins (WASM Runtime)</a></h2>
+<p><strong>Goal</strong>: Enable server-side plugin execution in sandboxed WASM.</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 4: BACKEND PLUGINS                                                    │
+│  Depends on: Phase 3                                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  4.1 WASM Runtime                                                            │
+│      □ Integrate wasmtime for plugin execution                              │
+│      □ Capability-filtered host function linking                            │
+│      □ Resource limiting (fuel, memory)                                      │
+│                                                                             │
+│  4.2 Plugin Hooks                                                            │
+│      □ Before/after request hooks                                            │
+│      □ Member lifecycle hooks                                                │
+│      □ Signal handling hooks                                                 │
+│                                                                             │
+│  4.3 Plugin SDK                                                              │
+│      □ Rust SDK for building backend plugins                                │
+│      □ Plugin development guide                                              │
+│      □ Example plugins                                                       │
+│                                                                             │
+│  Deliverables:                                                               │
+│      ✓ Backend plugins run in sandboxed WASM                                │
+│      ✓ Plugins can hook into workspace operations                           │
+│      ✓ Plugin SDK available for developers                                  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="phase-5-system-capabilities-level-4"><a class="header" href="#phase-5-system-capabilities-level-4">Phase 5: System Capabilities (Level 4)</a></h2>
+<p><strong>Goal</strong>: Enable powerful system integrations with strict security controls.</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 5: SYSTEM CAPABILITIES                                                │
+│  Depends on: Phase 4                                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  5.1 Filesystem Access                                                       │
+│      □ FileSystemHandle implementation                                       │
+│      □ Path allowlist enforcement                                            │
+│      □ File watching (inotify/kqueue)                                        │
+│                                                                             │
+│  5.2 Process Spawning                                                        │
+│      □ ProcessHandle implementation                                          │
+│      □ Executable allowlist enforcement                                      │
+│      □ Resource limits per process                                           │
+│                                                                             │
+│  5.3 Network Access                                                          │
+│      □ NetworkHandle implementation                                          │
+│      □ Host/port allowlist enforcement                                       │
+│      □ Connection pooling and limits                                         │
+│                                                                             │
+│  5.4 Native Plugin Support (Optional)                                        │
+│      □ Native plugin loading (dlopen)                                        │
+│      □ Enhanced security review process                                      │
+│      □ Signed plugin verification                                            │
+│                                                                             │
+│  Deliverables:                                                               │
+│      ✓ Plugins can access scoped filesystem                                 │
+│      ✓ Plugins can spawn allowlisted processes                              │
+│      ✓ Plugins can make allowlisted network connections                     │
+│      ✓ IDE use case fully functional                                        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="phase-6-ecosystem-plugin-marketplace"><a class="header" href="#phase-6-ecosystem-plugin-marketplace">Phase 6: Ecosystem (Plugin Marketplace)</a></h2>
+<p><strong>Goal</strong>: Build the plugin ecosystem infrastructure.</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│  PHASE 6: ECOSYSTEM                                                          │
+│  Depends on: Phase 5                                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  6.1 Plugin Registry Service                                                 │
+│      □ Central plugin registry (opt-in)                                     │
+│      □ Plugin discovery API                                                  │
+│      □ Version management                                                    │
+│                                                                             │
+│  6.2 Plugin Marketplace UI                                                   │
+│      □ Browse/search plugins                                                 │
+│      □ Install from marketplace                                              │
+│      □ Reviews and ratings                                                   │
+│                                                                             │
+│  6.3 Plugin Development Tools                                                │
+│      □ CLI for plugin scaffolding                                            │
+│      □ Local development server                                              │
+│      □ Testing framework                                                     │
+│                                                                             │
+│  6.4 Official Plugin Suite                                                   │
+│      □ IDE Plugin Suite                                                      │
+│      □ Infrastructure Suite                                                  │
+│      □ Project Management Suite                                              │
+│                                                                             │
+│  Deliverables:                                                               │
+│      ✓ Plugin marketplace operational                                        │
+│      ✓ Third-party developers can publish plugins                           │
+│      ✓ Official plugin suites available                                     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="signal-type-registry"><a class="header" href="#signal-type-registry">Signal Type Registry</a></h1>
+<p>Standard signal types that plugins should use for interoperability:</p>
+<pre><code class="language-yaml"># Infrastructure
+infrastructure.alert.critical
+infrastructure.alert.warning
+infrastructure.alert.info
+infrastructure.status.healthy
+infrastructure.status.degraded
+infrastructure.status.down
+
+# Incidents
+incident.created
+incident.assigned
+incident.escalated
+incident.resolved
+incident.closed
+
+# Build/Deploy
+build.started
+build.succeeded
+build.failed
+deploy.started
+deploy.succeeded
+deploy.failed
+deploy.rollback
+
+# Workspace
+workspace.member.joined
+workspace.member.left
+workspace.content.updated
+workspace.settings.changed
+
+# Plugin
+plugin.installed
+plugin.uninstalled
+plugin.error
+plugin.health.degraded
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="mdx-component-convention"><a class="header" href="#mdx-component-convention">MDX Component Convention</a></h1>
+<p>Plugins should follow these conventions for MDX components:</p>
+<pre><code class="language-typescript">// Component naming: PascalCase, namespaced
+// Good: "MyPlugin.StatusWidget"
+// Bad: "status-widget", "statusWidget"
+
+// Props should be documented
+interface StatusWidgetProps {
+  /** Server ID to display status for */
+  serverId: string;
+  /** Refresh interval in seconds */
+  refreshInterval?: number;
+  /** Show detailed metrics */
+  detailed?: boolean;
+}
+
+// Components should handle loading/error states
+function StatusWidget({ serverId, refreshInterval = 30 }: StatusWidgetProps) {
+  const { data, loading, error } = useServerStatus(serverId, refreshInterval);
+
+  if (loading) return &lt;Skeleton /&gt;;
+  if (error) return &lt;Alert variant="error"&gt;{error.message}&lt;/Alert&gt;;
+
+  return &lt;StatusDisplay status={data} /&gt;;
+}
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="security-checklist-for-plugin-developers"><a class="header" href="#security-checklist-for-plugin-developers">Security Checklist for Plugin Developers</a></h1>
+<p>Before publishing a plugin:</p>
+<ul>
+<li><input disabled="" type="checkbox"> Request only capabilities actually needed</li>
+<li><input disabled="" type="checkbox"> Handle all errors gracefully (no crashes)</li>
+<li><input disabled="" type="checkbox"> Sanitize user input before rendering</li>
+<li><input disabled="" type="checkbox"> Don’t store sensitive data in plugin storage</li>
+<li><input disabled="" type="checkbox"> Use capability-scoped paths for filesystem access</li>
+<li><input disabled="" type="checkbox"> Validate network responses before processing</li>
+<li><input disabled="" type="checkbox"> Implement proper cleanup in shutdown handler</li>
+<li><input disabled="" type="checkbox"> Test with resource limits enabled</li>
+<li><input disabled="" type="checkbox"> Document all capabilities and why they’re needed</li>
+<li><input disabled="" type="checkbox"> Provide clear privacy policy if collecting data</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="glossary"><a class="header" href="#glossary">Glossary</a></h1>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Term</th><th>Definition</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Capability</strong></td><td>A permission granted to a plugin to access specific functionality</td></tr>
+<tr><td><strong>Domain</strong></td><td>A workspace, office, or room in the hierarchy</td></tr>
+<tr><td><strong>Signal</strong></td><td>An event that can propagate through the domain hierarchy</td></tr>
+<tr><td><strong>Handle</strong></td><td>The API surface exposed to plugins for accessing workspace functionality</td></tr>
+<tr><td><strong>Hook</strong></td><td>A callback that plugins register to intercept workspace operations</td></tr>
+<tr><td><strong>Manifest</strong></td><td>The JSON file describing a plugin’s metadata and capability requirements</td></tr>
+<tr><td><strong>Propagation</strong></td><td>The process of sending a signal up, down, or across the domain hierarchy</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<p><em>This specification is a living document. As implementation progresses, details will be refined and expanded based on real-world usage and feedback.</em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-c2a407aa.js"></script>
+
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+
+    </div>
+    </body>
+</html>
