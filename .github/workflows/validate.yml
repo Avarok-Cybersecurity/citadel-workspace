@@ -222,6 +222,28 @@ jobs:
             artifact: permissions
           - test: test:admin-modal
             artifact: admin-modal
+          - test: test:security
+            artifact: security
+          - test: test:topbar
+            artifact: topbar
+          - test: test:p2p-types
+            artifact: p2p-types
+          - test: test:settings-controls
+            artifact: settings-controls
+          - test: test:directory-actions
+            artifact: directory-actions
+          - test: test:member-mgmt
+            artifact: member-mgmt
+          - test: test:group-extended
+            artifact: group-extended
+          - test: test:files-extended
+            artifact: files-extended
+          - test: test:mdx-content
+            artifact: mdx-content
+          - test: test:misc
+            artifact: misc
+          - test: test:account-mgmt
+            artifact: account-mgmt
     steps:
       - uses: actions/checkout@v4
         with:
