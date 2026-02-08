@@ -15,6 +15,10 @@ target_ide/
 target/
 **/target/
 
+# Cargo lock files - let Docker resolve its own deps to avoid stale git revision hashes
+Cargo.lock
+**/Cargo.lock
+
 # Node.js dependencies (assuming they are installed within the container or managed differently)
 node_modules/
 **/node_modules/

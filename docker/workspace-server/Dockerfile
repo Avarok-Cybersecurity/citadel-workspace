@@ -15,7 +15,6 @@ COPY ./docker/workspace-server/kernel.toml /usr/src/app/kernel.toml
 COPY ./docker/workspace-server/documents /usr/src/app/documents
 # Use Docker workspace Cargo.toml which excludes tests/common from members
 COPY ./docker/workspace-server/Cargo.docker.toml /usr/src/app/Cargo.toml
-COPY ./Cargo.lock /usr/src/app/Cargo.lock
 # Copy kernel without tests directory (tests/common has localhost-testing feature)
 COPY --exclude=tests ./citadel-workspace-server-kernel /usr/src/app/citadel-workspace-server-kernel
 # Replace kernel's Cargo.toml with Docker-specific version (no dev-dependencies)

@@ -16,7 +16,6 @@ RUN apt-get update && \
 
 COPY ./docker/workspace-server/kernel.toml /usr/src/app/kernel.toml
 COPY ./Cargo.toml /usr/src/app/Cargo.toml
-COPY ./Cargo.lock /usr/src/app/Cargo.lock
 COPY ./citadel-workspace-server-kernel /usr/src/app/citadel-workspace-server-kernel
 COPY ./citadel-workspace-internal-service /usr/src/app/citadel-workspace-internal-service
 COPY ./citadel-workspace-types /usr/src/app/citadel-workspace-types
