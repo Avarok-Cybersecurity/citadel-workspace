@@ -1,5 +1,5 @@
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{Domain, User, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 use common::async_test_helpers::*;
@@ -66,13 +66,11 @@ async fn test_member_command_processing() {
     }
 
     // Create office through proper command processing to ensure permissions are set correctly
-    let create_office_req = WorkspaceProtocolRequest::CreateOffice {
-        workspace_id: WORKSPACE_ROOT_ID.to_string(),
+    let create_office_req = WorkspaceProtocolRequest::CreateNode {
+        parent_id: Some(WORKSPACE_ROOT_ID.to_string()),
+        entity_type: NodeEntityType::Child("Office".to_string()),
         name: "Test Office".to_string(),
         description: "Test Office Description".to_string(),
-        mdx_content: None,
-        metadata: None,
-        is_default: None,
     };
 
     let office_response = execute_command(&kernel, create_office_req).await.unwrap();
@@ -92,8 +90,7 @@ async fn test_member_command_processing() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
-            office_id: Some(office_id.clone()),
-            room_id: None,
+            domain_id: Some(office_id.clone()),
             role: UserRole::Member,
             metadata: None,
         },
@@ -110,26 +107,19 @@ async fn test_member_command_processing() {
         _ => panic!("Failed to add member: {:?}", result),
     }
 
-    // Verify the user is in the office
-    citadel_logging::trace!(target: "citadel", "Verifying user is in office");
-    let office_domain = kernel
+    // Verify the user is in the node
+    citadel_logging::trace!(target: "citadel", "Verifying user is in node");
+    let node = kernel
         .domain_operations
         .backend_tx_manager
-        .get_domain(&office_id)
+        .get_node(&office_id)
         .await
-        .unwrap();
+        .unwrap()
+        .expect("Node should exist");
 
-    let office_exists = if let Some(Domain::Office { office }) = office_domain {
-        let result = office.members.contains(&user_id.to_string());
-        citadel_logging::trace!(target: "citadel", "User in office: {}", result);
-        result
-    } else {
-        citadel_logging::trace!(target: "citadel", "Office not found");
-        false
-    };
-
-    citadel_logging::trace!(target: "citadel", "Verified user in office: {}", office_exists);
-    assert!(office_exists, "User should be in the office after adding");
+    let user_in_node = node.members.contains(&user_id.to_string());
+    citadel_logging::trace!(target: "citadel", "User in node: {}", user_in_node);
+    assert!(user_in_node, "User should be in the node after adding");
 
     // Remove user from the office via command processing
     citadel_logging::trace!(target: "citadel", "About to remove member via command");
@@ -137,8 +127,7 @@ async fn test_member_command_processing() {
         &kernel,
         WorkspaceProtocolRequest::RemoveMember {
             user_id: user_id.to_string(),
-            office_id: Some(office_id.clone()),
-            room_id: None,
+            domain_id: Some(office_id.clone()),
         },
     )
     .await
@@ -153,28 +142,21 @@ async fn test_member_command_processing() {
         _ => panic!("Failed to remove member: {:?}", result),
     }
 
-    // Verify the user is no longer in the office
-    citadel_logging::trace!(target: "citadel", "Verifying user is no longer in office");
-    let office_domain = kernel
+    // Verify the user is no longer in the node
+    citadel_logging::trace!(target: "citadel", "Verifying user is no longer in node");
+    let node = kernel
         .domain_operations
         .backend_tx_manager
-        .get_domain(&office_id)
+        .get_node(&office_id)
         .await
-        .unwrap();
+        .unwrap()
+        .expect("Node should exist");
 
-    let user_in_office = if let Some(Domain::Office { office }) = office_domain {
-        let result = office.members.contains(&user_id.to_string());
-        citadel_logging::trace!(target: "citadel", "User in office: {}", result);
-        result
-    } else {
-        citadel_logging::trace!(target: "citadel", "Office not found");
-        false
-    };
-
-    citadel_logging::trace!(target: "citadel", "Verified user not in office: {}", !user_in_office);
+    let user_in_node = node.members.contains(&user_id.to_string());
+    citadel_logging::trace!(target: "citadel", "User in node: {}", user_in_node);
     assert!(
-        !user_in_office,
-        "User should not be in the office after removal"
+        !user_in_node,
+        "User should not be in the node after removal"
     );
     citadel_logging::trace!(target: "citadel", "Test completed successfully");
 }

@@ -189,57 +189,6 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   }
 
   /**
-   * Helper method to list offices
-   */
-  async listOffices(cid: string | bigint): Promise<void> {
-    await this.sendWorkspaceRequest(cid, { ListOffices: null } as any);
-  }
-
-  /**
-   * Helper method to create an office
-   */
-  async createOffice(
-    cid: string | bigint,
-    workspaceId: string,
-    name: string,
-    description: string,
-    mdxContent?: string,
-    metadata?: number[]
-  ): Promise<void> {
-    await this.sendWorkspaceRequest(cid, {
-      CreateOffice: {
-        workspace_id: workspaceId,
-        name,
-        description,
-        mdx_content: mdxContent,
-        metadata
-      }
-    });
-  }
-
-  /**
-   * Helper method to create a room
-   */
-  async createRoom(
-    cid: string | bigint,
-    officeId: string,
-    name: string,
-    description: string,
-    mdxContent?: string,
-    metadata?: number[]
-  ): Promise<void> {
-    await this.sendWorkspaceRequest(cid, {
-      CreateRoom: {
-        office_id: officeId,
-        name,
-        description,
-        mdx_content: mdxContent,
-        metadata
-      }
-    });
-  }
-
-  /**
    * Helper method to send a message
    */
   async sendMessage(cid: string | bigint, contents: Uint8Array): Promise<void> {

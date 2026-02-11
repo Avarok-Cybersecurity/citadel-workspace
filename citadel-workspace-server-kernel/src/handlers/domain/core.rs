@@ -5,7 +5,7 @@
 //! entities must implement.
 
 use citadel_sdk::prelude::NetworkError;
-use citadel_workspace_types::structs::{Domain, Office, Room, Workspace};
+use citadel_workspace_types::structs::{Domain, Workspace};
 
 // ═══════════════════════════════════════════════════════════════════════════════════
 // UTILITY FUNCTIONS
@@ -116,27 +116,4 @@ pub trait DomainEntity: Clone + Send + Sync + 'static {
     where
         Self: Sized;
 
-    /// Attempts to convert from an Office entity.
-    ///
-    /// # Arguments
-    /// * `office` - Office entity to convert
-    ///
-    /// # Returns
-    /// * `Ok(Self)` - Successfully converted entity
-    /// * `Err(NetworkError)` - Conversion failed (entity type mismatch)
-    fn try_from_office(office: Office) -> Result<Self, NetworkError>
-    where
-        Self: Sized;
-
-    /// Attempts to convert from a Room entity.
-    ///
-    /// # Arguments
-    /// * `room` - Room entity to convert
-    ///
-    /// # Returns
-    /// * `Ok(Self)` - Successfully converted entity
-    /// * `Err(NetworkError)` - Conversion failed (entity type mismatch)
-    fn try_from_room(room: Room) -> Result<Self, NetworkError>
-    where
-        Self: Sized;
 }

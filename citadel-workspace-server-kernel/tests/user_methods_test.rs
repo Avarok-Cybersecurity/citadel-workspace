@@ -81,7 +81,7 @@ mod tests {
             Permission::EditMdx,
             Permission::ManageDomains,
             Permission::ConfigureSystem,
-            Permission::DeleteOffice,
+            Permission::DeleteNode,
         ] {
             assert!(admin.has_permission("system", permission));
         }
@@ -92,7 +92,7 @@ mod tests {
             &[
                 Permission::ReadMessages,
                 Permission::EditMdx,
-                Permission::DeleteOffice,
+                Permission::DeleteNode,
             ]
         ));
 

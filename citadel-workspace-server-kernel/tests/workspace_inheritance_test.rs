@@ -1,7 +1,7 @@
 use citadel_logging::{debug, info};
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncPermissionOperations;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{User, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 use common::async_test_helpers::*;
@@ -54,13 +54,11 @@ async fn test_workspace_add_no_explicit_office_perms() {
     );
     let office_result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: workspace_id.clone(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(workspace_id.clone()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "OfficeInWsPermTest".to_string(),
             description: "Test Office".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await;
@@ -84,8 +82,7 @@ async fn test_workspace_add_no_explicit_office_perms() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
-            office_id: None, // Adding to workspace, not office
-            room_id: None,
+            domain_id: None, // Adding to workspace, not office
             role: UserRole::Member,
             metadata: None,
         },

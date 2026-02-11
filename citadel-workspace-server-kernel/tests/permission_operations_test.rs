@@ -2,7 +2,7 @@ use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{Permission, User, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission, User, UserRole};
 use citadel_workspace_types::{
     UpdateOperation, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
@@ -29,13 +29,11 @@ async fn test_permission_operations() {
     // Create an office first
     let create_office_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: root_workspace_id.clone(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(root_workspace_id.clone()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "Office for permission testing".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await
@@ -49,8 +47,7 @@ async fn test_permission_operations() {
     // Add member to office
     let add_member_cmd = WorkspaceProtocolRequest::AddMember {
         user_id: "test_user".to_string(),
-        office_id: Some(office_id.clone()),
-        room_id: None,
+        domain_id: Some(office_id.clone()),
         role: UserRole::Member,
         metadata: Some("test_metadata".to_string().into_bytes()),
     };
@@ -79,7 +76,7 @@ async fn test_permission_operations() {
 
             assert!(domain_permissions.contains(&Permission::ViewContent));
             assert!(!domain_permissions.contains(&Permission::EditMdx));
-            assert!(!domain_permissions.contains(&Permission::EditOfficeConfig));
+            assert!(!domain_permissions.contains(&Permission::EditNodeConfig));
         }
         _ => panic!("Expected Member response"),
     }

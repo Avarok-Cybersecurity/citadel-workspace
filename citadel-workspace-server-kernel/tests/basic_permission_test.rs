@@ -1,4 +1,4 @@
-use citadel_workspace_types::structs::{Permission, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
 use citadel_workspace_types::WorkspaceProtocolRequest;
 
 use common::async_test_helpers::*;
@@ -30,13 +30,11 @@ async fn test_permission_set() {
     // Create an office in the workspace
     let create_office_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: workspace_id.to_string(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(workspace_id.to_string()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "Test office for permissions".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await
@@ -49,8 +47,7 @@ async fn test_permission_set() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: "test_user".to_string(),
-            office_id: Some(office.id.clone()),
-            room_id: None,
+            domain_id: Some(office.id.clone()),
             role: UserRole::Member,
             metadata: None,
         },
@@ -67,7 +64,7 @@ async fn test_permission_set() {
         WorkspaceProtocolRequest::UpdateMemberPermissions {
             user_id: "test_user".to_string(),
             domain_id: office.id.clone(),
-            permissions: vec![Permission::CreateRoom, Permission::UpdateRoom],
+            permissions: vec![Permission::CreateNode, Permission::UpdateNode],
             operation: citadel_workspace_types::UpdateOperation::Set,
         },
     )
@@ -78,15 +75,14 @@ async fn test_permission_set() {
         extract_success(update_permissions_response).expect("Failed to update permissions");
     assert_eq!(success_msg, "Member permissions updated successfully");
 
-    // Verify by trying to create a room (should succeed with CreateRoom permission)
+    // Verify by trying to create a room (should succeed with CreateNode permission)
     let create_room_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateRoom {
-            office_id: office.id.clone(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(office.id.clone()),
+            entity_type: NodeEntityType::Child("Room".to_string()),
             name: "Test Room".to_string(),
             description: "Test room created by member".to_string(),
-            mdx_content: None,
-            metadata: None,
         },
     )
     .await
@@ -107,13 +103,11 @@ async fn test_permission_inheritance() {
     // Create an office first
     let create_office_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: workspace_id.to_string(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(workspace_id.to_string()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "Office for admin member test".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await
@@ -126,8 +120,7 @@ async fn test_permission_inheritance() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: "admin_member".to_string(),
-            office_id: Some(office.id.clone()),
-            room_id: None,
+            domain_id: Some(office.id.clone()),
             role: UserRole::Admin,
             metadata: None,
         },
@@ -142,13 +135,11 @@ async fn test_permission_inheritance() {
     // Test by creating an office (admins have all permissions)
     let create_office_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: workspace_id.to_string(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(workspace_id.to_string()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Admin Created Office".to_string(),
             description: "Office created by admin member".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await
@@ -168,13 +159,11 @@ async fn test_permission_denial() {
     // Create an office first
     let create_office_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: workspace_id.to_string(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(workspace_id.to_string()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Guest Test Office".to_string(),
             description: "Office for guest member test".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await
@@ -187,8 +176,7 @@ async fn test_permission_denial() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: "guest_user".to_string(),
-            office_id: Some(office.id.clone()),
-            room_id: None,
+            domain_id: Some(office.id.clone()),
             role: UserRole::Guest,
             metadata: None,
         },

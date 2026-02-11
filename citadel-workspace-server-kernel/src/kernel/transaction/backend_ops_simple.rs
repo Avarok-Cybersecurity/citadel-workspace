@@ -5,7 +5,7 @@
 use crate::kernel::transaction::BackendTransactionManager;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{
-    Domain, DomainNode, Office, Room, TreeSchema, User, Workspace,
+    Domain, DomainNode, TreeSchema, User, Workspace,
 };
 
 impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
@@ -96,66 +96,6 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             self.save_workspaces(&workspaces).await?;
         }
         Ok(removed)
-    }
-
-    /// Simple method to get an office
-    pub async fn get_office(&self, office_id: &str) -> Result<Option<Office>, NetworkError> {
-        let domains = self.get_all_domains().await?;
-        if let Some(Domain::Office { office }) = domains.get(office_id) {
-            Ok(Some(office.clone()))
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Simple method to insert an office
-    pub async fn insert_office(
-        &self,
-        office_id: String,
-        office: Office,
-    ) -> Result<(), NetworkError> {
-        let mut domains = self.get_all_domains().await?;
-        domains.insert(office_id, Domain::Office { office });
-        self.save_domains(&domains).await
-    }
-
-    /// Simple method to remove an office
-    pub async fn remove_office(&self, office_id: &str) -> Result<Option<Office>, NetworkError> {
-        let mut domains = self.get_all_domains().await?;
-        if let Some(Domain::Office { office }) = domains.remove(office_id) {
-            self.save_domains(&domains).await?;
-            Ok(Some(office))
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Simple method to get a room
-    pub async fn get_room(&self, room_id: &str) -> Result<Option<Room>, NetworkError> {
-        let domains = self.get_all_domains().await?;
-        if let Some(Domain::Room { room }) = domains.get(room_id) {
-            Ok(Some(room.clone()))
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Simple method to insert a room
-    pub async fn insert_room(&self, room_id: String, room: Room) -> Result<(), NetworkError> {
-        let mut domains = self.get_all_domains().await?;
-        domains.insert(room_id, Domain::Room { room });
-        self.save_domains(&domains).await
-    }
-
-    /// Simple method to remove a room
-    pub async fn remove_room(&self, room_id: &str) -> Result<Option<Room>, NetworkError> {
-        let mut domains = self.get_all_domains().await?;
-        if let Some(Domain::Room { room }) = domains.remove(room_id) {
-            self.save_domains(&domains).await?;
-            Ok(Some(room))
-        } else {
-            Ok(None)
-        }
     }
 
     /// Get workspace password

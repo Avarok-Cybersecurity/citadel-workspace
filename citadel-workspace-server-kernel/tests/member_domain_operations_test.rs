@@ -1,5 +1,5 @@
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{Domain, User, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 use common::async_test_helpers::*;
@@ -43,13 +43,11 @@ async fn test_add_user_to_domain() {
     // Create an office
     let office_result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: WORKSPACE_ROOT_ID.to_string(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(WORKSPACE_ROOT_ID.to_string()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "For Testing".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await;
@@ -64,8 +62,7 @@ async fn test_add_user_to_domain() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
-            office_id: Some(office_id.clone()),
-            room_id: None,
+            domain_id: Some(office_id.clone()),
             role: UserRole::Member,
             metadata: None,
         },
@@ -74,23 +71,18 @@ async fn test_add_user_to_domain() {
     assert!(add_result.is_ok());
 
     // Verify the user is in the office
-    let office_domain = kernel
+    let node = kernel
         .domain_operations
         .backend_tx_manager
-        .get_domain(&office_id)
+        .get_node(&office_id)
         .await
         .unwrap()
-        .expect("Office domain should exist");
+        .expect("Office node should exist");
 
-    match office_domain {
-        Domain::Office { office } => {
-            assert!(
-                office.members.contains(&user_id.to_string()),
-                "User should be in the office members list"
-            );
-        }
-        _ => panic!("Expected office domain"),
-    }
+    assert!(
+        node.members.contains(&user_id.to_string()),
+        "User should be in the office members list"
+    );
 }
 
 #[tokio::test]
@@ -116,13 +108,11 @@ async fn test_remove_user_from_domain() {
     // Create an office
     let office_result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: WORKSPACE_ROOT_ID.to_string(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(WORKSPACE_ROOT_ID.to_string()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "For Testing".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await;
@@ -137,8 +127,7 @@ async fn test_remove_user_from_domain() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
-            office_id: Some(office_id.clone()),
-            room_id: None,
+            domain_id: Some(office_id.clone()),
             role: UserRole::Member,
             metadata: None,
         },
@@ -151,29 +140,23 @@ async fn test_remove_user_from_domain() {
         &kernel,
         WorkspaceProtocolRequest::RemoveMember {
             user_id: user_id.to_string(),
-            office_id: Some(office_id.clone()),
-            room_id: None,
+            domain_id: Some(office_id.clone()),
         },
     )
     .await;
     assert!(remove_result.is_ok());
 
     // Verify the user is no longer in the office
-    let office_domain = kernel
+    let node = kernel
         .domain_operations
         .backend_tx_manager
-        .get_domain(&office_id)
+        .get_node(&office_id)
         .await
         .unwrap()
-        .expect("Office domain should exist");
+        .expect("Office node should exist");
 
-    match office_domain {
-        Domain::Office { office } => {
-            assert!(
-                !office.members.contains(&user_id.to_string()),
-                "User should not be in the office members list after removal"
-            );
-        }
-        _ => panic!("Expected office domain"),
-    }
+    assert!(
+        !node.members.contains(&user_id.to_string()),
+        "User should not be in the office members list after removal"
+    );
 }

@@ -1,5 +1,5 @@
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncPermissionOperations;
-use citadel_workspace_types::structs::{Permission, User, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 use common::async_test_helpers::*;
@@ -65,8 +65,7 @@ async fn test_permissions_inheritance() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: owner_id.to_string(),
-            office_id: None,
-            room_id: None,
+            domain_id: None,
             role: UserRole::Owner,
             metadata: None,
         },
@@ -79,8 +78,7 @@ async fn test_permissions_inheritance() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: member_id.to_string(),
-            office_id: None,
-            room_id: None,
+            domain_id: None,
             role: UserRole::Member,
             metadata: None,
         },
@@ -91,13 +89,11 @@ async fn test_permissions_inheritance() {
     // Create an office, owned by owner_id
     let office_result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "Test Office Description".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await;
@@ -110,12 +106,11 @@ async fn test_permissions_inheritance() {
     // Create a room within the office
     let room_result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateRoom {
-            office_id: office_id.clone(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(office_id.clone()),
+            entity_type: NodeEntityType::Child("Room".to_string()),
             name: "Test Room".to_string(),
             description: "Test Room Description".to_string(),
-            mdx_content: None,
-            metadata: None,
         },
     )
     .await;

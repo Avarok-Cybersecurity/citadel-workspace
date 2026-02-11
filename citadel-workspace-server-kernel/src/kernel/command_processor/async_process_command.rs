@@ -6,63 +6,7 @@ use crate::handlers::domain::async_ops::AsyncWorkspaceOperations;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{
-    DomainNode, NodeEntityType, Office, Room, WorkspaceMetadata,
-};
-use std::time::{SystemTime, UNIX_EPOCH};
-
-/// Convert an Office to a generic DomainNode
-fn office_to_domain_node(office: Office, parent_id: Option<String>) -> DomainNode {
-    DomainNode {
-        id: office.id,
-        parent_id: parent_id.or(Some("workspace-root".to_string())),
-        entity_type: NodeEntityType::Child("Office".to_string()),
-        depth: 1,
-        name: office.name,
-        description: office.description,
-        owner_id: office.owner_id,
-        members: office.members,
-        children: office.rooms,
-        mdx_content: office.mdx_content,
-        rules: office.rules,
-        chat_enabled: office.chat_enabled,
-        chat_channel_id: office.chat_channel_id,
-        default_permissions: office.default_permissions,
-        metadata: office.metadata,
-        allowed_child_types: Some(vec!["Room".to_string()]),
-        is_default: office.is_default,
-        created_at: 0, // Office struct doesn't have timestamps, use 0
-        updated_at: 0,
-    }
-}
-
-/// Convert a Room to a generic DomainNode
-fn room_to_domain_node(room: Room, parent_id: String) -> DomainNode {
-    // Convert Vec<MetadataField> to Vec<u8> via serialization
-    let metadata = serde_json::to_vec(&room.metadata).unwrap_or_default();
-
-    DomainNode {
-        id: room.id,
-        parent_id: Some(parent_id),
-        entity_type: NodeEntityType::Child("Room".to_string()),
-        depth: 2,
-        name: room.name,
-        description: room.description,
-        owner_id: room.owner_id,
-        members: room.members,
-        children: vec![],
-        mdx_content: room.mdx_content,
-        rules: room.rules,
-        chat_enabled: room.chat_enabled,
-        chat_channel_id: room.chat_channel_id,
-        default_permissions: room.default_permissions,
-        metadata,
-        allowed_child_types: None, // Rooms are leaf nodes
-        is_default: false,         // Room struct doesn't have is_default field
-        created_at: 0,             // Room struct doesn't have timestamps, use 0
-        updated_at: 0,
-    }
-}
+use citadel_workspace_types::structs::WorkspaceMetadata;
 
 /// Process a command asynchronously with a specific user context
 ///
@@ -215,340 +159,21 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             }
         }
 
-        // Office Commands
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id,
-            name,
-            description,
-            mdx_content,
-            metadata: _,
-            is_default,
-        } => {
-            use crate::handlers::domain::async_ops::AsyncOfficeOperations;
-            match kernel
-                .domain_ops()
-                .create_office(
-                    actor_user_id,
-                    workspace_id,
-                    name,
-                    description,
-                    mdx_content.as_deref(),
-                    *is_default,
-                )
-                .await
-            {
-                Ok(office) => {
-                    let node = office_to_domain_node(office, Some(workspace_id.clone()));
-                    Ok(WorkspaceProtocolResponse::Node(node))
-                }
-                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                    "Failed to create office: {}",
-                    e
-                ))),
-            }
-        }
-
-        WorkspaceProtocolRequest::GetOffice { office_id } => {
-            use crate::handlers::domain::async_ops::AsyncOfficeOperations;
-            match kernel
-                .domain_ops()
-                .get_office(actor_user_id, office_id)
-                .await
-            {
-                Ok(office_json) => {
-                    // Parse the JSON string back to Office struct
-                    match serde_json::from_str::<Office>(&office_json) {
-                        Ok(office) => {
-                            let parent_id = Some(office.workspace_id.clone());
-                            let node = office_to_domain_node(office, parent_id);
-                            Ok(WorkspaceProtocolResponse::Node(node))
-                        }
-                        Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                            "Failed to parse office: {}",
-                            e
-                        ))),
-                    }
-                }
-                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                    "Failed to get office: {}",
-                    e
-                ))),
-            }
-        }
-
-        WorkspaceProtocolRequest::UpdateOffice {
-            office_id,
-            name,
-            description,
-            mdx_content,
-            metadata: _,
-            is_default,
-        } => {
-            use crate::handlers::domain::async_ops::AsyncOfficeOperations;
-            match kernel
-                .domain_ops()
-                .update_office(
-                    actor_user_id,
-                    office_id,
-                    name.as_deref(),
-                    description.as_deref(),
-                    mdx_content.as_deref(),
-                    *is_default,
-                )
-                .await
-            {
-                Ok(office) => {
-                    // If mdx_content was updated, broadcast to other clients and persist to file
-                    if let Some(content) = mdx_content {
-                        let timestamp = SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs();
-
-                        let broadcast_response = WorkspaceProtocolResponse::OfficeContentUpdated {
-                            office_id: office_id.clone(),
-                            mdx_content: content.clone(),
-                            updated_by: actor_user_id.to_string(),
-                            timestamp,
-                        };
-
-                        kernel.broadcast(broadcast_response, requester_cid);
-                        println!(
-                            "[ASYNC_PROCESS_COMMAND] Broadcast OfficeContentUpdated for office {}",
-                            office_id
-                        );
-
-                        // Persist to file (non-blocking, log errors but don't fail)
-                        if let Err(e) = kernel.persist_office_content(&office.name, content).await {
-                            println!("[ASYNC_PROCESS_COMMAND] Warning: Failed to persist office content: {}", e);
-                        }
-                    }
-
-                    let parent_id = Some(office.workspace_id.clone());
-                    let node = office_to_domain_node(office, parent_id);
-                    Ok(WorkspaceProtocolResponse::Node(node))
-                }
-                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                    "Failed to update office: {}",
-                    e
-                ))),
-            }
-        }
-
-        WorkspaceProtocolRequest::DeleteOffice { office_id } => {
-            use crate::handlers::domain::async_ops::AsyncOfficeOperations;
-            match kernel
-                .domain_ops()
-                .delete_office(actor_user_id, office_id)
-                .await
-            {
-                Ok(_) => Ok(WorkspaceProtocolResponse::DeleteOffice {
-                    office_id: office_id.clone(),
-                }),
-                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                    "Failed to delete office: {}",
-                    e
-                ))),
-            }
-        }
-
-        WorkspaceProtocolRequest::ListOffices => {
-            use crate::handlers::domain::async_ops::AsyncOfficeOperations;
-            match kernel.domain_ops().list_offices(actor_user_id, None).await {
-                Ok(offices) => {
-                    let nodes: Vec<DomainNode> = offices
-                        .into_iter()
-                        .map(|office| {
-                            let parent_id = Some(office.workspace_id.clone());
-                            office_to_domain_node(office, parent_id)
-                        })
-                        .collect();
-                    Ok(WorkspaceProtocolResponse::Nodes(nodes))
-                }
-                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                    "Failed to list offices: {}",
-                    e
-                ))),
-            }
-        }
-
-        // Room Commands
-        WorkspaceProtocolRequest::CreateRoom {
-            office_id,
-            name,
-            description,
-            mdx_content,
-            metadata: _,
-        } => {
-            use crate::handlers::domain::async_ops::AsyncRoomOperations;
-            match kernel
-                .domain_ops()
-                .create_room(
-                    actor_user_id,
-                    office_id,
-                    name,
-                    description,
-                    mdx_content.as_deref(),
-                )
-                .await
-            {
-                Ok(room) => {
-                    let node = room_to_domain_node(room, office_id.clone());
-                    Ok(WorkspaceProtocolResponse::Node(node))
-                }
-                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                    "Failed to create room: {}",
-                    e
-                ))),
-            }
-        }
-
-        WorkspaceProtocolRequest::GetRoom { room_id } => {
-            use crate::handlers::domain::async_ops::AsyncRoomOperations;
-            match kernel.domain_ops().get_room(actor_user_id, room_id).await {
-                Ok(room) => {
-                    let parent_id = room.office_id.clone();
-                    let node = room_to_domain_node(room, parent_id);
-                    Ok(WorkspaceProtocolResponse::Node(node))
-                }
-                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                    "Failed to get room: {}",
-                    e
-                ))),
-            }
-        }
-
-        WorkspaceProtocolRequest::UpdateRoom {
-            room_id,
-            name,
-            description,
-            mdx_content,
-            metadata: _,
-        } => {
-            use crate::handlers::domain::async_ops::AsyncRoomOperations;
-            match kernel
-                .domain_ops()
-                .update_room(
-                    actor_user_id,
-                    room_id,
-                    name.as_deref(),
-                    description.as_deref(),
-                    mdx_content.as_deref(),
-                )
-                .await
-            {
-                Ok(room) => {
-                    // If mdx_content was updated, broadcast to other clients and persist to file
-                    if let Some(content) = mdx_content {
-                        let timestamp = SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs();
-
-                        let broadcast_response = WorkspaceProtocolResponse::RoomContentUpdated {
-                            room_id: room_id.clone(),
-                            office_id: room.office_id.clone(),
-                            mdx_content: content.clone(),
-                            updated_by: actor_user_id.to_string(),
-                            timestamp,
-                        };
-
-                        kernel.broadcast(broadcast_response, requester_cid);
-                        println!(
-                            "[ASYNC_PROCESS_COMMAND] Broadcast RoomContentUpdated for room {}",
-                            room_id
-                        );
-
-                        // Persist to file (need to look up office name first)
-                        if let Ok(Some(citadel_workspace_types::structs::Domain::Office {
-                            office,
-                        })) = kernel.get_domain(&room.office_id).await
-                        {
-                            if let Err(e) = kernel
-                                .persist_room_content(&office.name, &room.name, content)
-                                .await
-                            {
-                                println!(
-                                    "[ASYNC_PROCESS_COMMAND] Warning: Failed to persist room content: {}",
-                                    e
-                                );
-                            }
-                        }
-                    }
-
-                    let parent_id = room.office_id.clone();
-                    let node = room_to_domain_node(room, parent_id);
-                    Ok(WorkspaceProtocolResponse::Node(node))
-                }
-                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                    "Failed to update room: {}",
-                    e
-                ))),
-            }
-        }
-
-        WorkspaceProtocolRequest::DeleteRoom { room_id } => {
-            use crate::handlers::domain::async_ops::AsyncRoomOperations;
-            match kernel
-                .domain_ops()
-                .delete_room(actor_user_id, room_id)
-                .await
-            {
-                Ok(_) => Ok(WorkspaceProtocolResponse::DeleteRoom {
-                    room_id: room_id.clone(),
-                }),
-                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                    "Failed to delete room: {}",
-                    e
-                ))),
-            }
-        }
-
-        WorkspaceProtocolRequest::ListRooms { office_id } => {
-            use crate::handlers::domain::async_ops::AsyncRoomOperations;
-            match kernel
-                .domain_ops()
-                .list_rooms(actor_user_id, Some(office_id.clone()))
-                .await
-            {
-                Ok(rooms) => {
-                    let nodes: Vec<DomainNode> = rooms
-                        .into_iter()
-                        .map(|room| {
-                            let parent_id = room.office_id.clone();
-                            room_to_domain_node(room, parent_id)
-                        })
-                        .collect();
-                    Ok(WorkspaceProtocolResponse::Nodes(nodes))
-                }
-                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                    "Failed to list rooms: {}",
-                    e
-                ))),
-            }
-        }
-
         // Member Commands
         WorkspaceProtocolRequest::AddMember {
             user_id,
-            office_id,
-            room_id,
+            domain_id,
             role,
             metadata: _,
         } => {
             use crate::handlers::domain::async_ops::AsyncUserManagementOperations;
-            // Determine the domain_id based on room_id or office_id
-            let domain_id = if let Some(room_id) = room_id {
-                room_id.clone()
-            } else if let Some(office_id) = office_id {
-                office_id.clone()
-            } else {
-                crate::WORKSPACE_ROOT_ID.to_string()
-            };
+            let domain_id = domain_id
+                .as_deref()
+                .unwrap_or(crate::WORKSPACE_ROOT_ID);
 
             match kernel
                 .domain_ops()
-                .add_user_to_domain(actor_user_id, user_id, &domain_id, role.clone())
+                .add_user_to_domain(actor_user_id, user_id, domain_id, role.clone())
                 .await
             {
                 Ok(_) => Ok(WorkspaceProtocolResponse::Success(
@@ -652,22 +277,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
 
         WorkspaceProtocolRequest::RemoveMember {
             user_id,
-            office_id,
-            room_id,
+            domain_id,
         } => {
             use crate::handlers::domain::async_ops::AsyncUserManagementOperations;
-            // Determine the domain_id based on room_id or office_id
-            let domain_id = if let Some(room_id) = room_id {
-                room_id.clone()
-            } else if let Some(office_id) = office_id {
-                office_id.clone()
-            } else {
-                crate::WORKSPACE_ROOT_ID.to_string()
-            };
+            let domain_id = domain_id
+                .as_deref()
+                .unwrap_or(crate::WORKSPACE_ROOT_ID);
 
             match kernel
                 .domain_ops()
-                .remove_user_from_domain(actor_user_id, user_id, &domain_id)
+                .remove_user_from_domain(actor_user_id, user_id, domain_id)
                 .await
             {
                 Ok(_) => Ok(WorkspaceProtocolResponse::Success(
@@ -680,80 +299,44 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             }
         }
 
-        WorkspaceProtocolRequest::ListMembers { office_id, room_id } => {
-            // Validate parameters - must specify exactly one of office_id or room_id
-            match (office_id, room_id) {
-                (Some(_), Some(_)) => Ok(WorkspaceProtocolResponse::Error(
-                    "Must specify exactly one of office_id or room_id".to_string(),
-                )),
-                (None, None) => Ok(WorkspaceProtocolResponse::Error(
-                    "Must specify exactly one of office_id or room_id".to_string(),
-                )),
-                (Some(office_id), None) => {
-                    // Get the office domain and extract member IDs
-                    match kernel
-                        .domain_operations
-                        .backend_tx_manager
-                        .get_domain(office_id)
-                        .await
-                    {
-                        Ok(Some(domain)) => {
-                            let member_ids = domain.members().clone();
-                            // Get full user objects for each member ID
-                            let mut users = Vec::new();
-                            for user_id in member_ids {
-                                if let Ok(Some(user)) = kernel
-                                    .domain_operations
-                                    .backend_tx_manager
-                                    .get_user(&user_id)
-                                    .await
-                                {
-                                    users.push(user);
-                                }
-                            }
-                            Ok(WorkspaceProtocolResponse::Members(users))
-                        }
-                        Ok(None) => Ok(WorkspaceProtocolResponse::Error(
-                            "Office not found".to_string(),
-                        )),
-                        Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                            "Failed to list members: {e}"
-                        ))),
-                    }
-                }
-                (None, Some(room_id)) => {
-                    // Get the room domain and extract member IDs
-                    match kernel
-                        .domain_operations
-                        .backend_tx_manager
-                        .get_domain(room_id)
-                        .await
-                    {
-                        Ok(Some(domain)) => {
-                            let member_ids = domain.members().clone();
-                            // Get full user objects for each member ID
-                            let mut users = Vec::new();
-                            for user_id in member_ids {
-                                if let Ok(Some(user)) = kernel
-                                    .domain_operations
-                                    .backend_tx_manager
-                                    .get_user(&user_id)
-                                    .await
-                                {
-                                    users.push(user);
-                                }
-                            }
-                            Ok(WorkspaceProtocolResponse::Members(users))
-                        }
-                        Ok(None) => Ok(WorkspaceProtocolResponse::Error(
-                            "Room not found".to_string(),
-                        )),
-                        Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                            "Failed to list members: {e}"
-                        ))),
-                    }
+        WorkspaceProtocolRequest::ListMembers { domain_id } => {
+            let target_id = domain_id
+                .as_deref()
+                .unwrap_or(crate::WORKSPACE_ROOT_ID);
+
+            // Collect member IDs from legacy Domain storage or DomainNode tree storage
+            let member_ids = if let Ok(Some(domain)) = kernel
+                .domain_operations
+                .backend_tx_manager
+                .get_domain(target_id)
+                .await
+            {
+                domain.members().clone()
+            } else if let Ok(Some(node)) = kernel
+                .domain_operations
+                .backend_tx_manager
+                .get_node(target_id)
+                .await
+            {
+                node.members.clone()
+            } else {
+                return Ok(WorkspaceProtocolResponse::Error(
+                    "Domain not found".to_string(),
+                ));
+            };
+
+            let mut users = Vec::new();
+            for user_id in member_ids {
+                if let Ok(Some(user)) = kernel
+                    .domain_operations
+                    .backend_tx_manager
+                    .get_user(&user_id)
+                    .await
+                {
+                    users.push(user);
                 }
             }
+            Ok(WorkspaceProtocolResponse::Members(users))
         }
 
         WorkspaceProtocolRequest::GetUserPermissions { user_id, domain_id } => {

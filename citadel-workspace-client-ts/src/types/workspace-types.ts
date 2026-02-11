@@ -19,12 +19,9 @@ export type UserRole =
 
 export type Permission =
   | "All"
-  | "CreateRoom"
-  | "DeleteRoom"
-  | "UpdateRoom"
-  | "CreateOffice"
-  | "DeleteOffice"
-  | "UpdateOffice"
+  | "CreateNode"
+  | "DeleteNode"
+  | "UpdateNode"
   | "CreateWorkspace"
   | "UpdateWorkspace"
   | "DeleteWorkspace"
@@ -32,15 +29,11 @@ export type Permission =
   | "AddUsers"
   | "RemoveUsers"
   | "EditMdx"
-  | "EditRoomConfig"
-  | "EditOfficeConfig"
-  | "AddOffice"
-  | "AddRoom"
-  | "UpdateOfficeSettings"
-  | "UpdateRoomSettings"
+  | "EditNodeConfig"
+  | "AddNode"
+  | "UpdateNodeSettings"
   | "ViewContent"
-  | "ManageOfficeMembers"
-  | "ManageRoomMembers"
+  | "ManageNodeMembers"
   | "SendMessages"
   | "ReadMessages"
   | "UploadFiles"
@@ -85,33 +78,8 @@ export interface WorkspaceMetadata {
   member_count: number;
 }
 
-export interface Office {
-  id: string;
-  owner_id: string;
-  workspace_id: string;
-  name: string;
-  description: string;
-  members: string[];
-  rooms: string[];
-  mdx_content: string;
-  metadata: number[];
-}
-
-export interface Room {
-  id: string;
-  owner_id: string;
-  office_id: string;
-  name: string;
-  description: string;
-  members: string[];
-  mdx_content: string;
-  metadata: MetadataField[];
-}
-
 export type Domain =
-  | { Workspace: string }
-  | { Office: string }
-  | { Room: string };
+  | { Workspace: string };
 
 // =============================================================================
 // GENERALIZED TREE HIERARCHY TYPES
@@ -196,20 +164,13 @@ export interface DomainPermissions {
   edit_mdx: boolean;
   send_messages: boolean;
   upload_files: boolean;
-  create_room: boolean;
-  delete_room: boolean;
-  update_room: boolean;
-  add_room: boolean;
-  edit_room_config: boolean;
-  update_room_settings: boolean;
-  manage_room_members: boolean;
-  create_office: boolean;
-  delete_office: boolean;
-  update_office: boolean;
-  add_office: boolean;
-  edit_office_config: boolean;
-  update_office_settings: boolean;
-  manage_office_members: boolean;
+  create_node: boolean;
+  delete_node: boolean;
+  update_node: boolean;
+  add_node: boolean;
+  edit_node_config: boolean;
+  update_node_settings: boolean;
+  manage_node_members: boolean;
   create_workspace: boolean;
   update_workspace: boolean;
   delete_workspace: boolean;
@@ -233,22 +194,12 @@ export type WorkspaceProtocolRequest =
   | "ListWorkspaces"
   | { UpdateWorkspace: { workspace_id?: string | null; name?: string; description?: string; workspace_master_password: string; metadata?: number[] } }
   | { DeleteWorkspace: { workspace_id?: string | null; workspace_master_password: string } }
-  | { CreateOffice: { workspace_id: string; name: string; description: string; mdx_content?: string; metadata?: number[] } }
-  | { GetOffice: { office_id: string } }
-  | { UpdateOffice: { office_id: string; name?: string; description?: string; mdx_content?: string; metadata?: number[] } }
-  | { DeleteOffice: { office_id: string } }
-  | "ListOffices"
-  | { CreateRoom: { office_id: string; name: string; description: string; mdx_content?: string; metadata?: number[] } }
-  | { GetRoom: { room_id: string } }
-  | { UpdateRoom: { room_id: string; name?: string; description?: string; mdx_content?: string; metadata?: number[] } }
-  | { DeleteRoom: { room_id: string } }
-  | { ListRooms: { office_id: string } }
-  | { AddMember: { user_id: string; office_id?: string; room_id?: string; role: UserRole; metadata?: number[] } }
+  | { AddMember: { user_id: string; domain_id?: string; role: UserRole; metadata?: number[] } }
   | { GetMember: { user_id: string } }
   | { UpdateMemberRole: { user_id: string; role: UserRole; metadata?: number[] } }
   | { UpdateMemberPermissions: { user_id: string; domain_id: string; permissions: Permission[]; operation: UpdateOperation } }
-  | { RemoveMember: { user_id: string; office_id?: string; room_id?: string } }
-  | { ListMembers: { office_id?: string; room_id?: string } }
+  | { RemoveMember: { user_id: string; domain_id?: string } }
+  | { ListMembers: { domain_id?: string } }
   | { Message: { contents: number[] } }
   // Tree node operations
   | { CreateNode: { parent_id: string | null; entity_type: NodeEntityType; name: string; description: string } }
@@ -269,11 +220,7 @@ export type WorkspaceProtocolResponse =
   | { Success: string }
   | { Error: string }
   | { WorkspaceNotInitialized: null }
-  | { Offices: Office[] }
-  | { Rooms: Room[] }
   | { Members: User[] }
-  | { Office: Office }
-  | { Room: Room }
   | { Member: User }
   // Tree node responses
   | { Node: DomainNode }
@@ -288,7 +235,6 @@ export type UpdateOperation = "Add" | "Set" | "Remove";
 
 export type ListType =
   | "MembersInWorkspace"
-  | { MembersInOffice: { office_id: string } }
-  | { MembersInRoom: { room_id: string } };
+  | { MembersInDomain: { domain_id: string } };
 
 export type PermissionEndowOperation = "Add" | "Remove" | "Replace";

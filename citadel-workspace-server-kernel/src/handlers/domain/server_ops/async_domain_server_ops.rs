@@ -9,7 +9,7 @@ use crate::kernel::transaction::BackendTransactionManager;
 use async_trait::async_trait;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, Ratchet};
 use citadel_workspace_types::structs::{
-    Domain, DomainPermissions, Office, Permission, Room, User, UserRole, Workspace,
+    Domain, Permission, User, UserRole, Workspace,
 };
 use citadel_workspace_types::UpdateOperation;
 use parking_lot::RwLock;
@@ -45,32 +45,6 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
         Self { backend_tx_manager }
     }
 
-    /// Clear the default flag on all offices in a workspace
-    /// Used when setting a new default office
-    async fn clear_default_office_in_workspace(
-        &self,
-        workspace_id: &str,
-    ) -> Result<(), NetworkError> {
-        // Get workspace to find all offices
-        let workspace = match self.backend_tx_manager.get_workspace(workspace_id).await? {
-            Some(w) => w,
-            None => return Ok(()), // No workspace means no offices to clear
-        };
-
-        // Clear is_default on all offices
-        for office_id in &workspace.offices {
-            if let Some(mut office) = self.backend_tx_manager.get_office(office_id).await? {
-                if office.is_default {
-                    office.is_default = false;
-                    self.backend_tx_manager
-                        .insert_office(office_id.clone(), office)
-                        .await?;
-                }
-            }
-        }
-
-        Ok(())
-    }
 }
 
 // Implement AsyncDomainOperations
@@ -159,48 +133,23 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
             }
         }
 
-        // Check permission inheritance
-        // Get the domain to determine its type and parent
-        let domain = match self.backend_tx_manager.get_domain(entity_id).await? {
-            Some(d) => d,
-            None => return Ok(false), // Entity not found
-        };
-
-        match domain {
-            Domain::Room { room } => {
-                // Check office permissions
-                if let Some(office_perms) = user.permissions.get(&room.office_id) {
-                    if office_perms.contains(&permission) || office_perms.contains(&Permission::All)
+        // Check permission inheritance via DomainNode tree — walk up parent chain
+        if let Some(node) = self.backend_tx_manager.get_node(entity_id).await? {
+            let mut current_parent = node.parent_id.clone();
+            while let Some(pid) = current_parent {
+                if let Some(parent_perms) = user.permissions.get(&pid) {
+                    if parent_perms.contains(&permission)
+                        || parent_perms.contains(&Permission::All)
                     {
                         return Ok(true);
                     }
                 }
-
-                // Check workspace permissions through office
-                if let Some(Domain::Office { office }) =
-                    self.backend_tx_manager.get_domain(&room.office_id).await?
-                {
-                    if let Some(workspace_perms) = user.permissions.get(&office.workspace_id) {
-                        if workspace_perms.contains(&permission)
-                            || workspace_perms.contains(&Permission::All)
-                        {
-                            return Ok(true);
-                        }
-                    }
+                // Continue up the tree
+                if let Some(parent_node) = self.backend_tx_manager.get_node(&pid).await? {
+                    current_parent = parent_node.parent_id.clone();
+                } else {
+                    break;
                 }
-            }
-            Domain::Office { office } => {
-                // Check workspace permissions
-                if let Some(workspace_perms) = user.permissions.get(&office.workspace_id) {
-                    if workspace_perms.contains(&permission)
-                        || workspace_perms.contains(&Permission::All)
-                    {
-                        return Ok(true);
-                    }
-                }
-            }
-            Domain::Workspace { .. } => {
-                // No parent to inherit from
             }
         }
 
@@ -217,42 +166,21 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
         user_id: &str,
         domain_id: &str,
     ) -> Result<bool, NetworkError> {
-        // Get the domain from backend
-        let domain = match self.backend_tx_manager.get_domain(domain_id).await? {
-            Some(d) => d,
-            None => return Ok(false),
-        };
-
-        // Check direct membership first
-        let members = match &domain {
-            Domain::Workspace { workspace } => &workspace.members,
-            Domain::Office { office } => &office.members,
-            Domain::Room { room } => &room.members,
-        };
-
-        if members.contains(&user_id.to_string()) {
-            return Ok(true);
+        // Check if this is the workspace root (use Domain::Workspace for workspace)
+        if domain_id == crate::WORKSPACE_ROOT_ID {
+            if let Some(workspace) = self.backend_tx_manager.get_workspace(domain_id).await? {
+                return Ok(workspace.members.contains(&user_id.to_string()));
+            }
         }
 
-        // Check parent domains for inheritance
-        match domain {
-            Domain::Room { room } => {
-                // Check if member of parent office
-                if self.is_member_of_domain(user_id, &room.office_id).await? {
-                    return Ok(true);
-                }
+        // For all other entities, use DomainNode tree storage
+        if let Some(node) = self.backend_tx_manager.get_node(domain_id).await? {
+            if node.members.contains(&user_id.to_string()) {
+                return Ok(true);
             }
-            Domain::Office { office } => {
-                // Check if member of parent workspace
-                if self
-                    .is_member_of_domain(user_id, &office.workspace_id)
-                    .await?
-                {
-                    return Ok(true);
-                }
-            }
-            Domain::Workspace { .. } => {
-                // No parent to check
+            // Check parent for inheritance
+            if let Some(parent_id) = &node.parent_id {
+                return self.is_member_of_domain(user_id, parent_id).await;
             }
         }
 
@@ -278,35 +206,31 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             ));
         }
 
-        // Get the domain
-        let mut domain = match self.backend_tx_manager.get_domain(domain_id).await? {
-            Some(d) => d,
-            None => return Err(NetworkError::msg("Domain not found")),
-        };
+        // If this is the workspace root, use the workspace storage
+        if domain_id == crate::WORKSPACE_ROOT_ID {
+            let mut workspace = match self.backend_tx_manager.get_workspace(domain_id).await? {
+                Some(ws) => ws,
+                None => return Err(NetworkError::msg("Workspace not found")),
+            };
 
-        // Add user to domain members
-        match &mut domain {
-            Domain::Workspace { workspace } => {
-                if !workspace.members.contains(&user_id_to_add.to_string()) {
-                    workspace.members.push(user_id_to_add.to_string());
-                }
+            if !workspace.members.contains(&user_id_to_add.to_string()) {
+                workspace.members.push(user_id_to_add.to_string());
             }
-            Domain::Office { office } => {
-                if !office.members.contains(&user_id_to_add.to_string()) {
-                    office.members.push(user_id_to_add.to_string());
-                }
+
+            self.backend_tx_manager
+                .insert_workspace(domain_id.to_string(), workspace)
+                .await?;
+        } else {
+            // For all other entities, use DomainNode tree storage
+            let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
+            let node = nodes
+                .get_mut(domain_id)
+                .ok_or_else(|| NetworkError::msg("Domain not found"))?;
+            if !node.members.contains(&user_id_to_add.to_string()) {
+                node.members.push(user_id_to_add.to_string());
             }
-            Domain::Room { room } => {
-                if !room.members.contains(&user_id_to_add.to_string()) {
-                    room.members.push(user_id_to_add.to_string());
-                }
-            }
+            self.backend_tx_manager.save_nodes(&nodes).await?;
         }
-
-        // Save updated domain
-        self.backend_tx_manager
-            .insert_domain(domain_id.to_string(), domain)
-            .await?;
 
         // Update user's role and permissions
         let mut user = match self.backend_tx_manager.get_user(user_id_to_add).await? {
@@ -347,29 +271,27 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             ));
         }
 
-        // Get and update domain
-        let mut domain = match self.backend_tx_manager.get_domain(domain_id).await? {
-            Some(d) => d,
-            None => return Err(NetworkError::msg("Domain not found")),
-        };
+        // If this is the workspace root, use the workspace storage
+        if domain_id == crate::WORKSPACE_ROOT_ID {
+            let mut workspace = match self.backend_tx_manager.get_workspace(domain_id).await? {
+                Some(ws) => ws,
+                None => return Err(NetworkError::msg("Workspace not found")),
+            };
 
-        // Remove user from domain members
-        match &mut domain {
-            Domain::Workspace { workspace } => {
-                workspace.members.retain(|m| m != user_id_to_remove);
-            }
-            Domain::Office { office } => {
-                office.members.retain(|m| m != user_id_to_remove);
-            }
-            Domain::Room { room } => {
-                room.members.retain(|m| m != user_id_to_remove);
-            }
+            workspace.members.retain(|m| m != user_id_to_remove);
+
+            self.backend_tx_manager
+                .insert_workspace(domain_id.to_string(), workspace)
+                .await?;
+        } else {
+            // For all other entities, use DomainNode tree storage
+            let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
+            let node = nodes
+                .get_mut(domain_id)
+                .ok_or_else(|| NetworkError::msg("Domain not found"))?;
+            node.members.retain(|m| m != user_id_to_remove);
+            self.backend_tx_manager.save_nodes(&nodes).await?;
         }
-
-        // Save updated domain
-        self.backend_tx_manager
-            .insert_domain(domain_id.to_string(), domain)
-            .await?;
 
         // Remove permissions from user
         if let Some(mut user) = self.backend_tx_manager.get_user(user_id_to_remove).await? {
@@ -434,11 +356,21 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             ));
         }
 
-        // Check if domain exists
-        match self.backend_tx_manager.get_domain(domain_id).await? {
-            Some(_) => {}
-            None => return Err(NetworkError::msg("Domain not found")),
+        // Check if domain exists (workspace or DomainNode tree storage)
+        let domain_exists = if domain_id == crate::WORKSPACE_ROOT_ID {
+            self.backend_tx_manager
+                .get_workspace(domain_id)
+                .await?
+                .is_some()
+        } else {
+            self.backend_tx_manager
+                .get_node(domain_id)
+                .await?
+                .is_some()
         };
+        if !domain_exists {
+            return Err(NetworkError::msg("Domain not found"));
+        }
 
         // Get target user
         let mut user = match self.backend_tx_manager.get_user(target_user_id).await? {
@@ -902,9 +834,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         workspace_id: &str,
         office_id: &str,
     ) -> Result<(), NetworkError> {
-        // Check permission - need CreateOffice permission
+        // Check permission - need CreateNode permission
         if !self
-            .check_entity_permission(user_id, workspace_id, Permission::CreateOffice)
+            .check_entity_permission(user_id, workspace_id, Permission::CreateNode)
             .await?
         {
             return Err(NetworkError::msg("Permission denied: Cannot create office"));
@@ -936,9 +868,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         workspace_id: &str,
         office_id: &str,
     ) -> Result<(), NetworkError> {
-        // Check permission - need DeleteOffice permission
+        // Check permission - need DeleteNode permission
         if !self
-            .check_entity_permission(user_id, workspace_id, Permission::DeleteOffice)
+            .check_entity_permission(user_id, workspace_id, Permission::DeleteNode)
             .await?
         {
             return Err(NetworkError::msg("Permission denied: Cannot delete office"));
@@ -983,376 +915,6 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         // Delegate to remove_user_from_domain
         self.remove_user_from_domain(user_id, member_id, workspace_id)
             .await
-    }
-}
-
-#[async_trait]
-impl<R: Ratchet + Send + Sync + 'static> AsyncOfficeOperations<R>
-    for AsyncDomainServerOperations<R>
-{
-    async fn create_office(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-        name: &str,
-        description: &str,
-        mdx_content: Option<&str>,
-        is_default: Option<bool>,
-    ) -> Result<Office, NetworkError> {
-        // Check permission
-        if !self
-            .check_entity_permission(user_id, workspace_id, Permission::CreateOffice)
-            .await?
-        {
-            return Err(NetworkError::msg("Permission denied: Cannot create office"));
-        }
-
-        // Generate unique ID
-        let office_id = uuid::Uuid::new_v4().to_string();
-
-        // If setting as default, clear default on other offices
-        let set_as_default = is_default.unwrap_or(false);
-        if set_as_default {
-            self.clear_default_office_in_workspace(workspace_id).await?;
-        }
-
-        // Create office struct
-        let office = Office {
-            id: office_id.clone(),
-            owner_id: user_id.to_string(),
-            workspace_id: workspace_id.to_string(),
-            name: name.to_string(),
-            description: description.to_string(),
-            members: vec![user_id.to_string()],
-            rooms: Vec::new(),
-            mdx_content: mdx_content.unwrap_or_default().to_string(),
-            rules: None,
-            chat_enabled: false,
-            chat_channel_id: None,
-            default_permissions: DomainPermissions::default(),
-            is_default: set_as_default,
-            metadata: Default::default(),
-        };
-
-        // Save office
-        self.backend_tx_manager
-            .insert_office(office_id.clone(), office.clone())
-            .await?;
-
-        // Add office to workspace
-        self.add_office_to_workspace(user_id, workspace_id, &office_id)
-            .await?;
-
-        // Note: Creator is already added to members in the Office struct initialization above
-
-        Ok(office)
-    }
-
-    async fn get_office(&self, user_id: &str, office_id: &str) -> Result<String, NetworkError> {
-        // Check if user is member
-        if !self.is_member_of_domain(user_id, office_id).await? {
-            return Err(NetworkError::msg(
-                "Permission denied: Not a member of this office",
-            ));
-        }
-
-        // Get office
-        let office = match self.backend_tx_manager.get_office(office_id).await? {
-            Some(o) => o,
-            None => return Err(NetworkError::msg("Office not found")),
-        };
-
-        // Return as JSON string
-        serde_json::to_string(&office)
-            .map_err(|e| NetworkError::msg(format!("Failed to serialize office: {}", e)))
-    }
-
-    async fn delete_office(&self, user_id: &str, office_id: &str) -> Result<Office, NetworkError> {
-        // Check permission
-        if !self
-            .check_entity_permission(user_id, office_id, Permission::DeleteOffice)
-            .await?
-        {
-            return Err(NetworkError::msg("Permission denied: Cannot delete office"));
-        }
-
-        // Get office to return
-        let office = match self.backend_tx_manager.get_office(office_id).await? {
-            Some(o) => o,
-            None => return Err(NetworkError::msg("Office not found")),
-        };
-
-        // Remove from parent workspace
-        self.remove_office_from_workspace(user_id, &office.workspace_id, office_id)
-            .await?;
-
-        // Delete all rooms in office
-        for room_id in &office.rooms {
-            self.backend_tx_manager.remove_room(room_id).await?;
-        }
-
-        // Remove office
-        self.backend_tx_manager.remove_office(office_id).await?;
-
-        Ok(office)
-    }
-
-    async fn update_office(
-        &self,
-        user_id: &str,
-        office_id: &str,
-        name: Option<&str>,
-        description: Option<&str>,
-        mdx_content: Option<&str>,
-        is_default: Option<bool>,
-    ) -> Result<Office, NetworkError> {
-        // Check permission
-        if !self
-            .check_entity_permission(user_id, office_id, Permission::UpdateOffice)
-            .await?
-        {
-            return Err(NetworkError::msg("Permission denied: Cannot update office"));
-        }
-
-        // Get and update office
-        let mut office = match self.backend_tx_manager.get_office(office_id).await? {
-            Some(o) => o,
-            None => return Err(NetworkError::msg("Office not found")),
-        };
-
-        if let Some(new_name) = name {
-            office.name = new_name.to_string();
-        }
-        if let Some(new_desc) = description {
-            office.description = new_desc.to_string();
-        }
-        if let Some(new_mdx) = mdx_content {
-            office.mdx_content = new_mdx.to_string();
-        }
-        if let Some(new_is_default) = is_default {
-            // If setting as default, clear default on other offices first
-            if new_is_default {
-                self.clear_default_office_in_workspace(&office.workspace_id)
-                    .await?;
-            }
-            office.is_default = new_is_default;
-        }
-
-        // Save updated office
-        self.backend_tx_manager
-            .insert_office(office_id.to_string(), office.clone())
-            .await?;
-
-        Ok(office)
-    }
-
-    async fn list_offices(
-        &self,
-        user_id: &str,
-        workspace_id: Option<String>,
-    ) -> Result<Vec<Office>, NetworkError> {
-        let all_domains = self.backend_tx_manager.get_all_domains().await?;
-
-        let mut accessible_offices = Vec::new();
-        for (domain_id, domain) in all_domains {
-            if let Domain::Office { office } = domain {
-                // Check if user is member
-                if self.is_member_of_domain(user_id, &domain_id).await? {
-                    // If workspace filter provided, check parent
-                    if let Some(ref ws_id) = workspace_id {
-                        if office.workspace_id == *ws_id {
-                            accessible_offices.push(office);
-                        }
-                    } else {
-                        accessible_offices.push(office);
-                    }
-                }
-            }
-        }
-
-        Ok(accessible_offices)
-    }
-
-    async fn list_offices_in_workspace(
-        &self,
-        user_id: &str,
-        workspace_id: &str,
-    ) -> Result<Vec<Office>, NetworkError> {
-        self.list_offices(user_id, Some(workspace_id.to_string()))
-            .await
-    }
-}
-
-#[async_trait]
-impl<R: Ratchet + Send + Sync + 'static> AsyncRoomOperations<R> for AsyncDomainServerOperations<R> {
-    async fn create_room(
-        &self,
-        user_id: &str,
-        office_id: &str,
-        name: &str,
-        description: &str,
-        mdx_content: Option<&str>,
-    ) -> Result<Room, NetworkError> {
-        // Check permission - user needs CreateRoom permission in office
-        if !self
-            .check_entity_permission(user_id, office_id, Permission::CreateRoom)
-            .await?
-        {
-            return Err(NetworkError::msg("Permission denied: Cannot create room"));
-        }
-
-        // Generate unique ID
-        let room_id = uuid::Uuid::new_v4().to_string();
-
-        // Create room struct
-        let room = Room {
-            id: room_id.clone(),
-            owner_id: user_id.to_string(),
-            office_id: office_id.to_string(),
-            name: name.to_string(),
-            description: description.to_string(),
-            members: vec![user_id.to_string()],
-            mdx_content: mdx_content.unwrap_or_default().to_string(),
-            rules: None,
-            chat_enabled: false,
-            chat_channel_id: None,
-            default_permissions: DomainPermissions::default(),
-            metadata: Default::default(),
-        };
-
-        // Save room
-        self.backend_tx_manager
-            .insert_room(room_id.clone(), room.clone())
-            .await?;
-
-        // Add room to office
-        let mut office = match self.backend_tx_manager.get_office(office_id).await? {
-            Some(o) => o,
-            None => return Err(NetworkError::msg("Office not found")),
-        };
-
-        office.rooms.push(room_id.clone());
-        self.backend_tx_manager
-            .insert_office(office_id.to_string(), office)
-            .await?;
-
-        // Note: Creator is already added to members in the Room struct initialization above
-
-        Ok(room)
-    }
-
-    async fn get_room(&self, user_id: &str, room_id: &str) -> Result<Room, NetworkError> {
-        // Check if user is member
-        if !self.is_member_of_domain(user_id, room_id).await? {
-            return Err(NetworkError::msg(
-                "Permission denied: Not a member of this room",
-            ));
-        }
-
-        // Get room
-        match self.backend_tx_manager.get_room(room_id).await? {
-            Some(r) => Ok(r),
-            None => Err(NetworkError::msg("Room not found")),
-        }
-    }
-
-    async fn delete_room(&self, user_id: &str, room_id: &str) -> Result<Room, NetworkError> {
-        // Check permission
-        if !self
-            .check_entity_permission(user_id, room_id, Permission::DeleteRoom)
-            .await?
-        {
-            return Err(NetworkError::msg("Permission denied: Cannot delete room"));
-        }
-
-        // Get room to return
-        let room = match self.backend_tx_manager.get_room(room_id).await? {
-            Some(r) => r,
-            None => return Err(NetworkError::msg("Room not found")),
-        };
-
-        // Remove from parent office
-        let mut office = match self.backend_tx_manager.get_office(&room.office_id).await? {
-            Some(o) => o,
-            None => return Err(NetworkError::msg("Parent office not found")),
-        };
-
-        office.rooms.retain(|r| r != room_id);
-        self.backend_tx_manager
-            .insert_office(room.office_id.clone(), office)
-            .await?;
-
-        // Remove room
-        self.backend_tx_manager.remove_room(room_id).await?;
-
-        Ok(room)
-    }
-
-    async fn update_room(
-        &self,
-        user_id: &str,
-        room_id: &str,
-        name: Option<&str>,
-        description: Option<&str>,
-        mdx_content: Option<&str>,
-    ) -> Result<Room, NetworkError> {
-        // Check permission
-        if !self
-            .check_entity_permission(user_id, room_id, Permission::UpdateRoom)
-            .await?
-        {
-            return Err(NetworkError::msg("Permission denied: Cannot update room"));
-        }
-
-        // Get and update room
-        let mut room = match self.backend_tx_manager.get_room(room_id).await? {
-            Some(r) => r,
-            None => return Err(NetworkError::msg("Room not found")),
-        };
-
-        if let Some(new_name) = name {
-            room.name = new_name.to_string();
-        }
-        if let Some(new_desc) = description {
-            room.description = new_desc.to_string();
-        }
-        if let Some(new_mdx) = mdx_content {
-            room.mdx_content = new_mdx.to_string();
-        }
-
-        // Save updated room
-        self.backend_tx_manager
-            .insert_room(room_id.to_string(), room.clone())
-            .await?;
-
-        Ok(room)
-    }
-
-    async fn list_rooms(
-        &self,
-        user_id: &str,
-        office_id: Option<String>,
-    ) -> Result<Vec<Room>, NetworkError> {
-        let all_domains = self.backend_tx_manager.get_all_domains().await?;
-
-        let mut accessible_rooms = Vec::new();
-        for (domain_id, domain) in all_domains {
-            if let Domain::Room { room } = domain {
-                // Check if user is member
-                if self.is_member_of_domain(user_id, &domain_id).await? {
-                    // If office filter provided, check parent
-                    if let Some(ref off_id) = office_id {
-                        if room.office_id == *off_id {
-                            accessible_rooms.push(room);
-                        }
-                    } else {
-                        accessible_rooms.push(room);
-                    }
-                }
-            }
-        }
-
-        Ok(accessible_rooms)
     }
 }
 

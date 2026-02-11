@@ -1,5 +1,5 @@
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{Domain, User, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 use common::async_test_helpers::*;
@@ -44,13 +44,11 @@ async fn test_complete_user_removal() {
     // Create an office
     let office_result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: WORKSPACE_ROOT_ID.to_string(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(WORKSPACE_ROOT_ID.to_string()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "For Testing".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await;
@@ -65,8 +63,7 @@ async fn test_complete_user_removal() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
-            office_id: Some(office_id.clone()),
-            room_id: None,
+            domain_id: Some(office_id.clone()),
             role: UserRole::Member,
             metadata: None,
         },
@@ -75,31 +72,26 @@ async fn test_complete_user_removal() {
     assert!(add_result.is_ok());
 
     // Verify user is in the office before removal
-    let office_domain = kernel
+    let node = kernel
         .domain_operations
         .backend_tx_manager
-        .get_domain(&office_id)
+        .get_node(&office_id)
         .await
         .unwrap()
-        .expect("Office domain should exist");
+        .expect("Office node should exist");
 
-    match &office_domain {
-        Domain::Office { office } => {
-            assert!(
-                office.members.contains(&user_id.to_string()),
-                "User should be in the office members list before removal"
-            );
-        }
-        _ => panic!("Expected office domain"),
-    }
+    let user_in_node = node.members.contains(&user_id.to_string());
+    assert!(
+        user_in_node,
+        "User should be in the office members list before removal"
+    );
 
     // Remove user from the office first
     let remove_result = execute_command(
         &kernel,
         WorkspaceProtocolRequest::RemoveMember {
             user_id: user_id.to_string(),
-            office_id: Some(office_id.clone()),
-            room_id: None,
+            domain_id: Some(office_id.clone()),
         },
     )
     .await;
@@ -125,21 +117,17 @@ async fn test_complete_user_removal() {
     assert!(!user_exists, "User should have been completely removed");
 
     // Also verify user is no longer in the office
-    let office_domain_after = kernel
+    let node_after = kernel
         .domain_operations
         .backend_tx_manager
-        .get_domain(&office_id)
+        .get_node(&office_id)
         .await
         .unwrap()
-        .expect("Office domain should still exist");
+        .expect("Office node should still exist");
 
-    match office_domain_after {
-        Domain::Office { office } => {
-            assert!(
-                !office.members.contains(&user_id.to_string()),
-                "User should not be in the office members list after removal"
-            );
-        }
-        _ => panic!("Expected office domain"),
-    }
+    let user_still_in_node = node_after.members.contains(&user_id.to_string());
+    assert!(
+        !user_still_in_node,
+        "User should not be in the office members list after removal"
+    );
 }

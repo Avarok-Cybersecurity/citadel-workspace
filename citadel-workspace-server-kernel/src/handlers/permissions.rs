@@ -56,10 +56,8 @@ impl PermissionSet {
             Permission::EditContent,
             Permission::AddUsers,
             Permission::RemoveUsers,
-            Permission::CreateOffice,
-            Permission::DeleteOffice,
-            Permission::CreateRoom,
-            Permission::DeleteRoom,
+            Permission::CreateNode,
+            Permission::DeleteNode,
             Permission::CreateWorkspace,
             Permission::UpdateWorkspace,
             Permission::DeleteWorkspace,
@@ -71,8 +69,8 @@ impl PermissionSet {
         Self::with_permissions(&[
             Permission::ViewContent,
             Permission::EditContent,
-            Permission::CreateRoom,
-            Permission::ManageOfficeMembers,
+            Permission::CreateNode,
+            Permission::ManageNodeMembers,
         ])
     }
 

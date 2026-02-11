@@ -1,17 +1,3 @@
-/*
-    // Create a room within the office
-    let room_result = execute_command(
-        &kernel,
-        WorkspaceProtocolRequest::CreateRoom {
-            office_id: office_id.clone(),
-            name: "Test Room".to_string(),
-            description: "Test Room Description".to_string(),
-            mdx_content: None,
-            metadata: None,
-        },
-    ).await;
-*/
-
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_server_kernel::kernel::{
     async_kernel::AsyncWorkspaceServerKernel,

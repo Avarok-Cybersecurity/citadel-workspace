@@ -368,7 +368,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         config: &WorkspaceStructureConfig,
         base_path: Option<&std::path::Path>,
     ) -> Result<(), NetworkError> {
-        use citadel_workspace_types::structs::{Domain, Office, Room};
+        use citadel_workspace_types::structs::{DomainNode, NodeEntityType};
         use uuid::Uuid;
 
         println!(
@@ -387,6 +387,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         }
         // If no default is set, the first office will be the default
         let first_office_is_default = default_count == 0;
+
+        // Get the current tree nodes to add office/room nodes
+        let mut nodes = self.domain_operations.backend_tx_manager.get_all_nodes().await?;
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         for (idx, office_config) in config.offices.iter().enumerate() {
             // Determine if this office should be the default
@@ -433,67 +440,40 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 None
             };
 
-            // Create office struct - no owner initially, first admin user claims it
-            let office = Office {
+            // Create office DomainNode at depth 1
+            let office_node = DomainNode {
                 id: office_id.clone(),
-                owner_id: UNASSIGNED_OWNER.to_string(),
-                workspace_id: crate::WORKSPACE_ROOT_ID.to_string(),
+                parent_id: Some(crate::WORKSPACE_ROOT_ID.to_string()),
+                entity_type: NodeEntityType::Child("Office".to_string()),
+                depth: 1,
                 name: office_config.name.clone(),
                 description: office_config.description.clone().unwrap_or_default(),
+                owner_id: UNASSIGNED_OWNER.to_string(),
                 members: vec![],
-                rooms: Vec::new(),
+                children: Vec::new(),
                 mdx_content,
                 rules: office_config.rules.clone(),
                 chat_enabled: office_config.chat_enabled,
                 chat_channel_id,
                 default_permissions: office_config.default_permissions.clone(),
-                is_default,
                 metadata: Vec::new(),
+                allowed_child_types: Some(vec!["Room".to_string()]),
+                is_default,
+                created_at: current_time,
+                updated_at: current_time,
             };
 
             println!(
-                "[ASYNC_KERNEL] Creating office '{}' (id: {}, chat_enabled: {}, is_default: {})",
+                "[ASYNC_KERNEL] Creating office node '{}' (id: {}, chat_enabled: {}, is_default: {})",
                 office_config.name, office_id, office_config.chat_enabled, is_default
             );
 
-            // Insert office
-            self.domain_operations
-                .backend_tx_manager
-                .insert_office(office_id.clone(), office.clone())
-                .await?;
+            // Add office to workspace's children
+            if let Some(workspace_node) = nodes.get_mut(crate::WORKSPACE_ROOT_ID) {
+                workspace_node.children.push(office_id.clone());
+            }
 
-            // Insert domain
-            let domain = Domain::Office {
-                office: office.clone(),
-            };
-            self.domain_operations
-                .backend_tx_manager
-                .insert_domain(office_id.clone(), domain)
-                .await?;
-
-            // Add office to workspace
-            let mut workspace = self
-                .domain_operations
-                .backend_tx_manager
-                .get_workspace(crate::WORKSPACE_ROOT_ID)
-                .await?
-                .ok_or_else(|| NetworkError::msg("Root workspace not found"))?;
-
-            workspace.offices.push(office_id.clone());
-            self.domain_operations
-                .backend_tx_manager
-                .insert_workspace(crate::WORKSPACE_ROOT_ID.to_string(), workspace.clone())
-                .await?;
-
-            // Update workspace domain
-            let ws_domain = Domain::Workspace { workspace };
-            self.domain_operations
-                .backend_tx_manager
-                .insert_domain(crate::WORKSPACE_ROOT_ID.to_string(), ws_domain)
-                .await?;
-
-            // Create rooms within this office
-            let mut office_rooms = Vec::new();
+            // Create room nodes within this office
             for room_config in &office_config.rooms {
                 let room_id = Uuid::new_v4().to_string();
 
@@ -532,68 +512,56 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                     None
                 };
 
-                // Create room struct - no owner initially, first admin user claims it
-                let room = Room {
+                // Create room DomainNode at depth 2
+                let room_node = DomainNode {
                     id: room_id.clone(),
-                    owner_id: UNASSIGNED_OWNER.to_string(),
-                    office_id: office_id.clone(),
+                    parent_id: Some(office_id.clone()),
+                    entity_type: NodeEntityType::Child("Room".to_string()),
+                    depth: 2,
                     name: room_config.name.clone(),
                     description: room_config.description.clone().unwrap_or_default(),
+                    owner_id: UNASSIGNED_OWNER.to_string(),
                     members: vec![],
+                    children: Vec::new(),
                     mdx_content: room_mdx_content,
                     rules: room_config.rules.clone(),
                     chat_enabled: room_config.chat_enabled,
                     chat_channel_id: room_chat_channel_id,
                     default_permissions: room_config.default_permissions.clone(),
                     metadata: Vec::new(),
+                    allowed_child_types: Some(vec![]),
+                    is_default: false,
+                    created_at: current_time,
+                    updated_at: current_time,
                 };
 
                 println!(
-                    "[ASYNC_KERNEL] Creating room '{}' in office '{}' (id: {}, chat_enabled: {})",
+                    "[ASYNC_KERNEL] Creating room node '{}' in office '{}' (id: {}, chat_enabled: {})",
                     room_config.name, office_config.name, room_id, room_config.chat_enabled
                 );
 
-                // Insert room
-                self.domain_operations
-                    .backend_tx_manager
-                    .insert_room(room_id.clone(), room.clone())
-                    .await?;
+                // Add room to office's children (we'll update the office node before inserting)
+                nodes.entry(office_id.clone())
+                    .and_modify(|n| n.children.push(room_id.clone()))
+                    .or_insert_with(|| {
+                        let mut new_office = office_node.clone();
+                        new_office.children.push(room_id.clone());
+                        new_office
+                    });
 
-                // Insert domain
-                let room_domain = Domain::Room { room };
-                self.domain_operations
-                    .backend_tx_manager
-                    .insert_domain(room_id.clone(), room_domain)
-                    .await?;
-
-                office_rooms.push(room_id);
+                // Insert room node
+                nodes.insert(room_id, room_node);
             }
 
-            // Update office with room IDs
-            if !office_rooms.is_empty() {
-                let mut updated_office = self
-                    .domain_operations
-                    .backend_tx_manager
-                    .get_office(&office_id)
-                    .await?
-                    .ok_or_else(|| NetworkError::msg("Office not found after creation"))?;
-
-                updated_office.rooms = office_rooms;
-                self.domain_operations
-                    .backend_tx_manager
-                    .insert_office(office_id.clone(), updated_office.clone())
-                    .await?;
-
-                // Update office domain
-                let updated_domain = Domain::Office {
-                    office: updated_office,
-                };
-                self.domain_operations
-                    .backend_tx_manager
-                    .insert_domain(office_id.clone(), updated_domain)
-                    .await?;
-            }
+            // Insert office node (either updated with children or fresh)
+            nodes.insert(office_id, office_node);
         }
+
+        // Save all nodes back to storage
+        self.domain_operations
+            .backend_tx_manager
+            .save_nodes(&nodes)
+            .await?;
 
         println!("[ASYNC_KERNEL] Workspace structure initialization complete");
         Ok(())

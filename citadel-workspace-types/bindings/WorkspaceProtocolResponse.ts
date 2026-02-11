@@ -2,9 +2,7 @@
 import type { CustomNodeType } from "./CustomNodeType";
 import type { DomainNode } from "./DomainNode";
 import type { GroupMessage } from "./GroupMessage";
-import type { Office } from "./Office";
 import type { Permission } from "./Permission";
-import type { Room } from "./Room";
 import type { TreeNode } from "./TreeNode";
 import type { TreeSchema } from "./TreeSchema";
 import type { User } from "./User";
@@ -12,7 +10,7 @@ import type { UserRole } from "./UserRole";
 import type { Workspace } from "./Workspace";
 import type { WorkspaceMetadata } from "./WorkspaceMetadata";
 
-export type WorkspaceProtocolResponse = { "Workspace": Workspace } | { "Workspaces": Array<WorkspaceMetadata> } | { "Success": string } | { "Error": string } | "WorkspaceNotInitialized" | { "Offices": Array<Office> } | { "Rooms": Array<Room> } | { "Members": Array<User> } | { "Office": Office } | { "Room": Room } | { "Member": User } | { "UserPermissions": { domain_id: string, user_id: string, role: UserRole, permissions: Array<Permission>, } } | { "MemberRoleUpdated": { user_id: string, new_role: UserRole, } } | { "UserProfileUpdated": User } | { "DeleteOffice": { office_id: string, } } | { "DeleteRoom": { room_id: string, } } | { "OfficeContentUpdated": { office_id: string, mdx_content: string, updated_by: string, timestamp: bigint, } } | { "RoomContentUpdated": { room_id: string, office_id: string, mdx_content: string, updated_by: string, timestamp: bigint, } } | { "GroupMessageNotification": { group_id: string, message: GroupMessage, } } | { "GroupMessages": { group_id: string, messages: Array<GroupMessage>, has_more: boolean, } } | { "GroupMessageEdited": { group_id: string, message_id: string, new_content: string, edited_at: bigint, } } | { "GroupMessageDeleted": { group_id: string, message_id: string, deleted_by: string, } } | { "GroupMessage": GroupMessage } | { "ServerCapabilities": { 
+export type WorkspaceProtocolResponse = { "Workspace": Workspace } | { "Workspaces": Array<WorkspaceMetadata> } | { "Success": string } | { "Error": string } | "WorkspaceNotInitialized" | { "Members": Array<User> } | { "Member": User } | { "UserPermissions": { domain_id: string, user_id: string, role: UserRole, permissions: Array<Permission>, } } | { "MemberRoleUpdated": { user_id: string, new_role: UserRole, } } | { "UserProfileUpdated": User } | { "NodeContentUpdated": { node_id: string, mdx_content: string, updated_by: string, timestamp: bigint, } } | { "GroupMessageNotification": { group_id: string, message: GroupMessage, } } | { "GroupMessages": { group_id: string, messages: Array<GroupMessage>, has_more: boolean, } } | { "GroupMessageEdited": { group_id: string, message_id: string, new_content: string, edited_at: bigint, } } | { "GroupMessageDeleted": { group_id: string, message_id: string, deleted_by: string, } } | { "GroupMessage": GroupMessage } | { "ServerCapabilities": { 
 /**
  * Whether server-mediated file transfers are enabled
  */

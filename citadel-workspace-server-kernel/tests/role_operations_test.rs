@@ -2,7 +2,7 @@ use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{Permission, User, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 #[tokio::test]
@@ -54,13 +54,11 @@ async fn test_role_operations() {
     // Create an office
     let create_office_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: root_workspace_id.clone(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(root_workspace_id.clone()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "Office for role testing".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await
@@ -86,8 +84,7 @@ async fn test_role_operations() {
 
         let add_member_cmd = WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
-            office_id: Some(office_id.clone()),
-            room_id: None,
+            domain_id: Some(office_id.clone()),
             role: role.clone(),
             metadata: None,
         };
@@ -172,7 +169,7 @@ async fn test_role_operations() {
 
             // Guest should have minimal permissions
             assert!(domain_permissions.contains(&Permission::ViewContent));
-            assert!(!domain_permissions.contains(&Permission::CreateRoom));
+            assert!(!domain_permissions.contains(&Permission::CreateNode));
             assert!(!domain_permissions.contains(&Permission::EditMdx));
             assert!(!domain_permissions.contains(&Permission::ManageDomains));
             println!("Guest has minimal permissions as expected");
@@ -183,8 +180,7 @@ async fn test_role_operations() {
     // Test removing a member from a domain
     let remove_member_cmd = WorkspaceProtocolRequest::RemoveMember {
         user_id: "guest_user".to_string(),
-        office_id: Some(office_id.clone()),
-        room_id: None,
+        domain_id: Some(office_id.clone()),
     };
 
     let response = execute_command(&kernel, remove_member_cmd).await.unwrap();

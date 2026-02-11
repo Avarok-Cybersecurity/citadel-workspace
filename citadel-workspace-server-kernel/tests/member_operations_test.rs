@@ -1,4 +1,4 @@
-use citadel_workspace_types::structs::UserRole;
+use citadel_workspace_types::structs::{NodeEntityType, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 use common::async_test_helpers::*;
@@ -31,8 +31,7 @@ async fn test_member_operations() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: "test_user".to_string(),
-            office_id: None,
-            room_id: None,
+            domain_id: None,
             role: UserRole::Member,
             metadata: Some("workspace_metadata".to_string().into_bytes()),
         },
@@ -47,13 +46,11 @@ async fn test_member_operations() {
     // Create an office
     let create_office_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: workspace_id.clone(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(workspace_id.clone()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "A test office".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await
@@ -65,12 +62,11 @@ async fn test_member_operations() {
     // Create a room
     let create_room_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateRoom {
-            office_id: office_id.clone(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(office_id.clone()),
+            entity_type: NodeEntityType::Child("Room".to_string()),
             name: "Test Room".to_string(),
             description: "A test room".to_string(),
-            mdx_content: None,
-            metadata: None,
         },
     )
     .await
@@ -84,8 +80,7 @@ async fn test_member_operations() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: "test_user".to_string(),
-            office_id: Some(office_id.clone()),
-            room_id: None,
+            domain_id: Some(office_id.clone()),
             role: UserRole::Member,
             metadata: Some("test_metadata".to_string().into_bytes()),
         },
@@ -140,8 +135,7 @@ async fn test_member_operations() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: "test_user".to_string(),
-            office_id: None,
-            room_id: Some(room_id.clone()),
+            domain_id: Some(room_id.clone()),
             role: UserRole::Member,
             metadata: Some("test_metadata".to_string().into_bytes()),
         },
@@ -156,8 +150,8 @@ async fn test_member_operations() {
     // Verify test user is in room
     let get_room_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::GetRoom {
-            room_id: room_id.clone(),
+        WorkspaceProtocolRequest::GetNode {
+            node_id: room_id.clone(),
         },
     )
     .await
@@ -174,8 +168,7 @@ async fn test_member_operations() {
         &kernel,
         WorkspaceProtocolRequest::RemoveMember {
             user_id: "test_user".to_string(),
-            office_id: None,
-            room_id: Some(room_id.clone()),
+            domain_id: Some(room_id.clone()),
         },
     )
     .await
@@ -188,8 +181,8 @@ async fn test_member_operations() {
     // Verify test user is no longer in room
     let get_room_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::GetRoom {
-            room_id: room_id.clone(),
+        WorkspaceProtocolRequest::GetNode {
+            node_id: room_id.clone(),
         },
     )
     .await
@@ -206,8 +199,7 @@ async fn test_member_operations() {
         &kernel,
         WorkspaceProtocolRequest::RemoveMember {
             user_id: "test_user".to_string(),
-            office_id: Some(office_id.clone()),
-            room_id: None,
+            domain_id: Some(office_id.clone()),
         },
     )
     .await
@@ -238,15 +230,27 @@ async fn test_member_operations() {
         _ => panic!("Expected Member response"),
     }
 
-    // Verify removed user cannot get office details (since they're no longer a member)
-    use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncOfficeOperations;
-    let office_result = kernel
-        .domain_operations
-        .get_office("test_user", &office_id)
-        .await;
-    assert!(
-        office_result.is_err(),
-        "Expected get_office to fail for non-member, but got: {:?}",
-        office_result
-    );
+    // Verify removed user can still read node (workspace-level access) but is not in members
+    use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
+    let result = process_command_with_user(
+        &kernel,
+        &WorkspaceProtocolRequest::GetNode {
+            node_id: office_id.clone(),
+        },
+        "test_user",
+    )
+    .await
+    .unwrap();
+    match result {
+        WorkspaceProtocolResponse::Node(node) => {
+            assert!(
+                !node.members.contains(&"test_user".to_string()),
+                "Removed user should not be in node members"
+            );
+        }
+        _ => panic!(
+            "Expected Node response (workspace-level read access), but got: {:?}",
+            result
+        ),
+    }
 }

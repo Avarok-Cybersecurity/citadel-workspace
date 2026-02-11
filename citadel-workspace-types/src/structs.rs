@@ -213,71 +213,57 @@ impl PartialOrd for UserRole {
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 #[ts(export)]
 pub enum Permission {
-    // All permissions
+    /// All permissions
     All,
-    // Create a room
-    CreateRoom,
-    // Delete a room
-    DeleteRoom,
-    // Update a room
-    UpdateRoom,
-    // Create an office
-    CreateOffice,
-    // Delete an office
-    DeleteOffice,
-    // Update an office
-    UpdateOffice,
-    // Create a workspace
+    /// Create a child node (office, room, etc.)
+    CreateNode,
+    /// Delete a child node
+    DeleteNode,
+    /// Update a child node
+    UpdateNode,
+    /// Create a workspace
     CreateWorkspace,
-    // Update a workspace
+    /// Update a workspace
     UpdateWorkspace,
-    // Delete a workspace
+    /// Delete a workspace
     DeleteWorkspace,
-    // Edit content
+    /// Edit content
     EditContent,
-    // Add users
+    /// Add users
     AddUsers,
-    // Remove users
+    /// Remove users
     RemoveUsers,
-    // Edit MDX content
+    /// Edit MDX content
     EditMdx,
-    // Edit room configuration
-    EditRoomConfig,
-    // Edit office configuration
-    EditOfficeConfig,
-    // Add an office
-    AddOffice,
-    // Add a room
-    AddRoom,
-    // Update office settings
-    UpdateOfficeSettings,
-    // Update room settings
-    UpdateRoomSettings,
-    // View content
+    /// Edit node configuration
+    EditNodeConfig,
+    /// Add a node to a parent
+    AddNode,
+    /// Update node settings
+    UpdateNodeSettings,
+    /// View content
     ViewContent,
-    // Manage office members
-    ManageOfficeMembers,
-    // Manage room members
-    ManageRoomMembers,
-    // Send messages
+    /// Manage node members
+    ManageNodeMembers,
+    /// Send messages
     SendMessages,
-    // Read messages
+    /// Read messages
     ReadMessages,
-    // Upload files
+    /// Upload files
     UploadFiles,
-    // Download files
+    /// Download files
     DownloadFiles,
-    // Manage domains (admin permission)
+    /// Manage domains (admin permission)
     ManageDomains,
-    // Configure system (admin permission)
+    /// Configure system (admin permission)
     ConfigureSystem,
-    // Edit workspace configuration
+    /// Edit workspace configuration
     EditWorkspaceConfig,
-    // Ban a user from a domain
+    /// Ban a user from a domain
     BanUser,
-    // Edit tree structure (add/remove/rearrange nodes)
+    /// Edit tree structure (add/remove/rearrange nodes)
     EditTreeStructure,
-    // Manage custom node types
+    /// Manage custom node types
     ManageNodeTypes,
 }
 
@@ -291,17 +277,13 @@ impl Permission {
                 permissions.insert(Self::All);
             }
             UserRole::Owner => {
-                // Office permissions
                 permissions.insert(Self::EditContent);
                 permissions.insert(Self::AddUsers);
                 permissions.insert(Self::RemoveUsers);
-                permissions.insert(Self::CreateRoom);
-                permissions.insert(Self::DeleteRoom);
-                permissions.insert(Self::CreateOffice);
-                permissions.insert(Self::DeleteOffice);
+                permissions.insert(Self::CreateNode);
+                permissions.insert(Self::DeleteNode);
                 permissions.insert(Self::CreateWorkspace);
                 permissions.insert(Self::DeleteWorkspace);
-                // Tree structure permissions
                 permissions.insert(Self::EditTreeStructure);
                 permissions.insert(Self::ManageNodeTypes);
             }
@@ -370,8 +352,8 @@ impl Permission {
     }
 }
 
-/// Default permissions for a domain (Office or Room).
-/// These define what actions are allowed by default for users in that domain.
+/// Default permissions for a domain node.
+/// These define what actions are allowed by default for users in that node.
 /// Read operations default to `true`, write/admin operations default to `false`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 #[ts(export)]
@@ -394,37 +376,21 @@ pub struct DomainPermissions {
     /// Whether users can upload files
     pub upload_files: bool,
 
-    // === Room Management (default: false) ===
-    /// Whether users can create rooms in this office
-    pub create_room: bool,
-    /// Whether users can delete rooms
-    pub delete_room: bool,
-    /// Whether users can update room settings
-    pub update_room: bool,
-    /// Whether users can add rooms
-    pub add_room: bool,
-    /// Whether users can edit room configuration
-    pub edit_room_config: bool,
-    /// Whether users can update room settings
-    pub update_room_settings: bool,
-    /// Whether users can manage room members
-    pub manage_room_members: bool,
-
-    // === Office Management (default: false) ===
-    /// Whether users can create offices
-    pub create_office: bool,
-    /// Whether users can delete offices
-    pub delete_office: bool,
-    /// Whether users can update offices
-    pub update_office: bool,
-    /// Whether users can add offices
-    pub add_office: bool,
-    /// Whether users can edit office configuration
-    pub edit_office_config: bool,
-    /// Whether users can update office settings
-    pub update_office_settings: bool,
-    /// Whether users can manage office members
-    pub manage_office_members: bool,
+    // === Node Management (default: false) ===
+    /// Whether users can create child nodes
+    pub create_node: bool,
+    /// Whether users can delete child nodes
+    pub delete_node: bool,
+    /// Whether users can update child nodes
+    pub update_node: bool,
+    /// Whether users can add child nodes
+    pub add_node: bool,
+    /// Whether users can edit node configuration
+    pub edit_node_config: bool,
+    /// Whether users can update node settings
+    pub update_node_settings: bool,
+    /// Whether users can manage node members
+    pub manage_node_members: bool,
 
     // === Workspace Management (default: false) ===
     /// Whether users can create workspaces
@@ -471,23 +437,14 @@ impl Default for DomainPermissions {
             send_messages: false,
             upload_files: false,
 
-            // Room management - disabled by default
-            create_room: false,
-            delete_room: false,
-            update_room: false,
-            add_room: false,
-            edit_room_config: false,
-            update_room_settings: false,
-            manage_room_members: false,
-
-            // Office management - disabled by default
-            create_office: false,
-            delete_office: false,
-            update_office: false,
-            add_office: false,
-            edit_office_config: false,
-            update_office_settings: false,
-            manage_office_members: false,
+            // Node management - disabled by default
+            create_node: false,
+            delete_node: false,
+            update_node: false,
+            add_node: false,
+            edit_node_config: false,
+            update_node_settings: false,
+            manage_node_members: false,
 
             // Workspace management - disabled by default
             create_workspace: false,
@@ -543,20 +500,13 @@ impl DomainPermissions {
             edit_mdx: true,
             send_messages: true,
             upload_files: true,
-            create_room: true,
-            delete_room: true,
-            update_room: true,
-            add_room: true,
-            edit_room_config: true,
-            update_room_settings: true,
-            manage_room_members: true,
-            create_office: true,
-            delete_office: true,
-            update_office: true,
-            add_office: true,
-            edit_office_config: true,
-            update_office_settings: true,
-            manage_office_members: true,
+            create_node: true,
+            delete_node: true,
+            update_node: true,
+            add_node: true,
+            edit_node_config: true,
+            update_node_settings: true,
+            manage_node_members: true,
             create_workspace: true,
             update_workspace: true,
             delete_workspace: true,
@@ -575,15 +525,14 @@ impl DomainPermissions {
     pub fn has_permission(&self, permission: &Permission) -> bool {
         match permission {
             Permission::All => {
-                // Check if all permissions are granted
                 self.view_content
                     && self.read_messages
                     && self.download_files
                     && self.edit_content
                     && self.send_messages
                     && self.upload_files
-                    && self.create_room
-                    && self.delete_room
+                    && self.create_node
+                    && self.delete_node
                     && self.manage_domains
                     && self.configure_system
             }
@@ -594,20 +543,13 @@ impl DomainPermissions {
             Permission::EditMdx => self.edit_mdx,
             Permission::SendMessages => self.send_messages,
             Permission::UploadFiles => self.upload_files,
-            Permission::CreateRoom => self.create_room,
-            Permission::DeleteRoom => self.delete_room,
-            Permission::UpdateRoom => self.update_room,
-            Permission::AddRoom => self.add_room,
-            Permission::EditRoomConfig => self.edit_room_config,
-            Permission::UpdateRoomSettings => self.update_room_settings,
-            Permission::ManageRoomMembers => self.manage_room_members,
-            Permission::CreateOffice => self.create_office,
-            Permission::DeleteOffice => self.delete_office,
-            Permission::UpdateOffice => self.update_office,
-            Permission::AddOffice => self.add_office,
-            Permission::EditOfficeConfig => self.edit_office_config,
-            Permission::UpdateOfficeSettings => self.update_office_settings,
-            Permission::ManageOfficeMembers => self.manage_office_members,
+            Permission::CreateNode => self.create_node,
+            Permission::DeleteNode => self.delete_node,
+            Permission::UpdateNode => self.update_node,
+            Permission::AddNode => self.add_node,
+            Permission::EditNodeConfig => self.edit_node_config,
+            Permission::UpdateNodeSettings => self.update_node_settings,
+            Permission::ManageNodeMembers => self.manage_node_members,
             Permission::CreateWorkspace => self.create_workspace,
             Permission::UpdateWorkspace => self.update_workspace,
             Permission::DeleteWorkspace => self.delete_workspace,
@@ -900,198 +842,72 @@ impl From<&Workspace> for WorkspaceMetadata {
     }
 }
 
-// Workspace entity structures
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
-#[ts(export)]
-pub struct Office {
-    pub id: String,
-    pub owner_id: String,
-    pub workspace_id: String, // Added field to link to parent workspace
-    pub name: String,
-    pub description: String,
-    // workspace_id field added - all offices belong to the single workspace
-    pub members: Vec<String>, // User IDs
-    pub rooms: Vec<String>,   // Room IDs
-    #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
-    pub mdx_content: String,
-    /// Rules for this office (displayed to users)
-    pub rules: Option<String>,
-    /// Whether group chat is enabled for this office
-    pub chat_enabled: bool,
-    /// UUID for the group chat channel (assigned when chat_enabled is true)
-    pub chat_channel_id: Option<String>,
-    /// Default permissions for users in this office
-    pub default_permissions: DomainPermissions,
-    /// Whether this is the default office for the workspace (navigated to on login)
-    #[serde(default)]
-    pub is_default: bool,
-    // Can be used to add any type of data by the UI
-    #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
-    pub metadata: Vec<u8>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct Room {
-    pub id: String,
-    pub owner_id: String,
-    pub office_id: String,
-    pub name: String,
-    pub description: String,
-    pub members: Vec<String>, // User IDs
-    #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
-    pub mdx_content: String,
-    /// Rules for this room (displayed to users)
-    pub rules: Option<String>,
-    /// Whether group chat is enabled for this room
-    pub chat_enabled: bool,
-    /// UUID for the group chat channel (assigned when chat_enabled is true)
-    pub chat_channel_id: Option<String>,
-    /// Default permissions for users in this room
-    pub default_permissions: DomainPermissions,
-    pub metadata: Vec<MetadataField>,
-}
-
+/// Domain storage for workspace-level entities.
+/// Office and Room entities are now stored as DomainNodes in the tree hierarchy.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub enum Domain {
     Workspace { workspace: Workspace },
-    Office { office: Office },
-    Room { room: Room },
 }
 
 impl Domain {
     pub fn id(&self) -> &str {
         match self {
             Domain::Workspace { workspace } => &workspace.id,
-            Domain::Office { office } => &office.id,
-            Domain::Room { room } => &room.id,
         }
     }
 
     pub fn name(&self) -> &str {
         match self {
             Domain::Workspace { workspace } => &workspace.name,
-            Domain::Office { office } => &office.name,
-            Domain::Room { room } => &room.name,
         }
     }
 
     pub fn description(&self) -> &str {
         match self {
             Domain::Workspace { workspace } => &workspace.description,
-            Domain::Office { office } => &office.description,
-            Domain::Room { room } => &room.description,
         }
     }
 
     pub fn owner_id(&self) -> &str {
         match self {
             Domain::Workspace { workspace } => &workspace.owner_id,
-            Domain::Office { office } => &office.owner_id,
-            Domain::Room { room } => &room.owner_id,
         }
     }
 
     pub fn members(&self) -> &Vec<String> {
         match self {
             Domain::Workspace { workspace } => &workspace.members,
-            Domain::Office { office } => &office.members,
-            Domain::Room { room } => &room.members,
         }
     }
 
-    pub fn mdx_content(&self) -> &str {
-        match self {
-            Domain::Workspace { .. } => "",
-            Domain::Office { office } => &office.mdx_content,
-            Domain::Room { room } => &room.mdx_content,
-        }
-    }
-
-    /// Update the name of this domain
     pub fn update_name(&mut self, name: String) {
         match self {
             Domain::Workspace { workspace } => workspace.name = name,
-            Domain::Office { office } => office.name = name,
-            Domain::Room { room } => room.name = name,
         }
     }
 
     pub fn update_description(&mut self, description: String) {
         match self {
             Domain::Workspace { workspace } => workspace.description = description,
-            Domain::Office { office } => office.description = description,
-            Domain::Room { room } => room.description = description,
         }
     }
 
-    /// Get the parent ID of this domain (for rooms, this is the office ID)
-    pub fn parent_id(&self) -> &str {
-        match self {
-            Domain::Workspace { .. } => "", // Workspaces don't have a parent
-            Domain::Office { office } => &office.workspace_id, // Offices belong to workspaces
-            Domain::Room { room } => &room.office_id,
-        }
-    }
-
-    /// Update the members of this domain
     pub fn set_members(&mut self, members: Vec<String>) {
         match self {
             Domain::Workspace { workspace } => workspace.members = members,
-            Domain::Office { office } => office.members = members,
-            Domain::Room { room } => room.members = members,
-        }
-    }
-
-    /// Update the MDX content of this domain
-    pub fn update_mdx_content(&mut self, mdx_content: String) {
-        match self {
-            Domain::Workspace { .. } => (), // Workspaces don't have MDX content
-            Domain::Office { office } => office.mdx_content = mdx_content,
-            Domain::Room { room } => room.mdx_content = mdx_content,
         }
     }
 
     pub fn as_workspace(&self) -> Option<&Workspace> {
         match self {
             Domain::Workspace { workspace } => Some(workspace),
-            _ => None,
         }
     }
 
     pub fn as_workspace_mut(&mut self) -> Option<&mut Workspace> {
         match self {
             Domain::Workspace { workspace } => Some(workspace),
-            _ => None,
-        }
-    }
-
-    pub fn as_office(&self) -> Option<&Office> {
-        match self {
-            Domain::Office { office } => Some(office),
-            _ => None,
-        }
-    }
-
-    pub fn as_office_mut(&mut self) -> Option<&mut Office> {
-        match self {
-            Domain::Office { office } => Some(office),
-            _ => None,
-        }
-    }
-
-    pub fn as_room(&self) -> Option<&Room> {
-        match self {
-            Domain::Room { room } => Some(room),
-            _ => None,
-        }
-    }
-
-    pub fn as_room_mut(&mut self) -> Option<&mut Room> {
-        match self {
-            Domain::Room { room } => Some(room),
-            _ => None,
         }
     }
 }

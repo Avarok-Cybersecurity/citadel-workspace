@@ -18,15 +18,19 @@ workspace_id: string | null, name: string | null, description: string | null, wo
 /**
  * Workspace ID to delete. None defaults to the sentinel workspace-root.
  */
-workspace_id: string | null, workspace_master_password: string, } } | { "CreateOffice": { workspace_id: string, name: string, description: string, mdx_content: string | null, metadata: Array<number> | null, 
+workspace_id: string | null, workspace_master_password: string, } } | { "AddMember": { user_id: string, 
 /**
- * Whether this should be the default office (only one allowed per workspace)
+ * Domain (node) to add the member to. None defaults to workspace root.
  */
-is_default: boolean | null, } } | { "GetOffice": { office_id: string, } } | { "UpdateOffice": { office_id: string, name: string | null, description: string | null, mdx_content: string | null, metadata: Array<number> | null, 
+domain_id: string | null, role: UserRole, metadata: Array<number> | null, } } | { "GetMember": { user_id: string, } } | { "UpdateMemberRole": { user_id: string, role: UserRole, metadata: Array<number> | null, } } | { "UpdateMemberPermissions": { user_id: string, domain_id: string, permissions: Array<Permission>, operation: UpdateOperation, } } | { "RemoveMember": { user_id: string, 
 /**
- * Set this office as the default (clears default on other offices)
+ * Domain (node) to remove the member from. None defaults to workspace root.
  */
-is_default: boolean | null, } } | { "DeleteOffice": { office_id: string, } } | "ListOffices" | { "CreateRoom": { office_id: string, name: string, description: string, mdx_content: string | null, metadata: Array<number> | null, } } | { "GetRoom": { room_id: string, } } | { "UpdateRoom": { room_id: string, name: string | null, description: string | null, mdx_content: string | null, metadata: Array<number> | null, } } | { "DeleteRoom": { room_id: string, } } | { "ListRooms": { office_id: string, } } | { "AddMember": { user_id: string, office_id: string | null, room_id: string | null, role: UserRole, metadata: Array<number> | null, } } | { "GetMember": { user_id: string, } } | { "UpdateMemberRole": { user_id: string, role: UserRole, metadata: Array<number> | null, } } | { "UpdateMemberPermissions": { user_id: string, domain_id: string, permissions: Array<Permission>, operation: UpdateOperation, } } | { "RemoveMember": { user_id: string, office_id: string | null, room_id: string | null, } } | { "ListMembers": { office_id: string | null, room_id: string | null, } } | { "GetUserPermissions": { user_id: string, domain_id: string, } } | { "UpdateUserProfile": { 
+domain_id: string | null, } } | { "ListMembers": { 
+/**
+ * Domain (node) to list members for. None defaults to workspace root.
+ */
+domain_id: string | null, } } | { "GetUserPermissions": { user_id: string, domain_id: string, } } | { "UpdateUserProfile": { 
 /**
  * New display name (optional)
  */

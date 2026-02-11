@@ -1,6 +1,6 @@
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncPermissionOperations;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{Permission, User, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 use common::async_test_helpers::*;
@@ -47,13 +47,11 @@ async fn test_permission_escalation() {
     // Create an office
     let office_result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: WORKSPACE_ROOT_ID.to_string(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(WORKSPACE_ROOT_ID.to_string()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "For Testing".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await;
@@ -66,12 +64,11 @@ async fn test_permission_escalation() {
     // Create a room in the office
     let room_result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateRoom {
-            office_id: office_id.clone(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(office_id.clone()),
+            entity_type: NodeEntityType::Child("Room".to_string()),
             name: "Test Room".to_string(),
             description: "Room for testing".to_string(),
-            mdx_content: None,
-            metadata: None,
         },
     )
     .await;
@@ -86,8 +83,7 @@ async fn test_permission_escalation() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
-            office_id: Some(office_id.clone()),
-            room_id: None,
+            domain_id: Some(office_id.clone()),
             role: UserRole::Member,
             metadata: None,
         },
@@ -99,8 +95,7 @@ async fn test_permission_escalation() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
-            office_id: Some(office_id.clone()),
-            room_id: Some(room_id.clone()),
+            domain_id: Some(room_id.clone()),
             role: UserRole::Member,
             metadata: None,
         },
@@ -139,7 +134,7 @@ async fn test_permission_escalation() {
     // Now user should have admin permissions
     let has_admin_permission = kernel
         .domain_operations
-        .check_entity_permission(user_id, &room_id, Permission::ManageRoomMembers)
+        .check_entity_permission(user_id, &room_id, Permission::ManageNodeMembers)
         .await
         .unwrap();
     assert!(
