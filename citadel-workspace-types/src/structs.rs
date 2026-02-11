@@ -694,6 +694,26 @@ pub struct NestingRule {
     pub allowed_child_types: Vec<String>,
 }
 
+/// Display configuration for an entity type (icon, labels, placeholders).
+/// Sent as part of TreeSchema so the frontend can derive all display metadata
+/// from a single source of truth.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct EntityTypeConfig {
+    /// Entity type name (e.g., "Workspace", "Office", "Room")
+    pub type_name: String,
+    /// Lucide icon name in kebab-case (e.g., "building-2", "briefcase", "message-square")
+    pub icon: String,
+    /// Singular display label (e.g., "Office")
+    pub label: String,
+    /// Plural display label (e.g., "Offices")
+    pub plural_label: String,
+    /// Name field placeholder (e.g., "e.g., Engineering, Marketing, HR")
+    pub name_placeholder: String,
+    /// Description field placeholder
+    pub description_placeholder: String,
+}
+
 /// Schema defining the structure rules for a workspace tree
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -704,6 +724,9 @@ pub struct TreeSchema {
     pub rules: Vec<NestingRule>,
     /// Maximum allowed depth (None = unlimited)
     pub max_depth: Option<u32>,
+    /// Display configs for each entity type (icons, labels, placeholders)
+    #[serde(default)]
+    pub entity_type_configs: Vec<EntityTypeConfig>,
 }
 
 impl Default for TreeSchema {
@@ -727,6 +750,32 @@ impl Default for TreeSchema {
                 },
             ],
             max_depth: Some(3), // Workspace(0) → Office(1) → Room(2)
+            entity_type_configs: vec![
+                EntityTypeConfig {
+                    type_name: "Workspace".to_string(),
+                    icon: "building-2".to_string(),
+                    label: "Workspace".to_string(),
+                    plural_label: "Workspaces".to_string(),
+                    name_placeholder: "e.g., Avarok Cybersecurity".to_string(),
+                    description_placeholder: "Describe the purpose of this workspace...".to_string(),
+                },
+                EntityTypeConfig {
+                    type_name: "Office".to_string(),
+                    icon: "briefcase".to_string(),
+                    label: "Office".to_string(),
+                    plural_label: "Offices".to_string(),
+                    name_placeholder: "e.g., Engineering, Marketing, HR".to_string(),
+                    description_placeholder: "Describe the purpose of this office...".to_string(),
+                },
+                EntityTypeConfig {
+                    type_name: "Room".to_string(),
+                    icon: "message-square".to_string(),
+                    label: "Room".to_string(),
+                    plural_label: "Rooms".to_string(),
+                    name_placeholder: "e.g., General, Design Reviews, Standups".to_string(),
+                    description_placeholder: "Describe the purpose of this room...".to_string(),
+                },
+            ],
         }
     }
 }

@@ -134,6 +134,20 @@ export interface NestingRule {
 }
 
 /**
+ * Display configuration for an entity type (icon, labels, placeholders).
+ * Sent as part of TreeSchema so the frontend can derive all display metadata
+ * from a single source of truth.
+ */
+export interface EntityTypeConfig {
+  type_name: string;
+  icon: string;
+  label: string;
+  plural_label: string;
+  name_placeholder: string;
+  description_placeholder: string;
+}
+
+/**
  * Schema defining the structure rules for a workspace tree
  */
 export interface TreeSchema {
@@ -141,6 +155,7 @@ export interface TreeSchema {
   name: string;
   rules: NestingRule[];
   max_depth: number | null;
+  entity_type_configs: EntityTypeConfig[];
 }
 
 /**
