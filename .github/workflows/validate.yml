@@ -211,7 +211,8 @@ jobs:
             artifact: crud
           - test: test:login
             artifact: login
-          # test:prev-sessions moved to heavy-integration-tests (self-hosted runner)
+          - test: test:prev-sessions
+            artifact: prev-sessions
           - test: test:file-transfer
             artifact: file-transfer
           - test: test:offline
@@ -298,127 +299,14 @@ jobs:
           name: screenshots-${{ matrix.artifact }}
           path: citadel-workspaces/integration-tests/screenshots/
 
-  # Heavy integration tests run on self-hosted runner (more resources)
-  # Only auto-runs for CODEOWNERS, otherwise requires workflow_dispatch approval
-  heavy-integration-tests:
-    name: Heavy Integration Tests (Self-Hosted)
-    runs-on: [self-hosted, heavy-tests]
-    # Only run for CODEOWNERS or workflow_dispatch (manual trigger with approval)
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      contains(fromJSON('["tbraun96", "Raduc4", "Tjemmmic"]'), github.actor)
-    env:
-      # Self-hosted runner may have mismatched home dirs between install and test steps.
-      # Use explicit path so playwright install and test both find the same browsers.
-      PLAYWRIGHT_BROWSERS_PATH: /tmp/pw-browsers
-    steps:
-      - name: Fix Docker-created root-owned files
-        run: |
-          # Docker containers create files as root, which prevents checkout cleanup
-          # Fix ownership before checkout so actions/checkout can clean properly
-          # Self-hosted runner has a known workspace path structure
-          RUNNER_WORK_DIR="/home/ubuntu/actions-runner-workspace/_work"
-          REPO_DIR="$RUNNER_WORK_DIR/citadel-workspace/citadel-workspace"
-
-          echo "Current user: $(whoami)"
-          echo "Fixing ownership in: $REPO_DIR"
-
-          # Fix the repo directory if it exists
-          if [ -d "$REPO_DIR" ]; then
-            echo "Found repo dir, fixing ownership..."
-            sudo chown -R $(whoami):$(whoami) "$REPO_DIR" 2>&1 || true
-          fi
-
-          # Also fix the parent citadel-workspace directory
-          PARENT_DIR="$RUNNER_WORK_DIR/citadel-workspace"
-          if [ -d "$PARENT_DIR" ]; then
-            echo "Fixing parent: $PARENT_DIR"
-            sudo chown -R $(whoami):$(whoami) "$PARENT_DIR" 2>&1 || true
-          fi
-
-          # Verify fix worked
-          echo "Checking for remaining root-owned files..."
-          if [ -d "$REPO_DIR" ]; then
-            ROOT_FILES=$(sudo find "$REPO_DIR" -user root -type f 2>/dev/null | wc -l)
-            echo "Root-owned files remaining: $ROOT_FILES"
-            if [ "$ROOT_FILES" -gt 0 ]; then
-              sudo find "$REPO_DIR" -user root -type f 2>/dev/null | head -5
-            fi
-          fi
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install Dependencies
-        # Self-hosted runners persist node_modules between runs, causing version
-        # mismatches. Clean ALL node_modules first to ensure fresh install.
-        # npm workspaces hoist to root, but stale packages in workspace member
-        # dirs (e.g. citadel-workspaces/node_modules) cause resolution conflicts.
-        run: |
-          find "${{ github.workspace }}" -name node_modules -type d -prune -exec rm -rf {} + 2>/dev/null || true
-          npm ci
-        working-directory: citadel-workspaces/integration-tests
-      - name: Clean Up Previous Containers
-        run: |
-          # Stop any existing docker-compose services from previous runs
-          docker compose down --volumes --remove-orphans --timeout 0 2>/dev/null || true
-          # Stop any standalone citadel containers that might conflict
-          docker ps -q --filter "name=citadel" | xargs -r docker stop 2>/dev/null || true
-          docker ps -aq --filter "name=citadel" | xargs -r docker rm 2>/dev/null || true
-          # Clean up any dangling containers
-          docker container prune -f 2>/dev/null || true
-      - name: Force Rebuild Docker Images
-        # Self-hosted runners cache Docker images from previous runs, which may
-        # have stale WASM builds or outdated code. Force rebuild to ensure fresh.
-        # INTERNAL_SERVICE_PORT is a build arg for the internal-service Dockerfile
-        env:
-          INTERNAL_SERVICE_PORT: '12345'
-        run: docker compose build --no-cache
-      - name: Start Services
-        env:
-          INTERNAL_SERVICE_PORT: '12345'
-        run: docker compose up -d --wait
-      - name: Dump Service Logs on Start Failure
-        if: failure()
-        run: |
-          echo "=== sync-wasm-client logs ==="
-          docker compose logs sync-wasm-client 2>&1 | tail -200
-          echo "=== server logs ==="
-          docker compose logs server 2>&1 | tail -50
-          echo "=== internal-service logs ==="
-          docker compose logs internal-service 2>&1 | tail -50
-      - name: Clean Docker-modified playwright
-        # sync-wasm-client bind-mounts ./citadel-workspaces and runs
-        # `npm install --package-lock=false`, installing latest playwright (1.58.x)
-        # to citadel-workspaces/node_modules/ on the host. This shadows the
-        # lockfile-pinned version in root/node_modules/ (1.57.0).
-        # Remove only playwright packages so test resolves from root (consistent).
-        # Keep other packages (@types/node etc.) needed by tsc compilation.
-        run: |
-          rm -rf citadel-workspaces/node_modules/playwright
-          rm -rf citadel-workspaces/node_modules/playwright-core
-          rm -f citadel-workspaces/node_modules/.bin/playwright
-      - name: Install Playwright Browsers
-        # Note: --with-deps skipped on self-hosted runner (system deps pre-installed)
-        # Clean stale browsers first (self-hosted runners persist /tmp/pw-browsers)
-        run: |
-          rm -rf "$PLAYWRIGHT_BROWSERS_PATH"
-          echo "playwright version: $(npx playwright --version)"
-          npx playwright install chromium chromium-headless-shell
-      - name: Run Heavy Integration Tests
-        env:
-          IN_CI: 'true'
-        run: npm run test:prev-sessions
-        working-directory: citadel-workspaces/integration-tests
-        timeout-minutes: 15
-      - name: Upload Screenshots on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots-prev-sessions
-          path: citadel-workspaces/integration-tests/screenshots/
-      - name: Stop Services
-        if: always()
-        run: docker compose down --volumes --remove-orphans 2>/dev/null || true
+  # Heavy integration tests on self-hosted runner - currently disabled.
+  # All tests moved to the standard integration-tests matrix above.
+  # Kept for future use when tests need more resources than GitHub-hosted runners provide.
+  # heavy-integration-tests:
+  #   name: Heavy Integration Tests (Self-Hosted)
+  #   runs-on: [self-hosted, heavy-tests]
+  #   if: |
+  #     github.event_name == 'workflow_dispatch' ||
+  #     contains(fromJSON('["tbraun96", "Raduc4", "Tjemmmic"]'), github.actor)
+  #   steps:
+  #     - run: echo "No heavy tests configured"
