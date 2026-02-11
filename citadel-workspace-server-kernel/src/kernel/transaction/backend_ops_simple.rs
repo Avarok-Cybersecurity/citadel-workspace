@@ -4,9 +4,7 @@
 
 use crate::kernel::transaction::BackendTransactionManager;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::{
-    Domain, DomainNode, TreeSchema, User, Workspace,
-};
+use citadel_workspace_types::structs::{Domain, DomainNode, TreeSchema, User, Workspace};
 
 impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// Initialize the backend transaction manager

@@ -8,9 +8,7 @@ use crate::handlers::domain::core::DomainEntity;
 use crate::kernel::transaction::BackendTransactionManager;
 use async_trait::async_trait;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, Ratchet};
-use citadel_workspace_types::structs::{
-    Domain, Permission, User, UserRole, Workspace,
-};
+use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
 use citadel_workspace_types::UpdateOperation;
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -44,7 +42,6 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
     ) -> Self {
         Self { backend_tx_manager }
     }
-
 }
 
 // Implement AsyncDomainOperations
@@ -138,8 +135,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
             let mut current_parent = node.parent_id.clone();
             while let Some(pid) = current_parent {
                 if let Some(parent_perms) = user.permissions.get(&pid) {
-                    if parent_perms.contains(&permission)
-                        || parent_perms.contains(&Permission::All)
+                    if parent_perms.contains(&permission) || parent_perms.contains(&Permission::All)
                     {
                         return Ok(true);
                     }
@@ -363,10 +359,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
                 .await?
                 .is_some()
         } else {
-            self.backend_tx_manager
-                .get_node(domain_id)
-                .await?
-                .is_some()
+            self.backend_tx_manager.get_node(domain_id).await?.is_some()
         };
         if !domain_exists {
             return Err(NetworkError::msg("Domain not found"));

@@ -352,9 +352,7 @@ async fn test_list_members_invalid_parameters() {
     // Test Case 1: ListMembers with None domain_id defaults to workspace root (valid)
     let result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::ListMembers {
-            domain_id: None,
-        },
+        WorkspaceProtocolRequest::ListMembers { domain_id: None },
     )
     .await
     .unwrap();
@@ -363,7 +361,10 @@ async fn test_list_members_invalid_parameters() {
         WorkspaceProtocolResponse::Members(_) => {
             // Expected - None defaults to workspace root which exists
         }
-        other => panic!("Expected Members response for workspace root, got: {:?}", other),
+        other => panic!(
+            "Expected Members response for workspace root, got: {:?}",
+            other
+        ),
     }
 
     // Test Case 2: ListMembers with non-existent domain_id

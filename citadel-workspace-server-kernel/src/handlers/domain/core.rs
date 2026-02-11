@@ -115,5 +115,4 @@ pub trait DomainEntity: Clone + Send + Sync + 'static {
     fn try_from_workspace(workspace: Workspace) -> Result<Self, NetworkError>
     where
         Self: Sized;
-
 }

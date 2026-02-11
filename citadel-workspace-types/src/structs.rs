@@ -757,7 +757,8 @@ impl Default for TreeSchema {
                     label: "Workspace".to_string(),
                     plural_label: "Workspaces".to_string(),
                     name_placeholder: "e.g., Avarok Cybersecurity".to_string(),
-                    description_placeholder: "Describe the purpose of this workspace...".to_string(),
+                    description_placeholder: "Describe the purpose of this workspace..."
+                        .to_string(),
                 },
                 EntityTypeConfig {
                     type_name: "Office".to_string(),

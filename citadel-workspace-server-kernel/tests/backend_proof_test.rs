@@ -31,9 +31,7 @@ async fn test_backend_is_being_used() -> Result<(), Box<dyn std::error::Error>> 
     println!("\n3. Retrieving workspace from backend...");
     let get_workspace_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::GetWorkspace {
-            workspace_id: None,
-        },
+        WorkspaceProtocolRequest::GetWorkspace { workspace_id: None },
     )
     .await?;
 
@@ -141,9 +139,7 @@ async fn test_backend_is_being_used() -> Result<(), Box<dyn std::error::Error>> 
     .await?;
 
     match &permissions_response {
-        WorkspaceProtocolResponse::UserPermissions {
-            user_id, role, ..
-        } => {
+        WorkspaceProtocolResponse::UserPermissions { user_id, role, .. } => {
             println!(
                 "   ✓ Permission check completed: user={}, role={:?}",
                 user_id, role
@@ -242,8 +238,7 @@ async fn test_backend_persistence_across_instances() -> Result<(), Box<dyn std::
     )
     .await?;
 
-    let office =
-        extract_node(create_office_response).expect("Failed to create persistent office");
+    let office = extract_node(create_office_response).expect("Failed to create persistent office");
     println!("   ✓ Office created with ID: {}", office.id);
 
     // Create second instance (simulating restart)

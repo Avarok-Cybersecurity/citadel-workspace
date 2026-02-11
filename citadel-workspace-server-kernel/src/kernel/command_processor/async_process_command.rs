@@ -167,9 +167,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             metadata: _,
         } => {
             use crate::handlers::domain::async_ops::AsyncUserManagementOperations;
-            let domain_id = domain_id
-                .as_deref()
-                .unwrap_or(crate::WORKSPACE_ROOT_ID);
+            let domain_id = domain_id.as_deref().unwrap_or(crate::WORKSPACE_ROOT_ID);
 
             match kernel
                 .domain_ops()
@@ -275,14 +273,9 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             }
         }
 
-        WorkspaceProtocolRequest::RemoveMember {
-            user_id,
-            domain_id,
-        } => {
+        WorkspaceProtocolRequest::RemoveMember { user_id, domain_id } => {
             use crate::handlers::domain::async_ops::AsyncUserManagementOperations;
-            let domain_id = domain_id
-                .as_deref()
-                .unwrap_or(crate::WORKSPACE_ROOT_ID);
+            let domain_id = domain_id.as_deref().unwrap_or(crate::WORKSPACE_ROOT_ID);
 
             match kernel
                 .domain_ops()
@@ -300,9 +293,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         }
 
         WorkspaceProtocolRequest::ListMembers { domain_id } => {
-            let target_id = domain_id
-                .as_deref()
-                .unwrap_or(crate::WORKSPACE_ROOT_ID);
+            let target_id = domain_id.as_deref().unwrap_or(crate::WORKSPACE_ROOT_ID);
 
             // Collect member IDs from legacy Domain storage or DomainNode tree storage
             let member_ids = if let Ok(Some(domain)) = kernel

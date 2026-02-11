@@ -389,7 +389,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         let first_office_is_default = default_count == 0;
 
         // Get the current tree nodes to add office/room nodes
-        let mut nodes = self.domain_operations.backend_tx_manager.get_all_nodes().await?;
+        let mut nodes = self
+            .domain_operations
+            .backend_tx_manager
+            .get_all_nodes()
+            .await?;
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -541,7 +545,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 );
 
                 // Add room to office's children (we'll update the office node before inserting)
-                nodes.entry(office_id.clone())
+                nodes
+                    .entry(office_id.clone())
                     .and_modify(|n| n.children.push(room_id.clone()))
                     .or_insert_with(|| {
                         let mut new_office = office_node.clone();

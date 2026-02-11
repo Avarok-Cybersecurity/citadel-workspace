@@ -1,5 +1,5 @@
-use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use citadel_workspace_types::structs::NodeEntityType;
+use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;

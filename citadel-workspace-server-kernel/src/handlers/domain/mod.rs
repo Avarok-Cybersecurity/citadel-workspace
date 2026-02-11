@@ -86,9 +86,7 @@ pub use user_ops::UserManagementOperations;
 /// ```
 #[auto_impl::auto_impl(Arc)]
 pub trait CompleteDomainOperations<R: Ratchet + Send + Sync + 'static>:
-    DomainOperations<R>
-    + UserManagementOperations<R>
-    + EntityOperations<R>
+    DomainOperations<R> + UserManagementOperations<R> + EntityOperations<R>
 {
     // This trait automatically combines all operation categories
     // No additional methods needed - all functionality comes from constituent traits

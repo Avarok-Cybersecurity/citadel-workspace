@@ -107,10 +107,7 @@ async fn test_office_room_permission_inheritance() {
     );
 
     let user_in_node = node.members.contains(&user_id.to_string());
-    assert!(
-        user_in_node,
-        "User should be in the office members list"
-    );
+    assert!(user_in_node, "User should be in the office members list");
 
     // Check permission inheritance - user should have view access to the room
     // because they are a member of the parent office
