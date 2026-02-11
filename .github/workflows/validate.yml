@@ -244,6 +244,8 @@ jobs:
             artifact: misc
           - test: test:account-mgmt
             artifact: account-mgmt
+          - test: test:hierarchy-nav
+            artifact: hierarchy-nav
     steps:
       - uses: actions/checkout@v4
         with:
