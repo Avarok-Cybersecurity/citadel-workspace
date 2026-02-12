@@ -18,7 +18,8 @@ ENV CHOKIDAR_INTERVAL=100
 ENV NODE_ENV=development
 
 # Run as non-root user for security hardening
-RUN addgroup -g 1000 appgroup && adduser -u 1000 -G appgroup -s /bin/sh -D appuser && \
+# Use GID/UID 1001 to avoid conflicts with Alpine's default GID 1000
+RUN addgroup -g 1001 appgroup && adduser -u 1001 -G appgroup -s /bin/sh -D appuser && \
     chown -R appuser:appgroup /app
 USER appuser
 
