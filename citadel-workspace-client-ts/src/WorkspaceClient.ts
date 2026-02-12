@@ -1,6 +1,6 @@
 import { InternalServiceWasmClient } from 'citadel-internal-service-wasm-client';
 import type { WasmClientConfig, InternalServiceRequest, InternalServiceResponse } from 'citadel-internal-service-wasm-client';
-import type { WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse } from './types/workspace-types';
+import type { WorkspaceProtocolPayload, WorkspaceProtocolRequest } from './types/workspace-types';
 import { WorkspaceAuth } from './auth';
 import { WorkspaceSessionManager, type SessionConfig } from './session';
 
@@ -14,7 +14,10 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   public readonly session: WorkspaceSessionManager;
   
   constructor(config: WorkspaceClientConfig) {
-    // Store reference to self for use in handler
+    // Store reference to self for use in the handler closure below.
+    // This is initialized after super() (line 114) since `this` is unavailable before super().
+    // The `if (self && self.session)` guards in the handler protect against the
+    // window where super() hasn't completed yet.
     let self: WorkspaceClient;
     
     // Wrap the message handler to handle workspace protocol messages
@@ -46,16 +49,19 @@ export class WorkspaceClient extends InternalServiceWasmClient {
           
           // Call the original handler with the modified message
           if (originalHandler) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- enriched message extends InternalServiceResponse with workspace fields
             originalHandler(modifiedMessage as any);
           }
         } catch (e) {
-          // If it's not a workspace protocol message, pass it through unchanged
+          // Not a workspace protocol message — pass through unchanged
+          console.warn('[WorkspaceClient] Failed to parse MessageNotification as workspace protocol:', e);
           if (originalHandler) {
             originalHandler(message);
           }
         }
       } else if ('MessageDelivered' in message) {
         // Also handle MessageDelivered which is used for workspace protocol responses
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MessageDelivered shape not in InternalServiceResponse types
         const delivered = message.MessageDelivered as any;
         if (delivered && delivered.contents && Array.isArray(delivered.contents)) {
           try {
@@ -80,10 +86,12 @@ export class WorkspaceClient extends InternalServiceWasmClient {
             
             // Call the original handler with the modified message
             if (originalHandler) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- enriched message extends InternalServiceResponse with workspace fields
               originalHandler(modifiedMessage as any);
             }
           } catch (e) {
-            // If it's not a workspace protocol message, pass it through unchanged
+            // Not a workspace protocol message — pass through unchanged
+            console.warn('[WorkspaceClient] Failed to parse MessageDelivered as workspace protocol:', e);
             if (originalHandler) {
               originalHandler(message);
             }
@@ -123,7 +131,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   async sendWorkspaceRequest(
     cid: string | bigint,
     request: WorkspaceProtocolRequest,
-    securityLevel: string = 'Standard'
+    securityLevel: 'Standard' | 'High' | 'Maximum' = 'Standard'
   ): Promise<void> {
     // Create the workspace protocol payload
     const payload: WorkspaceProtocolPayload = {
@@ -144,7 +152,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
         message: Array.from(messageBytes),
         cid: cidBigInt,
         peer_cid: null,
-        security_level: securityLevel as any
+        security_level: securityLevel
       }
     };
 
@@ -160,7 +168,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
     name: string,
     description: string,
     workspaceMasterPassword: string,
-    metadata?: number[]
+    metadata: number[] | null = null
   ): Promise<void> {
     await this.sendWorkspaceRequest(cid, {
       CreateWorkspace: {
@@ -203,6 +211,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
    * Override sendDirectToInternalService to automatically convert CID fields to BigInt
    * This ensures all requests sent to WASM have proper BigInt CIDs
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accepts both InternalServiceRequest and untyped WASM requests
   override async sendDirectToInternalService(request: any): Promise<void> {
     const converted = this.convertCidsToBigInt(request);
     await super.sendDirectToInternalService(converted);
@@ -212,16 +221,26 @@ export class WorkspaceClient extends InternalServiceWasmClient {
    * Recursively converts cid, peer_cid, and session_cid fields to BigInt
    * for WASM compatibility (serde-wasm-bindgen expects BigInt for u64 fields)
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- recursive object transform operates on unknown shapes
   private convertCidsToBigInt(obj: any): any {
     if (obj === null || obj === undefined) return obj;
     if (typeof obj !== 'object') return obj;
     if (Array.isArray(obj)) return obj.map(item => this.convertCidsToBigInt(item));
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- building result of unknown shape
     const result: any = {};
     for (const [key, value] of Object.entries(obj)) {
-      if ((key === 'cid' || key === 'peer_cid' || key === 'session_cid') && value !== null) {
-        // Convert string/number CID to BigInt
-        result[key] = typeof value === 'bigint' ? value : BigInt(value as string | number);
+      if ((key === 'cid' || key === 'peer_cid' || key === 'session_cid') && value !== null && value !== undefined) {
+        // Convert string/number CID to BigInt with validation
+        if (typeof value === 'bigint') {
+          result[key] = value;
+        } else {
+          try {
+            result[key] = BigInt(value as string | number);
+          } catch {
+            throw new Error(`Invalid CID value for ${key}: ${String(value)}`);
+          }
+        }
       } else if (typeof value === 'object') {
         result[key] = this.convertCidsToBigInt(value);
       } else {
@@ -234,8 +253,10 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   /**
    * Get the WASM module instance from parent class
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- WASM module lacks TypeScript type definitions
   getWasmModule(): any {
     // Access the private wasmModule field from parent class
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accessing private parent field
     return (this as any).wasmModule;
   }
 

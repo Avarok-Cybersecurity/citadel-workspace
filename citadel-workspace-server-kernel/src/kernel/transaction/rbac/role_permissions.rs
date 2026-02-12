@@ -60,11 +60,11 @@ pub fn retrieve_role_permissions(role: &UserRole, domain_type: &DomainType) -> V
                 }
                 DomainType::Child(type_name) => {
                     // Custom child types get intermediate permissions
-                    // Similar to Office-level permissions by default
                     permissions.push(Permission::UploadFiles);
                     permissions.push(Permission::DownloadFiles);
-                    // If it looks like an office-level type, add create child permissions
-                    if type_name != "Room" {
+                    // Non-leaf types can create child nodes (derived from schema SSOT)
+                    let schema = citadel_workspace_types::structs::TreeSchema::default();
+                    if !schema.is_leaf_type(type_name) {
                         permissions.push(Permission::CreateNode);
                         permissions.push(Permission::AddNode);
                     }

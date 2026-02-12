@@ -44,7 +44,7 @@ impl DomainEntity for Workspace {
             id: workspace_id,
             name: name.to_string(),
             description: description.to_string(),
-            owner_id: "".to_string(),
+            owner_id: crate::kernel::async_kernel::UNASSIGNED_OWNER.to_string(),
             members: vec![],
             offices: vec![],
             metadata: Vec::new(),

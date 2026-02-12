@@ -139,7 +139,11 @@ const MEMBER_RANK: u8 = 10;
 const GUEST_RANK: u8 = 5;
 const BANNED_RANK: u8 = 0;
 
-// Custom role thresholds
+// Custom role thresholds for permission escalation.
+// These are intentionally separate from the role ranks above — they define
+// the rank *above which* custom roles gain additional permissions.
+// Currently CUSTOM_BASIC_THRESHOLD == MEMBER_RANK, meaning custom roles
+// above Member rank get edit permissions.
 const CUSTOM_BASIC_THRESHOLD: u8 = 10;
 const CUSTOM_EDITOR_THRESHOLD: u8 = 15;
 
@@ -805,6 +809,130 @@ impl TreeSchema {
             .find(|r| r.parent_type == parent_type)
             .map(|r| r.allowed_child_types.clone())
             .unwrap_or_default()
+    }
+
+    /// Get types that are direct children of the root in the hierarchy.
+    /// The root type is the one that appears as a parent but never as a child.
+    /// In the default schema, this returns ["Office"].
+    pub fn root_child_types(&self) -> Vec<&str> {
+        let all_child_types: std::collections::HashSet<&str> = self
+            .rules
+            .iter()
+            .flat_map(|r| r.allowed_child_types.iter().map(|s| s.as_str()))
+            .collect();
+
+        for rule in &self.rules {
+            if !all_child_types.contains(rule.parent_type.as_str()) {
+                // This is the root type — return its allowed children
+                return rule
+                    .allowed_child_types
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect();
+            }
+        }
+        Vec::new()
+    }
+
+    /// Get all leaf types — types that have no allowed children.
+    pub fn leaf_types(&self) -> Vec<&str> {
+        self.rules
+            .iter()
+            .filter(|r| r.allowed_child_types.is_empty())
+            .map(|r| r.parent_type.as_str())
+            .collect()
+    }
+
+    /// Check if a type is a leaf type (has no allowed children in the schema).
+    pub fn is_leaf_type(&self, type_name: &str) -> bool {
+        self.rules
+            .iter()
+            .find(|r| r.parent_type == type_name)
+            .map(|r| r.allowed_child_types.is_empty())
+            .unwrap_or(false)
+    }
+
+    /// Get all entity type names defined in this schema (from rules).
+    pub fn all_entity_types(&self) -> Vec<&str> {
+        let mut types = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for rule in &self.rules {
+            if seen.insert(rule.parent_type.as_str()) {
+                types.push(rule.parent_type.as_str());
+            }
+            for child in &rule.allowed_child_types {
+                if seen.insert(child.as_str()) {
+                    types.push(child.as_str());
+                }
+            }
+        }
+        types
+    }
+
+    /// Derive `CustomNodeType` entries from the schema rules and entity_type_configs.
+    /// This is the SSOT for built-in node types — callers should use this instead of
+    /// hardcoding entity type names.
+    pub fn to_builtin_node_types(&self) -> Vec<CustomNodeType> {
+        let mut types = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        for rule in &self.rules {
+            // Add the parent type
+            if seen.insert(rule.parent_type.clone()) {
+                let config = self
+                    .entity_type_configs
+                    .iter()
+                    .find(|c| c.type_name == rule.parent_type);
+                let display_name = config
+                    .map(|c| c.label.clone())
+                    .unwrap_or_else(|| rule.parent_type.clone());
+                let icon = config.map(|c| c.icon.clone());
+
+                // Determine allowed parents by scanning other rules
+                let allowed_parents: Vec<String> = self
+                    .rules
+                    .iter()
+                    .filter(|r| r.allowed_child_types.contains(&rule.parent_type))
+                    .map(|r| r.parent_type.clone())
+                    .collect();
+
+                types.push(CustomNodeType {
+                    name: rule.parent_type.clone(),
+                    display_name,
+                    icon,
+                    allowed_parents,
+                });
+            }
+
+            // Add child types
+            for child_type in &rule.allowed_child_types {
+                if seen.insert(child_type.clone()) {
+                    let config = self
+                        .entity_type_configs
+                        .iter()
+                        .find(|c| c.type_name == *child_type);
+                    let display_name = config
+                        .map(|c| c.label.clone())
+                        .unwrap_or_else(|| child_type.clone());
+                    let icon = config.map(|c| c.icon.clone());
+
+                    let allowed_parents: Vec<String> = self
+                        .rules
+                        .iter()
+                        .filter(|r| r.allowed_child_types.contains(child_type))
+                        .map(|r| r.parent_type.clone())
+                        .collect();
+
+                    types.push(CustomNodeType {
+                        name: child_type.clone(),
+                        display_name,
+                        icon,
+                        allowed_parents,
+                    });
+                }
+            }
+        }
+        types
     }
 }
 

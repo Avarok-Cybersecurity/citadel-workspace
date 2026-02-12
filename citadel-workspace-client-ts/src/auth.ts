@@ -67,6 +67,7 @@ export class WorkspaceAuth {
           cid: BigInt(this.session.cid),
           request_id: crypto.randomUUID()
         }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- WASM interop: GetSession not in typed InternalServiceRequest
       } as any);
 
       // Wait for response
@@ -97,8 +98,9 @@ export class WorkspaceAuth {
           cid: BigInt(this.session.cid),
           request_id: crypto.randomUUID()
         }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- WASM interop: Disconnect not in typed InternalServiceRequest
       } as any);
-      
+
       await this.client.close();
     } catch (error) {
       console.error('Error during disconnect:', error);

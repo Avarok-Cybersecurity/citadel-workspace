@@ -160,6 +160,11 @@ export class WorkspaceSessionManager {
    * Handle workspace protocol responses
    */
   handleWorkspaceResponse(response: WorkspaceProtocolResponse): void {
+    // Guard against string variants (e.g. "WorkspaceNotInitialized") before using `in`
+    if (typeof response !== 'object' || response === null) {
+      return;
+    }
+
     if ('Workspace' in response) {
       const workspace = response.Workspace;
       // Update session with workspace info

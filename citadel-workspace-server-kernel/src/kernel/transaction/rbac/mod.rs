@@ -27,17 +27,24 @@ pub enum DomainType {
 }
 
 impl DomainType {
-    /// Create DomainType from a NodeEntityType
+    /// Create DomainType from a NodeEntityType.
+    /// Uses the TreeSchema (SSOT) to classify types as leaf or non-leaf
+    /// rather than hardcoding entity type names.
     pub fn from_node_entity_type(entity_type: &citadel_workspace_types::structs::NodeEntityType) -> Self {
-        use citadel_workspace_types::structs::NodeEntityType;
+        use citadel_workspace_types::structs::{NodeEntityType, TreeSchema};
         match entity_type {
             NodeEntityType::Workspace => DomainType::Workspace,
             NodeEntityType::Child(name) => {
-                // Map known types to their legacy variants for backward compatibility
-                match name.as_str() {
-                    "Office" => DomainType::Office,
-                    "Room" => DomainType::Room,
-                    _ => DomainType::Child(name.clone()),
+                let schema = TreeSchema::default();
+                if schema.is_leaf_type(name) {
+                    // Leaf types get leaf-level (Room) permissions
+                    DomainType::Room
+                } else if schema.all_entity_types().contains(&name.as_str()) {
+                    // Non-leaf schema types get branch-level (Office) permissions
+                    DomainType::Office
+                } else {
+                    // Unknown custom types
+                    DomainType::Child(name.clone())
                 }
             }
         }

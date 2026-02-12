@@ -6,7 +6,7 @@
 use crate::kernel::transaction::BackendTransactionManager;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{
-    Domain, DomainNode, NodeEntityType, Permission, User, UserRole, Workspace,
+    Domain, DomainNode, NodeEntityType, Permission, TreeSchema, User, UserRole, Workspace,
 };
 use std::sync::Arc;
 
@@ -58,12 +58,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncReadTransaction<R> {
         user_id: &str,
         workspace_id: Option<String>,
     ) -> Result<Vec<DomainNode>, NetworkError> {
+        // Derive "office" type names from the schema (SSOT) — these are direct children of root
+        let schema = TreeSchema::default();
+        let office_types = schema.root_child_types();
+
         let nodes = self.backend_tx_manager.get_all_nodes().await?;
         let mut offices = Vec::new();
 
         for (_, node) in nodes {
-            // Filter for Office nodes
-            if matches!(node.entity_type, NodeEntityType::Child(ref name) if name == "Office") {
+            // Filter for root-child types (Office equivalent) derived from schema
+            if matches!(node.entity_type, NodeEntityType::Child(ref name) if office_types.contains(&name.as_str())) {
                 // Check if user is a member
                 if node.members.contains(&user_id.to_string()) {
                     // Filter by workspace_id if provided
@@ -86,12 +90,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncReadTransaction<R> {
         user_id: &str,
         office_id: Option<String>,
     ) -> Result<Vec<DomainNode>, NetworkError> {
+        // Derive "room" type names from the schema (SSOT) — these are leaf types
+        let schema = TreeSchema::default();
+        let leaf_types = schema.leaf_types();
+
         let nodes = self.backend_tx_manager.get_all_nodes().await?;
         let mut rooms = Vec::new();
 
         for (_, node) in nodes {
-            // Filter for Room nodes
-            if matches!(node.entity_type, NodeEntityType::Child(ref name) if name == "Room") {
+            // Filter for leaf types (Room equivalent) derived from schema
+            if matches!(node.entity_type, NodeEntityType::Child(ref name) if leaf_types.contains(&name.as_str())) {
                 // Check if user is a member
                 if node.members.contains(&user_id.to_string()) {
                     // Filter by office_id if provided

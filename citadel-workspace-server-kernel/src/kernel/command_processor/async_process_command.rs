@@ -891,8 +891,6 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         }
 
         WorkspaceProtocolRequest::ListNodeTypes => {
-            use citadel_workspace_types::structs::CustomNodeType;
-
             // Get the schema to extract node types
             let schema = kernel
                 .domain_operations
@@ -900,51 +898,8 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 .get_tree_schema_or_default()
                 .await?;
 
-            // Extract all unique node types from the schema rules
-            let mut node_types = Vec::new();
-            let mut seen_types = std::collections::HashSet::new();
-
-            // Add built-in types
-            let builtin_types = vec![
-                CustomNodeType {
-                    name: "Workspace".to_string(),
-                    display_name: "Workspace".to_string(),
-                    icon: None,
-                    allowed_parents: vec![], // Root only
-                },
-                CustomNodeType {
-                    name: "Office".to_string(),
-                    display_name: "Office".to_string(),
-                    icon: None,
-                    allowed_parents: vec!["Workspace".to_string()],
-                },
-                CustomNodeType {
-                    name: "Room".to_string(),
-                    display_name: "Room".to_string(),
-                    icon: None,
-                    allowed_parents: vec!["Office".to_string()],
-                },
-            ];
-
-            for bt in builtin_types {
-                seen_types.insert(bt.name.clone());
-                node_types.push(bt);
-            }
-
-            // Add custom types from schema
-            for rule in &schema.rules {
-                for child_type in &rule.allowed_child_types {
-                    if !seen_types.contains(child_type) {
-                        seen_types.insert(child_type.clone());
-                        node_types.push(CustomNodeType {
-                            name: child_type.clone(),
-                            display_name: child_type.clone(),
-                            icon: None,
-                            allowed_parents: vec![rule.parent_type.clone()],
-                        });
-                    }
-                }
-            }
+            // Derive node types from the schema (SSOT) instead of hardcoding
+            let node_types = schema.to_builtin_node_types();
 
             Ok(WorkspaceProtocolResponse::NodeTypes(node_types))
         }

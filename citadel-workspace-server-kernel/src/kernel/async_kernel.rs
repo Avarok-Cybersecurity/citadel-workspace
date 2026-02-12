@@ -126,8 +126,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             response,
             exclude_cid,
         };
-        // Ignore errors (no receivers is fine)
-        let _ = self.broadcast_tx.send(msg);
+        if let Err(e) = self.broadcast_tx.send(msg) {
+            // Only log when there are active receivers (0 receivers at startup is expected)
+            if self.broadcast_tx.receiver_count() > 0 {
+                warn!(target: "citadel", "Failed to broadcast workspace update: {}", e);
+            }
+        }
     }
 
     /// Create a kernel with admin user for testing
@@ -401,6 +405,20 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .expect("system clock before unix epoch")
             .as_secs();
 
+        // Derive entity type names from the schema (SSOT) instead of hardcoding
+        use citadel_workspace_types::structs::TreeSchema;
+        let schema = TreeSchema::default();
+        let root_child_types = schema.root_child_types();
+        let office_entity_type = root_child_types
+            .first()
+            .expect("schema must define at least one root child type")
+            .to_string();
+        let office_child_types = schema.get_allowed_children(&office_entity_type);
+        let room_entity_type = office_child_types
+            .first()
+            .cloned()
+            .expect("schema must define at least one child type for office-level nodes");
+
         for (idx, office_config) in config.offices.iter().enumerate() {
             // Determine if this office should be the default
             let is_default = if first_office_is_default {
@@ -452,7 +470,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             let office_node = DomainNode {
                 id: office_id.clone(),
                 parent_id: Some(crate::WORKSPACE_ROOT_ID.to_string()),
-                entity_type: NodeEntityType::Child("Office".to_string()),
+                entity_type: NodeEntityType::Child(office_entity_type.clone()),
                 depth: 1,
                 name: office_config.name.clone(),
                 description: office_config.description.clone().unwrap_or_default(),
@@ -465,7 +483,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 chat_channel_id,
                 default_permissions: office_config.default_permissions.clone(),
                 metadata: Vec::new(),
-                allowed_child_types: Some(vec!["Room".to_string()]),
+                allowed_child_types: Some(schema.get_allowed_children(&office_entity_type)),
                 is_default,
                 created_at: current_time,
                 updated_at: current_time,
@@ -527,7 +545,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 let room_node = DomainNode {
                     id: room_id.clone(),
                     parent_id: Some(office_id.clone()),
-                    entity_type: NodeEntityType::Child("Room".to_string()),
+                    entity_type: NodeEntityType::Child(room_entity_type.clone()),
                     depth: 2,
                     name: room_config.name.clone(),
                     description: room_config.description.clone().unwrap_or_default(),
@@ -540,7 +558,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                     chat_channel_id: room_chat_channel_id,
                     default_permissions: room_config.default_permissions.clone(),
                     metadata: Vec::new(),
-                    allowed_child_types: Some(vec![]),
+                    allowed_child_types: Some(schema.get_allowed_children(&room_entity_type)),
                     is_default: false,
                     created_at: current_time,
                     updated_at: current_time,
@@ -656,7 +674,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     let user_id = account_manager
                         .get_username_by_cid(connect_success.session_cid)
                         .await?
-                        .ok_or_else(|| NetworkError::Generic("User not found".to_string()))?;
+                        .ok_or_else(|| NetworkError::Generic(format!("User not found for CID {}", connect_success.session_cid)))?;
 
                     info!(target: "citadel", "[ASYNC_KERNEL] User {} connected with cid {} ({})", user_id, connect_success.session_cid, user_cid);
 
