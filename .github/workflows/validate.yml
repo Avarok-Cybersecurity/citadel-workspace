@@ -272,7 +272,7 @@ jobs:
       - name: Start Services
         env:
           INTERNAL_SERVICE_PORT: '12345'
-        run: docker compose up -d --wait
+        run: docker compose up -d --build --wait
       - name: Dump Service Logs on Start Failure
         if: failure()
         run: |
