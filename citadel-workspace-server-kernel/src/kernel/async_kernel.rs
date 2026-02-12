@@ -674,7 +674,12 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     let user_id = account_manager
                         .get_username_by_cid(connect_success.session_cid)
                         .await?
-                        .ok_or_else(|| NetworkError::Generic(format!("User not found for CID {}", connect_success.session_cid)))?;
+                        .ok_or_else(|| {
+                            NetworkError::Generic(format!(
+                                "User not found for CID {}",
+                                connect_success.session_cid
+                            ))
+                        })?;
 
                     info!(target: "citadel", "[ASYNC_KERNEL] User {} connected with cid {} ({})", user_id, connect_success.session_cid, user_cid);
 

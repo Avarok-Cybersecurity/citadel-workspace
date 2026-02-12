@@ -106,35 +106,59 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     // ========== Typed Accessors (delegate to generic helpers) ==========
 
     pub async fn get_all_domains(&self) -> Result<HashMap<String, Domain>, NetworkError> {
-        Ok(self.backend_get("citadel_workspace.domains").await?.unwrap_or_default())
+        Ok(self
+            .backend_get("citadel_workspace.domains")
+            .await?
+            .unwrap_or_default())
     }
 
     pub async fn get_all_users(&self) -> Result<HashMap<String, User>, NetworkError> {
-        Ok(self.backend_get("citadel_workspace.users").await?.unwrap_or_default())
+        Ok(self
+            .backend_get("citadel_workspace.users")
+            .await?
+            .unwrap_or_default())
     }
 
     pub async fn get_all_workspaces(&self) -> Result<HashMap<String, Workspace>, NetworkError> {
-        Ok(self.backend_get("citadel_workspace.workspaces").await?.unwrap_or_default())
+        Ok(self
+            .backend_get("citadel_workspace.workspaces")
+            .await?
+            .unwrap_or_default())
     }
 
     pub async fn get_all_passwords(&self) -> Result<HashMap<String, String>, NetworkError> {
-        Ok(self.backend_get("citadel_workspace.passwords").await?.unwrap_or_default())
+        Ok(self
+            .backend_get("citadel_workspace.passwords")
+            .await?
+            .unwrap_or_default())
     }
 
-    pub async fn save_domains(&self, domains: &HashMap<String, Domain>) -> Result<(), NetworkError> {
-        self.backend_save("citadel_workspace.domains", domains).await
+    pub async fn save_domains(
+        &self,
+        domains: &HashMap<String, Domain>,
+    ) -> Result<(), NetworkError> {
+        self.backend_save("citadel_workspace.domains", domains)
+            .await
     }
 
     pub async fn save_users(&self, users: &HashMap<String, User>) -> Result<(), NetworkError> {
         self.backend_save("citadel_workspace.users", users).await
     }
 
-    pub async fn save_workspaces(&self, workspaces: &HashMap<String, Workspace>) -> Result<(), NetworkError> {
-        self.backend_save("citadel_workspace.workspaces", workspaces).await
+    pub async fn save_workspaces(
+        &self,
+        workspaces: &HashMap<String, Workspace>,
+    ) -> Result<(), NetworkError> {
+        self.backend_save("citadel_workspace.workspaces", workspaces)
+            .await
     }
 
-    pub async fn save_passwords(&self, passwords: &HashMap<String, String>) -> Result<(), NetworkError> {
-        self.backend_save("citadel_workspace.passwords", passwords).await
+    pub async fn save_passwords(
+        &self,
+        passwords: &HashMap<String, String>,
+    ) -> Result<(), NetworkError> {
+        self.backend_save("citadel_workspace.passwords", passwords)
+            .await
     }
 
     // ========== Group Messaging Storage ==========
@@ -143,7 +167,10 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         format!("citadel_workspace.group_messages.{}", group_id)
     }
 
-    pub async fn get_group_messages(&self, group_id: &str) -> Result<Vec<GroupMessage>, NetworkError> {
+    pub async fn get_group_messages(
+        &self,
+        group_id: &str,
+    ) -> Result<Vec<GroupMessage>, NetworkError> {
         let key = Self::group_messages_key(group_id);
         Ok(self.backend_get(&key).await?.unwrap_or_default())
     }
@@ -199,7 +226,11 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(thread_messages)
     }
 
-    async fn save_group_messages(&self, group_id: &str, messages: &[GroupMessage]) -> Result<(), NetworkError> {
+    async fn save_group_messages(
+        &self,
+        group_id: &str,
+        messages: &[GroupMessage],
+    ) -> Result<(), NetworkError> {
         let key = Self::group_messages_key(group_id);
         self.backend_save(&key, &messages).await
     }
@@ -302,10 +333,16 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     // ========== DomainNode (Generalized Tree Hierarchy) Storage ==========
 
     pub async fn get_all_nodes(&self) -> Result<HashMap<String, DomainNode>, NetworkError> {
-        Ok(self.backend_get("citadel_workspace.nodes").await?.unwrap_or_default())
+        Ok(self
+            .backend_get("citadel_workspace.nodes")
+            .await?
+            .unwrap_or_default())
     }
 
-    pub async fn save_nodes(&self, nodes: &HashMap<String, DomainNode>) -> Result<(), NetworkError> {
+    pub async fn save_nodes(
+        &self,
+        nodes: &HashMap<String, DomainNode>,
+    ) -> Result<(), NetworkError> {
         self.backend_save("citadel_workspace.nodes", nodes).await
     }
 
@@ -314,6 +351,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     }
 
     pub async fn save_tree_schema(&self, schema: &TreeSchema) -> Result<(), NetworkError> {
-        self.backend_save("citadel_workspace.tree_schema", schema).await
+        self.backend_save("citadel_workspace.tree_schema", schema)
+            .await
     }
 }

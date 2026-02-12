@@ -67,7 +67,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncReadTransaction<R> {
 
         for (_, node) in nodes {
             // Filter for root-child types (Office equivalent) derived from schema
-            if matches!(node.entity_type, NodeEntityType::Child(ref name) if office_types.contains(&name.as_str())) {
+            if matches!(node.entity_type, NodeEntityType::Child(ref name) if office_types.contains(&name.as_str()))
+            {
                 // Check if user is a member
                 if node.members.contains(&user_id.to_string()) {
                     // Filter by workspace_id if provided
@@ -99,7 +100,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncReadTransaction<R> {
 
         for (_, node) in nodes {
             // Filter for leaf types (Room equivalent) derived from schema
-            if matches!(node.entity_type, NodeEntityType::Child(ref name) if leaf_types.contains(&name.as_str())) {
+            if matches!(node.entity_type, NodeEntityType::Child(ref name) if leaf_types.contains(&name.as_str()))
+            {
                 // Check if user is a member
                 if node.members.contains(&user_id.to_string()) {
                     // Filter by office_id if provided
