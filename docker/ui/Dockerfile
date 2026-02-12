@@ -17,6 +17,11 @@ ENV CHOKIDAR_USEPOLLING=true
 ENV CHOKIDAR_INTERVAL=100
 ENV NODE_ENV=development
 
+# Run as non-root user for security hardening
+RUN addgroup -g 1000 appgroup && adduser -u 1000 -G appgroup -s /bin/sh -D appuser && \
+    chown -R appuser:appgroup /app
+USER appuser
+
 # Expose Vite dev server port
 EXPOSE 5173
 

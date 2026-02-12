@@ -5,6 +5,7 @@
 use crate::handlers::domain::async_ops::AsyncWorkspaceOperations;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use citadel_logging::{debug, info, warn};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::WorkspaceMetadata;
 
@@ -26,33 +27,27 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
     actor_user_id: &str,
     requester_cid: Option<u64>,
 ) -> Result<WorkspaceProtocolResponse, NetworkError> {
-    println!("[ASYNC_PROCESS_COMMAND] Processing command: {command:?} for user: {actor_user_id}");
+    debug!(target: "citadel", "Processing command: {command:?} for user: {actor_user_id}");
 
     match command {
         // Workspace Commands
         WorkspaceProtocolRequest::GetWorkspace { workspace_id } => {
             let target_id = workspace_id.as_deref().unwrap_or(crate::WORKSPACE_ROOT_ID);
-            println!(
-                "[ASYNC_PROCESS_COMMAND] GetWorkspace({}) for user: {}",
-                target_id, actor_user_id
-            );
+            debug!(target: "citadel", "GetWorkspace({}) for user: {}", target_id, actor_user_id);
             match kernel
                 .domain_ops()
                 .get_workspace(actor_user_id, target_id)
                 .await
             {
                 Ok(workspace) => {
-                    println!(
-                        "[ASYNC_PROCESS_COMMAND] Workspace found: {:?}",
-                        workspace.id
-                    );
+                    debug!(target: "citadel", "Workspace found: {:?}", workspace.id);
                     Ok(WorkspaceProtocolResponse::Workspace(workspace))
                 }
                 Err(e) => {
                     let error_msg = e.to_string();
-                    println!("[ASYNC_PROCESS_COMMAND] GetWorkspace error: {}", error_msg);
+                    warn!(target: "citadel", "GetWorkspace error: {}", error_msg);
                     if error_msg.contains("not found") || error_msg.contains("Not a member") {
-                        println!("[ASYNC_PROCESS_COMMAND] Returning WorkspaceNotInitialized");
+                        info!(target: "citadel", "Returning WorkspaceNotInitialized");
                         Ok(WorkspaceProtocolResponse::WorkspaceNotInitialized)
                     } else {
                         Ok(WorkspaceProtocolResponse::Error(format!(
@@ -65,16 +60,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         }
 
         WorkspaceProtocolRequest::ListWorkspaces => {
-            println!(
-                "[ASYNC_PROCESS_COMMAND] ListWorkspaces for user: {}",
-                actor_user_id
-            );
+            debug!(target: "citadel", "ListWorkspaces for user: {}", actor_user_id);
             match kernel.domain_ops().list_workspaces(actor_user_id).await {
                 Ok(workspaces) => {
-                    println!(
-                        "[ASYNC_PROCESS_COMMAND] Found {} accessible workspaces",
-                        workspaces.len()
-                    );
+                    debug!(target: "citadel", "Found {} accessible workspaces", workspaces.len());
                     let metadata: Vec<WorkspaceMetadata> =
                         workspaces.iter().map(WorkspaceMetadata::from).collect();
                     Ok(WorkspaceProtocolResponse::Workspaces(metadata))
@@ -418,7 +407,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 content: content.clone(),
                 timestamp: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .expect("system clock before unix epoch")
                     .as_millis() as u64,
                 reply_to: reply_to.clone(),
                 reply_count: 0,
@@ -478,7 +467,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
 
                     let edited_at = std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
+                        .expect("system clock before unix epoch")
                         .as_millis() as u64;
 
                     match kernel

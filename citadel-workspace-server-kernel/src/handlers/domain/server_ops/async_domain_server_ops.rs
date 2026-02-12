@@ -7,6 +7,7 @@ use crate::handlers::domain::async_ops::*;
 use crate::handlers::domain::core::DomainEntity;
 use crate::kernel::transaction::BackendTransactionManager;
 use async_trait::async_trait;
+use citadel_logging::info;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, Ratchet};
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
 use citadel_workspace_types::UpdateOperation;
@@ -718,10 +719,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
 
         // If workspace has no owner, the first user with master password becomes the owner
         if workspace.owner_id.is_empty() {
-            println!(
-                "[UPDATE_WORKSPACE] No owner set - assigning {} as workspace owner",
-                user_id
-            );
+            info!(target: "citadel", "No owner set - assigning {} as workspace owner", user_id);
             workspace.owner_id = user_id.to_string();
         }
 

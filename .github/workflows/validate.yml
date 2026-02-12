@@ -189,7 +189,7 @@ jobs:
           ln -sf ${{ github.workspace }}/node_modules/@eslint/js node_modules/@eslint/js
           ln -sf ${{ github.workspace }}/node_modules/globals node_modules/globals
           ln -sf ${{ github.workspace }}/node_modules/typescript-eslint node_modules/typescript-eslint
-          ${{ github.workspace }}/node_modules/.bin/eslint .
+          ${{ github.workspace }}/node_modules/.bin/eslint . --max-warnings 0
         working-directory: ${{ matrix.path }}
 
   integration-tests:

@@ -1,3 +1,4 @@
+use citadel_logging::info;
 use citadel_sdk::prelude::{BackendHandler, NetworkError, NodeRemote, ProtocolRemoteExt, Ratchet};
 use citadel_workspace_types::structs::{Domain, DomainNode, TreeSchema, User, Workspace};
 use citadel_workspace_types::GroupMessage;
@@ -24,9 +25,7 @@ impl<R: Ratchet + Send + Sync + 'static> Default for BackendTransactionManager<R
 
 impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     pub fn new() -> Self {
-        println!(
-            "[BTM_NEW_PRINTLN] Initializing BackendTransactionManager with NodeRemote backend..."
-        );
+        info!(target: "citadel", "Initializing BackendTransactionManager with NodeRemote backend");
 
         Self {
             node_remote: Arc::new(RwLock::new(None)),

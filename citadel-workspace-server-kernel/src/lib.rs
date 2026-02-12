@@ -21,6 +21,9 @@ pub mod config {
         pub bind_addr: String,
         pub dangerous_skip_cert_verification: Option<bool>,
         pub backend: Option<String>,
+        /// Workspace master password. Can be overridden by WORKSPACE_MASTER_PASSWORD env var.
+        /// Server refuses to start if neither config nor env var provides a non-empty password.
+        #[serde(default)]
         pub workspace_master_password: String,
         /// Path to the workspace structure JSON file (relative to kernel.toml)
         /// DEPRECATED: Use content_base_dir instead

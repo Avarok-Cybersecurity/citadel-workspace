@@ -1,6 +1,6 @@
 # syntax=docker.io/docker/dockerfile:1.7-labs
 # Base image with Rust
-FROM rust:latest
+FROM rust:1.92.0
 
 WORKDIR /usr/src/app
 ARG INTERNAL_SERVICE_PORT
@@ -29,6 +29,11 @@ RUN cargo build --release --bin citadel-workspace-internal-service --features de
 
 # Copy binary to /usr/local/bin to avoid being shadowed by target_cache volume mount
 RUN cp ./target/release/citadel-workspace-internal-service /usr/local/bin/
+
+# Run as non-root user for security hardening
+RUN useradd -m -u 1000 appuser
+RUN chown appuser /usr/local/bin/citadel-workspace-internal-service
+USER appuser
 
 # Run the pre-built internal service binary
 CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind 0.0.0.0:${INTERNAL_SERVICE_PORT}"]

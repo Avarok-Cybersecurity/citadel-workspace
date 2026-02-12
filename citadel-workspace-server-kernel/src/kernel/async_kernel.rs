@@ -7,7 +7,7 @@ use crate::config::{FileTransferConfig, WorkspaceStructureConfig};
 use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
 use crate::kernel::transaction::BackendTransactionManager;
 use crate::WorkspaceProtocolResponse;
-use citadel_logging::info;
+use citadel_logging::{error, info, warn};
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, ObjectTransferStatus, Ratchet};
 use parking_lot::RwLock;
 use std::path::PathBuf;
@@ -59,7 +59,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
 impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// Create a new AsyncWorkspaceServerKernel with backend persistence
     pub fn new(node_remote: Option<NodeRemote<R>>) -> Self {
-        println!("[ASYNC_KERNEL] Creating AsyncWorkspaceServerKernel with backend persistence");
+        info!(target: "citadel", "Creating AsyncWorkspaceServerKernel with backend persistence");
 
         let node_remote_arc = Arc::new(RwLock::new(node_remote));
 
@@ -161,13 +161,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         workspace_structure: Option<(WorkspaceStructureConfig, Option<PathBuf>)>,
         file_transfer_config: Option<FileTransferConfig>,
     ) -> Result<Self, NetworkError> {
-        println!("[ASYNC_KERNEL] Creating AsyncWorkspaceServerKernel with admin user");
+        info!(target: "citadel", "Creating AsyncWorkspaceServerKernel with admin user");
 
         let mut kernel = Self::with_file_transfer_config(None, file_transfer_config);
 
         // Log file transfer config
-        println!(
-            "[ASYNC_KERNEL] File transfer config: allow_server_file_transfer={}, allow_server_revfs_storage={}, max_size={}MB, quota={}MB",
+        info!(
+            target: "citadel",
+            "File transfer config: allow_server_file_transfer={}, allow_server_revfs_storage={}, max_size={}MB, quota={}MB",
             kernel.file_transfer_config.allow_server_file_transfer,
             kernel.file_transfer_config.allow_server_revfs_storage,
             kernel.file_transfer_config.max_file_transfer_size_mb,
@@ -182,14 +183,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         kernel.domain_operations.backend_tx_manager.init().await?;
 
         // Don't inject admin here - wait until on_start when NodeRemote is available
-        println!("[ASYNC_KERNEL] Deferring admin injection until NodeRemote is available");
+        info!(target: "citadel", "Deferring admin injection until NodeRemote is available");
 
         Ok(kernel)
     }
 
     /// Set the NodeRemote instance
     pub fn set_node_remote(&self, node_remote: NodeRemote<R>) {
-        println!("[ASYNC_KERNEL] Setting NodeRemote in kernel and domain operations");
+        info!(target: "citadel", "Setting NodeRemote in kernel and domain operations");
         *self.node_remote.write() = Some(node_remote.clone());
         self.domain_operations
             .backend_tx_manager
@@ -202,12 +203,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         &self,
         workspace_master_password: &str,
     ) -> Result<(), NetworkError> {
-        println!("[ASYNC_KERNEL] Initializing root workspace (no pre-created admin user)");
+        info!(target: "citadel", "Initializing root workspace (no pre-created admin user)");
 
         // Pre-populate the master password BEFORE any workspace checks
         // This ensures first-time initialization via CreateWorkspace can validate the password
         if !workspace_master_password.is_empty() {
-            println!("[ASYNC_KERNEL] Pre-populating master password for root workspace");
+            info!(target: "citadel", "Pre-populating master password for root workspace");
             self.domain_operations
                 .backend_tx_manager
                 .set_workspace_password(crate::WORKSPACE_ROOT_ID, workspace_master_password)
@@ -218,13 +219,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         let workspace_exists = self.get_domain(crate::WORKSPACE_ROOT_ID).await?.is_some();
 
         if !workspace_exists {
-            println!("[ASYNC_KERNEL] Creating root workspace with no owner (first user with master password becomes admin)");
+            info!(target: "citadel", "Creating root workspace with no owner (first user with master password becomes admin)");
 
             // Debug: Check current storage mode
             if self.domain_operations.backend_tx_manager.is_test_mode() {
-                println!("[ASYNC_KERNEL] WARNING: Creating workspace in test storage mode!");
+                warn!(target: "citadel", "Creating workspace in test storage mode!");
             } else {
-                println!("[ASYNC_KERNEL] Creating workspace in backend storage mode");
+                info!(target: "citadel", "Creating workspace in backend storage mode");
             }
 
             // Create root workspace object with no owner - first user with master password claims it
@@ -257,13 +258,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 )
                 .await?;
 
-            println!("[ASYNC_KERNEL] Setting workspace password for root workspace");
+            info!(target: "citadel", "Setting workspace password for root workspace");
             self.domain_operations
                 .backend_tx_manager
                 .set_workspace_password(crate::WORKSPACE_ROOT_ID, workspace_master_password)
                 .await?;
 
-            println!("[ASYNC_KERNEL] Root workspace created successfully (awaiting first admin)");
+            info!(target: "citadel", "Root workspace created successfully (awaiting first admin)");
         }
 
         Ok(())
@@ -371,8 +372,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         use citadel_workspace_types::structs::{DomainNode, NodeEntityType};
         use uuid::Uuid;
 
-        println!(
-            "[ASYNC_KERNEL] Initializing workspace structure: {} with {} offices",
+        info!(
+            target: "citadel",
+            "Initializing workspace structure: {} with {} offices",
             config.name,
             config.offices.len()
         );
@@ -396,7 +398,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .await?;
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("system clock before unix epoch")
             .as_secs();
 
         for (idx, office_config) in config.offices.iter().enumerate() {
@@ -419,15 +421,17 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
                 match std::fs::read_to_string(&full_path) {
                     Ok(content) => {
-                        println!(
-                            "[ASYNC_KERNEL] Loaded markdown for office '{}': {:?}",
+                        info!(
+                            target: "citadel",
+                            "Loaded markdown for office '{}': {:?}",
                             office_config.name, full_path
                         );
                         content
                     }
                     Err(e) => {
-                        println!(
-                            "[ASYNC_KERNEL] Warning: Failed to load markdown for office '{}': {}",
+                        warn!(
+                            target: "citadel",
+                            "Failed to load markdown for office '{}': {}",
                             office_config.name, e
                         );
                         String::new()
@@ -467,8 +471,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 updated_at: current_time,
             };
 
-            println!(
-                "[ASYNC_KERNEL] Creating office node '{}' (id: {}, chat_enabled: {}, is_default: {})",
+            info!(
+                target: "citadel",
+                "Creating office node '{}' (id: {}, chat_enabled: {}, is_default: {})",
                 office_config.name, office_id, office_config.chat_enabled, is_default
             );
 
@@ -491,15 +496,17 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
                     match std::fs::read_to_string(&full_path) {
                         Ok(content) => {
-                            println!(
-                                "[ASYNC_KERNEL] Loaded markdown for room '{}': {:?}",
+                            info!(
+                                target: "citadel",
+                                "Loaded markdown for room '{}': {:?}",
                                 room_config.name, full_path
                             );
                             content
                         }
                         Err(e) => {
-                            println!(
-                                "[ASYNC_KERNEL] Warning: Failed to load markdown for room '{}': {}",
+                            warn!(
+                                target: "citadel",
+                                "Failed to load markdown for room '{}': {}",
                                 room_config.name, e
                             );
                             String::new()
@@ -539,8 +546,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                     updated_at: current_time,
                 };
 
-                println!(
-                    "[ASYNC_KERNEL] Creating room node '{}' in office '{}' (id: {}, chat_enabled: {})",
+                info!(
+                    target: "citadel",
+                    "Creating room node '{}' in office '{}' (id: {}, chat_enabled: {})",
                     room_config.name, office_config.name, room_id, room_config.chat_enabled
                 );
 
@@ -568,7 +576,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .save_nodes(&nodes)
             .await?;
 
-        println!("[ASYNC_KERNEL] Workspace structure initialization complete");
+        info!(target: "citadel", "Workspace structure initialization complete");
         Ok(())
     }
 }
@@ -579,7 +587,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
     for AsyncWorkspaceServerKernel<R>
 {
     fn load_remote(&mut self, server_remote: NodeRemote<R>) -> Result<(), NetworkError> {
-        println!("[ASYNC_KERNEL] Loading NodeRemote into AsyncWorkspaceServerKernel");
+        info!(target: "citadel", "Loading NodeRemote into AsyncWorkspaceServerKernel");
 
         // Set in both places
         *self.node_remote.write() = Some(server_remote.clone());
@@ -591,19 +599,19 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
     }
 
     async fn on_start(&self) -> Result<(), NetworkError> {
-        println!("[ASYNC_KERNEL] NetKernel started");
+        info!(target: "citadel", "NetKernel started");
 
         // Re-run admin injection now that NodeRemote is available
         if self.domain_operations.backend_tx_manager.is_test_mode() {
-            println!("[ASYNC_KERNEL] ERROR: NodeRemote not set after node start!");
+            error!(target: "citadel", "NodeRemote not set after node start!");
         } else if let Some(workspace_password) = &self.workspace_password {
-            println!("[ASYNC_KERNEL] NodeRemote is available, injecting admin and workspace");
+            info!(target: "citadel", "NodeRemote is available, injecting admin and workspace");
             // Inject admin now that we have backend storage
             self.inject_admin_user(workspace_password).await?;
 
             // Initialize workspace structure from config if provided
             if let Some((structure, base_path)) = &self.workspace_structure {
-                println!("[ASYNC_KERNEL] Initializing workspace structure from config");
+                info!(target: "citadel", "Initializing workspace structure from config");
                 self.initialize_workspace_structure(structure, base_path.as_deref())
                     .await?;
             }
@@ -653,24 +661,22 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     info!(target: "citadel", "[ASYNC_KERNEL] User {} connected with cid {} ({})", user_id, connect_success.session_cid, user_cid);
 
                     // Check if user is already in workspace domain
-                    println!("[ASYNC_KERNEL] Checking for root workspace...");
+                    debug!(target: "citadel", "Checking for root workspace...");
 
                     // Debug: Check current storage mode
                     if this.domain_operations.backend_tx_manager.is_test_mode() {
-                        println!(
-                            "[ASYNC_KERNEL] WARNING: Checking workspace in test storage mode!"
-                        );
+                        warn!(target: "citadel", "Checking workspace in test storage mode!");
                     } else {
-                        println!("[ASYNC_KERNEL] Checking workspace in backend storage mode");
+                        debug!(target: "citadel", "Checking workspace in backend storage mode");
                     }
 
                     let workspace = match this.get_domain(crate::WORKSPACE_ROOT_ID).await? {
                         Some(domain) => {
-                            println!("[ASYNC_KERNEL] Root workspace found");
+                            debug!(target: "citadel", "Root workspace found");
                             domain
                         }
                         None => {
-                            error!(target: "citadel", "[ASYNC_KERNEL] Root workspace not found for user {}", user_id);
+                            error!(target: "citadel", "Root workspace not found for user {}", user_id);
 
                             // Debug: Let's check what domains exist
                             let all_domains = this
@@ -678,8 +684,9 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                 .backend_tx_manager
                                 .get_all_domains()
                                 .await?;
-                            println!(
-                                "[ASYNC_KERNEL] Available domains: {:?}",
+                            debug!(
+                                target: "citadel",
+                                "Available domains: {:?}",
                                 all_domains.keys().collect::<Vec<_>>()
                             );
 
@@ -922,7 +929,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
     }
 
     async fn on_stop(&mut self) -> Result<(), NetworkError> {
-        println!("[ASYNC_KERNEL] NetKernel stopping");
+        info!(target: "citadel", "NetKernel stopping");
         Ok(())
     }
 }

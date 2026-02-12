@@ -29,6 +29,12 @@ services:
       - target_cache:/usr/src/app/target
     environment:
       - RUST_LOG=citadel=info
+      - WORKSPACE_MASTER_PASSWORD=${WORKSPACE_MASTER_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
     healthcheck:
       test: [ "CMD", "nc", "-z", "127.0.0.1", "12349" ]
       interval: 30s
@@ -54,6 +60,11 @@ services:
       - RUST_LOG=citadel=debug
       - DOCKER_CONTAINER=1
       - SKIP_WASM_BUILD=1
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
     healthcheck:
       test: ["CMD-SHELL", "netstat -tuln | grep -q \":$${INTERNAL_SERVICE_PORT}\" || exit 1"]
       interval: 30s
@@ -105,6 +116,11 @@ services:
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
       - CHOKIDAR_INTERVAL=100
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
     depends_on:
       sync-wasm-client:
         condition: service_completed_successfully

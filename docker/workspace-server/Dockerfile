@@ -1,6 +1,6 @@
 # syntax=docker.io/docker/dockerfile:1.7-labs
 # Base image with Rust
-FROM rust:latest
+FROM rust:1.92.0
 
 WORKDIR /usr/src/app
 
@@ -39,6 +39,13 @@ RUN cargo build --release --bin citadel-workspace-server-kernel
 # The docker-compose.yml mounts a volume at /usr/src/app/target for cargo caching,
 # which would hide the binary built in the image. This copy ensures the binary is available.
 RUN cp ./target/release/citadel-workspace-server-kernel /usr/local/bin/
+
+# Run as non-root user for security hardening
+RUN useradd -m -u 1000 appuser
+RUN chown appuser /usr/local/bin/citadel-workspace-server-kernel && \
+    chown appuser /usr/src/app/kernel.toml && \
+    chown -R appuser /usr/src/app/documents
+USER appuser
 
 # Run the workspace server from /usr/local/bin (not shadowed by volume mounts)
 CMD ["/usr/local/bin/citadel-workspace-server-kernel", "--config", "/usr/src/app/kernel.toml"]

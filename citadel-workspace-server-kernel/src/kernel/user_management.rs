@@ -1,5 +1,6 @@
 use super::core::WorkspaceServerKernel;
 use crate::kernel::transaction::{Transaction, TransactionManagerExt};
+use citadel_logging::{debug, info};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{User, UserRole};
 
@@ -20,19 +21,13 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
                 // For tests, if user already exists, we might not want to error out,
                 // or we might want a specific error. For now, let's allow re-injection to be idempotent for simplicity.
                 // If strict "already exists" is needed, return Err(NetworkError::user_exists(username));
-                println!(
-                    "[INJECT_USER_FOR_TEST] User {} already exists. Skipping creation.",
-                    username
-                );
+                debug!(target: "citadel", "User {} already exists. Skipping creation.", username);
                 return Ok(());
             }
             // Use username for both id and name for simplicity in tests
             let user = User::new(user_id_string.clone(), user_id_string.clone(), role.clone()); // Clone role here
             tx.insert_user(username.to_string(), user)?;
-            println!(
-                "[INJECT_USER_FOR_TEST] Successfully injected user {} with role {:?}.",
-                username, role
-            ); // Original role can now be used
+            info!(target: "citadel", "Successfully injected user {} with role {:?}.", username, role);
             Ok(())
         })
     }
