@@ -1,5 +1,6 @@
 import { WorkspaceClient } from './WorkspaceClient';
 import { WorkspaceAuth } from './auth';
+import { isVariant } from 'citadel-internal-service-wasm-client';
 import type { WorkspaceProtocolResponse } from './types/workspace-types';
 
 export interface SessionConfig {
@@ -165,7 +166,7 @@ export class WorkspaceSessionManager {
       return;
     }
 
-    if ('Workspace' in response) {
+    if (isVariant(response, 'Workspace')) {
       const workspace = response.Workspace;
       // Update session with workspace info
       if (!this.workspaceSession || this.workspaceSession.workspaceId !== workspace.id) {
@@ -174,7 +175,7 @@ export class WorkspaceSessionManager {
         this.workspaceSession.workspaceName = workspace.name;
         this.notifySessionListeners();
       }
-    } else if ('Error' in response) {
+    } else if (isVariant(response, 'Error')) {
       const error = response.Error;
       console.error('Workspace error:', error);
       

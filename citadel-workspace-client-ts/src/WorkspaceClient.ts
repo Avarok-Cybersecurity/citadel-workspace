@@ -1,8 +1,46 @@
 import { InternalServiceWasmClient } from 'citadel-internal-service-wasm-client';
-import type { WasmClientConfig, InternalServiceRequest, InternalServiceResponse } from 'citadel-internal-service-wasm-client';
-import type { WorkspaceProtocolPayload, WorkspaceProtocolRequest } from './types/workspace-types';
+import type { WasmClientConfig, InternalServiceRequest, InternalServiceResponse, WasmModule, SecurityLevel } from 'citadel-internal-service-wasm-client';
+import { isResponseType } from 'citadel-internal-service-wasm-client';
+import { isVariant } from 'citadel-internal-service-wasm-client';
+import type { WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse } from './types/workspace-types';
 import { WorkspaceAuth } from './auth';
 import { WorkspaceSessionManager, type SessionConfig } from './session';
+
+// Extends parent WasmModule with workspace-specific WASM methods
+interface WorkspaceWasmModule extends WasmModule {
+  open_messenger_for(cid_str: string): Promise<void>;
+  ensure_messenger_open(cid_str: string): Promise<boolean>;
+}
+
+// MessageDelivered is not in InternalServiceResponse (type gap in auto-generated bindings).
+// Defined here to avoid `as any` when accessing its fields.
+interface MessageDeliveredPayload {
+  contents: number[];
+  cid?: bigint;
+  peer_cid?: bigint;
+}
+
+// Enriched response types for workspace protocol messages.
+// These extend InternalServiceResponse with parsed workspace payloads.
+interface WorkspaceNotificationEnriched {
+  WorkspaceNotification: {
+    cid: bigint;
+    peer_cid: bigint;
+    message: number[];
+    payload: WorkspaceProtocolPayload;
+  };
+}
+
+interface WorkspaceDeliveredEnriched {
+  WorkspaceDelivered: MessageDeliveredPayload & {
+    payload: WorkspaceProtocolPayload;
+  };
+}
+
+export type WorkspaceEnrichedResponse =
+  | InternalServiceResponse
+  | WorkspaceNotificationEnriched
+  | WorkspaceDeliveredEnriched;
 
 export interface WorkspaceClientConfig extends WasmClientConfig {
   // Additional workspace-specific configuration can be added here
@@ -12,45 +50,46 @@ export interface WorkspaceClientConfig extends WasmClientConfig {
 export class WorkspaceClient extends InternalServiceWasmClient {
   public readonly auth: WorkspaceAuth;
   public readonly session: WorkspaceSessionManager;
-  
+
   constructor(config: WorkspaceClientConfig) {
     // Store reference to self for use in the handler closure below.
-    // This is initialized after super() (line 114) since `this` is unavailable before super().
+    // This is initialized after super() since `this` is unavailable before super().
     // The `if (self && self.session)` guards in the handler protect against the
     // window where super() hasn't completed yet.
     let self: WorkspaceClient;
-    
+
     // Wrap the message handler to handle workspace protocol messages
     const originalHandler = config.messageHandler;
-    
+
     config.messageHandler = (message: InternalServiceResponse) => {
       // Check if this is a MessageNotification that contains workspace protocol
-      if ('MessageNotification' in message) {
+      if (isResponseType(message, 'MessageNotification')) {
         const notification = message.MessageNotification;
         try {
           // Decode the message bytes as UTF-8 string
           const messageText = new TextDecoder().decode(new Uint8Array(notification.message));
           // Parse as WorkspaceProtocolPayload
           const workspacePayload: WorkspaceProtocolPayload = JSON.parse(messageText);
-          
+
           // Handle workspace responses in session manager
-          if (self && self.session && 'Response' in workspacePayload) {
-            self.session.handleWorkspaceResponse(workspacePayload.Response);
+          const payloadRecord = workspacePayload as Record<string, unknown>;
+          if (self && self.session && isVariant(payloadRecord, 'Response')) {
+            self.session.handleWorkspaceResponse(
+              (workspacePayload as { Response: WorkspaceProtocolResponse }).Response
+            );
           }
-          
-          // Create a modified message with the parsed payload
-          const modifiedMessage = {
-            ...message,
+
+          // Create enriched message with parsed workspace payload
+          const enrichedMessage: WorkspaceNotificationEnriched = {
             WorkspaceNotification: {
               ...notification,
               payload: workspacePayload
             }
           };
-          
-          // Call the original handler with the modified message
+
+          // Call the original handler with the enriched message
           if (originalHandler) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- enriched message extends InternalServiceResponse with workspace fields
-            originalHandler(modifiedMessage as any);
+            originalHandler(enrichedMessage as unknown as InternalServiceResponse);
           }
         } catch (e) {
           // Not a workspace protocol message — pass through unchanged
@@ -60,34 +99,35 @@ export class WorkspaceClient extends InternalServiceWasmClient {
           }
         }
       } else if ('MessageDelivered' in message) {
-        // Also handle MessageDelivered which is used for workspace protocol responses
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MessageDelivered shape not in InternalServiceResponse types
-        const delivered = message.MessageDelivered as any;
+        // MessageDelivered is not in InternalServiceResponse types (type gap) —
+        // narrow via Record access to avoid `as any`
+        const delivered = (message as Record<string, unknown>)['MessageDelivered'] as MessageDeliveredPayload | undefined;
         if (delivered && delivered.contents && Array.isArray(delivered.contents)) {
           try {
             // Decode the message bytes as UTF-8 string
             const messageText = new TextDecoder().decode(new Uint8Array(delivered.contents));
             // Parse as WorkspaceProtocolPayload
             const workspacePayload: WorkspaceProtocolPayload = JSON.parse(messageText);
-            
+
             // Handle workspace responses in session manager
-            if (self && self.session && 'Response' in workspacePayload) {
-              self.session.handleWorkspaceResponse(workspacePayload.Response);
+            const deliveredPayloadRecord = workspacePayload as Record<string, unknown>;
+            if (self && self.session && isVariant(deliveredPayloadRecord, 'Response')) {
+              self.session.handleWorkspaceResponse(
+                (workspacePayload as { Response: WorkspaceProtocolResponse }).Response
+              );
             }
-            
-            // Create a modified message with the parsed payload
-            const modifiedMessage = {
-              ...message,
+
+            // Create enriched message with parsed workspace payload
+            const enrichedMessage: WorkspaceDeliveredEnriched = {
               WorkspaceDelivered: {
                 ...delivered,
                 payload: workspacePayload
               }
             };
-            
-            // Call the original handler with the modified message
+
+            // Call the original handler with the enriched message
             if (originalHandler) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- enriched message extends InternalServiceResponse with workspace fields
-              originalHandler(modifiedMessage as any);
+              originalHandler(enrichedMessage as unknown as InternalServiceResponse);
             }
           } catch (e) {
             // Not a workspace protocol message — pass through unchanged
@@ -109,15 +149,15 @@ export class WorkspaceClient extends InternalServiceWasmClient {
         }
       }
     };
-    
+
     super(config);
-    
+
     // Initialize auth module
     this.auth = new WorkspaceAuth(this);
-    
+
     // Initialize session manager
     this.session = new WorkspaceSessionManager(this, config.sessionConfig);
-    
+
     // Set self reference for use in message handler
     self = this;
   }
@@ -131,7 +171,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   async sendWorkspaceRequest(
     cid: string | bigint,
     request: WorkspaceProtocolRequest,
-    securityLevel: 'Standard' | 'High' | 'Maximum' = 'Standard'
+    securityLevel: SecurityLevel = 'Standard'
   ): Promise<void> {
     // Create the workspace protocol payload
     const payload: WorkspaceProtocolPayload = {
@@ -208,28 +248,32 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   }
 
   /**
-   * Override sendDirectToInternalService to automatically convert CID fields to BigInt
-   * This ensures all requests sent to WASM have proper BigInt CIDs
+   * Override sendDirectToInternalService to automatically convert CID fields to BigInt.
+   * This ensures all requests sent to WASM have proper BigInt CIDs.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accepts both InternalServiceRequest and untyped WASM requests
-  override async sendDirectToInternalService(request: any): Promise<void> {
+  override async sendDirectToInternalService(request: InternalServiceRequest): Promise<void> {
     const converted = this.convertCidsToBigInt(request);
     await super.sendDirectToInternalService(converted);
   }
 
   /**
    * Recursively converts cid, peer_cid, and session_cid fields to BigInt
-   * for WASM compatibility (serde-wasm-bindgen expects BigInt for u64 fields)
+   * for WASM compatibility (serde-wasm-bindgen expects BigInt for u64 fields).
+   * Uses Record<string, unknown> internally for recursive traversal since
+   * InternalServiceRequest is a discriminated union that can't be indexed generically.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- recursive object transform operates on unknown shapes
-  private convertCidsToBigInt(obj: any): any {
+  private convertCidsToBigInt(obj: InternalServiceRequest): InternalServiceRequest {
+    return this.convertCidsRecursive(obj) as InternalServiceRequest;
+  }
+
+  private convertCidsRecursive(obj: unknown): unknown {
     if (obj === null || obj === undefined) return obj;
     if (typeof obj !== 'object') return obj;
-    if (Array.isArray(obj)) return obj.map(item => this.convertCidsToBigInt(item));
+    if (Array.isArray(obj)) return obj.map(item => this.convertCidsRecursive(item));
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- building result of unknown shape
-    const result: any = {};
-    for (const [key, value] of Object.entries(obj)) {
+    const source = obj as Record<string, unknown>;
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(source)) {
       if ((key === 'cid' || key === 'peer_cid' || key === 'session_cid') && value !== null && value !== undefined) {
         // Convert string/number CID to BigInt with validation
         if (typeof value === 'bigint') {
@@ -242,7 +286,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
           }
         }
       } else if (typeof value === 'object') {
-        result[key] = this.convertCidsToBigInt(value);
+        result[key] = this.convertCidsRecursive(value);
       } else {
         result[key] = value;
       }
@@ -251,13 +295,15 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   }
 
   /**
-   * Get the WASM module instance from parent class
+   * Get the WASM module instance with workspace-specific methods.
+   * Parent's wasmModule is typed as WasmModule; this casts to WorkspaceWasmModule
+   * which adds open_messenger_for and ensure_messenger_open.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- WASM module lacks TypeScript type definitions
-  getWasmModule(): any {
-    // Access the private wasmModule field from parent class
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accessing private parent field
-    return (this as any).wasmModule;
+  private getWorkspaceWasmModule(): WorkspaceWasmModule {
+    if (!this.wasmModule) {
+      throw new Error('WASM module not initialized');
+    }
+    return this.wasmModule as unknown as WorkspaceWasmModule;
   }
 
   /**
@@ -266,11 +312,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
    * @param cid The CID to open the messenger for
    */
   async openMessengerFor(cid: string): Promise<void> {
-    const wasmModule = this.getWasmModule();
-    if (!wasmModule) {
-      throw new Error('WASM module not initialized');
-    }
-
+    const wasmModule = this.getWorkspaceWasmModule();
     await wasmModule.open_messenger_for(cid);
   }
 
@@ -281,11 +323,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
    * @param cid The CID to ensure messenger is open for
    */
   async ensureMessengerOpen(cid: string): Promise<boolean> {
-    const wasmModule = this.getWasmModule();
-    if (!wasmModule) {
-      throw new Error('WASM module not initialized');
-    }
-
+    const wasmModule = this.getWorkspaceWasmModule();
     return await wasmModule.ensure_messenger_open(cid);
   }
 
@@ -295,13 +333,10 @@ export class WorkspaceClient extends InternalServiceWasmClient {
    * @param message The message to send
    */
   async sendP2PMessageDirect(peerCid: string, message: string): Promise<void> {
-    const wasmModule = this.getWasmModule();
-    if (!wasmModule) {
-      throw new Error('WASM module not initialized');
-    }
-    
+    const wasmModule = this.getWorkspaceWasmModule();
+
     // Create InternalServiceRequest with Message variant
-    const messageRequest = {
+    const messageRequest: InternalServiceRequest = {
       Message: {
         request_id: crypto.randomUUID(),
         message: Array.from(new TextEncoder().encode(message)),
@@ -310,7 +345,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
         security_level: 'Standard'
       }
     };
-    
+
     // Send the P2P message through WASM
     await wasmModule.send_p2p_message(peerCid, messageRequest);
   }
