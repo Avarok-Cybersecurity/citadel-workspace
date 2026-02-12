@@ -291,6 +291,7 @@ jobs:
       - name: Run Integration Test
         env:
           IN_CI: 'true'
+          WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
         run: npm run ${{ matrix.test }}
         working-directory: citadel-workspaces/integration-tests
       - name: Upload Screenshots on Failure
