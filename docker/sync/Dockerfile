@@ -31,9 +31,8 @@ RUN chmod +x /workspace/sync-wasm-clients.sh
 # Set environment variable to indicate container mode
 ENV CONTAINER_MODE=1
 
-# Run as non-root user for security hardening
-RUN useradd -m -u 1000 appuser && chown -R appuser /workspace
-USER appuser
+# Note: runs as root because it needs write access to mounted workspace volumes
+# (creates dirs like citadel-workspaces/public/wasm during WASM sync)
 
 # Run sync script with no-restart flag (Tilt handles service restarts)
 CMD ["./sync-wasm-clients.sh", "--no-restart"]
