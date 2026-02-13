@@ -58,8 +58,10 @@ export class WorkspaceClient extends InternalServiceWasmClient {
     // window where super() hasn't completed yet.
     let self: WorkspaceClient;
 
-    // Wrap the message handler to handle workspace protocol messages
-    const originalHandler = config.messageHandler;
+    // Wrap the message handler to handle workspace protocol messages.
+    // Cast once to accept enriched responses (with WorkspaceNotification/WorkspaceDelivered).
+    const originalHandler = config.messageHandler as
+      ((message: WorkspaceEnrichedResponse) => void) | undefined;
 
     config.messageHandler = (message: InternalServiceResponse) => {
       // Check if this is a MessageNotification that contains workspace protocol
@@ -92,7 +94,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
 
           // Call the original handler with the enriched message
           if (originalHandler) {
-            originalHandler(enrichedMessage as unknown as InternalServiceResponse);
+            originalHandler(enrichedMessage);
           }
         } catch (e) {
           // Not a workspace protocol message — pass through unchanged
@@ -132,7 +134,7 @@ export class WorkspaceClient extends InternalServiceWasmClient {
 
             // Call the original handler with the enriched message
             if (originalHandler) {
-              originalHandler(enrichedMessage as unknown as InternalServiceResponse);
+              originalHandler(enrichedMessage);
             }
           } catch (e) {
             // Not a workspace protocol message — pass through unchanged
