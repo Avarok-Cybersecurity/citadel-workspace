@@ -19,7 +19,7 @@ export interface WorkspaceSessionInfo {
 export class WorkspaceSessionManager {
   private client: WorkspaceClient;
   private auth: WorkspaceAuth;
-  private config: SessionConfig;
+  private config: Required<SessionConfig>;
   private workspaceSession: WorkspaceSessionInfo | null = null;
   private reconnectAttempts = 0;
   private reconnectTimer?: NodeJS.Timeout;
@@ -112,7 +112,7 @@ export class WorkspaceSessionManager {
     this.client.setErrorHandler((error: Error) => {
       console.error('Connection error:', error);
       
-      if (this.config.autoReconnect && this.reconnectAttempts < this.config.maxReconnectAttempts!) {
+      if (this.config.autoReconnect && this.reconnectAttempts < this.config.maxReconnectAttempts) {
         this.scheduleReconnect();
       }
     });
@@ -150,7 +150,7 @@ export class WorkspaceSessionManager {
       } catch (error) {
         console.error('Reconnect failed:', error);
         
-        if (this.reconnectAttempts < this.config.maxReconnectAttempts!) {
+        if (this.reconnectAttempts < this.config.maxReconnectAttempts) {
           this.scheduleReconnect();
         }
       }
