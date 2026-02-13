@@ -79,8 +79,11 @@ export class WorkspaceClient extends InternalServiceWasmClient {
             );
           }
 
-          // Create enriched message with parsed workspace payload
-          const enrichedMessage: WorkspaceNotificationEnriched = {
+          // Create enriched message preserving original variant keys.
+          // Downstream handlers (workspace-response-handler, instance-inbound-router)
+          // check for MessageNotification — the spread keeps it accessible.
+          const enrichedMessage = {
+            ...message,
             WorkspaceNotification: {
               ...notification,
               payload: workspacePayload
@@ -117,8 +120,10 @@ export class WorkspaceClient extends InternalServiceWasmClient {
               );
             }
 
-            // Create enriched message with parsed workspace payload
-            const enrichedMessage: WorkspaceDeliveredEnriched = {
+            // Create enriched message preserving original variant keys.
+            // Downstream handlers check for MessageDelivered — the spread keeps it accessible.
+            const enrichedMessage = {
+              ...message,
               WorkspaceDelivered: {
                 ...delivered,
                 payload: workspacePayload
