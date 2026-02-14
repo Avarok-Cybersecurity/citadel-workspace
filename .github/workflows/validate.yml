@@ -147,6 +147,37 @@ jobs:
           else
             npm run typecheck -w ${{ matrix.project }}
           fi
+      - name: Enforce 250-line file limit
+        if: matrix.project == 'citadel-workspaces'
+        run: |
+          # Skip list: generated/external files exempt from 250-line limit
+          SKIP_FILES=(
+            "components/ui/sidebar.tsx"
+            "types/messaging-layer.ts"
+            "types/workspace-protocol.ts"
+          )
+
+          VIOLATIONS=0
+          while IFS= read -r file; do
+            rel="${file#citadel-workspaces/src/}"
+            skip=false
+            for s in "${SKIP_FILES[@]}"; do
+              if [ "$rel" = "$s" ]; then skip=true; break; fi
+            done
+            if $skip; then continue; fi
+
+            lines=$(wc -l < "$file")
+            if [ "$lines" -gt 250 ]; then
+              echo "::error file=$file::$file has $lines lines (limit: 250)"
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          done < <(find citadel-workspaces/src -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.bak')
+
+          if [ "$VIOLATIONS" -gt 0 ]; then
+            echo "FAIL: $VIOLATIONS file(s) exceed the 250-line limit"
+            exit 1
+          fi
+          echo "All TypeScript files within 250-line limit"
 
   lint:
     name: ESLint - ${{ matrix.project }}
