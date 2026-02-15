@@ -694,13 +694,12 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                             .unwrap_or_default()
                             .as_secs();
 
-                        let broadcast_response =
-                            WorkspaceProtocolResponse::NodeContentUpdated {
-                                node_id: node_id.clone(),
-                                mdx_content: content.clone(),
-                                updated_by: actor_user_id.to_string(),
-                                timestamp,
-                            };
+                        let broadcast_response = WorkspaceProtocolResponse::NodeContentUpdated {
+                            node_id: node_id.clone(),
+                            mdx_content: content.clone(),
+                            updated_by: actor_user_id.to_string(),
+                            timestamp,
+                        };
 
                         kernel.broadcast(broadcast_response, requester_cid);
                         info!(
@@ -709,9 +708,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                             node_id
                         );
 
-                        if let Err(e) =
-                            kernel.persist_node_content(&node.name, content).await
-                        {
+                        if let Err(e) = kernel.persist_node_content(&node.name, content).await {
                             warn!(
                                 target: "citadel",
                                 "[ASYNC_PROCESS_COMMAND] Failed to persist node content: {}",

@@ -326,10 +326,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         // Ensure parent directory exists
         if let Some(parent) = content_path.parent() {
             tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                NetworkError::msg(format!(
-                    "Failed to create directory {:?}: {}",
-                    parent, e
-                ))
+                NetworkError::msg(format!("Failed to create directory {:?}: {}", parent, e))
             })?;
         }
 
