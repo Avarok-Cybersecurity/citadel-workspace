@@ -17,6 +17,10 @@ ENV CHOKIDAR_USEPOLLING=true
 ENV CHOKIDAR_INTERVAL=100
 ENV NODE_ENV=development
 
+# Pre-create Vite cache directory for dependency optimization
+# Must exist before switching to non-root user so named volume inherits correct ownership
+RUN mkdir -p /app/node_modules/.vite/deps
+
 # Run as non-root user for security hardening
 # Use GID/UID 1001 to avoid conflicts with Alpine's default GID 1000
 RUN addgroup -g 1001 appgroup && adduser -u 1001 -G appgroup -s /bin/sh -D appuser && \
