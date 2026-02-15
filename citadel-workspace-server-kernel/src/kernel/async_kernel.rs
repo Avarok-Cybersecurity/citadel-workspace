@@ -308,6 +308,41 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .and_then(|(_, path)| path.clone())
     }
 
+    /// Persist node MDX content to file
+    ///
+    /// Writes the content to `{content_base_path}/{node_name}/CONTENT.md`
+    pub async fn persist_node_content(
+        &self,
+        node_name: &str,
+        mdx_content: &str,
+    ) -> Result<(), NetworkError> {
+        let Some(base_path) = self.get_content_base_path() else {
+            return Ok(());
+        };
+
+        let content_path = base_path.join(node_name).join("CONTENT.md");
+        info!(target: "citadel", "[ASYNC_KERNEL] Persisting node content to {:?}", content_path);
+
+        // Ensure parent directory exists
+        if let Some(parent) = content_path.parent() {
+            tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                NetworkError::msg(format!(
+                    "Failed to create directory {:?}: {}",
+                    parent, e
+                ))
+            })?;
+        }
+
+        tokio::fs::write(&content_path, mdx_content)
+            .await
+            .map_err(|e| {
+                NetworkError::msg(format!(
+                    "Failed to persist node content to {:?}: {}",
+                    content_path, e
+                ))
+            })
+    }
+
     /// Persist office MDX content to file
     ///
     /// Writes the content to `{content_base_path}/{office_name}/CONTENT.md`
@@ -500,7 +535,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 workspace_node.children.push(office_id.clone());
             }
 
-            // Create room nodes within this office
+            // Create room nodes within this office, accumulating children on office_node
+            let mut office_node = office_node;
             for room_config in &office_config.rooms {
                 let room_id = Uuid::new_v4().to_string();
 
@@ -570,21 +606,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                     room_config.name, office_config.name, room_id, room_config.chat_enabled
                 );
 
-                // Add room to office's children (we'll update the office node before inserting)
-                nodes
-                    .entry(office_id.clone())
-                    .and_modify(|n| n.children.push(room_id.clone()))
-                    .or_insert_with(|| {
-                        let mut new_office = office_node.clone();
-                        new_office.children.push(room_id.clone());
-                        new_office
-                    });
+                // Accumulate room as child of office
+                office_node.children.push(room_id.clone());
 
                 // Insert room node
                 nodes.insert(room_id, room_node);
             }
 
-            // Insert office node (either updated with children or fresh)
+            // Insert office node with accumulated children
             nodes.insert(office_id, office_node);
         }
 

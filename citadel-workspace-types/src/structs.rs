@@ -533,12 +533,27 @@ impl DomainPermissions {
                     && self.read_messages
                     && self.download_files
                     && self.edit_content
+                    && self.edit_mdx
                     && self.send_messages
                     && self.upload_files
                     && self.create_node
                     && self.delete_node
+                    && self.update_node
+                    && self.add_node
+                    && self.edit_node_config
+                    && self.update_node_settings
+                    && self.manage_node_members
+                    && self.create_workspace
+                    && self.update_workspace
+                    && self.delete_workspace
+                    && self.edit_workspace_config
+                    && self.add_users
+                    && self.remove_users
+                    && self.ban_user
                     && self.manage_domains
                     && self.configure_system
+                    && self.edit_tree_structure
+                    && self.manage_node_types
             }
             Permission::ViewContent => self.view_content,
             Permission::ReadMessages => self.read_messages,

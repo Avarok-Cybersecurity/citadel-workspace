@@ -673,6 +673,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             chat_enabled,
         } => {
             use crate::handlers::domain::node_ops::AsyncNodeOperations;
+            use std::time::{SystemTime, UNIX_EPOCH};
             match kernel
                 .domain_ops()
                 .update_node(
@@ -686,7 +687,41 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 )
                 .await
             {
-                Ok(node) => Ok(WorkspaceProtocolResponse::Node(node)),
+                Ok(node) => {
+                    if let Some(content) = mdx_content {
+                        let timestamp = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs();
+
+                        let broadcast_response =
+                            WorkspaceProtocolResponse::NodeContentUpdated {
+                                node_id: node_id.clone(),
+                                mdx_content: content.clone(),
+                                updated_by: actor_user_id.to_string(),
+                                timestamp,
+                            };
+
+                        kernel.broadcast(broadcast_response, requester_cid);
+                        info!(
+                            target: "citadel",
+                            "[ASYNC_PROCESS_COMMAND] Broadcast NodeContentUpdated for node {}",
+                            node_id
+                        );
+
+                        if let Err(e) =
+                            kernel.persist_node_content(&node.name, content).await
+                        {
+                            warn!(
+                                target: "citadel",
+                                "[ASYNC_PROCESS_COMMAND] Failed to persist node content: {}",
+                                e
+                            );
+                        }
+                    }
+
+                    Ok(WorkspaceProtocolResponse::Node(node))
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to update node: {}",
                     e
