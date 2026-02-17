@@ -1,3 +1,4 @@
+use citadel_workspace_types::structs::NodeEntityType;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 use common::async_test_helpers::*;
@@ -31,13 +32,11 @@ async fn test_room_operations() {
     // Create an office first
     let create_office_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: workspace_id.clone(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(workspace_id.clone()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "A test office".to_string(),
-            mdx_content: Some("# Test Office\nThis is a test office".to_string()),
-            metadata: None,
-            is_default: None,
         },
     )
     .await
@@ -49,12 +48,11 @@ async fn test_room_operations() {
     // Create a room in the office
     let create_room_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateRoom {
-            office_id: office_id.clone(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(office_id.clone()),
+            entity_type: NodeEntityType::Child("Room".to_string()),
             name: "Test Room".to_string(),
             description: "A test room".to_string(),
-            mdx_content: Some("# Test Room\nThis is a test room".to_string()),
-            metadata: None,
         },
     )
     .await
@@ -63,14 +61,15 @@ async fn test_room_operations() {
     let room = extract_node(create_room_response).expect("Failed to create room");
     assert_eq!(room.name, "Test Room");
     assert_eq!(room.description, "A test room");
-    assert_eq!(room.mdx_content, "# Test Room\nThis is a test room");
+    // CreateNode starts with empty mdx_content; content is set via UpdateNode
+    assert_eq!(room.mdx_content, "");
     let room_id = room.id.clone();
 
     // Get the room
     let get_room_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::GetRoom {
-            room_id: room_id.clone(),
+        WorkspaceProtocolRequest::GetNode {
+            node_id: room_id.clone(),
         },
     )
     .await
@@ -79,20 +78,19 @@ async fn test_room_operations() {
     let retrieved_room = extract_node(get_room_response).expect("Failed to get room");
     assert_eq!(retrieved_room.name, "Test Room");
     assert_eq!(retrieved_room.description, "A test room");
-    assert_eq!(
-        retrieved_room.mdx_content,
-        "# Test Room\nThis is a test room"
-    );
+    // CreateNode starts with empty mdx_content; content is set via UpdateNode
+    assert_eq!(retrieved_room.mdx_content, "");
 
     // Update the room
     let update_room_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::UpdateRoom {
-            room_id: room_id.clone(),
+        WorkspaceProtocolRequest::UpdateNode {
+            node_id: room_id.clone(),
             name: Some("Updated Room".to_string()),
             description: None,
             mdx_content: Some("# Updated Room\nThis room content has been updated".to_string()),
-            metadata: None,
+            rules: None,
+            chat_enabled: None,
         },
     )
     .await
@@ -109,8 +107,10 @@ async fn test_room_operations() {
     // List rooms in the office
     let list_rooms_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::ListRooms {
-            office_id: office_id.clone(),
+        WorkspaceProtocolRequest::ListNodes {
+            parent_id: Some(office_id.clone()),
+            depth: Some(1),
+            entity_types: Some(vec![NodeEntityType::Child("Room".to_string())]),
         },
     )
     .await
@@ -127,27 +127,31 @@ async fn test_room_operations() {
     // Delete the room
     let delete_room_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::DeleteRoom {
-            room_id: room_id.clone(),
+        WorkspaceProtocolRequest::DeleteNode {
+            node_id: room_id.clone(),
+            cascade: false,
         },
     )
     .await
     .unwrap();
 
     match delete_room_response {
-        WorkspaceProtocolResponse::DeleteRoom {
-            room_id: deleted_id,
+        WorkspaceProtocolResponse::NodeDeleted {
+            node_id: deleted_id,
+            ..
         } => {
             assert_eq!(deleted_id, room_id, "Deleted room ID should match");
         }
-        other => panic!("Expected DeleteRoom response, got: {:?}", other),
+        other => panic!("Expected NodeDeleted response, got: {:?}", other),
     }
 
     // Verify room was deleted
     let list_rooms_after_delete = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::ListRooms {
-            office_id: office_id.clone(),
+        WorkspaceProtocolRequest::ListNodes {
+            parent_id: Some(office_id.clone()),
+            depth: Some(1),
+            entity_types: Some(vec![NodeEntityType::Child("Room".to_string())]),
         },
     )
     .await

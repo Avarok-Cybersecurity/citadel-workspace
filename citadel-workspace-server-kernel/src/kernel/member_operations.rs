@@ -1,6 +1,7 @@
 use super::core::WorkspaceServerKernel;
 use crate::kernel::transaction::TransactionManagerExt;
 use crate::WORKSPACE_ROOT_ID;
+use citadel_logging::error;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::UserRole;
 
@@ -43,11 +44,7 @@ impl<R: Ratchet> WorkspaceServerKernel<R> {
 
             // Commit changes
             tx.commit().map_err(|e| {
-                // @human-review: Consider proper logging for transaction commit failures
-                eprintln!(
-                    "[add_member KERNEL COMMIT_FAILURE_PRINTLN] Transaction commit failed: {:?}",
-                    e
-                );
+                error!(target: "citadel", "add_member transaction commit failed: {:?}", e);
                 NetworkError::msg(format!("Transaction commit failed: {}", e))
             })?;
 

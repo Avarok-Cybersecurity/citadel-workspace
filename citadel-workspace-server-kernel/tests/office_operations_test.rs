@@ -1,3 +1,4 @@
+use citadel_workspace_types::structs::NodeEntityType;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 use common::async_test_helpers::*;
@@ -58,13 +59,11 @@ async fn test_office_operations() {
     // Create an office
     let create_office_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: workspace_id.clone(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(workspace_id.clone()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "A test office".to_string(),
-            mdx_content: Some("# Test Office\nThis is a test office".to_string()),
-            metadata: None,
-            is_default: None,
         },
     )
     .await
@@ -76,8 +75,8 @@ async fn test_office_operations() {
     // Get the office
     let get_office_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::GetOffice {
-            office_id: office_id.clone(),
+        WorkspaceProtocolRequest::GetNode {
+            node_id: office_id.clone(),
         },
     )
     .await
@@ -86,21 +85,19 @@ async fn test_office_operations() {
     let retrieved_office = extract_node(get_office_response).expect("Failed to get office");
     assert_eq!(retrieved_office.name, "Test Office");
     assert_eq!(retrieved_office.description, "A test office");
-    assert_eq!(
-        retrieved_office.mdx_content,
-        "# Test Office\nThis is a test office"
-    );
+    // CreateNode starts with empty mdx_content; content is set via UpdateNode
+    assert_eq!(retrieved_office.mdx_content, "");
 
     // Update the office
     let update_office_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::UpdateOffice {
-            office_id: office_id.clone(),
+        WorkspaceProtocolRequest::UpdateNode {
+            node_id: office_id.clone(),
             name: Some("Updated Office".to_string()),
             description: None,
             mdx_content: Some("# Updated Office\nThis content has been updated".to_string()),
-            metadata: None,
-            is_default: None,
+            rules: None,
+            chat_enabled: None,
         },
     )
     .await
@@ -115,9 +112,16 @@ async fn test_office_operations() {
     );
 
     // List offices
-    let list_offices_response = execute_command(&kernel, WorkspaceProtocolRequest::ListOffices {})
-        .await
-        .unwrap();
+    let list_offices_response = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::ListNodes {
+            parent_id: None,
+            depth: Some(1),
+            entity_types: Some(vec![NodeEntityType::Child("Office".to_string())]),
+        },
+    )
+    .await
+    .unwrap();
 
     match list_offices_response {
         WorkspaceProtocolResponse::Nodes(offices) => {
@@ -137,27 +141,35 @@ async fn test_office_operations() {
     // Delete the office
     let delete_office_response = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::DeleteOffice {
-            office_id: office_id.clone(),
+        WorkspaceProtocolRequest::DeleteNode {
+            node_id: office_id.clone(),
+            cascade: true,
         },
     )
     .await
     .unwrap();
 
     match delete_office_response {
-        WorkspaceProtocolResponse::DeleteOffice {
-            office_id: deleted_id,
+        WorkspaceProtocolResponse::NodeDeleted {
+            node_id: deleted_id,
+            ..
         } => {
             assert_eq!(deleted_id, office_id, "Deleted office ID should match");
         }
-        other => panic!("Expected DeleteOffice response, got: {:?}", other),
+        other => panic!("Expected NodeDeleted response, got: {:?}", other),
     }
 
     // Verify office was deleted
-    let list_offices_after_delete =
-        execute_command(&kernel, WorkspaceProtocolRequest::ListOffices {})
-            .await
-            .unwrap();
+    let list_offices_after_delete = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::ListNodes {
+            parent_id: None,
+            depth: Some(1),
+            entity_types: Some(vec![NodeEntityType::Child("Office".to_string())]),
+        },
+    )
+    .await
+    .unwrap();
 
     match list_offices_after_delete {
         WorkspaceProtocolResponse::Nodes(offices) => {

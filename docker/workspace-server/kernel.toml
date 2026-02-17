@@ -1,7 +1,8 @@
-# Replace with a secure, randomly generated password
-workspace_master_password = "SUPER_SECRET_ADMIN_PASSWORD_CHANGE_ME"
+# Workspace master password — set via WORKSPACE_MASTER_PASSWORD env var (preferred)
+# or directly here for local development. Server refuses to start if empty.
 bind_addr = "0.0.0.0:12349"
-dangerous_skip_cert_verification = true
+# TLS certificate verification — set to true ONLY for local development with self-signed certs.
+dangerous_skip_cert_verification = false
 
 # Path to directory-based workspace content (recommended)
 # The directory must contain:

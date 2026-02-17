@@ -10,7 +10,7 @@ use crate::handlers::domain::tree_validator::{NodeMutation, TreeValidator};
 use async_trait::async_trait;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{
-    DomainNode, DomainPermissions, NodeEntityType, Permission, TreeNode,
+    DomainNode, DomainPermissions, NodeEntityType, Permission, TreeNode, TreeSchema,
 };
 use std::collections::VecDeque;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -129,6 +129,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
 
         let now = current_timestamp();
 
+        // Derive allowed child types from the tree schema (SSOT)
+        let allowed_child_types = schema
+            .rules
+            .iter()
+            .find(|r| r.parent_type == entity_type.type_name())
+            .map(|r| r.allowed_child_types.clone());
+
         // Create the node
         let node = DomainNode {
             id: node_id.clone(),
@@ -146,7 +153,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             chat_channel_id: None,
             default_permissions: DomainPermissions::default(),
             metadata: vec![],
-            allowed_child_types: None,
+            allowed_child_types,
             is_default: false,
             created_at: now,
             updated_at: now,
@@ -501,6 +508,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         }
 
         let nodes = self.backend_tx_manager.get_all_nodes().await?;
+        let schema = self.backend_tx_manager.get_tree_schema_or_default().await?;
         let max_depth = depth.unwrap_or(0);
 
         // Start from specified parent or root
@@ -516,17 +524,21 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                 })
                 .unwrap_or_default()
         } else {
-            // Get root nodes (workspace level)
+            // Get root nodes (workspace level): parent_id is None or "workspace-root"
             nodes
                 .values()
-                .filter(|n| n.parent_id.is_none())
+                .filter(|n| {
+                    n.parent_id.is_none()
+                        || n.parent_id.as_deref() == Some(crate::WORKSPACE_ROOT_ID)
+                })
                 .cloned()
                 .collect()
         };
 
         // If depth is 0, return only direct children
         if max_depth == 0 {
-            return Ok(filter_by_type(start_nodes, entity_types));
+            let enriched = enrich_allowed_child_types(start_nodes, &schema);
+            return Ok(filter_by_type(enriched, entity_types));
         }
 
         // BFS to collect nodes up to max_depth
@@ -548,7 +560,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             }
         }
 
-        Ok(filter_by_type(result, entity_types))
+        let enriched = enrich_allowed_child_types(result, &schema);
+        Ok(filter_by_type(enriched, entity_types))
     }
 
     async fn get_tree_structure(
@@ -689,6 +702,24 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
 
         Ok(build_tree(root_node, &nodes, 0, max_depth))
     }
+}
+
+/// Populate `allowed_child_types` from the tree schema for nodes that have `None`.
+/// Ensures nodes created before schema enrichment was added still get correct values.
+fn enrich_allowed_child_types(nodes: Vec<DomainNode>, schema: &TreeSchema) -> Vec<DomainNode> {
+    nodes
+        .into_iter()
+        .map(|mut node| {
+            if node.allowed_child_types.is_none() {
+                node.allowed_child_types = schema
+                    .rules
+                    .iter()
+                    .find(|r| r.parent_type == node.entity_type.type_name())
+                    .map(|r| r.allowed_child_types.clone());
+            }
+            node
+        })
+        .collect()
 }
 
 /// Filter nodes by entity type if filter is specified

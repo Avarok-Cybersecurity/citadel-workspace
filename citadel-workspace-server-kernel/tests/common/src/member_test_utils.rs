@@ -246,12 +246,11 @@ pub async fn create_test_room(
     cid: u64,
     office_id: &str,
 ) -> Result<String, Box<dyn Error>> {
-    let create_room_command = WorkspaceProtocolRequest::CreateRoom {
-        office_id: office_id.to_string(),
+    let create_room_command = WorkspaceProtocolRequest::CreateNode {
+        parent_id: Some(office_id.to_string()),
+        entity_type: citadel_workspace_types::structs::NodeEntityType::Child("Room".to_string()),
         name: "Test Room".to_string(),
         description: "A test room".to_string(),
-        mdx_content: None,
-        metadata: None,
     };
 
     match send_workspace_command(to_service, from_service, cid, create_room_command).await? {

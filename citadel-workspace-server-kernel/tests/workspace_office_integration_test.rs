@@ -1,3 +1,4 @@
+use citadel_workspace_types::structs::NodeEntityType;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 use common::async_test_helpers::*;
@@ -27,13 +28,11 @@ async fn test_add_office_to_workspace() {
     let office_name = "Test Office";
     let office_result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: office_name.to_string(),
             description: "Test Office Description".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await;
@@ -46,15 +45,23 @@ async fn test_add_office_to_workspace() {
     // Check that we can get the office
     let get_office_result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::GetOffice {
-            office_id: office_id.clone(),
+        WorkspaceProtocolRequest::GetNode {
+            node_id: office_id.clone(),
         },
     )
     .await;
     assert!(get_office_result.is_ok());
 
     // Check that the office appears in the list of offices
-    let list_offices_result = execute_command(&kernel, WorkspaceProtocolRequest::ListOffices).await;
+    let list_offices_result = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::ListNodes {
+            parent_id: None,
+            depth: Some(1),
+            entity_types: Some(vec![NodeEntityType::Child("Office".to_string())]),
+        },
+    )
+    .await;
 
     match list_offices_result {
         Ok(WorkspaceProtocolResponse::Nodes(offices)) => {

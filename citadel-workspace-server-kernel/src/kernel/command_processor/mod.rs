@@ -16,8 +16,7 @@
 //!
 //! ### Command Categories
 //! - **Workspace Commands**: Core workspace lifecycle management (create, read, update, delete)
-//! - **Office Commands**: Office management within workspaces
-//! - **Room Commands**: Room management within offices
+//! - **Node Commands**: Generic tree node CRUD (offices, rooms, custom types)
 //! - **Member Commands**: User management and permission operations across all entity types
 //!
 //! ## Error Handling Strategy
@@ -30,18 +29,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════════
 // SUBMODULE DECLARATIONS
 // ═══════════════════════════════════════════════════════════════════════════════════
-
-// Member-specific command implementations and utilities
-// mod member_commands;  // Commented out - depends on sync WorkspaceServerKernel
-
-// Office-specific command implementations and utilities
-// mod office_commands;  // Commented out - depends on sync WorkspaceServerKernel
-
-// Room-specific command implementations and utilities
-// mod room_commands;  // Commented out - depends on sync WorkspaceServerKernel
-
-// Workspace-specific command implementations and utilities
-// mod workspace_commands;  // Commented out - depends on sync WorkspaceServerKernel
 
 /// Async command processor
 pub mod async_process_command;

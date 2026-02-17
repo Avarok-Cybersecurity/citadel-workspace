@@ -1,5 +1,6 @@
 import { WorkspaceClient } from './WorkspaceClient';
 import { WorkspaceAuth } from './auth';
+import { isVariant } from 'citadel-internal-service-wasm-client';
 import type { WorkspaceProtocolResponse } from './types/workspace-types';
 
 export interface SessionConfig {
@@ -18,7 +19,7 @@ export interface WorkspaceSessionInfo {
 export class WorkspaceSessionManager {
   private client: WorkspaceClient;
   private auth: WorkspaceAuth;
-  private config: SessionConfig;
+  private config: Required<SessionConfig>;
   private workspaceSession: WorkspaceSessionInfo | null = null;
   private reconnectAttempts = 0;
   private reconnectTimer?: NodeJS.Timeout;
@@ -111,7 +112,7 @@ export class WorkspaceSessionManager {
     this.client.setErrorHandler((error: Error) => {
       console.error('Connection error:', error);
       
-      if (this.config.autoReconnect && this.reconnectAttempts < this.config.maxReconnectAttempts!) {
+      if (this.config.autoReconnect && this.reconnectAttempts < this.config.maxReconnectAttempts) {
         this.scheduleReconnect();
       }
     });
@@ -149,7 +150,7 @@ export class WorkspaceSessionManager {
       } catch (error) {
         console.error('Reconnect failed:', error);
         
-        if (this.reconnectAttempts < this.config.maxReconnectAttempts!) {
+        if (this.reconnectAttempts < this.config.maxReconnectAttempts) {
           this.scheduleReconnect();
         }
       }
@@ -160,7 +161,12 @@ export class WorkspaceSessionManager {
    * Handle workspace protocol responses
    */
   handleWorkspaceResponse(response: WorkspaceProtocolResponse): void {
-    if ('Workspace' in response) {
+    // Guard against string variants (e.g. "WorkspaceNotInitialized") before using `in`
+    if (typeof response !== 'object' || response === null) {
+      return;
+    }
+
+    if (isVariant(response, 'Workspace')) {
       const workspace = response.Workspace;
       // Update session with workspace info
       if (!this.workspaceSession || this.workspaceSession.workspaceId !== workspace.id) {
@@ -169,7 +175,7 @@ export class WorkspaceSessionManager {
         this.workspaceSession.workspaceName = workspace.name;
         this.notifySessionListeners();
       }
-    } else if ('Error' in response) {
+    } else if (isVariant(response, 'Error')) {
       const error = response.Error;
       console.error('Workspace error:', error);
       

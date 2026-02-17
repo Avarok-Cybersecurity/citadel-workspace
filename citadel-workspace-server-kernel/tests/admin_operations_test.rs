@@ -2,7 +2,7 @@ use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::UserRole;
+use citadel_workspace_types::structs::{NodeEntityType, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 #[tokio::test]
@@ -23,13 +23,11 @@ async fn test_admin_can_add_multiple_users_to_office() {
         .await
         .expect("Failed to inject user2_id for test");
 
-    let create_office_req = WorkspaceProtocolRequest::CreateOffice {
-        workspace_id: WORKSPACE_ROOT_ID.to_string(),
+    let create_office_req = WorkspaceProtocolRequest::CreateNode {
+        parent_id: Some(WORKSPACE_ROOT_ID.to_string()),
+        entity_type: NodeEntityType::Child("Office".to_string()),
         name: "test_office_multi_add".to_string(),
         description: String::new(),
-        mdx_content: None,
-        metadata: None,
-        is_default: None,
     };
 
     let node = match execute_command(&kernel, create_office_req).await.unwrap() {
@@ -49,8 +47,7 @@ async fn test_admin_can_add_multiple_users_to_office() {
     // Test adding first user
     let add_user1_req = WorkspaceProtocolRequest::AddMember {
         user_id: user1_id.to_string(),
-        office_id: Some(node.id.clone()),
-        room_id: None,
+        domain_id: Some(node.id.clone()),
         role: UserRole::Member,
         metadata: None,
     };
@@ -71,8 +68,7 @@ async fn test_admin_can_add_multiple_users_to_office() {
     // Test adding second user
     let add_user2_req = WorkspaceProtocolRequest::AddMember {
         user_id: user2_id.to_string(),
-        office_id: Some(node.id.clone()),
-        room_id: None,
+        domain_id: Some(node.id.clone()),
         role: UserRole::Member,
         metadata: None,
     };
@@ -91,8 +87,8 @@ async fn test_admin_can_add_multiple_users_to_office() {
     }
 
     // Verify both users are in the office
-    let get_office_req = WorkspaceProtocolRequest::GetOffice {
-        office_id: node.id.clone(),
+    let get_office_req = WorkspaceProtocolRequest::GetNode {
+        node_id: node.id.clone(),
     };
 
     let office_details = match execute_command(&kernel, get_office_req).await.unwrap() {
@@ -136,13 +132,11 @@ async fn test_non_admin_cannot_add_user_to_office() {
         .await
         .expect("Failed to inject target_user_id for test");
 
-    let create_office_req = WorkspaceProtocolRequest::CreateOffice {
-        workspace_id: WORKSPACE_ROOT_ID.to_string(),
+    let create_office_req = WorkspaceProtocolRequest::CreateNode {
+        parent_id: Some(WORKSPACE_ROOT_ID.to_string()),
+        entity_type: NodeEntityType::Child("Office".to_string()),
         name: "test_office_non_admin".to_string(),
         description: String::new(),
-        mdx_content: None,
-        metadata: None,
-        is_default: None,
     };
 
     let node = match execute_command(&kernel, create_office_req).await.unwrap() {
@@ -162,8 +156,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
     // Add owner to office
     let add_owner_req = WorkspaceProtocolRequest::AddMember {
         user_id: owner_id.to_string(),
-        office_id: Some(node.id.clone()),
-        room_id: None,
+        domain_id: Some(node.id.clone()),
         role: UserRole::Owner,
         metadata: None,
     };
@@ -184,8 +177,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
     // Add non-admin to office
     let add_non_admin_req = WorkspaceProtocolRequest::AddMember {
         user_id: non_admin_id.to_string(),
-        office_id: Some(node.id.clone()),
-        room_id: None,
+        domain_id: Some(node.id.clone()),
         role: UserRole::Member,
         metadata: None,
     };

@@ -23,8 +23,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_content = fs::read_to_string(&options.config)
         .map_err(|e| format!("Failed to read config file {:?}: {}", options.config, e))?;
 
-    let config: ServerConfig = toml::from_str(&config_content)
+    let mut config: ServerConfig = toml::from_str(&config_content)
         .map_err(|e| format!("Failed to parse config file {:?}: {}", options.config, e))?;
+
+    // Environment variable override for workspace master password (preferred over config file)
+    if let Ok(env_password) = std::env::var("WORKSPACE_MASTER_PASSWORD") {
+        if !env_password.is_empty() {
+            config.workspace_master_password = env_password;
+        }
+    }
+
+    // Validate master password is set and not a placeholder
+    if config.workspace_master_password.is_empty() {
+        return Err("workspace_master_password is required. Set via WORKSPACE_MASTER_PASSWORD env var or in kernel.toml".into());
+    }
 
     info!(?config, "Loaded server configuration");
 

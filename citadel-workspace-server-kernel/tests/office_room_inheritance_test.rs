@@ -1,7 +1,7 @@
 use citadel_logging::debug;
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncPermissionOperations;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{Domain, Permission, User, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 use common::async_test_helpers::*;
@@ -47,13 +47,11 @@ async fn test_office_room_permission_inheritance() {
     // Create an office
     let office_result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: WORKSPACE_ROOT_ID.to_string(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(WORKSPACE_ROOT_ID.to_string()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "For Testing".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await;
@@ -66,12 +64,11 @@ async fn test_office_room_permission_inheritance() {
     // Create a room in the office
     let room_result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateRoom {
-            office_id: office_id.clone(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(office_id.clone()),
+            entity_type: NodeEntityType::Child("Room".to_string()),
             name: "Test Room".to_string(),
             description: "Room for testing".to_string(),
-            mdx_content: None,
-            metadata: None,
         },
     )
     .await;
@@ -86,8 +83,7 @@ async fn test_office_room_permission_inheritance() {
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
-            office_id: Some(office_id.clone()),
-            room_id: None,
+            domain_id: Some(office_id.clone()),
             role: UserRole::Member,
             metadata: None,
         },
@@ -96,13 +92,13 @@ async fn test_office_room_permission_inheritance() {
     assert!(add_result.is_ok());
 
     // Verify the user is in the office
-    let office_domain = kernel
+    let node = kernel
         .domain_operations
         .backend_tx_manager
-        .get_domain(&office_id)
+        .get_node(&office_id)
         .await
         .unwrap()
-        .expect("Office domain should exist");
+        .expect("Office node should exist");
 
     let office_id_for_check = office_id.clone();
     debug!(
@@ -110,15 +106,8 @@ async fn test_office_room_permission_inheritance() {
         office_id_for_check, WORKSPACE_ROOT_ID
     );
 
-    match office_domain {
-        Domain::Office { office } => {
-            assert!(
-                office.members.contains(&user_id.to_string()),
-                "User should be in the office members list"
-            );
-        }
-        _ => panic!("Expected office domain"),
-    }
+    let user_in_node = node.members.contains(&user_id.to_string());
+    assert!(user_in_node, "User should be in the office members list");
 
     // Check permission inheritance - user should have view access to the room
     // because they are a member of the parent office

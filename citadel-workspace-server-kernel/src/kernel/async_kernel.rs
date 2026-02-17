@@ -7,7 +7,7 @@ use crate::config::{FileTransferConfig, WorkspaceStructureConfig};
 use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
 use crate::kernel::transaction::BackendTransactionManager;
 use crate::WorkspaceProtocolResponse;
-use citadel_logging::info;
+use citadel_logging::{error, info, warn};
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, ObjectTransferStatus, Ratchet};
 use parking_lot::RwLock;
 use std::path::PathBuf;
@@ -59,7 +59,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
 impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// Create a new AsyncWorkspaceServerKernel with backend persistence
     pub fn new(node_remote: Option<NodeRemote<R>>) -> Self {
-        println!("[ASYNC_KERNEL] Creating AsyncWorkspaceServerKernel with backend persistence");
+        info!(target: "citadel", "Creating AsyncWorkspaceServerKernel with backend persistence");
 
         let node_remote_arc = Arc::new(RwLock::new(node_remote));
 
@@ -126,8 +126,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             response,
             exclude_cid,
         };
-        // Ignore errors (no receivers is fine)
-        let _ = self.broadcast_tx.send(msg);
+        if let Err(e) = self.broadcast_tx.send(msg) {
+            // Only log when there are active receivers (0 receivers at startup is expected)
+            if self.broadcast_tx.receiver_count() > 0 {
+                warn!(target: "citadel", "Failed to broadcast workspace update: {}", e);
+            }
+        }
     }
 
     /// Create a kernel with admin user for testing
@@ -161,13 +165,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         workspace_structure: Option<(WorkspaceStructureConfig, Option<PathBuf>)>,
         file_transfer_config: Option<FileTransferConfig>,
     ) -> Result<Self, NetworkError> {
-        println!("[ASYNC_KERNEL] Creating AsyncWorkspaceServerKernel with admin user");
+        info!(target: "citadel", "Creating AsyncWorkspaceServerKernel with admin user");
 
         let mut kernel = Self::with_file_transfer_config(None, file_transfer_config);
 
         // Log file transfer config
-        println!(
-            "[ASYNC_KERNEL] File transfer config: allow_server_file_transfer={}, allow_server_revfs_storage={}, max_size={}MB, quota={}MB",
+        info!(
+            target: "citadel",
+            "File transfer config: allow_server_file_transfer={}, allow_server_revfs_storage={}, max_size={}MB, quota={}MB",
             kernel.file_transfer_config.allow_server_file_transfer,
             kernel.file_transfer_config.allow_server_revfs_storage,
             kernel.file_transfer_config.max_file_transfer_size_mb,
@@ -182,14 +187,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         kernel.domain_operations.backend_tx_manager.init().await?;
 
         // Don't inject admin here - wait until on_start when NodeRemote is available
-        println!("[ASYNC_KERNEL] Deferring admin injection until NodeRemote is available");
+        info!(target: "citadel", "Deferring admin injection until NodeRemote is available");
 
         Ok(kernel)
     }
 
     /// Set the NodeRemote instance
     pub fn set_node_remote(&self, node_remote: NodeRemote<R>) {
-        println!("[ASYNC_KERNEL] Setting NodeRemote in kernel and domain operations");
+        info!(target: "citadel", "Setting NodeRemote in kernel and domain operations");
         *self.node_remote.write() = Some(node_remote.clone());
         self.domain_operations
             .backend_tx_manager
@@ -202,12 +207,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         &self,
         workspace_master_password: &str,
     ) -> Result<(), NetworkError> {
-        println!("[ASYNC_KERNEL] Initializing root workspace (no pre-created admin user)");
+        info!(target: "citadel", "Initializing root workspace (no pre-created admin user)");
 
         // Pre-populate the master password BEFORE any workspace checks
         // This ensures first-time initialization via CreateWorkspace can validate the password
         if !workspace_master_password.is_empty() {
-            println!("[ASYNC_KERNEL] Pre-populating master password for root workspace");
+            info!(target: "citadel", "Pre-populating master password for root workspace");
             self.domain_operations
                 .backend_tx_manager
                 .set_workspace_password(crate::WORKSPACE_ROOT_ID, workspace_master_password)
@@ -218,13 +223,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         let workspace_exists = self.get_domain(crate::WORKSPACE_ROOT_ID).await?.is_some();
 
         if !workspace_exists {
-            println!("[ASYNC_KERNEL] Creating root workspace with no owner (first user with master password becomes admin)");
+            info!(target: "citadel", "Creating root workspace with no owner (first user with master password becomes admin)");
 
             // Debug: Check current storage mode
             if self.domain_operations.backend_tx_manager.is_test_mode() {
-                println!("[ASYNC_KERNEL] WARNING: Creating workspace in test storage mode!");
+                warn!(target: "citadel", "Creating workspace in test storage mode!");
             } else {
-                println!("[ASYNC_KERNEL] Creating workspace in backend storage mode");
+                info!(target: "citadel", "Creating workspace in backend storage mode");
             }
 
             // Create root workspace object with no owner - first user with master password claims it
@@ -257,13 +262,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 )
                 .await?;
 
-            println!("[ASYNC_KERNEL] Setting workspace password for root workspace");
+            info!(target: "citadel", "Setting workspace password for root workspace");
             self.domain_operations
                 .backend_tx_manager
                 .set_workspace_password(crate::WORKSPACE_ROOT_ID, workspace_master_password)
                 .await?;
 
-            println!("[ASYNC_KERNEL] Root workspace created successfully (awaiting first admin)");
+            info!(target: "citadel", "Root workspace created successfully (awaiting first admin)");
         }
 
         Ok(())
@@ -301,6 +306,38 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         self.workspace_structure
             .as_ref()
             .and_then(|(_, path)| path.clone())
+    }
+
+    /// Persist node MDX content to file
+    ///
+    /// Writes the content to `{content_base_path}/{node_name}/CONTENT.md`
+    pub async fn persist_node_content(
+        &self,
+        node_name: &str,
+        mdx_content: &str,
+    ) -> Result<(), NetworkError> {
+        let Some(base_path) = self.get_content_base_path() else {
+            return Ok(());
+        };
+
+        let content_path = base_path.join(node_name).join("CONTENT.md");
+        info!(target: "citadel", "[ASYNC_KERNEL] Persisting node content to {:?}", content_path);
+
+        // Ensure parent directory exists
+        if let Some(parent) = content_path.parent() {
+            tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                NetworkError::msg(format!("Failed to create directory {:?}: {}", parent, e))
+            })?;
+        }
+
+        tokio::fs::write(&content_path, mdx_content)
+            .await
+            .map_err(|e| {
+                NetworkError::msg(format!(
+                    "Failed to persist node content to {:?}: {}",
+                    content_path, e
+                ))
+            })
     }
 
     /// Persist office MDX content to file
@@ -368,11 +405,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         config: &WorkspaceStructureConfig,
         base_path: Option<&std::path::Path>,
     ) -> Result<(), NetworkError> {
-        use citadel_workspace_types::structs::{Domain, Office, Room};
+        use citadel_workspace_types::structs::{DomainNode, NodeEntityType};
         use uuid::Uuid;
 
-        println!(
-            "[ASYNC_KERNEL] Initializing workspace structure: {} with {} offices",
+        info!(
+            target: "citadel",
+            "Initializing workspace structure: {} with {} offices",
             config.name,
             config.offices.len()
         );
@@ -387,6 +425,31 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         }
         // If no default is set, the first office will be the default
         let first_office_is_default = default_count == 0;
+
+        // Get the current tree nodes to add office/room nodes
+        let mut nodes = self
+            .domain_operations
+            .backend_tx_manager
+            .get_all_nodes()
+            .await?;
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock before unix epoch")
+            .as_secs();
+
+        // Derive entity type names from the schema (SSOT) instead of hardcoding
+        use citadel_workspace_types::structs::TreeSchema;
+        let schema = TreeSchema::default();
+        let root_child_types = schema.root_child_types();
+        let office_entity_type = root_child_types
+            .first()
+            .expect("schema must define at least one root child type")
+            .to_string();
+        let office_child_types = schema.get_allowed_children(&office_entity_type);
+        let room_entity_type = office_child_types
+            .first()
+            .cloned()
+            .expect("schema must define at least one child type for office-level nodes");
 
         for (idx, office_config) in config.offices.iter().enumerate() {
             // Determine if this office should be the default
@@ -408,15 +471,17 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
                 match std::fs::read_to_string(&full_path) {
                     Ok(content) => {
-                        println!(
-                            "[ASYNC_KERNEL] Loaded markdown for office '{}': {:?}",
+                        info!(
+                            target: "citadel",
+                            "Loaded markdown for office '{}': {:?}",
                             office_config.name, full_path
                         );
                         content
                     }
                     Err(e) => {
-                        println!(
-                            "[ASYNC_KERNEL] Warning: Failed to load markdown for office '{}': {}",
+                        warn!(
+                            target: "citadel",
+                            "Failed to load markdown for office '{}': {}",
                             office_config.name, e
                         );
                         String::new()
@@ -433,67 +498,42 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 None
             };
 
-            // Create office struct - no owner initially, first admin user claims it
-            let office = Office {
+            // Create office DomainNode at depth 1
+            let office_node = DomainNode {
                 id: office_id.clone(),
-                owner_id: UNASSIGNED_OWNER.to_string(),
-                workspace_id: crate::WORKSPACE_ROOT_ID.to_string(),
+                parent_id: Some(crate::WORKSPACE_ROOT_ID.to_string()),
+                entity_type: NodeEntityType::Child(office_entity_type.clone()),
+                depth: 1,
                 name: office_config.name.clone(),
                 description: office_config.description.clone().unwrap_or_default(),
+                owner_id: UNASSIGNED_OWNER.to_string(),
                 members: vec![],
-                rooms: Vec::new(),
+                children: Vec::new(),
                 mdx_content,
                 rules: office_config.rules.clone(),
                 chat_enabled: office_config.chat_enabled,
                 chat_channel_id,
                 default_permissions: office_config.default_permissions.clone(),
-                is_default,
                 metadata: Vec::new(),
+                allowed_child_types: Some(schema.get_allowed_children(&office_entity_type)),
+                is_default,
+                created_at: current_time,
+                updated_at: current_time,
             };
 
-            println!(
-                "[ASYNC_KERNEL] Creating office '{}' (id: {}, chat_enabled: {}, is_default: {})",
+            info!(
+                target: "citadel",
+                "Creating office node '{}' (id: {}, chat_enabled: {}, is_default: {})",
                 office_config.name, office_id, office_config.chat_enabled, is_default
             );
 
-            // Insert office
-            self.domain_operations
-                .backend_tx_manager
-                .insert_office(office_id.clone(), office.clone())
-                .await?;
+            // Add office to workspace's children
+            if let Some(workspace_node) = nodes.get_mut(crate::WORKSPACE_ROOT_ID) {
+                workspace_node.children.push(office_id.clone());
+            }
 
-            // Insert domain
-            let domain = Domain::Office {
-                office: office.clone(),
-            };
-            self.domain_operations
-                .backend_tx_manager
-                .insert_domain(office_id.clone(), domain)
-                .await?;
-
-            // Add office to workspace
-            let mut workspace = self
-                .domain_operations
-                .backend_tx_manager
-                .get_workspace(crate::WORKSPACE_ROOT_ID)
-                .await?
-                .ok_or_else(|| NetworkError::msg("Root workspace not found"))?;
-
-            workspace.offices.push(office_id.clone());
-            self.domain_operations
-                .backend_tx_manager
-                .insert_workspace(crate::WORKSPACE_ROOT_ID.to_string(), workspace.clone())
-                .await?;
-
-            // Update workspace domain
-            let ws_domain = Domain::Workspace { workspace };
-            self.domain_operations
-                .backend_tx_manager
-                .insert_domain(crate::WORKSPACE_ROOT_ID.to_string(), ws_domain)
-                .await?;
-
-            // Create rooms within this office
-            let mut office_rooms = Vec::new();
+            // Create room nodes within this office, accumulating children on office_node
+            let mut office_node = office_node;
             for room_config in &office_config.rooms {
                 let room_id = Uuid::new_v4().to_string();
 
@@ -507,15 +547,17 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
                     match std::fs::read_to_string(&full_path) {
                         Ok(content) => {
-                            println!(
-                                "[ASYNC_KERNEL] Loaded markdown for room '{}': {:?}",
+                            info!(
+                                target: "citadel",
+                                "Loaded markdown for room '{}': {:?}",
                                 room_config.name, full_path
                             );
                             content
                         }
                         Err(e) => {
-                            println!(
-                                "[ASYNC_KERNEL] Warning: Failed to load markdown for room '{}': {}",
+                            warn!(
+                                target: "citadel",
+                                "Failed to load markdown for room '{}': {}",
                                 room_config.name, e
                             );
                             String::new()
@@ -532,70 +574,53 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                     None
                 };
 
-                // Create room struct - no owner initially, first admin user claims it
-                let room = Room {
+                // Create room DomainNode at depth 2
+                let room_node = DomainNode {
                     id: room_id.clone(),
-                    owner_id: UNASSIGNED_OWNER.to_string(),
-                    office_id: office_id.clone(),
+                    parent_id: Some(office_id.clone()),
+                    entity_type: NodeEntityType::Child(room_entity_type.clone()),
+                    depth: 2,
                     name: room_config.name.clone(),
                     description: room_config.description.clone().unwrap_or_default(),
+                    owner_id: UNASSIGNED_OWNER.to_string(),
                     members: vec![],
+                    children: Vec::new(),
                     mdx_content: room_mdx_content,
                     rules: room_config.rules.clone(),
                     chat_enabled: room_config.chat_enabled,
                     chat_channel_id: room_chat_channel_id,
                     default_permissions: room_config.default_permissions.clone(),
                     metadata: Vec::new(),
+                    allowed_child_types: Some(schema.get_allowed_children(&room_entity_type)),
+                    is_default: false,
+                    created_at: current_time,
+                    updated_at: current_time,
                 };
 
-                println!(
-                    "[ASYNC_KERNEL] Creating room '{}' in office '{}' (id: {}, chat_enabled: {})",
+                info!(
+                    target: "citadel",
+                    "Creating room node '{}' in office '{}' (id: {}, chat_enabled: {})",
                     room_config.name, office_config.name, room_id, room_config.chat_enabled
                 );
 
-                // Insert room
-                self.domain_operations
-                    .backend_tx_manager
-                    .insert_room(room_id.clone(), room.clone())
-                    .await?;
+                // Accumulate room as child of office
+                office_node.children.push(room_id.clone());
 
-                // Insert domain
-                let room_domain = Domain::Room { room };
-                self.domain_operations
-                    .backend_tx_manager
-                    .insert_domain(room_id.clone(), room_domain)
-                    .await?;
-
-                office_rooms.push(room_id);
+                // Insert room node
+                nodes.insert(room_id, room_node);
             }
 
-            // Update office with room IDs
-            if !office_rooms.is_empty() {
-                let mut updated_office = self
-                    .domain_operations
-                    .backend_tx_manager
-                    .get_office(&office_id)
-                    .await?
-                    .ok_or_else(|| NetworkError::msg("Office not found after creation"))?;
-
-                updated_office.rooms = office_rooms;
-                self.domain_operations
-                    .backend_tx_manager
-                    .insert_office(office_id.clone(), updated_office.clone())
-                    .await?;
-
-                // Update office domain
-                let updated_domain = Domain::Office {
-                    office: updated_office,
-                };
-                self.domain_operations
-                    .backend_tx_manager
-                    .insert_domain(office_id.clone(), updated_domain)
-                    .await?;
-            }
+            // Insert office node with accumulated children
+            nodes.insert(office_id, office_node);
         }
 
-        println!("[ASYNC_KERNEL] Workspace structure initialization complete");
+        // Save all nodes back to storage
+        self.domain_operations
+            .backend_tx_manager
+            .save_nodes(&nodes)
+            .await?;
+
+        info!(target: "citadel", "Workspace structure initialization complete");
         Ok(())
     }
 }
@@ -606,7 +631,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
     for AsyncWorkspaceServerKernel<R>
 {
     fn load_remote(&mut self, server_remote: NodeRemote<R>) -> Result<(), NetworkError> {
-        println!("[ASYNC_KERNEL] Loading NodeRemote into AsyncWorkspaceServerKernel");
+        info!(target: "citadel", "Loading NodeRemote into AsyncWorkspaceServerKernel");
 
         // Set in both places
         *self.node_remote.write() = Some(server_remote.clone());
@@ -618,19 +643,19 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
     }
 
     async fn on_start(&self) -> Result<(), NetworkError> {
-        println!("[ASYNC_KERNEL] NetKernel started");
+        info!(target: "citadel", "NetKernel started");
 
         // Re-run admin injection now that NodeRemote is available
         if self.domain_operations.backend_tx_manager.is_test_mode() {
-            println!("[ASYNC_KERNEL] ERROR: NodeRemote not set after node start!");
+            error!(target: "citadel", "NodeRemote not set after node start!");
         } else if let Some(workspace_password) = &self.workspace_password {
-            println!("[ASYNC_KERNEL] NodeRemote is available, injecting admin and workspace");
+            info!(target: "citadel", "NodeRemote is available, injecting admin and workspace");
             // Inject admin now that we have backend storage
             self.inject_admin_user(workspace_password).await?;
 
             // Initialize workspace structure from config if provided
             if let Some((structure, base_path)) = &self.workspace_structure {
-                println!("[ASYNC_KERNEL] Initializing workspace structure from config");
+                info!(target: "citadel", "Initializing workspace structure from config");
                 self.initialize_workspace_structure(structure, base_path.as_deref())
                     .await?;
             }
@@ -675,29 +700,32 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     let user_id = account_manager
                         .get_username_by_cid(connect_success.session_cid)
                         .await?
-                        .ok_or_else(|| NetworkError::Generic("User not found".to_string()))?;
+                        .ok_or_else(|| {
+                            NetworkError::Generic(format!(
+                                "User not found for CID {}",
+                                connect_success.session_cid
+                            ))
+                        })?;
 
                     info!(target: "citadel", "[ASYNC_KERNEL] User {} connected with cid {} ({})", user_id, connect_success.session_cid, user_cid);
 
                     // Check if user is already in workspace domain
-                    println!("[ASYNC_KERNEL] Checking for root workspace...");
+                    debug!(target: "citadel", "Checking for root workspace...");
 
                     // Debug: Check current storage mode
                     if this.domain_operations.backend_tx_manager.is_test_mode() {
-                        println!(
-                            "[ASYNC_KERNEL] WARNING: Checking workspace in test storage mode!"
-                        );
+                        warn!(target: "citadel", "Checking workspace in test storage mode!");
                     } else {
-                        println!("[ASYNC_KERNEL] Checking workspace in backend storage mode");
+                        debug!(target: "citadel", "Checking workspace in backend storage mode");
                     }
 
                     let workspace = match this.get_domain(crate::WORKSPACE_ROOT_ID).await? {
                         Some(domain) => {
-                            println!("[ASYNC_KERNEL] Root workspace found");
+                            debug!(target: "citadel", "Root workspace found");
                             domain
                         }
                         None => {
-                            error!(target: "citadel", "[ASYNC_KERNEL] Root workspace not found for user {}", user_id);
+                            error!(target: "citadel", "Root workspace not found for user {}", user_id);
 
                             // Debug: Let's check what domains exist
                             let all_domains = this
@@ -705,8 +733,9 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                 .backend_tx_manager
                                 .get_all_domains()
                                 .await?;
-                            println!(
-                                "[ASYNC_KERNEL] Available domains: {:?}",
+                            debug!(
+                                target: "citadel",
+                                "Available domains: {:?}",
                                 all_domains.keys().collect::<Vec<_>>()
                             );
 
@@ -949,7 +978,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
     }
 
     async fn on_stop(&mut self) -> Result<(), NetworkError> {
-        println!("[ASYNC_KERNEL] NetKernel stopping");
+        info!(target: "citadel", "NetKernel stopping");
         Ok(())
     }
 }

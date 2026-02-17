@@ -39,9 +39,7 @@ use citadel_sdk::prelude::Ratchet;
 pub mod core;
 pub mod entity_ops;
 pub mod node_ops;
-pub mod office_ops;
 pub mod operations_trait;
-pub mod room_ops;
 pub mod user_ops;
 
 // Async operations module
@@ -64,9 +62,7 @@ pub use core::{permission_denied, DomainEntity};
 // Main trait definitions
 pub use entity_ops::EntityOperations;
 pub use node_ops::AsyncNodeOperations;
-pub use office_ops::OfficeOperations;
 pub use operations_trait::DomainOperations;
-pub use room_ops::RoomOperations;
 pub use user_ops::UserManagementOperations;
 
 // ═══════════════════════════════════════════════════════════════════════════════════
@@ -90,11 +86,7 @@ pub use user_ops::UserManagementOperations;
 /// ```
 #[auto_impl::auto_impl(Arc)]
 pub trait CompleteDomainOperations<R: Ratchet + Send + Sync + 'static>:
-    DomainOperations<R>
-    + UserManagementOperations<R>
-    + EntityOperations<R>
-    + OfficeOperations<R>
-    + RoomOperations<R>
+    DomainOperations<R> + UserManagementOperations<R> + EntityOperations<R>
 {
     // This trait automatically combines all operation categories
     // No additional methods needed - all functionality comes from constituent traits

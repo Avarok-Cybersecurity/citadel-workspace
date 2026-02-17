@@ -6,7 +6,7 @@
 use crate::kernel::transaction::BackendTransactionManager;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{
-    Domain, Office, Permission, Room, User, UserRole, Workspace,
+    Domain, DomainNode, NodeEntityType, Permission, TreeSchema, User, UserRole, Workspace,
 };
 use std::sync::Arc;
 
@@ -57,19 +57,27 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncReadTransaction<R> {
         &self,
         user_id: &str,
         workspace_id: Option<String>,
-    ) -> Result<Vec<Office>, NetworkError> {
-        let domains = self.backend_tx_manager.get_all_domains().await?;
+    ) -> Result<Vec<DomainNode>, NetworkError> {
+        // Derive "office" type names from the schema (SSOT) — these are direct children of root
+        let schema = TreeSchema::default();
+        let office_types = schema.root_child_types();
+
+        let nodes = self.backend_tx_manager.get_all_nodes().await?;
         let mut offices = Vec::new();
 
-        for (_, domain) in domains {
-            if let Domain::Office { office } = domain {
-                if office.members.contains(&user_id.to_string()) {
+        for (_, node) in nodes {
+            // Filter for root-child types (Office equivalent) derived from schema
+            if matches!(node.entity_type, NodeEntityType::Child(ref name) if office_types.contains(&name.as_str()))
+            {
+                // Check if user is a member
+                if node.members.contains(&user_id.to_string()) {
+                    // Filter by workspace_id if provided
                     if let Some(ref wid) = workspace_id {
-                        if office.workspace_id == *wid {
-                            offices.push(office);
+                        if node.parent_id.as_ref() == Some(wid) {
+                            offices.push(node);
                         }
                     } else {
-                        offices.push(office);
+                        offices.push(node);
                     }
                 }
             }
@@ -82,19 +90,27 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncReadTransaction<R> {
         &self,
         user_id: &str,
         office_id: Option<String>,
-    ) -> Result<Vec<Room>, NetworkError> {
-        let domains = self.backend_tx_manager.get_all_domains().await?;
+    ) -> Result<Vec<DomainNode>, NetworkError> {
+        // Derive "room" type names from the schema (SSOT) — these are leaf types
+        let schema = TreeSchema::default();
+        let leaf_types = schema.leaf_types();
+
+        let nodes = self.backend_tx_manager.get_all_nodes().await?;
         let mut rooms = Vec::new();
 
-        for (_, domain) in domains {
-            if let Domain::Room { room } = domain {
-                if room.members.contains(&user_id.to_string()) {
+        for (_, node) in nodes {
+            // Filter for leaf types (Room equivalent) derived from schema
+            if matches!(node.entity_type, NodeEntityType::Child(ref name) if leaf_types.contains(&name.as_str()))
+            {
+                // Check if user is a member
+                if node.members.contains(&user_id.to_string()) {
+                    // Filter by office_id if provided
                     if let Some(ref oid) = office_id {
-                        if room.office_id == *oid {
-                            rooms.push(room);
+                        if node.parent_id.as_ref() == Some(oid) {
+                            rooms.push(node);
                         }
                     } else {
-                        rooms.push(room);
+                        rooms.push(node);
                     }
                 }
             }
@@ -189,51 +205,53 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWriteTransaction<R> {
         domain_id: &str,
         role: UserRole,
     ) -> Result<(), NetworkError> {
-        // Get the domain
+        // Try to get the domain first (for workspaces)
         if let Some(mut domain) = self.backend_tx_manager.get_domain(domain_id).await? {
-            // Add user to domain members
+            // Add user to workspace members
             match &mut domain {
                 Domain::Workspace { workspace } => {
                     if !workspace.members.contains(&user_id.to_string()) {
                         workspace.members.push(user_id.to_string());
                     }
                 }
-                Domain::Office { office } => {
-                    if !office.members.contains(&user_id.to_string()) {
-                        office.members.push(user_id.to_string());
-                    }
-                }
-                Domain::Room { room } => {
-                    if !room.members.contains(&user_id.to_string()) {
-                        room.members.push(user_id.to_string());
-                    }
-                }
             }
 
             // Update the domain
             self.update_domain(domain_id, domain).await?;
+        } else {
+            // If not a workspace, try as a node (office/room)
+            if let Some(mut node) = self.backend_tx_manager.get_node(domain_id).await? {
+                if !node.members.contains(&user_id.to_string()) {
+                    node.members.push(user_id.to_string());
+                }
 
-            // Update user permissions
-            if let Some(mut user) = self.backend_tx_manager.get_user(user_id).await? {
-                // Add domain permissions based on role
-                let permissions = match role {
-                    UserRole::Admin => vec![Permission::All],
-                    UserRole::Member => vec![
-                        Permission::CreateRoom,
-                        Permission::SendMessages,
-                        Permission::ReadMessages,
-                    ],
-                    UserRole::Guest => vec![Permission::ReadMessages],
-                    UserRole::Owner => vec![Permission::All],
-                    UserRole::Banned => vec![],
-                    UserRole::Custom(_, _) => vec![], // Custom roles start with no default permissions
-                };
-
-                user.permissions
-                    .insert(domain_id.to_string(), permissions.into_iter().collect());
-
-                self.update_user(user_id, user).await?;
+                // Save the updated node
+                let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
+                nodes.insert(domain_id.to_string(), node);
+                self.backend_tx_manager.save_nodes(&nodes).await?;
             }
+        }
+
+        // Update user permissions
+        if let Some(mut user) = self.backend_tx_manager.get_user(user_id).await? {
+            // Add domain permissions based on role
+            let permissions = match role {
+                UserRole::Admin => vec![Permission::All],
+                UserRole::Member => vec![
+                    Permission::CreateNode,
+                    Permission::SendMessages,
+                    Permission::ReadMessages,
+                ],
+                UserRole::Guest => vec![Permission::ReadMessages],
+                UserRole::Owner => vec![Permission::All],
+                UserRole::Banned => vec![],
+                UserRole::Custom(_, _) => vec![], // Custom roles start with no default permissions
+            };
+
+            user.permissions
+                .insert(domain_id.to_string(), permissions.into_iter().collect());
+
+            self.update_user(user_id, user).await?;
         }
 
         Ok(())
@@ -244,29 +262,33 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWriteTransaction<R> {
         user_id: &str,
         domain_id: &str,
     ) -> Result<(), NetworkError> {
-        // Get the domain
+        // Try to get the domain first (for workspaces)
         if let Some(mut domain) = self.backend_tx_manager.get_domain(domain_id).await? {
-            // Remove user from domain members
+            // Remove user from workspace members
             match &mut domain {
                 Domain::Workspace { workspace } => {
                     workspace.members.retain(|m| m != user_id);
-                }
-                Domain::Office { office } => {
-                    office.members.retain(|m| m != user_id);
-                }
-                Domain::Room { room } => {
-                    room.members.retain(|m| m != user_id);
                 }
             }
 
             // Update the domain
             self.update_domain(domain_id, domain).await?;
+        } else {
+            // If not a workspace, try as a node (office/room)
+            if let Some(mut node) = self.backend_tx_manager.get_node(domain_id).await? {
+                node.members.retain(|m| m != user_id);
 
-            // Remove user permissions for this domain
-            if let Some(mut user) = self.backend_tx_manager.get_user(user_id).await? {
-                user.permissions.remove(domain_id);
-                self.update_user(user_id, user).await?;
+                // Save the updated node
+                let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
+                nodes.insert(domain_id.to_string(), node);
+                self.backend_tx_manager.save_nodes(&nodes).await?;
             }
+        }
+
+        // Remove user permissions for this domain
+        if let Some(mut user) = self.backend_tx_manager.get_user(user_id).await? {
+            user.permissions.remove(domain_id);
+            self.update_user(user_id, user).await?;
         }
 
         Ok(())

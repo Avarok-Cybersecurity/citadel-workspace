@@ -19,3 +19,6 @@ export type { AuthSession } from './auth';
 // Export session management
 export { WorkspaceSessionManager } from './session';
 export type { SessionConfig, WorkspaceSessionInfo } from './session';
+
+// Note: isVariant, isResponseType, isRequestType, DiscriminatorOf, ResponseType, RequestType
+// are re-exported via `export * from 'citadel-internal-service-wasm-client'` above.

@@ -1,7 +1,10 @@
+use citadel_logging::info;
 use citadel_sdk::prelude::{BackendHandler, NetworkError, NodeRemote, ProtocolRemoteExt, Ratchet};
 use citadel_workspace_types::structs::{Domain, DomainNode, TreeSchema, User, Workspace};
 use citadel_workspace_types::GroupMessage;
 use parking_lot::RwLock;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 pub mod async_transactions;
@@ -24,9 +27,7 @@ impl<R: Ratchet + Send + Sync + 'static> Default for BackendTransactionManager<R
 
 impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     pub fn new() -> Self {
-        println!(
-            "[BTM_NEW_PRINTLN] Initializing BackendTransactionManager with NodeRemote backend..."
-        );
+        info!(target: "citadel", "Initializing BackendTransactionManager with NodeRemote backend");
 
         Self {
             node_remote: Arc::new(RwLock::new(None)),
@@ -53,251 +54,125 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             .cloned()
     }
 
-    /// Get all domains from backend
+    // ========== Generic Backend Helpers (SSOT for persistence pattern) ==========
+
+    /// Generic get: deserializes a value from the backend by key.
+    /// Returns `None` if the key doesn't exist.
+    async fn backend_get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, NetworkError> {
+        if self.node_remote.read().is_none() {
+            return if let Some(data) = self.test_storage.read().get(key) {
+                serde_json::from_slice(data)
+                    .map(Some)
+                    .map_err(|e| NetworkError::msg(format!("Failed to deserialize {key}: {e}")))
+            } else {
+                Ok(None)
+            };
+        }
+
+        let node_remote = self.get_node_remote()?;
+        let backend = node_remote
+            .propose_target(0, 0)
+            .await
+            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {e}")))?;
+
+        if let Some(data) = backend.get(key).await? {
+            serde_json::from_slice(&data)
+                .map(Some)
+                .map_err(|e| NetworkError::msg(format!("Failed to deserialize {key}: {e}")))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Generic save: serializes a value and writes it to the backend by key.
+    async fn backend_save<T: Serialize>(&self, key: &str, value: &T) -> Result<(), NetworkError> {
+        let data = serde_json::to_vec(value)
+            .map_err(|e| NetworkError::msg(format!("Failed to serialize {key}: {e}")))?;
+
+        if self.node_remote.read().is_none() {
+            self.test_storage.write().insert(key.to_string(), data);
+            return Ok(());
+        }
+
+        let node_remote = self.get_node_remote()?;
+        let backend = node_remote
+            .propose_target(0, 0)
+            .await
+            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {e}")))?;
+        backend.set(key, data).await?;
+        Ok(())
+    }
+
+    // ========== Typed Accessors (delegate to generic helpers) ==========
+
     pub async fn get_all_domains(&self) -> Result<HashMap<String, Domain>, NetworkError> {
-        // Check if we're in test mode without NodeRemote
-        if self.node_remote.read().is_none() {
-            if let Some(data) = self.test_storage.read().get("citadel_workspace.domains") {
-                return serde_json::from_slice(data).map_err(|e| {
-                    NetworkError::msg(format!("Failed to deserialize domains: {}", e))
-                });
-            } else {
-                return Ok(HashMap::new());
-            }
-        }
-
-        let node_remote = self.get_node_remote()?;
-        let backend = node_remote
-            .propose_target(0, 0)
-            .await
-            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
-
-        if let Some(data) = backend.get("citadel_workspace.domains").await? {
-            serde_json::from_slice(&data)
-                .map_err(|e| NetworkError::msg(format!("Failed to deserialize domains: {}", e)))
-        } else {
-            Ok(HashMap::new())
-        }
+        Ok(self
+            .backend_get("citadel_workspace.domains")
+            .await?
+            .unwrap_or_default())
     }
 
-    /// Get all users from backend
     pub async fn get_all_users(&self) -> Result<HashMap<String, User>, NetworkError> {
-        // Check if we're in test mode without NodeRemote
-        if self.node_remote.read().is_none() {
-            if let Some(data) = self.test_storage.read().get("citadel_workspace.users") {
-                return serde_json::from_slice(data)
-                    .map_err(|e| NetworkError::msg(format!("Failed to deserialize users: {}", e)));
-            } else {
-                return Ok(HashMap::new());
-            }
-        }
-
-        let node_remote = self.get_node_remote()?;
-        let backend = node_remote
-            .propose_target(0, 0)
-            .await
-            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
-
-        if let Some(data) = backend.get("citadel_workspace.users").await? {
-            serde_json::from_slice(&data)
-                .map_err(|e| NetworkError::msg(format!("Failed to deserialize users: {}", e)))
-        } else {
-            Ok(HashMap::new())
-        }
+        Ok(self
+            .backend_get("citadel_workspace.users")
+            .await?
+            .unwrap_or_default())
     }
 
-    /// Get all workspaces from backend
     pub async fn get_all_workspaces(&self) -> Result<HashMap<String, Workspace>, NetworkError> {
-        // Check if we're in test mode without NodeRemote
-        if self.node_remote.read().is_none() {
-            if let Some(data) = self.test_storage.read().get("citadel_workspace.workspaces") {
-                return serde_json::from_slice(data).map_err(|e| {
-                    NetworkError::msg(format!("Failed to deserialize workspaces: {}", e))
-                });
-            } else {
-                return Ok(HashMap::new());
-            }
-        }
-
-        let node_remote = self.get_node_remote()?;
-        let backend = node_remote
-            .propose_target(0, 0)
-            .await
-            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
-
-        if let Some(data) = backend.get("citadel_workspace.workspaces").await? {
-            serde_json::from_slice(&data)
-                .map_err(|e| NetworkError::msg(format!("Failed to deserialize workspaces: {}", e)))
-        } else {
-            Ok(HashMap::new())
-        }
+        Ok(self
+            .backend_get("citadel_workspace.workspaces")
+            .await?
+            .unwrap_or_default())
     }
 
-    /// Get all passwords from backend
     pub async fn get_all_passwords(&self) -> Result<HashMap<String, String>, NetworkError> {
-        // Check if we're in test mode without NodeRemote
-        if self.node_remote.read().is_none() {
-            if let Some(data) = self.test_storage.read().get("citadel_workspace.passwords") {
-                return serde_json::from_slice(data).map_err(|e| {
-                    NetworkError::msg(format!("Failed to deserialize passwords: {}", e))
-                });
-            } else {
-                return Ok(HashMap::new());
-            }
-        }
-
-        let node_remote = self.get_node_remote()?;
-        let backend = node_remote
-            .propose_target(0, 0)
-            .await
-            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
-
-        if let Some(data) = backend.get("citadel_workspace.passwords").await? {
-            serde_json::from_slice(&data)
-                .map_err(|e| NetworkError::msg(format!("Failed to deserialize passwords: {}", e)))
-        } else {
-            Ok(HashMap::new())
-        }
+        Ok(self
+            .backend_get("citadel_workspace.passwords")
+            .await?
+            .unwrap_or_default())
     }
 
-    /// Save domains to backend
     pub async fn save_domains(
         &self,
         domains: &HashMap<String, Domain>,
     ) -> Result<(), NetworkError> {
-        // Check if we're in test mode without NodeRemote
-        if self.node_remote.read().is_none() {
-            let data = serde_json::to_vec(domains)
-                .map_err(|e| NetworkError::msg(format!("Failed to serialize domains: {}", e)))?;
-            self.test_storage
-                .write()
-                .insert("citadel_workspace.domains".to_string(), data);
-            return Ok(());
-        }
-
-        let node_remote = self.get_node_remote()?;
-        let backend = node_remote
-            .propose_target(0, 0)
+        self.backend_save("citadel_workspace.domains", domains)
             .await
-            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
-        let data = serde_json::to_vec(domains)
-            .map_err(|e| NetworkError::msg(format!("Failed to serialize domains: {}", e)))?;
-        backend.set("citadel_workspace.domains", data).await?;
-        Ok(())
     }
 
-    /// Save users to backend
     pub async fn save_users(&self, users: &HashMap<String, User>) -> Result<(), NetworkError> {
-        // Check if we're in test mode without NodeRemote
-        if self.node_remote.read().is_none() {
-            let data = serde_json::to_vec(users)
-                .map_err(|e| NetworkError::msg(format!("Failed to serialize users: {}", e)))?;
-            self.test_storage
-                .write()
-                .insert("citadel_workspace.users".to_string(), data);
-            return Ok(());
-        }
-
-        let node_remote = self.get_node_remote()?;
-        let backend = node_remote
-            .propose_target(0, 0)
-            .await
-            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
-        let data = serde_json::to_vec(users)
-            .map_err(|e| NetworkError::msg(format!("Failed to serialize users: {}", e)))?;
-        backend.set("citadel_workspace.users", data).await?;
-        Ok(())
+        self.backend_save("citadel_workspace.users", users).await
     }
 
-    /// Save workspaces to backend
     pub async fn save_workspaces(
         &self,
         workspaces: &HashMap<String, Workspace>,
     ) -> Result<(), NetworkError> {
-        // Check if we're in test mode without NodeRemote
-        if self.node_remote.read().is_none() {
-            let data = serde_json::to_vec(workspaces)
-                .map_err(|e| NetworkError::msg(format!("Failed to serialize workspaces: {}", e)))?;
-            self.test_storage
-                .write()
-                .insert("citadel_workspace.workspaces".to_string(), data);
-            return Ok(());
-        }
-
-        let node_remote = self.get_node_remote()?;
-        let backend = node_remote
-            .propose_target(0, 0)
+        self.backend_save("citadel_workspace.workspaces", workspaces)
             .await
-            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
-        let data = serde_json::to_vec(workspaces)
-            .map_err(|e| NetworkError::msg(format!("Failed to serialize workspaces: {}", e)))?;
-        backend.set("citadel_workspace.workspaces", data).await?;
-        Ok(())
     }
 
-    /// Save passwords to backend
     pub async fn save_passwords(
         &self,
         passwords: &HashMap<String, String>,
     ) -> Result<(), NetworkError> {
-        // Check if we're in test mode without NodeRemote
-        if self.node_remote.read().is_none() {
-            let data = serde_json::to_vec(passwords)
-                .map_err(|e| NetworkError::msg(format!("Failed to serialize passwords: {}", e)))?;
-            self.test_storage
-                .write()
-                .insert("citadel_workspace.passwords".to_string(), data);
-            return Ok(());
-        }
-
-        let node_remote = self.get_node_remote()?;
-        let backend = node_remote
-            .propose_target(0, 0)
+        self.backend_save("citadel_workspace.passwords", passwords)
             .await
-            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
-        let data = serde_json::to_vec(passwords)
-            .map_err(|e| NetworkError::msg(format!("Failed to serialize passwords: {}", e)))?;
-        backend.set("citadel_workspace.passwords", data).await?;
-        Ok(())
     }
 
     // ========== Group Messaging Storage ==========
 
-    /// Get the storage key for a group's messages
     fn group_messages_key(group_id: &str) -> String {
         format!("citadel_workspace.group_messages.{}", group_id)
     }
 
-    /// Get all messages for a group
     pub async fn get_group_messages(
         &self,
         group_id: &str,
     ) -> Result<Vec<GroupMessage>, NetworkError> {
         let key = Self::group_messages_key(group_id);
-
-        if self.node_remote.read().is_none() {
-            if let Some(data) = self.test_storage.read().get(&key) {
-                return serde_json::from_slice(data).map_err(|e| {
-                    NetworkError::msg(format!("Failed to deserialize group messages: {}", e))
-                });
-            } else {
-                return Ok(Vec::new());
-            }
-        }
-
-        let node_remote = self.get_node_remote()?;
-        let backend = node_remote
-            .propose_target(0, 0)
-            .await
-            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
-
-        if let Some(data) = backend.get(&key).await? {
-            serde_json::from_slice(&data).map_err(|e| {
-                NetworkError::msg(format!("Failed to deserialize group messages: {}", e))
-            })
-        } else {
-            Ok(Vec::new())
-        }
+        Ok(self.backend_get(&key).await?.unwrap_or_default())
     }
 
     /// Get paginated messages for a group
@@ -351,31 +226,13 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(thread_messages)
     }
 
-    /// Save all messages for a group
     async fn save_group_messages(
         &self,
         group_id: &str,
         messages: &[GroupMessage],
     ) -> Result<(), NetworkError> {
         let key = Self::group_messages_key(group_id);
-
-        if self.node_remote.read().is_none() {
-            let data = serde_json::to_vec(messages).map_err(|e| {
-                NetworkError::msg(format!("Failed to serialize group messages: {}", e))
-            })?;
-            self.test_storage.write().insert(key, data);
-            return Ok(());
-        }
-
-        let node_remote = self.get_node_remote()?;
-        let backend = node_remote
-            .propose_target(0, 0)
-            .await
-            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
-        let data = serde_json::to_vec(messages)
-            .map_err(|e| NetworkError::msg(format!("Failed to serialize group messages: {}", e)))?;
-        backend.set(&key, data).await?;
-        Ok(())
+        self.backend_save(&key, &messages).await
     }
 
     /// Store a new group message
@@ -475,108 +332,26 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
 
     // ========== DomainNode (Generalized Tree Hierarchy) Storage ==========
 
-    /// Get all DomainNodes from backend
     pub async fn get_all_nodes(&self) -> Result<HashMap<String, DomainNode>, NetworkError> {
-        if self.node_remote.read().is_none() {
-            if let Some(data) = self.test_storage.read().get("citadel_workspace.nodes") {
-                return serde_json::from_slice(data)
-                    .map_err(|e| NetworkError::msg(format!("Failed to deserialize nodes: {}", e)));
-            } else {
-                return Ok(HashMap::new());
-            }
-        }
-
-        let node_remote = self.get_node_remote()?;
-        let backend = node_remote
-            .propose_target(0, 0)
-            .await
-            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
-
-        if let Some(data) = backend.get("citadel_workspace.nodes").await? {
-            serde_json::from_slice(&data)
-                .map_err(|e| NetworkError::msg(format!("Failed to deserialize nodes: {}", e)))
-        } else {
-            Ok(HashMap::new())
-        }
+        Ok(self
+            .backend_get("citadel_workspace.nodes")
+            .await?
+            .unwrap_or_default())
     }
 
-    /// Save all DomainNodes to backend
     pub async fn save_nodes(
         &self,
         nodes: &HashMap<String, DomainNode>,
     ) -> Result<(), NetworkError> {
-        if self.node_remote.read().is_none() {
-            let data = serde_json::to_vec(nodes)
-                .map_err(|e| NetworkError::msg(format!("Failed to serialize nodes: {}", e)))?;
-            self.test_storage
-                .write()
-                .insert("citadel_workspace.nodes".to_string(), data);
-            return Ok(());
-        }
-
-        let node_remote = self.get_node_remote()?;
-        let backend = node_remote
-            .propose_target(0, 0)
-            .await
-            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
-        let data = serde_json::to_vec(nodes)
-            .map_err(|e| NetworkError::msg(format!("Failed to serialize nodes: {}", e)))?;
-        backend.set("citadel_workspace.nodes", data).await?;
-        Ok(())
+        self.backend_save("citadel_workspace.nodes", nodes).await
     }
 
-    /// Get the tree schema from backend
     pub async fn get_tree_schema(&self) -> Result<Option<TreeSchema>, NetworkError> {
-        if self.node_remote.read().is_none() {
-            if let Some(data) = self
-                .test_storage
-                .read()
-                .get("citadel_workspace.tree_schema")
-            {
-                return serde_json::from_slice(data).map_err(|e| {
-                    NetworkError::msg(format!("Failed to deserialize tree schema: {}", e))
-                });
-            } else {
-                return Ok(None);
-            }
-        }
-
-        let node_remote = self.get_node_remote()?;
-        let backend = node_remote
-            .propose_target(0, 0)
-            .await
-            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
-
-        if let Some(data) = backend.get("citadel_workspace.tree_schema").await? {
-            let schema: TreeSchema = serde_json::from_slice(&data).map_err(|e| {
-                NetworkError::msg(format!("Failed to deserialize tree schema: {}", e))
-            })?;
-            Ok(Some(schema))
-        } else {
-            Ok(None)
-        }
+        self.backend_get("citadel_workspace.tree_schema").await
     }
 
-    /// Save the tree schema to backend
     pub async fn save_tree_schema(&self, schema: &TreeSchema) -> Result<(), NetworkError> {
-        if self.node_remote.read().is_none() {
-            let data = serde_json::to_vec(schema).map_err(|e| {
-                NetworkError::msg(format!("Failed to serialize tree schema: {}", e))
-            })?;
-            self.test_storage
-                .write()
-                .insert("citadel_workspace.tree_schema".to_string(), data);
-            return Ok(());
-        }
-
-        let node_remote = self.get_node_remote()?;
-        let backend = node_remote
-            .propose_target(0, 0)
+        self.backend_save("citadel_workspace.tree_schema", schema)
             .await
-            .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {}", e)))?;
-        let data = serde_json::to_vec(schema)
-            .map_err(|e| NetworkError::msg(format!("Failed to serialize tree schema: {}", e)))?;
-        backend.set("citadel_workspace.tree_schema", data).await?;
-        Ok(())
     }
 }

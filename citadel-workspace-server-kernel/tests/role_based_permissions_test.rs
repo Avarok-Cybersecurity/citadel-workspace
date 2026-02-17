@@ -1,9 +1,10 @@
-use citadel_workspace_server_kernel::handlers::domain::async_ops::{
-    AsyncOfficeOperations, AsyncPermissionOperations,
-};
-use citadel_workspace_types::structs::{Domain, Permission, UserRole, Workspace};
+use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncPermissionOperations;
+use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
+use citadel_workspace_types::WorkspaceProtocolRequest;
 
-use common::permissions_test_utils::*;
+use common::async_test_helpers::*;
+use common::permissions_test_utils::create_test_user;
+use common::workspace_test_utils::*;
 
 /// # Role-Based Permission Test Suite
 ///
@@ -24,45 +25,18 @@ use common::permissions_test_utils::*;
 
 #[tokio::test]
 async fn test_role_based_permissions() {
-    let (kernel, domain_ops) = setup_permissions_test_environment().await;
+    let kernel = create_test_kernel().await;
+    let domain_ops = kernel.domain_operations.clone();
 
-    const TEST_WORKSPACE_ID: &str = "test_workspace_id";
+    // Use the root workspace ID
+    let workspace_id = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 
     // Create test users with different roles
-    let owner_user = create_test_user("owner", UserRole::Admin); // Changed to Admin to have permissions
+    let owner_user = create_test_user("owner", UserRole::Admin);
     let member_user = create_test_user("member", UserRole::Member);
     let guest_user = create_test_user("guest", UserRole::Guest);
 
-    // Add users to the kernel and set up workspace & permissions
-    // Create and insert the workspace
-    let workspace = Workspace {
-        id: TEST_WORKSPACE_ID.to_string(),
-        name: "Test Workspace".to_string(),
-        description: "A workspace for testing".to_string(),
-        owner_id: owner_user.id.clone(),
-        members: vec![owner_user.id.clone()],
-        offices: Vec::new(),
-        metadata: Vec::new(),
-    };
-    let workspace_domain = Domain::Workspace {
-        workspace: workspace.clone(),
-    };
-
-    // Insert into both workspace table and domain table
-    kernel
-        .domain_operations
-        .backend_tx_manager
-        .insert_workspace(TEST_WORKSPACE_ID.to_string(), workspace)
-        .await
-        .unwrap();
-    kernel
-        .domain_operations
-        .backend_tx_manager
-        .insert_domain(TEST_WORKSPACE_ID.to_string(), workspace_domain)
-        .await
-        .unwrap();
-
-    // Insert users
+    // Insert users into the kernel
     kernel
         .domain_operations
         .backend_tx_manager
@@ -82,58 +56,20 @@ async fn test_role_based_permissions() {
         .await
         .unwrap();
 
-    // Grant CreateOffice permission to owner_user for the workspace
-    let mut fetched_owner_user = kernel
-        .domain_operations
-        .backend_tx_manager
-        .get_user(&owner_user.id)
-        .await
-        .unwrap()
-        .unwrap()
-        .clone();
-    fetched_owner_user
-        .permissions
-        .entry(TEST_WORKSPACE_ID.to_string())
-        .or_default()
-        .insert(Permission::CreateOffice);
-    kernel
-        .domain_operations
-        .backend_tx_manager
-        .update_user(&owner_user.id, fetched_owner_user)
-        .await
-        .unwrap();
+    // Create an office using protocol command (parent is the root workspace)
+    let create_office_response = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(workspace_id.to_string()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
+            name: "Test Office".to_string(),
+            description: "Test Description".to_string(),
+        },
+    )
+    .await
+    .unwrap();
 
-    // Add owner to the workspace members and grant permissions
-    let mut workspace_domain_mut = kernel
-        .domain_operations
-        .backend_tx_manager
-        .get_domain(TEST_WORKSPACE_ID)
-        .await
-        .unwrap()
-        .unwrap();
-    if let Domain::Workspace { ref mut workspace } = workspace_domain_mut {
-        workspace.members.push(owner_user.id.clone());
-    }
-    kernel
-        .domain_operations
-        .backend_tx_manager
-        .update_domain(TEST_WORKSPACE_ID, workspace_domain_mut)
-        .await
-        .unwrap();
-
-    // Create an office using domain_ops directly instead of protocol command
-    let office = domain_ops
-        .create_office(
-            owner_user.id.as_str(),
-            TEST_WORKSPACE_ID,
-            "Test Office",
-            "Test Description",
-            None,
-            None, // is_default
-        )
-        .await
-        .unwrap();
-
+    let office = extract_node(create_office_response).expect("Failed to create office");
     let office_id = office.id.clone();
 
     // First check if the creator (owner) has permissions
@@ -141,13 +77,13 @@ async fn test_role_based_permissions() {
         .check_entity_permission(
             owner_user.id.as_str(),
             office_id.as_str(),
-            Permission::EditOfficeConfig,
+            Permission::EditNodeConfig,
         )
         .await
         .unwrap();
     assert!(
         has_edit_permission,
-        "Owner should have EditOfficeConfig permission"
+        "Owner should have EditNodeConfig permission"
     );
 
     // Member should not have permission until added
@@ -165,42 +101,35 @@ async fn test_role_based_permissions() {
     );
 
     // Manually add the member to the office via backend
-    let mut domain = kernel
+    let mut node = kernel
         .domain_operations
         .backend_tx_manager
-        .get_domain(&office_id)
+        .get_node(&office_id)
         .await
         .unwrap()
-        .unwrap()
+        .expect("Node should exist")
         .clone();
-    if let Domain::Office { ref mut office } = domain {
-        office.members.push(member_user.id.clone());
-    }
+    node.members.push(member_user.id.clone());
     kernel
         .domain_operations
         .backend_tx_manager
-        .update_domain(&office_id, domain)
+        .update_node(&office_id, node)
         .await
         .unwrap();
 
     // Verify member was actually added to the office
     {
-        let domain = kernel
+        let node = kernel
             .domain_operations
             .backend_tx_manager
-            .get_domain(&office_id)
+            .get_node(&office_id)
             .await
             .unwrap()
-            .unwrap();
-        match domain {
-            Domain::Office { office } => {
-                assert!(
-                    office.members.contains(&member_user.id),
-                    "Member should be in the office members list"
-                );
-            }
-            _ => panic!("Expected office domain"),
-        }
+            .expect("Node should exist");
+        assert!(
+            node.members.contains(&member_user.id),
+            "Member should be in the office members list"
+        );
     }
 
     // Now member should have basic permissions but not admin permissions
@@ -221,13 +150,13 @@ async fn test_role_based_permissions() {
         .check_entity_permission(
             member_user.id.as_str(),
             office_id.as_str(),
-            Permission::EditOfficeConfig,
+            Permission::EditNodeConfig,
         )
         .await
         .unwrap();
     assert!(
         !has_edit_permission,
-        "Member should not have EditOfficeConfig permission"
+        "Member should not have EditNodeConfig permission"
     );
 
     // Guest should not have any permissions

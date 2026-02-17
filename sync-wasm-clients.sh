@@ -92,6 +92,7 @@ TYPESCRIPT_CLIENT_PACKAGE_JSON=$(cat << 'EOF'
     "./snippets/*"
   ],
   "dependencies": {
+    "@avarok/citadel-protocol-types": "^0.14.0",
     "ws": "^8.0.0",
     "uuid": "^9.0.0"
   },
@@ -226,6 +227,7 @@ if [ -d "$DEST1" ]; then
     "./snippets/*"
   ],
   "dependencies": {
+    "@avarok/citadel-protocol-types": "^0.14.0",
     "ws": "^8.0.0",
     "uuid": "^9.0.0"
   },

@@ -34,7 +34,7 @@
 // - No data corruption occurs during error conditions
 
 use citadel_workspace_types::{
-    structs::{Permission, UserRole},
+    structs::{NodeEntityType, Permission, UserRole},
     UpdateOperation, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
 
@@ -106,13 +106,11 @@ async fn test_command_invalid_access() {
     // by checking the expected behavior
     let result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::CreateOffice {
-            workspace_id: citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string(),
+        WorkspaceProtocolRequest::CreateNode {
+            parent_id: Some(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string()),
+            entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Office 1".to_string(),
             description: "Office 1 Description".to_string(),
-            mdx_content: None,
-            metadata: None,
-            is_default: None,
         },
     )
     .await
@@ -130,8 +128,9 @@ async fn test_command_invalid_access() {
     // Test Case 2: Attempt office deletion - should fail for non-existent office
     let result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::DeleteOffice {
-            office_id: "non_existent_id".to_string(),
+        WorkspaceProtocolRequest::DeleteNode {
+            node_id: "non_existent_id".to_string(),
+            cascade: true,
         },
     )
     .await
@@ -177,8 +176,8 @@ async fn test_command_invalid_resource() {
     // Test Case 1: Attempt to retrieve a non-existent office
     let result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::GetOffice {
-            office_id: "non_existent_id".to_string(),
+        WorkspaceProtocolRequest::GetNode {
+            node_id: "non_existent_id".to_string(),
         },
     )
     .await
@@ -187,7 +186,7 @@ async fn test_command_invalid_resource() {
     // Validate proper error response for missing office
     match result {
         WorkspaceProtocolResponse::Error(message) => {
-            assert!(message.contains("Failed to get office"));
+            assert!(message.contains("Failed to get") || message.contains("not found"));
         }
         _ => panic!("Expected error response for non-existent office"),
     }
@@ -195,8 +194,8 @@ async fn test_command_invalid_resource() {
     // Test Case 2: Attempt to retrieve a non-existent room
     let result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::GetRoom {
-            room_id: "non_existent_room".to_string(),
+        WorkspaceProtocolRequest::GetNode {
+            node_id: "non_existent_room".to_string(),
         },
     )
     .await
@@ -205,7 +204,7 @@ async fn test_command_invalid_resource() {
     // Validate proper error response for missing room
     match result {
         WorkspaceProtocolResponse::Error(message) => {
-            assert!(message.contains("Failed to get room"));
+            assert!(message.contains("Failed to get") || message.contains("not found"));
         }
         _ => panic!("Expected error response for non-existent room"),
     }
@@ -333,60 +332,60 @@ async fn test_member_operations_errors() {
 // PARAMETER VALIDATION ERROR HANDLING TESTS
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Tests proper error handling for invalid parameter combinations.
+/// Tests proper error handling for ListMembers with invalid parameters.
 ///
-/// This test validates that the system properly validates input parameters
-/// and rejects invalid combinations with clear error messages. It focuses on
-/// operations that have mutually exclusive parameters or missing required inputs.
+/// This test validates that the system properly handles ListMembers requests
+/// targeting non-existent domains, returning clear error messages.
 ///
 /// ## Test Scenarios
-/// 1. **ListMembers with No Parameters**: Tests validation of missing required parameters
-/// 2. **ListMembers with Conflicting Parameters**: Tests validation of mutually exclusive parameters
+/// 1. **ListMembers with None domain_id**: Defaults to workspace root, returns members
+/// 2. **ListMembers with non-existent domain_id**: Returns domain not found error
 ///
 /// ## Expected Behavior
-/// - Invalid parameter combinations are rejected immediately
-/// - Error messages clearly explain the parameter validation requirements
-/// - No database operations are attempted with invalid parameters
-/// - Validation occurs before any permission or resource existence checks
+/// - None domain_id defaults to workspace root and succeeds
+/// - Non-existent domain_id returns a clear error response
+/// - No system crashes or panics occur
 #[tokio::test]
 async fn test_list_members_invalid_parameters() {
     let kernel = create_test_kernel().await;
 
-    // Test Case 1: ListMembers with neither office_id nor room_id (missing required parameter)
+    // Test Case 1: ListMembers with None domain_id defaults to workspace root (valid)
     let result = execute_command(
         &kernel,
-        WorkspaceProtocolRequest::ListMembers {
-            office_id: None,
-            room_id: None,
-        },
+        WorkspaceProtocolRequest::ListMembers { domain_id: None },
     )
     .await
     .unwrap();
 
-    // Validate proper error response for missing required parameters
     match result {
-        WorkspaceProtocolResponse::Error(message) => {
-            assert_eq!(message, "Must specify exactly one of office_id or room_id");
+        WorkspaceProtocolResponse::Members(_) => {
+            // Expected - None defaults to workspace root which exists
         }
-        _ => panic!("Expected error response for missing required parameters"),
+        other => panic!(
+            "Expected Members response for workspace root, got: {:?}",
+            other
+        ),
     }
 
-    // Test Case 2: ListMembers with both office_id and room_id (conflicting parameters)
+    // Test Case 2: ListMembers with non-existent domain_id
     let result = execute_command(
         &kernel,
         WorkspaceProtocolRequest::ListMembers {
-            office_id: Some("office1".to_string()),
-            room_id: Some("room1".to_string()),
+            domain_id: Some("non_existent_domain".to_string()),
         },
     )
     .await
     .unwrap();
 
-    // Validate proper error response for conflicting parameters
+    // Validate proper error response for non-existent domain
     match result {
         WorkspaceProtocolResponse::Error(message) => {
-            assert_eq!(message, "Must specify exactly one of office_id or room_id");
+            assert!(
+                message.contains("not found"),
+                "Expected 'not found' error, got: {}",
+                message
+            );
         }
-        _ => panic!("Expected error response for conflicting parameters"),
+        _ => panic!("Expected error response for non-existent domain"),
     }
 }

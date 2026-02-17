@@ -1,4 +1,5 @@
 import { WorkspaceClient } from './WorkspaceClient';
+import { isResponseType } from 'citadel-internal-service-wasm-client';
 import type { WasmConnectOptions as ConnectOptions, WasmRegisterOptions as RegisterOptions } from 'citadel-internal-service-wasm-client';
 import type { ConnectSuccess, RegisterSuccess, GetSessionsResponse } from 'citadel-internal-service-wasm-client';
 
@@ -61,19 +62,18 @@ export class WorkspaceAuth {
     }
 
     try {
-      // Send GetSession request
+      // Send GetSessions request (note: plural — GetSession singular does not exist in InternalServiceRequest)
       await this.client.sendDirectToInternalService({
-        GetSession: {
-          cid: BigInt(this.session.cid),
+        GetSessions: {
           request_id: crypto.randomUUID()
         }
-      } as any);
+      });
 
       // Wait for response
       const response = await this.client.nextMessage();
-      
-      if ('GetSessionResponse' in response) {
-        return response.GetSessionResponse as GetSessionsResponse;
+
+      if (isResponseType(response, 'GetSessionsResponse')) {
+        return response.GetSessionsResponse;
       }
       
       return null;
@@ -97,8 +97,8 @@ export class WorkspaceAuth {
           cid: BigInt(this.session.cid),
           request_id: crypto.randomUUID()
         }
-      } as any);
-      
+      });
+
       await this.client.close();
     } catch (error) {
       console.error('Error during disconnect:', error);

@@ -1016,6 +1016,7 @@ mod tests {
             name: "Test Schema".to_string(),
             rules: vec![],
             max_depth: Some(2),
+            entity_type_configs: vec![],
         };
 
         let result = TreeValidator::validate_tree_with_schema(&nodes, &schema);

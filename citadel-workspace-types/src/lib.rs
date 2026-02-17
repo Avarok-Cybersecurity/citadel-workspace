@@ -3,8 +3,8 @@ pub mod structs;
 use custom_debug::Debug;
 use serde::{Deserialize, Serialize};
 use structs::{
-    CustomNodeType, DomainNode, NodeEntityType, Office, Permission, Room, TreeNode, TreeSchema,
-    User, UserRole, Workspace, WorkspaceMetadata,
+    CustomNodeType, DomainNode, NodeEntityType, Permission, TreeNode, TreeSchema, User, UserRole,
+    Workspace, WorkspaceMetadata,
 };
 use ts_rs::TS;
 
@@ -70,71 +70,11 @@ pub enum WorkspaceProtocolRequest {
         workspace_master_password: String,
     },
 
-    // Office commands
-    CreateOffice {
-        workspace_id: String,
-        name: String,
-        description: String,
-        #[debug(with = bytes_opt_debug_fmt)]
-        mdx_content: Option<String>,
-        #[debug(with = bytes_opt_debug_fmt)]
-        metadata: Option<Vec<u8>>,
-        /// Whether this should be the default office (only one allowed per workspace)
-        is_default: Option<bool>,
-    },
-    GetOffice {
-        office_id: String,
-    },
-    UpdateOffice {
-        office_id: String,
-        name: Option<String>,
-        description: Option<String>,
-        #[debug(with = bytes_opt_debug_fmt)]
-        mdx_content: Option<String>,
-        #[debug(with = bytes_opt_debug_fmt)]
-        metadata: Option<Vec<u8>>,
-        /// Set this office as the default (clears default on other offices)
-        is_default: Option<bool>,
-    },
-    DeleteOffice {
-        office_id: String,
-    },
-    ListOffices,
-
-    // Room commands
-    CreateRoom {
-        office_id: String,
-        name: String,
-        description: String,
-        #[debug(with = bytes_opt_debug_fmt)]
-        mdx_content: Option<String>,
-        #[debug(with = bytes_opt_debug_fmt)]
-        metadata: Option<Vec<u8>>,
-    },
-    GetRoom {
-        room_id: String,
-    },
-    UpdateRoom {
-        room_id: String,
-        name: Option<String>,
-        description: Option<String>,
-        #[debug(with = bytes_opt_debug_fmt)]
-        mdx_content: Option<String>,
-        #[debug(with = bytes_opt_debug_fmt)]
-        metadata: Option<Vec<u8>>,
-    },
-    DeleteRoom {
-        room_id: String,
-    },
-    ListRooms {
-        office_id: String,
-    },
-
     // Member commands
     AddMember {
         user_id: String,
-        office_id: Option<String>,
-        room_id: Option<String>,
+        /// Domain (node) to add the member to. None defaults to workspace root.
+        domain_id: Option<String>,
         role: UserRole,
         #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
@@ -156,12 +96,12 @@ pub enum WorkspaceProtocolRequest {
     },
     RemoveMember {
         user_id: String,
-        office_id: Option<String>,
-        room_id: Option<String>,
+        /// Domain (node) to remove the member from. None defaults to workspace root.
+        domain_id: Option<String>,
     },
     ListMembers {
-        office_id: Option<String>,
-        room_id: Option<String>,
+        /// Domain (node) to list members for. None defaults to workspace root.
+        domain_id: Option<String>,
     },
     /// Get a user's permissions for a specific domain
     GetUserPermissions {
@@ -319,11 +259,7 @@ pub enum WorkspaceProtocolResponse {
     Success(String),
     Error(String),
     WorkspaceNotInitialized,
-    Offices(Vec<Office>),
-    Rooms(Vec<Room>),
     Members(Vec<User>),
-    Office(Office),
-    Room(Room),
     Member(User),
     /// Response containing a user's role and permissions for a domain
     UserPermissions {
@@ -341,30 +277,10 @@ pub enum WorkspaceProtocolResponse {
     /// Response after user profile was updated
     UserProfileUpdated(User),
 
-    /// Confirmation that an office was deleted
-    DeleteOffice {
-        office_id: String,
-    },
-
-    /// Confirmation that a room was deleted
-    DeleteRoom {
-        room_id: String,
-    },
-
     // ========== Content Broadcast Responses ==========
-    /// Notification that office content was updated (broadcast to all workspace members)
-    OfficeContentUpdated {
-        office_id: String,
-        mdx_content: String,
-        updated_by: String,
-        #[ts(type = "bigint")]
-        timestamp: u64,
-    },
-
-    /// Notification that room content was updated (broadcast to all workspace members)
-    RoomContentUpdated {
-        room_id: String,
-        office_id: String,
+    /// Notification that a node's content was updated (broadcast to all workspace members)
+    NodeContentUpdated {
+        node_id: String,
         mdx_content: String,
         updated_by: String,
         #[ts(type = "bigint")]
@@ -503,14 +419,6 @@ pub enum PermissionEndowOperation {
     Remove,
     // Completely overwrites any existing permissions with the newly provided permissions
     Replace,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub enum ListType {
-    MembersInWorkspace,
-    MembersInOffice { office_id: String },
-    MembersInRoom { room_id: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

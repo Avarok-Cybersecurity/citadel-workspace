@@ -17,12 +17,9 @@ pub fn retrieve_role_permissions(role: &UserRole, domain_type: &DomainType) -> V
         UserRole::Admin => {
             // Admin role has all permissions across all domain types
             permissions.push(Permission::All);
-            permissions.push(Permission::CreateOffice);
-            permissions.push(Permission::DeleteOffice);
-            permissions.push(Permission::UpdateOffice);
-            permissions.push(Permission::CreateRoom);
-            permissions.push(Permission::DeleteRoom);
-            permissions.push(Permission::UpdateRoom);
+            permissions.push(Permission::CreateNode);
+            permissions.push(Permission::DeleteNode);
+            permissions.push(Permission::UpdateNode);
             permissions.push(Permission::CreateWorkspace);
             permissions.push(Permission::DeleteWorkspace);
             permissions.push(Permission::UpdateWorkspace);
@@ -48,13 +45,13 @@ pub fn retrieve_role_permissions(role: &UserRole, domain_type: &DomainType) -> V
             match domain_type {
                 DomainType::Workspace => {
                     // Workspace members can create offices
-                    permissions.push(Permission::CreateOffice);
-                    permissions.push(Permission::AddOffice);
+                    permissions.push(Permission::CreateNode);
+                    permissions.push(Permission::AddNode);
                 }
                 DomainType::Office => {
                     // Office members can create rooms
-                    permissions.push(Permission::CreateRoom);
-                    permissions.push(Permission::AddRoom);
+                    permissions.push(Permission::CreateNode);
+                    permissions.push(Permission::AddNode);
                 }
                 DomainType::Room => {
                     // Room members can send messages
@@ -63,13 +60,13 @@ pub fn retrieve_role_permissions(role: &UserRole, domain_type: &DomainType) -> V
                 }
                 DomainType::Child(type_name) => {
                     // Custom child types get intermediate permissions
-                    // Similar to Office-level permissions by default
                     permissions.push(Permission::UploadFiles);
                     permissions.push(Permission::DownloadFiles);
-                    // If it looks like an office-level type, add create child permissions
-                    if type_name != "Room" {
-                        permissions.push(Permission::CreateRoom);
-                        permissions.push(Permission::AddRoom);
+                    // Non-leaf types can create child nodes (derived from schema SSOT)
+                    let schema = citadel_workspace_types::structs::TreeSchema::default();
+                    if !schema.is_leaf_type(type_name) {
+                        permissions.push(Permission::CreateNode);
+                        permissions.push(Permission::AddNode);
                     }
                 }
             }
@@ -87,12 +84,9 @@ pub fn retrieve_role_permissions(role: &UserRole, domain_type: &DomainType) -> V
         UserRole::Owner => {
             // Owner has all permissions except system configuration
             permissions.push(Permission::All);
-            permissions.push(Permission::CreateOffice);
-            permissions.push(Permission::DeleteOffice);
-            permissions.push(Permission::UpdateOffice);
-            permissions.push(Permission::CreateRoom);
-            permissions.push(Permission::DeleteRoom);
-            permissions.push(Permission::UpdateRoom);
+            permissions.push(Permission::CreateNode);
+            permissions.push(Permission::DeleteNode);
+            permissions.push(Permission::UpdateNode);
             permissions.push(Permission::EditContent);
             permissions.push(Permission::AddUsers);
             permissions.push(Permission::RemoveUsers);

@@ -1,6 +1,6 @@
 # Multi-tool image for WASM client synchronization
 # Includes Rust toolchain, wasm-pack, Node.js, and build tools
-FROM rust:latest
+FROM rust:1.92.0
 
 # Install Node.js 20.x
 RUN apt-get update && \
@@ -30,6 +30,9 @@ RUN chmod +x /workspace/sync-wasm-clients.sh
 
 # Set environment variable to indicate container mode
 ENV CONTAINER_MODE=1
+
+# Note: runs as root because it needs write access to mounted workspace volumes
+# (creates dirs like citadel-workspaces/public/wasm during WASM sync)
 
 # Run sync script with no-restart flag (Tilt handles service restarts)
 CMD ["./sync-wasm-clients.sh", "--no-restart"]

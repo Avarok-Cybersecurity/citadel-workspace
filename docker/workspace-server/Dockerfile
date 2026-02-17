@@ -1,6 +1,6 @@
 # syntax=docker.io/docker/dockerfile:1.7-labs
 # Base image with Rust
-FROM rust:latest
+FROM rust:1.92.0
 
 WORKDIR /usr/src/app
 
@@ -15,7 +15,6 @@ COPY ./docker/workspace-server/kernel.toml /usr/src/app/kernel.toml
 COPY ./docker/workspace-server/documents /usr/src/app/documents
 # Use Docker workspace Cargo.toml which excludes tests/common from members
 COPY ./docker/workspace-server/Cargo.docker.toml /usr/src/app/Cargo.toml
-COPY ./Cargo.lock /usr/src/app/Cargo.lock
 # Copy kernel without tests directory (tests/common has localhost-testing feature)
 COPY --exclude=tests ./citadel-workspace-server-kernel /usr/src/app/citadel-workspace-server-kernel
 # Replace kernel's Cargo.toml with Docker-specific version (no dev-dependencies)
@@ -40,6 +39,13 @@ RUN cargo build --release --bin citadel-workspace-server-kernel
 # The docker-compose.yml mounts a volume at /usr/src/app/target for cargo caching,
 # which would hide the binary built in the image. This copy ensures the binary is available.
 RUN cp ./target/release/citadel-workspace-server-kernel /usr/local/bin/
+
+# Run as non-root user for security hardening
+RUN useradd -m -u 1000 appuser
+RUN chown appuser /usr/local/bin/citadel-workspace-server-kernel && \
+    chown appuser /usr/src/app/kernel.toml && \
+    chown -R appuser /usr/src/app/documents
+USER appuser
 
 # Run the workspace server from /usr/local/bin (not shadowed by volume mounts)
 CMD ["/usr/local/bin/citadel-workspace-server-kernel", "--config", "/usr/src/app/kernel.toml"]

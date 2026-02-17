@@ -9,9 +9,7 @@ use citadel_sdk::prelude::Ratchet;
 pub mod async_domain_ops;
 pub mod async_entity_ops;
 pub mod async_node_ops;
-pub mod async_office_ops;
 pub mod async_permission_ops;
-pub mod async_room_ops;
 pub mod async_transaction_ops;
 pub mod async_user_ops;
 pub mod async_workspace_ops;
@@ -19,9 +17,7 @@ pub mod async_workspace_ops;
 // Re-export all async traits
 pub use async_domain_ops::AsyncDomainOperations;
 pub use async_entity_ops::AsyncEntityOperations;
-pub use async_office_ops::AsyncOfficeOperations;
 pub use async_permission_ops::AsyncPermissionOperations;
-pub use async_room_ops::AsyncRoomOperations;
 pub use async_transaction_ops::AsyncTransactionOperations;
 pub use async_user_ops::AsyncUserManagementOperations;
 pub use async_workspace_ops::AsyncWorkspaceOperations;
@@ -36,8 +32,6 @@ pub trait AsyncCompleteDomainOperations<R: Ratchet + Send + Sync + 'static>:
     + AsyncUserManagementOperations<R>
     + AsyncEntityOperations<R>
     + AsyncWorkspaceOperations<R>
-    + AsyncOfficeOperations<R>
-    + AsyncRoomOperations<R>
     + Send
     + Sync
 {

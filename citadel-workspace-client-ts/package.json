@@ -22,7 +22,7 @@
     "lint": "npx eslint ."
   },
   "dependencies": {
-    "@avarok/citadel-protocol-types": "^0.13.1",
+    "@avarok/citadel-protocol-types": "^0.14.0",
     "citadel-internal-service-wasm-client": "file:../citadel-internal-service/typescript-client"
   },
   "devDependencies": {

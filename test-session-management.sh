@@ -10,7 +10,7 @@ TIMESTAMP=$(date +%s)
 USERNAME="testuser${TIMESTAMP}"
 PASSWORD="test12345"
 LOG_FILE="./logs/session-test-${TIMESTAMP}.log"
-WORKSPACE_MASTER_PASSWORD="SUPER_SECRET_ADMIN_PASSWORD_CHANGE_ME"
+WORKSPACE_MASTER_PASSWORD="dev-local-workspace-password"
 
 # Colors for output
 GREEN='\033[0;32m'

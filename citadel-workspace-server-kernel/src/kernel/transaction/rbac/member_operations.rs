@@ -74,7 +74,9 @@ impl TransactionManager {
                 NetworkError::msg(format!("Member with id {} not found", member_id))
             })?;
 
-            let member_mut = tx.get_user_mut(member_id).unwrap();
+            let member_mut = tx.get_user_mut(member_id).ok_or_else(|| {
+                NetworkError::msg(format!("Member {} not found for mutable access", member_id))
+            })?;
 
             match modify_type {
                 UpdateOperation::Add => {
