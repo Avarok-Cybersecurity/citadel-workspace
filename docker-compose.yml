@@ -57,7 +57,7 @@ services:
       # Mount shared caches and target directory
       - target_cache:/usr/src/app/target
     environment:
-      - RUST_LOG=citadel=debug
+      - RUST_LOG=citadel=info
       - DOCKER_CONTAINER=1
       - SKIP_WASM_BUILD=1
     deploy:
