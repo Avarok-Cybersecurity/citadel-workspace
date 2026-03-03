@@ -28,7 +28,7 @@ USER appuser
 RUN mkdir -p /app/node_modules/.vite/deps
 
 # Expose Vite dev server port
-EXPOSE 5173
+EXPOSE 5291
 
 # Start Vite dev server with Docker-specific configuration
 CMD ["npm", "run", "dev:docker"]
