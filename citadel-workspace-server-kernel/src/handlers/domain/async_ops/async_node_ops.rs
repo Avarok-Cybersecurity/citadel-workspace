@@ -509,7 +509,6 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
 
         let nodes = self.backend_tx_manager.get_all_nodes().await?;
         let schema = self.backend_tx_manager.get_tree_schema_or_default().await?;
-        let max_depth = depth.unwrap_or(0);
 
         // Start from specified parent or root
         let start_nodes: Vec<DomainNode> = if let Some(pid) = parent_id {
@@ -535,11 +534,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                 .collect()
         };
 
-        // If depth is 0, return only direct children
-        if max_depth == 0 {
+        // If depth is Some(0), return only direct children.
+        // If depth is None, return ALL descendants (unlimited depth).
+        if depth == Some(0) {
             let enriched = enrich_allowed_child_types(start_nodes, &schema);
             return Ok(filter_by_type(enriched, entity_types));
         }
+
+        let max_depth = depth; // None = unlimited
 
         // BFS to collect nodes up to max_depth
         let base_depth = start_nodes.first().map(|n| n.depth).unwrap_or(0);
@@ -547,8 +549,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         let mut queue: VecDeque<&DomainNode> = start_nodes.iter().collect();
 
         while let Some(node) = queue.pop_front() {
-            // Check if within depth limit
-            if node.depth <= base_depth + max_depth {
+            // Check if within depth limit (None = unlimited)
+            let within_limit = match max_depth {
+                Some(d) => node.depth <= base_depth + d,
+                None => true, // No limit
+            };
+            if within_limit {
                 result.push(node.clone());
 
                 // Add children to queue
