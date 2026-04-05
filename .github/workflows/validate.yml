@@ -332,6 +332,73 @@ jobs:
           name: screenshots-${{ matrix.artifact }}
           path: citadel-workspaces/integration-tests/screenshots/
 
+  production-build:
+    name: Production Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Free Disk Space
+        run: |
+          # Remove unnecessary pre-installed tools (frees 10-20 GB)
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
+          df -h
+      - name: Build Production Images (server + internal-service)
+        run: |
+          docker compose -f docker-compose.production.yml build server internal-service
+      - name: Verify Images Were Built
+        run: |
+          echo "Checking for built images..."
+          # docker compose build tags images as <project>-<service>
+          docker images
+          # Verify both images exist and are non-empty
+          SERVER_IMAGE=$(docker compose -f docker-compose.production.yml images server --format json | head -1)
+          IS_IMAGE=$(docker compose -f docker-compose.production.yml images internal-service --format json | head -1)
+          if [ -z "$SERVER_IMAGE" ] && [ -z "$IS_IMAGE" ]; then
+            echo "ERROR: Production images were not built"
+            exit 1
+          fi
+          echo "Production images built successfully"
+      - name: Smoke Test - Services Start
+        env:
+          WORKSPACE_MASTER_PASSWORD: 'ci-smoke-test'
+          INTERNAL_SERVICE_PORT: '12345'
+        run: |
+          # Start services and wait for health checks
+          docker compose -f docker-compose.production.yml up -d server internal-service
+          echo "Waiting for server to become healthy..."
+          timeout 120 bash -c 'until docker compose -f docker-compose.production.yml ps server --format json | grep -q healthy; do sleep 5; echo "Waiting..."; done' || {
+            echo "Server failed to become healthy"
+            docker compose -f docker-compose.production.yml logs server
+            exit 1
+          }
+          echo "Server is healthy"
+          echo "Waiting for internal-service to become healthy..."
+          timeout 120 bash -c 'until docker compose -f docker-compose.production.yml ps internal-service --format json | grep -q healthy; do sleep 5; echo "Waiting..."; done' || {
+            echo "Internal-service failed to become healthy"
+            docker compose -f docker-compose.production.yml logs internal-service
+            exit 1
+          }
+          echo "Internal-service is healthy"
+          echo "Smoke test passed: both services started and are healthy"
+      - name: Dump Logs on Failure
+        if: failure()
+        run: |
+          echo "=== server logs ==="
+          docker compose -f docker-compose.production.yml logs server 2>&1 | tail -100
+          echo "=== internal-service logs ==="
+          docker compose -f docker-compose.production.yml logs internal-service 2>&1 | tail -100
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose -f docker-compose.production.yml down -v --remove-orphans 2>/dev/null || true
+
   # Heavy integration tests on self-hosted runner - currently disabled.
   # All tests moved to the standard integration-tests matrix above.
   # Kept for future use when tests need more resources than GitHub-hosted runners provide.

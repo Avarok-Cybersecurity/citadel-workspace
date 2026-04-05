@@ -4,6 +4,11 @@ bind_addr = "0.0.0.0:12349"
 # TLS certificate verification — set to true ONLY for local development with self-signed certs.
 dangerous_skip_cert_verification = false
 
+# Backend type: "filesystem" for persistent storage, omit for in-memory (dev only)
+backend = "filesystem"
+# Data directory for filesystem backend
+data_dir = "/data/server"
+
 # Path to directory-based workspace content (recommended)
 # The directory must contain:
 #   - workspace.json: Workspace metadata

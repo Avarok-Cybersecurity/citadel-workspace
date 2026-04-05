@@ -21,6 +21,8 @@ pub mod config {
         pub bind_addr: String,
         pub dangerous_skip_cert_verification: Option<bool>,
         pub backend: Option<String>,
+        /// Data directory for filesystem backend (defaults to "./data")
+        pub data_dir: Option<String>,
         /// Workspace master password. Can be overridden by WORKSPACE_MASTER_PASSWORD env var.
         /// Server refuses to start if neither config nor env var provides a non-empty password.
         #[serde(default)]
@@ -413,8 +415,24 @@ pub async fn run_server_with_base_path(
         None
     };
 
-    // Always use in-memory backend for now
-    let backend_type_for_node_builder = BackendType::InMemory;
+    // Select backend type from config (defaults to InMemory for backwards compatibility)
+    let backend_type_for_node_builder = match config.backend.as_deref() {
+        Some("filesystem") => {
+            let data_dir = config.data_dir.clone().unwrap_or_else(|| "./data".to_string());
+            info!(target: "citadel", "Using filesystem backend with data directory: {}", data_dir);
+            BackendType::Filesystem(data_dir.into())
+        }
+        Some(other) => {
+            return Err(NetworkError::msg(format!(
+                "Unknown backend type '{}'. Supported: 'filesystem' (or omit for in-memory)",
+                other
+            )));
+        }
+        None => {
+            info!(target: "citadel", "Using in-memory backend (data will not persist across restarts)");
+            BackendType::InMemory
+        }
+    };
 
     // Log file transfer config
     if let Some(ref ft_config) = config.file_transfer {
@@ -442,6 +460,7 @@ pub async fn run_server_with_base_path(
         .with_backend(backend_type_for_node_builder);
 
     if config.dangerous_skip_cert_verification.unwrap_or(false) {
+        citadel_logging::warn!(target: "citadel", "⚠️  SECURITY WARNING: TLS certificate verification is DISABLED. This should ONLY be used for local development with self-signed certificates. Never use in production!");
         builder.with_insecure_skip_cert_verification();
     }
 

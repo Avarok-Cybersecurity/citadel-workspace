@@ -30,10 +30,14 @@ RUN cargo build --release --bin citadel-workspace-internal-service --features de
 # Copy binary to /usr/local/bin to avoid being shadowed by target_cache volume mount
 RUN cp ./target/release/citadel-workspace-internal-service /usr/local/bin/
 
+# Create data directory for persistent storage
+RUN mkdir -p /data/internal-service
+
 # Run as non-root user for security hardening
 RUN useradd -m -u 1000 appuser
 RUN chown appuser /usr/local/bin/citadel-workspace-internal-service
+RUN chown -R appuser /data/internal-service
 USER appuser
 
-# Run the pre-built internal service binary
-CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind 0.0.0.0:${INTERNAL_SERVICE_PORT}"]
+# Run the pre-built internal service binary with filesystem backend for persistence
+CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind 0.0.0.0:${INTERNAL_SERVICE_PORT} --backend filesystem --data-dir /data/internal-service"]

@@ -1,0 +1,161 @@
+# =============================================================================
+# Citadel Workspace - Production Docker Compose
+# =============================================================================
+#
+# Architecture:
+#   Users → Cloudflare (TLS) → cloudflared tunnel → Docker network
+#                                                     ├── ui (nginx:80)
+#                                                     ├── internal-service (ws:12345)
+#                                                     └── server (citadel:12349)
+#
+# Usage:
+#   # Local testing (no tunnel, ports exposed on localhost):
+#   docker compose -f docker-compose.production.yml up --build
+#   # Access UI at http://localhost:8080
+#
+#   # Production with Cloudflare Tunnel:
+#   TUNNEL_TOKEN=<your-token> docker compose -f docker-compose.production.yml --profile tunnel up --build -d
+#
+# Required environment variables (set in .env or export):
+#   WORKSPACE_MASTER_PASSWORD  - Master password for workspace initialization
+#   INTERNAL_SERVICE_PORT      - Internal service port (default: 12345)
+#
+# Optional (production only):
+#   TUNNEL_TOKEN               - Cloudflare Tunnel token (enables tunnel profile)
+#
+# Update procedure (zero-downtime, data-safe):
+#   ./deploy.sh
+#
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Workspace Server (Citadel Protocol)
+  # Handles workspace CRUD, office/room management, member permissions
+  # Data persisted to server_data volume
+  # ---------------------------------------------------------------------------
+  server:
+    build:
+      context: .
+      dockerfile: ./docker/workspace-server/Dockerfile
+    volumes:
+      - server_data:/data/server
+      - target_cache:/usr/src/app/target
+    environment:
+      - RUST_LOG=citadel=info
+      - WORKSPACE_MASTER_PASSWORD=${WORKSPACE_MASTER_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "12349"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    network_mode: host
+
+  # ---------------------------------------------------------------------------
+  # Internal Service (Session Management / P2P Relay)
+  # Manages WebSocket connections, Citadel SDK sessions, P2P channels
+  # Data persisted to internal_service_data volume
+  #
+  # Uses host networking because the Citadel SDK connects to workspace servers
+  # using the address the user typed (e.g., localhost:12349). In bridge mode,
+  # localhost resolves to the container's own loopback, not the server container.
+  # Host networking ensures the internal service can reach the server at the
+  # same address the user specified.
+  # ---------------------------------------------------------------------------
+  internal-service:
+    build:
+      context: .
+      dockerfile: ./docker/internal-service/Dockerfile
+      args:
+        - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT:-12345}
+    volumes:
+      - internal_service_data:/data/internal-service
+      - target_cache:/usr/src/app/target
+    environment:
+      - RUST_LOG=citadel=info
+      - DOCKER_CONTAINER=1
+      - SKIP_WASM_BUILD=1
+      - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT:-12345}
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "netstat -tuln | grep -q \":$${INTERNAL_SERVICE_PORT}\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      server:
+        condition: service_healthy
+    network_mode: host
+
+  # ---------------------------------------------------------------------------
+  # UI (React Frontend - Production Build)
+  # Vite build served via nginx
+  # ---------------------------------------------------------------------------
+  ui:
+    build:
+      context: .
+      dockerfile: ./docker/ui/Dockerfile
+      target: production
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    restart: unless-stopped
+    depends_on:
+      internal-service:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    network_mode: host
+
+  # ---------------------------------------------------------------------------
+  # Cloudflare Tunnel (Production only)
+  # Exposes services to the internet via Cloudflare's network
+  # Activate with: --profile tunnel
+  #
+  # Setup:
+  #   1. Create a tunnel in Cloudflare Zero Trust dashboard
+  #   2. Add public hostname rules:
+  #      - yourdomain.com      → http://ui:80
+  #      - yourdomain.com/ws*  → ws://internal-service:12345
+  #   3. Copy the tunnel token
+  #   4. Set TUNNEL_TOKEN in .env
+  # ---------------------------------------------------------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    restart: unless-stopped
+    depends_on:
+      ui:
+        condition: service_started
+      internal-service:
+        condition: service_healthy
+    network_mode: host
+    profiles:
+      - tunnel
+
+# =============================================================================
+# Volumes - persist across container rebuilds and restarts
+# =============================================================================
+volumes:
+  # Application data (NEVER delete these unless you want to lose all data)
+  server_data:
+  internal_service_data:
+  # Build cache (safe to delete, just makes rebuilds slower)
+  target_cache:

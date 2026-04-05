@@ -17,13 +17,33 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let opts: Options = Options::from_args();
     let service = CitadelWorkspaceService::new_websocket(opts.bind).await?;
 
+    // Select backend type from CLI options (defaults to InMemory)
+    let backend_type = match opts.backend.as_deref() {
+        Some("filesystem") => {
+            let data_dir = opts.data_dir.clone().unwrap_or_else(|| "./data".to_string());
+            citadel_logging::info!(target: "citadel", "Using filesystem backend with data directory: {}", data_dir);
+            BackendType::Filesystem(data_dir.into())
+        }
+        Some(other) => {
+            return Err(format!(
+                "Unknown backend type '{}'. Supported: 'filesystem' (or omit for in-memory)",
+                other
+            ).into());
+        }
+        None => {
+            citadel_logging::info!(target: "citadel", "Using in-memory backend (data will not persist across restarts)");
+            BackendType::InMemory
+        }
+    };
+
     // Initialize the node builder with StackedRatchet, which is a concrete implementation of the Ratchet trait
     let mut node_builder = NodeBuilder::<StackedRatchet>::default();
     let mut builder = node_builder
-        .with_backend(BackendType::InMemory) // TODO: parameterize this in the opts
+        .with_backend(backend_type)
         .with_node_type(NodeType::Peer);
 
     if opts.dangerous.unwrap_or(false) {
+        citadel_logging::warn!(target: "citadel", "⚠️  SECURITY WARNING: TLS certificate verification is DISABLED via --dangerous flag. Never use in production!");
         builder = builder.with_insecure_skip_cert_verification()
     }
 
@@ -42,6 +62,12 @@ struct Options {
     bind: SocketAddr,
     #[structopt(short, long)]
     dangerous: Option<bool>,
+    /// Backend type: "filesystem" for persistent storage, omit for in-memory
+    #[structopt(long)]
+    backend: Option<String>,
+    /// Data directory for filesystem backend (defaults to "./data")
+    #[structopt(long)]
+    data_dir: Option<String>,
 }
 
 #[cfg(feature = "deadlock-detection")]

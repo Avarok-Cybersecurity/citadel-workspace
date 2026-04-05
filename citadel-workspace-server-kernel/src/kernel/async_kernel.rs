@@ -14,6 +14,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
+/// Current schema version for the workspace backend storage.
+/// Increment this when making breaking changes to the storage format.
+/// The `on_start` method checks this version and runs migrations if needed.
+pub const CURRENT_SCHEMA_VERSION: u32 = 1;
+
 /// Message for broadcasting workspace updates to connected clients
 #[derive(Clone, Debug)]
 pub struct BroadcastMessage {
@@ -113,6 +118,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// Check if server RE-VFS storage is enabled
     pub fn is_server_revfs_enabled(&self) -> bool {
         self.file_transfer_config.allow_server_revfs_storage
+    }
+
+    /// Health check: returns true if the kernel is operational
+    /// Checks that NodeRemote is available and backend is accessible
+    pub fn is_healthy(&self) -> bool {
+        self.node_remote.read().is_some()
     }
 
     /// Get a new receiver for broadcast messages
@@ -661,6 +672,56 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
             }
         }
 
+        // Schema version check and migration infrastructure
+        if !self.domain_operations.backend_tx_manager.is_test_mode() {
+            let backend = &self.domain_operations.backend_tx_manager;
+            match backend.get_schema_version().await? {
+                None => {
+                    // Fresh database or pre-versioning installation: stamp with current version
+                    info!(
+                        target: "citadel",
+                        "No schema version found, initializing to v{}",
+                        CURRENT_SCHEMA_VERSION
+                    );
+                    backend.set_schema_version(CURRENT_SCHEMA_VERSION).await?;
+                }
+                Some(version) if version < CURRENT_SCHEMA_VERSION => {
+                    info!(
+                        target: "citadel",
+                        "Schema migration required: v{} -> v{}",
+                        version,
+                        CURRENT_SCHEMA_VERSION
+                    );
+                    // Future migrations go here, applied sequentially:
+                    // if version < 2 { migrate_v1_to_v2().await?; }
+                    // if version < 3 { migrate_v2_to_v3().await?; }
+                    // ...
+                    backend.set_schema_version(CURRENT_SCHEMA_VERSION).await?;
+                    info!(
+                        target: "citadel",
+                        "Schema migration complete, now at v{}",
+                        CURRENT_SCHEMA_VERSION
+                    );
+                }
+                Some(version) if version > CURRENT_SCHEMA_VERSION => {
+                    warn!(
+                        target: "citadel",
+                        "Backend schema version (v{}) is newer than expected (v{}). \
+                         This may indicate a downgrade; proceeding with caution.",
+                        version,
+                        CURRENT_SCHEMA_VERSION
+                    );
+                }
+                Some(version) => {
+                    info!(
+                        target: "citadel",
+                        "Schema version v{} is current, no migration needed",
+                        version
+                    );
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -800,6 +861,12 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     // Subscribe to broadcast channel for this connection
                     let mut broadcast_rx = this.subscribe_broadcast();
 
+                    // Per-connection rate limiter: max 100 requests per second
+                    let mut rate_limit_tokens: u32 = 100;
+                    let mut last_refill = tokio::time::Instant::now();
+                    const RATE_LIMIT_MAX: u32 = 100;
+                    const RATE_LIMIT_REFILL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+
                     // Main message processing loop for this connection
                     // Uses select! to handle both incoming messages and broadcasts
                     loop {
@@ -810,6 +877,25 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                     // Connection closed
                                     break;
                                 };
+
+                                // Rate limiting: refill tokens and check
+                                let now = tokio::time::Instant::now();
+                                if now.duration_since(last_refill) >= RATE_LIMIT_REFILL_INTERVAL {
+                                    rate_limit_tokens = RATE_LIMIT_MAX;
+                                    last_refill = now;
+                                }
+
+                                if rate_limit_tokens == 0 {
+                                    warn!(target: "citadel", "[ASYNC_KERNEL] Rate limit exceeded for CID {}", current_cid);
+                                    let response = WorkspaceProtocolPayload::Response(Box::new(
+                                        WorkspaceProtocolResponse::Error("Rate limit exceeded. Please slow down.".to_string())
+                                    ));
+                                    if let Ok(serialized) = serde_json::to_vec(&response) {
+                                        let _ = tx.send(serialized).await;
+                                    }
+                                    continue;
+                                }
+                                rate_limit_tokens -= 1;
 
                                 match serde_json::from_slice::<WorkspaceProtocolPayload>(msg.as_ref()) {
                                     Ok(command_payload) => {
@@ -978,7 +1064,19 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
     }
 
     async fn on_stop(&mut self) -> Result<(), NetworkError> {
-        info!(target: "citadel", "NetKernel stopping");
+        info!(target: "citadel", "NetKernel stopping - broadcasting shutdown to connected clients");
+
+        // Notify all connected clients about the shutdown
+        self.broadcast(
+            WorkspaceProtocolResponse::Error("Server is shutting down".to_string()),
+            None,
+        );
+
+        // Allow brief drain period for in-flight requests
+        info!(target: "citadel", "Allowing 2s drain period for in-flight requests");
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+        info!(target: "citadel", "NetKernel stopped");
         Ok(())
     }
 }

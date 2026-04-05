@@ -18,6 +18,12 @@ pub struct Options {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_log();
 
+    // Log startup information for observability
+    info!(target: "citadel_workspace_server_kernel",
+        version = env!("CARGO_PKG_VERSION"),
+        "Citadel Workspace Server starting"
+    );
+
     let options = Options::from_args();
 
     let config_content = fs::read_to_string(&options.config)
