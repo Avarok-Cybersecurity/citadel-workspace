@@ -437,6 +437,12 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         &self,
         domains: &HashMap<String, Domain>,
     ) -> Result<(), NetworkError> {
+        // Bulk replace of the domain collection. Taken under the same
+        // index_write_mutex as add_to_index/remove_from_index so an in-flight
+        // single-entity insert cannot be clobbered by this write rebuilding
+        // the index from an older snapshot.
+        let _guard = self.index_write_mutex.lock().await;
+
         // Compute the desired set of IDs from the incoming map
         let new_ids: HashSet<String> = domains.keys().cloned().collect();
         let old_ids = self.get_index(KEY_INDEX_DOMAIN_IDS).await?;
@@ -456,6 +462,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     }
 
     pub async fn save_users(&self, users: &HashMap<String, User>) -> Result<(), NetworkError> {
+        // See `save_domains` for rationale on index_write_mutex.
+        let _guard = self.index_write_mutex.lock().await;
+
         let new_ids: HashSet<String> = users.keys().cloned().collect();
         let old_ids = self.get_index(KEY_INDEX_USER_IDS).await?;
 
@@ -474,6 +483,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         &self,
         workspaces: &HashMap<String, Workspace>,
     ) -> Result<(), NetworkError> {
+        // See `save_domains` for rationale on index_write_mutex.
+        let _guard = self.index_write_mutex.lock().await;
+
         let new_ids: HashSet<String> = workspaces.keys().cloned().collect();
         let old_ids = self.get_index(KEY_INDEX_WORKSPACE_IDS).await?;
 
