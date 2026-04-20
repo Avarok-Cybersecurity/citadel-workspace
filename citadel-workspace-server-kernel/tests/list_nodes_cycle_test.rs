@@ -19,10 +19,8 @@
 
 use citadel_workspace_server_kernel::handlers::domain::node_ops::AsyncNodeOperations;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_server_kernel_test_common::workspace_test_utils::{
-    create_test_kernel, TEST_ADMIN_USER_ID,
-};
 use citadel_workspace_types::structs::{DomainNode, DomainPermissions, NodeEntityType};
+use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 use std::collections::HashMap;
 
 /// Helper to build a minimally-valid DomainNode for test injection.
