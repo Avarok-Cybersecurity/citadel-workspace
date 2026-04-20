@@ -658,25 +658,29 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
     async fn on_start(&self) -> Result<(), NetworkError> {
         info!(target: "citadel", "NetKernel started");
 
-        // Re-run admin injection now that NodeRemote is available
         if self.domain_operations.backend_tx_manager.is_test_mode() {
             error!(target: "citadel", "NodeRemote not set after node start!");
-        } else if let Some(workspace_password) = &self.workspace_password {
-            info!(target: "citadel", "NodeRemote is available, running backend init + admin injection");
-
+        } else {
             // Initialize backend (runs legacy-key migration once against the real
-            // backend). Safe to call every startup: it checks the persistent
-            // KEY_MIGRATION_DONE sentinel and is a no-op once migration has run.
+            // backend). Runs unconditionally in production so migrations fire
+            // even in configurations that didn't set `workspace_password`.
+            // Safe to call every startup: `migrate_if_needed` checks the
+            // persistent KEY_MIGRATION_DONE sentinel and is a no-op once
+            // migration has run.
+            info!(target: "citadel", "NodeRemote is available, running backend init");
             self.domain_operations.backend_tx_manager.init().await?;
 
-            // Inject admin now that we have backend storage
-            self.inject_admin_user(workspace_password).await?;
+            // Re-run admin injection now that NodeRemote is available
+            if let Some(workspace_password) = &self.workspace_password {
+                info!(target: "citadel", "Injecting admin and workspace");
+                self.inject_admin_user(workspace_password).await?;
 
-            // Initialize workspace structure from config if provided
-            if let Some((structure, base_path)) = &self.workspace_structure {
-                info!(target: "citadel", "Initializing workspace structure from config");
-                self.initialize_workspace_structure(structure, base_path.as_deref())
-                    .await?;
+                // Initialize workspace structure from config if provided
+                if let Some((structure, base_path)) = &self.workspace_structure {
+                    info!(target: "citadel", "Initializing workspace structure from config");
+                    self.initialize_workspace_structure(structure, base_path.as_deref())
+                        .await?;
+                }
             }
         }
 
