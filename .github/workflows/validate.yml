@@ -360,8 +360,11 @@ jobs:
           # Verify both images exist and are non-empty
           SERVER_IMAGE=$(docker compose -f docker-compose.production.yml images server --format json | head -1)
           IS_IMAGE=$(docker compose -f docker-compose.production.yml images internal-service --format json | head -1)
-          if [ -z "$SERVER_IMAGE" ] && [ -z "$IS_IMAGE" ]; then
-            echo "ERROR: Production images were not built"
+          # Fail if EITHER image is missing. Previous '&&' would only fail
+          # when both were absent, silently passing if one of the two builds
+          # was missing.
+          if [ -z "$SERVER_IMAGE" ] || [ -z "$IS_IMAGE" ]; then
+            echo "ERROR: Production images were not built (server='$SERVER_IMAGE', internal-service='$IS_IMAGE')"
             exit 1
           fi
           echo "Production images built successfully"
