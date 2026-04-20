@@ -12,7 +12,7 @@ use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{
     DomainNode, DomainPermissions, NodeEntityType, Permission, TreeNode, TreeSchema,
 };
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Entity type name constants to avoid repeated string allocations
@@ -543,12 +543,27 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
 
         let max_depth = depth; // None = unlimited
 
-        // BFS to collect nodes up to max_depth
+        // BFS to collect nodes up to max_depth.
+        //
+        // `visited` protects against two classes of malformed input:
+        //   1. Genuine cycles in the children graph (e.g. from a future
+        //      mutation bug, a manual backend edit, or storage corruption).
+        //      Without a guard, an unlimited-depth walk would loop forever
+        //      and eventually OOM the server.
+        //   2. Duplicate child references (the same node listed under two
+        //      parents). Without a guard this produces exponential expansion
+        //      even in the absence of a true cycle.
         let base_depth = start_nodes.first().map(|n| n.depth).unwrap_or(0);
         let mut result = Vec::new();
         let mut queue: VecDeque<&DomainNode> = start_nodes.iter().collect();
+        let mut visited: HashSet<String> = HashSet::new();
 
         while let Some(node) = queue.pop_front() {
+            // Skip nodes we've already processed (cycle / duplicate protection)
+            if !visited.insert(node.id.clone()) {
+                continue;
+            }
+
             // Check if within depth limit (None = unlimited)
             let within_limit = match max_depth {
                 Some(d) => node.depth <= base_depth + d,
