@@ -194,11 +194,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         kernel.workspace_password = Some(admin_password.to_string());
         kernel.workspace_structure = workspace_structure;
 
-        // Initialize the backend
-        kernel.domain_operations.backend_tx_manager.init().await?;
-
-        // Don't inject admin here - wait until on_start when NodeRemote is available
-        info!(target: "citadel", "Deferring admin injection until NodeRemote is available");
+        // NOTE: Backend initialization (init() / migrate_if_needed()) is deliberately
+        // deferred to on_start(). At this point in the constructor, NodeRemote is not
+        // yet set, so the BackendTransactionManager would run against its in-memory
+        // test_storage rather than the real backend - meaning the migration sentinel
+        // would be written to the wrong place and real migration logic would silently
+        // no-op on every restart. See on_start() below for the real init call.
+        info!(target: "citadel", "Deferring backend init and admin injection until NodeRemote is available");
 
         Ok(kernel)
     }
@@ -660,7 +662,13 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
         if self.domain_operations.backend_tx_manager.is_test_mode() {
             error!(target: "citadel", "NodeRemote not set after node start!");
         } else if let Some(workspace_password) = &self.workspace_password {
-            info!(target: "citadel", "NodeRemote is available, injecting admin and workspace");
+            info!(target: "citadel", "NodeRemote is available, running backend init + admin injection");
+
+            // Initialize backend (runs legacy-key migration once against the real
+            // backend). Safe to call every startup: it checks the persistent
+            // KEY_MIGRATION_DONE sentinel and is a no-op once migration has run.
+            self.domain_operations.backend_tx_manager.init().await?;
+
             // Inject admin now that we have backend storage
             self.inject_admin_user(workspace_password).await?;
 
