@@ -11,7 +11,7 @@
 # Usage:
 #   # Local testing (no tunnel, ports exposed on localhost):
 #   docker compose -f docker-compose.production.yml up --build
-#   # Access UI at http://localhost:8080
+#   # Access UI at http://localhost (nginx listens on port 80 via network_mode: host)
 #
 #   # Production with Cloudflare Tunnel:
 #   TUNNEL_TOKEN=<your-token> docker compose -f docker-compose.production.yml --profile tunnel up --build -d
