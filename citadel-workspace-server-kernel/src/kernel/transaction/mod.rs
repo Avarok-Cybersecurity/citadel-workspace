@@ -20,6 +20,12 @@ pub struct BackendTransactionManager<R: Ratchet> {
     test_storage: Arc<RwLock<HashMap<String, Vec<u8>>>>,
     /// Whether migration from collection-level keys has been completed
     migrated: Arc<RwLock<bool>>,
+    /// Serializes index-key read-modify-write operations across concurrent
+    /// connection tasks. Without this, two connections inserting entities
+    /// concurrently would race on the index (both read the same prior set,
+    /// both append, second write wins) and silently drop one entity from
+    /// the index - making the affected entity invisible to get_all_* lookups.
+    index_write_mutex: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl<R: Ratchet + Send + Sync + 'static> Default for BackendTransactionManager<R> {
@@ -59,6 +65,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             node_remote: Arc::new(RwLock::new(None)),
             test_storage: Arc::new(RwLock::new(HashMap::new())),
             migrated: Arc::new(RwLock::new(false)),
+            index_write_mutex: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 
@@ -186,14 +193,22 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     }
 
     /// Add an ID to an index and persist.
+    ///
+    /// The read-modify-write is serialised through `index_write_mutex` so that
+    /// two concurrent tasks inserting distinct entities cannot race and
+    /// silently drop one entity from the index.
     async fn add_to_index(&self, index_key: &str, id: &str) -> Result<(), NetworkError> {
+        let _guard = self.index_write_mutex.lock().await;
         let mut ids = self.get_index(index_key).await?;
         ids.insert(id.to_string());
         self.save_index(index_key, &ids).await
     }
 
     /// Remove an ID from an index and persist.
+    ///
+    /// Serialised through `index_write_mutex`; see `add_to_index` for rationale.
     async fn remove_from_index(&self, index_key: &str, id: &str) -> Result<(), NetworkError> {
+        let _guard = self.index_write_mutex.lock().await;
         let mut ids = self.get_index(index_key).await?;
         ids.remove(id);
         self.save_index(index_key, &ids).await
