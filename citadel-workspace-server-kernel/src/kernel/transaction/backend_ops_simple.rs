@@ -84,7 +84,13 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(removed)
     }
 
-    /// Simple method to remove a workspace (deletes entity + removes from index)
+    /// Simple method to remove a workspace (deletes entity + password + removes from index)
+    ///
+    /// Also deletes the per-workspace password key. Without this, the password
+    /// value stored at `citadel_workspace.password.{id}` would be orphaned in
+    /// the backend after the workspace was removed, leaking secret material
+    /// indefinitely and risking re-association if a workspace ID were ever
+    /// reused.
     pub async fn remove_workspace(
         &self,
         workspace_id: &str,
@@ -92,6 +98,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         let removed = self.get_workspace_by_key(workspace_id).await?;
         if removed.is_some() {
             self.delete_workspace_key(workspace_id).await?;
+            self.delete_password_key(workspace_id).await?;
             self.remove_from_index(KEY_INDEX_WORKSPACE_IDS, workspace_id)
                 .await?;
         }
