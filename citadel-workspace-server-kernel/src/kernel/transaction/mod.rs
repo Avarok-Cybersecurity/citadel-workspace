@@ -706,3 +706,159 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             .await
     }
 }
+
+#[cfg(test)]
+mod migration_tests {
+    //! Tests for the legacy-collection -> per-entity-key migration and the
+    //! schema-version stamping in `BackendTransactionManager`.
+    //!
+    //! These tests run against the in-memory `test_storage` backend (no
+    //! `NodeRemote`), which is the only mode reachable from a unit test;
+    //! the real-backend behaviour is exercised end-to-end via the kernel
+    //! integration tests. The contract being verified here is the same
+    //! either way: the migration moves data from legacy collection keys to
+    //! per-entity keys, populates the index, removes the legacy collection,
+    //! sets the persistent sentinel, and is idempotent.
+    use super::*;
+    use citadel_sdk::prelude::StackedRatchet;
+    use citadel_workspace_types::structs::Workspace;
+
+    fn fresh() -> BackendTransactionManager<StackedRatchet> {
+        BackendTransactionManager::new()
+    }
+
+    fn ws(id: &str) -> Workspace {
+        Workspace {
+            id: id.to_string(),
+            name: format!("workspace-{id}"),
+            description: String::new(),
+            owner_id: "owner".to_string(),
+            members: vec![],
+            offices: vec![],
+            metadata: vec![],
+        }
+    }
+
+    /// Helper: write a serialized blob directly into `test_storage` to
+    /// simulate a backend that already contains a legacy collection. We
+    /// have to reach into the private field (rather than calling the
+    /// public save_* methods) because those write to per-entity keys -
+    /// the very format we're trying to migrate AWAY from.
+    fn seed_legacy<T: Serialize>(mgr: &BackendTransactionManager<StackedRatchet>, key: &str, value: &T) {
+        let bytes = serde_json::to_vec(value).expect("serialize");
+        mgr.test_storage.write().insert(key.to_string(), bytes);
+    }
+
+    #[tokio::test]
+    async fn migrate_moves_legacy_domains_to_per_entity_keys() {
+        let mgr = fresh();
+
+        // Seed two domains in the legacy collection format.
+        let mut domains: HashMap<String, Domain> = HashMap::new();
+        domains.insert(
+            "a".to_string(),
+            Domain::Workspace { workspace: ws("a") },
+        );
+        domains.insert(
+            "b".to_string(),
+            Domain::Workspace { workspace: ws("b") },
+        );
+        seed_legacy(&mgr, LEGACY_KEY_DOMAINS, &domains);
+
+        mgr.migrate_if_needed().await.expect("migration");
+
+        // Each entity now reachable via the per-entity key.
+        assert!(mgr.get_domain_by_key("a").await.unwrap().is_some());
+        assert!(mgr.get_domain_by_key("b").await.unwrap().is_some());
+
+        // Index reflects both IDs.
+        let idx = mgr.get_index(KEY_INDEX_DOMAIN_IDS).await.unwrap();
+        assert_eq!(idx.len(), 2);
+        assert!(idx.contains("a"));
+        assert!(idx.contains("b"));
+
+        // Legacy collection key is removed.
+        assert!(mgr.test_storage.read().get(LEGACY_KEY_DOMAINS).is_none());
+
+        // Persistent sentinel is set so the next startup is a no-op.
+        let sentinel: Option<bool> = mgr.backend_get(KEY_MIGRATION_DONE).await.unwrap();
+        assert_eq!(sentinel, Some(true));
+    }
+
+    #[tokio::test]
+    async fn migrate_is_no_op_on_fresh_database() {
+        let mgr = fresh();
+        // No legacy keys, no per-entity keys. Migration should still run
+        // cleanly and stamp the sentinel.
+        mgr.migrate_if_needed().await.expect("migration");
+
+        let sentinel: Option<bool> = mgr.backend_get(KEY_MIGRATION_DONE).await.unwrap();
+        assert_eq!(sentinel, Some(true));
+        let idx = mgr.get_index(KEY_INDEX_DOMAIN_IDS).await.unwrap();
+        assert!(idx.is_empty());
+    }
+
+    #[tokio::test]
+    async fn migrate_skips_when_persistent_sentinel_already_set() {
+        let mgr = fresh();
+        // Pre-stamp the sentinel as if a previous run had completed.
+        mgr.backend_save(KEY_MIGRATION_DONE, &true).await.unwrap();
+
+        // Plant legacy data; this MUST NOT be migrated because the sentinel
+        // says we're done.
+        let mut domains: HashMap<String, Domain> = HashMap::new();
+        domains.insert(
+            "x".to_string(),
+            Domain::Workspace { workspace: ws("x") },
+        );
+        seed_legacy(&mgr, LEGACY_KEY_DOMAINS, &domains);
+
+        mgr.migrate_if_needed().await.expect("migration");
+
+        assert!(
+            mgr.get_domain_by_key("x").await.unwrap().is_none(),
+            "sentinel must short-circuit the migration"
+        );
+        assert!(
+            mgr.test_storage.read().get(LEGACY_KEY_DOMAINS).is_some(),
+            "legacy data must remain untouched when sentinel is set"
+        );
+    }
+
+    #[tokio::test]
+    async fn migrate_running_twice_in_same_process_is_cheap() {
+        let mgr = fresh();
+
+        let mut domains: HashMap<String, Domain> = HashMap::new();
+        domains.insert(
+            "y".to_string(),
+            Domain::Workspace { workspace: ws("y") },
+        );
+        seed_legacy(&mgr, LEGACY_KEY_DOMAINS, &domains);
+
+        mgr.migrate_if_needed().await.expect("first migration");
+        // Second call must be a no-op (process-local fast-path), and must
+        // not undo anything from the first call.
+        mgr.migrate_if_needed().await.expect("second migration");
+
+        let idx = mgr.get_index(KEY_INDEX_DOMAIN_IDS).await.unwrap();
+        assert_eq!(idx.len(), 1);
+        assert!(mgr.get_domain_by_key("y").await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn schema_version_round_trips() {
+        let mgr = fresh();
+
+        // Fresh DB has no version stamp.
+        assert!(mgr.get_schema_version().await.unwrap().is_none());
+
+        // After set, the value is visible to subsequent reads.
+        mgr.set_schema_version(7).await.unwrap();
+        assert_eq!(mgr.get_schema_version().await.unwrap(), Some(7));
+
+        // Idempotent overwrite to a higher version (simulates an upgrade).
+        mgr.set_schema_version(8).await.unwrap();
+        assert_eq!(mgr.get_schema_version().await.unwrap(), Some(8));
+    }
+}

@@ -114,7 +114,15 @@ pub trait AsyncNodeOperations<R: Ratchet + Send + Sync + 'static>: Send + Sync {
     /// # Arguments
     /// * `user_id` - The user listing nodes (must be member of workspace)
     /// * `parent_id` - Parent to list children of. None lists from workspace root.
-    /// * `depth` - How many levels deep to traverse. None or 0 = direct children only.
+    /// * `depth` - How many levels deep to traverse beyond the start nodes:
+    ///   * `Some(0)` - direct children only.
+    ///   * `Some(n)` - the start nodes plus their descendants up to `n`
+    ///     additional levels.
+    ///   * `None` - **all descendants at every depth** (unlimited). This is the
+    ///     intentional default used by the frontend so that newly-added rooms
+    ///     (depth 2 under a workspace) are surfaced without a follow-up
+    ///     request. The implementation has a visited-set guard so cycles or
+    ///     duplicate child references cannot cause unbounded traversal.
     /// * `entity_types` - Filter to only these node types. None = all types.
     ///
     /// # Returns

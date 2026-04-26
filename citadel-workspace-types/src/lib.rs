@@ -211,9 +211,20 @@ pub enum WorkspaceProtocolRequest {
     },
 
     /// List nodes with optional filtering.
-    /// If parent_id is None, lists from workspace root.
-    /// If depth is None or 0, returns only direct children.
-    /// If entity_types is provided, filters to only those types.
+    ///
+    /// If `parent_id` is `None`, lists from workspace root.
+    ///
+    /// Depth semantics:
+    ///
+    /// - `Some(0)` returns only direct children.
+    /// - `Some(n)` returns descendants up to n additional levels.
+    /// - `None` returns ALL descendants (unlimited depth). This is the
+    ///   intentional default used by the workspace UI so that nodes
+    ///   beyond the immediate children (e.g. rooms) are surfaced in a
+    ///   single round trip. The server applies a visited-set guard so
+    ///   cycles or duplicate child refs cannot cause unbounded traversal.
+    ///
+    /// If `entity_types` is provided, filters to only those types.
     ListNodes {
         parent_id: Option<String>,
         depth: Option<u32>,
