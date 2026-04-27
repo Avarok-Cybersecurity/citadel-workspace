@@ -482,6 +482,13 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
 
         for id in old_ids.difference(&new_ids) {
             self.delete_workspace_key(id).await?;
+            // Mirror remove_workspace's password cleanup. Without
+            // this, workspaces removed via the bulk save path would
+            // leave their `citadel_workspace.password.{id}` entry
+            // orphaned in the backend forever - leaking secret
+            // material and risking re-association if the same id is
+            // ever reused.
+            self.delete_password_key(id).await?;
         }
 
         for (id, workspace) in workspaces {
@@ -539,7 +546,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             })
             .collect();
 
-        messages.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        messages.sort_by_key(|m| std::cmp::Reverse(m.timestamp));
 
         // Apply limit
         let limit = limit as usize;
@@ -563,7 +570,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             .collect();
 
         // Sort by timestamp ascending (oldest first for threads)
-        thread_messages.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+        thread_messages.sort_by_key(|m| m.timestamp);
 
         Ok(thread_messages)
     }

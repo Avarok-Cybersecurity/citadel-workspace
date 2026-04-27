@@ -20,15 +20,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Select backend type from CLI options (defaults to InMemory)
     let backend_type = match opts.backend.as_deref() {
         Some("filesystem") => {
-            let data_dir = opts.data_dir.clone().unwrap_or_else(|| "./data".to_string());
+            let data_dir = opts
+                .data_dir
+                .clone()
+                .unwrap_or_else(|| "./data".to_string());
             citadel_logging::info!(target: "citadel", "Using filesystem backend with data directory: {}", data_dir);
-            BackendType::Filesystem(data_dir.into())
+            BackendType::Filesystem(data_dir)
         }
         Some(other) => {
             return Err(format!(
                 "Unknown backend type '{}'. Supported: 'filesystem' (or omit for in-memory)",
                 other
-            ).into());
+            )
+            .into());
         }
         None => {
             citadel_logging::info!(target: "citadel", "Using in-memory backend (data will not persist across restarts)");

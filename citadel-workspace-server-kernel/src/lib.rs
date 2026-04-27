@@ -435,7 +435,7 @@ pub async fn run_server_with_base_path(
         Some("filesystem") => {
             let data_dir = data_dir_choice.unwrap_or("./data").to_string();
             info!(target: "citadel", "Using filesystem backend with data directory: {}", data_dir);
-            BackendType::Filesystem(data_dir.into())
+            BackendType::Filesystem(data_dir)
         }
         Some(other) => {
             return Err(NetworkError::msg(format!(
