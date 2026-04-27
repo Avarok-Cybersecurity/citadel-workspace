@@ -89,6 +89,12 @@ services:
       - DOCKER_CONTAINER=1
       - SKIP_WASM_BUILD=1
       - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT:-12345}
+      # Persistence is opt-in via env vars so the same Dockerfile baked
+      # into the image stays ephemeral by default for dev (`tilt`).
+      # Production sets both vars below to mount internal-service state
+      # on the `internal_service_data` volume defined above.
+      - INTERNAL_SERVICE_BACKEND=filesystem
+      - INTERNAL_SERVICE_DATA_DIR=/data/internal-service
     deploy:
       resources:
         limits:

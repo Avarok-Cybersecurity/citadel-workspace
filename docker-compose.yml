@@ -27,8 +27,12 @@ services:
     volumes:
       # Mount relevant codebase for live updates
       - target_cache:/usr/src/app/target
-      # Persistent data volume for filesystem backend
-      - server_data:/data/server
+      # NOTE: dev intentionally has no persistent data volume here.
+      # CLAUDE.md documents the dev contract as ephemeral ("any
+      # accounts created on one will be lost on reload"), and the
+      # server defaults to in-memory backend when WORKSPACE_BACKEND is
+      # unset. Production mounts `server_data:/data/server` in
+      # docker-compose.production.yml and sets WORKSPACE_BACKEND there.
     environment:
       - RUST_LOG=citadel=info
       - WORKSPACE_MASTER_PASSWORD=${WORKSPACE_MASTER_PASSWORD}
@@ -58,8 +62,12 @@ services:
     volumes:
       # Mount shared caches and target directory
       - target_cache:/usr/src/app/target
-      # Persistent data volume for filesystem backend
-      - internal_service_data:/data/internal-service
+      # NOTE: no persistent data volume here for the same reason as the
+      # server above. Dev keeps INTERNAL_SERVICE_BACKEND unset; the
+      # binary's CMD then expands the env var as nothing and falls
+      # through to its in-memory default. Production mounts
+      # `internal_service_data:/data/internal-service` in
+      # docker-compose.production.yml and sets the backend env vars.
     environment:
       - RUST_LOG=citadel=info
       - DOCKER_CONTAINER=1
@@ -136,13 +144,12 @@ services:
     labels:
       - "frontend"
 
-# Define named volumes for caching and persistence
+# Cache volumes only — dev intentionally has no persistent data
+# volumes. Production data persistence lives in
+# docker-compose.production.yml.
 volumes:
   target_cache:
   rust_cache:
   sync_node_modules:
   sync_target_cache:
   ui_node_modules:
-  # Persistent data volumes (survive container restarts)
-  server_data:
-  internal_service_data:

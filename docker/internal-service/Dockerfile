@@ -24,8 +24,16 @@ COPY ./citadel-internal-service /usr/src/app/citadel-internal-service
 # Dynamically expose the port from the build argument
 EXPOSE ${INTERNAL_SERVICE_PORT}
 
-# Build release binary during docker build (not at container startup)
-RUN cargo build --release --bin citadel-workspace-internal-service --features deadlock-detection
+# Build release binary during docker build (not at container startup).
+#
+# `deadlock-detection` was previously enabled here, but it spawns a
+# background thread that sweeps every parking_lot mutex every 5
+# seconds — pure runtime overhead in production where deadlocks should
+# be diagnosed via stack traces, not by paying the constant
+# bookkeeping cost. The feature stays available for local debugging
+# (enable explicitly when reproducing a hang) and is OFF for the
+# image that actually ships.
+RUN cargo build --release --bin citadel-workspace-internal-service
 
 # Copy binary to /usr/local/bin to avoid being shadowed by target_cache volume mount
 RUN cp ./target/release/citadel-workspace-internal-service /usr/local/bin/
@@ -39,5 +47,14 @@ RUN chown appuser /usr/local/bin/citadel-workspace-internal-service
 RUN chown -R appuser /data/internal-service
 USER appuser
 
-# Run the pre-built internal service binary with filesystem backend for persistence
-CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind 0.0.0.0:${INTERNAL_SERVICE_PORT} --backend filesystem --data-dir /data/internal-service"]
+# Run the pre-built internal service binary.
+#
+# Persistence is opt-in via env vars so dev (`tilt`) keeps the
+# documented ephemeral behaviour from CLAUDE.md ("any accounts created
+# on one will be lost on reload"). Production sets both vars in
+# docker-compose.production.yml; dev leaves them unset and the binary
+# falls through to its in-memory default.
+#
+# The shell-only `${VAR:+ --flag $VAR}` form expands to nothing when
+# the env var is unset, so dev gets a clean `--bind` invocation.
+CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind 0.0.0.0:${INTERNAL_SERVICE_PORT}${INTERNAL_SERVICE_BACKEND:+ --backend $INTERNAL_SERVICE_BACKEND}${INTERNAL_SERVICE_DATA_DIR:+ --data-dir $INTERNAL_SERVICE_DATA_DIR}"]

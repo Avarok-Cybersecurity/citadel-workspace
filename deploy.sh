@@ -74,24 +74,39 @@ echo ""
 # and restarting a container does NOT affect the volume data.
 echo "[3/4] Updating services (data volumes preserved)..."
 
+# Each readiness probe combines:
+#   * an outer `timeout` so the inner `until nc -z` cannot hang forever
+#     when a container stays running but never opens its port (crash
+#     loop, port conflict, bad config), and
+#   * a non-zero-exit branch that dumps logs and aborts the deploy
+#     before the next service is restarted against a broken dependency.
+#
+# Previously the readiness checks were `... 2>/dev/null || sleep 15` —
+# a silent fallback that hid every failure mode and then restarted the
+# UI on top of a dead backend. `set -euo pipefail` couldn't catch the
+# failure because the `||` branch suppressed the non-zero exit.
+wait_for_port() {
+    local svc="$1" port="$2" deadline="${3:-90}"
+    if ! timeout "$deadline" docker compose -f "$COMPOSE_FILE" exec "$svc" \
+            sh -c "until nc -z 127.0.0.1 ${port} 2>/dev/null; do sleep 2; done"; then
+        echo "ERROR: ${svc} did not become healthy within ${deadline}s"
+        docker compose -f "$COMPOSE_FILE" logs "$svc" --tail 80
+        exit 1
+    fi
+}
+
 # Server first (other services depend on it)
 echo "  Restarting server..."
 docker compose -f "$COMPOSE_FILE" $PROFILE_ARGS up -d --no-deps --build server
 echo "  Waiting for server to be healthy..."
-docker compose -f "$COMPOSE_FILE" exec server sh -c 'until nc -z 127.0.0.1 12349 2>/dev/null; do sleep 2; done' 2>/dev/null || sleep 15
+wait_for_port server 12349
 echo "  Server is up."
 
 # Internal service next
 echo "  Restarting internal-service..."
 docker compose -f "$COMPOSE_FILE" $PROFILE_ARGS up -d --no-deps --build internal-service
 echo "  Waiting for internal-service to be healthy..."
-# Mirror the server's nc-based readiness probe so a startup failure
-# (crash, port conflict, bad config) is visible here instead of being
-# masked by a blind 15s sleep that would let the script proceed to
-# restart the UI against a broken backend.
-INTERNAL_PORT="${INTERNAL_SERVICE_PORT:-12345}"
-docker compose -f "$COMPOSE_FILE" exec internal-service \
-    sh -c "until nc -z 127.0.0.1 ${INTERNAL_PORT} 2>/dev/null; do sleep 2; done" 2>/dev/null || sleep 15
+wait_for_port internal-service "${INTERNAL_SERVICE_PORT:-12345}"
 echo "  Internal service is up."
 
 # UI last (lightweight, fast restart)
