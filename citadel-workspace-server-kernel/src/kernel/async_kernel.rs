@@ -5,6 +5,7 @@
 
 use crate::config::{FileTransferConfig, WorkspaceStructureConfig};
 use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
+use crate::kernel::rate_limiter::{RateLimiter, DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL};
 use crate::kernel::transaction::BackendTransactionManager;
 use crate::WorkspaceProtocolResponse;
 use citadel_logging::{error, info, warn};
@@ -42,6 +43,11 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     broadcast_tx: broadcast::Sender<BroadcastMessage>,
     /// File transfer configuration
     file_transfer_config: FileTransferConfig,
+    /// Per-CID token-bucket rate limiter shared across all connection
+    /// tasks. The shared map is what makes the limit per-CID rather than
+    /// per-connection - opening multiple connections from the same
+    /// account no longer multiplies the budget.
+    rate_limiter: RateLimiter,
 }
 
 // Placeholder for entities that don't have an owner yet.
@@ -57,6 +63,10 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             workspace_structure: self.workspace_structure.clone(),
             broadcast_tx: self.broadcast_tx.clone(),
             file_transfer_config: self.file_transfer_config.clone(),
+            // RateLimiter::Clone shares the same Arc<Mutex<HashMap>>,
+            // which is exactly what we want: every clone of the kernel
+            // sees the same per-CID buckets.
+            rate_limiter: self.rate_limiter.clone(),
         }
     }
 }
@@ -90,6 +100,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             workspace_structure: None,
             broadcast_tx,
             file_transfer_config: FileTransferConfig::default(),
+            rate_limiter: RateLimiter::new(DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL),
         }
     }
 
@@ -873,11 +884,12 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     // Subscribe to broadcast channel for this connection
                     let mut broadcast_rx = this.subscribe_broadcast();
 
-                    // Per-connection rate limiter: max 100 requests per second
-                    let mut rate_limit_tokens: u32 = 100;
-                    let mut last_refill = tokio::time::Instant::now();
-                    const RATE_LIMIT_MAX: u32 = 100;
-                    const RATE_LIMIT_REFILL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+                    // Per-CID token-bucket limiter shared across the
+                    // kernel. Multiple concurrent connections owned by
+                    // the same CID share one bucket - the previous
+                    // per-connection variables let a single user open N
+                    // connections to multiply their effective limit.
+                    let rate_limiter = this.rate_limiter.clone();
 
                     // Main message processing loop for this connection
                     // Uses select! to handle both incoming messages and broadcasts
@@ -890,14 +902,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                     break;
                                 };
 
-                                // Rate limiting: refill tokens and check
-                                let now = tokio::time::Instant::now();
-                                if now.duration_since(last_refill) >= RATE_LIMIT_REFILL_INTERVAL {
-                                    rate_limit_tokens = RATE_LIMIT_MAX;
-                                    last_refill = now;
-                                }
-
-                                if rate_limit_tokens == 0 {
+                                if !rate_limiter.try_consume(current_cid, std::time::Instant::now()) {
                                     warn!(target: "citadel", "[ASYNC_KERNEL] Rate limit exceeded for CID {}", current_cid);
                                     let response = WorkspaceProtocolPayload::Response(Box::new(
                                         WorkspaceProtocolResponse::Error("Rate limit exceeded. Please slow down.".to_string())
@@ -907,7 +912,6 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                     }
                                     continue;
                                 }
-                                rate_limit_tokens -= 1;
 
                                 match serde_json::from_slice::<WorkspaceProtocolPayload>(msg.as_ref()) {
                                     Ok(command_payload) => {
@@ -1078,15 +1082,23 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
     async fn on_stop(&mut self) -> Result<(), NetworkError> {
         info!(target: "citadel", "NetKernel stopping - broadcasting shutdown to connected clients");
 
-        // Notify all connected clients about the shutdown
+        // Inform every connected client via the dedicated ServerShutdown
+        // variant. Previously this used WorkspaceProtocolResponse::Error,
+        // which caused UIs to render a red error toast on every planned
+        // restart - misleading because graceful shutdown is a normal
+        // operational event, not a failure.
+        const DRAIN_SECONDS: u64 = 2;
         self.broadcast(
-            WorkspaceProtocolResponse::Error("Server is shutting down".to_string()),
+            WorkspaceProtocolResponse::ServerShutdown {
+                message: "Server is shutting down for a planned restart.".to_string(),
+                drain_seconds: DRAIN_SECONDS,
+            },
             None,
         );
 
         // Allow brief drain period for in-flight requests
-        info!(target: "citadel", "Allowing 2s drain period for in-flight requests");
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        info!(target: "citadel", "Allowing {DRAIN_SECONDS}s drain period for in-flight requests");
+        tokio::time::sleep(std::time::Duration::from_secs(DRAIN_SECONDS)).await;
 
         info!(target: "citadel", "NetKernel stopped");
         Ok(())
@@ -1105,5 +1117,66 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .backend_tx_manager
             .set_node_remote(node_remote);
         info!(target: "citadel", "[ASYNC_KERNEL] NodeRemote set for AsyncWorkspaceServerKernel");
+    }
+}
+
+#[cfg(test)]
+mod shutdown_tests {
+    //! Tests for the graceful-shutdown broadcast path.
+    //!
+    //! The behaviour under test is `on_stop`: it must broadcast a
+    //! `ServerShutdown` variant (NOT `Error`) to every subscriber so
+    //! UIs can tell a planned restart apart from a real failure and
+    //! render the appropriate UX (reconnect countdown vs red toast).
+    use super::*;
+    use citadel_sdk::prelude::{NetKernel, StackedRatchet};
+
+    /// Drives `on_stop` against a fresh kernel and asserts the
+    /// resulting broadcast is `ServerShutdown { .. }`.
+    ///
+    /// We start the broadcast subscriber in a background task and
+    /// receive *before* awaiting `on_stop` to completion, so we don't
+    /// have to pay the full real-time drain delay - the broadcast is
+    /// emitted synchronously at the top of `on_stop`, before its sleep.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn on_stop_broadcasts_server_shutdown_not_error() {
+        let mut kernel = AsyncWorkspaceServerKernel::<StackedRatchet>::new(None);
+        let mut rx = kernel.subscribe_broadcast();
+
+        let receive = tokio::spawn(async move {
+            tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+                .await
+                .expect("broadcast must arrive before timeout")
+                .expect("broadcast channel must not error")
+        });
+
+        // `on_stop` from the NetKernel trait. The broadcast is emitted
+        // synchronously at the top of the function, then it sleeps for
+        // a small drain window. The receiver task above will pick up
+        // the broadcast immediately and complete before this returns.
+        kernel.on_stop().await.expect("on_stop");
+
+        let msg = receive.await.expect("subscriber task should complete");
+        match msg.response {
+            WorkspaceProtocolResponse::ServerShutdown { drain_seconds, message } => {
+                assert!(drain_seconds >= 1, "drain_seconds should be > 0 ({drain_seconds})");
+                assert!(
+                    !message.is_empty(),
+                    "message should be a human-readable description, got empty"
+                );
+            }
+            other => panic!(
+                "expected ServerShutdown, got {other:?}. Regression: a future change must \
+                 NOT use Error here - it would render as a red error toast on every planned restart."
+            ),
+        }
+        // exclude_cid is None: the shutdown signal must reach every
+        // connected client, including the one that initiated the
+        // restart (if any). A future change to set this to Some(_)
+        // would silently drop the notification on certain clients.
+        assert!(
+            msg.exclude_cid.is_none(),
+            "shutdown broadcast must not exclude any CID"
+        );
     }
 }

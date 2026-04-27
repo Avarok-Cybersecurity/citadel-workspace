@@ -58,7 +58,8 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         workspace_id: String,
         workspace: Workspace,
     ) -> Result<(), NetworkError> {
-        self.save_workspace_by_key(&workspace_id, &workspace).await?;
+        self.save_workspace_by_key(&workspace_id, &workspace)
+            .await?;
         self.add_to_index(KEY_INDEX_WORKSPACE_IDS, &workspace_id)
             .await
     }

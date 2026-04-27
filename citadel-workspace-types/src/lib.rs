@@ -377,6 +377,21 @@ pub enum WorkspaceProtocolResponse {
         old_parent_id: Option<String>,
         new_parent_id: Option<String>,
     },
+
+    // ========== Server Lifecycle Events ==========
+    /// Broadcast to every connected client when the server is shutting down
+    /// gracefully (e.g. deploy, planned restart). Distinct from `Error` so
+    /// clients can render an informational reconnect-banner / countdown
+    /// instead of a red error toast.
+    ///
+    /// `drain_seconds` is the upper bound on how long the server will keep
+    /// servicing in-flight requests before terminating; a UI can use it to
+    /// time a reconnect attempt or display "back in N seconds".
+    ServerShutdown {
+        message: String,
+        #[ts(type = "bigint")]
+        drain_seconds: u64,
+    },
 }
 
 /// Type of group message

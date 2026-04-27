@@ -146,7 +146,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             }
         }
 
-        Err(last_err.unwrap_or_else(|| NetworkError::msg(format!("Failed to save key '{key}' after 3 attempts"))))
+        Err(last_err.unwrap_or_else(|| {
+            NetworkError::msg(format!("Failed to save key '{key}' after 3 attempts"))
+        }))
     }
 
     /// Single attempt to save data to the backend
@@ -184,11 +186,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     }
 
     /// Save the set of entity IDs to an index key.
-    async fn save_index(
-        &self,
-        index_key: &str,
-        ids: &HashSet<String>,
-    ) -> Result<(), NetworkError> {
+    async fn save_index(&self, index_key: &str, ids: &HashSet<String>) -> Result<(), NetworkError> {
         self.backend_save(index_key, ids).await
     }
 
@@ -336,10 +334,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     }
 
     /// Get a single workspace by ID using per-entity key.
-    pub async fn get_workspace_by_key(
-        &self,
-        id: &str,
-    ) -> Result<Option<Workspace>, NetworkError> {
+    pub async fn get_workspace_by_key(&self, id: &str) -> Result<Option<Workspace>, NetworkError> {
         let key = format!("{KEY_PREFIX_WORKSPACE}{id}");
         self.backend_get(&key).await
     }
@@ -367,11 +362,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     }
 
     /// Save a single password by workspace ID using per-entity key.
-    pub async fn save_password_by_key(
-        &self,
-        id: &str,
-        password: &str,
-    ) -> Result<(), NetworkError> {
+    pub async fn save_password_by_key(&self, id: &str, password: &str) -> Result<(), NetworkError> {
         let key = format!("{KEY_PREFIX_PASSWORD}{id}");
         self.backend_save(&key, &password.to_string()).await
     }
@@ -744,7 +735,11 @@ mod migration_tests {
     /// have to reach into the private field (rather than calling the
     /// public save_* methods) because those write to per-entity keys -
     /// the very format we're trying to migrate AWAY from.
-    fn seed_legacy<T: Serialize>(mgr: &BackendTransactionManager<StackedRatchet>, key: &str, value: &T) {
+    fn seed_legacy<T: Serialize>(
+        mgr: &BackendTransactionManager<StackedRatchet>,
+        key: &str,
+        value: &T,
+    ) {
         let bytes = serde_json::to_vec(value).expect("serialize");
         mgr.test_storage.write().insert(key.to_string(), bytes);
     }
@@ -755,14 +750,8 @@ mod migration_tests {
 
         // Seed two domains in the legacy collection format.
         let mut domains: HashMap<String, Domain> = HashMap::new();
-        domains.insert(
-            "a".to_string(),
-            Domain::Workspace { workspace: ws("a") },
-        );
-        domains.insert(
-            "b".to_string(),
-            Domain::Workspace { workspace: ws("b") },
-        );
+        domains.insert("a".to_string(), Domain::Workspace { workspace: ws("a") });
+        domains.insert("b".to_string(), Domain::Workspace { workspace: ws("b") });
         seed_legacy(&mgr, LEGACY_KEY_DOMAINS, &domains);
 
         mgr.migrate_if_needed().await.expect("migration");
@@ -807,10 +796,7 @@ mod migration_tests {
         // Plant legacy data; this MUST NOT be migrated because the sentinel
         // says we're done.
         let mut domains: HashMap<String, Domain> = HashMap::new();
-        domains.insert(
-            "x".to_string(),
-            Domain::Workspace { workspace: ws("x") },
-        );
+        domains.insert("x".to_string(), Domain::Workspace { workspace: ws("x") });
         seed_legacy(&mgr, LEGACY_KEY_DOMAINS, &domains);
 
         mgr.migrate_if_needed().await.expect("migration");
@@ -830,10 +816,7 @@ mod migration_tests {
         let mgr = fresh();
 
         let mut domains: HashMap<String, Domain> = HashMap::new();
-        domains.insert(
-            "y".to_string(),
-            Domain::Workspace { workspace: ws("y") },
-        );
+        domains.insert("y".to_string(), Domain::Workspace { workspace: ws("y") });
         seed_legacy(&mgr, LEGACY_KEY_DOMAINS, &domains);
 
         mgr.migrate_if_needed().await.expect("first migration");

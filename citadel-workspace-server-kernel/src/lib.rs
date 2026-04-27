@@ -415,10 +415,25 @@ pub async fn run_server_with_base_path(
         None
     };
 
-    // Select backend type from config (defaults to InMemory for backwards compatibility)
-    let backend_type_for_node_builder = match config.backend.as_deref() {
+    // Select backend type from env-var override (preferred) or config file.
+    //
+    // Env vars win because:
+    //   * dev `kernel.toml` is shared with prod via the same Dockerfile
+    //     COPY, so the file CANNOT default to filesystem without
+    //     persisting state across `tilt` restarts in dev (contradicting
+    //     CLAUDE.md's documented ephemeral-dev contract).
+    //   * Production `docker-compose.production.yml` sets the env vars,
+    //     keeping production state on disk while dev stays ephemeral.
+    //
+    // Defaults to InMemory when neither env var nor config sets it -
+    // matching the prior "omit = in-memory" contract.
+    let env_backend = std::env::var("WORKSPACE_BACKEND").ok();
+    let env_data_dir = std::env::var("WORKSPACE_DATA_DIR").ok();
+    let backend_choice = env_backend.as_deref().or(config.backend.as_deref());
+    let data_dir_choice = env_data_dir.as_deref().or(config.data_dir.as_deref());
+    let backend_type_for_node_builder = match backend_choice {
         Some("filesystem") => {
-            let data_dir = config.data_dir.clone().unwrap_or_else(|| "./data".to_string());
+            let data_dir = data_dir_choice.unwrap_or("./data").to_string();
             info!(target: "citadel", "Using filesystem backend with data directory: {}", data_dir);
             BackendType::Filesystem(data_dir.into())
         }
