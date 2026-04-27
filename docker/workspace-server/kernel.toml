@@ -4,10 +4,17 @@ bind_addr = "0.0.0.0:12349"
 # TLS certificate verification — set to true ONLY for local development with self-signed certs.
 dangerous_skip_cert_verification = false
 
-# Backend type: "filesystem" for persistent storage, omit for in-memory (dev only)
-backend = "filesystem"
-# Data directory for filesystem backend
-data_dir = "/data/server"
+# Backend type:
+#   * Omit (default) for in-memory storage - this is the development
+#     contract documented in CLAUDE.md (ephemeral state across `tilt`
+#     reloads).
+#   * Set `WORKSPACE_BACKEND=filesystem` and `WORKSPACE_DATA_DIR=/path`
+#     env vars to enable persistent storage. Production deployments do
+#     this in `docker-compose.production.yml`.
+#
+# A previous version of this file hard-coded `backend = "filesystem"`,
+# which broke the ephemeral-dev contract because dev and prod share
+# this baked-in config via the same Dockerfile COPY.
 
 # Path to directory-based workspace content (recommended)
 # The directory must contain:
