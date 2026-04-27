@@ -44,6 +44,12 @@ services:
     environment:
       - RUST_LOG=citadel=info
       - WORKSPACE_MASTER_PASSWORD=${WORKSPACE_MASTER_PASSWORD}
+      # Persistence is opt-in via env vars so the same `kernel.toml`
+      # baked into the Docker image stays ephemeral by default for
+      # `tilt`-driven dev. Production sets both vars below to mount
+      # workspace state on the `server_data` volume defined above.
+      - WORKSPACE_BACKEND=filesystem
+      - WORKSPACE_DATA_DIR=/data/server
     deploy:
       resources:
         limits:

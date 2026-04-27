@@ -85,7 +85,13 @@ echo "  Server is up."
 echo "  Restarting internal-service..."
 docker compose -f "$COMPOSE_FILE" $PROFILE_ARGS up -d --no-deps --build internal-service
 echo "  Waiting for internal-service to be healthy..."
-sleep 15
+# Mirror the server's nc-based readiness probe so a startup failure
+# (crash, port conflict, bad config) is visible here instead of being
+# masked by a blind 15s sleep that would let the script proceed to
+# restart the UI against a broken backend.
+INTERNAL_PORT="${INTERNAL_SERVICE_PORT:-12345}"
+docker compose -f "$COMPOSE_FILE" exec internal-service \
+    sh -c "until nc -z 127.0.0.1 ${INTERNAL_PORT} 2>/dev/null; do sleep 2; done" 2>/dev/null || sleep 15
 echo "  Internal service is up."
 
 # UI last (lightweight, fast restart)
