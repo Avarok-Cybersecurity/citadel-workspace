@@ -23,12 +23,19 @@
 //! Memory
 //! ------
 //! The internal map grows monotonically with the unique-CID set
-//! observed since process start. There is no proactive eviction: at
-//! ~32 bytes/entry the cost is negligible for any realistic workspace
-//! deployment (millions of unique CIDs would be needed to reach a
-//! megabyte). If a deployment ever needs LRU eviction, the public
-//! surface (`try_consume`) is small enough to swap the backing store
-//! without changing call sites.
+//! observed since process start. There is no proactive eviction.
+//!
+//! Per-entry footprint in a `HashMap<u64, Bucket>`: 8 bytes for the
+//! key + ~16 bytes for the bucket (`u32` tokens + `Instant`) + the
+//! HashMap's per-entry overhead (~8 bytes for the hash + slot
+//! bookkeeping) — call it ~32 bytes amortised. So roughly 30k unique
+//! CIDs per MiB, ~1 GiB at 30M CIDs. That's negligible for a
+//! workspace deployment whose unique-user set will plateau in the
+//! thousands-to-tens-of-thousands range over months of operation;
+//! large multi-tenant SaaS shapes (millions of churning users on a
+//! long-running process) would want an LRU sweep on `last_refill` —
+//! the public surface (`try_consume`) is small enough to swap the
+//! backing store without changing call sites when that day comes.
 
 use parking_lot::Mutex;
 use std::collections::HashMap;
