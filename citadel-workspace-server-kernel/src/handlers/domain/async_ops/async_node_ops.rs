@@ -701,18 +701,36 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                 })
         };
 
-        // Build tree recursively
+        // Build tree recursively.
+        //
+        // `visited` mirrors the cycle/duplicate guard added to `list_nodes`
+        // above. Both functions traverse the same `DomainNode.children`
+        // graph, so the same risks apply: a cycle (from a future mutation
+        // bug, manual backend edit, or storage corruption) or a duplicate
+        // child reference would otherwise unwind into unbounded recursion
+        // and stack-overflow the server, especially because the caller
+        // can pass `max_depth: None` to request an unlimited walk.
         fn build_tree(
             node: DomainNode,
             nodes: &std::collections::HashMap<String, DomainNode>,
             current_depth: u32,
             max_depth: Option<u32>,
+            visited: &mut HashSet<String>,
         ) -> TreeNode {
+            // Skip already-seen nodes; return the node with no children so
+            // the caller still sees a leaf rather than a missing entry.
+            if !visited.insert(node.id.clone()) {
+                return TreeNode {
+                    node,
+                    children: vec![],
+                };
+            }
+
             let children = if max_depth.map(|m| current_depth < m).unwrap_or(true) {
                 node.children
                     .iter()
                     .filter_map(|child_id| nodes.get(child_id).cloned())
-                    .map(|child| build_tree(child, nodes, current_depth + 1, max_depth))
+                    .map(|child| build_tree(child, nodes, current_depth + 1, max_depth, visited))
                     .collect()
             } else {
                 vec![]
@@ -721,7 +739,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             TreeNode { node, children }
         }
 
-        Ok(build_tree(root_node, &nodes, 0, max_depth))
+        let mut visited = HashSet::new();
+        Ok(build_tree(root_node, &nodes, 0, max_depth, &mut visited))
     }
 }
 

@@ -36,23 +36,52 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         self.get_workspace_by_key(workspace_id).await
     }
 
-    /// Simple method to insert a domain (saves entity + adds to index)
+    // Insert/remove pairs below are intentionally written as
+    // "save → index" (insert) and "delete → index" (remove) with a
+    // best-effort rollback on the second step. The two underlying
+    // operations are independent backend writes; if the second fails
+    // the first must be undone so that:
+    //
+    //   * `get_all_*` (which walks the index) can never see an entity
+    //     whose entity-key save failed, and
+    //   * the entity store can never hold a payload that no index
+    //     entry points to (an orphan that consumes storage forever
+    //     and is invisible to bulk lookups).
+    //
+    // The rollback uses `let _ = ... .await;` because the *real*
+    // failure to surface to the caller is the original index error;
+    // the rollback's own failure is logged via the warn! macros in
+    // the underlying delete/save methods and there is nothing more
+    // sensible the request handler can do with two stacked errors.
+
+    /// Insert a domain: save entity, then add to index. On index-write
+    /// failure, deletes the entity to avoid orphans.
     pub async fn insert_domain(
         &self,
         domain_id: String,
         domain: Domain,
     ) -> Result<(), NetworkError> {
         self.save_domain_by_key(&domain_id, &domain).await?;
-        self.add_to_index(KEY_INDEX_DOMAIN_IDS, &domain_id).await
+        if let Err(e) = self.add_to_index(KEY_INDEX_DOMAIN_IDS, &domain_id).await {
+            let _ = self.delete_domain_key(&domain_id).await;
+            return Err(e);
+        }
+        Ok(())
     }
 
-    /// Simple method to insert a user (saves entity + adds to index)
+    /// Insert a user: save entity, then add to index. On index-write
+    /// failure, deletes the entity to avoid orphans.
     pub async fn insert_user(&self, user_id: String, user: User) -> Result<(), NetworkError> {
         self.save_user_by_key(&user_id, &user).await?;
-        self.add_to_index(KEY_INDEX_USER_IDS, &user_id).await
+        if let Err(e) = self.add_to_index(KEY_INDEX_USER_IDS, &user_id).await {
+            let _ = self.delete_user_key(&user_id).await;
+            return Err(e);
+        }
+        Ok(())
     }
 
-    /// Simple method to insert a workspace (saves entity + adds to index)
+    /// Insert a workspace: save entity, then add to index. On
+    /// index-write failure, deletes the entity to avoid orphans.
     pub async fn insert_workspace(
         &self,
         workspace_id: String,
@@ -60,48 +89,80 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     ) -> Result<(), NetworkError> {
         self.save_workspace_by_key(&workspace_id, &workspace)
             .await?;
-        self.add_to_index(KEY_INDEX_WORKSPACE_IDS, &workspace_id)
+        if let Err(e) = self
+            .add_to_index(KEY_INDEX_WORKSPACE_IDS, &workspace_id)
             .await
+        {
+            let _ = self.delete_workspace_key(&workspace_id).await;
+            return Err(e);
+        }
+        Ok(())
     }
 
-    /// Simple method to remove a domain (deletes entity + removes from index)
+    /// Remove a domain: delete entity, then remove from index. On
+    /// index-write failure, re-saves the entity so it remains visible
+    /// to `get_all_domains` (avoids dangling index entries pointing
+    /// to a missing payload).
     pub async fn remove_domain(&self, domain_id: &str) -> Result<Option<Domain>, NetworkError> {
         let removed = self.get_domain_by_key(domain_id).await?;
-        if removed.is_some() {
+        if let Some(ref d) = removed {
             self.delete_domain_key(domain_id).await?;
-            self.remove_from_index(KEY_INDEX_DOMAIN_IDS, domain_id)
-                .await?;
+            if let Err(e) = self
+                .remove_from_index(KEY_INDEX_DOMAIN_IDS, domain_id)
+                .await
+            {
+                let _ = self.save_domain_by_key(domain_id, d).await;
+                return Err(e);
+            }
         }
         Ok(removed)
     }
 
-    /// Simple method to remove a user (deletes entity + removes from index)
+    /// Remove a user: delete entity, then remove from index. On
+    /// index-write failure, re-saves the entity so it remains visible
+    /// to `get_all_users`.
     pub async fn remove_user(&self, user_id: &str) -> Result<Option<User>, NetworkError> {
         let removed = self.get_user_by_key(user_id).await?;
-        if removed.is_some() {
+        if let Some(ref u) = removed {
             self.delete_user_key(user_id).await?;
-            self.remove_from_index(KEY_INDEX_USER_IDS, user_id).await?;
+            if let Err(e) = self.remove_from_index(KEY_INDEX_USER_IDS, user_id).await {
+                let _ = self.save_user_by_key(user_id, u).await;
+                return Err(e);
+            }
         }
         Ok(removed)
     }
 
-    /// Simple method to remove a workspace (deletes entity + password + removes from index)
+    /// Remove a workspace: delete entity + password, then remove from
+    /// index. On index-write failure, re-saves the entity so it
+    /// remains visible to `get_all_workspaces`.
     ///
-    /// Also deletes the per-workspace password key. Without this, the password
-    /// value stored at `citadel_workspace.password.{id}` would be orphaned in
-    /// the backend after the workspace was removed, leaking secret material
-    /// indefinitely and risking re-association if a workspace ID were ever
-    /// reused.
+    /// Also deletes the per-workspace password key. Without this, the
+    /// password value stored at `citadel_workspace.password.{id}`
+    /// would be orphaned in the backend after the workspace was
+    /// removed, leaking secret material indefinitely and risking
+    /// re-association if a workspace ID were ever reused.
+    ///
+    /// The password is intentionally NOT restored on rollback: a
+    /// failed remove leaves the workspace itself recoverable, but
+    /// callers must re-set the password explicitly. Caching the
+    /// plaintext password just to support a rare rollback path would
+    /// keep secret material live in memory longer than necessary.
     pub async fn remove_workspace(
         &self,
         workspace_id: &str,
     ) -> Result<Option<Workspace>, NetworkError> {
         let removed = self.get_workspace_by_key(workspace_id).await?;
-        if removed.is_some() {
+        if let Some(ref w) = removed {
             self.delete_workspace_key(workspace_id).await?;
             self.delete_password_key(workspace_id).await?;
-            self.remove_from_index(KEY_INDEX_WORKSPACE_IDS, workspace_id)
-                .await?;
+            if let Err(e) = self
+                .remove_from_index(KEY_INDEX_WORKSPACE_IDS, workspace_id)
+                .await
+            {
+                let _ = self.save_workspace_by_key(workspace_id, w).await;
+                return Err(e);
+            }
         }
         Ok(removed)
     }

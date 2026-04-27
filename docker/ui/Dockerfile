@@ -67,7 +67,27 @@ FROM nginx:stable-alpine AS production
 # Copy the built static assets from the build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Custom nginx config for SPA routing (all routes -> index.html)
+# Custom nginx config for SPA routing (all routes -> index.html).
+#
+# Security headers note: nginx `add_header` does NOT inherit across
+# nesting levels — if a `location` block declares its own `add_header`,
+# it silently replaces ALL inherited headers from the parent `server`
+# block. So the security headers below must be repeated in every
+# `location` block that also adds Cache-Control. Verbose, but explicit
+# and correct; alternatives (sub-include files, `more_set_headers` from
+# nginx-extras) require either extra build wiring or a non-stable
+# nginx variant.
+#
+# CSP rationale:
+#   * `script-src 'self' 'wasm-unsafe-eval'` — WASM compilation
+#     (WebAssembly.compile / instantiate) is blocked by default CSP
+#     unless `'wasm-unsafe-eval'` is granted. The Citadel WASM client
+#     will fail to initialise without it.
+#   * `style-src 'self' 'unsafe-inline'` — Vite/React + several Radix
+#     UI components emit inline styles for layout/measurement.
+#   * `img-src 'self' data:` — small inline icons use data: URLs.
+#   * `connect-src 'self' ws: wss:` — WebSocket to the internal
+#     service and workspace server is the app's primary transport.
 RUN printf 'server {\n\
     listen 80;\n\
     server_name _;\n\
@@ -80,17 +100,35 @@ RUN printf 'server {\n\
     gzip_vary on;\n\
     gzip_min_length 256;\n\
 \n\
+    # Security headers (server-level; re-emitted in any location that\n\
+    # also calls add_header — see comment above).\n\
+    add_header X-Frame-Options "SAMEORIGIN" always;\n\
+    add_header X-Content-Type-Options "nosniff" always;\n\
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;\n\
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;\n\
+    add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\'' ws: wss:; worker-src '\''self'\'' blob:; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
+\n\
     # Cache static assets aggressively (hashed filenames from Vite)\n\
     location /assets/ {\n\
         expires 1y;\n\
-        add_header Cache-Control "public, immutable";\n\
+        add_header Cache-Control "public, immutable" always;\n\
+        add_header X-Frame-Options "SAMEORIGIN" always;\n\
+        add_header X-Content-Type-Options "nosniff" always;\n\
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;\n\
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;\n\
+        add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\'' ws: wss:; worker-src '\''self'\'' blob:; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
     }\n\
 \n\
     # WASM files\n\
     location ~* \\.wasm$ {\n\
         types { application/wasm wasm; }\n\
         expires 1y;\n\
-        add_header Cache-Control "public, immutable";\n\
+        add_header Cache-Control "public, immutable" always;\n\
+        add_header X-Frame-Options "SAMEORIGIN" always;\n\
+        add_header X-Content-Type-Options "nosniff" always;\n\
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;\n\
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;\n\
+        add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\'' ws: wss:; worker-src '\''self'\'' blob:; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
     }\n\
 \n\
     # SPA fallback - serve index.html for all non-file routes\n\

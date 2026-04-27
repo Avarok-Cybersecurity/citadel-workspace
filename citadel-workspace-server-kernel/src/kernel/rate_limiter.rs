@@ -12,6 +12,17 @@
 //! This module moves the bucket to **per-CID shared state** so all
 //! connections owned by the same client identity share one budget.
 //!
+//! Wiring
+//! ------
+//! A single `RateLimiter` is constructed in
+//! `async_kernel::AsyncCitadelWorkspaceKernel::new` and `clone()`d into
+//! every accepted connection task; each connection's `recv` loop calls
+//! `try_consume(current_cid, Instant::now())` before parsing/dispatching
+//! the message and returns a `WorkspaceProtocolResponse::Error` when
+//! the budget is exhausted. See `src/kernel/async_kernel.rs` (search
+//! for `rate_limiter.try_consume`). This module is the data plane; the
+//! call site is the control plane.
+//!
 //! Concurrency
 //! -----------
 //! `parking_lot::Mutex` is used because the critical section is small

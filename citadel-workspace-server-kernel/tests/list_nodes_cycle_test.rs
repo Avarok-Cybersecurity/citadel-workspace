@@ -138,3 +138,87 @@ async fn list_nodes_deduplicates_shared_child() {
         "a node referenced by two parents must appear exactly once"
     );
 }
+
+/// `get_tree_structure` walks the same `children` graph as `list_nodes`
+/// (recursively this time) and accepts `max_depth: None` for unlimited
+/// depth. Without the visited-set guard added alongside this test, a
+/// 3-cycle in `children` would recurse forever and stack-overflow the
+/// server. The guard must let the call complete in bounded time and
+/// must not yield the same node id twice along any path.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_tree_structure_terminates_on_cycle() {
+    let kernel = create_test_kernel().await;
+    let backend = &kernel.domain_operations.backend_tx_manager;
+
+    let mut nodes = HashMap::new();
+    nodes.insert(
+        "A".to_string(),
+        mk_node("A", Some(WORKSPACE_ROOT_ID), vec!["B".to_string()], 1),
+    );
+    nodes.insert(
+        "B".to_string(),
+        mk_node("B", Some("A"), vec!["C".to_string()], 2),
+    );
+    // Close the cycle: C.children = [A]
+    nodes.insert(
+        "C".to_string(),
+        mk_node("C", Some("B"), vec!["A".to_string()], 3),
+    );
+    backend
+        .save_nodes(&nodes)
+        .await
+        .expect("save_nodes should succeed");
+
+    // Bound the test with a generous timeout. Before the visited-set
+    // guard, this call recurses unbounded and either stack-overflows
+    // (panic) or hangs; we give the guarded implementation 10s to
+    // complete normally.
+    let tree = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        kernel
+            .domain_operations
+            .get_tree_structure(TEST_ADMIN_USER_ID, Some("A"), None),
+    )
+    .await
+    .expect("get_tree_structure with a cycle in children must terminate")
+    .expect("get_tree_structure should return Ok");
+
+    // Walk the resulting tree, counting total nodes visited and
+    // tracking which cycle participants appear. The expected shape
+    // when starting at A and walking A → B → C → (A as leaf-stub via
+    // the visited guard) is exactly 4 nodes: A, B, C, A. Without the
+    // guard this walk would never return.
+    fn walk(
+        node: &citadel_workspace_types::structs::TreeNode,
+        seen: &mut std::collections::HashMap<String, usize>,
+        total: &mut usize,
+    ) {
+        *total += 1;
+        *seen.entry(node.node.id.clone()).or_insert(0) += 1;
+        for c in &node.children {
+            walk(c, seen, total);
+        }
+    }
+    let mut seen = std::collections::HashMap::new();
+    let mut total = 0usize;
+    walk(&tree, &mut seen, &mut total);
+
+    // Every cycle participant must be reachable from the root.
+    for id in ["A", "B", "C"] {
+        assert!(seen.contains_key(id), "cycle participant {id} missing");
+    }
+    // The tree is finite — no participant should appear more times
+    // than the cycle length itself, which bounds the worst-case
+    // depth-first expansion before the visited guard fires.
+    let cycle_len = 3;
+    for (id, count) in &seen {
+        assert!(
+            *count <= cycle_len,
+            "node {id} appeared {count} times — cycle guard did not bound recursion"
+        );
+    }
+    assert!(
+        total <= cycle_len * 2,
+        "tree size {total} exceeds bounded expectation"
+    );
+}
