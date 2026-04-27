@@ -30,4 +30,4 @@ revfs_storage_quota_mb: bigint, } } | { "Node": DomainNode } | { "Nodes": Array<
 /**
  * IDs of child nodes that were also deleted (if cascade was true)
  */
-children_deleted: Array<string>, } } | { "NodeMoved": { node_id: string, old_parent_id: string | null, new_parent_id: string | null, } };
+children_deleted: Array<string>, } } | { "NodeMoved": { node_id: string, old_parent_id: string | null, new_parent_id: string | null, } } | { "ServerShutdown": { message: string, drain_seconds: bigint, } };
