@@ -476,6 +476,12 @@ pub async fn run_server_with_base_path(
 
     if config.dangerous_skip_cert_verification.unwrap_or(false) {
         citadel_logging::warn!(target: "citadel", "⚠️  SECURITY WARNING: TLS certificate verification is DISABLED. This should ONLY be used for local development with self-signed certificates. Never use in production!");
+        // `with_insecure_skip_cert_verification` is `&mut self -> &mut Self`
+        // (see citadel_sdk::builder::node_builder), so the call mutates
+        // `builder` in place — discarding the returned `&mut Self` is
+        // intentional and correct, not a bug. The static analysers that
+        // flag this expect a `self -> Self` consuming-builder pattern;
+        // the SDK builder uses the in-place variant.
         builder.with_insecure_skip_cert_verification();
     }
 
