@@ -21,7 +21,14 @@
 set -euo pipefail
 
 COMPOSE_FILE="docker-compose.production.yml"
-PROFILE_ARGS=""
+# Bash array (not a string) so `"${PROFILE_ARGS[@]}"` expands to nothing
+# when no profile is selected and to a properly quoted multi-token list
+# when one is. Storing "--profile tunnel" as a single string and relying
+# on word-splitting (`$PROFILE_ARGS` unquoted) is the classic shell
+# gotcha that breaks the moment a value contains whitespace, glob chars,
+# or a single empty element.
+PROFILE_ARGS=()
+TUNNEL_PROFILE_ACTIVE=false
 SKIP_PULL=false
 
 # Parse arguments
@@ -31,7 +38,8 @@ for arg in "$@"; do
             SKIP_PULL=true
             ;;
         --tunnel)
-            PROFILE_ARGS="--profile tunnel"
+            PROFILE_ARGS=(--profile tunnel)
+            TUNNEL_PROFILE_ACTIVE=true
             ;;
         *)
             echo "Unknown argument: $arg"
@@ -66,7 +74,7 @@ fi
 
 # Step 2: Rebuild images (only changed layers are rebuilt due to Docker cache)
 echo "[2/4] Building images..."
-docker compose -f "$COMPOSE_FILE" $PROFILE_ARGS build
+docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" build
 echo ""
 
 # Step 3: Rolling restart - update services one at a time
@@ -97,27 +105,27 @@ wait_for_port() {
 
 # Server first (other services depend on it)
 echo "  Restarting server..."
-docker compose -f "$COMPOSE_FILE" $PROFILE_ARGS up -d --no-deps --build server
+docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps --build server
 echo "  Waiting for server to be healthy..."
 wait_for_port server 12349
 echo "  Server is up."
 
 # Internal service next
 echo "  Restarting internal-service..."
-docker compose -f "$COMPOSE_FILE" $PROFILE_ARGS up -d --no-deps --build internal-service
+docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps --build internal-service
 echo "  Waiting for internal-service to be healthy..."
 wait_for_port internal-service "${INTERNAL_SERVICE_PORT:-12345}"
 echo "  Internal service is up."
 
 # UI last (lightweight, fast restart)
 echo "  Restarting ui..."
-docker compose -f "$COMPOSE_FILE" $PROFILE_ARGS up -d --no-deps --build ui
+docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps --build ui
 echo "  UI is up."
 
 # Cloudflared if tunnel profile is active
-if [[ "$PROFILE_ARGS" == *"tunnel"* ]]; then
+if [[ "$TUNNEL_PROFILE_ACTIVE" == "true" ]]; then
     echo "  Restarting cloudflared..."
-    docker compose -f "$COMPOSE_FILE" $PROFILE_ARGS up -d --no-deps cloudflared
+    docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps cloudflared
     echo "  Cloudflared is up."
 fi
 
@@ -125,7 +133,7 @@ echo ""
 
 # Step 4: Verify
 echo "[4/4] Verifying deployment..."
-docker compose -f "$COMPOSE_FILE" $PROFILE_ARGS ps
+docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" ps
 echo ""
 
 # Show data volume status

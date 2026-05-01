@@ -101,8 +101,14 @@ services:
           memory: 2G
           cpus: '2.0'
     restart: unless-stopped
+    # Same `nc -z` pattern as the server healthcheck above. The
+    # previous `netstat | grep ":$PORT"` form had two failure modes:
+    # `:12345` matches `:123450` and `:112345` as substrings (false
+    # positives if some other process binds an unrelated port that
+    # happens to contain the digits), and the `$$` escape is awkward
+    # to maintain. `nc -z` is exact-port and ships in the same image.
     healthcheck:
-      test: ["CMD-SHELL", "netstat -tuln | grep -q \":$${INTERNAL_SERVICE_PORT}\" || exit 1"]
+      test: ["CMD", "nc", "-z", "127.0.0.1", "${INTERNAL_SERVICE_PORT:-12345}"]
       interval: 15s
       timeout: 5s
       retries: 5

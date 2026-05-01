@@ -17,13 +17,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let opts: Options = Options::from_args();
     let service = CitadelWorkspaceService::new_websocket(opts.bind).await?;
 
-    // Select backend type from CLI options (defaults to InMemory)
-    let backend_type = match opts.backend.as_deref() {
+    // Backend selection precedence:
+    //   1. INTERNAL_SERVICE_BACKEND / INTERNAL_SERVICE_DATA_DIR env vars
+    //   2. --backend / --data-dir CLI flags
+    //   3. InMemory default
+    //
+    // Mirrors the workspace-server kernel's pattern (env -> config ->
+    // default) so a container that has the env vars set in its
+    // environment cannot silently end up on a different backend than
+    // the operator intended just because the CMD wrapper got reshaped.
+    // The Dockerfile still bridges env -> CLI today, but having the
+    // env-var path inside the binary itself is the load-bearing
+    // contract — the wrapper is just convenience.
+    let backend_choice = std::env::var("INTERNAL_SERVICE_BACKEND")
+        .ok()
+        .or_else(|| opts.backend.clone());
+    let data_dir_choice = std::env::var("INTERNAL_SERVICE_DATA_DIR")
+        .ok()
+        .or_else(|| opts.data_dir.clone());
+
+    let backend_type = match backend_choice.as_deref() {
         Some("filesystem") => {
-            let data_dir = opts
-                .data_dir
-                .clone()
-                .unwrap_or_else(|| "./data".to_string());
+            let data_dir = data_dir_choice.unwrap_or_else(|| "./data".to_string());
             citadel_logging::info!(target: "citadel", "Using filesystem backend with data directory: {}", data_dir);
             BackendType::Filesystem(data_dir)
         }

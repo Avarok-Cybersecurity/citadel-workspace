@@ -77,8 +77,11 @@ services:
         limits:
           memory: 2G
           cpus: '2.0'
+    # Mirrors the production healthcheck (see docker-compose.production.yml):
+    # `nc -z` is exact-port and avoids the substring-match pitfalls of
+    # `netstat | grep ":$PORT"`.
     healthcheck:
-      test: ["CMD-SHELL", "netstat -tuln | grep -q \":$${INTERNAL_SERVICE_PORT}\" || exit 1"]
+      test: ["CMD", "nc", "-z", "127.0.0.1", "${INTERNAL_SERVICE_PORT:-12345}"]
       interval: 30s
       timeout: 10s
       retries: 3
