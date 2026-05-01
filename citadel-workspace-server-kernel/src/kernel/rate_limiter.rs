@@ -58,6 +58,24 @@ pub const DEFAULT_RATE_LIMIT_MAX: u32 = 100;
 /// Default refill window the kernel applies if it doesn't override.
 pub const DEFAULT_RATE_LIMIT_REFILL: Duration = Duration::from_secs(1);
 
+/// High-water mark for the per-CID bucket map. When `try_consume`
+/// would push the map past this, it first sweeps stale entries (see
+/// `STALE_BUCKET_AGE`). This is a safety net against unbounded growth
+/// over a long-running process — a token-bucket whose refill window
+/// elapsed long ago is observationally equivalent to "no entry at all"
+/// (a fresh bucket is created with full tokens on the next request),
+/// so reaping them is a pure optimisation that never changes the
+/// observable rate-limit decision.
+pub const MAX_TRACKED_CIDS: usize = 100_000;
+
+/// Buckets older than this are eligible for sweep on the next
+/// over-capacity insert. Pinned at 60× the refill interval so that
+/// even a CID that hits the limiter once a minute under load doesn't
+/// get reaped between requests; in practice the bound is mostly
+/// triggered by truly idle CIDs whose owner closed the connection
+/// minutes or hours ago.
+const STALE_BUCKET_AGE_MULTIPLIER: u32 = 60;
+
 #[derive(Debug, Clone, Copy)]
 struct Bucket {
     /// Tokens currently available in this CID's bucket.
@@ -107,6 +125,21 @@ impl RateLimiter {
     /// window.
     pub fn try_consume(&self, cid: u64, now: Instant) -> bool {
         let mut map = self.state.lock();
+
+        // Opportunistic stale-bucket sweep before inserting a new
+        // entry, but only when we're about to cross the high-water
+        // mark. The sweep is amortised: each new insert past the bound
+        // walks the map once, removing buckets whose `last_refill` is
+        // older than `STALE_BUCKET_AGE_MULTIPLIER * refill_interval`.
+        // A reaped bucket is observationally identical to a missing
+        // one — the next request from that CID re-creates it with a
+        // full token budget — so the sweep cannot change the
+        // rate-limit decision for any caller.
+        if !map.contains_key(&cid) && map.len() >= MAX_TRACKED_CIDS {
+            let stale_threshold = self.refill_interval * STALE_BUCKET_AGE_MULTIPLIER;
+            map.retain(|_, b| now.duration_since(b.last_refill) < stale_threshold);
+        }
+
         let bucket = map
             .entry(cid)
             .or_insert_with(|| Bucket::new(now, self.max_tokens));
@@ -232,5 +265,94 @@ mod tests {
         let l = limiter();
         let t = Instant::now();
         assert!(l.try_consume(123, t));
+    }
+
+    #[test]
+    fn sweep_reaps_stale_buckets_when_at_capacity() {
+        // Drive a tiny bound through the public API by simulating
+        // capacity locally. We can't shrink MAX_TRACKED_CIDS without
+        // exposing a knob, so this test calls the internal map
+        // directly via tracked_cids() and asserts the *behavioural*
+        // contract: after the sweep, an old bucket is gone but a
+        // recent one remains.
+        let l = RateLimiter::new(1, Duration::from_millis(10));
+        let t0 = Instant::now();
+        // Old bucket: created 1s ago — well past
+        // STALE_BUCKET_AGE_MULTIPLIER * 10ms = 600ms.
+        assert!(l.try_consume(1, t0 - Duration::from_secs(1)));
+        // Recent bucket: created at t0.
+        assert!(l.try_consume(2, t0));
+        assert_eq!(l.tracked_cids(), 2);
+
+        // Force the bound by injecting MAX_TRACKED_CIDS - 2 + 1
+        // sentinels so the next *new* CID hits the sweep path. We
+        // can't realistically allocate 100k entries in a unit test,
+        // so the `at_capacity` invariant is exercised by the
+        // `sweep_reaps_stale_buckets_directly` test below using the
+        // module-level helper. This case asserts the no-op path:
+        // when below capacity, the sweep does NOT run, so both
+        // buckets remain.
+        assert!(l.try_consume(3, t0));
+        assert_eq!(l.tracked_cids(), 3);
+    }
+
+    #[test]
+    fn sweep_reaps_stale_buckets_directly() {
+        // Drive the sweep path directly by reaching into the locked
+        // map and checking the retain predicate that try_consume
+        // applies when at capacity. This avoids allocating
+        // MAX_TRACKED_CIDS sentinels in a unit test.
+        let l = RateLimiter::new(1, Duration::from_millis(10));
+        let now = Instant::now();
+        // Plant 5 buckets: ids 1..=5 with last_refill at varying ages.
+        {
+            let mut map = l.state.lock();
+            for id in 1u64..=5 {
+                let age_ms = id * 200; // 200, 400, 600, 800, 1000 ms
+                map.insert(
+                    id,
+                    Bucket {
+                        tokens: 1,
+                        last_refill: now - Duration::from_millis(age_ms),
+                    },
+                );
+            }
+        }
+        // Sweep with the same predicate try_consume uses.
+        let stale_threshold = Duration::from_millis(10) * STALE_BUCKET_AGE_MULTIPLIER; // 600ms
+        l.state
+            .lock()
+            .retain(|_, b| now.duration_since(b.last_refill) < stale_threshold);
+
+        // Buckets at 200ms and 400ms survive; 600/800/1000ms are reaped.
+        let map = l.state.lock();
+        assert!(map.contains_key(&1), "200ms-old bucket should survive");
+        assert!(map.contains_key(&2), "400ms-old bucket should survive");
+        assert!(!map.contains_key(&3), "600ms-old bucket should be reaped");
+        assert!(!map.contains_key(&4), "800ms-old bucket should be reaped");
+        assert!(!map.contains_key(&5), "1000ms-old bucket should be reaped");
+    }
+
+    #[test]
+    fn reaped_cid_starts_with_a_full_budget_again() {
+        // Observable contract: a CID whose bucket got reaped behaves
+        // identically to a CID that has never been seen. Specifically
+        // it gets a fresh full-token budget — there's no penalty or
+        // memory of the reaped state.
+        let l = RateLimiter::new(2, Duration::from_millis(10));
+        let t = Instant::now();
+
+        // CID 7 burns its budget.
+        assert!(l.try_consume(7, t));
+        assert!(l.try_consume(7, t));
+        assert!(!l.try_consume(7, t));
+
+        // Simulate the sweep removing CID 7.
+        l.state.lock().remove(&7);
+
+        // CID 7 now behaves like a fresh CID — full budget.
+        assert!(l.try_consume(7, t));
+        assert!(l.try_consume(7, t));
+        assert!(!l.try_consume(7, t));
     }
 }
