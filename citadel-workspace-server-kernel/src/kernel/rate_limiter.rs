@@ -58,15 +58,21 @@ pub const DEFAULT_RATE_LIMIT_MAX: u32 = 100;
 /// Default refill window the kernel applies if it doesn't override.
 pub const DEFAULT_RATE_LIMIT_REFILL: Duration = Duration::from_secs(1);
 
-/// High-water mark for the per-CID bucket map. When `try_consume`
-/// would push the map past this, it first sweeps stale entries (see
-/// `STALE_BUCKET_AGE`). This is a safety net against unbounded growth
-/// over a long-running process — a token-bucket whose refill window
-/// elapsed long ago is observationally equivalent to "no entry at all"
-/// (a fresh bucket is created with full tokens on the next request),
-/// so reaping them is a pure optimisation that never changes the
-/// observable rate-limit decision.
-pub const MAX_TRACKED_CIDS: usize = 100_000;
+/// Default high-water mark for the per-CID bucket map. When
+/// `try_consume` would push the map past this, it first sweeps stale
+/// entries (see `STALE_BUCKET_AGE_MULTIPLIER`). This is a safety net
+/// against unbounded growth over a long-running process — a
+/// token-bucket whose refill window elapsed long ago is
+/// observationally equivalent to "no entry at all" (a fresh bucket is
+/// created with full tokens on the next request), so reaping them is
+/// a pure optimisation that never changes the observable rate-limit
+/// decision.
+///
+/// Tests can drop the bound to a small value via
+/// `RateLimiter::with_capacity` so the sweep path is exercised
+/// through the public API rather than left to a 100k-entry stress
+/// test that won't run in CI.
+pub const DEFAULT_MAX_TRACKED_CIDS: usize = 100_000;
 
 /// Buckets older than this are eligible for sweep on the next
 /// over-capacity insert. Pinned at 60× the refill interval so that
@@ -107,14 +113,30 @@ impl Bucket {
 pub struct RateLimiter {
     max_tokens: u32,
     refill_interval: Duration,
+    /// Per-instance high-water mark for the bucket map. Production
+    /// uses `DEFAULT_MAX_TRACKED_CIDS`; tests use a small value so
+    /// they can exercise the sweep path through the public API.
+    max_tracked_cids: usize,
     state: Arc<Mutex<HashMap<u64, Bucket>>>,
 }
 
 impl RateLimiter {
     pub fn new(max_tokens: u32, refill_interval: Duration) -> Self {
+        Self::with_capacity(max_tokens, refill_interval, DEFAULT_MAX_TRACKED_CIDS)
+    }
+
+    /// Construct a limiter with a custom map-size bound. Intended for
+    /// tests that need to trigger the stale-bucket sweep without
+    /// allocating `DEFAULT_MAX_TRACKED_CIDS` (100k) entries.
+    pub fn with_capacity(
+        max_tokens: u32,
+        refill_interval: Duration,
+        max_tracked_cids: usize,
+    ) -> Self {
         Self {
             max_tokens,
             refill_interval,
+            max_tracked_cids,
             state: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -135,7 +157,7 @@ impl RateLimiter {
         // one — the next request from that CID re-creates it with a
         // full token budget — so the sweep cannot change the
         // rate-limit decision for any caller.
-        if !map.contains_key(&cid) && map.len() >= MAX_TRACKED_CIDS {
+        if !map.contains_key(&cid) && map.len() >= self.max_tracked_cids {
             let stale_threshold = self.refill_interval * STALE_BUCKET_AGE_MULTIPLIER;
             map.retain(|_, b| now.duration_since(b.last_refill) < stale_threshold);
         }
@@ -270,7 +292,7 @@ mod tests {
     #[test]
     fn sweep_reaps_stale_buckets_when_at_capacity() {
         // Drive a tiny bound through the public API by simulating
-        // capacity locally. We can't shrink MAX_TRACKED_CIDS without
+        // capacity locally. We can't shrink DEFAULT_MAX_TRACKED_CIDS without
         // exposing a knob, so this test calls the internal map
         // directly via tracked_cids() and asserts the *behavioural*
         // contract: after the sweep, an old bucket is gone but a
@@ -284,7 +306,7 @@ mod tests {
         assert!(l.try_consume(2, t0));
         assert_eq!(l.tracked_cids(), 2);
 
-        // Force the bound by injecting MAX_TRACKED_CIDS - 2 + 1
+        // Force the bound by injecting DEFAULT_MAX_TRACKED_CIDS - 2 + 1
         // sentinels so the next *new* CID hits the sweep path. We
         // can't realistically allocate 100k entries in a unit test,
         // so the `at_capacity` invariant is exercised by the
@@ -301,7 +323,7 @@ mod tests {
         // Drive the sweep path directly by reaching into the locked
         // map and checking the retain predicate that try_consume
         // applies when at capacity. This avoids allocating
-        // MAX_TRACKED_CIDS sentinels in a unit test.
+        // DEFAULT_MAX_TRACKED_CIDS sentinels in a unit test.
         let l = RateLimiter::new(1, Duration::from_millis(10));
         let now = Instant::now();
         // Plant 5 buckets: ids 1..=5 with last_refill at varying ages.
@@ -331,6 +353,65 @@ mod tests {
         assert!(!map.contains_key(&3), "600ms-old bucket should be reaped");
         assert!(!map.contains_key(&4), "800ms-old bucket should be reaped");
         assert!(!map.contains_key(&5), "1000ms-old bucket should be reaped");
+    }
+
+    #[test]
+    fn sweep_fires_through_public_api_at_custom_capacity() {
+        // Drives the at-capacity branch in `try_consume` via the
+        // public surface — `with_capacity` lets us shrink the bound
+        // to something a test can actually reach. With cap=3, the
+        // first three new CIDs fill the map; on the 4th NEW cid,
+        // the sweep predicate runs.
+        let l = RateLimiter::with_capacity(1, Duration::from_millis(10), 3);
+        let t0 = Instant::now();
+
+        // Plant CIDs 1..=3 with `last_refill` set 1s in the past, so
+        // they're well past STALE_BUCKET_AGE_MULTIPLIER * 10ms =
+        // 600ms and all eligible for reaping.
+        let stale_t = t0 - Duration::from_secs(1);
+        assert!(l.try_consume(1, stale_t));
+        assert!(l.try_consume(2, stale_t));
+        assert!(l.try_consume(3, stale_t));
+        assert_eq!(l.tracked_cids(), 3, "map filled to capacity");
+
+        // CID 4 is a NEW key arriving at t0. Map is at capacity, so
+        // the sweep runs first — reaping all three stale entries —
+        // then CID 4 is inserted with a full budget. After the call,
+        // the map holds only CID 4.
+        assert!(l.try_consume(4, t0));
+        assert_eq!(
+            l.tracked_cids(),
+            1,
+            "sweep must reap stale entries when capacity is hit"
+        );
+
+        // The reaped CID 1 behaves like a fresh CID on its next
+        // request — observably indistinguishable from "never seen".
+        assert!(l.try_consume(1, t0));
+    }
+
+    #[test]
+    fn sweep_does_not_reap_recent_buckets_at_capacity() {
+        // Mirror of the above: if the buckets at capacity are NOT
+        // stale, the sweep removes nothing and the new insert simply
+        // pushes the map one over the bound. This is the
+        // fail-open behaviour: we'd rather over-track briefly than
+        // refuse a legitimate caller a token. The bound is a
+        // soft watermark, not a hard cap.
+        let l = RateLimiter::with_capacity(1, Duration::from_millis(10), 3);
+        let t = Instant::now();
+        assert!(l.try_consume(1, t));
+        assert!(l.try_consume(2, t));
+        assert!(l.try_consume(3, t));
+        assert_eq!(l.tracked_cids(), 3);
+
+        // CID 4: sweep runs but finds nothing stale, insert proceeds.
+        assert!(l.try_consume(4, t));
+        assert_eq!(
+            l.tracked_cids(),
+            4,
+            "no stale entries to reap, soft over-track is fine"
+        );
     }
 
     #[test]
