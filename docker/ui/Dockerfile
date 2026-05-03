@@ -60,12 +60,36 @@ ENV NODE_ENV=production
 RUN npm run build
 
 # ==============================================================================
-# Production serve stage - static files via nginx
+# Production serve stage - static files via nginx, non-root.
+#
+# Why not the default `nginx:stable-alpine` user model: that image
+# starts the master process as root so it can bind to port 80, then
+# forks workers that drop to `nginx`. The master staying root is a
+# blast-radius hazard — a vulnerability in the master could yield
+# root inside the container, which the rest of this PR's services
+# (citadel-workspace-internal-service, server-kernel) avoid by
+# running as `appuser` with no privileged-port binding. To match
+# that posture we listen on 8080 (above 1024, so no root needed),
+# chown the writable nginx state directories to the `nginx` user,
+# and switch to that user before starting the daemon. Operators
+# expose port 80 / 443 externally via the surrounding reverse proxy
+# (Cloudflare tunnel in this repo) — the container internal port
+# does not need to be 80.
 # ==============================================================================
 FROM nginx:stable-alpine AS production
 
 # Copy the built static assets from the build stage
 COPY --from=build /app/dist /usr/share/nginx/html
+
+# nginx ships with default config files that assume the master runs
+# as root and write logs / pid / cache under root-owned paths. Re-own
+# them to the unprivileged `nginx` user (uid 101, present in the
+# base image) and drop the default config so our custom one below
+# is the only server block.
+RUN chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx \
+    && touch /var/run/nginx.pid \
+    && chown nginx:nginx /var/run/nginx.pid \
+    && rm -f /etc/nginx/conf.d/default.conf
 
 # Custom nginx config for SPA routing (all routes -> index.html).
 #
@@ -89,7 +113,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 #   * `connect-src 'self' ws: wss:` — WebSocket to the internal
 #     service and workspace server is the app's primary transport.
 RUN printf 'server {\n\
-    listen 80;\n\
+    listen 8080;\n\
     server_name _;\n\
     root /usr/share/nginx/html;\n\
     index index.html;\n\
@@ -137,6 +161,7 @@ RUN printf 'server {\n\
     }\n\
 }\n' > /etc/nginx/conf.d/default.conf
 
-EXPOSE 80
+USER nginx
+EXPOSE 8080
 
 CMD ["nginx", "-g", "daemon off;"]
