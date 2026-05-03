@@ -26,6 +26,19 @@ pub struct BackendTransactionManager<R: Ratchet> {
     /// both append, second write wins) and silently drop one entity from
     /// the index - making the affected entity invisible to get_all_* lookups.
     index_write_mutex: Arc<tokio::sync::Mutex<()>>,
+    /// Serializes group-message read-modify-write operations across all
+    /// groups. Without this, two concurrent `store_group_message` /
+    /// `update_group_message` / `delete_group_message` calls for the
+    /// same group would each load the prior message list, mutate, and
+    /// save — the second save silently overwrites the first, dropping
+    /// a message edit or insert on the floor.
+    ///
+    /// A single mutex serializes across *all* groups (rather than
+    /// per-group-id) because the cost is small (group message ops are
+    /// infrequent compared to index ops) and the data-loss
+    /// consequence of a missed lock is severe. Refactor to a per-id
+    /// mutex if profiling shows contention.
+    group_msg_mutex: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl<R: Ratchet + Send + Sync + 'static> Default for BackendTransactionManager<R> {
@@ -66,6 +79,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             test_storage: Arc::new(RwLock::new(HashMap::new())),
             migrated: Arc::new(RwLock::new(false)),
             index_write_mutex: Arc::new(tokio::sync::Mutex::new(())),
+            group_msg_mutex: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 
@@ -584,8 +598,14 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         self.backend_save(&key, &messages).await
     }
 
-    /// Store a new group message
+    /// Store a new group message.
+    ///
+    /// Serialized through `group_msg_mutex` so two concurrent inserts
+    /// for the same group cannot race on the load-modify-save cycle
+    /// (both read the same prior list, both push, second save
+    /// overwrites the first — silently dropping the earlier message).
     pub async fn store_group_message(&self, message: GroupMessage) -> Result<(), NetworkError> {
+        let _guard = self.group_msg_mutex.lock().await;
         let group_id = message.group_id.clone();
         let mut messages = self.get_group_messages(&group_id).await?;
 
@@ -603,7 +623,8 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         self.save_group_messages(&group_id, &messages).await
     }
 
-    /// Update a group message (edit)
+    /// Update a group message (edit). Serialized through
+    /// `group_msg_mutex` for the same reason as `store_group_message`.
     pub async fn update_group_message(
         &self,
         group_id: &str,
@@ -611,6 +632,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         new_content: String,
         edited_at: u64,
     ) -> Result<Option<GroupMessage>, NetworkError> {
+        let _guard = self.group_msg_mutex.lock().await;
         let mut messages = self.get_group_messages(group_id).await?;
 
         let mut updated_message = None;
@@ -630,12 +652,14 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(updated_message)
     }
 
-    /// Delete a group message
+    /// Delete a group message. Serialized through `group_msg_mutex`
+    /// for the same reason as `store_group_message`.
     pub async fn delete_group_message(
         &self,
         group_id: &str,
         message_id: &str,
     ) -> Result<Option<GroupMessage>, NetworkError> {
+        let _guard = self.group_msg_mutex.lock().await;
         let mut messages = self.get_group_messages(group_id).await?;
 
         // Find and remove the message
@@ -850,5 +874,106 @@ mod migration_tests {
         // Idempotent overwrite to a higher version (simulates an upgrade).
         mgr.set_schema_version(8).await.unwrap();
         assert_eq!(mgr.get_schema_version().await.unwrap(), Some(8));
+    }
+}
+
+#[cfg(test)]
+mod group_message_tests {
+    //! Regression tests for the `group_msg_mutex`. The three group
+    //! message ops (`store`, `update`, `delete`) all do a load,
+    //! mutate, save sequence; without the mutex, two concurrent
+    //! callers would each load the prior list, mutate, and save in
+    //! whichever order their futures wake — silently dropping one
+    //! caller's mutation when the second save lands on top.
+    use super::*;
+    use citadel_sdk::prelude::StackedRatchet;
+    use citadel_workspace_types::{GroupMessage, GroupMessageType};
+
+    fn fresh() -> Arc<BackendTransactionManager<StackedRatchet>> {
+        Arc::new(BackendTransactionManager::new())
+    }
+
+    fn msg(id: &str, group_id: &str) -> GroupMessage {
+        GroupMessage {
+            id: id.to_string(),
+            group_id: group_id.to_string(),
+            sender_id: "u1".to_string(),
+            sender_name: "Alice".to_string(),
+            message_type: GroupMessageType::Text,
+            content: format!("body-{id}"),
+            timestamp: 0,
+            reply_to: None,
+            reply_count: 0,
+            mentions: vec![],
+            edited_at: None,
+        }
+    }
+
+    /// 50 concurrent `store_group_message` calls into the same group
+    /// must all land — the pre-mutex implementation lost messages
+    /// because the load-modify-save sequences interleaved and the
+    /// last-writer-wins saves clobbered earlier inserts.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_stores_all_persist() {
+        let mgr = fresh();
+        let n = 50;
+        let handles: Vec<_> = (0..n)
+            .map(|i| {
+                let mgr = Arc::clone(&mgr);
+                tokio::spawn(async move {
+                    mgr.store_group_message(msg(&format!("m{i}"), "g1"))
+                        .await
+                        .expect("store ok");
+                })
+            })
+            .collect();
+        for h in handles {
+            h.await.expect("task ok");
+        }
+
+        let stored = mgr.get_group_messages("g1").await.expect("get ok");
+        assert_eq!(
+            stored.len(),
+            n,
+            "every concurrent store must land — mutex regression if not"
+        );
+        let mut ids: Vec<&str> = stored.iter().map(|m| m.id.as_str()).collect();
+        ids.sort();
+        let mut expected: Vec<String> = (0..n).map(|i| format!("m{i}")).collect();
+        expected.sort();
+        assert_eq!(ids, expected.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+    }
+
+    /// Concurrent edits to *different* messages in the same group
+    /// must all be visible after the storm. Pre-mutex, two edits
+    /// would each load the same prior list, apply one mutation, and
+    /// save — losing the other's edit.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_updates_dont_lose_edits() {
+        let mgr = fresh();
+        // Seed two messages.
+        mgr.store_group_message(msg("a", "g")).await.unwrap();
+        mgr.store_group_message(msg("b", "g")).await.unwrap();
+
+        let m1 = Arc::clone(&mgr);
+        let m2 = Arc::clone(&mgr);
+        let (r1, r2) = tokio::join!(
+            tokio::spawn(async move {
+                m1.update_group_message("g", "a", "edit-a".into(), 100)
+                    .await
+            }),
+            tokio::spawn(async move {
+                m2.update_group_message("g", "b", "edit-b".into(), 100)
+                    .await
+            }),
+        );
+        r1.unwrap().unwrap();
+        r2.unwrap().unwrap();
+
+        let stored = mgr.get_group_messages("g").await.unwrap();
+        let by_id: HashMap<&str, &GroupMessage> =
+            stored.iter().map(|m| (m.id.as_str(), m)).collect();
+        assert_eq!(by_id.get("a").unwrap().content, "edit-a");
+        assert_eq!(by_id.get("b").unwrap().content, "edit-b");
     }
 }
