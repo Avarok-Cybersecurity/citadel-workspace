@@ -20,6 +20,49 @@ use tokio::sync::broadcast;
 /// The `on_start` method checks this version and runs migrations if needed.
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 
+/// Reject a path segment supplied by an authenticated client before it
+/// is joined onto the content base directory. Without this check, a
+/// node/office/room name like `"../../etc/evil"` would let
+/// `tokio::fs::write` escape the configured content tree and clobber
+/// arbitrary files as the server process user.
+///
+/// Rules: a content segment is rejected if it
+///   * is empty,
+///   * is exactly `.` or `..` (current/parent dir traversal),
+///   * contains a path separator (`/` or `\`) — either form is taken
+///     as an attempt to climb the tree even on a Linux host, since
+///     `Path::join` interprets a leading slash as an absolute root,
+///   * contains a NUL byte (truncates filesystem syscalls), or
+///   * starts with `.` (hidden / special directories like `.git`,
+///     `.ssh`, `..`).
+///
+/// All real workspace/office/room names today are user-visible labels
+/// that the UI should already prevent from containing these
+/// characters — this is a belt-and-suspenders check at the persistence
+/// boundary so a compromised or misbehaving client can't reach a
+/// `tokio::fs::write` outside the content directory.
+pub(crate) fn validate_content_segment(segment: &str) -> Result<(), NetworkError> {
+    if segment.is_empty() {
+        return Err(NetworkError::msg("Content segment cannot be empty"));
+    }
+    if segment == "." || segment == ".." {
+        return Err(NetworkError::msg(format!(
+            "Content segment '{segment}' is a directory traversal sentinel"
+        )));
+    }
+    if segment.starts_with('.') {
+        return Err(NetworkError::msg(format!(
+            "Content segment '{segment}' must not start with '.'"
+        )));
+    }
+    if segment.contains('/') || segment.contains('\\') || segment.contains('\0') {
+        return Err(NetworkError::msg(format!(
+            "Content segment '{segment}' contains a forbidden character"
+        )));
+    }
+    Ok(())
+}
+
 /// Message for broadcasting workspace updates to connected clients
 #[derive(Clone, Debug)]
 pub struct BroadcastMessage {
@@ -334,7 +377,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     /// Persist node MDX content to file
     ///
-    /// Writes the content to `{content_base_path}/{node_name}/CONTENT.md`
+    /// Writes the content to `{content_base_path}/{node_name}/CONTENT.md`.
+    /// `node_name` is rejected if it would escape the content base
+    /// directory — see `validate_content_segment`.
     pub async fn persist_node_content(
         &self,
         node_name: &str,
@@ -343,6 +388,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         let Some(base_path) = self.get_content_base_path() else {
             return Ok(());
         };
+        validate_content_segment(node_name)?;
 
         let content_path = base_path.join(node_name).join("CONTENT.md");
         info!(target: "citadel", "[ASYNC_KERNEL] Persisting node content to {:?}", content_path);
@@ -366,7 +412,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     /// Persist office MDX content to file
     ///
-    /// Writes the content to `{content_base_path}/{office_name}/CONTENT.md`
+    /// Writes the content to `{content_base_path}/{office_name}/CONTENT.md`.
+    /// `office_name` is sanitised via `validate_content_segment`.
     pub async fn persist_office_content(
         &self,
         office_name: &str,
@@ -376,6 +423,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             // No content base path configured, skip file persistence
             return Ok(());
         };
+        validate_content_segment(office_name)?;
 
         let office_content_path = base_path.join(office_name).join("CONTENT.md");
         info!(target: "citadel", "[ASYNC_KERNEL] Persisting office content to {:?}", office_content_path);
@@ -392,7 +440,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     /// Persist room MDX content to file
     ///
-    /// Writes the content to `{content_base_path}/{office_name}/{room_name}/CONTENT.md`
+    /// Writes the content to `{content_base_path}/{office_name}/{room_name}/CONTENT.md`.
+    /// Both `office_name` and `room_name` are sanitised via
+    /// `validate_content_segment`.
     pub async fn persist_room_content(
         &self,
         office_name: &str,
@@ -403,6 +453,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             // No content base path configured, skip file persistence
             return Ok(());
         };
+        validate_content_segment(office_name)?;
+        validate_content_segment(room_name)?;
 
         let room_content_path = base_path
             .join(office_name)
@@ -727,13 +779,35 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     );
                 }
                 Some(version) if version > CURRENT_SCHEMA_VERSION => {
-                    warn!(
-                        target: "citadel",
-                        "Backend schema version (v{}) is newer than expected (v{}). \
-                         This may indicate a downgrade; proceeding with caution.",
-                        version,
-                        CURRENT_SCHEMA_VERSION
-                    );
+                    // Refuse to start: a newer-than-expected schema means
+                    // either we're booting an older binary against a
+                    // forward-migrated store, or the backend has been
+                    // tampered with. Proceeding could silently corrupt
+                    // data — newer migrations may have rewritten keys
+                    // this binary doesn't know how to read. Operators
+                    // who legitimately downgrade can set
+                    // `WORKSPACE_ALLOW_SCHEMA_DOWNGRADE=1` to bypass.
+                    if std::env::var("WORKSPACE_ALLOW_SCHEMA_DOWNGRADE")
+                        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                        .unwrap_or(false)
+                    {
+                        warn!(
+                            target: "citadel",
+                            "Backend schema version (v{}) is newer than expected (v{}); \
+                             WORKSPACE_ALLOW_SCHEMA_DOWNGRADE is set, proceeding anyway. \
+                             Data corruption is possible if the storage format changed.",
+                            version,
+                            CURRENT_SCHEMA_VERSION
+                        );
+                    } else {
+                        return Err(NetworkError::msg(format!(
+                            "Backend schema version (v{}) is newer than this binary expects (v{}). \
+                             Refusing to start to prevent silent data corruption. \
+                             To override (e.g. an intentional downgrade), set \
+                             WORKSPACE_ALLOW_SCHEMA_DOWNGRADE=1.",
+                            version, CURRENT_SCHEMA_VERSION,
+                        )));
+                    }
                 }
                 Some(version) => {
                     info!(
@@ -1178,5 +1252,68 @@ mod shutdown_tests {
             msg.exclude_cid.is_none(),
             "shutdown broadcast must not exclude any CID"
         );
+    }
+}
+
+#[cfg(test)]
+mod content_segment_tests {
+    //! Boundary tests for `validate_content_segment`. The function is
+    //! the only thing standing between user-supplied node names and
+    //! `tokio::fs::write` underneath the content directory; if any of
+    //! the rejection rules ever loosen, a malicious or malformed name
+    //! could escape the content tree.
+    use super::validate_content_segment;
+
+    #[test]
+    fn accepts_a_normal_name() {
+        validate_content_segment("Engineering").expect("normal name must be accepted");
+        validate_content_segment("Q4-Planning").expect("dashes are fine");
+        validate_content_segment("Office 1").expect("spaces are fine");
+        validate_content_segment("café").expect("non-ascii is fine");
+    }
+
+    #[test]
+    fn rejects_empty() {
+        assert!(validate_content_segment("").is_err());
+    }
+
+    #[test]
+    fn rejects_traversal_sentinels() {
+        assert!(validate_content_segment(".").is_err());
+        assert!(validate_content_segment("..").is_err());
+    }
+
+    #[test]
+    fn rejects_path_separators() {
+        // `Path::join` interprets a leading slash as an absolute
+        // root, which would let a malicious caller redirect the write
+        // to /etc/anything; backslash is rejected too because `tokio::fs`
+        // on Windows treats it as a separator.
+        assert!(validate_content_segment("foo/bar").is_err());
+        assert!(validate_content_segment("/etc/passwd").is_err());
+        assert!(validate_content_segment("foo\\bar").is_err());
+        assert!(validate_content_segment("\\\\server\\share").is_err());
+    }
+
+    #[test]
+    fn rejects_traversal_via_relative_segments() {
+        assert!(validate_content_segment("../../etc/evil").is_err());
+        assert!(validate_content_segment("..\\..\\windows").is_err());
+    }
+
+    #[test]
+    fn rejects_hidden_dot_prefixes() {
+        // Blocks `.git`, `.ssh`, `.well-known`, etc. — these aren't
+        // legitimate workspace names and a name like `.config` could
+        // shadow operationally-sensitive directories if the content
+        // root happened to be a user home directory.
+        assert!(validate_content_segment(".git").is_err());
+        assert!(validate_content_segment(".env").is_err());
+        assert!(validate_content_segment(".hiddenfile").is_err());
+    }
+
+    #[test]
+    fn rejects_nul_byte() {
+        assert!(validate_content_segment("foo\0bar").is_err());
     }
 }
