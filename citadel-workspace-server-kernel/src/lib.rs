@@ -416,38 +416,12 @@ pub async fn run_server_with_base_path(
     };
 
     // Select backend type from env-var override (preferred) or config file.
-    //
-    // Env vars win because:
-    //   * dev `kernel.toml` is shared with prod via the same Dockerfile
-    //     COPY, so the file CANNOT default to filesystem without
-    //     persisting state across `tilt` restarts in dev (contradicting
-    //     CLAUDE.md's documented ephemeral-dev contract).
-    //   * Production `docker-compose.production.yml` sets the env vars,
-    //     keeping production state on disk while dev stays ephemeral.
-    //
-    // Defaults to InMemory when neither env var nor config sets it -
-    // matching the prior "omit = in-memory" contract.
-    let env_backend = std::env::var("WORKSPACE_BACKEND").ok();
-    let env_data_dir = std::env::var("WORKSPACE_DATA_DIR").ok();
-    let backend_choice = env_backend.as_deref().or(config.backend.as_deref());
-    let data_dir_choice = env_data_dir.as_deref().or(config.data_dir.as_deref());
-    let backend_type_for_node_builder = match backend_choice {
-        Some("filesystem") => {
-            let data_dir = data_dir_choice.unwrap_or("./data").to_string();
-            info!(target: "citadel", "Using filesystem backend with data directory: {}", data_dir);
-            BackendType::Filesystem(data_dir)
-        }
-        Some(other) => {
-            return Err(NetworkError::msg(format!(
-                "Unknown backend type '{}'. Supported: 'filesystem' (or omit for in-memory)",
-                other
-            )));
-        }
-        None => {
-            info!(target: "citadel", "Using in-memory backend (data will not persist across restarts)");
-            BackendType::InMemory
-        }
-    };
+    let backend_type_for_node_builder = select_backend_type(
+        std::env::var("WORKSPACE_BACKEND").ok().as_deref(),
+        std::env::var("WORKSPACE_DATA_DIR").ok().as_deref(),
+        config.backend.as_deref(),
+        config.data_dir.as_deref(),
+    )?;
 
     // Log file transfer config
     if let Some(ref ft_config) = config.file_transfer {
@@ -489,4 +463,126 @@ pub async fn run_server_with_base_path(
     builder.build(kernel)?.await?;
 
     Ok(())
+}
+
+/// Resolve the backend type from the four possible sources, in
+/// precedence order: env-var first, config-file second, and a
+/// default of `InMemory` if neither is set.
+///
+/// Why env wins: the same Dockerfile COPY is shared between the dev
+/// `tilt` flow and the production compose file, so `kernel.toml`
+/// CANNOT default to filesystem without breaking CLAUDE.md's
+/// documented ephemeral-dev contract (every dev reload would persist
+/// state, masking issues that only surface on a fresh server).
+/// Production `docker-compose.production.yml` sets the env vars to
+/// override that default, keeping prod on disk and dev in memory.
+///
+/// Pure function — no I/O, no logging — so unit tests can drive every
+/// combination of env/config inputs through the public surface.
+pub fn select_backend_type(
+    env_backend: Option<&str>,
+    env_data_dir: Option<&str>,
+    config_backend: Option<&str>,
+    config_data_dir: Option<&str>,
+) -> Result<BackendType, NetworkError> {
+    let backend_choice = env_backend.or(config_backend);
+    let data_dir_choice = env_data_dir.or(config_data_dir);
+    match backend_choice {
+        Some("filesystem") => {
+            let data_dir = data_dir_choice.unwrap_or("./data").to_string();
+            info!(target: "citadel", "Using filesystem backend with data directory: {}", data_dir);
+            Ok(BackendType::Filesystem(data_dir))
+        }
+        Some(other) => Err(NetworkError::msg(format!(
+            "Unknown backend type '{}'. Supported: 'filesystem' (or omit for in-memory)",
+            other
+        ))),
+        None => {
+            info!(target: "citadel", "Using in-memory backend (data will not persist across restarts)");
+            Ok(BackendType::InMemory)
+        }
+    }
+}
+
+#[cfg(test)]
+mod backend_select_tests {
+    //! Boundary tests for `select_backend_type`. The selection logic
+    //! is the main reason a deployment ends up on the wrong backend
+    //! (in-memory in production, filesystem in dev), so each
+    //! precedence path has its own assertion. The function is pure,
+    //! so the tests don't need a kernel or runtime.
+    use super::*;
+
+    #[test]
+    fn defaults_to_in_memory_when_nothing_is_set() {
+        let bt = select_backend_type(None, None, None, None).unwrap();
+        assert!(matches!(bt, BackendType::InMemory));
+    }
+
+    #[test]
+    fn config_filesystem_uses_config_data_dir() {
+        let bt = select_backend_type(None, None, Some("filesystem"), Some("/srv/data")).unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "/srv/data"),
+            other => panic!("expected Filesystem, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn config_filesystem_falls_back_to_default_data_dir() {
+        let bt = select_backend_type(None, None, Some("filesystem"), None).unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "./data"),
+            other => panic!("expected Filesystem, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn env_backend_overrides_config_backend() {
+        let bt =
+            select_backend_type(Some("filesystem"), Some("/data/from-env"), None, None).unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "/data/from-env"),
+            other => panic!("expected Filesystem, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn env_data_dir_overrides_config_data_dir_independently() {
+        // The env-var precedence applies to backend AND data-dir
+        // independently — operators should be able to keep
+        // backend=filesystem from config but redirect data-dir from
+        // env (e.g. switching to a mounted volume without rebuilding
+        // the image).
+        let bt = select_backend_type(
+            None,
+            Some("/mnt/persistent"),
+            Some("filesystem"),
+            Some("/srv/data"),
+        )
+        .unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "/mnt/persistent"),
+            other => panic!("expected Filesystem, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_backend_string_returns_error() {
+        let err = select_backend_type(None, None, Some("redis"), None).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("Unknown backend type 'redis'"),
+            "error message should name the bad value: {msg}"
+        );
+    }
+
+    #[test]
+    fn explicit_in_memory_via_omitted_backend_ignores_data_dir() {
+        // If the operator omits the backend entirely (intending
+        // in-memory), a stray data-dir env var must not silently
+        // promote them to filesystem.
+        let bt = select_backend_type(None, Some("/should-be-ignored"), None, None).unwrap();
+        assert!(matches!(bt, BackendType::InMemory));
+    }
 }
