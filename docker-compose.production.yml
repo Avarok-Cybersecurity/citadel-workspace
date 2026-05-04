@@ -152,8 +152,14 @@ services:
   # Setup:
   #   1. Create a tunnel in Cloudflare Zero Trust dashboard
   #   2. Add public hostname rules:
-  #      - yourdomain.com      → http://ui:8080
-  #      - yourdomain.com/ws*  → ws://internal-service:12345
+  #      - yourdomain.com      → http://localhost:8080
+  #      - yourdomain.com/ws*  → ws://localhost:12345
+  #      (Docker service names like `ui:8080` would only resolve on
+  #      a bridge network — this compose file uses `network_mode:
+  #      host` for every service including cloudflared, so the
+  #      tunnel reaches the backends through the shared host
+  #      loopback. Pointing the rules at the service-name hostnames
+  #      would silently fail to connect.)
   #   3. Copy the tunnel token
   #   4. Set TUNNEL_TOKEN in .env
   # ---------------------------------------------------------------------------
