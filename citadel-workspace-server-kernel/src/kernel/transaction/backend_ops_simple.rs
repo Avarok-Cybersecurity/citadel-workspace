@@ -209,7 +209,17 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     }
 
     // ========== DomainNode (Generalized Tree Hierarchy) Operations ==========
-    // Note: DomainNode storage is NOT migrated to per-entity keys (not requested).
+    //
+    // DomainNode storage is NOT migrated to per-entity keys; the entire
+    // collection sits behind one HashMap-shaped key. That means every
+    // mutating op below does a load-modify-save cycle on the same
+    // backend value, and two concurrent ops would race the same way
+    // group-message ops did before `group_msg_mutex` — both load the
+    // prior map, each apply its change, and the second save silently
+    // overwrites the first. `node_mutex` serializes the three
+    // mutators below so that race cannot drop a node insert / delete
+    // / update on the floor. Migration to per-entity keys would let
+    // us shed the lock; until then this is the cheap, correct fix.
 
     /// Get a single DomainNode by ID
     pub async fn get_node(&self, node_id: &str) -> Result<Option<DomainNode>, NetworkError> {
@@ -217,15 +227,17 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(nodes.get(node_id).cloned())
     }
 
-    /// Insert a DomainNode
+    /// Insert a DomainNode. Serialized through `node_mutex`.
     pub async fn insert_node(&self, node_id: String, node: DomainNode) -> Result<(), NetworkError> {
+        let _guard = self.node_mutex.lock().await;
         let mut nodes = self.get_all_nodes().await?;
         nodes.insert(node_id, node);
         self.save_nodes(&nodes).await
     }
 
-    /// Remove a DomainNode
+    /// Remove a DomainNode. Serialized through `node_mutex`.
     pub async fn remove_node(&self, node_id: &str) -> Result<Option<DomainNode>, NetworkError> {
+        let _guard = self.node_mutex.lock().await;
         let mut nodes = self.get_all_nodes().await?;
         let removed = nodes.remove(node_id);
         if removed.is_some() {
@@ -234,8 +246,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(removed)
     }
 
-    /// Update a DomainNode
+    /// Update a DomainNode. Serialized through `node_mutex`.
     pub async fn update_node(&self, node_id: &str, node: DomainNode) -> Result<(), NetworkError> {
+        let _guard = self.node_mutex.lock().await;
         let mut nodes = self.get_all_nodes().await?;
         nodes.insert(node_id.to_string(), node);
         self.save_nodes(&nodes).await?;
