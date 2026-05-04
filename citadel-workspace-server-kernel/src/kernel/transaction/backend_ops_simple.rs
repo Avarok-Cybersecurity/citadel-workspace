@@ -276,3 +276,201 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         self.backend_save(KEY_SCHEMA_VERSION, &version).await
     }
 }
+
+#[cfg(test)]
+mod rollback_tests {
+    //! Tests for the best-effort rollback paths in
+    //! `insert_*` / `remove_*`. The rollback fires when the second
+    //! step (index write or removal) fails after the first step
+    //! (entity save or delete) succeeded — without it, a partial
+    //! failure would leave an entity orphaned in storage but
+    //! invisible to `get_all_*`, or an index pointing at a
+    //! deleted payload.
+    //!
+    //! Driving the failure: in test mode the backend reads from
+    //! `test_storage`, and `backend_get<T>` deserialises the bytes
+    //! via serde_json. Planting invalid JSON for the index key
+    //! makes `get_index` (called inside `add_to_index` /
+    //! `remove_from_index`) return Err, which is exactly the
+    //! second-step failure the rollback handles.
+    use super::*;
+    use crate::kernel::transaction::{
+        BackendTransactionManager, KEY_INDEX_DOMAIN_IDS, KEY_INDEX_USER_IDS,
+        KEY_INDEX_WORKSPACE_IDS, KEY_PREFIX_DOMAIN, KEY_PREFIX_USER, KEY_PREFIX_WORKSPACE,
+    };
+    use citadel_sdk::prelude::StackedRatchet;
+
+    fn fresh() -> BackendTransactionManager<StackedRatchet> {
+        BackendTransactionManager::new()
+    }
+
+    fn poison_index(mgr: &BackendTransactionManager<StackedRatchet>, key: &str) {
+        // Bytes that aren't valid JSON for `HashSet<String>` make the
+        // subsequent backend_get deserialise call return Err.
+        mgr.test_storage
+            .write()
+            .insert(key.to_string(), b"not-json".to_vec());
+    }
+
+    fn ws(id: &str) -> Workspace {
+        Workspace {
+            id: id.to_string(),
+            name: format!("ws-{id}"),
+            description: String::new(),
+            owner_id: "owner".to_string(),
+            members: vec![],
+            offices: vec![],
+            metadata: vec![],
+        }
+    }
+
+    fn dom(id: &str) -> Domain {
+        // The only `Domain` variant currently is the workspace-level
+        // wrapper; the rollback tests don't care which variant — they
+        // only need a serialisable payload to round-trip.
+        Domain::Workspace { workspace: ws(id) }
+    }
+
+    fn usr(id: &str) -> User {
+        use citadel_workspace_types::structs::UserRole;
+        use std::collections::HashMap;
+        User {
+            id: id.to_string(),
+            name: format!("user-{id}"),
+            role: UserRole::Member,
+            permissions: HashMap::new(),
+            metadata: HashMap::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn insert_domain_rolls_back_entity_when_index_write_fails() {
+        let mgr = fresh();
+        // Plant an unreadable index so the add_to_index inside
+        // insert_domain returns Err on its initial get_index().
+        poison_index(&mgr, KEY_INDEX_DOMAIN_IDS);
+
+        let result = mgr.insert_domain("d1".to_string(), dom("d1")).await;
+        assert!(
+            result.is_err(),
+            "insert_domain must surface the index-write failure"
+        );
+
+        // The rollback should have deleted the per-entity key. Probe
+        // it directly so we don't hide behind get_all_domains (which
+        // would fail to even decode the poisoned index).
+        let key = format!("{KEY_PREFIX_DOMAIN}d1");
+        let stored: Option<Domain> = mgr
+            .backend_get(&key)
+            .await
+            .expect("backend_get of per-entity key");
+        assert!(
+            stored.is_none(),
+            "insert_domain must roll back the entity payload on index-write failure"
+        );
+    }
+
+    #[tokio::test]
+    async fn insert_user_rolls_back_entity_when_index_write_fails() {
+        let mgr = fresh();
+        poison_index(&mgr, KEY_INDEX_USER_IDS);
+
+        let err = mgr
+            .insert_user("u1".to_string(), usr("u1"))
+            .await
+            .expect_err("must surface index-write failure");
+        let _ = err;
+
+        let key = format!("{KEY_PREFIX_USER}u1");
+        let stored: Option<User> = mgr.backend_get(&key).await.unwrap();
+        assert!(stored.is_none(), "user payload must be rolled back");
+    }
+
+    #[tokio::test]
+    async fn insert_workspace_rolls_back_entity_when_index_write_fails() {
+        let mgr = fresh();
+        poison_index(&mgr, KEY_INDEX_WORKSPACE_IDS);
+
+        let err = mgr
+            .insert_workspace("w1".to_string(), ws("w1"))
+            .await
+            .expect_err("must surface index-write failure");
+        let _ = err;
+
+        let key = format!("{KEY_PREFIX_WORKSPACE}w1");
+        let stored: Option<Workspace> = mgr.backend_get(&key).await.unwrap();
+        assert!(stored.is_none(), "workspace payload must be rolled back");
+    }
+
+    #[tokio::test]
+    async fn remove_domain_restores_entity_when_index_removal_fails() {
+        let mgr = fresh();
+        // Seed a domain through the happy path so its entity key
+        // exists and the index has it.
+        mgr.insert_domain("d1".to_string(), dom("d1"))
+            .await
+            .expect("seed insert");
+
+        // Now poison the index so the remove_from_index call inside
+        // remove_domain fails after the entity key was already
+        // deleted.
+        poison_index(&mgr, KEY_INDEX_DOMAIN_IDS);
+
+        let err = mgr
+            .remove_domain("d1")
+            .await
+            .expect_err("remove_domain must surface index-removal failure");
+        let _ = err;
+
+        // The rollback re-saves the entity so `get_all_domains` (once
+        // the index is repaired) would see it again. Probe the
+        // per-entity key directly because the poisoned index would
+        // make `get_all_domains` itself fail.
+        let key = format!("{KEY_PREFIX_DOMAIN}d1");
+        let stored: Option<Domain> = mgr.backend_get(&key).await.unwrap();
+        assert!(
+            stored.is_some(),
+            "remove_domain must restore the entity payload when the index removal fails"
+        );
+    }
+
+    #[tokio::test]
+    async fn remove_user_restores_entity_when_index_removal_fails() {
+        let mgr = fresh();
+        mgr.insert_user("u1".to_string(), usr("u1"))
+            .await
+            .expect("seed");
+        poison_index(&mgr, KEY_INDEX_USER_IDS);
+
+        let _ = mgr
+            .remove_user("u1")
+            .await
+            .expect_err("must surface index-removal failure");
+
+        let key = format!("{KEY_PREFIX_USER}u1");
+        assert!(
+            mgr.backend_get::<User>(&key).await.unwrap().is_some(),
+            "user payload must be restored on index-removal failure"
+        );
+    }
+
+    #[tokio::test]
+    async fn remove_workspace_restores_entity_when_index_removal_fails() {
+        let mgr = fresh();
+        mgr.insert_workspace("w1".to_string(), ws("w1"))
+            .await
+            .expect("seed");
+        poison_index(&mgr, KEY_INDEX_WORKSPACE_IDS);
+
+        let _ = mgr
+            .remove_workspace("w1")
+            .await
+            .expect_err("must surface index-removal failure");
+
+        let key = format!("{KEY_PREFIX_WORKSPACE}w1");
+        assert!(
+            mgr.backend_get::<Workspace>(&key).await.unwrap().is_some(),
+            "workspace payload must be restored on index-removal failure"
+        );
+    }
+}
