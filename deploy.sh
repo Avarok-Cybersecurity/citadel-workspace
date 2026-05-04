@@ -136,14 +136,25 @@ echo "[4/4] Verifying deployment..."
 docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" ps
 echo ""
 
-# Show data volume status
+# Show data volume status. Two `--filter name=` flags AND-combine on
+# Docker's side, and a single volume can't match two distinct names —
+# the original `--filter name=server_data --filter name=internal_service_data`
+# always returned an empty list, masking missing-volume problems
+# during a deploy. Pipe through grep so the filter is OR-shaped and
+# emit an explicit "(no volumes found)" so an empty result never
+# silently slips past.
 echo "Data volumes (persistent):"
-docker volume ls --filter name=server_data --filter name=internal_service_data --format "  {{.Name}}: {{.Driver}}"
+volume_list=$(docker volume ls --format '  {{.Name}}: {{.Driver}}' | grep -E 'server_data|internal_service_data' || true)
+if [ -z "$volume_list" ]; then
+    echo "  (no persistent volumes found — production state will not survive container removal)"
+else
+    echo "$volume_list"
+fi
 echo ""
 
 echo "============================================"
 echo "  Deploy complete!"
 echo "============================================"
 echo ""
-echo "Local access:  http://localhost"
+echo "Local access:  http://localhost:8080"
 echo "WebSocket:     ws://localhost:${INTERNAL_SERVICE_PORT:-12345}"
