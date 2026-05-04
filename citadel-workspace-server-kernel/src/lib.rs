@@ -477,8 +477,10 @@ pub async fn run_server_with_base_path(
 /// Production `docker-compose.production.yml` sets the env vars to
 /// override that default, keeping prod on disk and dev in memory.
 ///
-/// Pure function — no I/O, no logging — so unit tests can drive every
-/// combination of env/config inputs through the public surface.
+/// Side effects are limited to structured logging via `info!()` —
+/// no filesystem or network I/O. Unit tests can drive every
+/// combination of env/config inputs through the public surface and
+/// the `info!` calls are no-ops without a configured subscriber.
 pub fn select_backend_type(
     env_backend: Option<&str>,
     env_data_dir: Option<&str>,
