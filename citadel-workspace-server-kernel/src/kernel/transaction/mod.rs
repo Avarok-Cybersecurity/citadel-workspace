@@ -39,6 +39,15 @@ pub struct BackendTransactionManager<R: Ratchet> {
     /// consequence of a missed lock is severe. Refactor to a per-id
     /// mutex if profiling shows contention.
     group_msg_mutex: Arc<tokio::sync::Mutex<()>>,
+    /// Serializes DomainNode-collection read-modify-write operations.
+    /// All nodes share a single `citadel_workspace.nodes` HashMap key,
+    /// so `insert_node` / `remove_node` / `update_node` all do a
+    /// load-mutate-save cycle on that single key. Without the mutex,
+    /// two concurrent node ops would each load the same prior map,
+    /// apply their mutation, and the second save would overwrite the
+    /// first's change — losing a node insert/delete/update silently.
+    /// Same data-loss-vs-cost trade-off as `group_msg_mutex` above.
+    node_mutex: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl<R: Ratchet + Send + Sync + 'static> Default for BackendTransactionManager<R> {
@@ -80,6 +89,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             migrated: Arc::new(RwLock::new(false)),
             index_write_mutex: Arc::new(tokio::sync::Mutex::new(())),
             group_msg_mutex: Arc::new(tokio::sync::Mutex::new(())),
+            node_mutex: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 
@@ -245,7 +255,17 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
 
         info!(target: "citadel", "Checking for legacy collection-level storage keys to migrate...");
 
-        // Migrate domains
+        // Migrate domains.
+        //
+        // Each `save_index` call is wrapped in `index_write_mutex` so a
+        // concurrent request handler calling `add_to_index` cannot race
+        // with the migration writing the migrated set: the handler's
+        // addition would otherwise be loaded by `add_to_index`, then
+        // overwritten when the migration's `save_index` lands. Today
+        // `init()` runs before connections are accepted so the race
+        // window is zero in practice, but the mutex acquisition keeps
+        // the invariant of "every write to an index goes through
+        // `index_write_mutex`" intact regardless of future call order.
         let legacy_domains: Option<HashMap<String, Domain>> =
             self.backend_get(LEGACY_KEY_DOMAINS).await?;
         if let Some(domains) = legacy_domains {
@@ -256,11 +276,14 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
                 self.backend_save(&key, domain).await?;
                 ids.insert(id.clone());
             }
-            self.save_index(KEY_INDEX_DOMAIN_IDS, &ids).await?;
+            {
+                let _guard = self.index_write_mutex.lock().await;
+                self.save_index(KEY_INDEX_DOMAIN_IDS, &ids).await?;
+            }
             self.backend_delete(LEGACY_KEY_DOMAINS).await?;
         }
 
-        // Migrate users
+        // Migrate users — same mutex contract as domains above.
         let legacy_users: Option<HashMap<String, User>> =
             self.backend_get(LEGACY_KEY_USERS).await?;
         if let Some(users) = legacy_users {
@@ -271,11 +294,14 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
                 self.backend_save(&key, user).await?;
                 ids.insert(id.clone());
             }
-            self.save_index(KEY_INDEX_USER_IDS, &ids).await?;
+            {
+                let _guard = self.index_write_mutex.lock().await;
+                self.save_index(KEY_INDEX_USER_IDS, &ids).await?;
+            }
             self.backend_delete(LEGACY_KEY_USERS).await?;
         }
 
-        // Migrate workspaces
+        // Migrate workspaces — same mutex contract as domains above.
         let legacy_workspaces: Option<HashMap<String, Workspace>> =
             self.backend_get(LEGACY_KEY_WORKSPACES).await?;
         if let Some(workspaces) = legacy_workspaces {
@@ -286,7 +312,10 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
                 self.backend_save(&key, workspace).await?;
                 ids.insert(id.clone());
             }
-            self.save_index(KEY_INDEX_WORKSPACE_IDS, &ids).await?;
+            {
+                let _guard = self.index_write_mutex.lock().await;
+                self.save_index(KEY_INDEX_WORKSPACE_IDS, &ids).await?;
+            }
             self.backend_delete(LEGACY_KEY_WORKSPACES).await?;
         }
 
@@ -975,5 +1004,107 @@ mod group_message_tests {
             stored.iter().map(|m| (m.id.as_str(), m)).collect();
         assert_eq!(by_id.get("a").unwrap().content, "edit-a");
         assert_eq!(by_id.get("b").unwrap().content, "edit-b");
+    }
+}
+
+#[cfg(test)]
+mod node_concurrency_tests {
+    //! Regression tests for `node_mutex`. The three DomainNode mutators
+    //! (`insert_node`, `remove_node`, `update_node`) all share a single
+    //! collection-level backend key, so the same load-modify-save race
+    //! that motivated `group_msg_mutex` applies here. Without the
+    //! mutex, two concurrent inserts each load the same prior map,
+    //! each apply their change, and the second save overwrites the
+    //! first — silently losing a node insert.
+    use super::*;
+    use citadel_sdk::prelude::StackedRatchet;
+    use citadel_workspace_types::structs::{DomainNode, DomainPermissions, NodeEntityType};
+
+    fn fresh() -> Arc<BackendTransactionManager<StackedRatchet>> {
+        Arc::new(BackendTransactionManager::new())
+    }
+
+    fn node(id: &str) -> DomainNode {
+        DomainNode {
+            id: id.to_string(),
+            parent_id: None,
+            entity_type: NodeEntityType::Child("Office".to_string()),
+            depth: 1,
+            name: format!("node-{id}"),
+            description: String::new(),
+            owner_id: "owner".to_string(),
+            members: vec![],
+            children: vec![],
+            mdx_content: String::new(),
+            rules: None,
+            chat_enabled: false,
+            chat_channel_id: None,
+            default_permissions: DomainPermissions::default(),
+            metadata: vec![],
+            allowed_child_types: None,
+            is_default: false,
+            created_at: 0,
+            updated_at: 0,
+        }
+    }
+
+    /// 50 concurrent `insert_node` calls into the same collection
+    /// must all land. The pre-mutex implementation lost roughly half
+    /// because the read-modify-write cycles interleaved.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_inserts_all_persist() {
+        let mgr = fresh();
+        let n = 50;
+        let handles: Vec<_> = (0..n)
+            .map(|i| {
+                let mgr = Arc::clone(&mgr);
+                tokio::spawn(async move {
+                    let id = format!("n{i}");
+                    mgr.insert_node(id.clone(), node(&id))
+                        .await
+                        .expect("insert");
+                })
+            })
+            .collect();
+        for h in handles {
+            h.await.expect("task ok");
+        }
+
+        let stored = mgr.get_all_nodes().await.expect("get_all_nodes");
+        assert_eq!(
+            stored.len(),
+            n,
+            "every concurrent insert must land — node_mutex regression if not"
+        );
+    }
+
+    /// Concurrent insert + update on different nodes must both
+    /// be visible after the storm.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_insert_and_update_dont_lose_either() {
+        let mgr = fresh();
+        // Seed an existing node so the update has a target.
+        mgr.insert_node("a".to_string(), node("a")).await.unwrap();
+
+        let m1 = Arc::clone(&mgr);
+        let m2 = Arc::clone(&mgr);
+        let (r1, r2) = tokio::join!(
+            tokio::spawn(async move { m1.insert_node("b".to_string(), node("b")).await }),
+            tokio::spawn(async move {
+                let mut updated = node("a");
+                updated.name = "renamed".to_string();
+                m2.update_node("a", updated).await
+            }),
+        );
+        r1.unwrap().unwrap();
+        r2.unwrap().unwrap();
+
+        let stored = mgr.get_all_nodes().await.unwrap();
+        assert!(stored.contains_key("a"), "update target should still exist");
+        assert!(
+            stored.contains_key("b"),
+            "concurrent insert must not be lost"
+        );
+        assert_eq!(stored.get("a").unwrap().name, "renamed");
     }
 }
