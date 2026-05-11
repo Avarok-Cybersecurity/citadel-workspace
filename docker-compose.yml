@@ -62,16 +62,25 @@ services:
     volumes:
       # Mount shared caches and target directory
       - target_cache:/usr/src/app/target
-      # NOTE: no persistent data volume here for the same reason as the
-      # server above. Dev keeps INTERNAL_SERVICE_BACKEND unset; the
-      # binary's CMD then expands the env var as nothing and falls
-      # through to its in-memory default. Production mounts
-      # `internal_service_data:/data/internal-service` in
-      # docker-compose.production.yml and sets the backend env vars.
+      # Dev still gets the ephemeral-state contract documented in CLAUDE.md
+      # ("any accounts created on one will be lost on reload") — but we route
+      # the SDK through a tmpfs-backed filesystem path instead of the pure
+      # InMemory backend. This is required for file-transfer (`SendObject`)
+      # to function at all: the SDK refuses peer-to-peer file transfers when
+      # both nodes are on `BackendType::InMemory` with
+      #   "File transfer is not enabled for this p2p session.
+      #    Both nodes must use a filesystem backend"
+      # tmpfs gives us filesystem semantics without persistence — perfect for
+      # dev. Production still uses a real volume via
+      # docker-compose.production.yml.
+    tmpfs:
+      - /var/lib/internal-service:size=128m
     environment:
       - RUST_LOG=citadel=info
       - DOCKER_CONTAINER=1
       - SKIP_WASM_BUILD=1
+      - INTERNAL_SERVICE_BACKEND=filesystem
+      - INTERNAL_SERVICE_DATA_DIR=/var/lib/internal-service
     deploy:
       resources:
         limits:
