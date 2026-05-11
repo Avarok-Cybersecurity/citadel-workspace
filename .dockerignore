@@ -65,6 +65,10 @@ Thumbs.db
 coverage/
 junit.xml
 
+# Playwright MCP test artifacts (avoid triggering Tilt rebuilds during testing)
+.playwright-mcp/
+.pr-reviews/
+
 # Specific workspace files (add if necessary)
 .service-pid
 .server-pid
