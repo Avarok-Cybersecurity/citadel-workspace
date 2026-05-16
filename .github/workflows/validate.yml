@@ -310,8 +310,31 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install chromium --with-deps
       - name: Install Dependencies
+        # Run `npm ci` at the workspace root so playwright is installed
+        # ONCE (hoisted at root) instead of being installed both at root
+        # AND at citadel-workspaces/node_modules — the latter causes
+        # `tsc` to see two distinct `playwright-core/types/types`
+        # locations and fail every test build with:
+        #   Type 'X/playwright-core/.../Browser' is not assignable to
+        #   type 'Y/playwright-core/.../Browser'
+        # plus `Property 'toBeVisible' does not exist on type
+        # 'MakeMatchers<…>'` because the wrong `@playwright/test`
+        # `expect` augmentation gets picked up. Installing once at
+        # root unifies module resolution.
         run: npm ci
-        working-directory: citadel-workspaces/integration-tests
+      - name: Symlink workspace deps for integration-tests build
+        # `tsc` in integration-tests resolves modules with NodeNext
+        # which walks node_modules up the directory tree. After the
+        # workspace install, playwright lives at workspace-root
+        # node_modules — symlink it into integration-tests so the
+        # closest-resolution rule lands on the single hoisted copy
+        # instead of attempting to resolve via citadel-workspaces.
+        run: |
+          mkdir -p citadel-workspaces/integration-tests/node_modules
+          ln -sf ${{ github.workspace }}/node_modules/playwright \
+                 citadel-workspaces/integration-tests/node_modules/playwright
+          ln -sf ${{ github.workspace }}/node_modules/@playwright \
+                 citadel-workspaces/integration-tests/node_modules/@playwright
       - name: Start Services
         env:
           INTERNAL_SERVICE_PORT: '12345'
