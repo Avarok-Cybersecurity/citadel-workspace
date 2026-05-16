@@ -773,13 +773,25 @@ fn build_tree(
         bounded_children.insert(node_id, accepted_children);
     }
 
-    // Phase 2: Pre-create empty TreeNode entries, then wire up children
-    // deepest-first so a parent never tries to assemble a child that
-    // hasn't been built yet. Use `bounded_children` (not
-    // `node.children`) so back-edges in cyclic input do not try to move
-    // an already-assembled ancestor out of the arena.
+    // Phase 2: Pre-create empty TreeNode entries for the NON-ROOT nodes,
+    // then wire up children deepest-first so a parent never tries to
+    // assemble a child that hasn't been built yet. Use `bounded_children`
+    // (not `node.children`) so back-edges in cyclic input do not try to
+    // move an already-assembled ancestor out of the arena.
+    //
+    // The root TreeNode lives in its own local instead of the arena so a
+    // future refactor that changes the phase-2 sort order can never strand
+    // us with the root removed mid-iteration. The previous implementation
+    // ended on `arena.remove(&root_id).expect(...)`, which would panic the
+    // server process on the very rebuild it was trying to recover from.
+    let root_domain = included
+        .iter()
+        .find(|(n, _)| n.id == root_id)
+        .map(|(n, _)| n.clone())
+        .expect("BFS phase 1 pushed the root into `included`");
     let mut arena: std::collections::HashMap<String, TreeNode> = included
         .iter()
+        .filter(|(n, _)| n.id != root_id)
         .map(|(n, _)| {
             (
                 n.id.clone(),
@@ -790,6 +802,10 @@ fn build_tree(
             )
         })
         .collect();
+    let mut root_tree = TreeNode {
+        node: root_domain,
+        children: vec![],
+    };
 
     included.sort_by_key(|(_, d)| std::cmp::Reverse(*d));
     for (node, _depth) in included {
@@ -800,14 +816,14 @@ fn build_tree(
                 child_trees.push(child_tree);
             }
         }
-        if let Some(tree) = arena.get_mut(&node.id) {
+        if node.id == root_id {
+            root_tree.children = child_trees;
+        } else if let Some(tree) = arena.get_mut(&node.id) {
             tree.children = child_trees;
         }
     }
 
-    arena
-        .remove(&root_id)
-        .expect("root was inserted into arena in phase 1")
+    root_tree
 }
 
 /// Populate `allowed_child_types` from the tree schema for nodes that have `None`.
