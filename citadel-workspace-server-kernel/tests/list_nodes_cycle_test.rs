@@ -222,3 +222,73 @@ async fn get_tree_structure_terminates_on_cycle() {
         "tree size {total} exceeds bounded expectation"
     );
 }
+
+/// Regression: a legitimate non-cyclic chain a few thousand nodes deep
+/// must not stack-overflow when walked with `max_depth: None`. The
+/// original recursive `build_tree` would unwind one stack frame per
+/// level, capping at ~16k frames on an 8 MB stack regardless of cycle
+/// guards. The current iterative implementation walks the same graph
+/// in BFS + arena assembly, so depth is bounded only by available heap.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_tree_structure_handles_very_deep_non_cyclic_chain() {
+    let kernel = create_test_kernel().await;
+    let backend = &kernel.domain_operations.backend_tx_manager;
+
+    // 4096 nodes deep — well past any realistic office/room hierarchy
+    // and several times what a recursive walk could survive on a default
+    // stack size.
+    const CHAIN_LEN: u32 = 4096;
+    let mut nodes = HashMap::new();
+    let id_of = |i: u32| format!("n{:05}", i);
+    for i in 0..CHAIN_LEN {
+        let parent = if i == 0 {
+            Some(WORKSPACE_ROOT_ID.to_string())
+        } else {
+            Some(id_of(i - 1))
+        };
+        let children = if i == CHAIN_LEN - 1 {
+            vec![]
+        } else {
+            vec![id_of(i + 1)]
+        };
+        nodes.insert(
+            id_of(i),
+            mk_node(&id_of(i), parent.as_deref(), children, i),
+        );
+    }
+    backend
+        .save_nodes(&nodes)
+        .await
+        .expect("save_nodes should succeed");
+
+    let tree = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        kernel
+            .domain_operations
+            .get_tree_structure(TEST_ADMIN_USER_ID, Some(&id_of(0)), None),
+    )
+    .await
+    .expect("get_tree_structure on a deep chain must terminate")
+    .expect("get_tree_structure should return Ok");
+
+    // Walk the resulting tree iteratively so this assertion ITSELF
+    // doesn't stack-overflow — the test infrastructure would otherwise
+    // mask the regression it's trying to catch.
+    let mut total = 0usize;
+    let mut max_depth_seen = 0u32;
+    let mut stack: Vec<(&citadel_workspace_types::structs::TreeNode, u32)> =
+        vec![(&tree, 0)];
+    while let Some((node, d)) = stack.pop() {
+        total += 1;
+        max_depth_seen = max_depth_seen.max(d);
+        for c in &node.children {
+            stack.push((c, d + 1));
+        }
+    }
+    assert_eq!(total, CHAIN_LEN as usize, "every chain node should appear");
+    assert_eq!(
+        max_depth_seen,
+        CHAIN_LEN - 1,
+        "the deepest node should sit at chain length - 1"
+    );
+}

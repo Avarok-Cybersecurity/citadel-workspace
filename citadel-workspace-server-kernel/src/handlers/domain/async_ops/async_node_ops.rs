@@ -701,47 +701,113 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                 })
         };
 
-        // Build tree recursively.
-        //
-        // `visited` mirrors the cycle/duplicate guard added to `list_nodes`
-        // above. Both functions traverse the same `DomainNode.children`
-        // graph, so the same risks apply: a cycle (from a future mutation
-        // bug, manual backend edit, or storage corruption) or a duplicate
-        // child reference would otherwise unwind into unbounded recursion
-        // and stack-overflow the server, especially because the caller
-        // can pass `max_depth: None` to request an unlimited walk.
-        fn build_tree(
-            node: DomainNode,
-            nodes: &std::collections::HashMap<String, DomainNode>,
-            current_depth: u32,
-            max_depth: Option<u32>,
-            visited: &mut HashSet<String>,
-        ) -> TreeNode {
-            // Skip already-seen nodes; return the node with no children so
-            // the caller still sees a leaf rather than a missing entry.
-            if !visited.insert(node.id.clone()) {
-                return TreeNode {
-                    node,
-                    children: vec![],
-                };
-            }
+        Ok(build_tree(root_node, &nodes, max_depth))
+    }
+}
 
-            let children = if max_depth.map(|m| current_depth < m).unwrap_or(true) {
-                node.children
-                    .iter()
-                    .filter_map(|child_id| nodes.get(child_id).cloned())
-                    .map(|child| build_tree(child, nodes, current_depth + 1, max_depth, visited))
-                    .collect()
-            } else {
-                vec![]
-            };
+/// Iterative tree construction. The previous recursive implementation
+/// guarded against cycles via a `visited` HashSet but had no depth cap
+/// on the recursion itself — a legitimate non-cyclic hierarchy of a few
+/// thousand nodes called with `max_depth: None` would overflow the stack.
+///
+/// This is BFS + reverse-depth assembly, mirroring the iterative pattern
+/// `list_nodes` uses in the same file. Two phases:
+///   1. BFS the children graph from `root` to collect every node that
+///      should appear in the tree (respecting `max_depth`), recording
+///      each node's depth and pruning cycles/duplicate child refs.
+///   2. Build TreeNode entries in an arena (`HashMap<id, TreeNode>`),
+///      then iterate from the deepest collected nodes to the root and
+///      `arena.remove` each child into its parent's `children` vec.
+///      Processing deepest-first guarantees every child TreeNode is
+///      ready before its parent assembles.
+///
+/// Cycle/duplicate protection is preserved (the `visited` set in phase 1
+/// drops already-seen ids), and the resulting tree shape is identical to
+/// the recursive version for any well-formed input.
+fn build_tree(
+    root: DomainNode,
+    nodes: &std::collections::HashMap<String, DomainNode>,
+    max_depth: Option<u32>,
+) -> TreeNode {
+    let root_id = root.id.clone();
 
-            TreeNode { node, children }
+    // Phase 1: BFS to collect (node, depth) in discovery order, plus a
+    // separate `bounded_children` map that records only the children
+    // actually expanded from each node (i.e. respecting `max_depth` and
+    // the visited/cycle guard). We CANNOT use `node.children` directly
+    // in phase 2 because cyclic / cross-parent / out-of-depth references
+    // would either reattach a node we already removed from the arena
+    // (e.g. a back-edge from a leaf to the root) or attach a node that
+    // was deliberately pruned.
+    let mut visited: HashSet<String> = HashSet::new();
+    visited.insert(root_id.clone());
+    let mut included: Vec<(DomainNode, u32)> = Vec::new();
+    let mut bounded_children: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    let mut queue: VecDeque<(DomainNode, u32)> = VecDeque::new();
+    queue.push_back((root, 0));
+
+    while let Some((node, depth)) = queue.pop_front() {
+        let node_id = node.id.clone();
+        let child_ids = node.children.clone();
+        included.push((node, depth));
+
+        // Stop expanding past max_depth — the popped node still appears
+        // as a leaf (no children) in the final tree, same as the
+        // recursive behaviour.
+        let can_expand = max_depth.map(|m| depth < m).unwrap_or(true);
+        if !can_expand {
+            continue;
         }
 
-        let mut visited = HashSet::new();
-        Ok(build_tree(root_node, &nodes, 0, max_depth, &mut visited))
+        let mut accepted_children = Vec::new();
+        for child_id in child_ids {
+            if !visited.insert(child_id.clone()) {
+                continue;
+            }
+            if let Some(child) = nodes.get(&child_id) {
+                accepted_children.push(child_id.clone());
+                queue.push_back((child.clone(), depth + 1));
+            }
+        }
+        bounded_children.insert(node_id, accepted_children);
     }
+
+    // Phase 2: Pre-create empty TreeNode entries, then wire up children
+    // deepest-first so a parent never tries to assemble a child that
+    // hasn't been built yet. Use `bounded_children` (not
+    // `node.children`) so back-edges in cyclic input do not try to move
+    // an already-assembled ancestor out of the arena.
+    let mut arena: std::collections::HashMap<String, TreeNode> = included
+        .iter()
+        .map(|(n, _)| {
+            (
+                n.id.clone(),
+                TreeNode {
+                    node: n.clone(),
+                    children: vec![],
+                },
+            )
+        })
+        .collect();
+
+    included.sort_by_key(|(_, d)| std::cmp::Reverse(*d));
+    for (node, _depth) in included {
+        let child_ids = bounded_children.remove(&node.id).unwrap_or_default();
+        let mut child_trees = Vec::with_capacity(child_ids.len());
+        for child_id in &child_ids {
+            if let Some(child_tree) = arena.remove(child_id) {
+                child_trees.push(child_tree);
+            }
+        }
+        if let Some(tree) = arena.get_mut(&node.id) {
+            tree.children = child_trees;
+        }
+    }
+
+    arena
+        .remove(&root_id)
+        .expect("root was inserted into arena in phase 1")
 }
 
 /// Populate `allowed_child_types` from the tree schema for nodes that have `None`.
