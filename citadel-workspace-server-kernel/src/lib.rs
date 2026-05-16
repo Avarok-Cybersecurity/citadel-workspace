@@ -636,8 +636,7 @@ mod backend_select_tests {
 
     #[test]
     fn empty_config_data_dir_falls_through_to_default() {
-        let bt =
-            select_backend_type(None, None, Some("filesystem"), Some("")).unwrap();
+        let bt = select_backend_type(None, None, Some("filesystem"), Some("")).unwrap();
         match bt {
             BackendType::Filesystem(d) => assert_eq!(d, "./data"),
             other => panic!("expected Filesystem(./data), got {other:?}"),

@@ -251,10 +251,7 @@ async fn get_tree_structure_handles_very_deep_non_cyclic_chain() {
         } else {
             vec![id_of(i + 1)]
         };
-        nodes.insert(
-            id_of(i),
-            mk_node(&id_of(i), parent.as_deref(), children, i),
-        );
+        nodes.insert(id_of(i), mk_node(&id_of(i), parent.as_deref(), children, i));
     }
     backend
         .save_nodes(&nodes)
@@ -276,8 +273,7 @@ async fn get_tree_structure_handles_very_deep_non_cyclic_chain() {
     // mask the regression it's trying to catch.
     let mut total = 0usize;
     let mut max_depth_seen = 0u32;
-    let mut stack: Vec<(&citadel_workspace_types::structs::TreeNode, u32)> =
-        vec![(&tree, 0)];
+    let mut stack: Vec<(&citadel_workspace_types::structs::TreeNode, u32)> = vec![(&tree, 0)];
     while let Some((node, d)) = stack.pop() {
         total += 1;
         max_depth_seen = max_depth_seen.max(d);
