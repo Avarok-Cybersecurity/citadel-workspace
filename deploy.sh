@@ -61,6 +61,17 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
+# Load .env into the shell. Docker Compose already auto-reads .env, but the
+# wait_for_port probe below shell-expands ${INTERNAL_SERVICE_PORT} BEFORE it
+# hands off to docker compose, so an operator who customised the port would
+# otherwise have the probe target 12345 (the literal default) while the
+# service is bound elsewhere. `set -a` exports every assignment so the
+# variables are visible to the rest of the script's environment.
+set -a
+# shellcheck disable=SC1091
+source .env
+set +a
+
 # Step 1: Pull latest code
 if [ "$SKIP_PULL" = false ]; then
     echo "[1/4] Pulling latest code..."
@@ -82,25 +93,53 @@ echo ""
 # and restarting a container does NOT affect the volume data.
 echo "[3/4] Updating services (data volumes preserved)..."
 
-# Each readiness probe combines:
-#   * an outer `timeout` so the inner `until nc -z` cannot hang forever
-#     when a container stays running but never opens its port (crash
-#     loop, port conflict, bad config), and
-#   * a non-zero-exit branch that dumps logs and aborts the deploy
-#     before the next service is restarted against a broken dependency.
+# Readiness probe driven by the compose healthcheck rather than an in-
+# container `docker compose exec sh -c "nc -z …"`. Two failure modes the
+# exec form had:
+#   * `exec` requires a running container — if the container crashes
+#     immediately after `up -d` (bad config, port conflict), exec fails
+#     with "container not running" while the outer `timeout` reports
+#     "did not become healthy within Ns". The error pointed at the wrong
+#     cause.
+#   * Re-implementing the readiness check in the script duplicated the
+#     compose healthcheck. Drift between the two was easy.
 #
-# Previously the readiness checks were `... 2>/dev/null || sleep 15` —
-# a silent fallback that hid every failure mode and then restarted the
-# UI on top of a dead backend. `set -euo pipefail` couldn't catch the
-# failure because the `||` branch suppressed the non-zero exit.
+# Polling `docker compose ps --format json` reads the SAME healthcheck the
+# operator defined in `docker-compose.production.yml`, so the script and
+# the compose file agree by construction. The probe distinguishes
+# "container not running" (exited / no entry in ps) from "container
+# running but unhealthy" so the error message is specific.
 wait_for_port() {
     local svc="$1" port="$2" deadline="${3:-90}"
-    if ! timeout "$deadline" docker compose -f "$COMPOSE_FILE" exec "$svc" \
-            sh -c "until nc -z 127.0.0.1 ${port} 2>/dev/null; do sleep 2; done"; then
-        echo "ERROR: ${svc} did not become healthy within ${deadline}s"
-        docker compose -f "$COMPOSE_FILE" logs "$svc" --tail 80
-        exit 1
-    fi
+    local elapsed=0
+    while (( elapsed < deadline )); do
+        local entry
+        entry=$(docker compose -f "$COMPOSE_FILE" ps "$svc" --format json 2>/dev/null | head -n1 || true)
+        if [ -z "$entry" ]; then
+            echo "ERROR: ${svc} is not running (no container in compose ps after ${elapsed}s)"
+            docker compose -f "$COMPOSE_FILE" logs "$svc" --tail 80
+            exit 1
+        fi
+        # Treat a service whose container exited as a hard failure so
+        # the script aborts immediately instead of waiting out the
+        # full deadline for a healthcheck that will never run.
+        local state health
+        state=$(echo "$entry" | grep -o '"State":"[^"]*"' | head -n1 | sed 's/.*:"\([^"]*\)"/\1/')
+        health=$(echo "$entry" | grep -o '"Health":"[^"]*"' | head -n1 | sed 's/.*:"\([^"]*\)"/\1/')
+        if [ "$state" = "exited" ] || [ "$state" = "dead" ]; then
+            echo "ERROR: ${svc} container ${state} on its own (port ${port} never came up)"
+            docker compose -f "$COMPOSE_FILE" logs "$svc" --tail 80
+            exit 1
+        fi
+        if [ "$health" = "healthy" ]; then
+            return 0
+        fi
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+    echo "ERROR: ${svc} did not become healthy on port ${port} within ${deadline}s (last health=${health:-<none>})"
+    docker compose -f "$COMPOSE_FILE" logs "$svc" --tail 80
+    exit 1
 }
 
 # Server first (other services depend on it)
