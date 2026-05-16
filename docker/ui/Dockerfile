@@ -177,7 +177,11 @@ RUN printf 'server {\n\
         add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\'' ws: wss:; worker-src '\''self'\'' blob:; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
     }\n\
 \n\
-    # SPA fallback - serve index.html for all non-file routes\n\
+    # SPA fallback - serve index.html for all non-file routes.\n\
+    # CAUTION: Do NOT add `add_header` here without also repeating ALL\n\
+    # security headers above — nginx `add_header` does not inherit when\n\
+    # a nested block declares its own header, so a Cache-Control line\n\
+    # added here would silently drop the CSP / X-Frame-Options block.\n\
     location / {\n\
         try_files $uri $uri/ /index.html;\n\
     }\n\
