@@ -487,6 +487,17 @@ pub fn select_backend_type(
     config_backend: Option<&str>,
     config_data_dir: Option<&str>,
 ) -> Result<BackendType, NetworkError> {
+    // Treat empty strings the same as "unset". `std::env::var().ok()`
+    // returns `Some("")` for a defined-but-empty env var, and TOML
+    // config can carry the same (e.g. `data_dir = ""`). Without this
+    // filter, `WORKSPACE_DATA_DIR=""` short-circuits the `.or()` chain
+    // and produces `BackendType::Filesystem("")`, silently writing data
+    // to the container CWD instead of falling through to config or the
+    // documented `./data` default.
+    let env_backend = env_backend.filter(|s| !s.is_empty());
+    let env_data_dir = env_data_dir.filter(|s| !s.is_empty());
+    let config_backend = config_backend.filter(|s| !s.is_empty());
+    let config_data_dir = config_data_dir.filter(|s| !s.is_empty());
     let backend_choice = env_backend.or(config_backend);
     let data_dir_choice = env_data_dir.or(config_data_dir);
     match backend_choice {
@@ -586,5 +597,50 @@ mod backend_select_tests {
         // promote them to filesystem.
         let bt = select_backend_type(None, Some("/should-be-ignored"), None, None).unwrap();
         assert!(matches!(bt, BackendType::InMemory));
+    }
+
+    #[test]
+    fn empty_env_data_dir_falls_through_to_config_then_default() {
+        // `WORKSPACE_DATA_DIR=""` in `.env` previously short-circuited
+        // the `.or()` and produced `BackendType::Filesystem("")`,
+        // silently writing data to the container CWD instead of the
+        // configured volume. With the empty-string filter the env
+        // value is ignored and config wins.
+        let bt =
+            select_backend_type(Some("filesystem"), Some(""), None, Some("/srv/data")).unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "/srv/data"),
+            other => panic!("expected Filesystem(/srv/data), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn empty_env_data_dir_with_no_config_falls_through_to_default() {
+        let bt = select_backend_type(Some("filesystem"), Some(""), None, None).unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "./data"),
+            other => panic!("expected Filesystem(./data), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn empty_env_backend_treated_as_unset() {
+        // `WORKSPACE_BACKEND=""` should NOT be reported as an unknown
+        // backend; it should fall through to config or default.
+        let bt = select_backend_type(Some(""), None, Some("filesystem"), Some("/x")).unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "/x"),
+            other => panic!("expected Filesystem(/x), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn empty_config_data_dir_falls_through_to_default() {
+        let bt =
+            select_backend_type(None, None, Some("filesystem"), Some("")).unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "./data"),
+            other => panic!("expected Filesystem(./data), got {other:?}"),
+        }
     }
 }

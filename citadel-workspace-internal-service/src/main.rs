@@ -29,12 +29,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // The Dockerfile still bridges env -> CLI today, but having the
     // env-var path inside the binary itself is the load-bearing
     // contract — the wrapper is just convenience.
+    // Treat defined-but-empty env vars as unset. `std::env::var().ok()`
+    // returns `Some("")` for `INTERNAL_SERVICE_DATA_DIR=""` in `.env`,
+    // which would short-circuit the `.or()` and silently produce
+    // `BackendType::Filesystem("")` — writing data to the container CWD
+    // instead of the configured volume mount. Mirrors the equivalent
+    // filter in `citadel_workspace_server_kernel::select_backend_type`.
     let backend_choice = std::env::var("INTERNAL_SERVICE_BACKEND")
         .ok()
-        .or_else(|| opts.backend.clone());
+        .filter(|s| !s.is_empty())
+        .or_else(|| opts.backend.clone().filter(|s| !s.is_empty()));
     let data_dir_choice = std::env::var("INTERNAL_SERVICE_DATA_DIR")
         .ok()
-        .or_else(|| opts.data_dir.clone());
+        .filter(|s| !s.is_empty())
+        .or_else(|| opts.data_dir.clone().filter(|s| !s.is_empty()));
 
     let backend_type = match backend_choice.as_deref() {
         Some("filesystem") => {
