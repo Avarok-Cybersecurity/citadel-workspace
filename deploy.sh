@@ -61,6 +61,16 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
+# jq is required by the readiness probe below. Check up front rather than
+# letting the probe loop forever against `state=""` parsed from a missing
+# `jq` binary.
+if ! command -v jq >/dev/null 2>&1; then
+    echo "ERROR: 'jq' is required for the readiness probe. Install with:"
+    echo "  apt-get install jq   # Debian/Ubuntu"
+    echo "  brew install jq      # macOS"
+    exit 1
+fi
+
 # Load .env into the shell. Docker Compose already auto-reads .env, but the
 # wait_for_port probe below shell-expands ${INTERNAL_SERVICE_PORT} BEFORE it
 # hands off to docker compose, so an operator who customised the port would
@@ -123,9 +133,12 @@ wait_for_port() {
         # Treat a service whose container exited as a hard failure so
         # the script aborts immediately instead of waiting out the
         # full deadline for a healthcheck that will never run.
+        # Use jq so a future docker-compose JSON-formatting change
+        # (added whitespace, key reordering, nullable fields) doesn't
+        # silently break the regex and leave us looping until timeout.
         local state health
-        state=$(echo "$entry" | grep -o '"State":"[^"]*"' | head -n1 | sed 's/.*:"\([^"]*\)"/\1/')
-        health=$(echo "$entry" | grep -o '"Health":"[^"]*"' | head -n1 | sed 's/.*:"\([^"]*\)"/\1/')
+        state=$(echo "$entry" | jq -r '.State // empty')
+        health=$(echo "$entry" | jq -r '.Health // empty')
         if [ "$state" = "exited" ] || [ "$state" = "dead" ]; then
             echo "ERROR: ${svc} container ${state} on its own (port ${port} never came up)"
             docker compose -f "$COMPOSE_FILE" logs "$svc" --tail 80
