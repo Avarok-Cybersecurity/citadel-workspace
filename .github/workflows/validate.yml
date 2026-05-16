@@ -361,22 +361,29 @@ jobs:
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           sudo apt-get clean
           df -h
-      - name: Build Production Images (server + internal-service)
+      - name: Build Production Images (server + internal-service + ui)
         run: |
-          docker compose -f docker-compose.production.yml build server internal-service
+          # The UI image has its own multi-stage `production` target with
+          # a hand-written nginx config (printf'd from the Dockerfile), a
+          # non-root user setup, and a security-header block. None of that
+          # is exercised by the dev `target: dev` build, so a syntax error
+          # in the printf, a wrong `COPY --from=build` path, or a missing
+          # `target: production` would previously only surface during an
+          # actual production deploy. Building it in CI catches those.
+          docker compose -f docker-compose.production.yml build server internal-service ui
       - name: Verify Images Were Built
         run: |
           echo "Checking for built images..."
           # docker compose build tags images as <project>-<service>
           docker images
-          # Verify both images exist and are non-empty
+          # Verify all three images exist and are non-empty
           SERVER_IMAGE=$(docker compose -f docker-compose.production.yml images server --format json | head -1)
           IS_IMAGE=$(docker compose -f docker-compose.production.yml images internal-service --format json | head -1)
-          # Fail if EITHER image is missing. Previous '&&' would only fail
-          # when both were absent, silently passing if one of the two builds
-          # was missing.
-          if [ -z "$SERVER_IMAGE" ] || [ -z "$IS_IMAGE" ]; then
-            echo "ERROR: Production images were not built (server='$SERVER_IMAGE', internal-service='$IS_IMAGE')"
+          UI_IMAGE=$(docker compose -f docker-compose.production.yml images ui --format json | head -1)
+          # Fail if ANY image is missing. Listing each one explicitly keeps
+          # the failure message specific about which build silently dropped.
+          if [ -z "$SERVER_IMAGE" ] || [ -z "$IS_IMAGE" ] || [ -z "$UI_IMAGE" ]; then
+            echo "ERROR: Production images were not built (server='$SERVER_IMAGE', internal-service='$IS_IMAGE', ui='$UI_IMAGE')"
             exit 1
           fi
           echo "Production images built successfully"
@@ -409,7 +416,34 @@ jobs:
             exit 1
           }
           echo "Internal-service is healthy"
-          echo "Smoke test passed: both services started and are healthy"
+          # UI nginx smoke test. The production UI container has no
+          # docker healthcheck of its own — it's a stateless nginx
+          # serving static SPA assets — so we exercise it directly by
+          # starting it and curling its bound port. A failure here
+          # catches: the nginx config printf'd in the Dockerfile being
+          # malformed, the `COPY --from=build /app/dist` path being
+          # wrong, the non-root chown step landing on the wrong dirs,
+          # or the CSP `connect-src` allow-list being missing for ws.
+          docker compose -f docker-compose.production.yml up -d ui
+          echo "Waiting for UI to start serving on port 8080 (host network)..."
+          # The UI's nginx listens on 8080 and `docker-compose.production.yml`
+          # uses `network_mode: host`, so curl localhost directly. Wait up
+          # to 60s for the container to bind the port and serve the SPA.
+          if ! timeout 60 bash -c 'until curl -fsS -o /dev/null http://localhost:8080/; do sleep 2; echo "Waiting..."; done'; then
+            echo "UI failed to serve on port 8080"
+            docker compose -f docker-compose.production.yml logs ui
+            exit 1
+          fi
+          # Sanity: the served root must contain the SPA shell. A
+          # successful 200 from a misconfigured root (e.g. nginx default
+          # welcome page) would otherwise mask a Dockerfile regression.
+          if ! curl -fsS http://localhost:8080/ | grep -q -i '<div id="root"'; then
+            echo "UI served a 200 but the response does not look like the SPA shell"
+            curl -fsS http://localhost:8080/ | head -40
+            exit 1
+          fi
+          echo "UI is serving the SPA shell"
+          echo "Smoke test passed: server, internal-service, ui all up"
       - name: Dump Logs on Failure
         if: failure()
         run: |
@@ -417,6 +451,8 @@ jobs:
           docker compose -f docker-compose.production.yml logs server 2>&1 | tail -100
           echo "=== internal-service logs ==="
           docker compose -f docker-compose.production.yml logs internal-service 2>&1 | tail -100
+          echo "=== ui logs ==="
+          docker compose -f docker-compose.production.yml logs ui 2>&1 | tail -100
       - name: Cleanup
         if: always()
         run: |
