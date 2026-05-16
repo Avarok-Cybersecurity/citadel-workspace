@@ -581,6 +581,27 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             }
         }
 
+        // Diagnostic warning for unbounded queries that return very large
+        // result sets. `depth = None` was previously treated as `Some(0)`
+        // (direct children only); the change to "unlimited descendants"
+        // is intentional for the frontend's full-tree render, but a
+        // surprise 50k-node response coming back to a future external
+        // caller would otherwise show up only as a slow request. Logging
+        // when the result exceeds a soft threshold surfaces drift early
+        // without changing behaviour. Threshold picked above plausible
+        // workspace sizes — bump in line with real telemetry, not a guess.
+        const UNLIMITED_DEPTH_RESULT_WARN_THRESHOLD: usize = 1000;
+        if depth.is_none() && result.len() > UNLIMITED_DEPTH_RESULT_WARN_THRESHOLD {
+            citadel_logging::warn!(
+                target: "citadel",
+                "list_nodes(parent_id={:?}, depth=None) returned {} nodes (> {} soft cap) \
+                 — caller is walking the full subtree; verify this is intentional",
+                parent_id,
+                result.len(),
+                UNLIMITED_DEPTH_RESULT_WARN_THRESHOLD,
+            );
+        }
+
         let enriched = enrich_allowed_child_types(result, &schema);
         Ok(filter_by_type(enriched, entity_types))
     }
