@@ -77,7 +77,17 @@ services:
       # dev. Production still uses a real volume via
       # docker-compose.production.yml.
     tmpfs:
-      - /var/lib/internal-service:size=128m
+      # `mode=1777` (sticky world-writable, /tmp-style) so `appuser`
+      # (uid 1000, set in docker/internal-service/Dockerfile) can write
+      # to the SDK's filesystem backend. Default tmpfs is root-owned
+      # mode 1755 — the SDK process can't even create subdirectories,
+      # which surfaces only after the container's port healthcheck
+      # passes (so `docker compose up --wait` looks healthy) and the
+      # first write attempt hits "Permission denied (os error 13)".
+      # That mismatch made integration tests fail on every
+      # `restartBackendServices()` call because the restart cycle
+      # exposes the write attempt before any port probe succeeds.
+      - /var/lib/internal-service:size=128m,mode=1777
     environment:
       - RUST_LOG=citadel=info
       - DOCKER_CONTAINER=1
