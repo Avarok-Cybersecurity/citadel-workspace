@@ -58,7 +58,10 @@ services:
       dockerfile: ./docker/internal-service/Dockerfile
       network: host
       args:
-        - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT}
+        # Default to 12345 so missing/unset .env doesn't make the
+        # Dockerfile bake ENV INTERNAL_SERVICE_PORT='' and crash the
+        # container with an invalid --bind '0.0.0.0:'.
+        - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT:-12345}
     volumes:
       # Mount shared caches and target directory
       - target_cache:/usr/src/app/target
