@@ -358,6 +358,14 @@ jobs:
         env:
           IN_CI: 'true'
           WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
+          # Several tests call `restartBackendServices` which spawns
+          # `docker compose` from the test runner; without
+          # INTERNAL_SERVICE_PORT in scope, the docker-compose.yml
+          # `${INTERNAL_SERVICE_PORT:-12345}` fallback works but the
+          # test runner's docker compose invocations would log a
+          # warning. Match Start Services' value so the runner
+          # inherits the same env.
+          INTERNAL_SERVICE_PORT: '12345'
         run: npm run ${{ matrix.test }}
         working-directory: citadel-workspaces/integration-tests
       - name: Upload Screenshots on Failure
@@ -384,6 +392,19 @@ jobs:
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           sudo apt-get clean
           df -h
+      - name: Generate WASM artifacts (required for UI production build)
+        # The UI production build embeds the wasm-pack generated
+        # `citadel_internal_service_wasm_client.js` (and the matching
+        # .wasm binary). Those artifacts are NOT git-tracked — they
+        # land in citadel-internal-service/typescript-client/ via the
+        # `sync-wasm-client` one-shot container that ships in
+        # docker-compose.yml. Without it, the Vite production build
+        # fails to resolve `../citadel_internal_service_wasm_client.js`
+        # from `dist/InternalServiceWasmClient.js`.
+        env:
+          WORKSPACE_MASTER_PASSWORD: 'ci-prod-build'
+          INTERNAL_SERVICE_PORT: '12345'
+        run: docker compose up --build sync-wasm-client
       - name: Build Production Images (server + internal-service + ui)
         run: |
           # The UI image has its own multi-stage `production` target with
