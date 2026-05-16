@@ -30,4 +30,5 @@ bun.lockb
 .archive
 target
 .playwright-mcp/
+.pr-reviews/
 screenshots/*
