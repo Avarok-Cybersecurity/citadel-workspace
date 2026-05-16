@@ -39,9 +39,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Validate master password is set and not a placeholder
-    if config.workspace_master_password.is_empty() {
+    // Validate master password is set AND not the `.env.example`
+    // placeholder. The placeholder is deliberately unguessable but it
+    // IS non-empty, so the previous `is_empty()` check let it through —
+    // any operator who copied .env.example without editing would have
+    // deployed with a known string. The marker `__CHANGE_ME__` is the
+    // contract: anything containing it is the unedited template.
+    let password = &config.workspace_master_password;
+    if password.is_empty() {
         return Err("workspace_master_password is required. Set via WORKSPACE_MASTER_PASSWORD env var or in kernel.toml".into());
+    }
+    if password.contains("__CHANGE_ME__") {
+        return Err(
+            "workspace_master_password is still set to the .env.example placeholder. \
+             Replace it with a real value, e.g. `openssl rand -hex 32`."
+                .into(),
+        );
     }
 
     info!(?config, "Loaded server configuration");
