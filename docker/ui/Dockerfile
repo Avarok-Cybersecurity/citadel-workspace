@@ -40,13 +40,35 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Copy package.json and install dependencies
-COPY citadel-workspaces/package.json ./
-# Copy the local file dependencies required by package.json
+# Stage local file: dependencies into /workspace. Both packages have
+# `main`/`exports` pointing at `dist/index.js`, so they have to be
+# tsc-built BEFORE the UI's `npm install` copies them into node_modules —
+# Vite's resolver fails the production build with "Failed to resolve
+# entry for package … incorrect main/module/exports" otherwise.
 COPY citadel-workspace-client-ts /workspace/citadel-workspace-client-ts
 COPY citadel-internal-service/typescript-client /workspace/citadel-internal-service-wasm-client
 
-# Rewrite file: references so they resolve inside the container
+# `citadel-workspace-client-ts/package.json` references the wasm client
+# via `file:../citadel-internal-service/typescript-client`, which only
+# resolves outside this flattened /workspace/ layout. Rewrite it so the
+# wasm client is installed from the sibling /workspace path.
+RUN sed -i 's|file:../citadel-internal-service/typescript-client|file:/workspace/citadel-internal-service-wasm-client|' /workspace/citadel-workspace-client-ts/package.json
+
+# Build wasm client (innermost dep) first, then workspace client (which
+# depends on it). Both produce dist/ so subsequent installs see the
+# entry points declared in their package.json.
+WORKDIR /workspace/citadel-internal-service-wasm-client
+RUN npm install && npm run build
+
+WORKDIR /workspace/citadel-workspace-client-ts
+RUN npm install && npm run build
+
+# Now build the UI itself.
+WORKDIR /app
+COPY citadel-workspaces/package.json ./
+
+# Rewrite the UI's file: references the same way so they point at the
+# already-built /workspace/ packages.
 RUN sed -i 's|file:../citadel-internal-service/typescript-client|file:/workspace/citadel-internal-service-wasm-client|' package.json && \
     sed -i 's|file:../citadel-workspace-client-ts|file:/workspace/citadel-workspace-client-ts|' package.json
 
