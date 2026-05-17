@@ -132,13 +132,15 @@ RUN chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx \
 #   * `style-src 'self' 'unsafe-inline'` — Vite/React + several Radix
 #     UI components emit inline styles for layout/measurement.
 #   * `img-src 'self' data:` — small inline icons use data: URLs.
-#   * `connect-src 'self' wss:` — WebSocket to the internal
-#     service and workspace server is the app's primary transport.
-#     Bare `ws:` is intentionally excluded for production: all
-#     WebSocket traffic flows through the Cloudflare tunnel as
-#     same-origin `wss://yourdomain.com`, so `'self'` covers it
-#     and `wss:` only widens the scheme allow-list (not the host).
-#     Dev uses the Vite server's own CSP, not this config.
+#   * `connect-src 'self'` — WebSocket to the internal service and
+#     workspace server is the app's primary transport, and in
+#     production all of that traffic flows through the Cloudflare
+#     tunnel as same-origin `wss://yourdomain.com`, which `'self'`
+#     already covers. We DO NOT add `wss:` here: per the CSP spec a
+#     bare scheme source matches ANY host with that scheme (not just
+#     the document's host), so `wss:` would let an XSS payload
+#     exfiltrate data to `wss://attacker.example`. Dev uses Vite's
+#     own CSP, not this config.
 RUN printf 'server {\n\
     listen 8080;\n\
     server_name _;\n\
@@ -157,7 +159,7 @@ RUN printf 'server {\n\
     add_header X-Content-Type-Options "nosniff" always;\n\
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;\n\
     add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;\n\
-    add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\'' wss:; worker-src '\''self'\'' blob:; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
+    add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\''; worker-src '\''self'\'' blob:; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
 \n\
     # Cache static assets aggressively (hashed filenames from Vite)\n\
     location /assets/ {\n\
@@ -167,7 +169,7 @@ RUN printf 'server {\n\
         add_header X-Content-Type-Options "nosniff" always;\n\
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;\n\
         add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;\n\
-        add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\'' wss:; worker-src '\''self'\'' blob:; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
+        add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\''; worker-src '\''self'\'' blob:; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
     }\n\
 \n\
     # WASM files\n\
@@ -179,7 +181,7 @@ RUN printf 'server {\n\
         add_header X-Content-Type-Options "nosniff" always;\n\
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;\n\
         add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;\n\
-        add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\'' wss:; worker-src '\''self'\'' blob:; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
+        add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\''; worker-src '\''self'\'' blob:; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
     }\n\
 \n\
     # SPA fallback - serve index.html for all non-file routes.\n\
