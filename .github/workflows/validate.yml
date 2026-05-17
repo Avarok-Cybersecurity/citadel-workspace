@@ -307,8 +307,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install Playwright Browsers
-        run: npx playwright install chromium --with-deps
       - name: Install Dependencies
         # Run `npm ci` at the workspace root so playwright is installed
         # ONCE (hoisted at root) instead of being installed both at root
@@ -321,7 +319,20 @@ jobs:
         # 'MakeMatchers<…>'` because the wrong `@playwright/test`
         # `expect` augmentation gets picked up. Installing once at
         # root unifies module resolution.
+        #
+        # IMPORTANT: install deps BEFORE `playwright install`. Running
+        # `npx playwright install` first triggers npx to auto-fetch the
+        # *latest* playwright, which downloads chrome-headless-shell for
+        # a different version than the locked one. The test then fails
+        # with "Executable doesn't exist at .../chromium_headless_shell-<v>"
+        # because the installed binary version doesn't match the one
+        # playwright@locked-version expects.
         run: npm ci
+      - name: Install Playwright Browsers
+        # Now that deps are installed, this resolves to the locked
+        # version's `playwright install` and downloads the matching
+        # chromium build.
+        run: npx playwright install chromium --with-deps
       - name: Symlink workspace deps for integration-tests build
         # `tsc` in integration-tests resolves modules with NodeNext
         # which walks node_modules up the directory tree. After the
