@@ -75,11 +75,27 @@ fi
 # wait_for_port probe below shell-expands ${INTERNAL_SERVICE_PORT} BEFORE it
 # hands off to docker compose, so an operator who customised the port would
 # otherwise have the probe target 12345 (the literal default) while the
-# service is bound elsewhere. `set -a` exports every assignment so the
-# variables are visible to the rest of the script's environment.
+# service is bound elsewhere.
+#
+# We parse `.env` line-by-line rather than `source .env`. `source` runs the
+# file as a shell script, so backticks, `$()`, unquoted spaces, etc. in a
+# value get evaluated by the shell — convenient for advanced users but a
+# silent-misconfiguration footgun for the common case where an operator
+# pasted `WORKSPACE_MASTER_PASSWORD=$(date +%s)` expecting docker-compose
+# to receive that literal string. This loop skips comments and blank lines,
+# strips matching surrounding quotes, and exports verbatim — matching what
+# docker-compose itself does with `.env`.
 set -a
-# shellcheck disable=SC1091
-source .env
+while IFS='=' read -r key value; do
+    [[ "$key" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "${key// /}" ]] && continue
+    # Strip matching outer quotes (single OR double) — docker-compose's
+    # env-file loader does the same so wrapped values land identically.
+    if [[ "$value" =~ ^\"(.*)\"$ ]] || [[ "$value" =~ ^\'(.*)\'$ ]]; then
+        value="${BASH_REMATCH[1]}"
+    fi
+    export "${key// /}=$value"
+done < .env
 set +a
 
 # Step 1: Pull latest code
