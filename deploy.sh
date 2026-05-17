@@ -87,6 +87,13 @@ fi
 # docker-compose itself does with `.env`.
 set -a
 while IFS='=' read -r key value; do
+    # Strip trailing CR so a `.env` created on Windows / transferred via
+    # FTP doesn't bake a literal "\r" into every value — that's a
+    # very-hard-to-diagnose auth failure for WORKSPACE_MASTER_PASSWORD
+    # (server gets "secret\r", operator types "secret"). docker-compose
+    # handles CRLF natively; this parser now matches.
+    key="${key%$'\r'}"
+    value="${value%$'\r'}"
     [[ "$key" =~ ^[[:space:]]*# ]] && continue
     [[ -z "${key// /}" ]] && continue
     # Strip matching outer quotes (single OR double) — docker-compose's
@@ -94,6 +101,13 @@ while IFS='=' read -r key value; do
     if [[ "$value" =~ ^\"(.*)\"$ ]] || [[ "$value" =~ ^\'(.*)\'$ ]]; then
         value="${BASH_REMATCH[1]}"
     fi
+    # `export "K=$value"` does NOT re-evaluate `$()` or backticks inside
+    # `$value` — parameter expansion happens once and the resulting
+    # characters become the literal exported value. Verified with
+    # `value='$(date +%s)' export "K=$value" && echo "$K"` → prints
+    # `$(date +%s)` literally, not the timestamp. A previous review
+    # flagged this as a re-evaluation risk; it isn't, but the test
+    # above is worth keeping in mind for any future refactor.
     export "${key// /}=$value"
 done < .env
 set +a
