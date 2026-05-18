@@ -154,6 +154,12 @@ RUN chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx \
 #     the document's host), so `wss:` would let an XSS payload
 #     exfiltrate data to `wss://attacker.example`. Dev uses Vite's
 #     own CSP, not this config.
+#   * `object-src 'none'` — defence-in-depth against legacy plugin
+#     content (<object>, <embed>, <applet>). Without it, `object-src`
+#     falls back to `default-src 'self'`, allowing same-origin plugin
+#     loads. The app uses no such content, so `'none'` is strictly
+#     more restrictive with zero functional cost — and it's the
+#     OWASP-recommended baseline.
 RUN printf 'server {\n\
     listen 8080;\n\
     server_name _;\n\
@@ -172,7 +178,7 @@ RUN printf 'server {\n\
     add_header X-Content-Type-Options "nosniff" always;\n\
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;\n\
     add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;\n\
-    add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\''; worker-src '\''self'\'' blob:; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
+    add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\''; worker-src '\''self'\'' blob:; object-src '\''none'\''; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
 \n\
     # Cache static assets aggressively (hashed filenames from Vite)\n\
     location /assets/ {\n\
@@ -182,7 +188,7 @@ RUN printf 'server {\n\
         add_header X-Content-Type-Options "nosniff" always;\n\
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;\n\
         add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;\n\
-        add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\''; worker-src '\''self'\'' blob:; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
+        add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\''; worker-src '\''self'\'' blob:; object-src '\''none'\''; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
     }\n\
 \n\
     # WASM files\n\
@@ -194,7 +200,7 @@ RUN printf 'server {\n\
         add_header X-Content-Type-Options "nosniff" always;\n\
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;\n\
         add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;\n\
-        add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\''; worker-src '\''self'\'' blob:; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
+        add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\''; worker-src '\''self'\'' blob:; object-src '\''none'\''; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
     }\n\
 \n\
     # SPA fallback - serve index.html for all non-file routes.\n\
