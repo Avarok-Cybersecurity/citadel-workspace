@@ -131,6 +131,15 @@ services:
       context: .
       dockerfile: ./docker/ui/Dockerfile
       target: production
+      args:
+        # Vite bakes VITE_* env vars at build time. The frontend's
+        # WebSocket URL falls back to `ws://localhost:12345` if this
+        # is empty, which the production CSP `connect-src 'self'`
+        # blocks (different port from the served origin and wrong
+        # scheme behind a Cloudflare tunnel). Operators set this in
+        # `.env` to a same-origin `wss://yourdomain.com/ws` so the
+        # browser can actually connect.
+        VITE_WS_URL: ${VITE_WS_URL:-}
     deploy:
       resources:
         limits:
