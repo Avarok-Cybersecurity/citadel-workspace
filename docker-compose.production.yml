@@ -146,6 +146,19 @@ services:
           memory: 256M
           cpus: '0.5'
     restart: unless-stopped
+    # `wget` is part of the nginx:stable-alpine base. `--spider` does a
+    # HEAD-equivalent request that exits 0 only on 2xx — so this fails
+    # if nginx isn't bound, if the SPA dist/ is missing (`/` would 404),
+    # or if the config block returns an error page. `container_name`-style
+    # probes that only check the container is "running" miss every one
+    # of those modes; without this the cloudflared dependency below
+    # would start before nginx is actually serving traffic.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       internal-service:
         condition: service_healthy
@@ -194,7 +207,7 @@ services:
       start_period: 15s
     depends_on:
       ui:
-        condition: service_started
+        condition: service_healthy
       internal-service:
         condition: service_healthy
     network_mode: host
