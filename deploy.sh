@@ -112,6 +112,16 @@ while IFS='=' read -r key value; do
     value="${value%$'\r'}"
     [[ "$key" =~ ^[[:space:]]*# ]] && continue
     [[ -z "${key// /}" ]] && continue
+    # Trim leading/trailing whitespace on the value. If the operator
+    # wrote `KEY = value` (with spaces around `=`), `IFS='='` gives
+    # value=" value", and the unquoted-export below would bake the
+    # leading space into the env var. Any shell consumer probing
+    # `${VAR}` then sees " value" (with leading space) — a `nc -z`
+    # against ` 12346` rather than `12346` would time out with a
+    # confusing "port not bound" error. Trim BEFORE the quote-strip
+    # so `KEY = "value"` lands the same as `KEY="value"`.
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
     # Strip matching outer quotes (single OR double) — docker-compose's
     # env-file loader does the same so wrapped values land identically.
     if [[ "$value" =~ ^\"(.*)\"$ ]] || [[ "$value" =~ ^\'(.*)\'$ ]]; then
