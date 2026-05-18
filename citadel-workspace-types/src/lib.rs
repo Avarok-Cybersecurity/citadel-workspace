@@ -224,6 +224,16 @@ pub enum WorkspaceProtocolRequest {
     ///   single round trip. The server applies a visited-set guard so
     ///   cycles or duplicate child refs cannot cause unbounded traversal.
     ///
+    /// Caution: `None` returns the full subtree with no hard cap on
+    /// result set size. The kernel emits a diagnostic warning past
+    /// 1000 nodes but does not refuse the request, so a single
+    /// ListNodes can serialize an arbitrarily large tree into one
+    /// WebSocket frame. This is acceptable at the current
+    /// per-workspace scale (typical workspaces are well under 1000
+    /// nodes). If workspaces are expected to grow past tens of
+    /// thousands of nodes, callers should switch to `Some(n)` and
+    /// paginate.
+    ///
     /// If `entity_types` is provided, filters to only those types.
     ListNodes {
         parent_id: Option<String>,
