@@ -61,6 +61,22 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
+# Fail fast if the operator forgot to replace the .env.example
+# placeholder. The server binary already refuses to start on
+# `__CHANGE_ME__` (kernel/main.rs), but reaching that error means the
+# deploy script has already pulled code, built every Docker image
+# (multi-minute), and started containers — only to crash with a
+# message the operator could have seen instantly. This pre-build
+# check turns "fail in 5 minutes" into "fail in 5 seconds" for the
+# single most common misconfiguration. Use `grep -F` to match the
+# literal placeholder rather than treating it as a regex.
+if grep -qF '__CHANGE_ME__' .env; then
+    echo "ERROR: .env still contains the __CHANGE_ME__ placeholder."
+    echo "  Replace WORKSPACE_MASTER_PASSWORD with a real value, e.g.:"
+    echo "    openssl rand -hex 32"
+    exit 1
+fi
+
 # jq is required by the readiness probe below. Check up front rather than
 # letting the probe loop forever against `state=""` parsed from a missing
 # `jq` binary.
