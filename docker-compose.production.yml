@@ -174,10 +174,24 @@ services:
   # ---------------------------------------------------------------------------
   cloudflared:
     image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate run
+    # `--metrics 0.0.0.0:2000` exposes cloudflared's built-in /ready
+    # endpoint so the healthcheck below can verify the tunnel actually
+    # established a connection. Without it, an invalid token / network
+    # failure leaves the container in "running" but traffic is
+    # black-holed; operators reading `docker compose ps` see a healthy
+    # stack with no signal.
+    command: tunnel --no-autoupdate --metrics 0.0.0.0:2000 run
     environment:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}
     restart: unless-stopped
+    # `/ready` returns 200 once the tunnel is up and a 5xx (or no
+    # response) otherwise. wget is in the cloudflared image's base.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:2000/ready 2>/dev/null | grep -q '\"status\":200' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     depends_on:
       ui:
         condition: service_started
