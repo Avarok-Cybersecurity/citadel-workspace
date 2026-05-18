@@ -55,6 +55,10 @@ USER appuser
 # docker-compose.production.yml; dev leaves them unset and the binary
 # falls through to its in-memory default.
 #
-# The shell-only `${VAR:+ --flag $VAR}` form expands to nothing when
-# the env var is unset, so dev gets a clean `--bind` invocation.
-CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind 0.0.0.0:${INTERNAL_SERVICE_PORT}${INTERNAL_SERVICE_BACKEND:+ --backend $INTERNAL_SERVICE_BACKEND}${INTERNAL_SERVICE_DATA_DIR:+ --data-dir $INTERNAL_SERVICE_DATA_DIR}"]
+# The shell-only `${VAR:+ --flag "$VAR"}` form expands to nothing when
+# the env var is unset, so dev gets a clean `--bind` invocation. The
+# `$VAR` references are double-quoted so a path containing whitespace
+# (e.g. `INTERNAL_SERVICE_DATA_DIR=/my data`) survives shell
+# word-splitting and reaches structopt as a single CLI argument
+# instead of being split into "/my" and "data".
+CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind 0.0.0.0:${INTERNAL_SERVICE_PORT}${INTERNAL_SERVICE_BACKEND:+ --backend \"$INTERNAL_SERVICE_BACKEND\"}${INTERNAL_SERVICE_DATA_DIR:+ --data-dir \"$INTERNAL_SERVICE_DATA_DIR\"}"]
