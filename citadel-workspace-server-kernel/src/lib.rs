@@ -16,7 +16,14 @@ pub mod config {
     use serde::Deserialize;
 
     /// Main server configuration from kernel.toml
-    #[derive(Deserialize, Debug, Clone)]
+    //
+    // Debug is implemented manually below to redact
+    // `workspace_master_password`. Deriving Debug here would dump the
+    // password in plaintext when `info!(?config, ...)` formats the
+    // value — and that line runs at the production INFO level on
+    // every boot, so the secret would land in `docker compose logs`
+    // and any log aggregator the operator wires up.
+    #[derive(Deserialize, Clone)]
     pub struct ServerConfig {
         pub bind_addr: String,
         pub dangerous_skip_cert_verification: Option<bool>,
@@ -35,6 +42,34 @@ pub mod config {
         pub content_base_dir: Option<String>,
         /// File transfer configuration
         pub file_transfer: Option<FileTransferConfig>,
+    }
+
+    impl std::fmt::Debug for ServerConfig {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            // Marker, not the password length, so `{:?}` output gives
+            // zero signal about the secret. Distinguish "set" from
+            // "empty" because an empty value usually means the env
+            // override missed — useful in startup diagnostics — while
+            // still never echoing the real string.
+            let password_state = if self.workspace_master_password.is_empty() {
+                "<empty>"
+            } else {
+                "<redacted>"
+            };
+            f.debug_struct("ServerConfig")
+                .field("bind_addr", &self.bind_addr)
+                .field(
+                    "dangerous_skip_cert_verification",
+                    &self.dangerous_skip_cert_verification,
+                )
+                .field("backend", &self.backend)
+                .field("data_dir", &self.data_dir)
+                .field("workspace_master_password", &password_state)
+                .field("workspace_structure", &self.workspace_structure)
+                .field("content_base_dir", &self.content_base_dir)
+                .field("file_transfer", &self.file_transfer)
+                .finish()
+        }
     }
 
     /// File transfer configuration section
@@ -641,5 +676,60 @@ mod backend_select_tests {
             BackendType::Filesystem(d) => assert_eq!(d, "./data"),
             other => panic!("expected Filesystem(./data), got {other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod server_config_debug_tests {
+    //! Pin the secret-redaction contract for `ServerConfig`'s Debug
+    //! impl. `main.rs` logs the full config at INFO on every boot, so
+    //! a regression here ships the master password into operator log
+    //! pipelines. If someone re-adds `#[derive(Debug)]` or forgets a
+    //! field in the manual impl, these tests fail loudly.
+    use super::config::{FileTransferConfig, ServerConfig};
+
+    fn cfg(password: &str) -> ServerConfig {
+        ServerConfig {
+            bind_addr: "0.0.0.0:12349".to_string(),
+            dangerous_skip_cert_verification: Some(true),
+            backend: Some("filesystem".to_string()),
+            data_dir: Some("/srv/data".to_string()),
+            workspace_master_password: password.to_string(),
+            workspace_structure: None,
+            content_base_dir: Some("/srv/content".to_string()),
+            file_transfer: Some(FileTransferConfig::default()),
+        }
+    }
+
+    #[test]
+    fn debug_never_emits_the_password_substring() {
+        let secret = "hunter2-extremely-distinctive-string";
+        let formatted = format!("{:?}", cfg(secret));
+        assert!(
+            !formatted.contains(secret),
+            "Debug output leaked the master password: {formatted}"
+        );
+    }
+
+    #[test]
+    fn debug_marks_set_passwords_as_redacted() {
+        let formatted = format!("{:?}", cfg("anything-non-empty"));
+        assert!(
+            formatted.contains("<redacted>"),
+            "expected <redacted> marker in {formatted}"
+        );
+    }
+
+    #[test]
+    fn debug_marks_empty_passwords_as_empty() {
+        let formatted = format!("{:?}", cfg(""));
+        assert!(
+            formatted.contains("<empty>"),
+            "expected <empty> marker in {formatted}"
+        );
+        assert!(
+            !formatted.contains("<redacted>"),
+            "should not mark empty as <redacted>: {formatted}"
+        );
     }
 }
