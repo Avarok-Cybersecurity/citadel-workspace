@@ -38,6 +38,19 @@ CMD ["npm", "run", "dev:docker"]
 # ==============================================================================
 FROM node:20-alpine AS build
 
+# Vite substitutes `import.meta.env.VITE_*` at build time. The runtime
+# WebSocket URL in `lib/websocket-service/core.ts` resolves to
+# `config.websocketUrl || import.meta.env.VITE_WS_URL || ws://localhost:12345`,
+# and the production CSP (`connect-src 'self'`) blocks the localhost
+# fallback when the page is served from a different origin (Cloudflare
+# tunnel, custom domain, etc.). Operators MUST set `VITE_WS_URL` to a
+# same-origin `wss://yourdomain.com/...` for the production deploy to
+# establish a WebSocket connection. docker-compose.production.yml
+# forwards the env var via `args:` so the operator's `.env` is the
+# single source of truth.
+ARG VITE_WS_URL=
+ENV VITE_WS_URL=${VITE_WS_URL}
+
 WORKDIR /app
 
 # Stage local file: dependencies into /workspace. Both packages have
