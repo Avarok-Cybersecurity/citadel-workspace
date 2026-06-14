@@ -390,7 +390,14 @@ pub async fn run_server_with_base_path(
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel...");
 
     let workspace_password = config.workspace_master_password.clone();
-    let bind_address_str = config.bind_addr.clone();
+    // Allow the bind address to be overridden via env so the same baked-in
+    // kernel.toml (0.0.0.0 for dev bridge networking) can be pinned to
+    // loopback in production under host networking (WORKSPACE_BIND_ADDR=
+    // 127.0.0.1:12349), keeping the Citadel listener off public interfaces.
+    let bind_address_str = std::env::var("WORKSPACE_BIND_ADDR")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| config.bind_addr.clone());
     let bind_address: SocketAddr = bind_address_str.parse().map_err(|e| {
         NetworkError::msg(format!(
             "Invalid bind address '{}': {}",
