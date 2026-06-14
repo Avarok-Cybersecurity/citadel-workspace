@@ -217,10 +217,12 @@ services:
     # only needs to reach it over localhost.
     command: tunnel --no-autoupdate --metrics 127.0.0.1:2000 run
     environment:
-      # Fail fast with a clear message if the tunnel profile is active but
-      # no token was provided (otherwise cloudflared starts with an empty
-      # token and dies with a confusing error).
-      - TUNNEL_TOKEN=${TUNNEL_TOKEN:?TUNNEL_TOKEN is required when using the tunnel profile}
+      # Empty default so `docker compose build`/`config` works without the
+      # tunnel profile (compose interpolates this even when cloudflared isn't
+      # being started). The required-token fail-fast lives in deploy.sh, which
+      # knows when the tunnel profile is actually requested — a `:?` here would
+      # break every non-tunnel build/config.
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
     # Match the resource discipline of the other services so a
     # misbehaving cloudflared process (memory leak, runaway CPU on
     # tunnel reconnect storms) can't starve the host. Numbers chosen

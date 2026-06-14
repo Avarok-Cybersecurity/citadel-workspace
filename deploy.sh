@@ -147,6 +147,18 @@ while IFS='=' read -r key value; do
 done < .env
 set +a
 
+# When the tunnel profile is requested, TUNNEL_TOKEN must be set — otherwise
+# cloudflared starts with an empty token and dies with a confusing error.
+# This guard lives here (not as a `${TUNNEL_TOKEN:?}` in the compose file)
+# because the compose interpolation is evaluated for every build/config even
+# without the tunnel profile, which would break non-tunnel deploys and CI.
+if [ "$TUNNEL_PROFILE_ACTIVE" = true ] && [ -z "${TUNNEL_TOKEN:-}" ]; then
+    echo "ERROR: --tunnel was passed but TUNNEL_TOKEN is not set in .env."
+    echo "  Create a tunnel token at https://one.dash.cloudflare.com and set"
+    echo "  TUNNEL_TOKEN=<token> in .env, or deploy without --tunnel."
+    exit 1
+fi
+
 # Step 1: Pull latest code
 if [ "$SKIP_PULL" = false ]; then
     echo "[1/4] Pulling latest code..."
