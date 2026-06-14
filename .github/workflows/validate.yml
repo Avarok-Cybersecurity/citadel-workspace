@@ -458,14 +458,14 @@ jobs:
           # failures even on healthy services.
           docker compose -f docker-compose.production.yml up -d server internal-service
           echo "Waiting for server to become healthy..."
-          timeout 180 bash -c 'until docker compose -f docker-compose.production.yml ps server --format json | grep -q healthy; do sleep 5; echo "Waiting..."; done' || {
+          timeout 180 bash -c 'until docker compose -f docker-compose.production.yml ps server --format json | grep -qw healthy; do sleep 5; echo "Waiting..."; done' || {
             echo "Server failed to become healthy"
             docker compose -f docker-compose.production.yml logs server
             exit 1
           }
           echo "Server is healthy"
           echo "Waiting for internal-service to become healthy..."
-          timeout 180 bash -c 'until docker compose -f docker-compose.production.yml ps internal-service --format json | grep -q healthy; do sleep 5; echo "Waiting..."; done' || {
+          timeout 180 bash -c 'until docker compose -f docker-compose.production.yml ps internal-service --format json | grep -qw healthy; do sleep 5; echo "Waiting..."; done' || {
             echo "Internal-service failed to become healthy"
             docker compose -f docker-compose.production.yml logs internal-service
             exit 1

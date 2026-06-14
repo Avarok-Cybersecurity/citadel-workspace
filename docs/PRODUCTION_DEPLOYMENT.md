@@ -1,27 +1,41 @@
 # Citadel Workspace Server — Production Deployment Analysis
 
-> **Date**: March 3, 2026  
-> **Status**: Analysis only — no changes implemented yet
+> **Date**: March 3, 2026 (original analysis)  
+> **Status**: ✅ Backend selection now IMPLEMENTED by this PR. The sections
+> below are retained as historical context; see "Backend Selection (now
+> implemented)" for the current behavior.
 
 ## Summary
 
-The current setup is strictly a development environment. The single most critical issue is that **all user data is stored in-memory and lost on every restart**. Switching to the existing `Filesystem` backend is a trivial code change.
+This was originally a development-only setup whose single most critical issue
+was that **all user data was stored in-memory and lost on every restart**. That
+is now resolved: both services select their backend from env vars, and the
+production compose runs them on the `Filesystem` backend.
 
 ---
 
-## Critical: In-Memory Backend
+## Backend Selection (now implemented)
 
-Both the workspace server and internal service are hardcoded to `BackendType::InMemory`:
+Both services choose their backend at startup; in-memory remains the dev
+default (ephemeral `tilt` runs) and `filesystem` is selected in production:
 
-| Service | File | Line |
-|---------|------|------|
-| Workspace Server | `citadel-workspace-server-kernel/src/lib.rs` | L416-417 |
-| Internal Service | `citadel-workspace-internal-service/src/main.rs` | L23 |
+| Service | Env vars | Production value |
+|---------|----------|------------------|
+| Workspace Server | `WORKSPACE_BACKEND` / `WORKSPACE_DATA_DIR` | `filesystem` → `/data/server` |
+| Internal Service | `INTERNAL_SERVICE_BACKEND` / `INTERNAL_SERVICE_DATA_DIR` | `filesystem` → `/data/internal-service` |
 
-### What exists but isn't used
+`docker-compose.production.yml` sets these, and both services persist to named
+volumes. The internal service logs a loud startup warning if it falls back to
+in-memory (which disables file transfer).
 
-- `ServerConfig` already has `backend: Option<String>` — defined but **never read**
-- `BackendType::Filesystem(path)` exists in `citadel_sdk` and is used in 5 existing tests
+### Historical: what the in-memory analysis found
+
+Before this PR, both services were hardcoded to `BackendType::InMemory`:
+
+- `ServerConfig` had `backend: Option<String>` defined but never read (now read,
+  with the env override taking precedence)
+- `BackendType::Filesystem(path)` exists in `citadel_sdk` and was already used
+  in 5 tests
 - The `"filesystem"` argument is just a directory path where the SDK stores data
 
 ### Tests using Filesystem backend
