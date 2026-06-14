@@ -727,9 +727,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
 }
 
 /// Iterative tree construction. The previous recursive implementation
-/// guarded against cycles via a `visited` HashSet but had no depth cap
-/// on the recursion itself — a legitimate non-cyclic hierarchy of a few
-/// thousand nodes called with `max_depth: None` would overflow the stack.
+/// walked `node.children` unconditionally with NO cycle guard and no cap
+/// on recursion depth: a cyclic or duplicate child reference would recurse
+/// forever, and even a well-formed but deep (a few thousand levels)
+/// hierarchy called with `max_depth: None` would overflow the stack. This
+/// version adds both protections (a `visited` set and an explicit queue).
 ///
 /// This is BFS + reverse-depth assembly, mirroring the iterative pattern
 /// `list_nodes` uses in the same file. Two phases:

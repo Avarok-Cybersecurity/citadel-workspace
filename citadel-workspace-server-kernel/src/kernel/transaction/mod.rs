@@ -541,12 +541,19 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         self.save_index(KEY_INDEX_WORKSPACE_IDS, &new_ids).await
     }
 
+    /// Persist passwords keyed by workspace ID.
+    ///
+    /// IMPORTANT: this is UPSERT-ONLY. Unlike `save_workspaces`, it does not
+    /// reconcile deletions — a key omitted from `passwords` is NOT removed
+    /// from the backend (there is no password index to diff against). Removal
+    /// must be done explicitly via `delete_password_key`, which is what
+    /// `remove_workspace` does. Do NOT rely on dropping a key from the map +
+    /// calling this to delete a secret; the stale password would silently
+    /// persist.
     pub async fn save_passwords(
         &self,
         passwords: &HashMap<String, String>,
     ) -> Result<(), NetworkError> {
-        // Save each password individually. Passwords are keyed by workspace ID
-        // and we don't maintain a separate password index (we use workspace IDs).
         for (id, password) in passwords {
             self.save_password_by_key(id, password).await?;
         }
