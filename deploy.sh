@@ -68,11 +68,20 @@ fi
 # (multi-minute), and started containers — only to crash with a
 # message the operator could have seen instantly. This pre-build
 # check turns "fail in 5 minutes" into "fail in 5 seconds" for the
-# single most common misconfiguration. Use `grep -F` to match the
-# literal placeholder rather than treating it as a regex.
-if grep -qF '__CHANGE_ME__' .env; then
-    echo "ERROR: .env still contains the __CHANGE_ME__ placeholder."
-    echo "  Replace WORKSPACE_MASTER_PASSWORD with a real value, e.g.:"
+# single most common misconfiguration.
+#
+# Check ONLY the effective WORKSPACE_MASTER_PASSWORD value, not the whole
+# file: .env.example's comments legitimately mention `__CHANGE_ME__` to
+# document the contract, so `cp .env.example .env` + editing only the
+# assignment would leave the marker in a comment and a whole-file grep
+# would wrongly reject a correctly-edited file.
+master_pw=$(grep -E '^[[:space:]]*WORKSPACE_MASTER_PASSWORD=' .env | tail -n1 | cut -d= -f2-)
+master_pw="${master_pw%$'\r'}"                                # strip CR
+master_pw="${master_pw#"${master_pw%%[![:space:]]*}"}"       # trim leading ws
+master_pw="${master_pw%"${master_pw##*[![:space:]]}"}"       # trim trailing ws
+if [[ -z "$master_pw" || "$master_pw" == *"__CHANGE_ME__"* ]]; then
+    echo "ERROR: WORKSPACE_MASTER_PASSWORD is unset or still the __CHANGE_ME__ placeholder."
+    echo "  Set it to a real value in .env, e.g.:"
     echo "    openssl rand -hex 32"
     exit 1
 fi
