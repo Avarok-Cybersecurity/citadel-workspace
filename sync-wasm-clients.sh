@@ -86,7 +86,8 @@ TYPESCRIPT_CLIENT_PACKAGE_JSON=$(cat << 'EOF'
   },
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "echo \"No tests configured yet\" && exit 0"
   },
   "sideEffects": [
     "./snippets/*"
@@ -221,7 +222,8 @@ if [ -d "$DEST1" ]; then
   },
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "echo \"No tests configured yet\" && exit 0"
   },
   "sideEffects": [
     "./snippets/*"
