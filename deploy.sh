@@ -228,6 +228,11 @@ echo "  Internal service is up."
 # UI last (lightweight, fast restart)
 echo "  Restarting ui..."
 docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps --build ui
+# Wait for nginx to actually serve (the ui healthcheck does a wget --spider
+# on :8080). Without this the deploy reports success even if nginx failed to
+# start (bad config, missing dist/) — the cloudflared step would then start
+# in front of a dead UI.
+wait_for_port ui 8080
 echo "  UI is up."
 
 # Cloudflared if tunnel profile is active

@@ -61,4 +61,12 @@ USER appuser
 # (e.g. `INTERNAL_SERVICE_DATA_DIR=/my data`) survives shell
 # word-splitting and reaches structopt as a single CLI argument
 # instead of being split into "/my" and "data".
-CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind 0.0.0.0:${INTERNAL_SERVICE_PORT}${INTERNAL_SERVICE_BACKEND:+ --backend \"$INTERNAL_SERVICE_BACKEND\"}${INTERNAL_SERVICE_DATA_DIR:+ --data-dir \"$INTERNAL_SERVICE_DATA_DIR\"}"]
+#
+# The bind host is `INTERNAL_SERVICE_BIND_HOST` (default `0.0.0.0`). Dev
+# (bridge networking) leaves it unset so other containers can reach the
+# service. Production uses `network_mode: host` and sets it to `127.0.0.1`
+# so the WebSocket control plane is reachable only by the co-located
+# cloudflared/nginx over loopback and is NOT exposed on the host's public
+# interfaces (which `0.0.0.0` + host networking would do, bypassing the
+# Cloudflare TLS/Access boundary).
+CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind ${INTERNAL_SERVICE_BIND_HOST:-0.0.0.0}:${INTERNAL_SERVICE_PORT}${INTERNAL_SERVICE_BACKEND:+ --backend \"$INTERNAL_SERVICE_BACKEND\"}${INTERNAL_SERVICE_DATA_DIR:+ --data-dir \"$INTERNAL_SERVICE_DATA_DIR\"}"]

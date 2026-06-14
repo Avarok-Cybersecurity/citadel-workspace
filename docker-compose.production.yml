@@ -93,6 +93,13 @@ services:
       - DOCKER_CONTAINER=1
       - SKIP_WASM_BUILD=1
       - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT:-12345}
+      # With `network_mode: host`, bind the WebSocket control plane to
+      # loopback so it is reachable only by the co-located cloudflared /
+      # nginx and NOT exposed on the host's public interfaces (which
+      # `0.0.0.0` would, bypassing the Cloudflare TLS boundary). Override
+      # only if your ingress reaches the service over a non-loopback host
+      # interface (then add a host firewall blocking the port publicly).
+      - INTERNAL_SERVICE_BIND_HOST=127.0.0.1
       # Persistence is opt-in via env vars so the same Dockerfile baked
       # into the image stays ephemeral by default for dev (`tilt`).
       # Production sets both vars below to mount internal-service state
@@ -207,10 +214,14 @@ services:
           memory: 256M
           cpus: '0.5'
     restart: unless-stopped
-    # `/ready` returns 200 once the tunnel is up and a 5xx (or no
-    # response) otherwise. wget is in the cloudflared image's base.
+    # `/ready` returns HTTP 200 once the tunnel is up and a 5xx (or no
+    # response) otherwise. Probe the HTTP status with `--spider` (exits 0
+    # only on 2xx) rather than grepping the JSON body for `"status":200`:
+    # the body match is brittle to whitespace/field-order changes across
+    # cloudflared versions, which would falsely report the tunnel
+    # unhealthy. wget is in the cloudflared image's base.
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:2000/ready 2>/dev/null | grep -q '\"status\":200' || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:2000/ready || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

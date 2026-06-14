@@ -83,6 +83,34 @@ server:
 | Add restart policies to compose | Trivial | Add `restart: unless-stopped` to server and internal-service. The standalone deployment scripts already do this. |
 | Production UI build stage | Medium | UI Dockerfile only has a `dev` stage running Vite dev server. Add `prod` stage: `npm run build` → serve with nginx. |
 
+### Network Exposure (host networking) — IMPORTANT
+
+Every service runs with `network_mode: host`, which is required so the
+co-located `cloudflared` process can reach the origins over loopback. The
+catch: a service that binds `0.0.0.0` under host networking is reachable on
+**all** host interfaces — including any public IP — which bypasses the
+Cloudflare TLS/Access boundary entirely (an attacker can hit
+`ws://<host-ip>:12345` and `http://<host-ip>:8080` directly).
+
+- **internal-service (WebSocket control plane, :12345)** — now binds
+  `127.0.0.1` in production via `INTERNAL_SERVICE_BIND_HOST=127.0.0.1`
+  (`docker-compose.production.yml`). cloudflared/nginx still reach it over
+  loopback; the public interface no longer exposes it. Override only if your
+  ingress reaches it over a non-loopback interface, and add a host firewall.
+- **nginx UI (:8080)** — intentionally reachable by cloudflared over
+  loopback; serves only the static SPA with a restrictive CSP. Low risk, but
+  a host firewall blocking :8080 publicly is still recommended.
+- **workspace-server (Citadel C2S, :12349)** — still binds `0.0.0.0` (its
+  `bind_addr` lives in `docker/workspace-server/kernel.toml`, shared with
+  dev). The Citadel protocol is end-to-end encrypted, so this is lower risk
+  than the plaintext WS, but it remains an unguarded attack surface.
+  **Remaining work:** make the server bind host configurable (env or a
+  prod-specific `kernel.toml`) and bind it to `127.0.0.1` in production.
+- **Mandatory regardless:** run a host firewall (ufw / cloud security group)
+  that allows only Cloudflare ingress and blocks `8080`/`12345`/`12349` from
+  the public internet. Host networking means Docker's own port mapping does
+  not isolate these.
+
 ### P2 — Investigate
 
 | Item | Question |
@@ -94,7 +122,7 @@ server:
 
 | Item | Why |
 |------|-----|
-| `network_mode: host` | Fine for single-host deploys; avoids NAT issues for citadel protocol |
+| `network_mode: host` | Required so cloudflared can reach origins over loopback; avoids NAT issues for citadel protocol. **But** see "Network Exposure" above — services must bind loopback and/or sit behind a host firewall, not rely on host networking for isolation. |
 | Resource limits (2G/2CPU) | Reasonable defaults, tune after deployment |
 | Logging (stdout) | Standard for Docker; pipe to aggregator as needed |
 | `.env` security | Already gitignored; env vars are standard Docker secrets approach |
