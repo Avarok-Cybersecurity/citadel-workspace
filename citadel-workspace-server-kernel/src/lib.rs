@@ -483,7 +483,11 @@ pub async fn run_server_with_base_path(
         config.file_transfer.clone(),
     ).await?;
 
-    let node_type = NodeType::server(bind_address)?;
+    // `NodeType::server` and `NodeBuilder::build` now return `anyhow::Error`
+    // (newer citadel_sdk); map into this fn's `NetworkError`, which no longer
+    // implements `From<anyhow::Error>`.
+    let node_type =
+        NodeType::server(bind_address).map_err(|e| NetworkError::generic(e.to_string()))?;
 
     let mut builder = NodeBuilder::default();
     builder
@@ -502,7 +506,10 @@ pub async fn run_server_with_base_path(
     }
 
     // Build and await server execution
-    builder.build(kernel)?.await?;
+    builder
+        .build(kernel)
+        .map_err(|e| NetworkError::generic(e.to_string()))?
+        .await?;
 
     Ok(())
 }

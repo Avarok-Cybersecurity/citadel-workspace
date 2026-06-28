@@ -847,7 +847,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             Some(remote) => remote.account_manager().clone(),
                             None => {
                                 error!(target: "citadel", "[ASYNC_KERNEL] NodeRemote not available during ConnectSuccess for CID {}", connect_success.session_cid);
-                                return Err(NetworkError::Generic(
+                                return Err(NetworkError::generic(
                                     "NodeRemote not available".to_string(),
                                 ));
                             }
@@ -859,7 +859,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                         .get_username_by_cid(connect_success.session_cid)
                         .await?
                         .ok_or_else(|| {
-                            NetworkError::Generic(format!(
+                            NetworkError::generic(format!(
                                 "User not found for CID {}",
                                 connect_success.session_cid
                             ))
@@ -897,7 +897,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                 all_domains.keys().collect::<Vec<_>>()
                             );
 
-                            return Err(NetworkError::Generic(
+                            return Err(NetworkError::generic(
                                 "Root workspace not found".to_string(),
                             ));
                         }
