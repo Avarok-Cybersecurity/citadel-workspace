@@ -40,11 +40,15 @@ RUN cargo build --release --bin citadel-workspace-server-kernel
 # which would hide the binary built in the image. This copy ensures the binary is available.
 RUN cp ./target/release/citadel-workspace-server-kernel /usr/local/bin/
 
+# Create data directory for persistent storage
+RUN mkdir -p /data/server
+
 # Run as non-root user for security hardening
 RUN useradd -m -u 1000 appuser
 RUN chown appuser /usr/local/bin/citadel-workspace-server-kernel && \
     chown appuser /usr/src/app/kernel.toml && \
-    chown -R appuser /usr/src/app/documents
+    chown -R appuser /usr/src/app/documents && \
+    chown -R appuser /data/server
 USER appuser
 
 # Run the workspace server from /usr/local/bin (not shadowed by volume mounts)

@@ -16,11 +16,20 @@ pub mod config {
     use serde::Deserialize;
 
     /// Main server configuration from kernel.toml
-    #[derive(Deserialize, Debug, Clone)]
+    //
+    // Debug is implemented manually below to redact
+    // `workspace_master_password`. Deriving Debug here would dump the
+    // password in plaintext when `info!(?config, ...)` formats the
+    // value — and that line runs at the production INFO level on
+    // every boot, so the secret would land in `docker compose logs`
+    // and any log aggregator the operator wires up.
+    #[derive(Deserialize, Clone)]
     pub struct ServerConfig {
         pub bind_addr: String,
         pub dangerous_skip_cert_verification: Option<bool>,
         pub backend: Option<String>,
+        /// Data directory for filesystem backend (defaults to "./data")
+        pub data_dir: Option<String>,
         /// Workspace master password. Can be overridden by WORKSPACE_MASTER_PASSWORD env var.
         /// Server refuses to start if neither config nor env var provides a non-empty password.
         #[serde(default)]
@@ -33,6 +42,34 @@ pub mod config {
         pub content_base_dir: Option<String>,
         /// File transfer configuration
         pub file_transfer: Option<FileTransferConfig>,
+    }
+
+    impl std::fmt::Debug for ServerConfig {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            // Marker, not the password length, so `{:?}` output gives
+            // zero signal about the secret. Distinguish "set" from
+            // "empty" because an empty value usually means the env
+            // override missed — useful in startup diagnostics — while
+            // still never echoing the real string.
+            let password_state = if self.workspace_master_password.is_empty() {
+                "<empty>"
+            } else {
+                "<redacted>"
+            };
+            f.debug_struct("ServerConfig")
+                .field("bind_addr", &self.bind_addr)
+                .field(
+                    "dangerous_skip_cert_verification",
+                    &self.dangerous_skip_cert_verification,
+                )
+                .field("backend", &self.backend)
+                .field("data_dir", &self.data_dir)
+                .field("workspace_master_password", &password_state)
+                .field("workspace_structure", &self.workspace_structure)
+                .field("content_base_dir", &self.content_base_dir)
+                .field("file_transfer", &self.file_transfer)
+                .finish()
+        }
     }
 
     /// File transfer configuration section
@@ -353,7 +390,14 @@ pub async fn run_server_with_base_path(
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel...");
 
     let workspace_password = config.workspace_master_password.clone();
-    let bind_address_str = config.bind_addr.clone();
+    // Allow the bind address to be overridden via env so the same baked-in
+    // kernel.toml (0.0.0.0 for dev bridge networking) can be pinned to
+    // loopback in production under host networking (WORKSPACE_BIND_ADDR=
+    // 127.0.0.1:12349), keeping the Citadel listener off public interfaces.
+    let bind_address_str = std::env::var("WORKSPACE_BIND_ADDR")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| config.bind_addr.clone());
     let bind_address: SocketAddr = bind_address_str.parse().map_err(|e| {
         NetworkError::msg(format!(
             "Invalid bind address '{}': {}",
@@ -413,8 +457,13 @@ pub async fn run_server_with_base_path(
         None
     };
 
-    // Always use in-memory backend for now
-    let backend_type_for_node_builder = BackendType::InMemory;
+    // Select backend type from env-var override (preferred) or config file.
+    let backend_type_for_node_builder = select_backend_type(
+        std::env::var("WORKSPACE_BACKEND").ok().as_deref(),
+        std::env::var("WORKSPACE_DATA_DIR").ok().as_deref(),
+        config.backend.as_deref(),
+        config.data_dir.as_deref(),
+    )?;
 
     // Log file transfer config
     if let Some(ref ft_config) = config.file_transfer {
@@ -434,7 +483,11 @@ pub async fn run_server_with_base_path(
         config.file_transfer.clone(),
     ).await?;
 
-    let node_type = NodeType::server(bind_address)?;
+    // `NodeType::server` and `NodeBuilder::build` now return `anyhow::Error`
+    // (newer citadel_sdk); map into this fn's `NetworkError`, which no longer
+    // implements `From<anyhow::Error>`.
+    let node_type =
+        NodeType::server(bind_address).map_err(|e| NetworkError::generic(e.to_string()))?;
 
     let mut builder = NodeBuilder::default();
     builder
@@ -442,11 +495,255 @@ pub async fn run_server_with_base_path(
         .with_backend(backend_type_for_node_builder);
 
     if config.dangerous_skip_cert_verification.unwrap_or(false) {
+        citadel_logging::warn!(target: "citadel", "⚠️  SECURITY WARNING: TLS certificate verification is DISABLED. This should ONLY be used for local development with self-signed certificates. Never use in production!");
+        // `with_insecure_skip_cert_verification` is `&mut self -> &mut Self`
+        // (see citadel_sdk::builder::node_builder), so the call mutates
+        // `builder` in place — discarding the returned `&mut Self` is
+        // intentional and correct, not a bug. The static analysers that
+        // flag this expect a `self -> Self` consuming-builder pattern;
+        // the SDK builder uses the in-place variant.
         builder.with_insecure_skip_cert_verification();
     }
 
     // Build and await server execution
-    builder.build(kernel)?.await?;
+    builder
+        .build(kernel)
+        .map_err(|e| NetworkError::generic(e.to_string()))?
+        .await?;
 
     Ok(())
+}
+
+/// Resolve the backend type from the four possible sources, in
+/// precedence order: env-var first, config-file second, and a
+/// default of `InMemory` if neither is set.
+///
+/// Why env wins: the same Dockerfile COPY is shared between the dev
+/// `tilt` flow and the production compose file, so `kernel.toml`
+/// CANNOT default to filesystem without breaking CLAUDE.md's
+/// documented ephemeral-dev contract (every dev reload would persist
+/// state, masking issues that only surface on a fresh server).
+/// Production `docker-compose.production.yml` sets the env vars to
+/// override that default, keeping prod on disk and dev in memory.
+///
+/// Side effects are limited to structured logging via `info!()` —
+/// no filesystem or network I/O. Unit tests can drive every
+/// combination of env/config inputs through the public surface and
+/// the `info!` calls are no-ops without a configured subscriber.
+pub fn select_backend_type(
+    env_backend: Option<&str>,
+    env_data_dir: Option<&str>,
+    config_backend: Option<&str>,
+    config_data_dir: Option<&str>,
+) -> Result<BackendType, NetworkError> {
+    // Treat empty strings the same as "unset". `std::env::var().ok()`
+    // returns `Some("")` for a defined-but-empty env var, and TOML
+    // config can carry the same (e.g. `data_dir = ""`). Without this
+    // filter, `WORKSPACE_DATA_DIR=""` short-circuits the `.or()` chain
+    // and produces `BackendType::Filesystem("")`, silently writing data
+    // to the container CWD instead of falling through to config or the
+    // documented `./data` default.
+    let env_backend = env_backend.filter(|s| !s.is_empty());
+    let env_data_dir = env_data_dir.filter(|s| !s.is_empty());
+    let config_backend = config_backend.filter(|s| !s.is_empty());
+    let config_data_dir = config_data_dir.filter(|s| !s.is_empty());
+    let backend_choice = env_backend.or(config_backend);
+    let data_dir_choice = env_data_dir.or(config_data_dir);
+    match backend_choice {
+        Some("filesystem") => {
+            let data_dir = data_dir_choice.unwrap_or("./data").to_string();
+            info!(target: "citadel", "Using filesystem backend with data directory: {}", data_dir);
+            Ok(BackendType::Filesystem(data_dir))
+        }
+        Some(other) => Err(NetworkError::msg(format!(
+            "Unknown backend type '{}'. Supported: 'filesystem' (or omit for in-memory)",
+            other
+        ))),
+        None => {
+            info!(target: "citadel", "Using in-memory backend (data will not persist across restarts)");
+            Ok(BackendType::InMemory)
+        }
+    }
+}
+
+#[cfg(test)]
+mod backend_select_tests {
+    //! Boundary tests for `select_backend_type`. The selection logic
+    //! is the main reason a deployment ends up on the wrong backend
+    //! (in-memory in production, filesystem in dev), so each
+    //! precedence path has its own assertion. The function is pure,
+    //! so the tests don't need a kernel or runtime.
+    use super::*;
+
+    #[test]
+    fn defaults_to_in_memory_when_nothing_is_set() {
+        let bt = select_backend_type(None, None, None, None).unwrap();
+        assert!(matches!(bt, BackendType::InMemory));
+    }
+
+    #[test]
+    fn config_filesystem_uses_config_data_dir() {
+        let bt = select_backend_type(None, None, Some("filesystem"), Some("/srv/data")).unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "/srv/data"),
+            other => panic!("expected Filesystem, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn config_filesystem_falls_back_to_default_data_dir() {
+        let bt = select_backend_type(None, None, Some("filesystem"), None).unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "./data"),
+            other => panic!("expected Filesystem, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn env_backend_overrides_config_backend() {
+        let bt =
+            select_backend_type(Some("filesystem"), Some("/data/from-env"), None, None).unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "/data/from-env"),
+            other => panic!("expected Filesystem, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn env_data_dir_overrides_config_data_dir_independently() {
+        // The env-var precedence applies to backend AND data-dir
+        // independently — operators should be able to keep
+        // backend=filesystem from config but redirect data-dir from
+        // env (e.g. switching to a mounted volume without rebuilding
+        // the image).
+        let bt = select_backend_type(
+            None,
+            Some("/mnt/persistent"),
+            Some("filesystem"),
+            Some("/srv/data"),
+        )
+        .unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "/mnt/persistent"),
+            other => panic!("expected Filesystem, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_backend_string_returns_error() {
+        let err = select_backend_type(None, None, Some("redis"), None).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("Unknown backend type 'redis'"),
+            "error message should name the bad value: {msg}"
+        );
+    }
+
+    #[test]
+    fn explicit_in_memory_via_omitted_backend_ignores_data_dir() {
+        // If the operator omits the backend entirely (intending
+        // in-memory), a stray data-dir env var must not silently
+        // promote them to filesystem.
+        let bt = select_backend_type(None, Some("/should-be-ignored"), None, None).unwrap();
+        assert!(matches!(bt, BackendType::InMemory));
+    }
+
+    #[test]
+    fn empty_env_data_dir_falls_through_to_config_then_default() {
+        // `WORKSPACE_DATA_DIR=""` in `.env` previously short-circuited
+        // the `.or()` and produced `BackendType::Filesystem("")`,
+        // silently writing data to the container CWD instead of the
+        // configured volume. With the empty-string filter the env
+        // value is ignored and config wins.
+        let bt =
+            select_backend_type(Some("filesystem"), Some(""), None, Some("/srv/data")).unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "/srv/data"),
+            other => panic!("expected Filesystem(/srv/data), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn empty_env_data_dir_with_no_config_falls_through_to_default() {
+        let bt = select_backend_type(Some("filesystem"), Some(""), None, None).unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "./data"),
+            other => panic!("expected Filesystem(./data), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn empty_env_backend_treated_as_unset() {
+        // `WORKSPACE_BACKEND=""` should NOT be reported as an unknown
+        // backend; it should fall through to config or default.
+        let bt = select_backend_type(Some(""), None, Some("filesystem"), Some("/x")).unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "/x"),
+            other => panic!("expected Filesystem(/x), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn empty_config_data_dir_falls_through_to_default() {
+        let bt = select_backend_type(None, None, Some("filesystem"), Some("")).unwrap();
+        match bt {
+            BackendType::Filesystem(d) => assert_eq!(d, "./data"),
+            other => panic!("expected Filesystem(./data), got {other:?}"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod server_config_debug_tests {
+    //! Pin the secret-redaction contract for `ServerConfig`'s Debug
+    //! impl. `main.rs` logs the full config at INFO on every boot, so
+    //! a regression here ships the master password into operator log
+    //! pipelines. If someone re-adds `#[derive(Debug)]` or forgets a
+    //! field in the manual impl, these tests fail loudly.
+    use super::config::{FileTransferConfig, ServerConfig};
+
+    fn cfg(password: &str) -> ServerConfig {
+        ServerConfig {
+            bind_addr: "0.0.0.0:12349".to_string(),
+            dangerous_skip_cert_verification: Some(true),
+            backend: Some("filesystem".to_string()),
+            data_dir: Some("/srv/data".to_string()),
+            workspace_master_password: password.to_string(),
+            workspace_structure: None,
+            content_base_dir: Some("/srv/content".to_string()),
+            file_transfer: Some(FileTransferConfig::default()),
+        }
+    }
+
+    #[test]
+    fn debug_never_emits_the_password_substring() {
+        let secret = "hunter2-extremely-distinctive-string";
+        let formatted = format!("{:?}", cfg(secret));
+        assert!(
+            !formatted.contains(secret),
+            "Debug output leaked the master password: {formatted}"
+        );
+    }
+
+    #[test]
+    fn debug_marks_set_passwords_as_redacted() {
+        let formatted = format!("{:?}", cfg("anything-non-empty"));
+        assert!(
+            formatted.contains("<redacted>"),
+            "expected <redacted> marker in {formatted}"
+        );
+    }
+
+    #[test]
+    fn debug_marks_empty_passwords_as_empty() {
+        let formatted = format!("{:?}", cfg(""));
+        assert!(
+            formatted.contains("<empty>"),
+            "expected <empty> marker in {formatted}"
+        );
+        assert!(
+            !formatted.contains("<redacted>"),
+            "should not mark empty as <redacted>: {formatted}"
+        );
+    }
 }

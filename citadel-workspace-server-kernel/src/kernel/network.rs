@@ -30,7 +30,7 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
                     // Log the error and return, or handle as appropriate for your application's logic.
                     // For now, we'll log and return a generic error, as load_remote is critical.
                     citadel_logging::error!(target: "citadel", "WorkspaceServerKernel: load_remote: Failed to acquire write lock on node_remote (try_write would block).");
-                    return Err(NetworkError::Generic(
+                    return Err(NetworkError::generic(
                         "Failed to acquire lock in load_remote".to_string(),
                     ));
                 }
@@ -57,7 +57,7 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
                 Some(g) => g,
                 None => {
                     citadel_logging::error!(target: "citadel", "WorkspaceServerKernel: load_remote: Failed to acquire write lock on node_remote for insertion (try_write would block).");
-                    return Err(NetworkError::Generic(
+                    return Err(NetworkError::generic(
                         "Failed to acquire lock for insertion in load_remote".to_string(),
                     ));
                 }
@@ -98,7 +98,7 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
                             Some(remote) => remote.account_manager().clone(),
                             None => {
                                 citadel_logging::error!(target: "citadel", "NodeRemote not available during ConnectSuccess for CID {}", connect_success.session_cid);
-                                return Err(NetworkError::Generic(
+                                return Err(NetworkError::generic(
                                     "NodeRemote not available".to_string(),
                                 ));
                             }
@@ -108,7 +108,7 @@ impl<R: Ratchet + Send + Sync + 'static> NetKernel<R> for WorkspaceServerKernel<
                     let user_id = account_manager
                         .get_username_by_cid(connect_success.session_cid)
                         .await?
-                        .ok_or_else(|| NetworkError::Generic("User not found".to_string()))?;
+                        .ok_or_else(|| NetworkError::generic("User not found".to_string()))?;
 
                     info!(target: "citadel", "User {} connected with cid {} ({})", user_id, connect_success.session_cid, user_cid);
 

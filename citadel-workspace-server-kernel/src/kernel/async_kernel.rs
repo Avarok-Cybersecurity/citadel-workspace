@@ -5,6 +5,7 @@
 
 use crate::config::{FileTransferConfig, WorkspaceStructureConfig};
 use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
+use crate::kernel::rate_limiter::{RateLimiter, DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL};
 use crate::kernel::transaction::BackendTransactionManager;
 use crate::WorkspaceProtocolResponse;
 use citadel_logging::{error, info, warn};
@@ -13,6 +14,54 @@ use parking_lot::RwLock;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::broadcast;
+
+/// Current schema version for the workspace backend storage.
+/// Increment this when making breaking changes to the storage format.
+/// The `on_start` method checks this version and runs migrations if needed.
+pub const CURRENT_SCHEMA_VERSION: u32 = 1;
+
+/// Reject a path segment supplied by an authenticated client before it
+/// is joined onto the content base directory. Without this check, a
+/// node/office/room name like `"../../etc/evil"` would let
+/// `tokio::fs::write` escape the configured content tree and clobber
+/// arbitrary files as the server process user.
+///
+/// Rules: a content segment is rejected if it
+///   * is empty,
+///   * is exactly `.` or `..` (current/parent dir traversal),
+///   * contains a path separator (`/` or `\`) — either form is taken
+///     as an attempt to climb the tree even on a Linux host, since
+///     `Path::join` interprets a leading slash as an absolute root,
+///   * contains a NUL byte (truncates filesystem syscalls), or
+///   * starts with `.` (hidden / special directories like `.git`,
+///     `.ssh`, `..`).
+///
+/// All real workspace/office/room names today are user-visible labels
+/// that the UI should already prevent from containing these
+/// characters — this is a belt-and-suspenders check at the persistence
+/// boundary so a compromised or misbehaving client can't reach a
+/// `tokio::fs::write` outside the content directory.
+pub(crate) fn validate_content_segment(segment: &str) -> Result<(), NetworkError> {
+    if segment.is_empty() {
+        return Err(NetworkError::msg("Content segment cannot be empty"));
+    }
+    if segment == "." || segment == ".." {
+        return Err(NetworkError::msg(format!(
+            "Content segment '{segment}' is a directory traversal sentinel"
+        )));
+    }
+    if segment.starts_with('.') {
+        return Err(NetworkError::msg(format!(
+            "Content segment '{segment}' must not start with '.'"
+        )));
+    }
+    if segment.contains('/') || segment.contains('\\') || segment.contains('\0') {
+        return Err(NetworkError::msg(format!(
+            "Content segment '{segment}' contains a forbidden character"
+        )));
+    }
+    Ok(())
+}
 
 /// Message for broadcasting workspace updates to connected clients
 #[derive(Clone, Debug)]
@@ -37,6 +86,11 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     broadcast_tx: broadcast::Sender<BroadcastMessage>,
     /// File transfer configuration
     file_transfer_config: FileTransferConfig,
+    /// Per-CID token-bucket rate limiter shared across all connection
+    /// tasks. The shared map is what makes the limit per-CID rather than
+    /// per-connection - opening multiple connections from the same
+    /// account no longer multiplies the budget.
+    rate_limiter: RateLimiter,
 }
 
 // Placeholder for entities that don't have an owner yet.
@@ -52,6 +106,10 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             workspace_structure: self.workspace_structure.clone(),
             broadcast_tx: self.broadcast_tx.clone(),
             file_transfer_config: self.file_transfer_config.clone(),
+            // RateLimiter::Clone shares the same Arc<Mutex<HashMap>>,
+            // which is exactly what we want: every clone of the kernel
+            // sees the same per-CID buckets.
+            rate_limiter: self.rate_limiter.clone(),
         }
     }
 }
@@ -85,6 +143,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             workspace_structure: None,
             broadcast_tx,
             file_transfer_config: FileTransferConfig::default(),
+            rate_limiter: RateLimiter::new(DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL),
         }
     }
 
@@ -113,6 +172,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// Check if server RE-VFS storage is enabled
     pub fn is_server_revfs_enabled(&self) -> bool {
         self.file_transfer_config.allow_server_revfs_storage
+    }
+
+    /// Health check: returns true if the kernel is operational
+    /// Checks that NodeRemote is available and backend is accessible
+    pub fn is_healthy(&self) -> bool {
+        self.node_remote.read().is_some()
     }
 
     /// Get a new receiver for broadcast messages
@@ -183,11 +248,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         kernel.workspace_password = Some(admin_password.to_string());
         kernel.workspace_structure = workspace_structure;
 
-        // Initialize the backend
-        kernel.domain_operations.backend_tx_manager.init().await?;
-
-        // Don't inject admin here - wait until on_start when NodeRemote is available
-        info!(target: "citadel", "Deferring admin injection until NodeRemote is available");
+        // NOTE: Backend initialization (init() / migrate_if_needed()) is deliberately
+        // deferred to on_start(). At this point in the constructor, NodeRemote is not
+        // yet set, so the BackendTransactionManager would run against its in-memory
+        // test_storage rather than the real backend - meaning the migration sentinel
+        // would be written to the wrong place and real migration logic would silently
+        // no-op on every restart. See on_start() below for the real init call.
+        info!(target: "citadel", "Deferring backend init and admin injection until NodeRemote is available");
 
         Ok(kernel)
     }
@@ -310,7 +377,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     /// Persist node MDX content to file
     ///
-    /// Writes the content to `{content_base_path}/{node_name}/CONTENT.md`
+    /// Writes the content to `{content_base_path}/{node_name}/CONTENT.md`.
+    /// `node_name` is rejected if it would escape the content base
+    /// directory — see `validate_content_segment`.
     pub async fn persist_node_content(
         &self,
         node_name: &str,
@@ -319,6 +388,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         let Some(base_path) = self.get_content_base_path() else {
             return Ok(());
         };
+        validate_content_segment(node_name)?;
 
         let content_path = base_path.join(node_name).join("CONTENT.md");
         info!(target: "citadel", "[ASYNC_KERNEL] Persisting node content to {:?}", content_path);
@@ -342,7 +412,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     /// Persist office MDX content to file
     ///
-    /// Writes the content to `{content_base_path}/{office_name}/CONTENT.md`
+    /// Writes the content to `{content_base_path}/{office_name}/CONTENT.md`.
+    /// `office_name` is sanitised via `validate_content_segment`.
     pub async fn persist_office_content(
         &self,
         office_name: &str,
@@ -352,6 +423,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             // No content base path configured, skip file persistence
             return Ok(());
         };
+        validate_content_segment(office_name)?;
 
         let office_content_path = base_path.join(office_name).join("CONTENT.md");
         info!(target: "citadel", "[ASYNC_KERNEL] Persisting office content to {:?}", office_content_path);
@@ -368,7 +440,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     /// Persist room MDX content to file
     ///
-    /// Writes the content to `{content_base_path}/{office_name}/{room_name}/CONTENT.md`
+    /// Writes the content to `{content_base_path}/{office_name}/{room_name}/CONTENT.md`.
+    /// Both `office_name` and `room_name` are sanitised via
+    /// `validate_content_segment`.
     pub async fn persist_room_content(
         &self,
         office_name: &str,
@@ -379,6 +453,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             // No content base path configured, skip file persistence
             return Ok(());
         };
+        validate_content_segment(office_name)?;
+        validate_content_segment(room_name)?;
 
         let room_content_path = base_path
             .join(office_name)
@@ -645,19 +721,101 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
     async fn on_start(&self) -> Result<(), NetworkError> {
         info!(target: "citadel", "NetKernel started");
 
-        // Re-run admin injection now that NodeRemote is available
         if self.domain_operations.backend_tx_manager.is_test_mode() {
             error!(target: "citadel", "NodeRemote not set after node start!");
-        } else if let Some(workspace_password) = &self.workspace_password {
-            info!(target: "citadel", "NodeRemote is available, injecting admin and workspace");
-            // Inject admin now that we have backend storage
-            self.inject_admin_user(workspace_password).await?;
+        } else {
+            // Initialize backend (runs legacy-key migration once against the real
+            // backend). Runs unconditionally in production so migrations fire
+            // even in configurations that didn't set `workspace_password`.
+            // Safe to call every startup: `migrate_if_needed` checks the
+            // persistent KEY_MIGRATION_DONE sentinel and is a no-op once
+            // migration has run.
+            info!(target: "citadel", "NodeRemote is available, running backend init");
+            self.domain_operations.backend_tx_manager.init().await?;
 
-            // Initialize workspace structure from config if provided
-            if let Some((structure, base_path)) = &self.workspace_structure {
-                info!(target: "citadel", "Initializing workspace structure from config");
-                self.initialize_workspace_structure(structure, base_path.as_deref())
-                    .await?;
+            // Re-run admin injection now that NodeRemote is available
+            if let Some(workspace_password) = &self.workspace_password {
+                info!(target: "citadel", "Injecting admin and workspace");
+                self.inject_admin_user(workspace_password).await?;
+
+                // Initialize workspace structure from config if provided
+                if let Some((structure, base_path)) = &self.workspace_structure {
+                    info!(target: "citadel", "Initializing workspace structure from config");
+                    self.initialize_workspace_structure(structure, base_path.as_deref())
+                        .await?;
+                }
+            }
+        }
+
+        // Schema version check and migration infrastructure
+        if !self.domain_operations.backend_tx_manager.is_test_mode() {
+            let backend = &self.domain_operations.backend_tx_manager;
+            match backend.get_schema_version().await? {
+                None => {
+                    // Fresh database or pre-versioning installation: stamp with current version
+                    info!(
+                        target: "citadel",
+                        "No schema version found, initializing to v{}",
+                        CURRENT_SCHEMA_VERSION
+                    );
+                    backend.set_schema_version(CURRENT_SCHEMA_VERSION).await?;
+                }
+                Some(version) if version < CURRENT_SCHEMA_VERSION => {
+                    info!(
+                        target: "citadel",
+                        "Schema migration required: v{} -> v{}",
+                        version,
+                        CURRENT_SCHEMA_VERSION
+                    );
+                    // Future migrations go here, applied sequentially:
+                    // if version < 2 { migrate_v1_to_v2().await?; }
+                    // if version < 3 { migrate_v2_to_v3().await?; }
+                    // ...
+                    backend.set_schema_version(CURRENT_SCHEMA_VERSION).await?;
+                    info!(
+                        target: "citadel",
+                        "Schema migration complete, now at v{}",
+                        CURRENT_SCHEMA_VERSION
+                    );
+                }
+                Some(version) if version > CURRENT_SCHEMA_VERSION => {
+                    // Refuse to start: a newer-than-expected schema means
+                    // either we're booting an older binary against a
+                    // forward-migrated store, or the backend has been
+                    // tampered with. Proceeding could silently corrupt
+                    // data — newer migrations may have rewritten keys
+                    // this binary doesn't know how to read. Operators
+                    // who legitimately downgrade can set
+                    // `WORKSPACE_ALLOW_SCHEMA_DOWNGRADE=1` to bypass.
+                    if std::env::var("WORKSPACE_ALLOW_SCHEMA_DOWNGRADE")
+                        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                        .unwrap_or(false)
+                    {
+                        warn!(
+                            target: "citadel",
+                            "Backend schema version (v{}) is newer than expected (v{}); \
+                             WORKSPACE_ALLOW_SCHEMA_DOWNGRADE is set, proceeding anyway. \
+                             Data corruption is possible if the storage format changed.",
+                            version,
+                            CURRENT_SCHEMA_VERSION
+                        );
+                    } else {
+                        return Err(NetworkError::msg(format!(
+                            "Backend schema version (v{}) is newer than this binary expects (v{}). \
+                             Refusing to start to prevent silent data corruption. \
+                             To override (e.g. an intentional downgrade), set \
+                             WORKSPACE_ALLOW_SCHEMA_DOWNGRADE=1.",
+                            version, CURRENT_SCHEMA_VERSION,
+                        )));
+                    }
+                }
+                Some(version) => {
+                    info!(
+                        target: "citadel",
+                        "Schema version v{} is current, no migration needed",
+                        version
+                    );
+                }
             }
         }
 
@@ -689,7 +847,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             Some(remote) => remote.account_manager().clone(),
                             None => {
                                 error!(target: "citadel", "[ASYNC_KERNEL] NodeRemote not available during ConnectSuccess for CID {}", connect_success.session_cid);
-                                return Err(NetworkError::Generic(
+                                return Err(NetworkError::generic(
                                     "NodeRemote not available".to_string(),
                                 ));
                             }
@@ -701,7 +859,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                         .get_username_by_cid(connect_success.session_cid)
                         .await?
                         .ok_or_else(|| {
-                            NetworkError::Generic(format!(
+                            NetworkError::generic(format!(
                                 "User not found for CID {}",
                                 connect_success.session_cid
                             ))
@@ -739,7 +897,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                 all_domains.keys().collect::<Vec<_>>()
                             );
 
-                            return Err(NetworkError::Generic(
+                            return Err(NetworkError::generic(
                                 "Root workspace not found".to_string(),
                             ));
                         }
@@ -800,6 +958,13 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     // Subscribe to broadcast channel for this connection
                     let mut broadcast_rx = this.subscribe_broadcast();
 
+                    // Per-CID token-bucket limiter shared across the
+                    // kernel. Multiple concurrent connections owned by
+                    // the same CID share one bucket - the previous
+                    // per-connection variables let a single user open N
+                    // connections to multiply their effective limit.
+                    let rate_limiter = this.rate_limiter.clone();
+
                     // Main message processing loop for this connection
                     // Uses select! to handle both incoming messages and broadcasts
                     loop {
@@ -810,6 +975,17 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                     // Connection closed
                                     break;
                                 };
+
+                                if !rate_limiter.try_consume(current_cid, std::time::Instant::now()) {
+                                    warn!(target: "citadel", "[ASYNC_KERNEL] Rate limit exceeded for CID {}", current_cid);
+                                    let response = WorkspaceProtocolPayload::Response(Box::new(
+                                        WorkspaceProtocolResponse::Error("Rate limit exceeded. Please slow down.".to_string())
+                                    ));
+                                    if let Ok(serialized) = serde_json::to_vec(&response) {
+                                        let _ = tx.send(serialized).await;
+                                    }
+                                    continue;
+                                }
 
                                 match serde_json::from_slice::<WorkspaceProtocolPayload>(msg.as_ref()) {
                                     Ok(command_payload) => {
@@ -978,7 +1154,27 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
     }
 
     async fn on_stop(&mut self) -> Result<(), NetworkError> {
-        info!(target: "citadel", "NetKernel stopping");
+        info!(target: "citadel", "NetKernel stopping - broadcasting shutdown to connected clients");
+
+        // Inform every connected client via the dedicated ServerShutdown
+        // variant. Previously this used WorkspaceProtocolResponse::Error,
+        // which caused UIs to render a red error toast on every planned
+        // restart - misleading because graceful shutdown is a normal
+        // operational event, not a failure.
+        const DRAIN_SECONDS: u64 = 2;
+        self.broadcast(
+            WorkspaceProtocolResponse::ServerShutdown {
+                message: "Server is shutting down for a planned restart.".to_string(),
+                drain_seconds: DRAIN_SECONDS,
+            },
+            None,
+        );
+
+        // Allow brief drain period for in-flight requests
+        info!(target: "citadel", "Allowing {DRAIN_SECONDS}s drain period for in-flight requests");
+        tokio::time::sleep(std::time::Duration::from_secs(DRAIN_SECONDS)).await;
+
+        info!(target: "citadel", "NetKernel stopped");
         Ok(())
     }
 }
@@ -995,5 +1191,129 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .backend_tx_manager
             .set_node_remote(node_remote);
         info!(target: "citadel", "[ASYNC_KERNEL] NodeRemote set for AsyncWorkspaceServerKernel");
+    }
+}
+
+#[cfg(test)]
+mod shutdown_tests {
+    //! Tests for the graceful-shutdown broadcast path.
+    //!
+    //! The behaviour under test is `on_stop`: it must broadcast a
+    //! `ServerShutdown` variant (NOT `Error`) to every subscriber so
+    //! UIs can tell a planned restart apart from a real failure and
+    //! render the appropriate UX (reconnect countdown vs red toast).
+    use super::*;
+    use citadel_sdk::prelude::{NetKernel, StackedRatchet};
+
+    /// Drives `on_stop` against a fresh kernel and asserts the
+    /// resulting broadcast is `ServerShutdown { .. }`.
+    ///
+    /// We start the broadcast subscriber in a background task and
+    /// receive *before* awaiting `on_stop` to completion, so we don't
+    /// have to pay the full real-time drain delay - the broadcast is
+    /// emitted synchronously at the top of `on_stop`, before its sleep.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn on_stop_broadcasts_server_shutdown_not_error() {
+        let mut kernel = AsyncWorkspaceServerKernel::<StackedRatchet>::new(None);
+        let mut rx = kernel.subscribe_broadcast();
+
+        let receive = tokio::spawn(async move {
+            tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+                .await
+                .expect("broadcast must arrive before timeout")
+                .expect("broadcast channel must not error")
+        });
+
+        // `on_stop` from the NetKernel trait. The broadcast is emitted
+        // synchronously at the top of the function, then it sleeps for
+        // a small drain window. The receiver task above will pick up
+        // the broadcast immediately and complete before this returns.
+        kernel.on_stop().await.expect("on_stop");
+
+        let msg = receive.await.expect("subscriber task should complete");
+        match msg.response {
+            WorkspaceProtocolResponse::ServerShutdown { drain_seconds, message } => {
+                assert!(drain_seconds >= 1, "drain_seconds should be > 0 ({drain_seconds})");
+                assert!(
+                    !message.is_empty(),
+                    "message should be a human-readable description, got empty"
+                );
+            }
+            other => panic!(
+                "expected ServerShutdown, got {other:?}. Regression: a future change must \
+                 NOT use Error here - it would render as a red error toast on every planned restart."
+            ),
+        }
+        // exclude_cid is None: the shutdown signal must reach every
+        // connected client, including the one that initiated the
+        // restart (if any). A future change to set this to Some(_)
+        // would silently drop the notification on certain clients.
+        assert!(
+            msg.exclude_cid.is_none(),
+            "shutdown broadcast must not exclude any CID"
+        );
+    }
+}
+
+#[cfg(test)]
+mod content_segment_tests {
+    //! Boundary tests for `validate_content_segment`. The function is
+    //! the only thing standing between user-supplied node names and
+    //! `tokio::fs::write` underneath the content directory; if any of
+    //! the rejection rules ever loosen, a malicious or malformed name
+    //! could escape the content tree.
+    use super::validate_content_segment;
+
+    #[test]
+    fn accepts_a_normal_name() {
+        validate_content_segment("Engineering").expect("normal name must be accepted");
+        validate_content_segment("Q4-Planning").expect("dashes are fine");
+        validate_content_segment("Office 1").expect("spaces are fine");
+        validate_content_segment("café").expect("non-ascii is fine");
+    }
+
+    #[test]
+    fn rejects_empty() {
+        assert!(validate_content_segment("").is_err());
+    }
+
+    #[test]
+    fn rejects_traversal_sentinels() {
+        assert!(validate_content_segment(".").is_err());
+        assert!(validate_content_segment("..").is_err());
+    }
+
+    #[test]
+    fn rejects_path_separators() {
+        // `Path::join` interprets a leading slash as an absolute
+        // root, which would let a malicious caller redirect the write
+        // to /etc/anything; backslash is rejected too because `tokio::fs`
+        // on Windows treats it as a separator.
+        assert!(validate_content_segment("foo/bar").is_err());
+        assert!(validate_content_segment("/etc/passwd").is_err());
+        assert!(validate_content_segment("foo\\bar").is_err());
+        assert!(validate_content_segment("\\\\server\\share").is_err());
+    }
+
+    #[test]
+    fn rejects_traversal_via_relative_segments() {
+        assert!(validate_content_segment("../../etc/evil").is_err());
+        assert!(validate_content_segment("..\\..\\windows").is_err());
+    }
+
+    #[test]
+    fn rejects_hidden_dot_prefixes() {
+        // Blocks `.git`, `.ssh`, `.well-known`, etc. — these aren't
+        // legitimate workspace names and a name like `.config` could
+        // shadow operationally-sensitive directories if the content
+        // root happened to be a user home directory.
+        assert!(validate_content_segment(".git").is_err());
+        assert!(validate_content_segment(".env").is_err());
+        assert!(validate_content_segment(".hiddenfile").is_err());
+    }
+
+    #[test]
+    fn rejects_nul_byte() {
+        assert!(validate_content_segment("foo\0bar").is_err());
     }
 }

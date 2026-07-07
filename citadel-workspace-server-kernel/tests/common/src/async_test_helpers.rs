@@ -4,8 +4,7 @@ use citadel_workspace_server_kernel::kernel::{
     command_processor::async_process_command::process_command_with_user,
 };
 use citadel_workspace_types::{
-    structs::DomainNode,
-    WorkspaceProtocolRequest, WorkspaceProtocolResponse,
+    structs::DomainNode, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
 
 // Re-export TEST_ADMIN_USER_ID from workspace_test_utils

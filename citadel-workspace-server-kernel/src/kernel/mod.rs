@@ -10,6 +10,7 @@
 // - `member_operations`: Domain member add/remove operations
 
 pub mod command_processor;
+pub mod rate_limiter;
 pub mod transaction;
 
 // Import focused kernel modules - commented out old sync code

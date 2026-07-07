@@ -259,7 +259,7 @@ The following agents are available for UI testing workflows (defined in `.claude
 
 ### create-account Agent
 - Creates new accounts via UI using Playwright MCP
-- Navigates to http://localhost:5173/ and follows account creation flow
+- Navigates to http://localhost:5291/ (Vite dev server; was 5173 prior to the port change in `docker/ui/Dockerfile`) and follows account creation flow
 - Handles workspace initialization for first user
 - Username format: `testuser{timestamp}`
 - Default password: `test12345`

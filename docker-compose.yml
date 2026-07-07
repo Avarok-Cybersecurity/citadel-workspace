@@ -27,6 +27,12 @@ services:
     volumes:
       # Mount relevant codebase for live updates
       - target_cache:/usr/src/app/target
+      # NOTE: dev intentionally has no persistent data volume here.
+      # CLAUDE.md documents the dev contract as ephemeral ("any
+      # accounts created on one will be lost on reload"), and the
+      # server defaults to in-memory backend when WORKSPACE_BACKEND is
+      # unset. Production mounts `server_data:/data/server` in
+      # docker-compose.production.yml and sets WORKSPACE_BACKEND there.
     environment:
       - RUST_LOG=citadel=info
       - WORKSPACE_MASTER_PASSWORD=${WORKSPACE_MASTER_PASSWORD}
@@ -52,21 +58,52 @@ services:
       dockerfile: ./docker/internal-service/Dockerfile
       network: host
       args:
-        - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT}
+        # Default to 12345 so missing/unset .env doesn't make the
+        # Dockerfile bake ENV INTERNAL_SERVICE_PORT='' and crash the
+        # container with an invalid --bind '0.0.0.0:'.
+        - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT:-12345}
     volumes:
       # Mount shared caches and target directory
       - target_cache:/usr/src/app/target
+      # Dev still gets the ephemeral-state contract documented in CLAUDE.md
+      # ("any accounts created on one will be lost on reload") — but we route
+      # the SDK through a tmpfs-backed filesystem path instead of the pure
+      # InMemory backend. This is required for file-transfer (`SendObject`)
+      # to function at all: the SDK refuses peer-to-peer file transfers when
+      # both nodes are on `BackendType::InMemory` with
+      #   "File transfer is not enabled for this p2p session.
+      #    Both nodes must use a filesystem backend"
+      # tmpfs gives us filesystem semantics without persistence — perfect for
+      # dev. Production still uses a real volume via
+      # docker-compose.production.yml.
+    tmpfs:
+      # `mode=1777` (sticky world-writable, /tmp-style) so `appuser`
+      # (uid 1000, set in docker/internal-service/Dockerfile) can write
+      # to the SDK's filesystem backend. Default tmpfs is root-owned
+      # mode 1755 — the SDK process can't even create subdirectories,
+      # which surfaces only after the container's port healthcheck
+      # passes (so `docker compose up --wait` looks healthy) and the
+      # first write attempt hits "Permission denied (os error 13)".
+      # That mismatch made integration tests fail on every
+      # `restartBackendServices()` call because the restart cycle
+      # exposes the write attempt before any port probe succeeds.
+      - /var/lib/internal-service:size=128m,mode=1777
     environment:
-      - RUST_LOG=citadel=debug
+      - RUST_LOG=citadel=info
       - DOCKER_CONTAINER=1
       - SKIP_WASM_BUILD=1
+      - INTERNAL_SERVICE_BACKEND=filesystem
+      - INTERNAL_SERVICE_DATA_DIR=/var/lib/internal-service
     deploy:
       resources:
         limits:
           memory: 2G
           cpus: '2.0'
+    # Mirrors the production healthcheck (see docker-compose.production.yml):
+    # `nc -z` is exact-port and avoids the substring-match pitfalls of
+    # `netstat | grep ":$PORT"`.
     healthcheck:
-      test: ["CMD-SHELL", "netstat -tuln | grep -q \":$${INTERNAL_SERVICE_PORT}\" || exit 1"]
+      test: ["CMD", "nc", "-z", "127.0.0.1", "${INTERNAL_SERVICE_PORT:-12345}"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -132,7 +169,9 @@ services:
     labels:
       - "frontend"
 
-# Define named volumes for caching
+# Cache volumes only — dev intentionally has no persistent data
+# volumes. Production data persistence lives in
+# docker-compose.production.yml.
 volumes:
   target_cache:
   rust_cache:

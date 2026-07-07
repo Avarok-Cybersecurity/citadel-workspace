@@ -36,7 +36,7 @@ checksum = "b169f7a6d4742236a0a00c541b845991d0ac43e546831af1249753ab4c3aa3a0"
 dependencies = [
  "cfg-if 1.0.4",
  "cipher",
- "cpufeatures",
+ "cpufeatures 0.2.17",
 ]
 
 [[package]]
@@ -304,7 +304,7 @@ dependencies = [
 [[package]]
 name = "async_ip"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#2e9e3fd3390d9c09bc5556db0eb68c1c986b4e77"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#56650e9b6c110ef8fef6b02dc0c4d5f691aa1bf7"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -511,6 +511,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "blake3"
+version = "1.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0aa83c34e62843d924f905e0f5c866eb1dd6545fc4d719e803d9ba6030371fce"
+dependencies = [
+ "arrayref",
+ "arrayvec",
+ "cc",
+ "cfg-if 1.0.4",
+ "constant_time_eq",
+ "cpufeatures 0.3.0",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -632,7 +646,7 @@ checksum = "c3613f74bd2eac03dad61bd53dbe620703d4371614fe0bc3b9f04dd36fe4e818"
 dependencies = [
  "cfg-if 1.0.4",
  "cipher",
- "cpufeatures",
+ "cpufeatures 0.2.17",
 ]
 
 [[package]]
@@ -684,6 +698,7 @@ dependencies = [
  "citadel-internal-service-types",
  "citadel_sdk",
  "futures",
+ "libc",
  "parking_lot",
  "rfd",
  "tokio 1.49.0",
@@ -709,12 +724,12 @@ dependencies = [
  "parking_lot",
  "serde",
  "serde_json",
- "tokio-tungstenite",
- "tungstenite",
+ "tokio-tungstenite 0.21.0",
+ "tungstenite 0.21.0",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "wasmtimer",
+ "wasmtimer 0.2.1",
 ]
 
 [[package]]
@@ -831,7 +846,7 @@ dependencies = [
 [[package]]
 name = "citadel_crypt"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#2e9e3fd3390d9c09bc5556db0eb68c1c986b4e77"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#56650e9b6c110ef8fef6b02dc0c4d5f691aa1bf7"
 dependencies = [
  "arrayvec",
  "async-trait",
@@ -839,6 +854,7 @@ dependencies = [
  "auto_impl",
  "bincode 1.3.3",
  "bitvec",
+ "blake3",
  "bytemuck",
  "byteorder",
  "bytes",
@@ -863,25 +879,38 @@ dependencies = [
 [[package]]
 name = "citadel_io"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#2e9e3fd3390d9c09bc5556db0eb68c1c986b4e77"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#56650e9b6c110ef8fef6b02dc0c4d5f691aa1bf7"
 dependencies = [
+ "bytes",
+ "citadel_io_macros",
+ "futures",
  "getrandom 0.3.4",
  "parking_lot",
  "rand 0.8.5",
  "serde",
- "socket2 0.5.7",
  "tokio 1.36.0",
  "tokio 1.49.0",
  "tokio-stream 0.1.14",
  "tokio-stream 0.1.18",
  "tokio-util 0.7.10",
  "tokio-util 0.7.18",
+ "wasmtimer 0.4.3",
+]
+
+[[package]]
+name = "citadel_io_macros"
+version = "0.14.0"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#56650e9b6c110ef8fef6b02dc0c4d5f691aa1bf7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.116",
 ]
 
 [[package]]
 name = "citadel_logging"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#2e9e3fd3390d9c09bc5556db0eb68c1c986b4e77"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#56650e9b6c110ef8fef6b02dc0c4d5f691aa1bf7"
 dependencies = [
  "tracing",
  "tracing-subscriber",
@@ -890,7 +919,7 @@ dependencies = [
 [[package]]
 name = "citadel_pqcrypto"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#2e9e3fd3390d9c09bc5556db0eb68c1c986b4e77"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#56650e9b6c110ef8fef6b02dc0c4d5f691aa1bf7"
 dependencies = [
  "aes-gcm",
  "ascon-aead",
@@ -906,6 +935,7 @@ dependencies = [
  "log",
  "ml-dsa",
  "parking_lot",
+ "pqc_kyber_kyberslash",
  "rand 0.8.5",
  "serde",
  "serde-big-array",
@@ -916,7 +946,7 @@ dependencies = [
 [[package]]
 name = "citadel_proto"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#2e9e3fd3390d9c09bc5556db0eb68c1c986b4e77"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#56650e9b6c110ef8fef6b02dc0c4d5f691aa1bf7"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -931,28 +961,35 @@ dependencies = [
  "citadel_io",
  "citadel_logging",
  "citadel_pqcrypto",
+ "citadel_treekem",
  "citadel_types",
  "citadel_user",
  "citadel_wire",
+ "dashmap",
  "either",
  "embedded-semver",
  "futures",
  "itertools 0.14.0",
+ "js-sys",
  "lazy_static",
  "log",
  "netbeam",
  "once_cell",
  "serde",
+ "serde_json",
  "sha3",
+ "tokio-tungstenite 0.28.0",
  "tracing",
  "uuid",
+ "wasm-bindgen",
+ "web-sys",
  "zerocopy 0.7.35",
 ]
 
 [[package]]
 name = "citadel_sdk"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#2e9e3fd3390d9c09bc5556db0eb68c1c986b4e77"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#56650e9b6c110ef8fef6b02dc0c4d5f691aa1bf7"
 dependencies = [
  "anyhow",
  "bytes",
@@ -971,12 +1008,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "citadel_treekem"
+version = "0.14.0"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#56650e9b6c110ef8fef6b02dc0c4d5f691aa1bf7"
+dependencies = [
+ "arrayvec",
+ "bincode 1.3.3",
+ "blake3",
+ "chacha20poly1305",
+ "citadel_pqcrypto",
+ "citadel_types",
+ "rand 0.8.5",
+ "serde",
+ "serde-big-array",
+ "sha3",
+ "zeroize",
+]
+
+[[package]]
 name = "citadel_types"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#2e9e3fd3390d9c09bc5556db0eb68c1c986b4e77"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#56650e9b6c110ef8fef6b02dc0c4d5f691aa1bf7"
 dependencies = [
  "bincode 1.3.3",
  "bytes",
+ "citadel_io",
  "getrandom 0.2.17",
  "kernel32-sys",
  "libc",
@@ -985,14 +1041,13 @@ dependencies = [
  "sha3",
  "strum",
  "strum_macros",
- "twox-hash",
  "uuid",
 ]
 
 [[package]]
 name = "citadel_user"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#2e9e3fd3390d9c09bc5556db0eb68c1c986b4e77"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#56650e9b6c110ef8fef6b02dc0c4d5f691aa1bf7"
 dependencies = [
  "async-trait",
  "bincode 1.3.3",
@@ -1002,6 +1057,7 @@ dependencies = [
  "citadel_crypt",
  "citadel_io",
  "citadel_types",
+ "dirs2",
  "futures",
  "itertools 0.14.0",
  "log",
@@ -1018,7 +1074,7 @@ dependencies = [
 [[package]]
 name = "citadel_wire"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#2e9e3fd3390d9c09bc5556db0eb68c1c986b4e77"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#56650e9b6c110ef8fef6b02dc0c4d5f691aa1bf7"
 dependencies = [
  "anyhow",
  "async-trait-with-sync",
@@ -1159,6 +1215,15 @@ name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59ed5838eebb26a2bb2e58f6d5b5316989ae9d08bab10e0e6d103e656d1b0280"
+dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "cpufeatures"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b2a41393f66f16b0823bb79094d54ac5fbd34ab292ddafb9a0456ac9f87d201"
 dependencies = [
  "libc",
 ]
@@ -1588,7 +1653,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28104bba227c79bff8ffe34dff7c5a5631fd790dfd4d4f0a84b01952ef7c6f46"
 dependencies = [
- "cpufeatures",
+ "cpufeatures 0.2.17",
  "rand_core 0.6.4",
 ]
 
@@ -2330,7 +2395,7 @@ dependencies = [
  "tokio 1.49.0",
  "uuid",
  "wasm-bindgen-futures",
- "wasmtimer",
+ "wasmtimer 0.2.1",
 ]
 
 [[package]]
@@ -2417,7 +2482,7 @@ version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb26cec98cce3a3d96cbb7bced3c4b16e3d13f27ec56dbd62cbc8f39cfb9d653"
 dependencies = [
- "cpufeatures",
+ "cpufeatures 0.2.17",
 ]
 
 [[package]]
@@ -2647,7 +2712,7 @@ dependencies = [
 [[package]]
 name = "netbeam"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#2e9e3fd3390d9c09bc5556db0eb68c1c986b4e77"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=master#56650e9b6c110ef8fef6b02dc0c4d5f691aa1bf7"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -3079,7 +3144,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8159bd90725d2df49889a078b54f4f79e87f1f8a8444194cdca81d38f5393abf"
 dependencies = [
- "cpufeatures",
+ "cpufeatures 0.2.17",
  "opaque-debug",
  "universal-hash",
 ]
@@ -3091,7 +3156,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d1fe60d06143b2430aa532c94cfe9e29783047f06c0d7fd359a9a51b729fa25"
 dependencies = [
  "cfg-if 1.0.4",
- "cpufeatures",
+ "cpufeatures 0.2.17",
  "opaque-debug",
  "universal-hash",
 ]
@@ -3848,7 +3913,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3bf829a2d51ab4a5ddf1352d8470c140cadc8301b2ae1789db023f01cedd6ba"
 dependencies = [
  "cfg-if 1.0.4",
- "cpufeatures",
+ "cpufeatures 0.2.17",
  "digest",
 ]
 
@@ -3859,7 +3924,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
 dependencies = [
  "cfg-if 1.0.4",
- "cpufeatures",
+ "cpufeatures 0.2.17",
  "digest",
 ]
 
@@ -3927,16 +3992,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "socket2"
-version = "0.5.7"
-source = "git+https://github.com/second-state/socket2.git?branch=v0.5.x#450d51df5a1e885694f138a9036530e83ae934d0"
-dependencies = [
- "libc",
- "wasmedge_wasi_socket",
- "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4555,7 +4610,19 @@ dependencies = [
  "futures-util",
  "log",
  "tokio 1.49.0",
- "tungstenite",
+ "tungstenite 0.21.0",
+]
+
+[[package]]
+name = "tokio-tungstenite"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d25a406cddcc431a75d3d9afc6a7c0f7428d4891dd973e4d54c56b46127bf857"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio 1.49.0",
+ "tungstenite 0.28.0",
 ]
 
 [[package]]
@@ -4567,7 +4634,6 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "pin-project-lite",
- "slab",
  "tokio 1.36.0",
  "tracing",
 ]
@@ -4813,10 +4879,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "twox-hash"
-version = "2.1.2"
+name = "tungstenite"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
+checksum = "8628dcc84e5a09eb3d8423d6cb682965dea9133204e8fb3efee74c2a0c259442"
+dependencies = [
+ "bytes",
+ "data-encoding",
+ "http 1.4.0",
+ "httparse",
+ "log",
+ "rand 0.9.2",
+ "sha1",
+ "thiserror 2.0.18",
+ "utf-8",
+]
 
 [[package]]
 name = "typenum"
@@ -5135,6 +5212,20 @@ name = "wasmtimer"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7ed9d8b15c7fb594d72bfb4b5a276f3d2029333cd93a932f376f5937f6f80ee"
+dependencies = [
+ "futures",
+ "js-sys",
+ "parking_lot",
+ "pin-utils",
+ "slab",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "wasmtimer"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c598d6b99ea013e35844697fc4670d08339d5cda15588f193c6beedd12f644b"
 dependencies = [
  "futures",
  "js-sys",

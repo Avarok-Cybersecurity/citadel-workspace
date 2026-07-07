@@ -211,9 +211,30 @@ pub enum WorkspaceProtocolRequest {
     },
 
     /// List nodes with optional filtering.
-    /// If parent_id is None, lists from workspace root.
-    /// If depth is None or 0, returns only direct children.
-    /// If entity_types is provided, filters to only those types.
+    ///
+    /// If `parent_id` is `None`, lists from workspace root.
+    ///
+    /// Depth semantics:
+    ///
+    /// - `Some(0)` returns only direct children.
+    /// - `Some(n)` returns descendants up to n additional levels.
+    /// - `None` returns ALL descendants (unlimited depth). This is the
+    ///   intentional default used by the workspace UI so that nodes
+    ///   beyond the immediate children (e.g. rooms) are surfaced in a
+    ///   single round trip. The server applies a visited-set guard so
+    ///   cycles or duplicate child refs cannot cause unbounded traversal.
+    ///
+    /// Caution: `None` returns the full subtree with no hard cap on
+    /// result set size. The kernel emits a diagnostic warning past
+    /// 1000 nodes but does not refuse the request, so a single
+    /// ListNodes can serialize an arbitrarily large tree into one
+    /// WebSocket frame. This is acceptable at the current
+    /// per-workspace scale (typical workspaces are well under 1000
+    /// nodes). If workspaces are expected to grow past tens of
+    /// thousands of nodes, callers should switch to `Some(n)` and
+    /// paginate.
+    ///
+    /// If `entity_types` is provided, filters to only those types.
     ListNodes {
         parent_id: Option<String>,
         depth: Option<u32>,
@@ -365,6 +386,21 @@ pub enum WorkspaceProtocolResponse {
         node_id: String,
         old_parent_id: Option<String>,
         new_parent_id: Option<String>,
+    },
+
+    // ========== Server Lifecycle Events ==========
+    /// Broadcast to every connected client when the server is shutting down
+    /// gracefully (e.g. deploy, planned restart). Distinct from `Error` so
+    /// clients can render an informational reconnect-banner / countdown
+    /// instead of a red error toast.
+    ///
+    /// `drain_seconds` is the upper bound on how long the server will keep
+    /// servicing in-flight requests before terminating; a UI can use it to
+    /// time a reconnect attempt or display "back in N seconds".
+    ServerShutdown {
+        message: String,
+        #[ts(type = "bigint")]
+        drain_seconds: u64,
     },
 }
 

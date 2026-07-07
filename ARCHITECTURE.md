@@ -687,8 +687,8 @@ services:
     hot_reload: false
 
   ui:
-    ports: ["5173:5173"]
-    hot_reload: true   # Full HMR support
+    ports: ["5291:5291"]    # Vite dev server (changed from 5173)
+    hot_reload: true        # Full HMR support
 ```
 
 **Restart Order**:

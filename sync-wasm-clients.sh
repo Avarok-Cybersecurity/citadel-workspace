@@ -86,7 +86,8 @@ TYPESCRIPT_CLIENT_PACKAGE_JSON=$(cat << 'EOF'
   },
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "echo \"No tests configured yet\" && exit 0"
   },
   "sideEffects": [
     "./snippets/*"
@@ -221,7 +222,8 @@ if [ -d "$DEST1" ]; then
   },
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "echo \"No tests configured yet\" && exit 0"
   },
   "sideEffects": [
     "./snippets/*"
@@ -344,8 +346,17 @@ cd "$WORKSPACE_ROOT/citadel-workspaces"
 rm -rf ./dist ./node_modules
 
 print_status "Installing dependencies for citadel-workspaces.."
-# Use --package-lock=false to avoid platform-specific lockfile issues when running in Docker
-npm install --package-lock=false
+# Use --package-lock=false to avoid platform-specific lockfile issues when running in Docker.
+# Use --legacy-peer-deps because @vitejs/plugin-react-swc's peer dep
+# range (vite ^4 || ^5 || ^6 || ^7) trips npm's modern ERESOLVE
+# resolver under certain registry/cache states even when the local
+# devDep (`vite ^5.4.1`) satisfies it — observed as an intermittent
+# CI failure on the integration-test matrix where sync-wasm-client
+# would exit 1 with `Found: vite@undefined` mid-resolve. Legacy
+# resolution treats peer deps as advisory rather than transactional,
+# which is the historical npm behavior and matches what the rest of
+# our workspace npm-ci flow uses.
+npm install --package-lock=false --legacy-peer-deps
 
 # Recreate symlinks for WASM client (removed when node_modules was deleted)
 print_status "Recreating symlinks for citadel-internal-service-wasm-client..."

@@ -1,151 +1,225 @@
 //! Simplified backend operations for BackendTransactionManager
 //!
 //! This module provides simple async methods for the BackendTransactionManager without complex lifetimes.
+//! Operations on domains, users, workspaces, and passwords use per-entity storage keys
+//! (e.g. `citadel_workspace.domain.{id}`) with an index of IDs, rather than fetching
+//! and re-saving the entire collection for every single-entity operation.
 
 use crate::kernel::transaction::BackendTransactionManager;
+use crate::kernel::transaction::{
+    KEY_INDEX_DOMAIN_IDS, KEY_INDEX_USER_IDS, KEY_INDEX_WORKSPACE_IDS, KEY_SCHEMA_VERSION,
+};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{Domain, DomainNode, TreeSchema, User, Workspace};
 
 impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
-    /// Initialize the backend transaction manager
+    /// Initialize the backend transaction manager and run migration if needed.
     pub async fn init(&self) -> Result<(), NetworkError> {
-        // No special initialization needed for now
-        // The backend is already initialized through NodeRemote
-        Ok(())
+        self.migrate_if_needed().await
     }
-    /// Simple method to get a domain
+
+    /// Simple method to get a domain (per-entity key lookup, O(1))
     pub async fn get_domain(&self, domain_id: &str) -> Result<Option<Domain>, NetworkError> {
-        let domains = self.get_all_domains().await?;
-        Ok(domains.get(domain_id).cloned())
+        self.get_domain_by_key(domain_id).await
     }
 
-    /// Simple method to get a user
+    /// Simple method to get a user (per-entity key lookup, O(1))
     pub async fn get_user(&self, user_id: &str) -> Result<Option<User>, NetworkError> {
-        let users = self.get_all_users().await?;
-        Ok(users.get(user_id).cloned())
+        self.get_user_by_key(user_id).await
     }
 
-    /// Simple method to get a workspace
+    /// Simple method to get a workspace (per-entity key lookup, O(1))
     pub async fn get_workspace(
         &self,
         workspace_id: &str,
     ) -> Result<Option<Workspace>, NetworkError> {
-        let workspaces = self.get_all_workspaces().await?;
-        Ok(workspaces.get(workspace_id).cloned())
+        self.get_workspace_by_key(workspace_id).await
     }
 
-    /// Simple method to insert a domain
+    // Insert/remove pairs below are intentionally written as
+    // "save → index" (insert) and "delete → index" (remove) with a
+    // best-effort rollback on the second step. The two underlying
+    // operations are independent backend writes; if the second fails
+    // the first must be undone so that:
+    //
+    //   * `get_all_*` (which walks the index) can never see an entity
+    //     whose entity-key save failed, and
+    //   * the entity store can never hold a payload that no index
+    //     entry points to (an orphan that consumes storage forever
+    //     and is invisible to bulk lookups).
+    //
+    // The rollback uses `let _ = ... .await;` because the *real*
+    // failure to surface to the caller is the original index error;
+    // the rollback's own failure is logged via the warn! macros in
+    // the underlying delete/save methods and there is nothing more
+    // sensible the request handler can do with two stacked errors.
+
+    /// Insert a domain: save entity, then add to index. On index-write
+    /// failure, deletes the entity to avoid orphans.
     pub async fn insert_domain(
         &self,
         domain_id: String,
         domain: Domain,
     ) -> Result<(), NetworkError> {
-        let mut domains = self.get_all_domains().await?;
-        domains.insert(domain_id, domain);
-        self.save_domains(&domains).await
+        self.save_domain_by_key(&domain_id, &domain).await?;
+        if let Err(e) = self.add_to_index(KEY_INDEX_DOMAIN_IDS, &domain_id).await {
+            let _ = self.delete_domain_key(&domain_id).await;
+            return Err(e);
+        }
+        Ok(())
     }
 
-    /// Simple method to insert a user
+    /// Insert a user: save entity, then add to index. On index-write
+    /// failure, deletes the entity to avoid orphans.
     pub async fn insert_user(&self, user_id: String, user: User) -> Result<(), NetworkError> {
-        let mut users = self.get_all_users().await?;
-        users.insert(user_id, user);
-        self.save_users(&users).await
+        self.save_user_by_key(&user_id, &user).await?;
+        if let Err(e) = self.add_to_index(KEY_INDEX_USER_IDS, &user_id).await {
+            let _ = self.delete_user_key(&user_id).await;
+            return Err(e);
+        }
+        Ok(())
     }
 
-    /// Simple method to insert a workspace
+    /// Insert a workspace: save entity, then add to index. On
+    /// index-write failure, deletes the entity to avoid orphans.
     pub async fn insert_workspace(
         &self,
         workspace_id: String,
         workspace: Workspace,
     ) -> Result<(), NetworkError> {
-        let mut workspaces = self.get_all_workspaces().await?;
-        workspaces.insert(workspace_id, workspace);
-        self.save_workspaces(&workspaces).await
+        self.save_workspace_by_key(&workspace_id, &workspace)
+            .await?;
+        if let Err(e) = self
+            .add_to_index(KEY_INDEX_WORKSPACE_IDS, &workspace_id)
+            .await
+        {
+            let _ = self.delete_workspace_key(&workspace_id).await;
+            return Err(e);
+        }
+        Ok(())
     }
 
-    /// Simple method to remove a domain
+    /// Remove a domain: delete entity, then remove from index. On
+    /// index-write failure, re-saves the entity so it remains visible
+    /// to `get_all_domains` (avoids dangling index entries pointing
+    /// to a missing payload).
     pub async fn remove_domain(&self, domain_id: &str) -> Result<Option<Domain>, NetworkError> {
-        let mut domains = self.get_all_domains().await?;
-        let removed = domains.remove(domain_id);
-        if removed.is_some() {
-            self.save_domains(&domains).await?;
+        let removed = self.get_domain_by_key(domain_id).await?;
+        if let Some(ref d) = removed {
+            self.delete_domain_key(domain_id).await?;
+            if let Err(e) = self
+                .remove_from_index(KEY_INDEX_DOMAIN_IDS, domain_id)
+                .await
+            {
+                let _ = self.save_domain_by_key(domain_id, d).await;
+                return Err(e);
+            }
         }
         Ok(removed)
     }
 
-    /// Simple method to remove a user
+    /// Remove a user: delete entity, then remove from index. On
+    /// index-write failure, re-saves the entity so it remains visible
+    /// to `get_all_users`.
     pub async fn remove_user(&self, user_id: &str) -> Result<Option<User>, NetworkError> {
-        let mut users = self.get_all_users().await?;
-        let removed = users.remove(user_id);
-        if removed.is_some() {
-            self.save_users(&users).await?;
+        let removed = self.get_user_by_key(user_id).await?;
+        if let Some(ref u) = removed {
+            self.delete_user_key(user_id).await?;
+            if let Err(e) = self.remove_from_index(KEY_INDEX_USER_IDS, user_id).await {
+                let _ = self.save_user_by_key(user_id, u).await;
+                return Err(e);
+            }
         }
         Ok(removed)
     }
 
-    /// Simple method to remove a workspace
+    /// Remove a workspace: delete entity + password, then remove from
+    /// index. On index-write failure, re-saves the entity so it
+    /// remains visible to `get_all_workspaces`.
+    ///
+    /// Also deletes the per-workspace password key. Without this, the
+    /// password value stored at `citadel_workspace.password.{id}`
+    /// would be orphaned in the backend after the workspace was
+    /// removed, leaking secret material indefinitely and risking
+    /// re-association if a workspace ID were ever reused.
+    ///
+    /// The password is intentionally NOT restored on rollback: a
+    /// failed remove leaves the workspace itself recoverable, but
+    /// callers must re-set the password explicitly. Caching the
+    /// plaintext password just to support a rare rollback path would
+    /// keep secret material live in memory longer than necessary.
     pub async fn remove_workspace(
         &self,
         workspace_id: &str,
     ) -> Result<Option<Workspace>, NetworkError> {
-        let mut workspaces = self.get_all_workspaces().await?;
-        let removed = workspaces.remove(workspace_id);
-        if removed.is_some() {
-            self.save_workspaces(&workspaces).await?;
+        let removed = self.get_workspace_by_key(workspace_id).await?;
+        if let Some(ref w) = removed {
+            self.delete_workspace_key(workspace_id).await?;
+            self.delete_password_key(workspace_id).await?;
+            if let Err(e) = self
+                .remove_from_index(KEY_INDEX_WORKSPACE_IDS, workspace_id)
+                .await
+            {
+                let _ = self.save_workspace_by_key(workspace_id, w).await;
+                return Err(e);
+            }
         }
         Ok(removed)
     }
 
-    /// Get workspace password
+    /// Get workspace password (per-entity key lookup, O(1))
     pub async fn get_workspace_password(
         &self,
         workspace_id: &str,
     ) -> Result<Option<String>, NetworkError> {
-        let passwords = self.get_all_passwords().await?;
-        Ok(passwords.get(workspace_id).cloned())
+        self.get_password_by_key(workspace_id).await
     }
 
-    /// Set workspace password
+    /// Set workspace password (per-entity key save, O(1))
     pub async fn set_workspace_password(
         &self,
         workspace_id: &str,
         password: &str,
     ) -> Result<(), NetworkError> {
-        let mut passwords = self.get_all_passwords().await?;
-        passwords.insert(workspace_id.to_string(), password.to_string());
-        self.save_passwords(&passwords).await?;
-        Ok(())
+        self.save_password_by_key(workspace_id, password).await
     }
 
-    /// Update domain
+    /// Update domain (per-entity key save, O(1); index unchanged)
     pub async fn update_domain(&self, domain_id: &str, domain: Domain) -> Result<(), NetworkError> {
-        let mut domains = self.get_all_domains().await?;
-        domains.insert(domain_id.to_string(), domain);
-        self.save_domains(&domains).await?;
-        Ok(())
+        self.save_domain_by_key(domain_id, &domain).await?;
+        // Ensure the ID is in the index (idempotent)
+        self.add_to_index(KEY_INDEX_DOMAIN_IDS, domain_id).await
     }
 
-    /// Update workspace
+    /// Update workspace (per-entity key save, O(1); index unchanged)
     pub async fn update_workspace(
         &self,
         workspace_id: &str,
         workspace: Workspace,
     ) -> Result<(), NetworkError> {
-        let mut workspaces = self.get_all_workspaces().await?;
-        workspaces.insert(workspace_id.to_string(), workspace);
-        self.save_workspaces(&workspaces).await?;
-        Ok(())
+        self.save_workspace_by_key(workspace_id, &workspace).await?;
+        self.add_to_index(KEY_INDEX_WORKSPACE_IDS, workspace_id)
+            .await
     }
 
-    /// Update user
+    /// Update user (per-entity key save, O(1); index unchanged)
     pub async fn update_user(&self, user_id: &str, user: User) -> Result<(), NetworkError> {
-        let mut users = self.get_all_users().await?;
-        users.insert(user_id.to_string(), user);
-        self.save_users(&users).await?;
-        Ok(())
+        self.save_user_by_key(user_id, &user).await?;
+        self.add_to_index(KEY_INDEX_USER_IDS, user_id).await
     }
 
     // ========== DomainNode (Generalized Tree Hierarchy) Operations ==========
+    //
+    // DomainNode storage is NOT migrated to per-entity keys; the entire
+    // collection sits behind one HashMap-shaped key. That means every
+    // mutating op below does a load-modify-save cycle on the same
+    // backend value, and two concurrent ops would race the same way
+    // group-message ops did before `group_msg_mutex` — both load the
+    // prior map, each apply its change, and the second save silently
+    // overwrites the first. `node_mutex` serializes the three
+    // mutators below so that race cannot drop a node insert / delete
+    // / update on the floor. Migration to per-entity keys would let
+    // us shed the lock; until then this is the cheap, correct fix.
 
     /// Get a single DomainNode by ID
     pub async fn get_node(&self, node_id: &str) -> Result<Option<DomainNode>, NetworkError> {
@@ -153,15 +227,17 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(nodes.get(node_id).cloned())
     }
 
-    /// Insert a DomainNode
+    /// Insert a DomainNode. Serialized through `node_mutex`.
     pub async fn insert_node(&self, node_id: String, node: DomainNode) -> Result<(), NetworkError> {
+        let _guard = self.node_mutex.lock().await;
         let mut nodes = self.get_all_nodes().await?;
         nodes.insert(node_id, node);
         self.save_nodes(&nodes).await
     }
 
-    /// Remove a DomainNode
+    /// Remove a DomainNode. Serialized through `node_mutex`.
     pub async fn remove_node(&self, node_id: &str) -> Result<Option<DomainNode>, NetworkError> {
+        let _guard = self.node_mutex.lock().await;
         let mut nodes = self.get_all_nodes().await?;
         let removed = nodes.remove(node_id);
         if removed.is_some() {
@@ -170,8 +246,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(removed)
     }
 
-    /// Update a DomainNode
+    /// Update a DomainNode. Serialized through `node_mutex`.
     pub async fn update_node(&self, node_id: &str, node: DomainNode) -> Result<(), NetworkError> {
+        let _guard = self.node_mutex.lock().await;
         let mut nodes = self.get_all_nodes().await?;
         nodes.insert(node_id.to_string(), node);
         self.save_nodes(&nodes).await?;
@@ -184,5 +261,216 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             Some(schema) => Ok(schema),
             None => Ok(TreeSchema::default()),
         }
+    }
+
+    // ========== Schema Version Operations ==========
+
+    /// Get the current schema version from the backend.
+    /// Returns `None` if no schema version has been set yet (fresh database).
+    pub async fn get_schema_version(&self) -> Result<Option<u32>, NetworkError> {
+        self.backend_get(KEY_SCHEMA_VERSION).await
+    }
+
+    /// Set the schema version in the backend.
+    pub async fn set_schema_version(&self, version: u32) -> Result<(), NetworkError> {
+        self.backend_save(KEY_SCHEMA_VERSION, &version).await
+    }
+}
+
+#[cfg(test)]
+mod rollback_tests {
+    //! Tests for the best-effort rollback paths in
+    //! `insert_*` / `remove_*`. The rollback fires when the second
+    //! step (index write or removal) fails after the first step
+    //! (entity save or delete) succeeded — without it, a partial
+    //! failure would leave an entity orphaned in storage but
+    //! invisible to `get_all_*`, or an index pointing at a
+    //! deleted payload.
+    //!
+    //! Driving the failure: in test mode the backend reads from
+    //! `test_storage`, and `backend_get<T>` deserialises the bytes
+    //! via serde_json. Planting invalid JSON for the index key
+    //! makes `get_index` (called inside `add_to_index` /
+    //! `remove_from_index`) return Err, which is exactly the
+    //! second-step failure the rollback handles.
+    use super::*;
+    use crate::kernel::transaction::{
+        BackendTransactionManager, KEY_INDEX_DOMAIN_IDS, KEY_INDEX_USER_IDS,
+        KEY_INDEX_WORKSPACE_IDS, KEY_PREFIX_DOMAIN, KEY_PREFIX_USER, KEY_PREFIX_WORKSPACE,
+    };
+    use citadel_sdk::prelude::StackedRatchet;
+
+    fn fresh() -> BackendTransactionManager<StackedRatchet> {
+        BackendTransactionManager::new()
+    }
+
+    fn poison_index(mgr: &BackendTransactionManager<StackedRatchet>, key: &str) {
+        // Bytes that aren't valid JSON for `HashSet<String>` make the
+        // subsequent backend_get deserialise call return Err.
+        mgr.test_storage
+            .write()
+            .insert(key.to_string(), b"not-json".to_vec());
+    }
+
+    fn ws(id: &str) -> Workspace {
+        Workspace {
+            id: id.to_string(),
+            name: format!("ws-{id}"),
+            description: String::new(),
+            owner_id: "owner".to_string(),
+            members: vec![],
+            offices: vec![],
+            metadata: vec![],
+        }
+    }
+
+    fn dom(id: &str) -> Domain {
+        // The only `Domain` variant currently is the workspace-level
+        // wrapper; the rollback tests don't care which variant — they
+        // only need a serialisable payload to round-trip.
+        Domain::Workspace { workspace: ws(id) }
+    }
+
+    fn usr(id: &str) -> User {
+        use citadel_workspace_types::structs::UserRole;
+        use std::collections::HashMap;
+        User {
+            id: id.to_string(),
+            name: format!("user-{id}"),
+            role: UserRole::Member,
+            permissions: HashMap::new(),
+            metadata: HashMap::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn insert_domain_rolls_back_entity_when_index_write_fails() {
+        let mgr = fresh();
+        // Plant an unreadable index so the add_to_index inside
+        // insert_domain returns Err on its initial get_index().
+        poison_index(&mgr, KEY_INDEX_DOMAIN_IDS);
+
+        let result = mgr.insert_domain("d1".to_string(), dom("d1")).await;
+        assert!(
+            result.is_err(),
+            "insert_domain must surface the index-write failure"
+        );
+
+        // The rollback should have deleted the per-entity key. Probe
+        // it directly so we don't hide behind get_all_domains (which
+        // would fail to even decode the poisoned index).
+        let key = format!("{KEY_PREFIX_DOMAIN}d1");
+        let stored: Option<Domain> = mgr
+            .backend_get(&key)
+            .await
+            .expect("backend_get of per-entity key");
+        assert!(
+            stored.is_none(),
+            "insert_domain must roll back the entity payload on index-write failure"
+        );
+    }
+
+    #[tokio::test]
+    async fn insert_user_rolls_back_entity_when_index_write_fails() {
+        let mgr = fresh();
+        poison_index(&mgr, KEY_INDEX_USER_IDS);
+
+        let err = mgr
+            .insert_user("u1".to_string(), usr("u1"))
+            .await
+            .expect_err("must surface index-write failure");
+        let _ = err;
+
+        let key = format!("{KEY_PREFIX_USER}u1");
+        let stored: Option<User> = mgr.backend_get(&key).await.unwrap();
+        assert!(stored.is_none(), "user payload must be rolled back");
+    }
+
+    #[tokio::test]
+    async fn insert_workspace_rolls_back_entity_when_index_write_fails() {
+        let mgr = fresh();
+        poison_index(&mgr, KEY_INDEX_WORKSPACE_IDS);
+
+        let err = mgr
+            .insert_workspace("w1".to_string(), ws("w1"))
+            .await
+            .expect_err("must surface index-write failure");
+        let _ = err;
+
+        let key = format!("{KEY_PREFIX_WORKSPACE}w1");
+        let stored: Option<Workspace> = mgr.backend_get(&key).await.unwrap();
+        assert!(stored.is_none(), "workspace payload must be rolled back");
+    }
+
+    #[tokio::test]
+    async fn remove_domain_restores_entity_when_index_removal_fails() {
+        let mgr = fresh();
+        // Seed a domain through the happy path so its entity key
+        // exists and the index has it.
+        mgr.insert_domain("d1".to_string(), dom("d1"))
+            .await
+            .expect("seed insert");
+
+        // Now poison the index so the remove_from_index call inside
+        // remove_domain fails after the entity key was already
+        // deleted.
+        poison_index(&mgr, KEY_INDEX_DOMAIN_IDS);
+
+        let err = mgr
+            .remove_domain("d1")
+            .await
+            .expect_err("remove_domain must surface index-removal failure");
+        let _ = err;
+
+        // The rollback re-saves the entity so `get_all_domains` (once
+        // the index is repaired) would see it again. Probe the
+        // per-entity key directly because the poisoned index would
+        // make `get_all_domains` itself fail.
+        let key = format!("{KEY_PREFIX_DOMAIN}d1");
+        let stored: Option<Domain> = mgr.backend_get(&key).await.unwrap();
+        assert!(
+            stored.is_some(),
+            "remove_domain must restore the entity payload when the index removal fails"
+        );
+    }
+
+    #[tokio::test]
+    async fn remove_user_restores_entity_when_index_removal_fails() {
+        let mgr = fresh();
+        mgr.insert_user("u1".to_string(), usr("u1"))
+            .await
+            .expect("seed");
+        poison_index(&mgr, KEY_INDEX_USER_IDS);
+
+        let _ = mgr
+            .remove_user("u1")
+            .await
+            .expect_err("must surface index-removal failure");
+
+        let key = format!("{KEY_PREFIX_USER}u1");
+        assert!(
+            mgr.backend_get::<User>(&key).await.unwrap().is_some(),
+            "user payload must be restored on index-removal failure"
+        );
+    }
+
+    #[tokio::test]
+    async fn remove_workspace_restores_entity_when_index_removal_fails() {
+        let mgr = fresh();
+        mgr.insert_workspace("w1".to_string(), ws("w1"))
+            .await
+            .expect("seed");
+        poison_index(&mgr, KEY_INDEX_WORKSPACE_IDS);
+
+        let _ = mgr
+            .remove_workspace("w1")
+            .await
+            .expect_err("must surface index-removal failure");
+
+        let key = format!("{KEY_PREFIX_WORKSPACE}w1");
+        assert!(
+            mgr.backend_get::<Workspace>(&key).await.unwrap().is_some(),
+            "workspace payload must be restored on index-removal failure"
+        );
     }
 }

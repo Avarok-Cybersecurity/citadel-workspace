@@ -12,7 +12,7 @@ use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{
     DomainNode, DomainPermissions, NodeEntityType, Permission, TreeNode, TreeSchema,
 };
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Entity type name constants to avoid repeated string allocations
@@ -509,7 +509,6 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
 
         let nodes = self.backend_tx_manager.get_all_nodes().await?;
         let schema = self.backend_tx_manager.get_tree_schema_or_default().await?;
-        let max_depth = depth.unwrap_or(0);
 
         // Start from specified parent or root
         let start_nodes: Vec<DomainNode> = if let Some(pid) = parent_id {
@@ -535,20 +534,42 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                 .collect()
         };
 
-        // If depth is 0, return only direct children
-        if max_depth == 0 {
+        // If depth is Some(0), return only direct children.
+        // If depth is None, return ALL descendants (unlimited depth).
+        if depth == Some(0) {
             let enriched = enrich_allowed_child_types(start_nodes, &schema);
             return Ok(filter_by_type(enriched, entity_types));
         }
 
-        // BFS to collect nodes up to max_depth
+        let max_depth = depth; // None = unlimited
+
+        // BFS to collect nodes up to max_depth.
+        //
+        // `visited` protects against two classes of malformed input:
+        //   1. Genuine cycles in the children graph (e.g. from a future
+        //      mutation bug, a manual backend edit, or storage corruption).
+        //      Without a guard, an unlimited-depth walk would loop forever
+        //      and eventually OOM the server.
+        //   2. Duplicate child references (the same node listed under two
+        //      parents). Without a guard this produces exponential expansion
+        //      even in the absence of a true cycle.
         let base_depth = start_nodes.first().map(|n| n.depth).unwrap_or(0);
         let mut result = Vec::new();
         let mut queue: VecDeque<&DomainNode> = start_nodes.iter().collect();
+        let mut visited: HashSet<String> = HashSet::new();
 
         while let Some(node) = queue.pop_front() {
-            // Check if within depth limit
-            if node.depth <= base_depth + max_depth {
+            // Skip nodes we've already processed (cycle / duplicate protection)
+            if !visited.insert(node.id.clone()) {
+                continue;
+            }
+
+            // Check if within depth limit (None = unlimited)
+            let within_limit = match max_depth {
+                Some(d) => node.depth <= base_depth + d,
+                None => true, // No limit
+            };
+            if within_limit {
                 result.push(node.clone());
 
                 // Add children to queue
@@ -558,6 +579,27 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                     }
                 }
             }
+        }
+
+        // Diagnostic warning for unbounded queries that return very large
+        // result sets. `depth = None` was previously treated as `Some(0)`
+        // (direct children only); the change to "unlimited descendants"
+        // is intentional for the frontend's full-tree render, but a
+        // surprise 50k-node response coming back to a future external
+        // caller would otherwise show up only as a slow request. Logging
+        // when the result exceeds a soft threshold surfaces drift early
+        // without changing behaviour. Threshold picked above plausible
+        // workspace sizes — bump in line with real telemetry, not a guess.
+        const UNLIMITED_DEPTH_RESULT_WARN_THRESHOLD: usize = 1000;
+        if depth.is_none() && result.len() > UNLIMITED_DEPTH_RESULT_WARN_THRESHOLD {
+            citadel_logging::warn!(
+                target: "citadel",
+                "list_nodes(parent_id={:?}, depth=None) returned {} nodes (> {} soft cap) \
+                 — caller is walking the full subtree; verify this is intentional",
+                parent_id,
+                result.len(),
+                UNLIMITED_DEPTH_RESULT_WARN_THRESHOLD,
+            );
         }
 
         let enriched = enrich_allowed_child_types(result, &schema);
@@ -680,28 +722,131 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                 })
         };
 
-        // Build tree recursively
-        fn build_tree(
-            node: DomainNode,
-            nodes: &std::collections::HashMap<String, DomainNode>,
-            current_depth: u32,
-            max_depth: Option<u32>,
-        ) -> TreeNode {
-            let children = if max_depth.map(|m| current_depth < m).unwrap_or(true) {
-                node.children
-                    .iter()
-                    .filter_map(|child_id| nodes.get(child_id).cloned())
-                    .map(|child| build_tree(child, nodes, current_depth + 1, max_depth))
-                    .collect()
-            } else {
-                vec![]
-            };
+        Ok(build_tree(root_node, &nodes, max_depth))
+    }
+}
 
-            TreeNode { node, children }
+/// Iterative tree construction. The previous recursive implementation
+/// walked `node.children` unconditionally with NO cycle guard and no cap
+/// on recursion depth: a cyclic or duplicate child reference would recurse
+/// forever, and even a well-formed but deep (a few thousand levels)
+/// hierarchy called with `max_depth: None` would overflow the stack. This
+/// version adds both protections (a `visited` set and an explicit queue).
+///
+/// This is BFS + reverse-depth assembly, mirroring the iterative pattern
+/// `list_nodes` uses in the same file. Two phases:
+///   1. BFS the children graph from `root` to collect every node that
+///      should appear in the tree (respecting `max_depth`), recording
+///      each node's depth and pruning cycles/duplicate child refs.
+///   2. Build TreeNode entries in an arena (`HashMap<id, TreeNode>`),
+///      then iterate from the deepest collected nodes to the root and
+///      `arena.remove` each child into its parent's `children` vec.
+///      Processing deepest-first guarantees every child TreeNode is
+///      ready before its parent assembles.
+///
+/// Cycle/duplicate protection is preserved (the `visited` set in phase 1
+/// drops already-seen ids), and the resulting tree shape is identical to
+/// the recursive version for any well-formed input.
+fn build_tree(
+    root: DomainNode,
+    nodes: &std::collections::HashMap<String, DomainNode>,
+    max_depth: Option<u32>,
+) -> TreeNode {
+    let root_id = root.id.clone();
+
+    // Phase 1: BFS to collect (node, depth) in discovery order, plus a
+    // separate `bounded_children` map that records only the children
+    // actually expanded from each node (i.e. respecting `max_depth` and
+    // the visited/cycle guard). We CANNOT use `node.children` directly
+    // in phase 2 because cyclic / cross-parent / out-of-depth references
+    // would either reattach a node we already removed from the arena
+    // (e.g. a back-edge from a leaf to the root) or attach a node that
+    // was deliberately pruned.
+    let mut visited: HashSet<String> = HashSet::new();
+    visited.insert(root_id.clone());
+    let mut included: Vec<(DomainNode, u32)> = Vec::new();
+    let mut bounded_children: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    let mut queue: VecDeque<(DomainNode, u32)> = VecDeque::new();
+    queue.push_back((root, 0));
+
+    while let Some((node, depth)) = queue.pop_front() {
+        let node_id = node.id.clone();
+        let child_ids = node.children.clone();
+        included.push((node, depth));
+
+        // Stop expanding past max_depth — the popped node still appears
+        // as a leaf (no children) in the final tree, same as the
+        // recursive behaviour.
+        let can_expand = max_depth.map(|m| depth < m).unwrap_or(true);
+        if !can_expand {
+            continue;
         }
 
-        Ok(build_tree(root_node, &nodes, 0, max_depth))
+        let mut accepted_children = Vec::new();
+        for child_id in child_ids {
+            if !visited.insert(child_id.clone()) {
+                continue;
+            }
+            if let Some(child) = nodes.get(&child_id) {
+                accepted_children.push(child_id.clone());
+                queue.push_back((child.clone(), depth + 1));
+            }
+        }
+        bounded_children.insert(node_id, accepted_children);
     }
+
+    // Phase 2: Pre-create empty TreeNode entries for the NON-ROOT nodes,
+    // then wire up children deepest-first so a parent never tries to
+    // assemble a child that hasn't been built yet. Use `bounded_children`
+    // (not `node.children`) so back-edges in cyclic input do not try to
+    // move an already-assembled ancestor out of the arena.
+    //
+    // The root TreeNode lives in its own local instead of the arena so a
+    // future refactor that changes the phase-2 sort order can never strand
+    // us with the root removed mid-iteration. The previous implementation
+    // ended on `arena.remove(&root_id).expect(...)`, which would panic the
+    // server process on the very rebuild it was trying to recover from.
+    let root_domain = included
+        .iter()
+        .find(|(n, _)| n.id == root_id)
+        .map(|(n, _)| n.clone())
+        .expect("BFS phase 1 pushed the root into `included`");
+    let mut arena: std::collections::HashMap<String, TreeNode> = included
+        .iter()
+        .filter(|(n, _)| n.id != root_id)
+        .map(|(n, _)| {
+            (
+                n.id.clone(),
+                TreeNode {
+                    node: n.clone(),
+                    children: vec![],
+                },
+            )
+        })
+        .collect();
+    let mut root_tree = TreeNode {
+        node: root_domain,
+        children: vec![],
+    };
+
+    included.sort_by_key(|(_, d)| std::cmp::Reverse(*d));
+    for (node, _depth) in included {
+        let child_ids = bounded_children.remove(&node.id).unwrap_or_default();
+        let mut child_trees = Vec::with_capacity(child_ids.len());
+        for child_id in &child_ids {
+            if let Some(child_tree) = arena.remove(child_id) {
+                child_trees.push(child_tree);
+            }
+        }
+        if node.id == root_id {
+            root_tree.children = child_trees;
+        } else if let Some(tree) = arena.get_mut(&node.id) {
+            tree.children = child_trees;
+        }
+    }
+
+    root_tree
 }
 
 /// Populate `allowed_child_types` from the tree schema for nodes that have `None`.
@@ -733,5 +878,114 @@ fn filter_by_type(
             .filter(|n| types.contains(&n.entity_type))
             .collect(),
         _ => nodes,
+    }
+}
+
+#[cfg(test)]
+mod build_tree_tests {
+    use super::build_tree;
+    use citadel_workspace_types::structs::{DomainNode, DomainPermissions, NodeEntityType};
+    use std::collections::HashMap;
+
+    fn mk_node(id: &str, children: &[&str], depth: u32) -> DomainNode {
+        DomainNode {
+            id: id.to_string(),
+            parent_id: None,
+            entity_type: NodeEntityType::Child("Office".to_string()),
+            depth,
+            name: format!("node-{id}"),
+            description: String::new(),
+            owner_id: "owner".to_string(),
+            members: vec![],
+            children: children.iter().map(|s| s.to_string()).collect(),
+            mdx_content: String::new(),
+            rules: None,
+            chat_enabled: false,
+            chat_channel_id: None,
+            default_permissions: DomainPermissions::default(),
+            metadata: vec![],
+            allowed_child_types: None,
+            is_default: false,
+            created_at: 0,
+            updated_at: 0,
+        }
+    }
+
+    fn arena(nodes: Vec<DomainNode>) -> HashMap<String, DomainNode> {
+        nodes.into_iter().map(|n| (n.id.clone(), n)).collect()
+    }
+
+    #[test]
+    fn root_only_has_no_children() {
+        let root = mk_node("root", &[], 0);
+        let nodes = arena(vec![root.clone()]);
+        let tree = build_tree(root, &nodes, None);
+        assert_eq!(tree.node.id, "root");
+        assert!(tree.children.is_empty());
+    }
+
+    #[test]
+    fn single_level_collects_direct_children() {
+        let root = mk_node("root", &["a", "b"], 0);
+        let nodes = arena(vec![
+            root.clone(),
+            mk_node("a", &[], 1),
+            mk_node("b", &[], 1),
+        ]);
+        let tree = build_tree(root, &nodes, None);
+        let mut ids: Vec<_> = tree.children.iter().map(|c| c.node.id.clone()).collect();
+        ids.sort();
+        assert_eq!(ids, vec!["a", "b"]);
+        assert!(tree.children.iter().all(|c| c.children.is_empty()));
+    }
+
+    #[test]
+    fn max_depth_zero_returns_root_only() {
+        let root = mk_node("root", &["a"], 0);
+        let nodes = arena(vec![root.clone(), mk_node("a", &[], 1)]);
+        let tree = build_tree(root, &nodes, Some(0));
+        assert_eq!(tree.node.id, "root");
+        assert!(tree.children.is_empty(), "Some(0) must not expand children");
+    }
+
+    #[test]
+    fn max_depth_one_stops_below_direct_children() {
+        let root = mk_node("root", &["a"], 0);
+        let nodes = arena(vec![
+            root.clone(),
+            mk_node("a", &["g"], 1),
+            mk_node("g", &[], 2),
+        ]);
+        let tree = build_tree(root, &nodes, Some(1));
+        assert_eq!(tree.children.len(), 1);
+        assert_eq!(tree.children[0].node.id, "a");
+        assert!(
+            tree.children[0].children.is_empty(),
+            "grandchild must be pruned at max_depth 1"
+        );
+    }
+
+    #[test]
+    fn unlimited_depth_builds_full_chain() {
+        let root = mk_node("root", &["a"], 0);
+        let nodes = arena(vec![
+            root.clone(),
+            mk_node("a", &["g"], 1),
+            mk_node("g", &[], 2),
+        ]);
+        let tree = build_tree(root, &nodes, None);
+        assert_eq!(tree.children[0].node.id, "a");
+        assert_eq!(tree.children[0].children[0].node.id, "g");
+    }
+
+    #[test]
+    fn missing_child_reference_is_skipped() {
+        // root references "ghost", which isn't in the arena — it must be
+        // ignored rather than panicking or inserting an empty node.
+        let root = mk_node("root", &["ghost", "a"], 0);
+        let nodes = arena(vec![root.clone(), mk_node("a", &[], 1)]);
+        let tree = build_tree(root, &nodes, None);
+        let ids: Vec<_> = tree.children.iter().map(|c| c.node.id.clone()).collect();
+        assert_eq!(ids, vec!["a"]);
     }
 }

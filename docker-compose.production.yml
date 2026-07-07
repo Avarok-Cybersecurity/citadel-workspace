@@ -1,0 +1,266 @@
+# =============================================================================
+# Citadel Workspace - Production Docker Compose
+# =============================================================================
+#
+# Architecture:
+#   Users → Cloudflare (TLS) → cloudflared tunnel → Docker network
+#                                                     ├── ui (nginx:8080, non-root)
+#                                                     ├── internal-service (ws:12345)
+#                                                     └── server (citadel:12349)
+#
+# Usage:
+#   # Local testing (no tunnel) — serves the static UI only:
+#   docker compose -f docker-compose.production.yml up --build
+#   # The UI loads at http://localhost:8080, but the browser's WebSocket to
+#   # the internal service will NOT connect unless VITE_WS_URL is built to a
+#   # SAME-ORIGIN endpoint: the nginx CSP is `connect-src 'self'`, so an
+#   # off-origin `ws://localhost:12345` (the empty-VITE_WS_URL fallback) is
+#   # blocked by the browser. There is no built-in `/ws` reverse proxy, so a
+#   # fully-working no-tunnel deployment requires fronting this container
+#   # with your own same-origin WS proxy and building with VITE_WS_URL set to
+#   # it (e.g. `wss://yourdomain/ws`). For an end-to-end working stack, use
+#   # the tunnel profile below. nginx runs as the unprivileged `nginx` user
+#   # on 8080 so it doesn't need root to bind; do NOT add
+#   # CAP_NET_BIND_SERVICE — front it with a reverse proxy for 80/443.
+#
+#   # Production with Cloudflare Tunnel (full, working stack):
+#   TUNNEL_TOKEN=<your-token> docker compose -f docker-compose.production.yml --profile tunnel up --build -d
+#
+# Required environment variables (set in .env or export):
+#   WORKSPACE_MASTER_PASSWORD  - Master password for workspace initialization
+#   INTERNAL_SERVICE_PORT      - Internal service port (default: 12345)
+#
+# Optional (production only):
+#   TUNNEL_TOKEN               - Cloudflare Tunnel token (enables tunnel profile)
+#
+# Update procedure (zero-downtime, data-safe):
+#   ./deploy.sh
+#
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Workspace Server (Citadel Protocol)
+  # Handles workspace CRUD, office/room management, member permissions
+  # Data persisted to server_data volume
+  # ---------------------------------------------------------------------------
+  server:
+    build:
+      context: .
+      dockerfile: ./docker/workspace-server/Dockerfile
+    volumes:
+      - server_data:/data/server
+      - target_cache:/usr/src/app/target
+    environment:
+      - RUST_LOG=citadel=info
+      - WORKSPACE_MASTER_PASSWORD=${WORKSPACE_MASTER_PASSWORD}
+      # Persistence is opt-in via env vars so the same `kernel.toml`
+      # baked into the Docker image stays ephemeral by default for
+      # `tilt`-driven dev. Production sets both vars below to mount
+      # workspace state on the `server_data` volume defined above.
+      - WORKSPACE_BACKEND=filesystem
+      - WORKSPACE_DATA_DIR=/data/server
+      # With network_mode: host, bind the Citadel listener to loopback so it
+      # is reachable only by the co-located cloudflared (the protocol is E2E
+      # encrypted, but a 0.0.0.0 bind would still expose it on the host's
+      # public interfaces). Override if a remote peer must reach this server
+      # directly, and add a host firewall in that case.
+      - WORKSPACE_BIND_ADDR=127.0.0.1:12349
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "12349"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    network_mode: host
+
+  # ---------------------------------------------------------------------------
+  # Internal Service (Session Management / P2P Relay)
+  # Manages WebSocket connections, Citadel SDK sessions, P2P channels
+  # Data persisted to internal_service_data volume
+  #
+  # Uses host networking because the Citadel SDK connects to workspace servers
+  # using the address the user typed (e.g., localhost:12349). In bridge mode,
+  # localhost resolves to the container's own loopback, not the server container.
+  # Host networking ensures the internal service can reach the server at the
+  # same address the user specified.
+  # ---------------------------------------------------------------------------
+  internal-service:
+    build:
+      context: .
+      dockerfile: ./docker/internal-service/Dockerfile
+      args:
+        - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT:-12345}
+    volumes:
+      - internal_service_data:/data/internal-service
+      - target_cache:/usr/src/app/target
+    environment:
+      - RUST_LOG=citadel=info
+      - DOCKER_CONTAINER=1
+      - SKIP_WASM_BUILD=1
+      - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT:-12345}
+      # With `network_mode: host`, bind the WebSocket control plane to
+      # loopback so it is reachable only by the co-located cloudflared /
+      # nginx and NOT exposed on the host's public interfaces (which
+      # `0.0.0.0` would, bypassing the Cloudflare TLS boundary). Override
+      # only if your ingress reaches the service over a non-loopback host
+      # interface (then add a host firewall blocking the port publicly).
+      - INTERNAL_SERVICE_BIND_HOST=127.0.0.1
+      # Persistence is opt-in via env vars so the same Dockerfile baked
+      # into the image stays ephemeral by default for dev (`tilt`).
+      # Production sets both vars below to mount internal-service state
+      # on the `internal_service_data` volume defined above.
+      - INTERNAL_SERVICE_BACKEND=filesystem
+      - INTERNAL_SERVICE_DATA_DIR=/data/internal-service
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+    restart: unless-stopped
+    # Same `nc -z` pattern as the server healthcheck above. The
+    # previous `netstat | grep ":$PORT"` form had two failure modes:
+    # `:12345` matches `:123450` and `:112345` as substrings (false
+    # positives if some other process binds an unrelated port that
+    # happens to contain the digits), and the `$$` escape is awkward
+    # to maintain. `nc -z` is exact-port and ships in the same image.
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "${INTERNAL_SERVICE_PORT:-12345}"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      server:
+        condition: service_healthy
+    network_mode: host
+
+  # ---------------------------------------------------------------------------
+  # UI (React Frontend - Production Build)
+  # Vite build served via nginx
+  # ---------------------------------------------------------------------------
+  ui:
+    build:
+      context: .
+      dockerfile: ./docker/ui/Dockerfile
+      target: production
+      args:
+        # Vite bakes VITE_* env vars at build time. The frontend's
+        # WebSocket URL falls back to `ws://localhost:12345` if this
+        # is empty, which the production CSP `connect-src 'self'`
+        # blocks (different port from the served origin and wrong
+        # scheme behind a Cloudflare tunnel). Operators set this in
+        # `.env` to a same-origin `wss://yourdomain.com/ws` so the
+        # browser can actually connect.
+        VITE_WS_URL: ${VITE_WS_URL:-}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    restart: unless-stopped
+    # `wget` is part of the nginx:stable-alpine base. `--spider` does a
+    # HEAD-equivalent request that exits 0 only on 2xx — so this fails
+    # if nginx isn't bound, if the SPA dist/ is missing (`/` would 404),
+    # or if the config block returns an error page. `container_name`-style
+    # probes that only check the container is "running" miss every one
+    # of those modes; without this the cloudflared dependency below
+    # would start before nginx is actually serving traffic.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      internal-service:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    network_mode: host
+
+  # ---------------------------------------------------------------------------
+  # Cloudflare Tunnel (Production only)
+  # Exposes services to the internet via Cloudflare's network
+  # Activate with: --profile tunnel
+  #
+  # Setup:
+  #   1. Create a tunnel in Cloudflare Zero Trust dashboard
+  #   2. Add public hostname rules:
+  #      - yourdomain.com      → http://localhost:8080
+  #      - yourdomain.com/ws*  → ws://localhost:12345
+  #      (Docker service names like `ui:8080` would only resolve on
+  #      a bridge network — this compose file uses `network_mode:
+  #      host` for every service including cloudflared, so the
+  #      tunnel reaches the backends through the shared host
+  #      loopback. Pointing the rules at the service-name hostnames
+  #      would silently fail to connect.)
+  #   3. Copy the tunnel token
+  #   4. Set TUNNEL_TOKEN in .env
+  # ---------------------------------------------------------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    # `--metrics 127.0.0.1:2000` exposes cloudflared's built-in /ready
+    # endpoint so the healthcheck below can verify the tunnel actually
+    # established a connection. Without it, an invalid token / network
+    # failure leaves the container in "running" but traffic is
+    # black-holed; operators reading `docker compose ps` see a healthy
+    # stack with no signal. Bound to LOOPBACK (not 0.0.0.0) because under
+    # network_mode: host a 0.0.0.0 bind would publish this unauthenticated
+    # metrics endpoint on the host's public interfaces; the healthcheck
+    # only needs to reach it over localhost.
+    command: tunnel --no-autoupdate --metrics 127.0.0.1:2000 run
+    environment:
+      # Empty default so `docker compose build`/`config` works without the
+      # tunnel profile (compose interpolates this even when cloudflared isn't
+      # being started). The required-token fail-fast lives in deploy.sh, which
+      # knows when the tunnel profile is actually requested — a `:?` here would
+      # break every non-tunnel build/config.
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
+    # Match the resource discipline of the other services so a
+    # misbehaving cloudflared process (memory leak, runaway CPU on
+    # tunnel reconnect storms) can't starve the host. Numbers chosen
+    # to match `ui`'s budget — cloudflared is similarly lightweight
+    # (just relays bytes between Cloudflare's edge and localhost).
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    restart: unless-stopped
+    # `/ready` returns HTTP 200 once the tunnel is up and a 5xx (or no
+    # response) otherwise. Probe the HTTP status with `--spider` (exits 0
+    # only on 2xx) rather than grepping the JSON body for `"status":200`:
+    # the body match is brittle to whitespace/field-order changes across
+    # cloudflared versions, which would falsely report the tunnel
+    # unhealthy. wget is in the cloudflared image's base.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:2000/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      ui:
+        condition: service_healthy
+      internal-service:
+        condition: service_healthy
+    network_mode: host
+    profiles:
+      - tunnel
+
+# =============================================================================
+# Volumes - persist across container rebuilds and restarts
+# =============================================================================
+volumes:
+  # Application data (NEVER delete these unless you want to lose all data)
+  server_data:
+  internal_service_data:
+  # Build cache (safe to delete, just makes rebuilds slower)
+  target_cache:
