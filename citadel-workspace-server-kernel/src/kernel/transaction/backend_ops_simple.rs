@@ -8,7 +8,7 @@
 use crate::kernel::transaction::BackendTransactionManager;
 use crate::kernel::transaction::{
     KEY_INDEX_DOMAIN_IDS, KEY_INDEX_USER_IDS, KEY_INDEX_WORKSPACE_IDS, KEY_SCHEMA_VERSION,
-    KEY_STRUCTURE_SEEDED,
+    KEY_STRUCTURE_SEEDED, KEY_STRUCTURE_SEED_PENDING,
 };
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{Domain, DomainNode, TreeSchema, User, Workspace};
@@ -295,6 +295,27 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// never seeded again - not even if every office is later deleted.
     pub async fn mark_structure_seeded(&self) -> Result<(), NetworkError> {
         self.backend_save(KEY_STRUCTURE_SEEDED, &true).await
+    }
+
+    /// Whether a brand-new workspace was created whose structure has not been confirmed written.
+    ///
+    /// `true` on a fresh install between root-workspace creation and a successful seed - which
+    /// includes the next boot after a first boot that was interrupted.
+    pub async fn is_structure_seed_pending(&self) -> Result<bool, NetworkError> {
+        Ok(self
+            .backend_get::<bool>(KEY_STRUCTURE_SEED_PENDING)
+            .await?
+            .unwrap_or(false))
+    }
+
+    /// Record that a brand-new workspace owes an initial structure seed.
+    pub async fn mark_structure_seed_pending(&self) -> Result<(), NetworkError> {
+        self.backend_save(KEY_STRUCTURE_SEED_PENDING, &true).await
+    }
+
+    /// Clear the pending marker once the structure is durably written.
+    pub async fn clear_structure_seed_pending(&self) -> Result<(), NetworkError> {
+        self.backend_save(KEY_STRUCTURE_SEED_PENDING, &false).await
     }
 }
 

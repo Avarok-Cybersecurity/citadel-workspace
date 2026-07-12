@@ -90,6 +90,17 @@ pub(crate) const KEY_SCHEMA_VERSION: &str = "citadel_workspace.schema_version";
 /// contract actually depends on.
 pub(crate) const KEY_STRUCTURE_SEEDED: &str = "citadel_workspace.structure_seeded";
 
+/// Durable "a brand-new workspace was created and its initial structure has NOT yet been
+/// confirmed written" marker.
+///
+/// Written when the root workspace is first created, and cleared once the structure is durably
+/// seeded. It is what makes an interrupted first boot recoverable: if the process dies (or the
+/// node write merely fails) between creating the root workspace and writing the tree, the next
+/// boot still sees this marker and finishes the job. Without it, that store would look
+/// indistinguishable from an established pre-marker workspace and would be permanently left
+/// with no offices at all.
+pub(crate) const KEY_STRUCTURE_SEED_PENDING: &str = "citadel_workspace.structure_seed_pending";
+
 impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     pub fn new() -> Self {
         info!(target: "citadel", "Initializing BackendTransactionManager with NodeRemote backend");
