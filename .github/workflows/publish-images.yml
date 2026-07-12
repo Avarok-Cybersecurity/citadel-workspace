@@ -1,0 +1,124 @@
+# =============================================================================
+# Publish container images to GHCR.
+#
+# WHY THIS EXISTS
+#
+# Deploys previously built images ON the production host (`deploy.sh` ran
+# `docker compose build`). That is slow (a full Rust release build per deploy),
+# it requires the source tree and a toolchain on the production box, it offers
+# no rollback (the previous image is simply gone), and it makes every deploy
+# hostage to that host's Docker networking. Building here instead and having the
+# host `docker compose pull` fixes all four at once.
+#
+# Images are tagged with BOTH:
+#   * `sha-<short-sha>` - immutable. This is what makes rollback possible:
+#     `IMAGE_TAG=sha-abc1234 ./deploy.sh` redeploys an exact prior build.
+#   * `latest`          - moving pointer to the newest master build.
+#
+# ONE-TIME MANUAL SETUP
+#
+# GHCR packages are created PRIVATE. After the first successful run, open each
+# package's settings on GitHub and set its visibility to Public, otherwise every
+# developer must `docker login ghcr.io` before they can pull. The repositories
+# themselves are already public, so there is nothing secret in these images.
+#
+# WHY `ui` IS NOT PUBLISHED HERE (yet)
+#
+# The production UI image bakes `VITE_WS_URL` at build time, and its nginx CSP
+# is `connect-src 'self'` - so a UI served on :8080 cannot reach an agent on
+# :12345. Publishing it today would ship an artifact that cannot work for the
+# local-agent deployment. It gets added once the same-origin `/ws` reverse proxy
+# (and the matching frontend change to derive the URL from `window.location`)
+# lands.
+# =============================================================================
+name: Publish Images
+
+on:
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+
+# Never cancel a publish mid-push: a half-pushed manifest is worse than a slow
+# one, and unlike `validate.yml` these runs have side effects outside the runner.
+concurrency:
+  group: publish-images-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: server
+            dockerfile: ./docker/workspace-server/Dockerfile
+          - image: internal-service
+            dockerfile: ./docker/internal-service/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Free Disk Space
+        # The `builder` stage is ~5.6 GB (full Rust toolchain + target/). A stock
+        # GitHub runner does not have room for it alongside the preinstalled
+        # toolchains, and the failure mode is an opaque "no space left on device"
+        # deep inside a cargo build. Same step validate.yml already uses.
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
+          df -h
+
+      - name: Compute image reference
+        # Docker image references MUST be lowercase, but the org is spelled
+        # `Avarok-Cybersecurity`. Passing ${{ github.repository_owner }} straight
+        # into a tag produces `ghcr.io/Avarok-Cybersecurity/...`, which the daemon
+        # rejects with "repository name must be lowercase". Lowercase it here.
+        run: |
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/citadel-workspace-${{ matrix.image }}" >> "$GITHUB_ENV"
+          echo "SHA_TAG=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          # `production` is the slim runtime stage (~145 MB). Without an explicit
+          # target, Docker builds the LAST stage - which is `dev`, deliberately, so
+          # that docker-compose.yml (which pins no target) keeps working. Omitting
+          # this line would publish the 5.6 GB toolchain image.
+          target: production
+          push: true
+          build-args: |
+            INTERNAL_SERVICE_PORT=12345
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ env.SHA_TAG }}
+          # No BuildKit `gha` cache on purpose: the builder stage is ~5.6 GB and
+          # the Actions cache is capped at 10 GB, so caching these layers evicts
+          # itself and produces flaky, slow builds. This job runs once per merge to
+          # master; a clean build is the reliable choice.
+
+      - name: Report published tags
+        run: |
+          echo "Published:"
+          echo "  ${IMAGE}:latest"
+          echo "  ${IMAGE}:${SHA_TAG}   <- pin this to roll back"
