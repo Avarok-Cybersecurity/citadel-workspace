@@ -147,6 +147,16 @@ jobs:
           build-args: |
             INTERNAL_SERVICE_PORT=12345
           tags: ${{ env.IMAGE }}:${{ env.SHA_TAG }}
+          # Stamp the commit into the image itself. `latest` is a MUTABLE tag on two
+          # INDEPENDENT registry repositories, and no registry offers an atomic
+          # multi-repository tag update -- so a promotion that succeeds for `server` and
+          # then fails for `internal-service` would leave `latest` pointing at a mismatched
+          # pair. This label is what lets `deploy.sh` detect that and refuse to deploy the
+          # mixed set, rather than silently restarting production on two images that never
+          # shipped together. The check is the safety net; the promote job is the happy path.
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 
       - name: Smoke test the image before publishing
         # The runtime stages deliberately omit the toolchain, the source tree and
