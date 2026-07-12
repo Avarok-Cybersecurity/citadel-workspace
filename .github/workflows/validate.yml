@@ -434,17 +434,20 @@ jobs:
           ./scripts/verify-image-revisions.sh rev-none rev-none
           echo "PASS: unlabelled images fall back to a warning."
 
-      - name: Missing image is refused, not silently passed
-        # `docker image inspect` fails for an image that was never pulled. That must NOT be
-        # mistaken for "no label, carry on".
+      - name: A MISSING image is refused, not treated as unlabelled
+        # `docker image inspect` fails outright for an image that was never pulled. That must NOT
+        # be conflated with "inspected fine, but carries no label" - an image we cannot see is an
+        # image we cannot verify, so it has to fail the gate rather than slip through the
+        # warn-and-continue path. Asserting the FAILURE here is the point: an earlier version of
+        # this step passed whichever way the script behaved, which pinned the bypass instead of
+        # catching it.
         run: |
           set -euo pipefail
           if ./scripts/verify-image-revisions.sh rev-a definitely-not-pulled:latest 2>/dev/null; then
-            echo "WARNING: a missing image was treated as unlabelled (warn-and-continue)."
-            echo "That is the documented fallback, but note the deploy would then rely on"
-            echo "'docker compose up' failing on the missing image instead."
+            echo "::error::The gate ALLOWED an image it could not even inspect. A partially completed 'docker compose pull' would sail straight through the release-consistency check."
+            exit 1
           fi
-          echo "PASS: behaviour is pinned."
+          echo "PASS: an un-inspectable image is refused."
 
       - name: deploy.sh parses
         run: bash -n deploy.sh && bash -n scripts/verify-image-revisions.sh

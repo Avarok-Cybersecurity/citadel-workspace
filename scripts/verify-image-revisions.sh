@@ -37,11 +37,21 @@ fi
 
 REVISION_LABEL="org.opencontainers.image.revision"
 
+# Print the image's revision label on stdout.
+#
+# Exit 0  = the image was inspected successfully (the label may still be empty).
+# Exit 1  = the image could NOT be inspected at all.
+#
+# Those two must NOT be conflated. Swallowing an inspect failure as "no label" would let a
+# MISSING image - a half-completed `docker compose pull`, a typo'd tag, a dead daemon - slip
+# through the warn-and-continue path and bypass the gate entirely, which is exactly the
+# outcome this script exists to prevent.
 image_revision() {
-    # `docker image inspect` prints the literal string `<no value>` when the label
-    # is absent, so normalise that to an empty string.
     local rev
-    rev=$(docker image inspect --format "{{ index .Config.Labels \"$REVISION_LABEL\" }}" "$1" 2>/dev/null || true)
+    if ! rev=$(docker image inspect --format "{{ index .Config.Labels \"$REVISION_LABEL\" }}" "$1" 2>/dev/null); then
+        return 1
+    fi
+    # `docker image inspect` prints the literal string `<no value>` when the label is absent.
     if [ "$rev" = "<no value>" ]; then
         rev=""
     fi
@@ -53,7 +63,15 @@ reference_img=""
 unlabelled=0
 
 for img in "$@"; do
-    rev=$(image_revision "$img")
+    if ! rev=$(image_revision "$img"); then
+        echo "" >&2
+        echo "ERROR: cannot inspect ${img}. Refusing to deploy." >&2
+        echo "  The image is not present locally. Most likely the pull did not complete," >&2
+        echo "  or the tag does not exist in the registry." >&2
+        echo "  This is NOT the same as an image without a revision label: an image we cannot" >&2
+        echo "  see is an image we cannot verify, so the release-consistency gate cannot pass." >&2
+        exit 1
+    fi
 
     if [ -z "$rev" ]; then
         # Images built before the label existed, or built locally, carry no revision.

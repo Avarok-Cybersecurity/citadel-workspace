@@ -79,17 +79,25 @@ jobs:
             # password, and we exercise the filesystem backend because that is
             # what production runs.
             smoke_port: 12349
+            # Bind to LOOPBACK, matching the production default. Nothing is published out of
+            # the container anyway (the smoke run uses no `-p` and no host networking, so the
+            # listener is confined to the container's own network namespace), and the probe
+            # runs via `docker exec` inside that namespace - so loopback costs nothing. But
+            # this repository has a self-hosted runner, and a container that binds 0.0.0.0 is
+            # one `-p` or one `network_mode: host` away from putting a server with a known
+            # password on someone's LAN. Default to the narrow thing.
             smoke_env: >-
               -e WORKSPACE_MASTER_PASSWORD=ci-smoke-test
               -e WORKSPACE_BACKEND=filesystem
               -e WORKSPACE_DATA_DIR=/data/server
-              -e WORKSPACE_BIND_ADDR=0.0.0.0:12349
+              -e WORKSPACE_BIND_ADDR=127.0.0.1:12349
           - image: internal-service
             dockerfile: ./docker/internal-service/Dockerfile
             smoke_port: 12345
+            # Loopback, for the same reason as the server above.
             smoke_env: >-
               -e INTERNAL_SERVICE_PORT=12345
-              -e INTERNAL_SERVICE_BIND_HOST=0.0.0.0
+              -e INTERNAL_SERVICE_BIND_HOST=127.0.0.1
 
     steps:
       - uses: actions/checkout@v4
