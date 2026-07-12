@@ -75,6 +75,11 @@ jobs:
         include:
           - image: server
             dockerfile: ./docker/workspace-server/Dockerfile
+            # The server Dockerfile declares no build args. Passing an ARG a Dockerfile does not
+            # declare is a silent no-op that Docker only warns about, so build args are scoped
+            # per-image here rather than passed globally to both.
+            build_args: ""
+
             # Smoke-test config. The server refuses to start without a master
             # password, and we exercise the filesystem backend because that is
             # what production runs.
@@ -93,6 +98,10 @@ jobs:
               -e WORKSPACE_BIND_ADDR=127.0.0.1:12349
           - image: internal-service
             dockerfile: ./docker/internal-service/Dockerfile
+            # Only this Dockerfile declares INTERNAL_SERVICE_PORT (it is baked into the image's
+            # ENV and expanded by its CMD at runtime).
+            build_args: |
+              INTERNAL_SERVICE_PORT=12345
             smoke_port: 12345
             # Loopback, for the same reason as the server above.
             smoke_env: >-
@@ -152,8 +161,7 @@ jobs:
           # anyone who pulled in between.
           load: true
           push: false
-          build-args: |
-            INTERNAL_SERVICE_PORT=12345
+          build-args: ${{ matrix.build_args }}
           tags: ${{ env.IMAGE }}:${{ env.SHA_TAG }}
           # Stamp the commit into the image itself. `latest` is a MUTABLE tag on two
           # INDEPENDENT registry repositories, and no registry offers an atomic

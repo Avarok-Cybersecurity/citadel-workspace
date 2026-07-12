@@ -345,7 +345,12 @@ echo "  Internal service is up."
 
 # UI last (lightweight, fast restart)
 echo "  Restarting ui..."
-docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps --build ui
+# No `--build`: the ui image was already built in step 2, BEFORE anything was restarted.
+# Rebuilding it here would reopen the exact window step 2 exists to close - a build failure at
+# this point (cache invalidation, disk pressure, a transient npm error) would land AFTER the
+# server and internal-service have already been swapped to their new images, leaving production
+# on a new backend with the old UI. Build everything first, restart afterwards.
+docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps ui
 # Wait for nginx to actually serve (the ui healthcheck does a wget --spider
 # on :8080). Without this the deploy reports success even if nginx failed to
 # start (bad config, missing dist/) — the cloudflared step would then start
