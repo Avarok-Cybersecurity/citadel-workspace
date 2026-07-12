@@ -508,6 +508,34 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .backend_tx_manager
             .get_all_nodes()
             .await?;
+
+        // Seed the configured structure ONLY into a fresh workspace.
+        //
+        // `on_start` calls this on every boot, and the code below mints new UUIDs and
+        // *appends*. Against a persistent (filesystem) backend that means every restart
+        // deposits another complete copy of every office and room - the tree grows without
+        // bound, one extra set per deploy. Dev and CI never caught it because they run the
+        // server on the in-memory backend, where every boot legitimately starts empty.
+        //
+        // Skipping (rather than upserting) is deliberate: the tree is user-mutable after the
+        // first boot - offices are created and renamed, MDX content is edited live - so
+        // re-applying the baked-in config on each boot would clobber those edits. The config
+        // describes the *initial* state of a new workspace, not a desired state to reconcile.
+        //
+        // Any node parented to the workspace root means a tree already exists (whether
+        // config-seeded or user-created), so leave it untouched. This mirrors the
+        // `workspace_exists` guard `inject_admin_user` already applies to the root workspace.
+        if nodes
+            .values()
+            .any(|node| node.parent_id.as_deref() == Some(crate::WORKSPACE_ROOT_ID))
+        {
+            info!(
+                target: "citadel",
+                "Workspace structure already present; skipping initial structure seed"
+            );
+            return Ok(());
+        }
+
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system clock before unix epoch")
@@ -1315,5 +1343,173 @@ mod content_segment_tests {
     #[test]
     fn rejects_nul_byte() {
         assert!(validate_content_segment("foo\0bar").is_err());
+    }
+}
+
+#[cfg(test)]
+mod structure_seed_idempotency_tests {
+    //! Regression tests for the seed-once guard in `initialize_workspace_structure`.
+    //!
+    //! `on_start` invokes that function on EVERY boot. Before the guard, it minted fresh
+    //! UUIDs and appended, so a server on a persistent (filesystem) backend gained a
+    //! complete duplicate of every office and room on each restart - and `deploy.sh`
+    //! restarts the server on every deploy, so a live workspace would visibly corrupt
+    //! itself over time. Reproduced on real hardware: boot 1 created 3 offices / 8 rooms,
+    //! boot 2 against the same volume took it to 6 / 16.
+    //!
+    //! Nothing caught this because dev and CI run the server on the in-memory backend,
+    //! where every boot legitimately starts from an empty store. These tests close that
+    //! gap by seeding twice against a single store - the unit-test equivalent of a restart.
+    use super::*;
+    use crate::config::{OfficeConfig, RoomConfig};
+    use citadel_sdk::prelude::StackedRatchet;
+    use citadel_workspace_types::structs::DomainPermissions;
+
+    fn one_office_one_room() -> WorkspaceStructureConfig {
+        WorkspaceStructureConfig {
+            name: "Test Workspace".to_string(),
+            description: None,
+            offices: vec![OfficeConfig {
+                name: "General".to_string(),
+                description: None,
+                // No markdown_file: keeps the test off the filesystem entirely.
+                markdown_file: None,
+                chat_enabled: true,
+                rules: None,
+                default_permissions: DomainPermissions::default(),
+                is_default: true,
+                rooms: vec![RoomConfig {
+                    name: "Random".to_string(),
+                    description: None,
+                    markdown_file: None,
+                    chat_enabled: true,
+                    rules: None,
+                    default_permissions: DomainPermissions::default(),
+                }],
+            }],
+        }
+    }
+
+    /// Seeding twice against one store must be a no-op the second time.
+    #[tokio::test]
+    async fn second_seed_does_not_duplicate_the_tree() {
+        let kernel = AsyncWorkspaceServerKernel::<StackedRatchet>::new(None);
+        let config = one_office_one_room();
+
+        kernel
+            .initialize_workspace_structure(&config, None)
+            .await
+            .expect("first seed");
+        let after_first = kernel
+            .domain_operations
+            .backend_tx_manager
+            .get_all_nodes()
+            .await
+            .expect("read nodes after first seed");
+
+        // The restart: same store, `on_start` seeds again.
+        kernel
+            .initialize_workspace_structure(&config, None)
+            .await
+            .expect("second seed");
+        let after_second = kernel
+            .domain_operations
+            .backend_tx_manager
+            .get_all_nodes()
+            .await
+            .expect("read nodes after second seed");
+
+        assert_eq!(
+            after_first.len(),
+            2,
+            "fresh seed should produce exactly one office + one room"
+        );
+        assert_eq!(
+            after_second.len(),
+            after_first.len(),
+            "restart duplicated the tree ({} nodes -> {} nodes). The seed-once guard in \
+             initialize_workspace_structure has regressed: on a filesystem backend this grows \
+             an extra copy of every office and room on every single deploy.",
+            after_first.len(),
+            after_second.len()
+        );
+
+        // Cardinality alone is not enough - a re-seed that also wiped the old tree would keep
+        // the count equal while silently rotating every UUID, breaking any stored reference to
+        // an office or room. Pin identity, not just count.
+        let mut first_ids: Vec<_> = after_first.keys().cloned().collect();
+        let mut second_ids: Vec<_> = after_second.keys().cloned().collect();
+        first_ids.sort();
+        second_ids.sort();
+        assert_eq!(
+            first_ids, second_ids,
+            "node IDs changed across a restart; existing references would dangle"
+        );
+    }
+
+    /// A user-created office (no config seeding involved) must also suppress the seed, so a
+    /// workspace whose defaults were renamed or replaced never has them re-injected.
+    #[tokio::test]
+    async fn existing_user_created_office_suppresses_seeding() {
+        let kernel = AsyncWorkspaceServerKernel::<StackedRatchet>::new(None);
+
+        let mut nodes = std::collections::HashMap::new();
+        nodes.insert(
+            "user-made-office".to_string(),
+            citadel_workspace_types::structs::DomainNode {
+                id: "user-made-office".to_string(),
+                parent_id: Some(crate::WORKSPACE_ROOT_ID.to_string()),
+                entity_type: citadel_workspace_types::structs::NodeEntityType::Child(
+                    "office".to_string(),
+                ),
+                depth: 1,
+                name: "Renamed By User".to_string(),
+                description: String::new(),
+                owner_id: UNASSIGNED_OWNER.to_string(),
+                members: vec![],
+                children: Vec::new(),
+                mdx_content: String::new(),
+                rules: None,
+                chat_enabled: true,
+                chat_channel_id: None,
+                default_permissions: DomainPermissions::default(),
+                metadata: Vec::new(),
+                allowed_child_types: None,
+                is_default: true,
+                created_at: 0,
+                updated_at: 0,
+            },
+        );
+        kernel
+            .domain_operations
+            .backend_tx_manager
+            .save_nodes(&nodes)
+            .await
+            .expect("seed a user-created office");
+
+        kernel
+            .initialize_workspace_structure(&one_office_one_room(), None)
+            .await
+            .expect("seed against an already-populated workspace");
+
+        let after = kernel
+            .domain_operations
+            .backend_tx_manager
+            .get_all_nodes()
+            .await
+            .expect("read nodes");
+
+        assert_eq!(
+            after.len(),
+            1,
+            "config defaults were injected on top of a user-populated workspace ({} nodes). \
+             The baked-in structure describes the INITIAL state of a new workspace; it must \
+             never be re-applied over a tree the users own.",
+            after.len()
+        );
+        assert!(
+            after.contains_key("user-made-office"),
+            "the user's own office must survive untouched"
+        );
     }
 }
