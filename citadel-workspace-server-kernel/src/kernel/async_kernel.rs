@@ -270,6 +270,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     /// Initialize the root workspace. Note that this does NOT create any admin user.
     /// The first real user to provide the master password via UpdateWorkspace becomes the admin/owner.
+    ///
+    /// When this call CREATES the root workspace (i.e. the backend held no workspace at all), it
+    /// also records a durable "structure seed pending" marker. That marker is what
+    /// [`Self::initialize_workspace_structure`] uses to tell a brand-new deployment apart from
+    /// an established one, and it is what makes an interrupted first boot recoverable.
     pub async fn inject_admin_user(
         &self,
         workspace_master_password: &str,
@@ -291,6 +296,36 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
         if !workspace_exists {
             info!(target: "citadel", "Creating root workspace with no owner (first user with master password becomes admin)");
+
+            // Record the seed obligation BEFORE any of the durable writes below.
+            //
+            // ORDER IS THE WHOLE POINT. These are independent backend writes with no transaction
+            // around them, so whichever runs first defines the failure mode of the gap between
+            // them, and the two orderings are NOT symmetric:
+            //
+            //   * marker, then workspace - if we die in between, the next boot sees no workspace,
+            //     creates it, and (the marker being already set) seeds it. RECOVERABLE.
+            //   * workspace, then marker - if we die in between, the next boot sees a workspace
+            //     with NEITHER marker. That is indistinguishable from an established pre-marker
+            //     store, so the back-fill in `initialize_workspace_structure` stamps it "seeded"
+            //     and the workspace is left with no offices FOREVER. UNRECOVERABLE.
+            //
+            // So the marker goes first. A pending marker with no workspace is a harmless, self-
+            // healing state; a workspace with no marker is a permanent one.
+            //
+            // Armed ONLY when there is actually a structure to seed. `on_start` calls
+            // `initialize_workspace_structure` only when a structure is configured, so arming it
+            // unconditionally would leave a permanently-pending marker on a server booted without
+            // one. A later deploy that ADDED a structure config would then find `pending == true`
+            // against a workspace that has been live for weeks, and inject the baked-in defaults
+            // into it - an established workspace, which is exactly what this guard exists to
+            // prevent. The obligation only exists if something is going to discharge it.
+            if self.workspace_structure.is_some() {
+                self.domain_operations
+                    .backend_tx_manager
+                    .mark_structure_seed_pending()
+                    .await?;
+            }
 
             // Debug: Check current storage mode
             if self.domain_operations.backend_tx_manager.is_test_mode() {
@@ -472,10 +507,37 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             })
     }
 
+    /// Clear the seed-pending marker. BEST-EFFORT by design.
+    ///
+    /// `structure_seeded` is authoritative on every read path, so a leftover `pending` is
+    /// cosmetic - it only makes the store harder to reason about. Failing a boot over a cosmetic
+    /// write would turn a completed seed into a crash loop, and the next boot would short-circuit
+    /// on `seeded` anyway. Every site that discharges the obligation goes through here, so they
+    /// cannot drift into treating the same write as fatal in one place and optional in another.
+    async fn discharge_seed_obligation(&self) {
+        if let Err(e) = self
+            .domain_operations
+            .backend_tx_manager
+            .clear_structure_seed_pending()
+            .await
+        {
+            warn!(
+                target: "citadel",
+                "Could not clear the seed-pending marker: {e}. Harmless - the seeded marker takes \
+                 precedence on every later boot."
+            );
+        }
+    }
+
     /// Initialize workspace structure from configuration
     ///
     /// Creates offices and rooms as defined in the WorkspaceStructureConfig.
     /// Each office/room with chat_enabled=true gets a UUID for its chat channel.
+    ///
+    /// The configured structure is seeded ONLY into a workspace that has never been seeded. The
+    /// decision is driven entirely by durable markers written by [`Self::inject_admin_user`] -
+    /// never by the node contents, which cannot distinguish a brand-new workspace from an
+    /// established one whose offices were all deleted.
     pub async fn initialize_workspace_structure(
         &self,
         config: &WorkspaceStructureConfig,
@@ -508,6 +570,137 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .backend_tx_manager
             .get_all_nodes()
             .await?;
+
+        // Seed the configured structure ONLY into a fresh workspace.
+        //
+        // `on_start` calls this on every boot, and the code below mints new UUIDs and
+        // *appends*. Against a persistent (filesystem) backend that means every restart
+        // deposits another complete copy of every office and room - the tree grows without
+        // bound, one extra set per deploy. Dev and CI never caught it because they run the
+        // server on the in-memory backend, where every boot legitimately starts empty.
+        //
+        // Skipping (rather than upserting) is deliberate: the tree is user-mutable after the
+        // first boot - offices are created and renamed, MDX content is edited live - so
+        // re-applying the baked-in config on each boot would clobber those edits. The config
+        // describes the *initial* state of a new workspace, not a desired state to reconcile.
+        //
+        // The signal is a DURABLE MARKER, not "does the tree currently have root children".
+        // Emptiness is not the same fact as never-seeded: an admin who deletes every office
+        // leaves a legitimately empty tree, and a contents-based check would then resurrect
+        // the baked-in defaults on the next restart - re-applying config over structure the
+        // users deliberately removed, which is exactly the contract above.
+        // CONCURRENCY: this is a check-then-act, and it is safe because the workspace server is
+        // a SINGLE-WRITER process. `on_start` is a once-per-process NetKernel lifecycle hook,
+        // and the server is one container owning one TCP listener - a second instance against
+        // the same backend cannot even bind. There is deliberately no compare-and-set here:
+        // the backend surface is a plain get/put over the SDK's `BackendHandler` (no CAS
+        // primitive exists to build on), and every other persisted sentinel in this kernel -
+        // `KEY_MIGRATION_DONE` in `migrate_if_needed`, and the schema-version get/set later in
+        // this same `on_start` - has exactly the same shape.
+        //
+        // If multi-process servers over one backend are ever introduced, this marker is NOT the
+        // thing to fix first: every node mutation is a load-mutate-save of the single
+        // `citadel_workspace.nodes` key with no cross-process locking, so concurrent writers
+        // would lose whole subtrees regardless of how this guard is written. That would need a
+        // backend-level locking story, not a special case here.
+        if self
+            .domain_operations
+            .backend_tx_manager
+            .is_structure_seeded()
+            .await?
+        {
+            info!(
+                target: "citadel",
+                "Initial workspace structure already seeded; skipping"
+            );
+            // A leftover `pending` can only exist if an earlier discharge failed (it is
+            // best-effort). Clean it up opportunistically so the store does not carry a
+            // contradictory pair of flags forever. The READ is best-effort too - `seeded` is
+            // authoritative, so nothing on this path may fail a boot.
+            if matches!(
+                self.domain_operations
+                    .backend_tx_manager
+                    .is_structure_seed_pending()
+                    .await,
+                Ok(true)
+            ) {
+                self.discharge_seed_obligation().await;
+            }
+            return Ok(());
+        }
+
+        // Not seeded. Does this workspace still OWE a seed?
+        //
+        // `inject_admin_user` writes the pending marker at the moment it creates a brand-new root
+        // workspace, so this is true for a fresh install - and, crucially, it STAYS true if that
+        // first boot never finished. A crash (or even a transient failure of the node write,
+        // which aborts `on_start` and restarts the container) between creating the root workspace
+        // and writing the tree would otherwise leave a store that looks exactly like an
+        // established pre-marker workspace: no seeded marker, no offices. The back-fill below
+        // would then stamp it as seeded and it would be left with NO offices, permanently. The
+        // pending marker is what makes that first boot resumable.
+        let seed_pending = self
+            .domain_operations
+            .backend_tx_manager
+            .is_structure_seed_pending()
+            .await?;
+
+        if !seed_pending {
+            // Neither marker is present, so this store predates both: an established workspace
+            // from before this logic existed. Back-fill the seeded marker and leave it alone.
+            //
+            // This must NOT be decided from the node contents. An established workspace whose
+            // offices were all deleted by an admin has an empty node map too, and reading that as
+            // "fresh" would resurrect the baked-in defaults on upgrade - precisely the
+            // deletion-must-survive contract this guard exists to uphold.
+            //
+            // Crash-safe by construction: it writes ONLY the marker, never nodes, so there is no
+            // partial state to unwind. A crash before the write leaves the store exactly as it
+            // was and the next boot reaches the same conclusion.
+            info!(
+                target: "citadel",
+                "Established workspace predates the seed markers; recording marker and skipping re-seed"
+            );
+            self.domain_operations
+                .backend_tx_manager
+                .mark_structure_seeded()
+                .await?;
+            return Ok(());
+        }
+
+        // A seed is owed, but a tree already exists. That is not a contradiction - it is the
+        // signature of a boot that wrote the nodes and then died before it could record that it
+        // had (`save_nodes` succeeded, `mark_structure_seeded` did not). Finish that transition.
+        //
+        // The tree here is necessarily COMPLETE, never half-written: `save_nodes` serialises the
+        // entire node map into a single JSON blob and writes it under one key
+        // (`citadel_workspace.nodes`), so either all of it lands or none of it does. There is no
+        // "some offices written, others not" state to repair.
+        //
+        // This branch is therefore essential, not merely defensive. Removing it - or firing it
+        // only when the pending marker is ABSENT, which is already handled above - would send
+        // this exact state down the seeding path and duplicate the whole tree on top of itself:
+        // the original bug, reintroduced.
+        if nodes
+            .values()
+            .any(|node| node.parent_id.as_deref() == Some(crate::WORKSPACE_ROOT_ID))
+        {
+            // A tree exists while a seed is still owed: the previous boot wrote the nodes but died
+            // before recording that it had. Finish that transition rather than half-completing it
+            // - mark it seeded AND discharge the obligation, so no dangling `pending` is left
+            // behind for a future reader to puzzle over.
+            warn!(
+                target: "citadel",
+                "A seed is owed but the workspace already has a tree; recording it as seeded rather than seeding over it"
+            );
+            self.domain_operations
+                .backend_tx_manager
+                .mark_structure_seeded()
+                .await?;
+            self.discharge_seed_obligation().await;
+            return Ok(());
+        }
+
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system clock before unix epoch")
@@ -696,6 +889,22 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .save_nodes(&nodes)
             .await?;
 
+        // Record the seed only AFTER the nodes are durably written. If `save_nodes` fails we
+        // return early WITHOUT touching either marker, so the store keeps its pending marker and
+        // the next boot resumes the seed rather than stamping an empty workspace as done.
+        self.domain_operations
+            .backend_tx_manager
+            .mark_structure_seeded()
+            .await?;
+        // The debt is paid. `seeded` already takes precedence over `pending` on every later boot,
+        // so clearing it is hygiene, not correctness - it keeps the store from carrying a
+        // permanently-true flag that a future reader would have to reason about.
+        //
+        // Deliberately BEST-EFFORT. The tree is durably written and the workspace is durably
+        // marked seeded; failing the boot now over a cosmetic write would turn a completed seed
+        // into a crash loop, and the next boot would short-circuit on `seeded` anyway.
+        self.discharge_seed_obligation().await;
+
         info!(target: "citadel", "Workspace structure initialization complete");
         Ok(())
     }
@@ -736,6 +945,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
             // Re-run admin injection now that NodeRemote is available
             if let Some(workspace_password) = &self.workspace_password {
                 info!(target: "citadel", "Injecting admin and workspace");
+                // Records the "seed pending" marker if this creates a brand-new workspace.
                 self.inject_admin_user(workspace_password).await?;
 
                 // Initialize workspace structure from config if provided
@@ -1315,5 +1525,513 @@ mod content_segment_tests {
     #[test]
     fn rejects_nul_byte() {
         assert!(validate_content_segment("foo\0bar").is_err());
+    }
+}
+
+#[cfg(test)]
+mod structure_seed_idempotency_tests {
+    //! Regression tests for the seed-once guard in `initialize_workspace_structure`.
+    //!
+    //! `on_start` invokes that function on EVERY boot. Before the guard, it minted fresh UUIDs
+    //! and appended, so a server on a persistent (filesystem) backend gained a complete duplicate
+    //! of every office and room on each restart - and `deploy.sh` restarts the server on every
+    //! deploy, so a live workspace would visibly corrupt itself over time. Reproduced on real
+    //! hardware: boot 1 created 3 offices / 8 rooms, boot 2 against the same volume took it to
+    //! 6 / 16.
+    //!
+    //! Nothing caught this because dev and CI run the server on the in-memory backend, where
+    //! every boot legitimately starts from an empty store.
+    //!
+    //! These tests drive the REAL boot sequence - `inject_admin_user` followed by
+    //! `initialize_workspace_structure`, exactly as `on_start` does - rather than hand-feeding the
+    //! seed decision. That matters: the decision now lives in durable markers written by
+    //! `inject_admin_user`, so a mistake in ITS workspace-exists detection would break production
+    //! while leaving a hand-fed test green.
+    use super::*;
+    use crate::config::{OfficeConfig, RoomConfig};
+    use citadel_sdk::prelude::StackedRatchet;
+    use citadel_workspace_types::structs::{DomainNode, DomainPermissions};
+
+    const MASTER_PASSWORD: &str = "test-master-password";
+
+    type Kernel = AsyncWorkspaceServerKernel<StackedRatchet>;
+
+    /// A kernel wired the way a real server is: it HAS a structure configured, so
+    /// `inject_admin_user` takes on a seed obligation when it creates a fresh workspace. Setting
+    /// the field directly (rather than going through the async constructor) keeps the tests off
+    /// the filesystem while still exercising the production wiring.
+    fn kernel() -> Kernel {
+        let mut k = AsyncWorkspaceServerKernel::<StackedRatchet>::new(None);
+        k.workspace_structure = Some((one_office_one_room(), None));
+        k
+    }
+
+    /// A kernel with NO structure configured, as a server whose kernel.toml sets no content
+    /// directory would be.
+    fn kernel_without_structure() -> Kernel {
+        AsyncWorkspaceServerKernel::<StackedRatchet>::new(None)
+    }
+
+    fn one_office_one_room() -> WorkspaceStructureConfig {
+        WorkspaceStructureConfig {
+            name: "Test Workspace".to_string(),
+            description: None,
+            offices: vec![OfficeConfig {
+                name: "General".to_string(),
+                description: None,
+                // No markdown_file: keeps the test off the filesystem entirely.
+                markdown_file: None,
+                chat_enabled: true,
+                rules: None,
+                default_permissions: DomainPermissions::default(),
+                is_default: true,
+                rooms: vec![RoomConfig {
+                    name: "Random".to_string(),
+                    description: None,
+                    markdown_file: None,
+                    chat_enabled: true,
+                    rules: None,
+                    default_permissions: DomainPermissions::default(),
+                }],
+            }],
+        }
+    }
+
+    /// One server boot, in the same order `on_start` performs it.
+    async fn boot(kernel: &Kernel, config: &WorkspaceStructureConfig) {
+        kernel
+            .inject_admin_user(MASTER_PASSWORD)
+            .await
+            .expect("inject_admin_user");
+        kernel
+            .initialize_workspace_structure(config, None)
+            .await
+            .expect("initialize_workspace_structure");
+    }
+
+    async fn nodes(kernel: &Kernel) -> std::collections::HashMap<String, DomainNode> {
+        kernel
+            .domain_operations
+            .backend_tx_manager
+            .get_all_nodes()
+            .await
+            .expect("read nodes")
+    }
+
+    /// A store established BEFORE either seed marker existed: it has a root workspace, but no
+    /// `structure_seeded` and no `structure_seed_pending`. This is what an upgraded deployment
+    /// looks like, and it must never be re-seeded.
+    async fn establish_pre_marker_workspace(kernel: &Kernel) {
+        let workspace = citadel_workspace_types::structs::Workspace {
+            id: crate::WORKSPACE_ROOT_ID.to_string(),
+            name: "Root Workspace".to_string(),
+            description: "An existing deployment".to_string(),
+            owner_id: UNASSIGNED_OWNER.to_string(),
+            members: vec![],
+            offices: vec![],
+            metadata: vec![],
+        };
+        let backend = &kernel.domain_operations.backend_tx_manager;
+        backend
+            .insert_workspace(crate::WORKSPACE_ROOT_ID.to_string(), workspace.clone())
+            .await
+            .expect("insert legacy workspace");
+        backend
+            .insert_domain(
+                crate::WORKSPACE_ROOT_ID.to_string(),
+                citadel_workspace_types::structs::Domain::Workspace { workspace },
+            )
+            .await
+            .expect("insert legacy domain");
+    }
+
+    fn office_node(id: &str, name: &str) -> DomainNode {
+        DomainNode {
+            id: id.to_string(),
+            parent_id: Some(crate::WORKSPACE_ROOT_ID.to_string()),
+            entity_type: citadel_workspace_types::structs::NodeEntityType::Child(
+                "office".to_string(),
+            ),
+            depth: 1,
+            name: name.to_string(),
+            description: String::new(),
+            owner_id: UNASSIGNED_OWNER.to_string(),
+            members: vec![],
+            children: Vec::new(),
+            mdx_content: String::new(),
+            rules: None,
+            chat_enabled: true,
+            chat_channel_id: None,
+            default_permissions: DomainPermissions::default(),
+            metadata: Vec::new(),
+            allowed_child_types: None,
+            is_default: true,
+            created_at: 0,
+            updated_at: 0,
+        }
+    }
+
+    /// The original bug: a restart must not deposit a second copy of the tree.
+    #[tokio::test]
+    async fn second_boot_does_not_duplicate_the_tree() {
+        let k = kernel();
+        let config = one_office_one_room();
+
+        boot(&k, &config).await;
+        let after_first = nodes(&k).await;
+
+        boot(&k, &config).await; // the restart
+        let after_second = nodes(&k).await;
+
+        // Prove the test is not vacuous by NAME, not by a hardcoded count: if seeding silently
+        // produced nothing, the comparison below would be 0 == 0 and pass while testing nothing.
+        assert!(
+            after_first.values().any(|n| n.name == "General"),
+            "first boot did not create the configured office; the test would be vacuous"
+        );
+        assert!(
+            after_first.values().any(|n| n.name == "Random"),
+            "first boot did not create the configured room; the test would be vacuous"
+        );
+
+        assert_eq!(
+            after_second.len(),
+            after_first.len(),
+            "restart duplicated the tree ({} nodes -> {} nodes). On a filesystem backend this \
+             grows an extra copy of every office and room on every single deploy.",
+            after_first.len(),
+            after_second.len()
+        );
+
+        // Cardinality alone is not enough - a re-seed that also wiped the old tree would keep the
+        // count equal while silently rotating every UUID, dangling every stored reference.
+        let mut first: Vec<_> = after_first.keys().cloned().collect();
+        let mut second: Vec<_> = after_second.keys().cloned().collect();
+        first.sort();
+        second.sort();
+        assert_eq!(
+            first, second,
+            "node IDs changed across a restart; existing references would dangle"
+        );
+    }
+
+    /// Deleting every office is a deliberate act and must survive a restart.
+    #[tokio::test]
+    async fn deleting_every_office_does_not_resurrect_the_defaults() {
+        let k = kernel();
+        let config = one_office_one_room();
+
+        boot(&k, &config).await;
+        assert!(
+            !nodes(&k).await.is_empty(),
+            "precondition: first boot seeds"
+        );
+
+        // The admin deletes everything.
+        k.domain_operations
+            .backend_tx_manager
+            .save_nodes(&std::collections::HashMap::new())
+            .await
+            .expect("delete every node");
+
+        boot(&k, &config).await;
+
+        let after = nodes(&k).await;
+        assert!(
+            after.is_empty(),
+            "the defaults were resurrected into a workspace the admin had emptied ({} nodes \
+             reappeared). Config describes the INITIAL state of a new workspace.",
+            after.len()
+        );
+    }
+
+    /// An ESTABLISHED workspace that predates the markers AND was emptied by an admin must not be
+    /// re-seeded on upgrade. This is the case a contents-based check gets wrong: it has no marker
+    /// and no offices, so "is the tree empty?" reads it as brand new.
+    #[tokio::test]
+    async fn emptied_pre_marker_workspace_is_not_reseeded_on_upgrade() {
+        let k = kernel();
+        establish_pre_marker_workspace(&k).await;
+
+        boot(&k, &one_office_one_room()).await;
+
+        let after = nodes(&k).await;
+        assert!(
+            after.is_empty(),
+            "the defaults were resurrected into an established workspace that an admin had \
+             emptied ({} nodes reappeared). An empty tree is not the same fact as a NEW workspace.",
+            after.len()
+        );
+        assert!(
+            k.domain_operations
+                .backend_tx_manager
+                .is_structure_seeded()
+                .await
+                .expect("read marker"),
+            "the seeded marker must be back-filled so later boots take the cheap path"
+        );
+    }
+
+    /// A populated pre-marker store must be recognised as established, not duplicated.
+    #[tokio::test]
+    async fn populated_pre_marker_workspace_is_backfilled_not_reseeded() {
+        let k = kernel();
+        establish_pre_marker_workspace(&k).await;
+
+        let mut existing = std::collections::HashMap::new();
+        existing.insert(
+            "legacy-office".to_string(),
+            office_node("legacy-office", "Engineering"),
+        );
+        k.domain_operations
+            .backend_tx_manager
+            .save_nodes(&existing)
+            .await
+            .expect("save legacy tree");
+
+        boot(&k, &one_office_one_room()).await;
+
+        let after = nodes(&k).await;
+        assert_eq!(
+            after.len(),
+            1,
+            "a pre-marker workspace was re-seeded and now has {} nodes",
+            after.len()
+        );
+        assert!(
+            after.contains_key("legacy-office"),
+            "the existing office must survive untouched"
+        );
+    }
+
+    /// A first boot that dies before the tree is written must be RESUMED, not abandoned.
+    ///
+    /// The root workspace exists but no structure was ever saved. Without the pending marker that
+    /// store is indistinguishable from an established pre-marker workspace, so the back-fill would
+    /// stamp it "seeded" and it would be left with no offices forever. Note this needs no crash to
+    /// trigger: a transient failure of the node write aborts `on_start`, and the container simply
+    /// restarts into exactly this state.
+    #[tokio::test]
+    async fn interrupted_first_boot_is_resumed_not_abandoned() {
+        let k = kernel();
+        let config = one_office_one_room();
+
+        // Boot 1 creates the root workspace, then dies before seeding the structure.
+        k.inject_admin_user(MASTER_PASSWORD)
+            .await
+            .expect("inject_admin_user");
+        assert!(
+            k.domain_operations
+                .backend_tx_manager
+                .is_structure_seed_pending()
+                .await
+                .expect("read pending"),
+            "creating a fresh workspace must record that it still owes a seed"
+        );
+        assert!(
+            nodes(&k).await.is_empty(),
+            "precondition: nothing seeded yet"
+        );
+
+        // Boot 2: the process comes back up against the same store.
+        boot(&k, &config).await;
+
+        let after = nodes(&k).await;
+        assert!(
+            after.values().any(|n| n.name == "General"),
+            "an interrupted first boot was abandoned: the workspace was left with no offices \
+             ({} nodes). The seed obligation must survive the interruption.",
+            after.len()
+        );
+        assert!(
+            !k.domain_operations
+                .backend_tx_manager
+                .is_structure_seed_pending()
+                .await
+                .expect("read pending"),
+            "the pending marker must be cleared once the debt is paid"
+        );
+    }
+
+    /// The seed obligation must be recorded BEFORE the root workspace is persisted.
+    ///
+    /// The two writes are independent (no transaction spans them), so the gap between them has a
+    /// failure mode - and the orderings are not symmetric. Marker-then-workspace leaves a store
+    /// with a marker and no workspace, which self-heals: the next boot creates the workspace and
+    /// seeds it. Workspace-then-marker leaves a store with a workspace and NO marker, which is
+    /// indistinguishable from an established pre-marker store, so the back-fill stamps it "seeded"
+    /// and it is left with no offices forever.
+    ///
+    /// This test pins the recoverable ordering by reproducing the interrupted state directly: the
+    /// marker is set, the workspace was never created, and a subsequent boot must still produce a
+    /// fully seeded workspace.
+    #[tokio::test]
+    async fn seed_obligation_is_recorded_before_the_workspace_is_persisted() {
+        let k = kernel();
+        let backend = &k.domain_operations.backend_tx_manager;
+
+        // Reproduce a first boot that died between the two writes, in the SAFE order: the
+        // obligation was recorded, the workspace never made it.
+        backend
+            .mark_structure_seed_pending()
+            .await
+            .expect("mark pending");
+        assert!(
+            k.get_domain(crate::WORKSPACE_ROOT_ID)
+                .await
+                .expect("read domain")
+                .is_none(),
+            "precondition: the workspace was never persisted"
+        );
+
+        // The next boot must finish the job rather than give up.
+        boot(&k, &one_office_one_room()).await;
+
+        let after = nodes(&k).await;
+        assert!(
+            after.values().any(|n| n.name == "General"),
+            "a first boot interrupted between recording the obligation and persisting the \
+             workspace was not recovered: the workspace has {} nodes. Recording the obligation \
+             first is what makes that gap self-healing.",
+            after.len()
+        );
+        assert!(
+            backend.is_structure_seeded().await.unwrap(),
+            "the workspace should now be marked seeded"
+        );
+    }
+
+    /// A boot that wrote the tree but died before recording it must FINALISE, not re-seed.
+    ///
+    /// `save_nodes` succeeded, `mark_structure_seeded` did not - so the next boot finds a seed
+    /// still owed AND a tree already present. The tree is necessarily complete (`save_nodes`
+    /// writes the whole node map as one blob under one key, so it is all-or-nothing), and the
+    /// only correct move is to record it as seeded. Seeding again would deposit a second copy of
+    /// the entire tree on top of the first - the original bug.
+    #[tokio::test]
+    async fn tree_written_but_seed_unrecorded_is_finalised_not_duplicated() {
+        let k = kernel();
+        let backend = &k.domain_operations.backend_tx_manager;
+
+        // Reproduce the state left by that interrupted boot: workspace created, obligation still
+        // owed, tree fully written, `seeded` never recorded.
+        k.inject_admin_user(MASTER_PASSWORD)
+            .await
+            .expect("inject_admin_user");
+        let mut written = std::collections::HashMap::new();
+        written.insert(
+            "already-written-office".to_string(),
+            office_node("already-written-office", "General"),
+        );
+        backend
+            .save_nodes(&written)
+            .await
+            .expect("simulate the completed save_nodes");
+        assert!(
+            backend.is_structure_seed_pending().await.unwrap(),
+            "precondition: the seed is still owed"
+        );
+        assert!(
+            !backend.is_structure_seeded().await.unwrap(),
+            "precondition: the boot died before recording the seed"
+        );
+
+        // The next boot.
+        boot(&k, &one_office_one_room()).await;
+
+        let after = nodes(&k).await;
+        assert_eq!(
+            after.len(),
+            1,
+            "the existing tree was seeded over rather than recorded: {} nodes now exist. A tree \
+             present while a seed is owed means the previous boot wrote it and died before \
+             recording it - it must be finalised, never duplicated.",
+            after.len()
+        );
+        assert!(
+            after.contains_key("already-written-office"),
+            "the tree written by the interrupted boot must survive untouched"
+        );
+        assert!(
+            backend.is_structure_seeded().await.unwrap(),
+            "the interrupted transition must be completed: the workspace is now seeded"
+        );
+        assert!(
+            !backend.is_structure_seed_pending().await.unwrap(),
+            "and the obligation discharged"
+        );
+    }
+
+    /// A server booted with NO structure configured must not arm a seed obligation.
+    ///
+    /// `on_start` only calls `initialize_workspace_structure` when a structure is configured, so
+    /// an obligation armed on such a boot would never be discharged - it would sit there while the
+    /// workspace ran and accumulated real content, and the first deploy that ADDED a structure
+    /// config would find `pending == true` and inject the baked-in defaults into an established
+    /// workspace. The obligation may only be taken on if something is going to discharge it.
+    #[tokio::test]
+    async fn no_structure_config_means_no_seed_obligation() {
+        let k = kernel_without_structure();
+        assert!(
+            k.workspace_structure.is_none(),
+            "precondition: this kernel has no structure configured"
+        );
+
+        k.inject_admin_user(MASTER_PASSWORD)
+            .await
+            .expect("inject_admin_user");
+
+        assert!(
+            !k.domain_operations
+                .backend_tx_manager
+                .is_structure_seed_pending()
+                .await
+                .expect("read pending"),
+            "a seed obligation was armed on a server with nothing to seed. It would never be \
+             discharged, and a later deploy that added a structure config would inject the \
+             defaults into this by-then-established workspace."
+        );
+    }
+
+    /// The boot-time decision itself: `inject_admin_user` must record the seed obligation on a
+    /// fresh store and must NOT resurrect it on any later boot. This is the wiring the rest of the
+    /// guard depends on, so it is pinned directly rather than assumed.
+    #[tokio::test]
+    async fn inject_admin_user_records_the_seed_obligation_exactly_once() {
+        let k = kernel();
+        let backend = &k.domain_operations.backend_tx_manager;
+
+        assert!(
+            !backend.is_structure_seed_pending().await.unwrap(),
+            "a virgin store owes nothing yet"
+        );
+
+        // First boot: creates the workspace and takes on the seed obligation.
+        k.inject_admin_user(MASTER_PASSWORD)
+            .await
+            .expect("inject 1");
+        assert!(
+            backend.is_structure_seed_pending().await.unwrap(),
+            "creating the root workspace must record the seed obligation"
+        );
+
+        k.initialize_workspace_structure(&one_office_one_room(), None)
+            .await
+            .expect("seed");
+        assert!(backend.is_structure_seeded().await.unwrap());
+        assert!(
+            !backend.is_structure_seed_pending().await.unwrap(),
+            "the obligation must be discharged once the tree is written"
+        );
+
+        // Second boot: the workspace already exists, so no new obligation may be taken on -
+        // otherwise every restart would re-enter the seeding path.
+        k.inject_admin_user(MASTER_PASSWORD)
+            .await
+            .expect("inject 2");
+        assert!(
+            !backend.is_structure_seed_pending().await.unwrap(),
+            "a restart must not re-arm the seed obligation"
+        );
     }
 }

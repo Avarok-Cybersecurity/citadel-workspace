@@ -499,6 +499,65 @@ jobs:
           fi
           echo "UI is serving the SPA shell"
           echo "Smoke test passed: server, internal-service, ui all up"
+      - name: Persistence - restarting the server must not duplicate the workspace tree
+        # THE gap that let the structure-duplication bug ship. Every other test runs the server
+        # on the IN-MEMORY backend, where each boot legitimately starts from an empty store - so
+        # seeding-on-every-boot is indistinguishable from correct behaviour and no unit test can
+        # see the bug. Only a real restart against a real filesystem backend exposes it, and
+        # `docker-compose.production.yml` is the only place the server runs that way.
+        #
+        # The server container from the smoke test above is already running with
+        # WORKSPACE_BACKEND=filesystem on the `server_data` volume. Restart it against that SAME
+        # volume and assert it did not seed a second copy of the office/room tree.
+        env:
+          WORKSPACE_MASTER_PASSWORD: 'ci-smoke-test'
+          INTERNAL_SERVICE_PORT: '12345'
+        run: |
+          set -euo pipefail
+          compose="docker compose -f docker-compose.production.yml"
+
+          # Guard against a vacuous pass: if the FIRST boot seeded nothing, "the restart created
+          # nothing" would be trivially true and would prove nothing.
+          seeded_on_first_boot=$($compose logs server 2>&1 | grep -c "Creating office node" || true)
+          echo "First boot seeded ${seeded_on_first_boot} offices."
+          if [ "$seeded_on_first_boot" -eq 0 ]; then
+            echo "::error::The server seeded no offices at all, so this check would be vacuous."
+            $compose logs server 2>&1 | tail -40
+            exit 1
+          fi
+
+          # Only inspect logs emitted AFTER the restart. Comparing cumulative counts before/after
+          # would couple the result to docker's log buffering and rotation: if the daemon dropped
+          # early lines, the "after" count could come out LOWER and the check would misfire. A
+          # `--since` window asks the precise question instead - "did this boot create any office
+          # or room nodes?" - and the answer must be no.
+          restart_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo "Restarting the server against the same data volume (window starts ${restart_at})..."
+          $compose restart server
+          timeout 180 bash -c 'until docker compose -f docker-compose.production.yml ps server --format json | grep -qw healthy; do sleep 5; done' || {
+            echo "::error::Server did not come back healthy after restart"
+            $compose logs server 2>&1 | tail -40
+            exit 1
+          }
+
+          created_after_restart=$($compose logs server --since "$restart_at" 2>&1 | grep -cE "Creating (office|room) node" || true)
+          echo "Nodes created by the restarted server: ${created_after_restart}"
+
+          if [ "$created_after_restart" -ne 0 ]; then
+            echo "::error::The restart re-seeded the workspace: it created ${created_after_restart} office/room nodes on top of the existing tree. On a persistent backend this grows an extra copy of the whole tree on EVERY deploy."
+            $compose logs server --since "$restart_at" 2>&1 | grep -E "Creating (office|room) node" | head -20
+            exit 1
+          fi
+
+          # Positive confirmation, not just an absence: the guard must actually have run and said
+          # so. Without this, a server that failed to reach the seeding code at all would also
+          # produce zero creations and pass.
+          if ! $compose logs server --since "$restart_at" 2>&1 | grep -q "already seeded; skipping"; then
+            echo "::error::The restarted server never reported skipping the seed. It may not have reached the guard at all - this check cannot confirm the behaviour."
+            $compose logs server --since "$restart_at" 2>&1 | tail -30
+            exit 1
+          fi
+          echo "PASS: the restart created no offices or rooms, and the seed-once guard fired."
       - name: Dump Logs on Failure
         if: failure()
         run: |
