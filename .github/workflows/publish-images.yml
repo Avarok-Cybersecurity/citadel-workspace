@@ -168,6 +168,12 @@ jobs:
         run: |
           set -euo pipefail
           name="smoke-${{ matrix.image }}"
+          # Clean up on EVERY exit path, not just success. On a GitHub-hosted runner a leaked
+          # container dies with the VM, but this repository also has a SELF-HOSTED runner, where
+          # a container left behind by a failed run keeps its ports bound and poisons the next
+          # run. (A five-month-old leaked compose stack squatting on :12345/:12349 is exactly
+          # how the deployment host ended up blocked.)
+          trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
           docker run -d --name "$name" ${{ matrix.smoke_env }} "$IMAGE:$SHA_TAG"
 
           ok=0
@@ -190,7 +196,6 @@ jobs:
             exit 1
           fi
           echo "${{ matrix.image }} is listening on ${{ matrix.smoke_port }}; image is good."
-          docker rm -f "$name" >/dev/null 2>&1 || true
 
       - name: Push immutable SHA tag
         # Only the immutable tag is pushed here. `latest` is advanced by the

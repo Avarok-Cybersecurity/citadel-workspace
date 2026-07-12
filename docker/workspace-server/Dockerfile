@@ -67,7 +67,11 @@ RUN cp ./target/release/citadel-workspace-server-kernel /usr/local/bin/
 FROM debian:trixie-slim AS production
 
 # Runtime dependencies only, derived from `ldd` against the built binary:
-#   libssl3  - provides BOTH libssl.so.3 and libcrypto.so.3
+#   libssl3t64 - provides BOTH libssl.so.3 and libcrypto.so.3. Named `libssl3t64`, not
+#                `libssl3`: on Debian trixie the 64-bit time_t transition renamed the real
+#                package, and `libssl3` survives only as a virtual Provides: alias. Installing
+#                via the alias works today (verified), but naming the real package is explicit
+#                and does not depend on an alias that a future point release may drop.
 #   libzstd1 - libzstd.so.1
 #   zlib1g   - libz.so.1
 # (libc, libm and libgcc_s already ship in the slim base.)
@@ -81,7 +85,7 @@ FROM debian:trixie-slim AS production
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
-        libssl3 \
+        libssl3t64 \
         libzstd1 \
         zlib1g \
         netcat-openbsd && \
