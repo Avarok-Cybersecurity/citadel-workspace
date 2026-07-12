@@ -527,6 +527,20 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         // leaves a legitimately empty tree, and a contents-based check would then resurrect
         // the baked-in defaults on the next restart - re-applying config over structure the
         // users deliberately removed, which is exactly the contract above.
+        // CONCURRENCY: this is a check-then-act, and it is safe because the workspace server is
+        // a SINGLE-WRITER process. `on_start` is a once-per-process NetKernel lifecycle hook,
+        // and the server is one container owning one TCP listener - a second instance against
+        // the same backend cannot even bind. There is deliberately no compare-and-set here:
+        // the backend surface is a plain get/put over the SDK's `BackendHandler` (no CAS
+        // primitive exists to build on), and every other persisted sentinel in this kernel -
+        // `KEY_MIGRATION_DONE` in `migrate_if_needed`, and the schema-version get/set later in
+        // this same `on_start` - has exactly the same shape.
+        //
+        // If multi-process servers over one backend are ever introduced, this marker is NOT the
+        // thing to fix first: every node mutation is a load-mutate-save of the single
+        // `citadel_workspace.nodes` key with no cross-process locking, so concurrent writers
+        // would lose whole subtrees regardless of how this guard is written. That would need a
+        // backend-level locking story, not a special case here.
         if self
             .domain_operations
             .backend_tx_manager
@@ -545,6 +559,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         // duplicate its entire tree on the next boot - reintroducing the very bug this guard
         // exists to prevent. Any node parented to the workspace root proves a tree is already
         // established (config-seeded or user-created): record the marker and leave it alone.
+        //
+        // This path is crash-safe by construction: it writes ONLY the marker, and only when a
+        // tree already exists. It never writes nodes, so there is no partial state to unwind.
+        // A crash between reading `nodes` and writing the marker simply leaves the store as it
+        // was; the next boot re-reads the same tree and writes the marker then. Re-running it is
+        // a no-op, so a stale snapshot cannot cause incorrect behaviour - at worst it repeats.
         if nodes
             .values()
             .any(|node| node.parent_id.as_deref() == Some(crate::WORKSPACE_ROOT_ID))
