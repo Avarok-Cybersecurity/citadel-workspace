@@ -522,17 +522,41 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         // re-applying the baked-in config on each boot would clobber those edits. The config
         // describes the *initial* state of a new workspace, not a desired state to reconcile.
         //
-        // Any node parented to the workspace root means a tree already exists (whether
-        // config-seeded or user-created), so leave it untouched. This mirrors the
-        // `workspace_exists` guard `inject_admin_user` already applies to the root workspace.
+        // The signal is a DURABLE MARKER, not "does the tree currently have root children".
+        // Emptiness is not the same fact as never-seeded: an admin who deletes every office
+        // leaves a legitimately empty tree, and a contents-based check would then resurrect
+        // the baked-in defaults on the next restart - re-applying config over structure the
+        // users deliberately removed, which is exactly the contract above.
+        if self
+            .domain_operations
+            .backend_tx_manager
+            .is_structure_seeded()
+            .await?
+        {
+            info!(
+                target: "citadel",
+                "Initial workspace structure already seeded; skipping"
+            );
+            return Ok(());
+        }
+
+        // Back-fill for stores written before the marker existed. Such a workspace is already
+        // populated but carries no marker, so a marker-only check would treat it as fresh and
+        // duplicate its entire tree on the next boot - reintroducing the very bug this guard
+        // exists to prevent. Any node parented to the workspace root proves a tree is already
+        // established (config-seeded or user-created): record the marker and leave it alone.
         if nodes
             .values()
             .any(|node| node.parent_id.as_deref() == Some(crate::WORKSPACE_ROOT_ID))
         {
             info!(
                 target: "citadel",
-                "Workspace structure already present; skipping initial structure seed"
+                "Workspace structure predates the seed marker; recording marker and skipping re-seed"
             );
+            self.domain_operations
+                .backend_tx_manager
+                .mark_structure_seeded()
+                .await?;
             return Ok(());
         }
 
@@ -722,6 +746,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         self.domain_operations
             .backend_tx_manager
             .save_nodes(&nodes)
+            .await?;
+
+        // Record the seed only AFTER the nodes are durably written. If `save_nodes` fails we
+        // return early without a marker, so the next boot retries the seed rather than marking
+        // a workspace as seeded that has no structure in it.
+        self.domain_operations
+            .backend_tx_manager
+            .mark_structure_seeded()
             .await?;
 
         info!(target: "citadel", "Workspace structure initialization complete");
@@ -1390,6 +1422,151 @@ mod structure_seed_idempotency_tests {
         }
     }
 
+    /// A top-level office node, as a user-created or already-persisted tree would contain.
+    /// `parent_id == WORKSPACE_ROOT_ID` is what marks a node as top-level - the same predicate
+    /// the rest of the kernel uses to enumerate offices (see `async_node_ops.rs`).
+    fn office_node(id: &str, name: &str) -> citadel_workspace_types::structs::DomainNode {
+        citadel_workspace_types::structs::DomainNode {
+            id: id.to_string(),
+            parent_id: Some(crate::WORKSPACE_ROOT_ID.to_string()),
+            entity_type: citadel_workspace_types::structs::NodeEntityType::Child(
+                "office".to_string(),
+            ),
+            depth: 1,
+            name: name.to_string(),
+            description: String::new(),
+            owner_id: UNASSIGNED_OWNER.to_string(),
+            members: vec![],
+            children: Vec::new(),
+            mdx_content: String::new(),
+            rules: None,
+            chat_enabled: true,
+            chat_channel_id: None,
+            default_permissions: DomainPermissions::default(),
+            metadata: Vec::new(),
+            allowed_child_types: None,
+            is_default: true,
+            created_at: 0,
+            updated_at: 0,
+        }
+    }
+
+    /// Deleting every office must NOT cause the defaults to be resurrected on the next boot.
+    ///
+    /// This is the case a contents-based guard ("does the root have children?") gets wrong: an
+    /// admin who removes every office leaves a legitimately empty tree, which such a guard reads
+    /// as "fresh" and re-seeds. Emptiness and never-seeded are different facts, and only the
+    /// durable marker distinguishes them.
+    #[tokio::test]
+    async fn deleting_every_office_does_not_resurrect_the_defaults() {
+        let kernel = AsyncWorkspaceServerKernel::<StackedRatchet>::new(None);
+        let config = one_office_one_room();
+
+        // Boot 1: fresh workspace, seeds normally.
+        kernel
+            .initialize_workspace_structure(&config, None)
+            .await
+            .expect("first seed");
+        assert!(
+            !kernel
+                .domain_operations
+                .backend_tx_manager
+                .get_all_nodes()
+                .await
+                .expect("read nodes")
+                .is_empty(),
+            "precondition: the first seed must have produced a tree"
+        );
+
+        // The admin deletes everything.
+        kernel
+            .domain_operations
+            .backend_tx_manager
+            .save_nodes(&std::collections::HashMap::new())
+            .await
+            .expect("delete every node");
+
+        // Boot 2: the workspace is empty, but it has already been seeded once.
+        kernel
+            .initialize_workspace_structure(&config, None)
+            .await
+            .expect("seed against an emptied workspace");
+
+        let after = kernel
+            .domain_operations
+            .backend_tx_manager
+            .get_all_nodes()
+            .await
+            .expect("read nodes");
+
+        assert!(
+            after.is_empty(),
+            "the baked-in defaults were resurrected into a workspace the admin had emptied \
+             ({} nodes reappeared). Config describes the INITIAL state of a new workspace; \
+             deleting every office is a deliberate act and must survive a restart.",
+            after.len()
+        );
+    }
+
+    /// A store written before the seed marker existed is already populated but carries no
+    /// marker. It must be recognised as seeded and back-filled - NOT treated as fresh, which
+    /// would duplicate its entire tree on the next boot (the original bug).
+    #[tokio::test]
+    async fn preexisting_tree_without_marker_is_backfilled_not_reseeded() {
+        let kernel = AsyncWorkspaceServerKernel::<StackedRatchet>::new(None);
+
+        // Simulate an upgraded deployment: a populated tree, but no marker was ever written.
+        let mut nodes = std::collections::HashMap::new();
+        nodes.insert(
+            "legacy-office".to_string(),
+            office_node("legacy-office", "Engineering"),
+        );
+        kernel
+            .domain_operations
+            .backend_tx_manager
+            .save_nodes(&nodes)
+            .await
+            .expect("seed a legacy tree");
+        assert!(
+            !kernel
+                .domain_operations
+                .backend_tx_manager
+                .is_structure_seeded()
+                .await
+                .expect("read marker"),
+            "precondition: a legacy store carries no marker"
+        );
+
+        kernel
+            .initialize_workspace_structure(&one_office_one_room(), None)
+            .await
+            .expect("boot against a legacy store");
+
+        let after = kernel
+            .domain_operations
+            .backend_tx_manager
+            .get_all_nodes()
+            .await
+            .expect("read nodes");
+
+        assert_eq!(
+            after.len(),
+            1,
+            "a pre-marker workspace was re-seeded and now has {} nodes. Treating a populated \
+             store as fresh just because it predates the marker reintroduces the duplication bug.",
+            after.len()
+        );
+        assert!(
+            kernel
+                .domain_operations
+                .backend_tx_manager
+                .is_structure_seeded()
+                .await
+                .expect("read marker"),
+            "the marker must be back-filled so the check is cheap on every later boot"
+        );
+    }
+
     /// Seeding twice against one store must be a no-op the second time.
     #[tokio::test]
     async fn second_seed_does_not_duplicate_the_tree() {
@@ -1419,10 +1596,19 @@ mod structure_seed_idempotency_tests {
             .await
             .expect("read nodes after second seed");
 
-        assert_eq!(
-            after_first.len(),
-            2,
-            "fresh seed should produce exactly one office + one room"
+        // Assert the first seed produced the configured tree BY NAME rather than by a hardcoded
+        // node count. The point is only to prove the test is not vacuous: if seeding silently
+        // produced nothing, the idempotency assertion below would compare 0 against 0 and pass
+        // while testing nothing. Matching names keeps that guarantee without breaking if the
+        // storage layer ever persists an extra structural node (a root or wrapper), which would
+        // be unrelated to the regression under test.
+        assert!(
+            after_first.values().any(|n| n.name == "General"),
+            "fresh seed did not create the configured office; the test would be vacuous"
+        );
+        assert!(
+            after_first.values().any(|n| n.name == "Random"),
+            "fresh seed did not create the configured room; the test would be vacuous"
         );
         assert_eq!(
             after_second.len(),
@@ -1456,29 +1642,7 @@ mod structure_seed_idempotency_tests {
         let mut nodes = std::collections::HashMap::new();
         nodes.insert(
             "user-made-office".to_string(),
-            citadel_workspace_types::structs::DomainNode {
-                id: "user-made-office".to_string(),
-                parent_id: Some(crate::WORKSPACE_ROOT_ID.to_string()),
-                entity_type: citadel_workspace_types::structs::NodeEntityType::Child(
-                    "office".to_string(),
-                ),
-                depth: 1,
-                name: "Renamed By User".to_string(),
-                description: String::new(),
-                owner_id: UNASSIGNED_OWNER.to_string(),
-                members: vec![],
-                children: Vec::new(),
-                mdx_content: String::new(),
-                rules: None,
-                chat_enabled: true,
-                chat_channel_id: None,
-                default_permissions: DomainPermissions::default(),
-                metadata: Vec::new(),
-                allowed_child_types: None,
-                is_default: true,
-                created_at: 0,
-                updated_at: 0,
-            },
+            office_node("user-made-office", "Renamed By User"),
         );
         kernel
             .domain_operations

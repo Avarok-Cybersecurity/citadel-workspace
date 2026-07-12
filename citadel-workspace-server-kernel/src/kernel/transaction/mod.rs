@@ -79,6 +79,17 @@ const KEY_MIGRATION_DONE: &str = "citadel_workspace.migration_v2_done";
 /// Key for storing the backend schema version.
 pub(crate) const KEY_SCHEMA_VERSION: &str = "citadel_workspace.schema_version";
 
+/// Durable "the initial workspace structure has been seeded" marker.
+///
+/// `on_start` runs the structure seeding on EVERY boot, so it needs a way to
+/// know whether a workspace is genuinely new. Inferring that from "the tree has
+/// no root children" is not sound: an admin who deletes every office leaves a
+/// legitimately-empty tree that would then be re-seeded with the baked-in
+/// defaults on the next restart, resurrecting content they deliberately removed.
+/// A persisted marker records the fact of seeding itself, which is what the
+/// contract actually depends on.
+pub(crate) const KEY_STRUCTURE_SEEDED: &str = "citadel_workspace.structure_seeded";
+
 impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     pub fn new() -> Self {
         info!(target: "citadel", "Initializing BackendTransactionManager with NodeRemote backend");

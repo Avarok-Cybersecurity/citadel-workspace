@@ -8,6 +8,7 @@
 use crate::kernel::transaction::BackendTransactionManager;
 use crate::kernel::transaction::{
     KEY_INDEX_DOMAIN_IDS, KEY_INDEX_USER_IDS, KEY_INDEX_WORKSPACE_IDS, KEY_SCHEMA_VERSION,
+    KEY_STRUCTURE_SEEDED,
 };
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{Domain, DomainNode, TreeSchema, User, Workspace};
@@ -274,6 +275,26 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// Set the schema version in the backend.
     pub async fn set_schema_version(&self, version: u32) -> Result<(), NetworkError> {
         self.backend_save(KEY_SCHEMA_VERSION, &version).await
+    }
+
+    // ========== Initial Structure Seeding Marker ==========
+
+    /// Whether the initial workspace structure has already been seeded.
+    ///
+    /// `false` for a fresh database and for any store written before this marker
+    /// existed - see `initialize_workspace_structure`, which back-fills the marker
+    /// for the latter case rather than treating it as fresh.
+    pub async fn is_structure_seeded(&self) -> Result<bool, NetworkError> {
+        Ok(self
+            .backend_get::<bool>(KEY_STRUCTURE_SEEDED)
+            .await?
+            .unwrap_or(false))
+    }
+
+    /// Record that the initial workspace structure has been seeded, so it is
+    /// never seeded again - not even if every office is later deleted.
+    pub async fn mark_structure_seeded(&self) -> Result<(), NetworkError> {
+        self.backend_save(KEY_STRUCTURE_SEEDED, &true).await
     }
 }
 
