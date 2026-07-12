@@ -45,12 +45,26 @@ services:
   # Data persisted to server_data volume
   # ---------------------------------------------------------------------------
   server:
+    # Pull a prebuilt image from GHCR rather than compiling on the production
+    # host. `IMAGE_TAG` defaults to `latest`; pin it to a `sha-<12-char-sha>` tag
+    # to roll back to an exact prior build (see .github/workflows/publish-images.yml).
+    #
+    # `latest` is safe as a default because CI only advances it via a `promote-latest`
+    # job that requires EVERY image in the release to have built AND passed its smoke
+    # test, and only on master -- so it can never point at a half-published release or
+    # at a manually-dispatched branch build. Pin an explicit SHA tag for a deploy you
+    # need to be able to reproduce exactly.
+    image: ghcr.io/avarok-cybersecurity/citadel-workspace-server:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: ./docker/workspace-server/Dockerfile
+      # REQUIRED. `dev` is the last stage in that Dockerfile (so that the dev
+      # compose file, which pins no target, keeps its toolchain image). Without
+      # this line a local `docker compose build` would produce the 5.6 GB
+      # toolchain image instead of the 142 MB runtime one.
+      target: production
     volumes:
       - server_data:/data/server
-      - target_cache:/usr/src/app/target
     environment:
       - RUST_LOG=citadel=info
       - WORKSPACE_MASTER_PASSWORD=${WORKSPACE_MASTER_PASSWORD}
@@ -60,12 +74,20 @@ services:
       # workspace state on the `server_data` volume defined above.
       - WORKSPACE_BACKEND=filesystem
       - WORKSPACE_DATA_DIR=/data/server
-      # With network_mode: host, bind the Citadel listener to loopback so it
-      # is reachable only by the co-located cloudflared (the protocol is E2E
-      # encrypted, but a 0.0.0.0 bind would still expose it on the host's
-      # public interfaces). Override if a remote peer must reach this server
-      # directly, and add a host firewall in that case.
-      - WORKSPACE_BIND_ADDR=127.0.0.1:12349
+      # Which interface the Citadel listener binds to.
+      #
+      # Defaults to loopback, which is correct for the co-located-cloudflared
+      # topology: the tunnel reaches the server over the host loopback, and a
+      # 0.0.0.0 bind would additionally expose it on the host's public
+      # interfaces, bypassing the Cloudflare boundary.
+      #
+      # It is now overridable because the local-agent topology needs the
+      # opposite: each user runs their own agent on their own machine and dials
+      # this server DIRECTLY over the internet, so it must bind 0.0.0.0. Set
+      # `WORKSPACE_BIND_ADDR=0.0.0.0:12349` in .env for that deployment, and put
+      # a host firewall in front of the port. The Citadel protocol is E2E
+      # encrypted, so a public bind is by design in that mode.
+      - WORKSPACE_BIND_ADDR=${WORKSPACE_BIND_ADDR:-127.0.0.1:12349}
     deploy:
       resources:
         limits:
@@ -92,14 +114,19 @@ services:
   # same address the user specified.
   # ---------------------------------------------------------------------------
   internal-service:
+    # Prebuilt image from GHCR; see the `server` service above for the IMAGE_TAG
+    # pinning / rollback contract.
+    image: ghcr.io/avarok-cybersecurity/citadel-workspace-internal-service:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: ./docker/internal-service/Dockerfile
+      # REQUIRED - see the `server` service. Without it a local build produces
+      # the 4.5 GB toolchain image rather than the 145 MB runtime one.
+      target: production
       args:
         - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT:-12345}
     volumes:
       - internal_service_data:/data/internal-service
-      - target_cache:/usr/src/app/target
     environment:
       - RUST_LOG=citadel=info
       - DOCKER_CONTAINER=1
@@ -262,5 +289,8 @@ volumes:
   # Application data (NEVER delete these unless you want to lose all data)
   server_data:
   internal_service_data:
-  # Build cache (safe to delete, just makes rebuilds slower)
-  target_cache:
+  # NOTE: the `target_cache` build-cache volume is gone. The production images
+  # are now slim runtime stages that contain no cargo, no source and no
+  # `target/` directory, so there was nothing left for it to cache -- it only
+  # existed to speed up in-container rebuilds of the old 5.6 GB toolchain image.
+  # The dev compose file still has its own, which is where it belongs.

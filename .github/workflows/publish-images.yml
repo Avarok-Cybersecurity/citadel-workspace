@@ -1,0 +1,252 @@
+# =============================================================================
+# Publish container images to GHCR.
+#
+# WHY THIS EXISTS
+#
+# Deploys previously built images ON the production host (`deploy.sh` ran
+# `docker compose build`). That is slow (a full Rust release build per deploy),
+# it requires the source tree and a toolchain on the production box, it offers
+# no rollback (the previous image is simply gone), and it makes every deploy
+# hostage to that host's Docker build networking. Building here instead and
+# having the host `docker compose pull` fixes all four at once.
+#
+# TAGGING AND THE `latest` CONTRACT
+#
+# Each image is published under an immutable `sha-<12-char-sha>` tag. That is
+# what makes rollback possible: `IMAGE_TAG=sha-abc123456789 ./deploy.sh`
+# redeploys an exact prior build. 12 characters rather than git's default 7:
+# these tags are the rollback handle, and a 7-char prefix collision would make
+# an operator's chosen tag silently ambiguous.
+#
+# `latest` is published by a SEPARATE `promote-latest` job, never by the build
+# matrix, for two reasons:
+#
+#   1. `workflow_dispatch` can be run from ANY branch. If the matrix pushed
+#      `latest` directly, a manual run from a feature branch would overwrite the
+#      tag that production pulls by default with unmerged code. `promote-latest`
+#      is gated on `refs/heads/master`.
+#   2. The matrix builds the two images as independent jobs. If `latest` were
+#      pushed per-job, a run where `server` succeeded and `internal-service`
+#      failed would leave `latest` pointing at a MISMATCHED pair, and a deploy
+#      using the default tag would pull two versions that never shipped
+#      together. `promote-latest` needs the whole matrix to succeed, so `latest`
+#      only ever advances as a complete set.
+#
+# ONE-TIME MANUAL SETUP
+#
+# GHCR packages are created PRIVATE. After the first successful run, open each
+# package's settings on GitHub and set its visibility to Public, otherwise every
+# developer must `docker login ghcr.io` before they can pull. The repositories
+# themselves are already public, so there is nothing secret in these images.
+#
+# WHY `ui` IS NOT PUBLISHED HERE (yet)
+#
+# The production UI image bakes `VITE_WS_URL` at build time, and its nginx CSP
+# is `connect-src 'self'` - so a UI served on :8080 cannot reach an agent on
+# :12345. Publishing it today would ship an artifact that cannot work for the
+# local-agent deployment. It gets added once the same-origin `/ws` reverse proxy
+# (and the matching frontend change to derive the URL from `window.location`)
+# lands.
+# =============================================================================
+name: Publish Images
+
+on:
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+
+# Never cancel a publish mid-push: a half-pushed manifest is worse than a slow
+# one, and unlike `validate.yml` these runs have side effects outside the runner.
+concurrency:
+  group: publish-images-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: server
+            dockerfile: ./docker/workspace-server/Dockerfile
+            # The server Dockerfile declares no build args. Passing an ARG a Dockerfile does not
+            # declare is a silent no-op that Docker only warns about, so build args are scoped
+            # per-image here rather than passed globally to both.
+            build_args: ""
+
+            # Smoke-test config. The server refuses to start without a master
+            # password, and we exercise the filesystem backend because that is
+            # what production runs.
+            smoke_port: 12349
+            # Bind to LOOPBACK, matching the production default. Nothing is published out of
+            # the container anyway (the smoke run uses no `-p` and no host networking, so the
+            # listener is confined to the container's own network namespace), and the probe
+            # runs via `docker exec` inside that namespace - so loopback costs nothing. But
+            # this repository has a self-hosted runner, and a container that binds 0.0.0.0 is
+            # one `-p` or one `network_mode: host` away from putting a server with a known
+            # password on someone's LAN. Default to the narrow thing.
+            smoke_env: >-
+              -e WORKSPACE_MASTER_PASSWORD=ci-smoke-test
+              -e WORKSPACE_BACKEND=filesystem
+              -e WORKSPACE_DATA_DIR=/data/server
+              -e WORKSPACE_BIND_ADDR=127.0.0.1:12349
+          - image: internal-service
+            dockerfile: ./docker/internal-service/Dockerfile
+            # Only this Dockerfile declares INTERNAL_SERVICE_PORT (it is baked into the image's
+            # ENV and expanded by its CMD at runtime).
+            build_args: |
+              INTERNAL_SERVICE_PORT=12345
+            smoke_port: 12345
+            # Loopback, for the same reason as the server above.
+            smoke_env: >-
+              -e INTERNAL_SERVICE_PORT=12345
+              -e INTERNAL_SERVICE_BIND_HOST=127.0.0.1
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Free Disk Space
+        # The `builder` stage is ~5.6 GB (full Rust toolchain + target/). A stock
+        # GitHub runner does not have room for it alongside the preinstalled
+        # toolchains, and the failure mode is an opaque "no space left on device"
+        # deep inside a cargo build. Same step validate.yml already uses.
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
+          df -h
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Compute image reference
+        # Docker image references MUST be lowercase, but the org is spelled
+        # `Avarok-Cybersecurity`. Passing ${{ github.repository_owner }} straight
+        # into a tag produces `ghcr.io/Avarok-Cybersecurity/...`, which the daemon
+        # rejects with "repository name must be lowercase".
+        run: |
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/citadel-workspace-${{ matrix.image }}" >> "$GITHUB_ENV"
+          echo "SHA_TAG=sha-${GITHUB_SHA:0:12}" >> "$GITHUB_ENV"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build production image (load locally, do NOT push yet)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          # `production` is the slim runtime stage (~145 MB). Without an explicit
+          # target, Docker builds the LAST stage - which is `dev`, deliberately, so
+          # that docker-compose.yml (which pins no target) keeps working. Omitting
+          # this line would publish the 5.6 GB toolchain image.
+          target: production
+          # Load into the local daemon instead of pushing, so the smoke test below
+          # runs against the EXACT artifact that will be published. Pushing first
+          # and testing afterwards would leave a broken image in the registry for
+          # anyone who pulled in between.
+          load: true
+          push: false
+          build-args: ${{ matrix.build_args }}
+          tags: ${{ env.IMAGE }}:${{ env.SHA_TAG }}
+          # Stamp the commit into the image itself. `latest` is a MUTABLE tag on two
+          # INDEPENDENT registry repositories, and no registry offers an atomic
+          # multi-repository tag update -- so a promotion that succeeds for `server` and
+          # then fails for `internal-service` would leave `latest` pointing at a mismatched
+          # pair. This label is what lets `deploy.sh` detect that and refuse to deploy the
+          # mixed set, rather than silently restarting production on two images that never
+          # shipped together. The check is the safety net; the promote job is the happy path.
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Smoke test the image before publishing
+        # The runtime stages deliberately omit the toolchain, the source tree and
+        # most OS packages. A missing shared library, a missing runtime asset
+        # (kernel.toml / documents/), or a broken CMD would otherwise only surface
+        # during an actual deploy. This starts the real image and probes it with
+        # `nc -z` - the same check the compose healthchecks use - so a broken image
+        # can never reach the registry.
+        run: |
+          set -euo pipefail
+          name="smoke-${{ matrix.image }}"
+          # Clean up on EVERY exit path, not just success. On a GitHub-hosted runner a leaked
+          # container dies with the VM, but this repository also has a SELF-HOSTED runner, where
+          # a container left behind by a failed run keeps its ports bound and poisons the next
+          # run. (A five-month-old leaked compose stack squatting on :12345/:12349 is exactly
+          # how the deployment host ended up blocked.)
+          trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
+          docker run -d --name "$name" ${{ matrix.smoke_env }} "$IMAGE:$SHA_TAG"
+
+          ok=0
+          for _ in $(seq 1 45); do
+            state=$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null || echo gone)
+            if [ "$state" != "running" ]; then
+              echo "Container is '$state' - it exited instead of serving."
+              break
+            fi
+            if docker exec "$name" nc -z 127.0.0.1 ${{ matrix.smoke_port }} 2>/dev/null; then
+              ok=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::${{ matrix.image }} production image failed its smoke test - not publishing."
+            docker logs "$name" 2>&1 | tail -50 || true
+            exit 1
+          fi
+          echo "${{ matrix.image }} is listening on ${{ matrix.smoke_port }}; image is good."
+
+      - name: Push immutable SHA tag
+        # Only the immutable tag is pushed here. `latest` is advanced by the
+        # `promote-latest` job below, and only when the whole matrix succeeded on
+        # master - see the header comment.
+        run: docker push "$IMAGE:$SHA_TAG"
+
+  promote-latest:
+    name: Promote latest
+    # `needs` requires EVERY matrix job to have succeeded. Combined with the
+    # master-only guard, this is what guarantees `latest` never points at a
+    # half-published release or at unmerged code from a manual branch dispatch.
+    needs: publish
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Point latest at this release
+        # `imagetools create` retags in the registry by manifest reference - it
+        # does not pull or rebuild the image, so the bits under `latest` are
+        # byte-identical to the SHA tag that just passed its smoke test.
+        run: |
+          set -euo pipefail
+          sha_tag="sha-${GITHUB_SHA:0:12}"
+          for img in server internal-service; do
+            image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/citadel-workspace-${img}"
+            echo "Promoting ${image}:${sha_tag} -> ${image}:latest"
+            docker buildx imagetools create -t "${image}:latest" "${image}:${sha_tag}"
+          done
+          echo "Rollback handle for this release: IMAGE_TAG=${sha_tag}"
