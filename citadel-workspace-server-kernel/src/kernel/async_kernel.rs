@@ -507,6 +507,28 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             })
     }
 
+    /// Clear the seed-pending marker. BEST-EFFORT by design.
+    ///
+    /// `structure_seeded` is authoritative on every read path, so a leftover `pending` is
+    /// cosmetic - it only makes the store harder to reason about. Failing a boot over a cosmetic
+    /// write would turn a completed seed into a crash loop, and the next boot would short-circuit
+    /// on `seeded` anyway. Every site that discharges the obligation goes through here, so they
+    /// cannot drift into treating the same write as fatal in one place and optional in another.
+    async fn discharge_seed_obligation(&self) {
+        if let Err(e) = self
+            .domain_operations
+            .backend_tx_manager
+            .clear_structure_seed_pending()
+            .await
+        {
+            warn!(
+                target: "citadel",
+                "Could not clear the seed-pending marker: {e}. Harmless - the seeded marker takes \
+                 precedence on every later boot."
+            );
+        }
+    }
+
     /// Initialize workspace structure from configuration
     ///
     /// Creates offices and rooms as defined in the WorkspaceStructureConfig.
@@ -591,6 +613,19 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 target: "citadel",
                 "Initial workspace structure already seeded; skipping"
             );
+            // A leftover `pending` can only exist if an earlier discharge failed (it is
+            // best-effort). Clean it up opportunistically so the store does not carry a
+            // contradictory pair of flags forever. The READ is best-effort too - `seeded` is
+            // authoritative, so nothing on this path may fail a boot.
+            if matches!(
+                self.domain_operations
+                    .backend_tx_manager
+                    .is_structure_seed_pending()
+                    .await,
+                Ok(true)
+            ) {
+                self.discharge_seed_obligation().await;
+            }
             return Ok(());
         }
 
@@ -652,10 +687,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 .backend_tx_manager
                 .mark_structure_seeded()
                 .await?;
-            self.domain_operations
-                .backend_tx_manager
-                .clear_structure_seed_pending()
-                .await?;
+            self.discharge_seed_obligation().await;
             return Ok(());
         }
 
@@ -861,18 +893,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         // Deliberately BEST-EFFORT. The tree is durably written and the workspace is durably
         // marked seeded; failing the boot now over a cosmetic write would turn a completed seed
         // into a crash loop, and the next boot would short-circuit on `seeded` anyway.
-        if let Err(e) = self
-            .domain_operations
-            .backend_tx_manager
-            .clear_structure_seed_pending()
-            .await
-        {
-            warn!(
-                target: "citadel",
-                "Workspace seeded successfully, but could not clear the seed-pending marker: {e}. \
-                 Harmless - the seeded marker takes precedence on every later boot."
-            );
-        }
+        self.discharge_seed_obligation().await;
 
         info!(target: "citadel", "Workspace structure initialization complete");
         Ok(())
