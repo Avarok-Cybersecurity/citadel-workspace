@@ -668,9 +668,19 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             return Ok(());
         }
 
-        // Defence in depth: a seed is owed, but an existing tree proves the workspace is not
-        // actually empty. Never inject defaults on top of a tree. This can only ever ADD a skip,
-        // never cause a seed, so it is safe to keep.
+        // A seed is owed, but a tree already exists. That is not a contradiction - it is the
+        // signature of a boot that wrote the nodes and then died before it could record that it
+        // had (`save_nodes` succeeded, `mark_structure_seeded` did not). Finish that transition.
+        //
+        // The tree here is necessarily COMPLETE, never half-written: `save_nodes` serialises the
+        // entire node map into a single JSON blob and writes it under one key
+        // (`citadel_workspace.nodes`), so either all of it lands or none of it does. There is no
+        // "some offices written, others not" state to repair.
+        //
+        // This branch is therefore essential, not merely defensive. Removing it - or firing it
+        // only when the pending marker is ABSENT, which is already handled above - would send
+        // this exact state down the seeding path and duplicate the whole tree on top of itself:
+        // the original bug, reintroduced.
         if nodes
             .values()
             .any(|node| node.parent_id.as_deref() == Some(crate::WORKSPACE_ROOT_ID))
@@ -1888,6 +1898,67 @@ mod structure_seed_idempotency_tests {
         assert!(
             backend.is_structure_seeded().await.unwrap(),
             "the workspace should now be marked seeded"
+        );
+    }
+
+    /// A boot that wrote the tree but died before recording it must FINALISE, not re-seed.
+    ///
+    /// `save_nodes` succeeded, `mark_structure_seeded` did not - so the next boot finds a seed
+    /// still owed AND a tree already present. The tree is necessarily complete (`save_nodes`
+    /// writes the whole node map as one blob under one key, so it is all-or-nothing), and the
+    /// only correct move is to record it as seeded. Seeding again would deposit a second copy of
+    /// the entire tree on top of the first - the original bug.
+    #[tokio::test]
+    async fn tree_written_but_seed_unrecorded_is_finalised_not_duplicated() {
+        let k = kernel();
+        let backend = &k.domain_operations.backend_tx_manager;
+
+        // Reproduce the state left by that interrupted boot: workspace created, obligation still
+        // owed, tree fully written, `seeded` never recorded.
+        k.inject_admin_user(MASTER_PASSWORD)
+            .await
+            .expect("inject_admin_user");
+        let mut written = std::collections::HashMap::new();
+        written.insert(
+            "already-written-office".to_string(),
+            office_node("already-written-office", "General"),
+        );
+        backend
+            .save_nodes(&written)
+            .await
+            .expect("simulate the completed save_nodes");
+        assert!(
+            backend.is_structure_seed_pending().await.unwrap(),
+            "precondition: the seed is still owed"
+        );
+        assert!(
+            !backend.is_structure_seeded().await.unwrap(),
+            "precondition: the boot died before recording the seed"
+        );
+
+        // The next boot.
+        boot(&k, &one_office_one_room()).await;
+
+        let after = nodes(&k).await;
+        assert_eq!(
+            after.len(),
+            1,
+            "the existing tree was seeded over rather than recorded: {} nodes now exist. A tree \
+             present while a seed is owed means the previous boot wrote it and died before \
+             recording it - it must be finalised, never duplicated.",
+            after.len()
+        );
+        assert!(
+            after.contains_key("already-written-office"),
+            "the tree written by the interrupted boot must survive untouched"
+        );
+        assert!(
+            backend.is_structure_seeded().await.unwrap(),
+            "the interrupted transition must be completed: the workspace is now seeded"
+        );
+        assert!(
+            !backend.is_structure_seed_pending().await.unwrap(),
+            "and the obligation discharged"
         );
     }
 
