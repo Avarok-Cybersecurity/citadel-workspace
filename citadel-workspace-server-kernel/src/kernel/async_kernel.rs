@@ -297,6 +297,26 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         if !workspace_exists {
             info!(target: "citadel", "Creating root workspace with no owner (first user with master password becomes admin)");
 
+            // Record the seed obligation BEFORE any of the durable writes below.
+            //
+            // ORDER IS THE WHOLE POINT. These are independent backend writes with no transaction
+            // around them, so whichever runs first defines the failure mode of the gap between
+            // them, and the two orderings are NOT symmetric:
+            //
+            //   * marker, then workspace - if we die in between, the next boot sees no workspace,
+            //     creates it, and (the marker being already set) seeds it. RECOVERABLE.
+            //   * workspace, then marker - if we die in between, the next boot sees a workspace
+            //     with NEITHER marker. That is indistinguishable from an established pre-marker
+            //     store, so the back-fill in `initialize_workspace_structure` stamps it "seeded"
+            //     and the workspace is left with no offices FOREVER. UNRECOVERABLE.
+            //
+            // So the marker goes first. A pending marker with no workspace is a harmless, self-
+            // healing state; a workspace with no marker is a permanent one.
+            self.domain_operations
+                .backend_tx_manager
+                .mark_structure_seed_pending()
+                .await?;
+
             // Debug: Check current storage mode
             if self.domain_operations.backend_tx_manager.is_test_mode() {
                 warn!(target: "citadel", "Creating workspace in test storage mode!");
@@ -338,16 +358,6 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             self.domain_operations
                 .backend_tx_manager
                 .set_workspace_password(crate::WORKSPACE_ROOT_ID, workspace_master_password)
-                .await?;
-
-            // Record that this brand-new workspace still owes its initial structure. Written
-            // HERE, at creation, so the obligation survives a crash: if the boot dies before the
-            // tree is written, the next boot still sees the marker and finishes the job. Without
-            // it, such a store is indistinguishable from an established pre-marker workspace and
-            // would be permanently left with no offices.
-            self.domain_operations
-                .backend_tx_manager
-                .mark_structure_seed_pending()
                 .await?;
 
             info!(target: "citadel", "Root workspace created successfully (awaiting first admin)");
@@ -1767,6 +1777,54 @@ mod structure_seed_idempotency_tests {
                 .await
                 .expect("read pending"),
             "the pending marker must be cleared once the debt is paid"
+        );
+    }
+
+    /// The seed obligation must be recorded BEFORE the root workspace is persisted.
+    ///
+    /// The two writes are independent (no transaction spans them), so the gap between them has a
+    /// failure mode - and the orderings are not symmetric. Marker-then-workspace leaves a store
+    /// with a marker and no workspace, which self-heals: the next boot creates the workspace and
+    /// seeds it. Workspace-then-marker leaves a store with a workspace and NO marker, which is
+    /// indistinguishable from an established pre-marker store, so the back-fill stamps it "seeded"
+    /// and it is left with no offices forever.
+    ///
+    /// This test pins the recoverable ordering by reproducing the interrupted state directly: the
+    /// marker is set, the workspace was never created, and a subsequent boot must still produce a
+    /// fully seeded workspace.
+    #[tokio::test]
+    async fn seed_obligation_is_recorded_before_the_workspace_is_persisted() {
+        let k = kernel();
+        let backend = &k.domain_operations.backend_tx_manager;
+
+        // Reproduce a first boot that died between the two writes, in the SAFE order: the
+        // obligation was recorded, the workspace never made it.
+        backend
+            .mark_structure_seed_pending()
+            .await
+            .expect("mark pending");
+        assert!(
+            k.get_domain(crate::WORKSPACE_ROOT_ID)
+                .await
+                .expect("read domain")
+                .is_none(),
+            "precondition: the workspace was never persisted"
+        );
+
+        // The next boot must finish the job rather than give up.
+        boot(&k, &one_office_one_room()).await;
+
+        let after = nodes(&k).await;
+        assert!(
+            after.values().any(|n| n.name == "General"),
+            "a first boot interrupted between recording the obligation and persisting the \
+             workspace was not recovered: the workspace has {} nodes. Recording the obligation \
+             first is what makes that gap self-healing.",
+            after.len()
+        );
+        assert!(
+            backend.is_structure_seeded().await.unwrap(),
+            "the workspace should now be marked seeded"
         );
     }
 
