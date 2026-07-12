@@ -270,10 +270,15 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     /// Initialize the root workspace. Note that this does NOT create any admin user.
     /// The first real user to provide the master password via UpdateWorkspace becomes the admin/owner.
+    ///
+    /// Returns `true` if the root workspace was created by this call (i.e. the backend held no
+    /// workspace at all), and `false` if it already existed. Callers use that to tell a
+    /// brand-new deployment apart from an established one - see
+    /// [`Self::initialize_workspace_structure`].
     pub async fn inject_admin_user(
         &self,
         workspace_master_password: &str,
-    ) -> Result<(), NetworkError> {
+    ) -> Result<bool, NetworkError> {
         info!(target: "citadel", "Initializing root workspace (no pre-created admin user)");
 
         // Pre-populate the master password BEFORE any workspace checks
@@ -338,7 +343,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             info!(target: "citadel", "Root workspace created successfully (awaiting first admin)");
         }
 
-        Ok(())
+        // Report whether the root workspace was created by THIS call. That is the only
+        // trustworthy "is this a brand-new workspace?" signal available to
+        // `initialize_workspace_structure`: by the time it runs, the root workspace always
+        // exists (this function just made sure of it), and the node contents cannot tell a
+        // new workspace apart from an established one whose offices were all deleted.
+        Ok(!workspace_exists)
     }
 
     /// Get a reference to the async domain operations
@@ -476,10 +486,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     ///
     /// Creates offices and rooms as defined in the WorkspaceStructureConfig.
     /// Each office/room with chat_enabled=true gets a UUID for its chat channel.
+    ///
+    /// `workspace_is_new` must be the value returned by [`Self::inject_admin_user`] on this
+    /// same boot: `true` only when the root workspace did not previously exist. The configured
+    /// structure is seeded ONLY into such a workspace. It is not enough to look at the node
+    /// contents - see the guard below.
     pub async fn initialize_workspace_structure(
         &self,
         config: &WorkspaceStructureConfig,
         base_path: Option<&std::path::Path>,
+        workspace_is_new: bool,
     ) -> Result<(), NetworkError> {
         use citadel_workspace_types::structs::{DomainNode, NodeEntityType};
         use uuid::Uuid;
@@ -554,24 +570,43 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             return Ok(());
         }
 
-        // Back-fill for stores written before the marker existed. Such a workspace is already
-        // populated but carries no marker, so a marker-only check would treat it as fresh and
-        // duplicate its entire tree on the next boot - reintroducing the very bug this guard
-        // exists to prevent. Any node parented to the workspace root proves a tree is already
-        // established (config-seeded or user-created): record the marker and leave it alone.
+        // Back-fill for stores written before the marker existed: an established workspace
+        // carries no marker, so a marker-only check would treat it as fresh and duplicate its
+        // entire tree - reintroducing the very bug this guard exists to prevent.
         //
-        // This path is crash-safe by construction: it writes ONLY the marker, and only when a
-        // tree already exists. It never writes nodes, so there is no partial state to unwind.
-        // A crash between reading `nodes` and writing the marker simply leaves the store as it
-        // was; the next boot re-reads the same tree and writes the marker then. Re-running it is
-        // a no-op, so a stale snapshot cannot cause incorrect behaviour - at worst it repeats.
+        // The test for "established" is that the root workspace ALREADY EXISTED before this
+        // boot, NOT that the node map currently has contents. Those are different facts, and
+        // conflating them is a trap: an established workspace whose offices were all deleted by
+        // an admin has an empty node map, and a contents-based check would read that as "fresh"
+        // and resurrect the baked-in defaults on upgrade - precisely the deletion-must-survive
+        // contract this PR exists to uphold. `inject_admin_user` reports the creation fact
+        // directly, so use that.
+        //
+        // This path is crash-safe by construction: it writes ONLY the marker, never nodes, so
+        // there is no partial state to unwind. A crash before the marker write leaves the store
+        // exactly as it was, and the next boot reaches the same conclusion and writes it then.
+        if !workspace_is_new {
+            info!(
+                target: "citadel",
+                "Established workspace predates the seed marker; recording marker and skipping re-seed"
+            );
+            self.domain_operations
+                .backend_tx_manager
+                .mark_structure_seeded()
+                .await?;
+            return Ok(());
+        }
+
+        // Defence in depth: even if a caller claims the workspace is new, an existing tree
+        // proves otherwise. This can only ever ADD a skip, never cause a seed, so it is safe to
+        // keep as a guard against a future caller passing the flag incorrectly.
         if nodes
             .values()
             .any(|node| node.parent_id.as_deref() == Some(crate::WORKSPACE_ROOT_ID))
         {
-            info!(
+            warn!(
                 target: "citadel",
-                "Workspace structure predates the seed marker; recording marker and skipping re-seed"
+                "Workspace reported as new but already has a tree; refusing to seed over it"
             );
             self.domain_operations
                 .backend_tx_manager
@@ -816,13 +851,19 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
             // Re-run admin injection now that NodeRemote is available
             if let Some(workspace_password) = &self.workspace_password {
                 info!(target: "citadel", "Injecting admin and workspace");
-                self.inject_admin_user(workspace_password).await?;
+                // `true` only when the root workspace did not exist and was created just now -
+                // i.e. this backend is brand new. Anything else is an established deployment.
+                let workspace_is_new = self.inject_admin_user(workspace_password).await?;
 
                 // Initialize workspace structure from config if provided
                 if let Some((structure, base_path)) = &self.workspace_structure {
                     info!(target: "citadel", "Initializing workspace structure from config");
-                    self.initialize_workspace_structure(structure, base_path.as_deref())
-                        .await?;
+                    self.initialize_workspace_structure(
+                        structure,
+                        base_path.as_deref(),
+                        workspace_is_new,
+                    )
+                    .await?;
                 }
             }
         }
@@ -1484,7 +1525,7 @@ mod structure_seed_idempotency_tests {
 
         // Boot 1: fresh workspace, seeds normally.
         kernel
-            .initialize_workspace_structure(&config, None)
+            .initialize_workspace_structure(&config, None, true)
             .await
             .expect("first seed");
         assert!(
@@ -1506,9 +1547,9 @@ mod structure_seed_idempotency_tests {
             .await
             .expect("delete every node");
 
-        // Boot 2: the workspace is empty, but it has already been seeded once.
+        // Boot 2: the workspace is empty, but it exists and has already been seeded once.
         kernel
-            .initialize_workspace_structure(&config, None)
+            .initialize_workspace_structure(&config, None, false)
             .await
             .expect("seed against an emptied workspace");
 
@@ -1558,7 +1599,7 @@ mod structure_seed_idempotency_tests {
         );
 
         kernel
-            .initialize_workspace_structure(&one_office_one_room(), None)
+            .initialize_workspace_structure(&one_office_one_room(), None, false)
             .await
             .expect("boot against a legacy store");
 
@@ -1587,6 +1628,60 @@ mod structure_seed_idempotency_tests {
         );
     }
 
+    /// An ESTABLISHED workspace that predates the marker AND has been emptied by an admin must
+    /// not be re-seeded on upgrade.
+    ///
+    /// This is the case a contents-based back-fill gets wrong. Such a store has no marker (it
+    /// predates it) and no root children (the admin deleted them), so inferring "legacy" from
+    /// node contents reads it as a brand-new workspace and resurrects the baked-in defaults -
+    /// the exact deletion-must-survive contract this guard exists to uphold. Only the
+    /// "did the root workspace already exist?" fact distinguishes the two.
+    #[tokio::test]
+    async fn emptied_legacy_workspace_is_not_reseeded_on_upgrade() {
+        let kernel = AsyncWorkspaceServerKernel::<StackedRatchet>::new(None);
+
+        // A pre-marker deployment whose offices were all deleted: no marker, no nodes, but the
+        // workspace itself is long-established (so `inject_admin_user` reports `false`).
+        assert!(
+            !kernel
+                .domain_operations
+                .backend_tx_manager
+                .is_structure_seeded()
+                .await
+                .expect("read marker"),
+            "precondition: a pre-marker store carries no marker"
+        );
+
+        kernel
+            .initialize_workspace_structure(&one_office_one_room(), None, false)
+            .await
+            .expect("upgrade boot against an emptied legacy store");
+
+        let after = kernel
+            .domain_operations
+            .backend_tx_manager
+            .get_all_nodes()
+            .await
+            .expect("read nodes");
+
+        assert!(
+            after.is_empty(),
+            "the baked-in defaults were resurrected into an established workspace that an admin \
+             had emptied ({} nodes reappeared). An empty tree is not the same fact as a NEW \
+             workspace; only the root-workspace-creation signal distinguishes them.",
+            after.len()
+        );
+        assert!(
+            kernel
+                .domain_operations
+                .backend_tx_manager
+                .is_structure_seeded()
+                .await
+                .expect("read marker"),
+            "the marker must be back-filled so later boots take the cheap path"
+        );
+    }
+
     /// Seeding twice against one store must be a no-op the second time.
     #[tokio::test]
     async fn second_seed_does_not_duplicate_the_tree() {
@@ -1594,7 +1689,7 @@ mod structure_seed_idempotency_tests {
         let config = one_office_one_room();
 
         kernel
-            .initialize_workspace_structure(&config, None)
+            .initialize_workspace_structure(&config, None, true)
             .await
             .expect("first seed");
         let after_first = kernel
@@ -1604,9 +1699,10 @@ mod structure_seed_idempotency_tests {
             .await
             .expect("read nodes after first seed");
 
-        // The restart: same store, `on_start` seeds again.
+        // The restart: same store. The root workspace now exists, so `inject_admin_user` would
+        // report the workspace as NOT new on this boot.
         kernel
-            .initialize_workspace_structure(&config, None)
+            .initialize_workspace_structure(&config, None, false)
             .await
             .expect("second seed");
         let after_second = kernel
@@ -1672,7 +1768,7 @@ mod structure_seed_idempotency_tests {
             .expect("seed a user-created office");
 
         kernel
-            .initialize_workspace_structure(&one_office_one_room(), None)
+            .initialize_workspace_structure(&one_office_one_room(), None, false)
             .await
             .expect("seed against an already-populated workspace");
 

@@ -499,6 +499,51 @@ jobs:
           fi
           echo "UI is serving the SPA shell"
           echo "Smoke test passed: server, internal-service, ui all up"
+      - name: Persistence - restarting the server must not duplicate the workspace tree
+        # THE gap that let the structure-duplication bug ship. Every other test runs the server
+        # on the IN-MEMORY backend, where each boot legitimately starts from an empty store - so
+        # seeding-on-every-boot is indistinguishable from correct behaviour and no unit test can
+        # see the bug. Only a real restart against a real filesystem backend exposes it, and
+        # `docker-compose.production.yml` is the only place the server runs that way.
+        #
+        # The server container from the smoke test above is already running with
+        # WORKSPACE_BACKEND=filesystem on the `server_data` volume. Restart it against that SAME
+        # volume and assert it did not seed a second copy of the office/room tree.
+        env:
+          WORKSPACE_MASTER_PASSWORD: 'ci-smoke-test'
+          INTERNAL_SERVICE_PORT: '12345'
+        run: |
+          set -euo pipefail
+          compose="docker compose -f docker-compose.production.yml"
+
+          offices_before=$($compose logs server 2>&1 | grep -c "Creating office node" || true)
+          rooms_before=$($compose logs server 2>&1 | grep -c "Creating room node" || true)
+          echo "Before restart: ${offices_before} office / ${rooms_before} room creations."
+
+          if [ "$offices_before" -eq 0 ]; then
+            echo "::error::The server seeded no offices at all, so this check would be vacuous."
+            $compose logs server 2>&1 | tail -40
+            exit 1
+          fi
+
+          echo "Restarting the server against the same data volume..."
+          $compose restart server
+          timeout 180 bash -c 'until docker compose -f docker-compose.production.yml ps server --format json | grep -qw healthy; do sleep 5; done' || {
+            echo "::error::Server did not come back healthy after restart"
+            $compose logs server 2>&1 | tail -40
+            exit 1
+          }
+
+          offices_after=$($compose logs server 2>&1 | grep -c "Creating office node" || true)
+          rooms_after=$($compose logs server 2>&1 | grep -c "Creating room node" || true)
+          echo "After restart:  ${offices_after} office / ${rooms_after} room creations."
+
+          if [ "$offices_after" -ne "$offices_before" ] || [ "$rooms_after" -ne "$rooms_before" ]; then
+            echo "::error::Restart re-seeded the workspace: offices ${offices_before} -> ${offices_after}, rooms ${rooms_before} -> ${rooms_after}. On a persistent backend this grows an extra copy of the whole tree on EVERY deploy."
+            $compose logs server 2>&1 | grep -E "Creating (office|room) node" | tail -20
+            exit 1
+          fi
+          echo "PASS: restart added no duplicate offices or rooms."
       - name: Dump Logs on Failure
         if: failure()
         run: |
