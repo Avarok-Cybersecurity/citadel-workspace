@@ -46,8 +46,14 @@ services:
   # ---------------------------------------------------------------------------
   server:
     # Pull a prebuilt image from GHCR rather than compiling on the production
-    # host. `IMAGE_TAG` defaults to `latest`; pin it to a `sha-<short>` tag to
-    # roll back to an exact prior build (see .github/workflows/publish-images.yml).
+    # host. `IMAGE_TAG` defaults to `latest`; pin it to a `sha-<12-char-sha>` tag
+    # to roll back to an exact prior build (see .github/workflows/publish-images.yml).
+    #
+    # `latest` is safe as a default because CI only advances it via a `promote-latest`
+    # job that requires EVERY image in the release to have built AND passed its smoke
+    # test, and only on master -- so it can never point at a half-published release or
+    # at a manually-dispatched branch build. Pin an explicit SHA tag for a deploy you
+    # need to be able to reproduce exactly.
     image: ghcr.io/avarok-cybersecurity/citadel-workspace-server:${IMAGE_TAG:-latest}
     build:
       context: .

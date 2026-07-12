@@ -181,13 +181,31 @@ fi
 # needing `apt-get` or `npm` fails).
 #
 # CI now builds and publishes the images (.github/workflows/publish-images.yml)
-# and the host simply pulls them. Set IMAGE_TAG to a `sha-<short>` tag to deploy
-# or roll back to an exact prior build:
+# and the host simply pulls them. Set IMAGE_TAG to a `sha-<12-char>` tag to
+# deploy or roll back to an exact prior build:
 #
-#     IMAGE_TAG=sha-abc1234 ./deploy.sh --no-pull
+#     IMAGE_TAG=sha-abc123456789 ./deploy.sh --no-pull
 #
+# `set -euo pipefail` (top of this file) already aborts the deploy if either of
+# the commands below fails, so a failed pull can never fall through to the
+# restart step. The explicit checks exist for the OPERATOR, not for control
+# flow: a bare `set -e` abort prints nothing, and by far the most likely failure
+# here is a 403 because the GHCR packages are still Private (they are created
+# that way and must be flipped to Public once). Naming that cause up front turns
+# a cryptic mid-deploy exit into a one-line fix.
 echo "[2/4] Pulling images (tag: ${IMAGE_TAG:-latest})..."
-docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" pull server internal-service
+if ! docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" pull server internal-service; then
+    echo "" >&2
+    echo "ERROR: failed to pull images (tag: ${IMAGE_TAG:-latest})." >&2
+    echo "  Common causes:" >&2
+    echo "   * The GHCR packages are still Private. They are created Private;" >&2
+    echo "     set each package's visibility to Public, or run 'docker login ghcr.io'." >&2
+    echo "   * IMAGE_TAG names a tag that was never published. List them at" >&2
+    echo "     https://github.com/orgs/Avarok-Cybersecurity/packages" >&2
+    echo "   * The publish workflow has not run yet for this commit." >&2
+    echo "  Nothing was restarted; the running stack is untouched." >&2
+    exit 1
+fi
 
 # The `ui` service is not published to GHCR yet -- its production image bakes
 # VITE_WS_URL at build time and its CSP cannot reach an off-origin agent, so a
@@ -195,9 +213,31 @@ docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" pull server internal-serv
 # lands. Until then it is still built locally, and only when it is being run.
 if docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" config --services | grep -qx "ui"; then
     echo "  Building ui locally (not yet published to GHCR)..."
-    docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" build ui
+    if ! docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" build ui; then
+        echo "" >&2
+        echo "ERROR: failed to build the ui image." >&2
+        echo "  Aborting BEFORE restarting anything, so the backend is not left on new" >&2
+        echo "  images while the ui stays on its old one." >&2
+        exit 1
+    fi
 fi
 echo ""
+
+# NOTE on the removed `target_cache` volume: the production images no longer
+# contain cargo, source or a target/ directory, so the build-cache volume was
+# dropped from the compose file. A host that ran an older revision may still
+# have the named volume lying around, wasting disk.
+#
+# It is deliberately NOT removed automatically here. Volume names are scoped by
+# compose PROJECT name, so the orphan's name depends on the directory the stack
+# was deployed from -- and on a shared host that name can collide with a live
+# volume owned by an unrelated project (on the current deployment box, a
+# `citadel-workspace_target_cache` volume belongs to the CI runner's stack). A
+# blind `docker volume rm` in a deploy script could therefore destroy someone
+# else's build cache. Remove it by hand, after checking what owns it:
+#
+#     docker volume ls | grep target_cache
+#     docker volume rm <project>_target_cache
 
 # Step 3: Rolling restart - update services one at a time
 # Data volumes are attached to containers, NOT images. Rebuilding an image
