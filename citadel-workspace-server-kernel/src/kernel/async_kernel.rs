@@ -312,10 +312,20 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             //
             // So the marker goes first. A pending marker with no workspace is a harmless, self-
             // healing state; a workspace with no marker is a permanent one.
-            self.domain_operations
-                .backend_tx_manager
-                .mark_structure_seed_pending()
-                .await?;
+            //
+            // Armed ONLY when there is actually a structure to seed. `on_start` calls
+            // `initialize_workspace_structure` only when a structure is configured, so arming it
+            // unconditionally would leave a permanently-pending marker on a server booted without
+            // one. A later deploy that ADDED a structure config would then find `pending == true`
+            // against a workspace that has been live for weeks, and inject the baked-in defaults
+            // into it - an established workspace, which is exactly what this guard exists to
+            // prevent. The obligation only exists if something is going to discharge it.
+            if self.workspace_structure.is_some() {
+                self.domain_operations
+                    .backend_tx_manager
+                    .mark_structure_seed_pending()
+                    .await?;
+            }
 
             // Debug: Check current storage mode
             if self.domain_operations.backend_tx_manager.is_test_mode() {
@@ -630,13 +640,21 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .values()
             .any(|node| node.parent_id.as_deref() == Some(crate::WORKSPACE_ROOT_ID))
         {
+            // A tree exists while a seed is still owed: the previous boot wrote the nodes but died
+            // before recording that it had. Finish that transition rather than half-completing it
+            // - mark it seeded AND discharge the obligation, so no dangling `pending` is left
+            // behind for a future reader to puzzle over.
             warn!(
                 target: "citadel",
-                "Workspace reported as new but already has a tree; refusing to seed over it"
+                "A seed is owed but the workspace already has a tree; recording it as seeded rather than seeding over it"
             );
             self.domain_operations
                 .backend_tx_manager
                 .mark_structure_seeded()
+                .await?;
+            self.domain_operations
+                .backend_tx_manager
+                .clear_structure_seed_pending()
                 .await?;
             return Ok(());
         }
@@ -837,12 +855,24 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .mark_structure_seeded()
             .await?;
         // The debt is paid. `seeded` already takes precedence over `pending` on every later boot,
-        // so this is hygiene rather than correctness - it keeps the store from carrying a
-        // permanently-true "pending" flag that a future reader would have to reason about.
-        self.domain_operations
+        // so clearing it is hygiene, not correctness - it keeps the store from carrying a
+        // permanently-true flag that a future reader would have to reason about.
+        //
+        // Deliberately BEST-EFFORT. The tree is durably written and the workspace is durably
+        // marked seeded; failing the boot now over a cosmetic write would turn a completed seed
+        // into a crash loop, and the next boot would short-circuit on `seeded` anyway.
+        if let Err(e) = self
+            .domain_operations
             .backend_tx_manager
             .clear_structure_seed_pending()
-            .await?;
+            .await
+        {
+            warn!(
+                target: "citadel",
+                "Workspace seeded successfully, but could not clear the seed-pending marker: {e}. \
+                 Harmless - the seeded marker takes precedence on every later boot."
+            );
+        }
 
         info!(target: "citadel", "Workspace structure initialization complete");
         Ok(())
@@ -1495,7 +1525,19 @@ mod structure_seed_idempotency_tests {
 
     type Kernel = AsyncWorkspaceServerKernel<StackedRatchet>;
 
+    /// A kernel wired the way a real server is: it HAS a structure configured, so
+    /// `inject_admin_user` takes on a seed obligation when it creates a fresh workspace. Setting
+    /// the field directly (rather than going through the async constructor) keeps the tests off
+    /// the filesystem while still exercising the production wiring.
     fn kernel() -> Kernel {
+        let mut k = AsyncWorkspaceServerKernel::<StackedRatchet>::new(None);
+        k.workspace_structure = Some((one_office_one_room(), None));
+        k
+    }
+
+    /// A kernel with NO structure configured, as a server whose kernel.toml sets no content
+    /// directory would be.
+    fn kernel_without_structure() -> Kernel {
         AsyncWorkspaceServerKernel::<StackedRatchet>::new(None)
     }
 
@@ -1825,6 +1867,37 @@ mod structure_seed_idempotency_tests {
         assert!(
             backend.is_structure_seeded().await.unwrap(),
             "the workspace should now be marked seeded"
+        );
+    }
+
+    /// A server booted with NO structure configured must not arm a seed obligation.
+    ///
+    /// `on_start` only calls `initialize_workspace_structure` when a structure is configured, so
+    /// an obligation armed on such a boot would never be discharged - it would sit there while the
+    /// workspace ran and accumulated real content, and the first deploy that ADDED a structure
+    /// config would find `pending == true` and inject the baked-in defaults into an established
+    /// workspace. The obligation may only be taken on if something is going to discharge it.
+    #[tokio::test]
+    async fn no_structure_config_means_no_seed_obligation() {
+        let k = kernel_without_structure();
+        assert!(
+            k.workspace_structure.is_none(),
+            "precondition: this kernel has no structure configured"
+        );
+
+        k.inject_admin_user(MASTER_PASSWORD)
+            .await
+            .expect("inject_admin_user");
+
+        assert!(
+            !k.domain_operations
+                .backend_tx_manager
+                .is_structure_seed_pending()
+                .await
+                .expect("read pending"),
+            "a seed obligation was armed on a server with nothing to seed. It would never be \
+             discharged, and a later deploy that added a structure config would inject the \
+             defaults into this by-then-established workspace."
         );
     }
 
