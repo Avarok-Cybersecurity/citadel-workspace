@@ -170,9 +170,33 @@ else
     echo ""
 fi
 
-# Step 2: Rebuild images (only changed layers are rebuilt due to Docker cache)
-echo "[2/4] Building images..."
-docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" build
+# Step 2: Pull prebuilt images from GHCR.
+#
+# This used to run `docker compose build`, compiling Rust on the production
+# host. That was slow (a full release build per deploy), it required the source
+# tree and a toolchain on the box, it left no way back to the previous image,
+# and it made every deploy depend on the host's Docker build networking being
+# healthy -- which on at least one deployment host it is not (a k3s/Docker
+# iptables conflict leaves the default bridge with no egress, so any build
+# needing `apt-get` or `npm` fails).
+#
+# CI now builds and publishes the images (.github/workflows/publish-images.yml)
+# and the host simply pulls them. Set IMAGE_TAG to a `sha-<short>` tag to deploy
+# or roll back to an exact prior build:
+#
+#     IMAGE_TAG=sha-abc1234 ./deploy.sh --no-pull
+#
+echo "[2/4] Pulling images (tag: ${IMAGE_TAG:-latest})..."
+docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" pull server internal-service
+
+# The `ui` service is not published to GHCR yet -- its production image bakes
+# VITE_WS_URL at build time and its CSP cannot reach an off-origin agent, so a
+# published artifact would not actually work until the same-origin `/ws` proxy
+# lands. Until then it is still built locally, and only when it is being run.
+if docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" config --services | grep -qx "ui"; then
+    echo "  Building ui locally (not yet published to GHCR)..."
+    docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" build ui
+fi
 echo ""
 
 # Step 3: Rolling restart - update services one at a time
@@ -232,16 +256,19 @@ wait_for_port() {
     exit 1
 }
 
-# Server first (other services depend on it)
+# Server first (other services depend on it).
+#
+# No `--build`: the image was pulled in step 2. Leaving `--build` here would
+# silently re-compile on the host and defeat the whole point of the registry.
 echo "  Restarting server..."
-docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps --build server
+docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps server
 echo "  Waiting for server to be healthy..."
 wait_for_port server 12349
 echo "  Server is up."
 
 # Internal service next
 echo "  Restarting internal-service..."
-docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps --build internal-service
+docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps internal-service
 echo "  Waiting for internal-service to be healthy..."
 wait_for_port internal-service "${INTERNAL_SERVICE_PORT:-12345}"
 echo "  Internal service is up."
