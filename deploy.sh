@@ -220,38 +220,22 @@ fi
 # time with `org.opencontainers.image.revision` (the commit it was built from). If the
 # two disagree, abort BEFORE anything is restarted. This catches a partial promotion,
 # a hand-edited tag, or an interrupted deploy alike.
+#
+# The comparison itself lives in scripts/verify-image-revisions.sh rather than inline
+# here, because it is the safety gate and an untested safety gate is a liability. As a
+# standalone script that takes images as arguments it is exercised directly in CI
+# (validate.yml -> deploy-gate-tests) against real images with matching, mismatched and
+# absent labels. Inline in this script - wedged between an image pull and a production
+# restart - none of those paths could be tested at all.
 echo "  Verifying both images came from the same commit..."
 srv_img=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.services.server.image')
 is_img=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.services["internal-service"].image')
 
-image_revision() {
-    docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$1" 2>/dev/null || true
-}
-srv_rev=$(image_revision "$srv_img")
-is_rev=$(image_revision "$is_img")
-
-if [ -z "$srv_rev" ] || [ -z "$is_rev" ] || [ "$srv_rev" = "<no value>" ] || [ "$is_rev" = "<no value>" ]; then
-    # Images built before the label existed (or built locally). Warn rather than block:
-    # refusing to deploy an unlabelled image would strand anyone on an older build.
-    echo "  WARNING: one or both images carry no revision label; skipping the consistency check." >&2
-    echo "           (Images published by CI always carry it. Locally-built images do not.)" >&2
-elif [ "$srv_rev" != "$is_rev" ]; then
-    echo "" >&2
-    echo "ERROR: the pulled images come from DIFFERENT commits. Refusing to deploy." >&2
-    echo "  server           : $srv_img" >&2
-    echo "                     revision $srv_rev" >&2
-    echo "  internal-service : $is_img" >&2
-    echo "                     revision $is_rev" >&2
-    echo "" >&2
-    echo "  This usually means a 'latest' promotion only partially completed. Deploy an" >&2
-    echo "  explicit, immutable tag instead, which is consistent by construction:" >&2
-    echo "    IMAGE_TAG=sha-<12-char-sha> ./deploy.sh" >&2
-    echo "  Available tags: https://github.com/orgs/Avarok-Cybersecurity/packages" >&2
+if ! ./scripts/verify-image-revisions.sh "$srv_img" "$is_img"; then
     echo "" >&2
     echo "  Nothing was restarted; the running stack is untouched." >&2
     exit 1
 fi
-echo "  Both images are from commit ${srv_rev}."
 
 # The `ui` service is not published to GHCR yet -- its production image bakes
 # VITE_WS_URL at build time and its CSP cannot reach an off-origin agent, so a
