@@ -38,16 +38,19 @@ CMD ["npm", "run", "dev:docker"]
 # ==============================================================================
 FROM node:20-alpine AS build
 
-# Vite substitutes `import.meta.env.VITE_*` at build time. The runtime
-# WebSocket URL in `lib/websocket-service/core.ts` resolves to
-# `config.websocketUrl || import.meta.env.VITE_WS_URL || ws://localhost:12345`,
-# and the production CSP (`connect-src 'self'`) blocks the localhost
-# fallback when the page is served from a different origin (Cloudflare
-# tunnel, custom domain, etc.). Operators MUST set `VITE_WS_URL` to a
-# same-origin `wss://yourdomain.com/...` for the production deploy to
-# establish a WebSocket connection. docker-compose.production.yml
-# forwards the env var via `args:` so the operator's `.env` is the
-# single source of truth.
+# LEAVE THIS EMPTY. It exists only as an escape hatch, and setting it re-breaks the
+# thing this image was fixed to do.
+#
+# The app now derives its WebSocket URL from `window.location` at runtime, reaching the
+# agent through the same-origin `/ws` proxy below. That is what lets ONE published image
+# serve every topology. Baking an absolute URL in here pins the image to a single
+# deployment - and an OFF-ORIGIN one is blocked outright by the production CSP
+# (`connect-src 'self'`), which is the exact bug this replaced: the app appeared to work
+# in dev, whose CSP was laxer, and could not connect at all once built.
+#
+# Only a SAME-ORIGIN value (`wss://yourdomain.com/ws`) can work, and that is precisely
+# what the runtime default already produces - so there is no reason to set it. CI passes
+# no build-arg deliberately.
 ARG VITE_WS_URL=
 ENV VITE_WS_URL=${VITE_WS_URL}
 
@@ -111,7 +114,12 @@ RUN npm run build
 # (Cloudflare tunnel in this repo) — the container internal port
 # does not need to be 80.
 # ==============================================================================
-FROM nginx:stable-alpine AS production
+# Pinned to a minor line, not the moving `stable-alpine` tag. This image's behaviour depends on
+# the base's envsubst entrypoint (NGINX_ENVSUBST_FILTER), so an upstream major bump could change
+# how the config renders. The smoke test asserts the rendered output, so such a break would fail
+# the build rather than ship - but a deterministic base means it fails when we bump it, not at a
+# random hour because upstream moved a tag. Patch releases still flow in.
+FROM nginx:1.30-alpine AS production
 
 # Copy the built static assets from the build stage
 COPY --from=build /app/dist /usr/share/nginx/html
@@ -142,13 +150,21 @@ COPY docker/ui/nginx.conf.template /etc/nginx/templates/default.conf.template
 # `host.docker.internal:12345` for an agent running natively on the host.
 ENV AGENT_UPSTREAM=127.0.0.1:12345
 
-# Whether /ws proxies to the agent at all. The agent's socket is an UNAUTHENTICATED
-# control plane, and an Origin check cannot protect it from a non-browser client that
-# simply forges the header - so any deployment whose UI is reachable off-box (e.g.
-# served through a public tunnel) MUST set this to 0. Defaults to 1 because the
-# shipped topology is the local client, where the proxy is safe and required.
+# Whether /ws proxies to the agent at all. DEFAULTS TO OFF - the image FAILS CLOSED.
+#
+# The agent's socket is an UNAUTHENTICATED control plane, and an Origin check cannot
+# protect it from a non-browser client that simply forges the header. So the blast
+# radius of a permissive default is: anyone who runs this image in a topology we did
+# not anticipate - `docker run --network host`, a bridge run with `-p 8080:8080`,
+# behind someone else's ingress - silently republishes that control plane to whoever
+# can reach the port. An image cannot know which of those it is in.
+#
+# So the deployment declares its intent instead of inheriting it. docker-compose.local.yml
+# sets this to 1 because there the UI is loopback-bound and the proxy is both safe and
+# required; every other topology gets no proxy unless it asks. A wrong default here is a
+# security hole, whereas a wrong default the other way is a visible 404.
 # See the SECURITY note in nginx.conf.template.
-ENV WS_PROXY_ENABLED=1
+ENV WS_PROXY_ENABLED=0
 
 # Address nginx binds. 0.0.0.0 is right for a bridge-networked container (`-p 8080:8080`
 # cannot reach a loopback bind). Under HOST networking it would publish /ws to the LAN,

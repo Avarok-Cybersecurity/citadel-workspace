@@ -98,7 +98,10 @@ jobs:
             build_args: ""
             needs_wasm: true
             smoke_port: 8080
-            smoke_env: ""
+            # The image FAILS CLOSED (WS_PROXY_ENABLED=0), so the proxy checks below must opt in
+            # explicitly - exactly as a real deployment does. The fail-closed default itself is
+            # then proven by a second container that passes no env at all.
+            smoke_env: "-e WS_PROXY_ENABLED=1"
           - image: internal-service
             dockerfile: ./docker/internal-service/Dockerfile
             # Only this Dockerfile declares INTERNAL_SERVICE_PORT (it is baked into the image's
@@ -288,17 +291,19 @@ jobs:
             # unauthenticated agent to the internet.
             off="smoke-ui-wsoff"
             docker rm -f "$off" >/dev/null 2>&1 || true
-            docker run -d --name "$off" -e WS_PROXY_ENABLED=0 "$IMAGE:$SHA_TAG" >/dev/null
+            # NO -e flag: this is the image's DEFAULT posture. Anyone who runs this image without
+            # thinking about it must get no agent proxy at all.
+            docker run -d --name "$off" "$IMAGE:$SHA_TAG" >/dev/null
             for _ in $(seq 1 20); do docker exec "$off" nc -z 127.0.0.1 8080 2>/dev/null && break; sleep 1; done
             offip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$off")
             disabled=$(curl -s -o /dev/null -w '%{http_code}' -H "Origin: http://$offip:8080" "http://$offip:8080/ws")
             spa=$(curl -s -o /dev/null -w '%{http_code}' "http://$offip:8080/")
             docker rm -f "$off" >/dev/null 2>&1 || true
             if [ "$disabled" != "404" ] || [ "$spa" != "200" ]; then
-              echo "::error::WS_PROXY_ENABLED=0 did not disable /ws (got $disabled, want 404) or broke the SPA (got $spa, want 200). A publicly-served UI would expose the agent."
+              echo "::error::the image does not fail closed: with no WS_PROXY_ENABLED set, /ws returned $disabled (want 404) and the SPA $spa (want 200). Any unanticipated topology would republish the unauthenticated agent."
               exit 1
             fi
-            echo "ui: WS_PROXY_ENABLED=0 disables /ws (404) while still serving the SPA."
+            echo "ui: fails closed by default - /ws is 404 unless a deployment opts in, and the SPA still serves."
           fi
 
       - name: Push immutable SHA tag
