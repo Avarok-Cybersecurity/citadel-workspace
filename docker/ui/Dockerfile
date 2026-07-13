@@ -126,92 +126,32 @@ RUN chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx \
     && chown nginx:nginx /var/run/nginx.pid \
     && rm -f /etc/nginx/conf.d/default.conf
 
-# Custom nginx config for SPA routing (all routes -> index.html).
+# nginx config lives in docker/ui/nginx.conf.template and is rendered at CONTAINER
+# START by the nginx image's envsubst entrypoint, not baked in at build time.
 #
-# Security headers note: nginx `add_header` does NOT inherit across
-# nesting levels — if a `location` block declares its own `add_header`,
-# it silently replaces ALL inherited headers from the parent `server`
-# block. So the security headers below must be repeated in every
-# `location` block that also adds Cache-Control. Verbose, but explicit
-# and correct; alternatives (sub-include files, `more_set_headers` from
-# nginx-extras) require either extra build wiring or a non-stable
-# nginx variant.
-#
-# CSP rationale:
-#   * `script-src 'self' 'wasm-unsafe-eval'` — WASM compilation
-#     (WebAssembly.compile / instantiate) is blocked by default CSP
-#     unless `'wasm-unsafe-eval'` is granted. The Citadel WASM client
-#     will fail to initialise without it.
-#   * `style-src 'self' 'unsafe-inline'` — Vite/React + several Radix
-#     UI components emit inline styles for layout/measurement.
-#   * `img-src 'self' data:` — small inline icons use data: URLs.
-#   * `connect-src 'self'` — WebSocket to the internal service and
-#     workspace server is the app's primary transport, and in
-#     production all of that traffic flows through the Cloudflare
-#     tunnel as same-origin `wss://yourdomain.com`, which `'self'`
-#     already covers. We DO NOT add `wss:` here: per the CSP spec a
-#     bare scheme source matches ANY host with that scheme (not just
-#     the document's host), so `wss:` would let an XSS payload
-#     exfiltrate data to `wss://attacker.example`. Dev uses Vite's
-#     own CSP, not this config.
-#   * `object-src 'none'` — defence-in-depth against legacy plugin
-#     content (<object>, <embed>, <applet>). Without it, `object-src`
-#     falls back to `default-src 'self'`, allowing same-origin plugin
-#     loads. The app uses no such content, so `'none'` is strictly
-#     more restrictive with zero functional cost — and it's the
-#     OWASP-recommended baseline.
-RUN printf 'server {\n\
-    listen 8080;\n\
-    server_name _;\n\
-    root /usr/share/nginx/html;\n\
-    index index.html;\n\
-\n\
-    # Gzip compression\n\
-    gzip on;\n\
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript application/wasm;\n\
-    gzip_vary on;\n\
-    gzip_min_length 256;\n\
-\n\
-    # Security headers (server-level; re-emitted in any location that\n\
-    # also calls add_header — see comment above).\n\
-    add_header X-Frame-Options "SAMEORIGIN" always;\n\
-    add_header X-Content-Type-Options "nosniff" always;\n\
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;\n\
-    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;\n\
-    add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\''; worker-src '\''self'\'' blob:; object-src '\''none'\''; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
-\n\
-    # Cache static assets aggressively (hashed filenames from Vite)\n\
-    location /assets/ {\n\
-        expires 1y;\n\
-        add_header Cache-Control "public, immutable" always;\n\
-        add_header X-Frame-Options "SAMEORIGIN" always;\n\
-        add_header X-Content-Type-Options "nosniff" always;\n\
-        add_header Referrer-Policy "strict-origin-when-cross-origin" always;\n\
-        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;\n\
-        add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\''; worker-src '\''self'\'' blob:; object-src '\''none'\''; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
-    }\n\
-\n\
-    # WASM files\n\
-    location ~* \\.wasm$ {\n\
-        types { application/wasm wasm; }\n\
-        expires 1y;\n\
-        add_header Cache-Control "public, immutable" always;\n\
-        add_header X-Frame-Options "SAMEORIGIN" always;\n\
-        add_header X-Content-Type-Options "nosniff" always;\n\
-        add_header Referrer-Policy "strict-origin-when-cross-origin" always;\n\
-        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;\n\
-        add_header Content-Security-Policy "default-src '\''self'\''; script-src '\''self'\'' '\''wasm-unsafe-eval'\''; style-src '\''self'\'' '\''unsafe-inline'\''; img-src '\''self'\'' data:; font-src '\''self'\'' data:; connect-src '\''self'\''; worker-src '\''self'\'' blob:; object-src '\''none'\''; frame-ancestors '\''self'\''; base-uri '\''self'\''; form-action '\''self'\''" always;\n\
-    }\n\
-\n\
-    # SPA fallback - serve index.html for all non-file routes.\n\
-    # CAUTION: Do NOT add `add_header` here without also repeating ALL\n\
-    # security headers above — nginx `add_header` does not inherit when\n\
-    # a nested block declares its own header, so a Cache-Control line\n\
-    # added here would silently drop the CSP / X-Frame-Options block.\n\
-    location / {\n\
-        try_files $uri $uri/ /index.html;\n\
-    }\n\
-}\n' > /etc/nginx/conf.d/default.conf
+# WHY IT IS A TEMPLATE: the config now proxies `/ws` to the Citadel agent, and the
+# agent sits somewhere different in each topology - 127.0.0.1 on host networking,
+# a service name on a bridge network, host.docker.internal when it runs natively
+# on the user's machine. Baking the upstream in would mean one image per topology,
+# which defeats the point of publishing it to a registry. AGENT_UPSTREAM is
+# therefore a RUNTIME setting with a sane default.
+COPY docker/ui/nginx.conf.template /etc/nginx/templates/default.conf.template
+
+# Where the agent lives. Default suits host networking (and the dev stack). Override
+# with `-e AGENT_UPSTREAM=internal-service:12345` on a bridge network, or
+# `host.docker.internal:12345` for an agent running natively on the host.
+ENV AGENT_UPSTREAM=127.0.0.1:12345
+
+# Substitute ONLY AGENT_UPSTREAM. Without this filter, envsubst would also expand
+# nginx's own runtime variables ($host, $uri, $http_upgrade, $connection_upgrade)
+# into empty strings, silently producing a config that proxies nothing and drops
+# the upgrade handshake. This one line is load-bearing.
+ENV NGINX_ENVSUBST_FILTER=^AGENT_UPSTREAM$
+
+# The entrypoint renders templates into /etc/nginx/conf.d at start-up, and we run as
+# the unprivileged `nginx` user - so that directory must be writable by it. Without
+# this the container starts, fails to write the rendered config, and serves nothing.
+RUN chown -R nginx:nginx /etc/nginx/conf.d
 
 USER nginx
 EXPOSE 8080

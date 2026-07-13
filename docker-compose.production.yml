@@ -173,6 +173,13 @@ services:
   # Vite build served via nginx
   # ---------------------------------------------------------------------------
   ui:
+    # Prebuilt from GHCR, like the other two. The image needs no per-environment build now: the
+    # app derives its socket URL from window.location at runtime, and nginx's /ws upstream is the
+    # AGENT_UPSTREAM env var below - so one published image serves every deployment.
+    image: ghcr.io/avarok-cybersecurity/citadel-workspace-ui:${IMAGE_TAG:-latest}
+    environment:
+      # This stack runs on host networking, so the agent is on loopback.
+      - AGENT_UPSTREAM=127.0.0.1:${INTERNAL_SERVICE_PORT:-12345}
     build:
       context: .
       dockerfile: ./docker/ui/Dockerfile

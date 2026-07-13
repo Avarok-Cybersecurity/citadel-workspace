@@ -1,0 +1,132 @@
+# =============================================================================
+# nginx config for the Citadel Workspace UI.
+#
+# Rendered at CONTAINER START by the nginx image's envsubst entrypoint
+# (/docker-entrypoint.d/20-envsubst-on-templates.sh), which substitutes
+# ${AGENT_UPSTREAM} and writes the result to /etc/nginx/conf.d/. Only that one
+# variable is substituted - NGINX_ENVSUBST_FILTER pins it - so nginx's own
+# runtime variables ($host, $uri, $http_upgrade, ...) survive untouched. Getting
+# that filter wrong would silently mangle the config, which is why it is set.
+#
+# This lives in a real file rather than a printf'd one-liner in the Dockerfile:
+# the config now has a proxy block with upgrade headers and timeouts, and
+# maintaining that as escaped `\n\` continuations is a bug farm.
+# =============================================================================
+
+# WebSocket upgrade handshake. `Connection` must be `upgrade` for a websocket and
+# `close` otherwise; hardcoding `upgrade` breaks plain HTTP requests through the
+# same proxy. `map` is http-level context, which is what conf.d files are included
+# into.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Gzip compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript application/wasm;
+    gzip_vary on;
+    gzip_min_length 256;
+
+    # -------------------------------------------------------------------------
+    # Security headers.
+    #
+    # nginx `add_header` does NOT inherit into a nested block that declares its
+    # own `add_header` - the nested set silently REPLACES the inherited one. So
+    # every location that adds a header must repeat all of them. Verbose, but the
+    # alternative is a location that quietly ships with no CSP.
+    #
+    # CSP rationale:
+    #   * script-src 'wasm-unsafe-eval' - WebAssembly.instantiate is blocked by
+    #     default CSP without it, and the Citadel WASM client will not initialise.
+    #   * style-src 'unsafe-inline'     - React/Radix emit inline styles.
+    #   * connect-src 'self'            - the app's only outbound connection is the
+    #     WebSocket to the agent, and that is now SAME-ORIGIN (see /ws below), so
+    #     'self' covers it. We deliberately do NOT add `ws:`/`wss:`: a bare scheme
+    #     source matches ANY host with that scheme, so it would let an XSS payload
+    #     exfiltrate to wss://attacker.example. Same-origin proxying is what lets
+    #     this stay strict.
+    #   * object-src 'none'             - defence in depth against legacy plugins.
+    # -------------------------------------------------------------------------
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+
+    # -------------------------------------------------------------------------
+    # The agent socket.
+    #
+    # This is the whole point of the file. The browser cannot speak the Citadel
+    # protocol (raw TCP/QUIC), so it talks to a native agent over a WebSocket. The
+    # app resolves that socket to a SAME-ORIGIN `/ws` path, and nginx forwards it
+    # to the agent. Same-origin is what allows `connect-src 'self'` above to remain
+    # strict: a direct `ws://localhost:12345` from a page served here is a
+    # different origin and the browser blocks it outright.
+    #
+    # AGENT_UPSTREAM is set at RUN time, not baked in, because the agent sits
+    # somewhere different in each topology:
+    #   127.0.0.1:12345          - agent container on host networking (and dev)
+    #   internal-service:12345   - agent container on a bridge network
+    #   host.docker.internal:12345 - agent running natively on the user's machine
+    # One image serves all three.
+    #
+    # The trailing slash strips the `/ws` prefix, so the agent sees `/`. (It uses
+    # tokio-tungstenite's accept_async and ignores the path entirely, but sending
+    # it the path it would get from a direct connection keeps the proxy
+    # transparent.)
+    location /ws {
+        proxy_pass http://${AGENT_UPSTREAM}/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+
+        # A Citadel session is a long-lived socket that can sit idle between
+        # messages. nginx's default proxy_read_timeout is 60s, which would tear
+        # down an idle session and surface to the user as a random disconnect.
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+
+        # Never buffer a bidirectional stream - buffering would delay message
+        # delivery until nginx's buffer filled or flushed.
+        proxy_buffering off;
+    }
+
+    # Cache static assets aggressively (Vite emits content-hashed filenames)
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+    }
+
+    # WASM files
+    location ~* \.wasm$ {
+        types { application/wasm wasm; }
+        expires 1y;
+        add_header Cache-Control "public, immutable" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+    }
+
+    # SPA fallback - serve index.html for all non-file routes.
+    #
+    # CAUTION: do NOT add an `add_header` here without repeating ALL the security
+    # headers above; see the note at the top of the server block.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

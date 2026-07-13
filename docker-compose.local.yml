@@ -1,0 +1,89 @@
+# =============================================================================
+# Citadel Workspace - LOCAL CLIENT
+#
+# For people USING the workspace, not developing it. Runs the two pieces that must
+# live on your own machine:
+#
+#   agent (internal-service) - a native Citadel node. It holds your ratchet keys, does the
+#                              crypto, and speaks the Citadel protocol over TCP/QUIC. A browser
+#                              cannot do any of that, which is why it must run here and not on
+#                              a server. Keeping it local is what makes your P2P messages and
+#                              file transfers end-to-end encrypted: nobody else's machine ever
+#                              holds your keys.
+#   ui                       - nginx serving the app, and proxying /ws to the agent above.
+#
+# The shared workspace SERVER is not here - it runs once, centrally, and you point at it from
+# the login screen.
+#
+# Usage:
+#   docker login ghcr.io                      # one-time; the packages are private
+#   docker compose -f docker-compose.local.yml pull
+#   docker compose -f docker-compose.local.yml up -d
+#   open http://localhost:8080
+#     ...then enter the workspace server address at the login screen.
+#
+# Nothing is built. Both images are pulled prebuilt (~300 MB total), so you need neither a Rust
+# toolchain nor Node.
+#
+# NETWORKING - READ THIS IF P2P DOES NOT WORK
+#
+# The agent establishes DIRECT peer-to-peer links to other users' agents, using NAT traversal
+# (STUN/UPnP) to punch through your router. It therefore wants the real network stack, which is
+# why `network_mode: host` is used below.
+#
+#   Linux            - works as written.
+#   macOS / Windows  - Docker runs inside a VM, so "host" is the VM's network, not your machine's.
+#                      That adds a second NAT layer around the agent. Server-mediated features
+#                      (workspaces, offices, group chat) are unaffected, but DIRECT P2P - private
+#                      messages and file transfer - may fail to connect. If it does, run the agent
+#                      as a native binary on your machine instead and point the UI at it with
+#                      AGENT_UPSTREAM=host.docker.internal:12345. This is a known limitation of
+#                      containerising a NAT-traversing peer, not a bug in the app.
+# =============================================================================
+
+services:
+  agent:
+    image: ghcr.io/avarok-cybersecurity/citadel-workspace-internal-service:${IMAGE_TAG:-latest}
+    environment:
+      - RUST_LOG=citadel=info
+      - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT:-12345}
+      # Bind to loopback: the ONLY thing that should reach the agent's control socket is the UI
+      # on this same machine. It is an unauthenticated control plane - anything that can talk to
+      # it can drive your sessions - so it must never be exposed on your LAN.
+      - INTERNAL_SERVICE_BIND_HOST=127.0.0.1
+      # Persist keys and sessions, so you are not re-registering every restart.
+      - INTERNAL_SERVICE_BACKEND=filesystem
+      - INTERNAL_SERVICE_DATA_DIR=/data/internal-service
+    volumes:
+      - agent_data:/data/internal-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "${INTERNAL_SERVICE_PORT:-12345}"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    network_mode: host
+
+  ui:
+    image: ghcr.io/avarok-cybersecurity/citadel-workspace-ui:${IMAGE_TAG:-latest}
+    environment:
+      # Where nginx forwards /ws. Loopback, because the agent above is on host networking.
+      # If you run the agent natively instead of in Docker, set this to
+      # host.docker.internal:12345 and drop `network_mode: host` from this service.
+      - AGENT_UPSTREAM=127.0.0.1:${INTERNAL_SERVICE_PORT:-12345}
+    depends_on:
+      agent:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    network_mode: host
+
+volumes:
+  # Your account keys and session state. Deleting this means re-registering.
+  agent_data:
