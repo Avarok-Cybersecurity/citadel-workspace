@@ -142,11 +142,25 @@ COPY docker/ui/nginx.conf.template /etc/nginx/templates/default.conf.template
 # `host.docker.internal:12345` for an agent running natively on the host.
 ENV AGENT_UPSTREAM=127.0.0.1:12345
 
-# Substitute ONLY AGENT_UPSTREAM. Without this filter, envsubst would also expand
-# nginx's own runtime variables ($host, $uri, $http_upgrade, $connection_upgrade)
-# into empty strings, silently producing a config that proxies nothing and drops
-# the upgrade handshake. This one line is load-bearing.
-ENV NGINX_ENVSUBST_FILTER=^AGENT_UPSTREAM$
+# Whether /ws proxies to the agent at all. The agent's socket is an UNAUTHENTICATED
+# control plane, and an Origin check cannot protect it from a non-browser client that
+# simply forges the header - so any deployment whose UI is reachable off-box (e.g.
+# served through a public tunnel) MUST set this to 0. Defaults to 1 because the
+# shipped topology is the local client, where the proxy is safe and required.
+# See the SECURITY note in nginx.conf.template.
+ENV WS_PROXY_ENABLED=1
+
+# Address nginx binds. 0.0.0.0 is right for a bridge-networked container (`-p 8080:8080`
+# cannot reach a loopback bind). Under HOST networking it would publish /ws to the LAN,
+# so docker-compose.local.yml overrides this to 127.0.0.1.
+ENV LISTEN_ADDR=0.0.0.0
+
+# Substitute ONLY these three. Without this filter, envsubst would also expand nginx's
+# own runtime variables ($host, $uri, $http_upgrade, $connection_upgrade) into empty
+# strings, silently producing a config that proxies nothing and drops the upgrade
+# handshake. This one line is load-bearing, and the smoke test in publish-images.yml
+# asserts the rendered config still contains them.
+ENV NGINX_ENVSUBST_FILTER=^(AGENT_UPSTREAM|WS_PROXY_ENABLED|LISTEN_ADDR)$
 
 # The entrypoint renders templates into /etc/nginx/conf.d at start-up, and we run as
 # the unprivileged `nginx` user - so that directory must be writable by it. Without

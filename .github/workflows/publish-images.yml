@@ -25,7 +25,7 @@
 #      `latest` directly, a manual run from a feature branch would overwrite the
 #      tag that production pulls by default with unmerged code. `promote-latest`
 #      is gated on `refs/heads/master`.
-#   2. The matrix builds the two images as independent jobs. If `latest` were
+#   2. The matrix builds the three images as independent jobs. If `latest` were
 #      pushed per-job, a run where `server` succeeded and `internal-service`
 #      failed would leave `latest` pointing at a MISMATCHED pair, and a deploy
 #      using the default tag would pull two versions that never shipped
@@ -34,19 +34,11 @@
 #
 # ONE-TIME MANUAL SETUP
 #
-# GHCR packages are created PRIVATE. After the first successful run, open each
-# package's settings on GitHub and set its visibility to Public, otherwise every
-# developer must `docker login ghcr.io` before they can pull. The repositories
-# themselves are already public, so there is nothing secret in these images.
-#
-# WHY `ui` IS NOT PUBLISHED HERE (yet)
-#
-# The production UI image bakes `VITE_WS_URL` at build time, and its nginx CSP
-# is `connect-src 'self'` - so a UI served on :8080 cannot reach an agent on
-# :12345. Publishing it today would ship an artifact that cannot work for the
-# local-agent deployment. It gets added once the same-origin `/ws` reverse proxy
-# (and the matching frontend change to derive the URL from `window.location`)
-# lands.
+# GHCR packages are created PRIVATE and stay that way. Pulling them therefore
+# needs `docker login ghcr.io` with a token carrying `read:packages` - a one-time
+# step for anyone deploying or running the local client. (Public would remove that
+# step, but these images are an internal artifact and there is no reason to publish
+# the org's build output to the world for the sake of one login.)
 # =============================================================================
 name: Publish Images
 
@@ -237,20 +229,76 @@ jobs:
           echo "${{ matrix.image }} is listening on ${{ matrix.smoke_port }}; image is good."
 
           # The UI is a static server, so "the port is bound" is a weak signal - nginx binds even
-          # when it is serving nothing. Assert it serves the SPA shell AND that the /ws proxy made
-          # it into the rendered config (a broken envsubst would drop it silently and the app
-          # would ship unable to reach the agent at all).
+          # when it is serving nothing. Assert the things that actually have to hold, including the
+          # two security controls on /ws: a regression in either would ship an unauthenticated
+          # control plane to whoever can reach the page.
           if [ "${{ matrix.image }}" = "ui" ]; then
-            if ! docker exec "$name" wget -qO- http://127.0.0.1:8080/ | grep -q '<div id="root"'; then
-              echo "::error::ui served a response that is not the SPA shell."
+            # Drive these from the RUNNER with curl, against the container's bridge IP - NOT with
+            # `docker exec ... wget`. busybox wget prints no headers for a non-2xx response, so a
+            # status/header assertion made with it silently reads as empty and proves nothing.
+            ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$name")
+            code() { curl -s -o /dev/null -w '%{http_code}' ${2:+-H "Origin: $2"} "http://$ip:8080$1"; }
+
+            if ! curl -sf "http://$ip:8080/" | grep -q '<div id="root"'; then
+              echo "::error::ui served a response that is not the SPA shell."; exit 1
+            fi
+
+            # envsubst must substitute OUR vars and leave nginx's own alone. If the filter breaks,
+            # $http_upgrade renders empty, the Upgrade header is dropped, and every websocket dies
+            # while the container still looks perfectly healthy.
+            if ! docker exec "$name" grep -q 'location = /ws' /etc/nginx/conf.d/default.conf \
+               || ! docker exec "$name" grep -q 'proxy_set_header Upgrade \$http_upgrade' /etc/nginx/conf.d/default.conf; then
+              echo "::error::rendered nginx config is missing '/ws' or had \$http_upgrade clobbered by envsubst."
+              docker exec "$name" cat /etc/nginx/conf.d/default.conf; exit 1
+            fi
+
+            # CONTROL 1 - same-origin. The agent's socket is an unauthenticated control plane, so a
+            # page on another origin must not be able to drive it through the user's browser
+            # (cross-site WebSocket hijacking), and nor must a client that sends no Origin at all.
+            foreign=$(code /ws "http://evil.example"); none=$(code /ws "")
+            if [ "$foreign" != "403" ] || [ "$none" != "403" ]; then
+              echo "::error::/ws accepted a cross-origin ($foreign) or origin-less ($none) request; both must be 403. This is a cross-site WebSocket hijacking hole."
               exit 1
             fi
-            if ! docker exec "$name" grep -q 'location /ws' /etc/nginx/conf.d/default.conf; then
-              echo "::error::the /ws proxy is missing from the rendered nginx config - the app would be unable to reach the agent."
-              docker exec "$name" cat /etc/nginx/conf.d/default.conf | head -30
+            # ...and it must still accept ITS OWN origin, or the gate is uselessly strict and the app
+            # can never connect. No agent runs in this container, so a 502 is the proof that the
+            # request passed the Origin gate and nginx went looking for the upstream.
+            same=$(code /ws "http://$ip:8080")
+            if [ "$same" != "502" ]; then
+              echo "::error::/ws returned $same for a same-origin request; expected 502 (gate passed, no agent present). A 403 here means the app could never connect."
               exit 1
             fi
-            echo "ui serves the SPA shell and the /ws proxy is configured."
+            # Error pages must still carry the CSP. This holds only because the /ws block declares
+            # no add_header of its own and therefore inherits the server-level set; adding one there
+            # would silently replace them all.
+            if ! curl -s -D - -o /dev/null -H "Origin: http://evil.example" "http://$ip:8080/ws" \
+                 | grep -qi '^content-security-policy'; then
+              echo "::error::/ws error responses lost the Content-Security-Policy header (an add_header in that block would do this)."
+              exit 1
+            fi
+            # Exact-match location: a prefix match would forward /wsfoo to the agent too.
+            if [ "$(code /wsfoo "http://$ip:8080")" != "200" ]; then
+              echo "::error::/wsfoo was not served by the SPA - the /ws location is matching as a prefix."
+              exit 1
+            fi
+            echo "ui: SPA served; /ws is same-origin-only (403 cross-origin, 403 no-origin, proxies same-origin), keeps its CSP, and does not prefix-match."
+
+            # CONTROL 2 - the kill switch that any publicly-served UI relies on
+            # (docker-compose.production.yml). If this regresses, that deployment quietly proxies an
+            # unauthenticated agent to the internet.
+            off="smoke-ui-wsoff"
+            docker rm -f "$off" >/dev/null 2>&1 || true
+            docker run -d --name "$off" -e WS_PROXY_ENABLED=0 "$IMAGE:$SHA_TAG" >/dev/null
+            for _ in $(seq 1 20); do docker exec "$off" nc -z 127.0.0.1 8080 2>/dev/null && break; sleep 1; done
+            offip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$off")
+            disabled=$(curl -s -o /dev/null -w '%{http_code}' -H "Origin: http://$offip:8080" "http://$offip:8080/ws")
+            spa=$(curl -s -o /dev/null -w '%{http_code}' "http://$offip:8080/")
+            docker rm -f "$off" >/dev/null 2>&1 || true
+            if [ "$disabled" != "404" ] || [ "$spa" != "200" ]; then
+              echo "::error::WS_PROXY_ENABLED=0 did not disable /ws (got $disabled, want 404) or broke the SPA (got $spa, want 200). A publicly-served UI would expose the agent."
+              exit 1
+            fi
+            echo "ui: WS_PROXY_ENABLED=0 disables /ws (404) while still serving the SPA."
           fi
 
       - name: Push immutable SHA tag

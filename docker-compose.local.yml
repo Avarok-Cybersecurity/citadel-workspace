@@ -78,6 +78,19 @@ services:
       # If you run the agent natively instead of in Docker, set this to
       # host.docker.internal:12345 and drop `network_mode: host` from this service.
       - AGENT_UPSTREAM=127.0.0.1:${INTERNAL_SERVICE_PORT:-12345}
+      # Bind nginx to LOOPBACK, not 0.0.0.0.
+      #
+      # This service runs on host networking, so the image's 0.0.0.0 default (correct for a
+      # bridge-networked container, where -p cannot reach a loopback bind) would publish port
+      # 8080 on every interface - and /ws behind it. That would re-expose the agent's
+      # unauthenticated control plane to the whole LAN, undoing the 127.0.0.1 bind above: anyone
+      # on your network could drive your sessions. The UI is only ever opened from this machine.
+      - LISTEN_ADDR=127.0.0.1
+      # /ws proxies to the agent. Safe here, and ONLY here: the UI is loopback-bound (above) and
+      # nginx refuses any WebSocket whose Origin is not this page, which is what stops a malicious
+      # site you visit from driving your agent through your own browser. A publicly-served UI must
+      # set this to 0 - see docker-compose.production.yml.
+      - WS_PROXY_ENABLED=1
     depends_on:
       agent:
         condition: service_healthy
