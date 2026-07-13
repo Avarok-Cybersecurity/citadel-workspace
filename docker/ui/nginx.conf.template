@@ -2,11 +2,13 @@
 # nginx config for the Citadel Workspace UI.
 #
 # Rendered at CONTAINER START by the nginx image's envsubst entrypoint
-# (/docker-entrypoint.d/20-envsubst-on-templates.sh), which substitutes
-# ${AGENT_UPSTREAM} and writes the result to /etc/nginx/conf.d/. Only that one
-# variable is substituted - NGINX_ENVSUBST_FILTER pins it - so nginx's own
-# runtime variables ($host, $uri, $http_upgrade, ...) survive untouched. Getting
-# that filter wrong would silently mangle the config, which is why it is set.
+# (/docker-entrypoint.d/20-envsubst-on-templates.sh), which writes the result to
+# /etc/nginx/conf.d/. Exactly three variables are substituted - ${AGENT_UPSTREAM},
+# ${WS_PROXY_ENABLED} and ${LISTEN_ADDR} - and NGINX_ENVSUBST_FILTER in the Dockerfile
+# pins the list to those, so nginx's OWN runtime variables ($host, $uri, $http_upgrade,
+# $connection_upgrade, ...) survive untouched. Without that filter envsubst would expand
+# them to empty strings, silently producing a config that drops the upgrade handshake
+# while still looking healthy - which is why the smoke test asserts the rendered output.
 #
 # This lives in a real file rather than a printf'd one-liner in the Dockerfile:
 # the config now has a proxy block with upgrade headers and timeouts, and
@@ -107,11 +109,14 @@ server {
     #    protect a publicly-reachable /ws - anyone on the internet would simply
     #    forge the header and drive the agent. The only sound control for a UI that
     #    is served publicly (e.g. behind the Cloudflare tunnel in
-    #    docker-compose.production.yml) is to not proxy the agent at all. This flag
-    #    is the switch, and any deployment whose UI is reachable off-box MUST set it
-    #    to 0. It defaults to 1 because the shipped topology - the local client in
-    #    docker-compose.local.yml - is the one where the proxy is both safe and
-    #    required.
+    #    docker-compose.production.yml) is to not proxy the agent at all.
+    #
+    #    So this FAILS CLOSED: the image defaults it to 0 and a deployment must opt
+    #    in. docker-compose.local.yml sets it to 1, because there the UI is bound to
+    #    loopback and the proxy is both safe and required; docker-compose.production.yml
+    #    leaves it off. An image cannot know which topology it has been dropped into,
+    #    and a wrong default here is a security hole, whereas a wrong default the other
+    #    way is a visible 404.
     #
     # 2. Same-origin Origin check. Even when the UI is bound to loopback, a browser
     #    is a confused deputy: a malicious page the user visits can open a WebSocket
