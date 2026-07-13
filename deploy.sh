@@ -194,7 +194,7 @@ fi
 # that way and must be flipped to Public once). Naming that cause up front turns
 # a cryptic mid-deploy exit into a one-line fix.
 echo "[2/4] Pulling images (tag: ${IMAGE_TAG:-latest})..."
-if ! docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" pull server internal-service; then
+if ! docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" pull server internal-service ui; then
     echo "" >&2
     echo "ERROR: failed to pull images (tag: ${IMAGE_TAG:-latest})." >&2
     echo "  Common causes:" >&2
@@ -227,30 +227,23 @@ fi
 # (validate.yml -> deploy-gate-tests) against real images with matching, mismatched and
 # absent labels. Inline in this script - wedged between an image pull and a production
 # restart - none of those paths could be tested at all.
-echo "  Verifying both images came from the same commit..."
+echo "  Verifying all images came from the same commit..."
 srv_img=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.services.server.image')
 is_img=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.services["internal-service"].image')
+# The ui is pulled from the same release now, so it is subject to the same consistency rule: a
+# partially completed `latest` promotion could otherwise pair a new backend with an old UI, which
+# is exactly the mixed-version deploy this gate exists to prevent.
+ui_img=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.services.ui.image')
 
-if ! ./scripts/verify-image-revisions.sh "$srv_img" "$is_img"; then
+if ! ./scripts/verify-image-revisions.sh "$srv_img" "$is_img" "$ui_img"; then
     echo "" >&2
     echo "  Nothing was restarted; the running stack is untouched." >&2
     exit 1
 fi
 
-# The `ui` service is not published to GHCR yet -- its production image bakes
-# VITE_WS_URL at build time and its CSP cannot reach an off-origin agent, so a
-# published artifact would not actually work until the same-origin `/ws` proxy
-# lands. Until then it is still built locally, and only when it is being run.
-if docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" config --services | grep -qx "ui"; then
-    echo "  Building ui locally (not yet published to GHCR)..."
-    if ! docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" build ui; then
-        echo "" >&2
-        echo "ERROR: failed to build the ui image." >&2
-        echo "  Aborting BEFORE restarting anything, so the backend is not left on new" >&2
-        echo "  images while the ui stays on its old one." >&2
-        exit 1
-    fi
-fi
+# All three images are published now, so this host builds NOTHING. The ui used to be built here
+# (it baked VITE_WS_URL at build time, so a published image could not have worked); the app now
+# derives its socket URL at runtime, so one published ui image serves every deployment.
 echo ""
 
 # NOTE on the removed `target_cache` volume: the production images no longer
