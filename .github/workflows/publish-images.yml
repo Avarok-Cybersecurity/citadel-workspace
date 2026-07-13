@@ -101,7 +101,9 @@ jobs:
             # The image FAILS CLOSED (WS_PROXY_ENABLED=0), so the proxy checks below must opt in
             # explicitly - exactly as a real deployment does. The fail-closed default itself is
             # then proven by a second container that passes no env at all.
-            smoke_env: "-e WS_PROXY_ENABLED=1"
+            # -p on LOOPBACK: /ws requires a loopback Host (the DNS-rebinding defence), so the
+            # checks must arrive over 127.0.0.1 exactly as a real user's browser does.
+            smoke_env: "-e WS_PROXY_ENABLED=1 -p 127.0.0.1:18080:8080"
           - image: internal-service
             dockerfile: ./docker/internal-service/Dockerfile
             # Only this Dockerfile declares INTERNAL_SERVICE_PORT (it is baked into the image's
@@ -239,10 +241,13 @@ jobs:
             # Drive these from the RUNNER with curl, against the container's bridge IP - NOT with
             # `docker exec ... wget`. busybox wget prints no headers for a non-2xx response, so a
             # status/header assertion made with it silently reads as empty and proves nothing.
-            ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$name")
-            code() { curl -s -o /dev/null -w '%{http_code}' ${2:+-H "Origin: $2"} "http://$ip:8080$1"; }
+            # Reach it over LOOPBACK, not the container's bridge IP. /ws now requires a loopback
+            # Host (the DNS-rebinding defence), so 172.17.x.x would be refused - and a real user
+            # arrives on 127.0.0.1 anyway. The container was started with -p by the step above.
+            base="http://127.0.0.1:18080"
+            code() { curl -s -o /dev/null -w '%{http_code}' ${2:+-H "Origin: $2"} "$base$1"; }
 
-            if ! curl -sf "http://$ip:8080/" | grep -q '<div id="root"'; then
+            if ! curl -sf "$base/" | grep -q '<div id="root"'; then
               echo "::error::ui served a response that is not the SPA shell."; exit 1
             fi
 
@@ -266,25 +271,37 @@ jobs:
             # ...and it must still accept ITS OWN origin, or the gate is uselessly strict and the app
             # can never connect. No agent runs in this container, so a 502 is the proof that the
             # request passed the Origin gate and nginx went looking for the upstream.
-            same=$(code /ws "http://$ip:8080")
+            same=$(code /ws "$base")
             if [ "$same" != "502" ]; then
               echo "::error::/ws returned $same for a same-origin request; expected 502 (gate passed, no agent present). A 403 here means the app could never connect."
               exit 1
             fi
+            # DNS REBINDING. The attack the same-origin check cannot see: a rebound `evil.example`
+            # resolves to 127.0.0.1, so Host AND Origin both read evil.example - they match, and a
+            # same-origin check alone waves it through while the attacker's JS drives the agent.
+            # Only the loopback Host allowlist catches this. Simulated exactly: a matching
+            # Host/Origin pair for a name we do not serve under.
+            rebound=$(curl -s -o /dev/null -w '%{http_code}' \
+              -H "Host: evil.example:18080" -H "Origin: http://evil.example:18080" "$base/ws")
+            if [ "$rebound" != "403" ]; then
+              echo "::error::/ws accepted a DNS-rebinding handshake (Host=Origin=evil.example) with $rebound; expected 403. A malicious site could drive the local agent."
+              exit 1
+            fi
+
             # Error pages must still carry the CSP. This holds only because the /ws block declares
             # no add_header of its own and therefore inherits the server-level set; adding one there
             # would silently replace them all.
-            if ! curl -s -D - -o /dev/null -H "Origin: http://evil.example" "http://$ip:8080/ws" \
+            if ! curl -s -D - -o /dev/null -H "Origin: http://evil.example" "$base/ws" \
                  | grep -qi '^content-security-policy'; then
               echo "::error::/ws error responses lost the Content-Security-Policy header (an add_header in that block would do this)."
               exit 1
             fi
             # Exact-match location: a prefix match would forward /wsfoo to the agent too.
-            if [ "$(code /wsfoo "http://$ip:8080")" != "200" ]; then
+            if [ "$(code /wsfoo "$base")" != "200" ]; then
               echo "::error::/wsfoo was not served by the SPA - the /ws location is matching as a prefix."
               exit 1
             fi
-            echo "ui: SPA served; /ws is same-origin-only (403 cross-origin, 403 no-origin, proxies same-origin), keeps its CSP, and does not prefix-match."
+            echo "ui: SPA served; /ws requires a loopback Host (403 on DNS-rebinding) AND a same-origin Origin (403 cross-origin, 403 no-origin), proxies same-origin, keeps its CSP, and does not prefix-match."
 
             # CONTROL 2 - the kill switch that any publicly-served UI relies on
             # (docker-compose.production.yml). If this regresses, that deployment quietly proxies an
@@ -293,11 +310,17 @@ jobs:
             docker rm -f "$off" >/dev/null 2>&1 || true
             # NO -e flag: this is the image's DEFAULT posture. Anyone who runs this image without
             # thinking about it must get no agent proxy at all.
-            docker run -d --name "$off" "$IMAGE:$SHA_TAG" >/dev/null
+            docker run -d --name "$off" -p 127.0.0.1:18081:8080 "$IMAGE:$SHA_TAG" >/dev/null
             for _ in $(seq 1 20); do docker exec "$off" nc -z 127.0.0.1 8080 2>/dev/null && break; sleep 1; done
-            offip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$off")
-            disabled=$(curl -s -o /dev/null -w '%{http_code}' -H "Origin: http://$offip:8080" "http://$offip:8080/ws")
-            spa=$(curl -s -o /dev/null -w '%{http_code}' "http://$offip:8080/")
+            # Prove it actually STARTED. A container that crashed on boot refuses every connection,
+            # which would sail through the assertions below as a "404" and read as a security PASS.
+            if ! docker exec "$off" nc -z 127.0.0.1 8080 2>/dev/null; then
+              echo "::error::the fail-closed smoke container never became ready - the assertions below would be meaningless."
+              docker logs "$off"; docker rm -f "$off" >/dev/null 2>&1 || true; exit 1
+            fi
+            offbase="http://127.0.0.1:18081"
+            disabled=$(curl -s -o /dev/null -w '%{http_code}' -H "Origin: $offbase" "$offbase/ws")
+            spa=$(curl -s -o /dev/null -w '%{http_code}' "$offbase/")
             docker rm -f "$off" >/dev/null 2>&1 || true
             if [ "$disabled" != "404" ] || [ "$spa" != "200" ]; then
               echo "::error::the image does not fail closed: with no WS_PROXY_ENABLED set, /ws returned $disabled (want 404) and the SPA $spa (want 200). Any unanticipated topology would republish the unauthenticated agent."

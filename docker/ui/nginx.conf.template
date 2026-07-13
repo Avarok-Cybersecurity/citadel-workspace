@@ -34,6 +34,32 @@ map $http_origin $ws_origin_host {
     "~^https?://(.+)$" $1;
 }
 
+# Is the Host header one this machine can legitimately be addressed by? This is the
+# DNS-REBINDING defence, and it is NOT the same check as same-origin below.
+#
+# Origin == Host proves the request is SAME-SITE. It does not prove it is SAME-MACHINE.
+# An attacker serves a page from evil.example (DNS TTL 0), then re-points evil.example
+# at 127.0.0.1 and has the page open ws://evil.example:8080/ws. The browser connects to
+# THIS nginx and sends `Host: evil.example:8080` and `Origin: http://evil.example:8080` -
+# equal, so a same-origin check alone waves it straight through, and the attacker's
+# JavaScript is now driving the unauthenticated agent. Binding to loopback does not help:
+# the connection really does originate from 127.0.0.1, out of the victim's own browser.
+#
+# The name the attacker rebinds is a name WE never serve under. So pin the Host to the
+# ones a user can actually reach this UI by - the loopback names - and the rebound
+# request fails on a header the attacker cannot forge without giving up the attack (the
+# browser sends the hostname the page was loaded from, by construction).
+#
+# This is why /ws is a local-only facility. A deployment that needs to serve the UI on a
+# real hostname must not proxy the agent at all (WS_PROXY_ENABLED=0); there is no Host it
+# could add here that would be safe, because the agent has no authentication of its own.
+map $http_host $ws_host_allowed {
+    default                            0;
+    "~*^localhost(:[0-9]+)?$"          1;
+    "~*^127\.0\.0\.1(:[0-9]+)?$"       1;
+    "~*^\[::1\](:[0-9]+)?$"            1;
+}
+
 server {
     # LISTEN_ADDR is 0.0.0.0 by default, which is what a bridge-networked container
     # needs for `-p 8080:8080` to reach it. Under HOST networking, though, 0.0.0.0
@@ -100,8 +126,9 @@ server {
     #
     # -------------------------------------------------------------------------
     # SECURITY. The agent's WebSocket is an UNAUTHENTICATED CONTROL PLANE: whoever
-    # can talk to it can drive the user's sessions. Proxying it therefore needs two
-    # independent controls, because neither is sufficient alone.
+    # can talk to it can drive the user's sessions. Proxying it therefore needs THREE
+    # independent controls, because no one of them is sufficient alone. Each defeats an
+    # attack the others do not even see.
     #
     # 1. WS_PROXY_ENABLED. WebSockets are exempt from the same-origin policy and
     #    carry no CORS preflight, and a non-browser client can forge any Origin it
@@ -118,14 +145,23 @@ server {
     #    and a wrong default here is a security hole, whereas a wrong default the other
     #    way is a visible 404.
     #
-    # 2. Same-origin Origin check. Even when the UI is bound to loopback, a browser
-    #    is a confused deputy: a malicious page the user visits can open a WebSocket
-    #    to http://localhost:8080/ws FROM the user's own machine, and the request
-    #    arrives from 127.0.0.1 looking entirely legitimate (this is cross-site
-    #    WebSocket hijacking). A network/IP-based control cannot see the difference;
-    #    the Origin header can. Browsers set it truthfully and cannot be made to lie,
-    #    which is exactly the case this defends. Requests with no Origin are refused
-    #    too - the UI is a browser and always sends one.
+    # 2. Loopback Host allowlist. Defeats DNS REBINDING, which the same-origin check
+    #    below is blind to: a rebound `evil.example` sends Host and Origin that MATCH
+    #    each other, so same-origin says yes while the request is entirely attacker-
+    #    controlled. Origin==Host proves same-SITE, not same-MACHINE. Pinning Host to
+    #    the loopback names is what proves the latter. See the $ws_host_allowed map.
+    #
+    # 3. Same-origin Origin check. Defeats cross-site WebSocket hijacking, which the
+    #    Host allowlist is blind to: a malicious page the user visits can open a socket
+    #    to http://localhost:8080/ws from the user's own machine - a perfectly
+    #    allowlisted Host - and the request arrives from 127.0.0.1 looking entirely
+    #    legitimate. A network/IP control cannot tell the difference; the Origin header
+    #    can, because a browser sets it truthfully and cannot be made to lie about it.
+    #    Requests with no Origin are refused too - the UI is a browser and always sends
+    #    one.
+    #
+    # (2) and (3) are a pair: each is exactly the case the other cannot see. Removing
+    # either re-opens a hole that the remaining check will happily wave through.
     # -------------------------------------------------------------------------
     location = /ws {
         # `location = /ws` is an EXACT match, deliberately. A prefix match would also
@@ -142,7 +178,12 @@ server {
             return 404;
         }
 
-        # Same-origin or nothing. See (2) above.
+        # (2) Loopback Host only. Blocks DNS rebinding - see the $ws_host_allowed map.
+        if ($ws_host_allowed = 0) {
+            return 403;
+        }
+
+        # (3) Same-origin or nothing. Blocks cross-site WebSocket hijacking.
         if ($ws_origin_host != $http_host) {
             return 403;
         }
