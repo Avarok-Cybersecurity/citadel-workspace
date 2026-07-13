@@ -25,20 +25,26 @@
 # Nothing is built. Both images are pulled prebuilt (~300 MB total), so you need neither a Rust
 # toolchain nor Node.
 #
-# NETWORKING - READ THIS IF P2P DOES NOT WORK
+# NETWORKING
 #
-# The agent establishes DIRECT peer-to-peer links to other users' agents, using NAT traversal
-# (STUN/UPnP) to punch through your router. It therefore wants the real network stack, which is
-# why `network_mode: host` is used below.
+# The agent tries to establish a DIRECT peer-to-peer link to other users' agents, hole-punching
+# through your router. That is an OPTIMISATION, not a requirement: when the hole punch fails, the
+# Citadel protocol falls back to relaying peer traffic through the workspace server (a TURN-style
+# proxy - see check_proxy() in citadel_proto). The server forwards the packets without decrypting
+# them, since peers encrypt end-to-end with their own ratchet, so E2E is preserved either way.
+# The cost of relaying is latency and server bandwidth, not functionality.
 #
-#   Linux            - works as written.
+# `network_mode: host` below gives the agent the real network stack, which is what lets the direct
+# path work at all.
+#
+#   Linux            - direct P2P works as written.
 #   macOS / Windows  - Docker runs inside a VM, so "host" is the VM's network, not your machine's.
-#                      That adds a second NAT layer around the agent. Server-mediated features
-#                      (workspaces, offices, group chat) are unaffected, but DIRECT P2P - private
-#                      messages and file transfer - may fail to connect. If it does, run the agent
-#                      as a native binary on your machine instead and point the UI at it with
-#                      AGENT_UPSTREAM=host.docker.internal:12345. This is a known limitation of
-#                      containerising a NAT-traversing peer, not a bug in the app.
+#                      The extra NAT layer makes the DIRECT path less likely to succeed, so P2P is
+#                      more likely to be server-relayed. Everything still works; DMs and file
+#                      transfer just take the slower route. If you want the direct path (e.g. for
+#                      large file transfers), run the agent as a native binary on your machine and
+#                      point the UI at it with AGENT_UPSTREAM=host.docker.internal:12345 - this
+#                      image already supports that with no rebuild.
 # =============================================================================
 
 services:
