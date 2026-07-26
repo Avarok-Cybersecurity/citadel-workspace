@@ -171,11 +171,19 @@ ENV WS_PROXY_ENABLED=0
 # so docker-compose.local.yml overrides this to 127.0.0.1.
 ENV LISTEN_ADDR=0.0.0.0
 
-# Substitute ONLY these three. Without this filter, envsubst would also expand nginx's
-# own runtime variables ($host, $uri, $http_upgrade, $connection_upgrade) into empty
-# strings, silently producing a config that proxies nothing and drops the upgrade
-# handshake. This one line is load-bearing, and the smoke test in publish-images.yml
-# asserts the rendered config still contains them.
+# Pin envsubst to exactly these three names.
+#
+# The entrypoint builds its substitution list from the names of REAL environment
+# variables, so nginx's own `$http_upgrade` / `$connection_upgrade` are not at risk
+# merely because the filter is absent - verified by rendering both ways. What the
+# filter actually prevents is a COLLISION: without it, every environment variable is
+# eligible, so an env var whose name happens to match an nginx variable rewrites the
+# config. Demonstrated - running the unfiltered image with `-e host=pwned` renders
+# `proxy_set_header Host pwned;`, while the filtered image keeps `$host`.
+#
+# That makes this an injection guard: whoever can set env vars on the container could
+# otherwise alter the proxy's behaviour, including the headers it forwards. The smoke
+# test asserts the property directly by starting the image with a colliding variable.
 ENV NGINX_ENVSUBST_FILTER=^(AGENT_UPSTREAM|WS_PROXY_ENABLED|LISTEN_ADDR)$
 
 # The entrypoint renders templates into /etc/nginx/conf.d at start-up, and we run as

@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+#
+# Smoke-test the UI image's /ws agent proxy and its security controls.
+#
+# WHY THIS IS A SCRIPT AND NOT INLINE YAML
+#
+# These assertions guard an UNAUTHENTICATED control plane: whatever reaches the agent's
+# WebSocket can drive a user's sessions. They therefore have to run on the pull request
+# that could break them, not only on the publish pipeline that runs after the merge
+# decision has already been made. Living in one file means validate.yml (PR gate) and
+# publish-images.yml (release gate) assert exactly the same things, and neither can
+# quietly drift into testing less than the other.
+#
+# This is not hypothetical. The switch below was once written `if ($flag = "0")`, which
+# fails OPEN for every value except the literal "0" - so `WS_PROXY_ENABLED=false` exposed
+# the agent while reading as if it disabled it. Nothing in the PR gate would have caught
+# that.
+#
+# Usage:  scripts/smoke-ui-ws.sh <image-ref> [host-port]
+#
+# Requires: docker, curl. Exits non-zero on the first failed assertion.
+
+set -euo pipefail
+
+IMAGE="${1:?usage: smoke-ui-ws.sh <image-ref> [host-port]}"
+PORT="${2:-18080}"
+BASE="http://127.0.0.1:${PORT}"
+CTR="smoke-ui-ws-$$"
+
+cleanup() { docker rm -f "$CTR" >/dev/null 2>&1 || true; }
+trap cleanup EXIT
+
+fail() { echo "::error::$*"; exit 1; }
+
+# Start the image with a given WS_PROXY_ENABLED value ("__unset__" passes no env at all),
+# published on LOOPBACK - /ws requires a loopback Host, exactly as a real browser provides.
+start() {
+  local val="$1"
+  cleanup
+  if [ "$val" = "__unset__" ]; then
+    docker run -d --name "$CTR" -p "127.0.0.1:${PORT}:8080" "$IMAGE" >/dev/null
+  else
+    docker run -d --name "$CTR" -e WS_PROXY_ENABLED="$val" -p "127.0.0.1:${PORT}:8080" "$IMAGE" >/dev/null
+  fi
+  local i
+  for i in $(seq 1 30); do
+    curl -sf -o /dev/null "$BASE/" 2>/dev/null && return 0
+    sleep 1
+  done
+  # A container that never started would make every assertion below trivially "pass" as a
+  # connection error, so treat not-ready as a hard failure and show why.
+  docker logs "$CTR" 2>&1 | tail -30
+  fail "the UI container never became ready; the assertions would be meaningless."
+}
+
+# Status code for a request, with optional Host and Origin overrides.
+code() { # <path> [origin] [host]
+  local path="$1" origin="${2:-}" host="${3:-}"
+  local args=(-s -o /dev/null -w '%{http_code}')
+  [ -n "$origin" ] && args+=(-H "Origin: $origin")
+  [ -n "$host" ] && args+=(-H "Host: $host")
+  curl "${args[@]}" "$BASE$path"
+}
+
+echo "== UI /ws smoke test: $IMAGE =="
+
+# ---------------------------------------------------------------------------
+# 1. The proxy ENABLED. Everything below is the deployed local-client posture.
+# ---------------------------------------------------------------------------
+start 1
+
+curl -sf "$BASE/" | grep -q '<div id="root"' \
+  || fail "the UI did not serve the SPA shell. nginx binds even when it serves nothing, so this is the real liveness check."
+
+# The render must contain the proxy and keep nginx's own variables. This catches a
+# grossly broken template or a bad substitution; it does NOT by itself prove the envsubst
+# filter is in place (see the collision check further down, which does).
+docker exec "$CTR" grep -q 'location = /ws' /etc/nginx/conf.d/default.conf \
+  || { docker exec "$CTR" cat /etc/nginx/conf.d/default.conf; fail "'location = /ws' is missing from the rendered config."; }
+docker exec "$CTR" grep -q 'proxy_set_header Upgrade \$http_upgrade' /etc/nginx/conf.d/default.conf \
+  || { docker exec "$CTR" cat /etc/nginx/conf.d/default.conf; fail "the rendered config lost \$http_upgrade - the websocket upgrade would be silently dropped."; }
+
+# Same-origin. A page on another origin must not drive the agent through the user's browser
+# (cross-site WebSocket hijacking), and neither must a client that sends no Origin at all.
+[ "$(code /ws 'http://evil.example')" = "403" ] \
+  || fail "/ws accepted a CROSS-ORIGIN request; expected 403. This is a cross-site WebSocket hijacking hole."
+[ "$(code /ws)" = "403" ] \
+  || fail "/ws accepted a request with NO Origin; expected 403."
+
+# DNS rebinding: Host and Origin MATCH each other, so the same-origin check alone says yes.
+# Only the loopback Host allowlist catches this.
+[ "$(code /ws 'http://evil.example:8080' 'evil.example:8080')" = "403" ] \
+  || fail "/ws accepted a DNS-REBINDING handshake (Host=Origin=evil.example); expected 403."
+
+# The allowlist contains an IP literal (0.0.0.0), so prove it did not become "any IP".
+[ "$(code /ws 'http://192.168.1.50:8080' '192.168.1.50:8080')" = "403" ] \
+  || fail "/ws accepted a LAN Host; expected 403. Serving /ws to the local network hands the agent to every machine on it."
+
+# ...and it must still ACCEPT its own origin, or the gate is uselessly strict and the app can
+# never connect. No agent runs here, so 502 is the proof the request passed every gate and
+# nginx went looking for the upstream.
+[ "$(code /ws "$BASE")" = "502" ] \
+  || fail "/ws refused a SAME-ORIGIN request (got $(code /ws "$BASE"), expected 502 = gates passed, no agent present). A 403 here means the app could never connect."
+
+# Exact-match location: a prefix match would forward /wsfoo to the agent too.
+[ "$(code /wsfoo "$BASE")" = "200" ] \
+  || fail "/wsfoo was not served by the SPA - the /ws location is matching as a prefix."
+
+# Error pages must still carry the CSP. This holds only because the /ws block declares no
+# add_header of its own and so inherits the server-level set; adding one there silently
+# replaces them all.
+curl -s -D - -o /dev/null -H "Origin: http://evil.example" "$BASE/ws" | grep -qi '^content-security-policy' \
+  || fail "/ws error responses lost the Content-Security-Policy header."
+
+echo "  enabled: SPA served; envsubst intact; same-origin enforced (403 cross-origin, 403 no-Origin, 403 rebinding, 403 LAN); same-origin proxied; no prefix match; CSP preserved."
+
+# ---------------------------------------------------------------------------
+# 2. The switch is OPT-IN. Only the literal "1" may enable the proxy.
+# ---------------------------------------------------------------------------
+# Tested with the values an operator would plausibly reach for to turn it OFF. The obvious
+# spelling of the guard (`= "0"`) fails OPEN for every one of these.
+for val in "__unset__" "" "0" "false" "off" "no"; do
+  start "$val"
+  got="$(code /ws "$BASE")"
+  [ "$got" = "404" ] \
+    || fail "WS_PROXY_ENABLED='${val/__unset__/<unset>}' left /ws ENABLED (got $got, want 404). The switch must be opt-in: anything but the literal 1 has to disable the proxy, or an operator turning it 'off' would expose the agent."
+  [ "$(code /)" = "200" ] \
+    || fail "with the proxy disabled the SPA stopped serving; disabling /ws must not break the app."
+done
+
+echo "  opt-in: only the literal WS_PROXY_ENABLED=1 enables the proxy; unset, '', 0, false, off and no all disable it while still serving the SPA."
+
+# ---------------------------------------------------------------------------
+# 3. envsubst is pinned to our three variables (NGINX_ENVSUBST_FILTER).
+# ---------------------------------------------------------------------------
+# Unfiltered, envsubst is eligible to replace EVERY environment variable - so an env var
+# whose name collides with an nginx variable rewrites the config. Start the image with a
+# colliding `host` and assert `$host` survives. Without the filter this renders
+# `proxy_set_header Host pwned;`, which is config injection by whoever can set env vars.
+cleanup
+docker run -d --name "$CTR" -e WS_PROXY_ENABLED=1 -e host=pwned -e http_upgrade=pwned \
+  -p "127.0.0.1:${PORT}:8080" "$IMAGE" >/dev/null
+for i in $(seq 1 30); do curl -sf -o /dev/null "$BASE/" 2>/dev/null && break; sleep 1; done
+rendered=$(docker exec "$CTR" cat /etc/nginx/conf.d/default.conf)
+echo "$rendered" | grep -q 'proxy_set_header Host \$host' \
+  || fail "an environment variable named 'host' rewrote \$host in the rendered config - NGINX_ENVSUBST_FILTER is not pinning substitution, so env vars can inject into the proxy config."
+echo "$rendered" | grep -q 'proxy_set_header Upgrade \$http_upgrade' \
+  || fail "an environment variable named 'http_upgrade' rewrote \$http_upgrade in the rendered config - NGINX_ENVSUBST_FILTER is not pinning substitution."
+echo "  envsubst: pinned - colliding env vars (host, http_upgrade) cannot rewrite nginx's own variables."
+
+echo "== all /ws smoke assertions passed =="

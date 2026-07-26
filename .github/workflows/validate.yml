@@ -556,6 +556,17 @@ jobs:
             exit 1
           fi
           echo "Production images built successfully"
+      - name: Smoke Test - /ws proxy security controls
+        # The PR GATE for the agent proxy. These assertions used to live only in
+        # publish-images.yml, which runs on master pushes - i.e. AFTER the merge decision.
+        # A PR that regressed the fail-closed switch or the envsubst pinning would have gone
+        # green here and only been caught at promotion time, or shipped if publish were
+        # bypassed. The controls guard an unauthenticated control plane, so they have to be
+        # asserted on the change that could break them.
+        #
+        # Shared with publish-images.yml so the two gates cannot drift into testing
+        # different things.
+        run: ./scripts/smoke-ui-ws.sh ghcr.io/avarok-cybersecurity/citadel-workspace-ui:latest 18080
       - name: Smoke Test - Services Start
         env:
           WORKSPACE_MASTER_PASSWORD: 'ci-smoke-test'
