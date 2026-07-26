@@ -27,36 +27,41 @@ PORT="${2:-18080}"
 BASE="http://127.0.0.1:${PORT}"
 CTR="smoke-ui-ws-$$"
 
-# Remove the container AND wait for the published port to actually come free. `docker rm -f`
-# returns once the container is gone, but the daemon's port binding can outlive it briefly - and
-# this script cycles seven containers over the same port, so a race there would surface as a
-# spurious "port is already allocated" failure in a SECURITY gate. A flaky gate is worse than a
-# missing one: it trains people to re-run until green.
-cleanup() {
-  docker rm -f "$CTR" >/dev/null 2>&1 || true
-  local i
-  for i in $(seq 1 30); do
-    # Nothing listening on the host port means the binding is released.
-    (exec 3<>"/dev/tcp/127.0.0.1/${PORT}") 2>/dev/null || return 0
-    exec 3<&- 2>/dev/null || true
-    sleep 0.2
-  done
-  echo "warning: port ${PORT} still bound after container removal; continuing anyway" >&2
-}
+cleanup() { docker rm -f "$CTR" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 fail() { echo "::error::$*"; exit 1; }
 
 # Start the image with a given WS_PROXY_ENABLED value ("__unset__" passes no env at all),
 # published on LOOPBACK - /ws requires a loopback Host, exactly as a real browser provides.
+#
+# `docker run` is RETRIED rather than the port being probed first. This script cycles seven
+# containers over the same published port, and `docker rm -f` returns once the container is gone
+# while the daemon's port binding can briefly outlive it - so a naive run can lose the race with
+# "port is already allocated". Probing the port to predict that is the wrong shape: every probe is
+# itself a TCP connection to whatever still holds the socket, and a probe that succeeds tells you
+# nothing about whether the NEXT bind will. Retrying the actual operation tests the actual
+# precondition, and costs nothing when it succeeds first time (the common case).
+#
+# It matters because this is a SECURITY gate: one that fails at random trains people to re-run
+# until green, and the next real regression gets waved through the same way.
 start() {
   local val="$1"
   cleanup
-  if [ "$val" = "__unset__" ]; then
-    docker run -d --name "$CTR" -p "127.0.0.1:${PORT}:8080" "$IMAGE" >/dev/null
-  else
-    docker run -d --name "$CTR" -e WS_PROXY_ENABLED="$val" -p "127.0.0.1:${PORT}:8080" "$IMAGE" >/dev/null
-  fi
+  local args=(-d --name "$CTR" -p "127.0.0.1:${PORT}:8080")
+  [ "$val" = "__unset__" ] || args+=(-e "WS_PROXY_ENABLED=$val")
+  local attempt run_err
+  for attempt in 1 2 3 4 5; do
+    if run_err=$(docker run "${args[@]}" "$IMAGE" 2>&1 >/dev/null); then
+      break
+    fi
+    if [ "$attempt" -eq 5 ]; then
+      fail "could not start the smoke container after 5 attempts: $run_err"
+    fi
+    # Almost always the previous container's port binding has not been released yet.
+    docker rm -f "$CTR" >/dev/null 2>&1 || true
+    sleep 1
+  done
   local i
   for i in $(seq 1 30); do
     curl -sf -o /dev/null "$BASE/" 2>/dev/null && return 0
