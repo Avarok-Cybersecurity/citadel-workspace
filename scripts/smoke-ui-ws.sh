@@ -116,6 +116,14 @@ docker exec "$CTR" grep -q 'proxy_set_header Upgrade \$http_upgrade' /etc/nginx/
 [ "$(code /ws 'http://192.168.1.50:8080' '192.168.1.50:8080')" = "403" ] \
   || fail "/ws accepted a LAN Host; expected 403. Serving /ws to the local network hands the agent to every machine on it."
 
+# BOTH checks failing at once. nginx evaluates the `if` blocks in this location sequentially and
+# `return` inside one terminates immediately - but that is implicit rewrite-module behaviour, and
+# "if is evil" precisely because its interactions are easy to get wrong. Pin it: a request that
+# fails the Host allowlist AND the Origin check must be refused, not fall through to proxy_pass.
+# A 502 here would mean it reached the agent despite failing two independent gates.
+[ "$(code /ws 'http://other.example' 'evil.example:8080')" = "403" ] \
+  || fail "/ws returned $(code /ws 'http://other.example' 'evil.example:8080') for a request failing BOTH the Host and Origin checks; expected 403. Anything else means the if-chain let it through to the agent."
+
 # ...and it must still ACCEPT its own origin, or the gate is uselessly strict and the app can
 # never connect. No agent runs here, so 502 is the proof the request passed every gate and
 # nginx went looking for the upstream.
@@ -132,7 +140,7 @@ docker exec "$CTR" grep -q 'proxy_set_header Upgrade \$http_upgrade' /etc/nginx/
 curl -s -D - -o /dev/null -H "Origin: http://evil.example" "$BASE/ws" | grep -qi '^content-security-policy' \
   || fail "/ws error responses lost the Content-Security-Policy header."
 
-echo "  enabled: SPA served; envsubst intact; same-origin enforced (403 cross-origin, 403 no-Origin, 403 rebinding, 403 LAN); same-origin proxied; no prefix match; CSP preserved."
+echo "  enabled: SPA served; envsubst intact; same-origin enforced (403 cross-origin, 403 no-Origin, 403 rebinding, 403 LAN, 403 both-fail); same-origin proxied; no prefix match; CSP preserved."
 
 # ---------------------------------------------------------------------------
 # 2. The switch is OPT-IN. Only the literal "1" may enable the proxy.
