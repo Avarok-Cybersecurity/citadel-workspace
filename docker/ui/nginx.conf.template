@@ -186,8 +186,20 @@ server {
         # add_header here would REPLACE the inherited set, so the error pages would silently
         # ship with no CSP. That is exactly why /assets/ and .wasm below must repeat all of
         # them (they add Cache-Control, which breaks their inheritance).
+        # Opt-IN, not opt-out: anything that is not exactly "1" disables the proxy.
+        #
+        # The obvious spelling of this test - `if ($ws_proxy_enabled = "0")` - fails OPEN
+        # for every value except "0", which is the wrong direction for a switch guarding
+        # an unauthenticated control plane. An operator writing the intuitive
+        # `WS_PROXY_ENABLED=false` (or `off`, or `no`, or an empty value from a compose
+        # line like `WS_PROXY_ENABLED=`) would have been silently ENABLING it while
+        # believing they had turned it off. Verified: each of those values proxied.
+        #
+        # Requiring the literal "1" means every typo, every empty value and every
+        # not-yet-invented spelling of "off" lands on 404. The only way to expose the
+        # agent is to say so exactly.
         set $ws_proxy_enabled "${WS_PROXY_ENABLED}";
-        if ($ws_proxy_enabled = "0") {
+        if ($ws_proxy_enabled != "1") {
             return 404;
         }
 

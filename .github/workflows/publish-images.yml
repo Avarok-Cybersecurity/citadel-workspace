@@ -337,6 +337,25 @@ jobs:
               exit 1
             fi
             echo "ui: fails closed by default - /ws is 404 unless a deployment opts in, and the SPA still serves."
+
+            # The switch is opt-IN: only the literal "1" may enable the proxy. Tested with the
+            # values an operator would plausibly reach for to turn it OFF. The obvious spelling of
+            # the guard (`if $flag = "0"`) fails OPEN for every one of these, so someone writing
+            # WS_PROXY_ENABLED=false would have been silently EXPOSING the unauthenticated agent
+            # while believing they had disabled it.
+            for val in "" "false" "off" "no" "0"; do
+              vc="smoke-ui-val"
+              docker rm -f "$vc" >/dev/null 2>&1 || true
+              docker run -d --name "$vc" -e WS_PROXY_ENABLED="$val" -p 127.0.0.1:18082:8080 "$IMAGE:$SHA_TAG" >/dev/null
+              for _ in $(seq 1 20); do docker exec "$vc" nc -z 127.0.0.1 8080 2>/dev/null && break; sleep 1; done
+              got=$(curl -s -o /dev/null -w '%{http_code}' -H "Origin: http://127.0.0.1:18082" "http://127.0.0.1:18082/ws")
+              docker rm -f "$vc" >/dev/null 2>&1 || true
+              if [ "$got" != "404" ]; then
+                echo "::error::WS_PROXY_ENABLED='$val' left /ws ENABLED (got $got, want 404). The switch must be opt-in: anything but the literal 1 has to disable the proxy, or an operator turning it 'off' would expose the agent."
+                exit 1
+              fi
+            done
+            echo "ui: only the literal WS_PROXY_ENABLED=1 enables the proxy; '', false, off, no and 0 all disable it."
           fi
 
       - name: Push immutable SHA tag
