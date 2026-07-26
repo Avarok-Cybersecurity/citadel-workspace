@@ -288,6 +288,16 @@ jobs:
               exit 1
             fi
 
+            # The allowlist contains an IP literal (0.0.0.0, because LISTEN_ADDR defaults to it), so
+            # pin that it did NOT become "any IP". A LAN address must stay refused - serving /ws to
+            # the local network would hand the agent to every machine on it.
+            lan=$(curl -s -o /dev/null -w '%{http_code}' \
+              -H "Host: 192.168.1.50:18080" -H "Origin: http://192.168.1.50:18080" "$base/ws")
+            if [ "$lan" != "403" ]; then
+              echo "::error::/ws accepted a LAN Host (192.168.1.50) with $lan; expected 403. The loopback allowlist has been widened too far."
+              exit 1
+            fi
+
             # Error pages must still carry the CSP. This holds only because the /ws block declares
             # no add_header of its own and therefore inherits the server-level set; adding one there
             # would silently replace them all.

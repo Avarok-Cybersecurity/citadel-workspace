@@ -29,6 +29,12 @@ map $http_upgrade $connection_upgrade {
 # terminated upstream (a Cloudflare tunnel), the browser sends `https://x` while
 # nginx sees `$scheme` = http, so a scheme comparison would reject every legitimate
 # request behind a TLS-terminating proxy.
+#
+# The capture deliberately takes everything after the scheme rather than parsing out
+# a strict host[:port]. Per RFC 6454 an Origin never carries userinfo, so there is
+# nothing to strip - and if something ever sent one anyway, the extra `user:pass@`
+# would make this value DIFFER from $http_host and the request would be refused.
+# The imprecision fails closed, which is the direction it has to fail in.
 map $http_origin $ws_origin_host {
     default "";
     "~^https?://(.+)$" $1;
@@ -53,11 +59,18 @@ map $http_origin $ws_origin_host {
 # This is why /ws is a local-only facility. A deployment that needs to serve the UI on a
 # real hostname must not proxy the agent at all (WS_PROXY_ENABLED=0); there is no Host it
 # could add here that would be safe, because the agent has no authentication of its own.
+# `0.0.0.0` is included because LISTEN_ADDR defaults to it, so an operator who reads
+# the bind address off `docker ps` and browses to http://0.0.0.0:8080 would otherwise
+# get a bare 403 from a UI that looks fine. It costs nothing: 0.0.0.0 is a literal
+# address, not a name, so it cannot be DNS-rebound, and a page served from anywhere
+# else still fails the Origin check below. Anything genuinely remote - a LAN address,
+# a real hostname - stays refused, which is the point.
 map $http_host $ws_host_allowed {
     default                            0;
     "~*^localhost(:[0-9]+)?$"          1;
     "~*^127\.0\.0\.1(:[0-9]+)?$"       1;
     "~*^\[::1\](:[0-9]+)?$"            1;
+    "~*^0\.0\.0\.0(:[0-9]+)?$"         1;
 }
 
 server {
