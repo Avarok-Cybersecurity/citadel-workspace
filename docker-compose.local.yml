@@ -16,11 +16,17 @@
 # the login screen.
 #
 # Usage:
-#   docker login ghcr.io                      # one-time; the packages are private
+#   docker login ghcr.io -u <your-github-username>
 #   docker compose -f docker-compose.local.yml pull
 #   docker compose -f docker-compose.local.yml up -d
 #   open http://localhost:8080
 #     ...then enter the workspace server address at the login screen.
+#
+# The `docker login` is one-time, and the password it asks for is NOT your GitHub password: these
+# images are private org packages, so it wants a Personal Access Token with the `read:packages`
+# scope. Create one at https://github.com/settings/tokens (classic), tick `read:packages` and
+# nothing else, and paste it at the password prompt. A token with only that scope cannot push
+# code or read private source - it can pull these images and nothing more.
 #
 # Nothing is built. Both images are pulled prebuilt (~300 MB total), so you need neither a Rust
 # toolchain nor Node.

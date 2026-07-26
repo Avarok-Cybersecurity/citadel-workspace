@@ -424,6 +424,23 @@ jobs:
           fi
           echo "PASS: mismatched images are refused."
 
+      - name: THREE images are all checked, not just the first two
+        # deploy.sh now passes three images (server, internal-service, ui). The script iterates
+        # over "$@", so this works - but nothing pinned it, and the failure mode of a hardcoded
+        # $1/$2 would be silent: the third image's revision simply never compared, so a UI built
+        # from a different commit would deploy against mismatched backends and the gate would
+        # report success. Assert both directions, with the odd one out LAST so a gate that only
+        # looks at the first two arguments fails this test.
+        run: |
+          set -euo pipefail
+          ./scripts/verify-image-revisions.sh rev-a rev-a-copy rev-a
+          echo "PASS: three images from the same commit deploy."
+          if ./scripts/verify-image-revisions.sh rev-a rev-a-copy rev-b; then
+            echo "::error::The gate ignored the THIRD image. A UI built from a different commit than the backends would deploy unnoticed."
+            exit 1
+          fi
+          echo "PASS: a mismatched third image is refused."
+
       - name: Unlabelled images warn but do not block
         # Locally-built and pre-label images carry no revision. Blocking them would strand
         # anyone deploying an older or locally built image, so the documented behaviour is to
