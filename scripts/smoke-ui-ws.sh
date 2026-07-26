@@ -27,7 +27,22 @@ PORT="${2:-18080}"
 BASE="http://127.0.0.1:${PORT}"
 CTR="smoke-ui-ws-$$"
 
-cleanup() { docker rm -f "$CTR" >/dev/null 2>&1 || true; }
+# Remove the container AND wait for the published port to actually come free. `docker rm -f`
+# returns once the container is gone, but the daemon's port binding can outlive it briefly - and
+# this script cycles seven containers over the same port, so a race there would surface as a
+# spurious "port is already allocated" failure in a SECURITY gate. A flaky gate is worse than a
+# missing one: it trains people to re-run until green.
+cleanup() {
+  docker rm -f "$CTR" >/dev/null 2>&1 || true
+  local i
+  for i in $(seq 1 30); do
+    # Nothing listening on the host port means the binding is released.
+    (exec 3<>"/dev/tcp/127.0.0.1/${PORT}") 2>/dev/null || return 0
+    exec 3<&- 2>/dev/null || true
+    sleep 0.2
+  done
+  echo "warning: port ${PORT} still bound after container removal; continuing anyway" >&2
+}
 trap cleanup EXIT
 
 fail() { echo "::error::$*"; exit 1; }
