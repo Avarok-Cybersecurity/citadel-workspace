@@ -63,7 +63,7 @@ start() {
     sleep 1
   done
   local i
-  for i in $(seq 1 30); do
+  for ((i = 1; i <= 30; i++)); do
     curl -sf -o /dev/null "$BASE/" 2>/dev/null && return 0
     sleep 1
   done
@@ -168,7 +168,7 @@ echo "  opt-in: only the literal WS_PROXY_ENABLED=1 enables the proxy; unset, ''
 cleanup
 docker run -d --name "$CTR" -e WS_PROXY_ENABLED=1 -e host=pwned -e http_upgrade=pwned \
   -p "127.0.0.1:${PORT}:8080" "$IMAGE" >/dev/null
-for i in $(seq 1 30); do curl -sf -o /dev/null "$BASE/" 2>/dev/null && break; sleep 1; done
+for ((i = 1; i <= 30; i++)); do curl -sf -o /dev/null "$BASE/" 2>/dev/null && break; sleep 1; done
 rendered=$(docker exec "$CTR" cat /etc/nginx/conf.d/default.conf)
 echo "$rendered" | grep -q 'proxy_set_header Host \$host' \
   || fail "an environment variable named 'host' rewrote \$host in the rendered config - NGINX_ENVSUBST_FILTER is not pinning substitution, so env vars can inject into the proxy config."
