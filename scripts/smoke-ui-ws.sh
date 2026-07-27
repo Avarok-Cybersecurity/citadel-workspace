@@ -176,4 +176,28 @@ echo "$rendered" | grep -q 'proxy_set_header Upgrade \$http_upgrade' \
   || fail "an environment variable named 'http_upgrade' rewrote \$http_upgrade in the rendered config - NGINX_ENVSUBST_FILTER is not pinning substitution."
 echo "  envsubst: pinned - colliding env vars (host, http_upgrade) cannot rewrite nginx's own variables."
 
+# ---------------------------------------------------------------------------
+# 4. Runtime variables cannot inject nginx configuration.
+# ---------------------------------------------------------------------------
+# These values are substituted into the config VERBATIM, so a `;` closes the directive and
+# everything after it becomes real configuration. Before validation was added, AGENT_UPSTREAM=
+# '127.0.0.1:12345/; return 200 "X"; #' rendered a working config and nginx STARTED on it. The
+# entrypoint validator must now refuse to start instead.
+for bad_var in "AGENT_UPSTREAM=127.0.0.1:12345/; return 200 \"X\"; #" \
+               "WS_PROXY_ENABLED=1\"; return 200 \"X\"; #" \
+               "LISTEN_ADDR=0.0.0.0; return 200 \"X\"; #"; do
+  vc="smoke-ui-inject"
+  docker rm -f "$vc" >/dev/null 2>&1 || true
+  docker run -d --name "$vc" -e WS_PROXY_ENABLED=1 -e AGENT_UPSTREAM=127.0.0.1:12345 \
+    -e "$bad_var" "$IMAGE" >/dev/null 2>&1 || true
+  sleep 3
+  state=$(docker inspect -f '{{.State.Status}}' "$vc" 2>/dev/null || echo missing)
+  logs=$(docker logs "$vc" 2>&1 | grep -c "validate-runtime-vars.*FATAL" || true)
+  docker rm -f "$vc" >/dev/null 2>&1 || true
+  if [ "$state" = "running" ] || [ "$logs" = "0" ]; then
+    fail "the image STARTED with an injecting runtime variable (${bad_var%%=*}), or did not report why it refused. That value is substituted straight into the nginx config, so it can add arbitrary directives."
+  fi
+done
+echo "  injection: runtime variables containing nginx metacharacters are rejected at startup."
+
 echo "== all /ws smoke assertions passed =="

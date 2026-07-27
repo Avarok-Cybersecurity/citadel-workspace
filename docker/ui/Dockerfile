@@ -145,6 +145,13 @@ RUN chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx \
 # therefore a RUNTIME setting with a sane default.
 COPY docker/ui/nginx.conf.template /etc/nginx/templates/default.conf.template
 
+# Validate the runtime variables before envsubst renders them. They are substituted into the
+# config VERBATIM, so a value containing `;` injects real nginx directives - demonstrated with
+# AGENT_UPSTREAM='127.0.0.1:12345/; return 200 "x"; #', which nginx accepted and started on.
+# Numbered 16 so it runs after the base image's own scripts and before 20-envsubst-on-templates.sh.
+COPY docker/ui/16-validate-runtime-vars.sh /docker-entrypoint.d/16-validate-runtime-vars.sh
+RUN chmod +x /docker-entrypoint.d/16-validate-runtime-vars.sh
+
 # Where the agent lives. Default suits host networking (and the dev stack). Override
 # with `-e AGENT_UPSTREAM=internal-service:12345` on a bridge network, or
 # `host.docker.internal:12345` for an agent running natively on the host.
