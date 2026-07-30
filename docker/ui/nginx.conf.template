@@ -34,6 +34,14 @@ map $http_upgrade $connection_upgrade {
 # nginx sees `$scheme` = http, so a scheme comparison would reject every legitimate
 # request behind a TLS-terminating proxy.
 #
+# NOTE for anyone debugging an unexplained 403: this compares Origin's host to the
+# Host header, so the two must agree about the PORT. They do for every supported
+# topology, because /ws is loopback-only and reached on an explicit port. But if you
+# ever front this with a TLS terminator serving on the default 443 while rewriting
+# Host to include an internal port, the browser omits :443 from Origin (RFC 6454) and
+# every request 403s. That configuration is out of scope by design - a publicly served
+# UI must set WS_PROXY_ENABLED=0 - but the symptom is opaque enough to be worth naming.
+#
 # The capture deliberately takes everything after the scheme rather than parsing out
 # a strict host[:port]. Per RFC 6454 an Origin never carries userinfo, so there is
 # nothing to strip - and if something ever sent one anyway, the extra `user:pass@`

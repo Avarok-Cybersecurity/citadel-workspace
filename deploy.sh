@@ -194,7 +194,26 @@ fi
 # that way and must be flipped to Public once). Naming that cause up front turns
 # a cryptic mid-deploy exit into a one-line fix.
 echo "[2/4] Pulling images (tag: ${IMAGE_TAG:-latest})..."
-if ! docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" pull server internal-service ui; then
+
+# Pull whichever of the three services this compose file actually declares, rather than a
+# hardcoded list. docker-compose.production.yml documents that `ui` and `internal-service` are
+# droppable for a server-only deployment, and an operator who takes that option would otherwise
+# hit `no such service: ui` here - a deploy broken by following our own documentation. `server`
+# is the one service that is genuinely required.
+declared_services=$(docker compose -f "$COMPOSE_FILE" config --services)
+PULL_SERVICES=()
+for svc in server internal-service ui; do
+    if printf '%s\n' "$declared_services" | grep -qx "$svc"; then
+        PULL_SERVICES+=("$svc")
+    fi
+done
+if ! printf '%s\n' "${PULL_SERVICES[@]}" | grep -qx server; then
+    echo "ERROR: '$COMPOSE_FILE' declares no 'server' service; there is nothing to deploy." >&2
+    exit 1
+fi
+echo "  Services in this compose file: ${PULL_SERVICES[*]}"
+
+if ! docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" pull "${PULL_SERVICES[@]}"; then
     echo "" >&2
     echo "ERROR: failed to pull images (tag: ${IMAGE_TAG:-latest})." >&2
     echo "  Common causes:" >&2
@@ -228,14 +247,25 @@ fi
 # absent labels. Inline in this script - wedged between an image pull and a production
 # restart - none of those paths could be tested at all.
 echo "  Verifying all images came from the same commit..."
-srv_img=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.services.server.image')
-is_img=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.services["internal-service"].image')
-# The ui is pulled from the same release now, so it is subject to the same consistency rule: a
-# partially completed `latest` promotion could otherwise pair a new backend with an old UI, which
-# is exactly the mixed-version deploy this gate exists to prevent.
-ui_img=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.services.ui.image')
+# Verify exactly the services that were pulled. Every image in the deployment is subject to the
+# same consistency rule - the ui included, since a partially completed `latest` promotion could
+# otherwise pair a new backend with an old UI, which is precisely the mixed-version deploy this
+# gate exists to prevent. Asking for a service the file does not declare would hand the gate a
+# literal "null" from jq, which it correctly refuses as un-inspectable; deriving the list from the
+# file instead keeps a legitimately slimmed-down deployment working.
+compose_json=$(docker compose -f "$COMPOSE_FILE" config --format json)
+VERIFY_IMAGES=()
+for svc in "${PULL_SERVICES[@]}"; do
+    img=$(printf '%s' "$compose_json" | jq -r --arg s "$svc" '.services[$s].image // empty')
+    if [ -z "$img" ]; then
+        echo "ERROR: service '$svc' declares no image in '$COMPOSE_FILE'." >&2
+        echo "  Nothing was restarted; the running stack is untouched." >&2
+        exit 1
+    fi
+    VERIFY_IMAGES+=("$img")
+done
 
-if ! ./scripts/verify-image-revisions.sh "$srv_img" "$is_img" "$ui_img"; then
+if ! ./scripts/verify-image-revisions.sh "${VERIFY_IMAGES[@]}"; then
     echo "" >&2
     echo "  Nothing was restarted; the running stack is untouched." >&2
     exit 1

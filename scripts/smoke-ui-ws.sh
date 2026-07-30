@@ -147,7 +147,11 @@ echo "  enabled: SPA served; envsubst intact; same-origin enforced (403 cross-or
 # ---------------------------------------------------------------------------
 # Tested with the values an operator would plausibly reach for to turn it OFF. The obvious
 # spelling of the guard (`= "0"`) fails OPEN for every one of these.
-for val in "__unset__" "" "0" "false" "off" "no"; do
+# Includes TRUTHY-looking values (on/yes/true). They must still DISABLE the proxy: the switch is
+# an explicit opt-in on the literal "1", so anything else fails closed. Pinning the truthy ones
+# matters more than the falsy ones - someone writing `true` expects it enabled, and this asserts
+# they instead get a safe 404 rather than a silently exposed agent.
+for val in "__unset__" "" "0" "false" "off" "no" "on" "yes" "true"; do
   start "$val"
   got="$(code /ws "$BASE")"
   [ "$got" = "404" ] \
@@ -156,7 +160,7 @@ for val in "__unset__" "" "0" "false" "off" "no"; do
     || fail "with the proxy disabled the SPA stopped serving; disabling /ws must not break the app."
 done
 
-echo "  opt-in: only the literal WS_PROXY_ENABLED=1 enables the proxy; unset, '', 0, false, off and no all disable it while still serving the SPA."
+echo "  opt-in: only the literal WS_PROXY_ENABLED=1 enables the proxy; unset, '', 0, false, off, no, on, yes and true all disable it while still serving the SPA."
 
 # ---------------------------------------------------------------------------
 # 3. envsubst is pinned to our three variables (NGINX_ENVSUBST_FILTER).
