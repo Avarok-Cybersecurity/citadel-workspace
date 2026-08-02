@@ -1,0 +1,122 @@
+# =============================================================================
+# Citadel Workspace - LOCAL CLIENT
+#
+# For people USING the workspace, not developing it. Runs the two pieces that must
+# live on your own machine:
+#
+#   agent (internal-service) - a native Citadel node. It holds your ratchet keys, does the
+#                              crypto, and speaks the Citadel protocol over TCP/QUIC. A browser
+#                              cannot do any of that, which is why it must run here and not on
+#                              a server. Keeping it local is what makes your P2P messages and
+#                              file transfers end-to-end encrypted: nobody else's machine ever
+#                              holds your keys.
+#   ui                       - nginx serving the app, and proxying /ws to the agent above.
+#
+# The shared workspace SERVER is not here - it runs once, centrally, and you point at it from
+# the login screen.
+#
+# Usage:
+#   docker login ghcr.io -u <your-github-username>
+#   docker compose -f docker-compose.local.yml pull
+#   docker compose -f docker-compose.local.yml up -d
+#   open http://localhost:8080
+#     ...then enter the workspace server address at the login screen.
+#
+# The `docker login` is one-time, and the password it asks for is NOT your GitHub password: these
+# images are private org packages, so it wants a Personal Access Token with the `read:packages`
+# scope. Create one at https://github.com/settings/tokens (classic), tick `read:packages` and
+# nothing else, and paste it at the password prompt. A token with only that scope cannot push
+# code or read private source - it can pull these images and nothing more.
+#
+# Nothing is built. Both images are pulled prebuilt (~300 MB total), so you need neither a Rust
+# toolchain nor Node.
+#
+# NETWORKING - why this uses a private bridge and not host networking
+#
+# Everything below runs on a private Docker network, and the ONLY thing published to your machine
+# is the UI, on loopback. This is deliberate, for two independent reasons.
+#
+# 1. It works the same on Linux, macOS and Windows. `network_mode: host` does not: on macOS and
+#    Windows, Docker runs inside a VM, so "host" is the VM's network rather than your machine's.
+#    Port 8080 is then bound inside the VM and http://localhost:8080 in your browser reaches
+#    nothing - the app would simply never load. (Docker Desktop has an opt-in host-networking mode,
+#    but it must be enabled by hand and is not the default.) A published port is the portable
+#    mechanism, so that is what this uses.
+#
+# 2. It isolates the agent MORE tightly. The agent's WebSocket is an unauthenticated control plane
+#    - whatever can reach it can drive your sessions - and here it has no published port at all.
+#    It is reachable only from the `ui` container on this private network: not from your LAN, and
+#    not even from your own machine.
+#
+# The trade-off, stated honestly: behind Docker's NAT the agent is less likely to hole-punch a
+# DIRECT peer-to-peer link. That is an optimisation, not a requirement - when the hole punch fails,
+# the Citadel protocol relays peer traffic through the workspace server (a TURN-style proxy; see
+# check_proxy() in citadel_proto), which forwards packets WITHOUT decrypting them, because peers
+# encrypt end-to-end with their own ratchet. So end-to-end encryption holds either way and nothing
+# breaks; DMs and file transfer just take a slower route and spend server bandwidth.
+#
+# LINUX USERS WHO WANT DIRECT P2P can give the agent the real network stack. Host networking works
+# properly on Linux, and direct links measurably beat relayed ones for large file transfers. Change
+# these four things:
+#   agent:  add `network_mode: host`, and set INTERNAL_SERVICE_BIND_HOST=127.0.0.1
+#   ui:     add `network_mode: host`, drop the `ports:` block, and set
+#           LISTEN_ADDR=127.0.0.1 and AGENT_UPSTREAM=127.0.0.1:12345
+# Keep the agent on 127.0.0.1 there: under host networking a 0.0.0.0 bind would put that
+# unauthenticated control plane on your LAN.
+# =============================================================================
+
+services:
+  agent:
+    image: ghcr.io/avarok-cybersecurity/citadel-workspace-internal-service:${IMAGE_TAG:-latest}
+    environment:
+      - RUST_LOG=citadel=info
+      - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT:-12345}
+      # 0.0.0.0 is the CONTAINER's interfaces, not your machine's. With no `ports:` block below,
+      # nothing is published, so this socket is reachable only from the `ui` container on this
+      # private network. Binding loopback instead would make it unreachable even from there.
+      - INTERNAL_SERVICE_BIND_HOST=0.0.0.0
+      # Persist keys and sessions, so you are not re-registering every restart.
+      - INTERNAL_SERVICE_BACKEND=filesystem
+      - INTERNAL_SERVICE_DATA_DIR=/data/internal-service
+    volumes:
+      - agent_data:/data/internal-service
+    # Deliberately NO `ports:`. Publishing the agent would expose an unauthenticated control plane
+    # to your machine, and on a 0.0.0.0 publish to your whole LAN. The UI reaches it over the
+    # private network by service name; nothing else needs to.
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "${INTERNAL_SERVICE_PORT:-12345}"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  ui:
+    image: ghcr.io/avarok-cybersecurity/citadel-workspace-ui:${IMAGE_TAG:-latest}
+    environment:
+      # Reach the agent by service name on the private network. Docker's embedded DNS resolves it.
+      - AGENT_UPSTREAM=agent:${INTERNAL_SERVICE_PORT:-12345}
+      # /ws proxies to the agent. Safe here because the published port below is loopback-only and
+      # nginx refuses any WebSocket whose Origin is not this page and whose Host is not a loopback
+      # name - which is what stops a malicious site you visit from driving your agent through your
+      # own browser. A publicly-served UI must leave this off; see docker-compose.production.yml.
+      - WS_PROXY_ENABLED=1
+    ports:
+      # 127.0.0.1 on the LEFT is load-bearing: it publishes the UI to THIS MACHINE only. A bare
+      # "8080:8080" would bind every interface and hand /ws - and the agent behind it - to anyone
+      # on your network.
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      agent:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  # Your account keys and session state. Deleting this means re-registering.
+  agent_data:

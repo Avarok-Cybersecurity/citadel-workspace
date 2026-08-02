@@ -9,22 +9,28 @@
 #                                                     └── server (citadel:12349)
 #
 # Usage:
-#   # Local testing (no tunnel) — serves the static UI only:
-#   docker compose -f docker-compose.production.yml up --build
-#   # The UI loads at http://localhost:8080, but the browser's WebSocket to
-#   # the internal service will NOT connect unless VITE_WS_URL is built to a
-#   # SAME-ORIGIN endpoint: the nginx CSP is `connect-src 'self'`, so an
-#   # off-origin `ws://localhost:12345` (the empty-VITE_WS_URL fallback) is
-#   # blocked by the browser. There is no built-in `/ws` reverse proxy, so a
-#   # fully-working no-tunnel deployment requires fronting this container
-#   # with your own same-origin WS proxy and building with VITE_WS_URL set to
-#   # it (e.g. `wss://yourdomain/ws`). For an end-to-end working stack, use
-#   # the tunnel profile below. nginx runs as the unprivileged `nginx` user
-#   # on 8080 so it doesn't need root to bind; do NOT add
-#   # CAP_NET_BIND_SERVICE — front it with a reverse proxy for 80/443.
+#   docker compose -f docker-compose.production.yml up -d
+#   # Nothing is built: all three images are pulled from GHCR (see deploy.sh).
 #
-#   # Production with Cloudflare Tunnel (full, working stack):
-#   TUNNEL_TOKEN=<your-token> docker compose -f docker-compose.production.yml --profile tunnel up --build -d
+#   # With Cloudflare Tunnel, to serve the UI publicly:
+#   TUNNEL_TOKEN=<your-token> docker compose -f docker-compose.production.yml --profile tunnel up -d
+#
+# THE UI SERVED HERE CANNOT REACH AN AGENT, BY DESIGN.
+#
+# The browser talks to the agent over a WebSocket, and the UI image can proxy that at a
+# same-origin /ws. This stack sets WS_PROXY_ENABLED=0 to switch that proxy OFF, because the UI
+# here is served PUBLICLY and the agent's socket is an unauthenticated control plane - proxying
+# it from a public origin would expose it to the internet (an Origin check does not help; a
+# non-browser client forges the header trivially). A hosted UI backed by one shared agent would
+# also put every user's ratchet keys on the operator's machine, which defeats the E2E guarantee.
+#
+# Users therefore run the agent and UI on their OWN machine - see docker-compose.local.yml - and
+# point it at the `server` hosted here. This stack's job is the SERVER. The `ui` and
+# `internal-service` services are retained from the older centralized topology; if you are not
+# using them, they are dead weight and can be dropped.
+#
+# nginx runs as the unprivileged `nginx` user on 8080 so it doesn't need root to bind; do NOT add
+# CAP_NET_BIND_SERVICE — front it with a reverse proxy for 80/443.
 #
 # Required environment variables (set in .env or export):
 #   WORKSPACE_MASTER_PASSWORD  - Master password for workspace initialization
@@ -173,19 +179,27 @@ services:
   # Vite build served via nginx
   # ---------------------------------------------------------------------------
   ui:
-    build:
-      context: .
-      dockerfile: ./docker/ui/Dockerfile
-      target: production
-      args:
-        # Vite bakes VITE_* env vars at build time. The frontend's
-        # WebSocket URL falls back to `ws://localhost:12345` if this
-        # is empty, which the production CSP `connect-src 'self'`
-        # blocks (different port from the served origin and wrong
-        # scheme behind a Cloudflare tunnel). Operators set this in
-        # `.env` to a same-origin `wss://yourdomain.com/ws` so the
-        # browser can actually connect.
-        VITE_WS_URL: ${VITE_WS_URL:-}
+    # Prebuilt from GHCR, like the other two. There is deliberately NO `build:` block: with both
+    # `image:` and `build:` present, Compose builds locally and the published image - the one the
+    # release gate verified and the one carrying the nginx config - is silently bypassed. The
+    # image needs no per-environment build anyway: the app derives its socket URL from
+    # window.location at runtime, so one published image serves every deployment.
+    image: ghcr.io/avarok-cybersecurity/citadel-workspace-ui:${IMAGE_TAG:-latest}
+    environment:
+      # THE AGENT PROXY IS OFF HERE, AND MUST STAY OFF.
+      #
+      # This stack serves the UI publicly (that is what the `cloudflared` profile below does).
+      # The agent's WebSocket is an UNAUTHENTICATED control plane - whoever reaches it drives the
+      # user's sessions - so proxying it from a public origin would hand it to the internet. An
+      # Origin check does not save you: WebSockets carry no CORS preflight and a non-browser
+      # client forges the header with a single curl flag. The only sound control is not to proxy
+      # it at all from a publicly-served UI.
+      #
+      # A hosted UI backed by one shared agent is also incompatible with the product's threat
+      # model: that agent would hold EVERY user's ratchet keys, so the operator could read all
+      # P2P traffic. Users run their own agent locally instead - see docker-compose.local.yml,
+      # which is where /ws is both safe and enabled.
+      - WS_PROXY_ENABLED=0
     deploy:
       resources:
         limits:

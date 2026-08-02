@@ -25,7 +25,7 @@
 #      `latest` directly, a manual run from a feature branch would overwrite the
 #      tag that production pulls by default with unmerged code. `promote-latest`
 #      is gated on `refs/heads/master`.
-#   2. The matrix builds the two images as independent jobs. If `latest` were
+#   2. The matrix builds the three images as independent jobs. If `latest` were
 #      pushed per-job, a run where `server` succeeded and `internal-service`
 #      failed would leave `latest` pointing at a MISMATCHED pair, and a deploy
 #      using the default tag would pull two versions that never shipped
@@ -34,19 +34,11 @@
 #
 # ONE-TIME MANUAL SETUP
 #
-# GHCR packages are created PRIVATE. After the first successful run, open each
-# package's settings on GitHub and set its visibility to Public, otherwise every
-# developer must `docker login ghcr.io` before they can pull. The repositories
-# themselves are already public, so there is nothing secret in these images.
-#
-# WHY `ui` IS NOT PUBLISHED HERE (yet)
-#
-# The production UI image bakes `VITE_WS_URL` at build time, and its nginx CSP
-# is `connect-src 'self'` - so a UI served on :8080 cannot reach an agent on
-# :12345. Publishing it today would ship an artifact that cannot work for the
-# local-agent deployment. It gets added once the same-origin `/ws` reverse proxy
-# (and the matching frontend change to derive the URL from `window.location`)
-# lands.
+# GHCR packages are created PRIVATE and stay that way. Pulling them therefore
+# needs `docker login ghcr.io` with a token carrying `read:packages` - a one-time
+# step for anyone deploying or running the local client. (Public would remove that
+# step, but these images are an internal artifact and there is no reason to publish
+# the org's build output to the world for the sake of one login.)
 # =============================================================================
 name: Publish Images
 
@@ -96,6 +88,22 @@ jobs:
               -e WORKSPACE_BACKEND=filesystem
               -e WORKSPACE_DATA_DIR=/data/server
               -e WORKSPACE_BIND_ADDR=127.0.0.1:12349
+          - image: ui
+            dockerfile: ./docker/ui/Dockerfile
+            # nginx serves the SPA and proxies /ws to the agent. Nothing to configure at build
+            # time: the socket URL is derived from window.location at runtime and the agent's
+            # address is the AGENT_UPSTREAM env var, so ONE image serves every topology.
+            # Deliberately NO VITE_WS_URL build-arg - setting it would bake an absolute URL back
+            # in and re-break the thing this image exists to fix.
+            build_args: ""
+            needs_wasm: true
+            smoke_port: 8080
+            # Deliberately NO published port. The generic liveness probe below runs
+            # `docker exec ... nc`, so it does not need one - and the shared /ws smoke script
+            # binds 127.0.0.1:18080 for its own containers, which would collide. The proxy is
+            # opted in (the image fails closed) so the probe exercises a realistic config; the
+            # fail-closed default and every security control are asserted inside the script.
+            smoke_env: "-e WS_PROXY_ENABLED=1"
           - image: internal-service
             dockerfile: ./docker/internal-service/Dockerfile
             # Only this Dockerfile declares INTERNAL_SERVICE_PORT (it is baked into the image's
@@ -126,6 +134,18 @@ jobs:
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           sudo apt-get clean
           df -h
+
+      - name: Generate WASM artifacts (UI build needs them)
+        # The UI bundle imports the wasm-pack output (`citadel_internal_service_wasm_client.js`
+        # and its .wasm). Those are NOT git-tracked - they are produced into
+        # citadel-internal-service/typescript-client by the `sync-wasm-client` one-shot container.
+        # Without this the Vite production build fails to resolve the import. Same step
+        # validate.yml's production-build already relies on.
+        if: matrix.needs_wasm
+        env:
+          WORKSPACE_MASTER_PASSWORD: 'ci-prod-build'
+          INTERNAL_SERVICE_PORT: '12345'
+        run: docker compose up --build sync-wasm-client
 
       - uses: docker/setup-buildx-action@v3
 
@@ -213,6 +233,14 @@ jobs:
           fi
           echo "${{ matrix.image }} is listening on ${{ matrix.smoke_port }}; image is good."
 
+          # "The port is bound" is a weak signal for a static server - nginx binds even when it is
+          # serving nothing, and says nothing at all about the /ws security controls.
+          if [ "${{ matrix.image }}" = "ui" ]; then
+            # Same assertions the PR gate runs (validate.yml), from one shared script - so the
+            # release gate can never end up testing less than the pull-request gate did.
+            ./scripts/smoke-ui-ws.sh "$IMAGE:$SHA_TAG" 18080
+          fi
+
       - name: Push immutable SHA tag
         # Only the immutable tag is pushed here. `latest` is advanced by the
         # `promote-latest` job below, and only when the whole matrix succeeded on
@@ -244,7 +272,7 @@ jobs:
         run: |
           set -euo pipefail
           sha_tag="sha-${GITHUB_SHA:0:12}"
-          for img in server internal-service; do
+          for img in server internal-service ui; do
             image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/citadel-workspace-${img}"
             echo "Promoting ${image}:${sha_tag} -> ${image}:latest"
             docker buildx imagetools create -t "${image}:latest" "${image}:${sha_tag}"

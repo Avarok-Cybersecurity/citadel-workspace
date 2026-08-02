@@ -424,6 +424,23 @@ jobs:
           fi
           echo "PASS: mismatched images are refused."
 
+      - name: THREE images are all checked, not just the first two
+        # deploy.sh now passes three images (server, internal-service, ui). The script iterates
+        # over "$@", so this works - but nothing pinned it, and the failure mode of a hardcoded
+        # $1/$2 would be silent: the third image's revision simply never compared, so a UI built
+        # from a different commit would deploy against mismatched backends and the gate would
+        # report success. Assert both directions, with the odd one out LAST so a gate that only
+        # looks at the first two arguments fails this test.
+        run: |
+          set -euo pipefail
+          ./scripts/verify-image-revisions.sh rev-a rev-a-copy rev-a
+          echo "PASS: three images from the same commit deploy."
+          if ./scripts/verify-image-revisions.sh rev-a rev-a-copy rev-b; then
+            echo "::error::The gate ignored the THIRD image. A UI built from a different commit than the backends would deploy unnoticed."
+            exit 1
+          fi
+          echo "PASS: a mismatched third image is refused."
+
       - name: Unlabelled images warn but do not block
         # Locally-built and pre-label images carry no revision. Blocking them would strand
         # anyone deploying an older or locally built image, so the documented behaviour is to
@@ -484,30 +501,72 @@ jobs:
         run: docker compose up --build sync-wasm-client
       - name: Build Production Images (server + internal-service + ui)
         run: |
-          # The UI image has its own multi-stage `production` target with
-          # a hand-written nginx config (printf'd from the Dockerfile), a
-          # non-root user setup, and a security-header block. None of that
-          # is exercised by the dev `target: dev` build, so a syntax error
-          # in the printf, a wrong `COPY --from=build` path, or a missing
-          # `target: production` would previously only surface during an
-          # actual production deploy. Building it in CI catches those.
-          docker compose -f docker-compose.production.yml build server internal-service ui
+          # The UI image has its own multi-stage `production` target with a
+          # templated nginx config, a non-root user setup, a security-header
+          # block and the /ws proxy. None of that is exercised by the dev
+          # `target: dev` build, so a broken template, a wrong
+          # `COPY --from=build` path, or a missing `target: production` would
+          # otherwise only surface during an actual production deploy.
+          docker compose -f docker-compose.production.yml build server internal-service
+
+          # The `ui` service is intentionally build-less in the production
+          # compose file: production PULLS a published image, and carrying a
+          # `build:` next to `image:` would make Compose build locally and
+          # silently bypass the published artifact the release gate verified.
+          #
+          # That means Compose cannot build it for us here - `compose build ui`
+          # prints "No services to build" and exits 0, so CI would sail past a
+          # completely unbuilt image and only fail later, opaquely, when `up`
+          # tried to PULL a tag that does not exist yet on a PR branch.
+          #
+          # So build it straight from the Dockerfile and tag it with the exact
+          # reference the compose file resolves to. Compose's default
+          # pull_policy is `missing`, so a locally-present tag is used as-is and
+          # nothing is pulled. This also keeps CI honest: it validates the image
+          # built from THIS commit's source, not whatever `latest` happens to be.
+          docker build \
+            -f docker/ui/Dockerfile \
+            --target production \
+            -t ghcr.io/avarok-cybersecurity/citadel-workspace-ui:latest \
+            .
       - name: Verify Images Were Built
         run: |
           echo "Checking for built images..."
-          # docker compose build tags images as <project>-<service>
           docker images
-          # Verify all three images exist and are non-empty
-          SERVER_IMAGE=$(docker compose -f docker-compose.production.yml images server --format json | head -1)
-          IS_IMAGE=$(docker compose -f docker-compose.production.yml images internal-service --format json | head -1)
-          UI_IMAGE=$(docker compose -f docker-compose.production.yml images ui --format json | head -1)
-          # Fail if ANY image is missing. Listing each one explicitly keeps
-          # the failure message specific about which build silently dropped.
-          if [ -z "$SERVER_IMAGE" ] || [ -z "$IS_IMAGE" ] || [ -z "$UI_IMAGE" ]; then
-            echo "ERROR: Production images were not built (server='$SERVER_IMAGE', internal-service='$IS_IMAGE', ui='$UI_IMAGE')"
+          # Assert against the DAEMON, by the exact tag the compose file resolves
+          # to. The previous check asked `docker compose images <svc>`, which
+          # reports a row for a declared service whether or not the image was
+          # ever built - so it returned non-empty for an image that did not
+          # exist, and the "verification" passed while the build had silently
+          # dropped the UI entirely. `docker image inspect` cannot do that.
+          missing=0
+          for img in \
+            ghcr.io/avarok-cybersecurity/citadel-workspace-server:latest \
+            ghcr.io/avarok-cybersecurity/citadel-workspace-internal-service:latest \
+            ghcr.io/avarok-cybersecurity/citadel-workspace-ui:latest; do
+            if docker image inspect "$img" >/dev/null 2>&1; then
+              echo "  present: $img"
+            else
+              echo "  MISSING: $img"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "ERROR: at least one production image was not built (see MISSING above)."
             exit 1
           fi
           echo "Production images built successfully"
+      - name: Smoke Test - /ws proxy security controls
+        # The PR GATE for the agent proxy. These assertions used to live only in
+        # publish-images.yml, which runs on master pushes - i.e. AFTER the merge decision.
+        # A PR that regressed the fail-closed switch or the envsubst pinning would have gone
+        # green here and only been caught at promotion time, or shipped if publish were
+        # bypassed. The controls guard an unauthenticated control plane, so they have to be
+        # asserted on the change that could break them.
+        #
+        # Shared with publish-images.yml so the two gates cannot drift into testing
+        # different things.
+        run: ./scripts/smoke-ui-ws.sh ghcr.io/avarok-cybersecurity/citadel-workspace-ui:latest 18080
       - name: Smoke Test - Services Start
         env:
           WORKSPACE_MASTER_PASSWORD: 'ci-smoke-test'
