@@ -213,6 +213,23 @@ if ! printf '%s\n' "${PULL_SERVICES[@]}" | grep -qx server; then
 fi
 echo "  Services in this compose file: ${PULL_SERVICES[*]}"
 
+# True if this compose file declares $1.
+#
+# The rolling restart in step 3 uses this for the same reason the pull list above is derived
+# rather than hardcoded. `ui` and `internal-service` are documented as droppable for a
+# server-only deployment, but the restart step used to run `up -d --no-deps ui` unconditionally.
+# An operator who followed that documentation got `no such service: ui` AFTER the server had
+# already been swapped to its new image - a half-applied deploy, which is the single outcome
+# the ordering in this script exists to prevent. Guarding the pull but not the restart just
+# moved the failure later, to the most expensive possible moment.
+#
+# `server` is deliberately NOT guarded: the check above already aborts when it is absent, so
+# by this point it is guaranteed present, and a guard there would silently turn "the compose
+# file is malformed" into "nothing was deployed, exit 0".
+service_declared() {
+    printf '%s\n' "${PULL_SERVICES[@]}" | grep -qx "$1"
+}
+
 if ! docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" pull "${PULL_SERVICES[@]}"; then
     echo "" >&2
     echo "ERROR: failed to pull images (tag: ${IMAGE_TAG:-latest})." >&2
@@ -359,27 +376,35 @@ echo "  Waiting for server to be healthy..."
 wait_for_port server 12349
 echo "  Server is up."
 
-# Internal service next
-echo "  Restarting internal-service..."
-docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps internal-service
-echo "  Waiting for internal-service to be healthy..."
-wait_for_port internal-service "${INTERNAL_SERVICE_PORT:-12345}"
-echo "  Internal service is up."
+# Internal service next, when this deployment includes one.
+if service_declared internal-service; then
+    echo "  Restarting internal-service..."
+    docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps internal-service
+    echo "  Waiting for internal-service to be healthy..."
+    wait_for_port internal-service "${INTERNAL_SERVICE_PORT:-12345}"
+    echo "  Internal service is up."
+else
+    echo "  Skipping internal-service: not declared in $COMPOSE_FILE."
+fi
 
-# UI last (lightweight, fast restart)
-echo "  Restarting ui..."
-# No `--build`: the ui image was already built in step 2, BEFORE anything was restarted.
-# Rebuilding it here would reopen the exact window step 2 exists to close - a build failure at
-# this point (cache invalidation, disk pressure, a transient npm error) would land AFTER the
-# server and internal-service have already been swapped to their new images, leaving production
-# on a new backend with the old UI. Build everything first, restart afterwards.
-docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps ui
-# Wait for nginx to actually serve (the ui healthcheck does a wget --spider
-# on :8080). Without this the deploy reports success even if nginx failed to
-# start (bad config, missing dist/) — the cloudflared step would then start
-# in front of a dead UI.
-wait_for_port ui 8080
-echo "  UI is up."
+# UI last (lightweight, fast restart), when this deployment includes one.
+if service_declared ui; then
+    echo "  Restarting ui..."
+    # No `--build`: the ui image was already built in step 2, BEFORE anything was restarted.
+    # Rebuilding it here would reopen the exact window step 2 exists to close - a build failure at
+    # this point (cache invalidation, disk pressure, a transient npm error) would land AFTER the
+    # server and internal-service have already been swapped to their new images, leaving production
+    # on a new backend with the old UI. Build everything first, restart afterwards.
+    docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps ui
+    # Wait for nginx to actually serve (the ui healthcheck does a wget --spider
+    # on :8080). Without this the deploy reports success even if nginx failed to
+    # start (bad config, missing dist/) — the cloudflared step would then start
+    # in front of a dead UI.
+    wait_for_port ui 8080
+    echo "  UI is up."
+else
+    echo "  Skipping ui: not declared in $COMPOSE_FILE."
+fi
 
 # Cloudflared if tunnel profile is active
 if [[ "$TUNNEL_PROFILE_ACTIVE" == "true" ]]; then
@@ -415,5 +440,12 @@ echo "============================================"
 echo "  Deploy complete!"
 echo "============================================"
 echo ""
-echo "Local access:  http://localhost:8080"
-echo "WebSocket:     ws://localhost:${INTERNAL_SERVICE_PORT:-12345}"
+# Advertise only endpoints this deployment actually serves. A server-only stack that
+# printed "Local access: http://localhost:8080" would send the operator to a port nothing
+# is listening on and read as a broken deploy rather than a correctly slimmed-down one.
+if service_declared ui; then
+    echo "Local access:  http://localhost:8080"
+fi
+if service_declared internal-service; then
+    echo "WebSocket:     ws://localhost:${INTERNAL_SERVICE_PORT:-12345}"
+fi
