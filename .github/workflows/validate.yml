@@ -467,14 +467,40 @@ jobs:
           set -euo pipefail
           # PyYAML is declared rather than inherited from the runner image: a runner change would
           # otherwise turn this deterministic gate into an opaque ModuleNotFoundError.
-          python3 -c 'import yaml' 2>/dev/null || pip install --quiet pyyaml
+          # --break-system-packages first: on a PEP 668 runner image system pip refuses the install
+          # outright (externally-managed-environment), and the plain form is the one that fails.
+          # The fallback covers pip versions predating the flag. Ordered this way so the fallback
+          # is a fallback, not the only path that has ever run.
+          python3 -c 'import yaml' 2>/dev/null \
+            || pip install --quiet --break-system-packages pyyaml 2>/dev/null \
+            || pip install --quiet pyyaml
+          # docker compose interpolates variables from a project-directory .env, and deploy.sh
+          # requires one. The checkout has none (it is gitignored - this job's own end-to-end test
+          # synthesizes one for the same reason), so today the compose calls below emit "variable
+          # is not set" warnings and resolve to empty. That is harmless only for as long as the
+          # production compose sticks to ${VAR}; the day someone writes ${VAR:?} these steps start
+          # failing for a reason that has nothing to do with service selection. Stub it, guarded so
+          # a real .env is never overwritten.
+          # ONE trap, and it only deletes the .env if this step is what created it. Two separate
+          # `trap ... EXIT` calls do not compose - the second silently replaces the first - and the
+          # replacement here would have removed a REAL .env belonging to whoever ran the step
+          # outside CI. Caught by running this step in a checkout that had one.
+          created_env=""
+          if [ ! -f .env ]; then
+            echo 'WORKSPACE_MASTER_PASSWORD=ci-not-a-real-password' > .env
+            created_env=1
+          fi
+          cleanup() {
+            rm -f fx-*.yml
+            if [ -n "$created_env" ]; then rm -f .env; fi
+          }
+          trap cleanup EXIT
+
           # Fixtures are written into the CHECKOUT, not /tmp. `docker compose -f <file>` takes the
           # file's directory as the project directory, so a fixture in /tmp resolves `env_file:`
           # paths and ${VAR} references against /tmp instead of the repo root - the test could then
           # fail, or silently resolve a variable to empty, for reasons having nothing to do with
           # service selection, and it would not match how deploy.sh invokes the same command.
-          trap 'rm -f fx-*.yml' EXIT
-
           # Build fixtures from the real production compose so this tracks the actual file.
           # Dangling depends_on entries must be stripped or compose rejects the project.
           python3 - <<'PYEOF'
@@ -540,25 +566,32 @@ jobs:
           # hardcoded ['server','internal-service','ui'], so it would strip a newly added service
           # before the assertion ever saw it and this guard would pass while the drift shipped.
           #
-          # cloudflared is excluded deliberately - it is profile-gated and handled by deploy.sh's
-          # TUNNEL_PROFILE_ACTIVE branch rather than by this selection.
+          # Profile-gated services are excluded because deploy.sh handles them through its
+          # TUNNEL_PROFILE_ACTIVE branch, not through this selection. The set is DERIVED from the
+          # compose model (`--profile '*'` reveals every profile, and .profiles marks the gated
+          # ones) rather than hardcoding `cloudflared`, so adding a second profile-gated service
+          # does not silently start failing this guard with the wrong remediation.
+          #
           # Both sides are captured into variables rather than compared as `diff <(a) <(b)`.
           # Process substitution discards the child's exit status, so if `docker compose config`
           # failed, both sides would be EMPTY and diff would report no difference - a guard that
           # passes precisely when it cannot see anything. Assigning first means `set -e` aborts on
           # a failed read, and the emptiness check below makes a vacuous pass impossible.
-          declared=$(docker compose -f docker-compose.production.yml config --services | grep -vx cloudflared | sort)
+          declared=$(docker compose -f docker-compose.production.yml --profile '*' config --format json \
+            | jq -r '.services|to_entries[]|select((.value.profiles//[])|length==0)|.key' | sort)
+          gated=$(docker compose -f docker-compose.production.yml --profile '*' config --format json \
+            | jq -r '.services|to_entries[]|select((.value.profiles//[])|length>0)|.key' | sort | tr '\n' ' ')
           selected=$(./scripts/select-deploy-services.sh docker-compose.production.yml | sort)
           if [ -z "$declared" ] || [ -z "$selected" ]; then
             echo "::error::could not read services from docker-compose.production.yml; the drift guard cannot run and must not pass silently."
             exit 1
           fi
           if [ "$declared" != "$selected" ]; then
-            echo "::error::docker-compose.production.yml declares a deployable service the selector does not return. Add it to DEPLOYABLE in scripts/select-deploy-services.sh, or it will be silently skipped by pull, revision-check and restart."
+            echo "::error::docker-compose.production.yml and the selector disagree about which services this project deploys. A service the compose file declares but the selector omits is silently skipped by pull, revision-check and restart. Add it to DEPLOYABLE in scripts/select-deploy-services.sh - UNLESS it is profile-gated, in which case give it a profile in the compose file so deploy.sh handles it through its profile branch instead. Currently profile-gated (and so deliberately excluded): ${gated:-<none>}."
             diff <(printf '%s\n' "$declared") <(printf '%s\n' "$selected") || true
             exit 1
           fi
-          echo "  production compose -> no service missing from the selection"
+          echo "  production compose -> no service missing from the selection (profile-gated, excluded: ${gated:-<none>})"
 
       - name: THREE images are all checked, not just the first two
         # deploy.sh now passes three images (server, internal-service, ui). The script iterates
