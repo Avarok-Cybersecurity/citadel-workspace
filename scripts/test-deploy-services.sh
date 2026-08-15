@@ -90,6 +90,9 @@ fi
 # reconciliation. $PREEXISTING lists the services a PREVIOUS deploy left containers for, so a test
 # can model "full stack already running" and assert what a slimmed redeploy does about it.
 if [ "${1:-}" = "ps" ]; then
+  # Fail only AFTER a restart, so the preflight query still succeeds and the reconciliation-phase
+  # query is the one that breaks - otherwise the preflight aborts first and this path is never hit.
+  if [ -n "${PS_FAIL_AFTER_UP:-}" ] && grep -q 'up -d' "$CALLS" 2>/dev/null; then exit 1; fi
   svc=""; proj=""; want_service_only=0
   for a in "$@"; do
     case "$a" in
@@ -183,6 +186,7 @@ run_deploy() { # <name> <service>...
   export CFGCOUNT="$dir/cfgcount.txt"
   export REMOVED="$dir/removed.txt"
   export RM_NOOP="${RM_NOOP:-}"
+  export PS_FAIL_AFTER_UP="${PS_FAIL_AFTER_UP:-}"
   export PREEXISTING="${PREEXISTING:-}"
   export PREEXISTING_ONEOFF="${PREEXISTING_ONEOFF:-}"
   : > "$CALLS"
@@ -352,6 +356,34 @@ grep -q "no longer declares" "$d/out.txt" \
   || fail "an explicit-but-non-canonical lock authorized removal; output was: $(tail -6 "$d/out.txt")"
 echo "  explicit-lock -> a private lock path did not authorize removal"; pass_count=$((pass_count+1))
 
+# --- canonical lock wins over an explicit one -------------------------------
+# Authorization has to follow the inode actually held. If a deploy could be authorized by the
+# canonical file existing while locking somewhere else, one deploy on the canonical lock and
+# another on its own path would both believe they were serialized and both remove containers.
+# The canonical lock exists here and DEPLOY_LOCK_FILE points elsewhere; holding the CANONICAL one
+# must therefore lock this deploy out.
+exec 8>>"$WORK/canonical/stubproj.lock"
+flock -n 8 || fail "could not acquire the canonical lock to set up the override test"
+d=$(DEPLOY_LOCK_FILE="$WORK/ignored-private.lock" run_deploy canonical-wins server)
+exec 8>&-
+assert_failed "$d"
+grep -qi "another deploy" "$d/out.txt" \
+  || fail "an explicit DEPLOY_LOCK_FILE escaped the canonical lock; output was: $(tail -6 "$d/out.txt")"
+grep -q "overridden by the canonical lock" "$d/out.txt" \
+  || fail "the override was not announced; output was: $(tail -6 "$d/out.txt")"
+echo "  canonical-wins -> an explicit lock path did not escape the canonical lock"; pass_count=$((pass_count+1))
+
+# --- a failed stale-detection query must fail the deploy ---------------------
+# If we cannot tell whether a dropped service is still running, the requested topology is
+# unconfirmed - and reporting success there is the same false green as leaving it running.
+d=$(PREEXISTING="server internal-service ui" PS_FAIL_AFTER_UP=1 run_deploy ps-fail server)
+assert_failed "$d"
+grep -q "cannot be confirmed" "$d/out.txt" \
+  || fail "a failed detection query did not fail the deploy; output was: $(tail -6 "$d/out.txt")"
+grep -q "up -d --no-deps server" "$d/calls.txt" \
+  || fail "the failure should come after the deployable services are up"
+echo "  ps-fail     -> failed the run when stale detection could not be completed"; pass_count=$((pass_count+1))
+
 # --- removal that does not take effect must fail the deploy ------------------
 # The requested topology is "ui is gone". If it is still there afterwards, exiting 0 would let
 # automation record the slim topology as live while the old ui keeps serving - so the run fails,
@@ -391,6 +423,7 @@ echo "  locked-out  -> a different checkout of the same project was refused; pul
 exec 8>&-
 
 # --- a shared DEPLOY_LOCK_FILE serializes across ACCOUNTS --------------------
+# (No canonical lock on this host, so DEPLOY_LOCK_FILE is what serializes.)
 # The per-account default cannot cover two accounts deploying one project: the lock file the first
 # creates is mode 644, so the second cannot open it for append. A group-writable path every account
 # points at is the supported way to close that, so pin that it actually works - different HOME,
@@ -398,7 +431,7 @@ exec 8>&-
 shared_lock="$WORK/shared-deploy.lock"
 exec 8>>"$shared_lock"
 flock -n 8 || fail "could not acquire $shared_lock to set up the cross-account test"
-d=$(HOME_OVERRIDE="$WORK/other-account" DEPLOY_LOCK_FILE="$shared_lock" run_deploy other-account server)
+d=$(HOME_OVERRIDE="$WORK/other-account" LOCK_ROOT_OVERRIDE="$WORK/no-canonical" DEPLOY_LOCK_FILE="$shared_lock" run_deploy other-account server)
 exec 8>&-
 assert_failed "$d"
 grep -qi "another deploy" "$d/out.txt" \
