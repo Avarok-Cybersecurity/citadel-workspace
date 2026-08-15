@@ -82,11 +82,20 @@ fi
 # reconciliation. $PREEXISTING lists the services a PREVIOUS deploy left containers for, so a test
 # can model "full stack already running" and assert what a slimmed redeploy does about it.
 if [ "${1:-}" = "ps" ]; then
-  svc=""
+  svc=""; want_service_only=0
   for a in "$@"; do
-    case "$a" in *com.docker.compose.service=*) svc="${a##*=}" ;; esac
+    case "$a" in
+      *com.docker.compose.service=*) svc="${a##*=}" ;;
+      *com.docker.compose.oneoff=False) want_service_only=1 ;;
+    esac
   done
   case " ${PREEXISTING:-} " in *" $svc "*) echo "cid-$svc" ;; esac
+  # A `docker compose run` container carries the same project+service labels and is only excluded
+  # by oneoff=False. Emitting it whenever that filter is ABSENT is what makes the test able to
+  # tell whether deploy.sh actually passes the filter.
+  if [ "$want_service_only" = "0" ]; then
+    case " ${PREEXISTING_ONEOFF:-} " in *" $svc "*) echo "cid-oneoff-$svc" ;; esac
+  fi
   exit 0
 fi
 
@@ -127,6 +136,7 @@ run_deploy() { # <name> <service>...
   printf 'WORKSPACE_MASTER_PASSWORD=test-password-not-a-placeholder\n' > "$dir/.env"
   export CALLS="$dir/calls.txt"
   export PREEXISTING="${PREEXISTING:-}"
+  export PREEXISTING_ONEOFF="${PREEXISTING_ONEOFF:-}"
   : > "$CALLS"
   # --no-pull skips step 1 (git pull); the fixture dir is deliberately not a git repo, and the
   # git step is not what is under test here.
@@ -170,7 +180,10 @@ assert_restarted() { # <dir> <service>...
 assert_removed() { # <dir> <service>...
   local dir="$1"; shift
   local got
-  got=$(grep -oE '^rm -f cid-[a-z-]+' "$dir/calls.txt" 2>/dev/null | sed 's/^rm -f cid-//' | sort | tr '\n' ' ' | sed 's/ $//' || true)
+  # Every id on every `rm -f` line, not just the first: docker rm takes a list, so the whole line
+  # has to be split. A ^-anchored per-id pattern silently matched only the first id and let extra
+  # removals through unnoticed.
+  got=$(grep -E '^rm -f ' "$dir/calls.txt" 2>/dev/null | sed 's/^rm -f //' | tr ' ' '\n' | sed 's/^cid-//' | grep -v '^$' | sort | tr '\n' ' ' | sed 's/ $//' || true)
   local want; want=$(printf '%s\n' "$@" | sort | tr '\n' ' ' | sed 's/ $//')
   [ "$got" = "$want" ] || fail "removed [$got], expected [$want] (see $dir/out.txt)"
 }
@@ -227,7 +240,7 @@ echo "  server-is   -> never touched ui"; pass_count=$((pass_count+1))
 # The case the orphan reconciliation exists for, and the one a clean-environment test cannot see:
 # `docker compose up` leaves containers for undeclared services running and merely warns. Without
 # reconciliation this deploy reports success while the old ui still serves a stale image on :8080.
-d=$(PREEXISTING="server internal-service ui" run_deploy slim-transition server)
+d=$(PREEXISTING="server internal-service ui" PREEXISTING_ONEOFF="ui" run_deploy slim-transition server)
 assert_succeeded "$d"
 assert_pulled "$d" "server"
 assert_restarted "$d" server
@@ -235,20 +248,29 @@ assert_restarted "$d" server
 assert_removed "$d" internal-service ui
 assert_never_mentions "$d" ui
 assert_never_mentions "$d" internal-service
-if grep -qE '^rm -f cid-cloudflared' "$d/calls.txt"; then
+if grep -qE '^rm -f .*cid-cloudflared' "$d/calls.txt"; then
   fail "reconciliation removed the profile-gated cloudflared - that is the --remove-orphans pitfall this targeted removal exists to avoid"
 fi
-echo "  slim-transition -> dropped ui and internal-service containers removed; server kept, cloudflared untouched"; pass_count=$((pass_count+1))
+# A `docker compose run` job against the dropped ui shares its project+service labels. deploy.sh
+# must filter it out: it is someone's migration or debugging session, not a stale service container.
+if grep -qE '^rm -f .*cid-oneoff-' "$d/calls.txt"; then
+  fail "reconciliation removed a 'docker compose run' one-off container: $(grep -E '^rm -f .*cid-oneoff-' "$d/calls.txt" | head -1)"
+fi
+echo "  slim-transition -> dropped ui and internal-service removed; server, cloudflared and one-off jobs untouched"; pass_count=$((pass_count+1))
 
 # --- a second deploy must not run while another holds the project lock -------
 # The reconciliation above can remove containers this deploy did not start, so two overlapping
 # deploys whose compose files disagree could delete each other's freshly started services. The
 # lock is what makes that impossible; assert it actually blocks, and - the part that matters -
 # that the blocked run mutates NOTHING before giving up.
-lock_file="${TMPDIR:-/tmp}/citadel-deploy-stubproj.lock"
-exec 8>"$lock_file"
+# The lock lives beside the compose file, so the directory must exist before we can take it.
+# Deliberately NOT derived from TMPDIR: a lock whose path the caller's environment can change is
+# one two deploys can each miss, which is the property this case exists to pin.
+mkdir -p "$WORK/locked-out"
+lock_file="$WORK/locked-out/.deploy.lock"
+exec 8>>"$lock_file"
 flock -n 8 || fail "could not acquire $lock_file to set up the concurrency test"
-d=$(run_deploy locked-out server)
+d=$(TMPDIR=/nonexistent-tmpdir-should-not-matter run_deploy locked-out server)
 exec 8>&-   # release before the assertions, so a failure here never wedges later runs
 assert_failed "$d"
 grep -qi "another deploy" "$d/out.txt" \
