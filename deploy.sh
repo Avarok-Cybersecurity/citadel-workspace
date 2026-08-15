@@ -219,19 +219,35 @@ if [ -z "$deploy_project" ]; then
     echo "  deploys from removing each other's. Refusing to continue without it." >&2
     exit 1
 fi
-# The CANONICAL host-wide lock. Its path is fixed, not configurable, and that is the whole point:
-# a path an operator chooses cannot prove that every other deployment of this project chose the
-# same one, so "an absolute path was supplied" is not evidence of serialization. A constant is.
-# Provisioned once by an administrator (see .env.example); if it is present and writable, every
-# deploy of this project on this host contends on the same inode, and only then is it safe to
-# remove containers matched by the project label - which is why this, not DEPLOY_LOCK_FILE, is
-# what authorizes reconciliation.
-# The root is relocatable for hosts without /run/lock, and it is what the test suite points at -
-# but it is HOST policy, not a per-deploy choice: the guarantee is that every deploy of a project
-# lands on one inode, so a host that overrides this must override it for all of them. That is why
-# only the ROOT moves and the filename stays derived from the project.
-CANONICAL_LOCK="${CITADEL_DEPLOY_LOCK_ROOT:-/run/lock/citadel-deploy}/${deploy_project}.lock"
+# The CANONICAL host-wide lock. The path is a CONSTANT - not derived from any environment
+# variable, .env value, or anything else a deploy can choose. That is the entire guarantee: a path
+# an operator supplies cannot prove every other deployment of this project supplied the same one,
+# so only a constant establishes that all of them contend on a single inode. Holding it is what
+# authorizes removing containers matched by the project label, which spans the whole daemon.
+#
+# It is provisioned once by an administrator (see .env.example) and NEVER created here: a file this
+# script created would be one this account happened to make, not the shared one, and authorizing on
+# that is the same as authorizing on a path string.
+CANONICAL_LOCK="/run/lock/citadel-deploy/${deploy_project}.lock"
 RECONCILE_AUTHORIZED=""
+canonical_usable=""
+
+# Fail closed on a canonical lock that exists but this account cannot use. Falling back to a
+# private lock there would be worse than refusing: this deploy would pull and restart the same
+# project unserialized while another account, holding the canonical lock, removed containers.
+if [ -e "$CANONICAL_LOCK" ]; then
+    if [ -f "$CANONICAL_LOCK" ] && [ -w "$CANONICAL_LOCK" ]; then
+        canonical_usable=1
+    else
+        echo "ERROR: the canonical deploy lock exists but this account cannot use it:" >&2
+        echo "    ${CANONICAL_LOCK}" >&2
+        echo "  It must be a regular file, group-writable by every deploy account:" >&2
+        echo "    sudo install -o root -g docker -m 0664 /dev/null '${CANONICAL_LOCK}'" >&2
+        echo "  Refusing rather than falling back to a private lock, which would let this deploy" >&2
+        echo "  restart services while another account's deploy is mid-flight." >&2
+        exit 1
+    fi
+fi
 
 if [ -n "${DEPLOY_LOCK_FILE:-}" ]; then
     DEPLOY_LOCK_FILE_EXPLICIT=1
@@ -242,6 +258,17 @@ if [ -n "${DEPLOY_LOCK_FILE:-}" ]; then
             echo "  scoping bug this setting exists to avoid." >&2
             exit 1 ;;
     esac
+    # Pointing it at the canonical path does not make it the canonical lock. If the file is not
+    # already provisioned, the code below would create it under this account's umask - a private
+    # file wearing the shared file's name, which would then authorize removal on nothing more than
+    # a matching string.
+    if [ "$DEPLOY_LOCK_FILE" = "$CANONICAL_LOCK" ] && [ -z "$canonical_usable" ]; then
+        echo "ERROR: DEPLOY_LOCK_FILE names the canonical lock, but it is not provisioned." >&2
+        echo "  This script will not create it - a file it created would be this account's, not" >&2
+        echo "  the shared one. Provision it as an administrator:" >&2
+        echo "    sudo install -o root -g docker -m 0664 /dev/null '${CANONICAL_LOCK}'" >&2
+        exit 1
+    fi
 else
     if [ -z "${HOME:-}" ]; then
         echo "ERROR: HOME is not set, so the default lock location cannot be derived." >&2
@@ -250,13 +277,10 @@ else
     fi
     DEPLOY_LOCK_FILE="$HOME/.local/state/citadel-deploy/${deploy_project}.lock"
 fi
-# When the canonical lock exists it IS the lock - even if DEPLOY_LOCK_FILE says otherwise, and
-# announced when it overrides. Authorization has to follow the inode actually held, not a file that
-# merely exists: granting it on existence while locking somewhere else lets one deploy hold the
-# canonical lock and another hold its own path, both believing they are serialized, and both
-# removing containers matched by the same project label. The canonical path is host policy and
-# strictly stronger than a private one, so it wins rather than erroring - but never silently.
-if [ -f "$CANONICAL_LOCK" ] && [ -w "$CANONICAL_LOCK" ]; then
+
+# A usable canonical lock IS the lock, overriding any explicit path - announced, never silently.
+# It is strictly stronger: host policy rather than one deployment's choice.
+if [ -n "$canonical_usable" ]; then
     if [ -n "${DEPLOY_LOCK_FILE_EXPLICIT:-}" ] && [ "$DEPLOY_LOCK_FILE" != "$CANONICAL_LOCK" ]; then
         echo "  NOTE: DEPLOY_LOCK_FILE=${DEPLOY_LOCK_FILE} is overridden by the canonical lock" >&2
         echo "    ${CANONICAL_LOCK} - every deploy of this project must contend on one inode." >&2
@@ -267,7 +291,7 @@ if ! mkdir -p "$(dirname "$DEPLOY_LOCK_FILE")"; then
     echo "ERROR: cannot create the lock directory '$(dirname "$DEPLOY_LOCK_FILE")'." >&2
     exit 1
 fi
-if [ "$DEPLOY_LOCK_FILE" = "$CANONICAL_LOCK" ]; then
+if [ -n "$canonical_usable" ]; then
     echo "  Deploy lock: ${DEPLOY_LOCK_FILE} (canonical - every deploy of this project contends here)"
 elif [ -n "${DEPLOY_LOCK_FILE_EXPLICIT:-}" ]; then
     echo "  Deploy lock: ${DEPLOY_LOCK_FILE} (serializes accounts configured with this same path)"
@@ -316,7 +340,7 @@ fi
 # one. Tying it to the acquisition rather than to the file's existence is the whole guarantee:
 # every deploy that may remove containers is holding the same inode, so no two can be doing it at
 # once.
-if [ "$DEPLOY_LOCK_FILE" = "$CANONICAL_LOCK" ]; then
+if [ -n "$canonical_usable" ]; then
     RECONCILE_AUTHORIZED=1
 fi
 
