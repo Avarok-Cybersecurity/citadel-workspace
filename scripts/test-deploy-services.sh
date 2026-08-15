@@ -57,8 +57,16 @@ if [ "${1:-}" = "compose" ]; then
         # Service names are the top-level keys under `services:`.
         awk '/^services:/{f=1;next} f&&/^[a-z]/{exit} f&&/^  [a-zA-Z0-9_-]+:/{gsub(/[ :]/,"");print}' "$file"
       else
-        # `config --format json` - emit just what deploy.sh reads: .services[x].image
-        printf '{"name":"stubproj","services":{'
+        # deploy.sh reads this twice before mutating anything: once to key the lock, once
+        # after the pull to confirm the project was not renamed underneath it.
+        # $RENAME_PROJECT_AFTER_PULL makes the second answer differ, which is the only way to
+        # exercise that guard.
+        name=stubproj
+        if [ -n "${RENAME_PROJECT_AFTER_PULL:-}" ]; then
+          n=$(cat "$CFGCOUNT" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$CFGCOUNT"
+          [ "$n" -ge 2 ] && name=renamedproj
+        fi
+        printf '{"name":"%s","services":{' "$name"
         first=1
         for s in $(awk '/^services:/{f=1;next} f&&/^[a-z]/{exit} f&&/^  [a-zA-Z0-9_-]+:/{gsub(/[ :]/,"");print}' "$file"); do
           [ $first -eq 0 ] && printf ','
@@ -153,7 +161,12 @@ run_deploy() { # <name> <service>...
   cp "$REPO_ROOT/deploy.sh" "$dir/deploy.sh"
   # deploy.sh requires a .env with a real master password.
   printf 'WORKSPACE_MASTER_PASSWORD=test-password-not-a-placeholder\n' > "$dir/.env"
+  # HOME drives the default lock location, so point it at the fixture tree: the suite must never
+  # touch the real one, and this also exercises the default path derivation rather than bypassing
+  # it with DEPLOY_LOCK_FILE.
+  export HOME="$WORK/home"
   export CALLS="$dir/calls.txt"
+  export CFGCOUNT="$dir/cfgcount.txt"
   export PREEXISTING="${PREEXISTING:-}"
   export PREEXISTING_ONEOFF="${PREEXISTING_ONEOFF:-}"
   : > "$CALLS"
@@ -282,18 +295,18 @@ if grep -qE '^rm -f .*cid-otherproj-' "$d/calls.txt"; then
 fi
 echo "  slim-transition -> dropped ui and internal-service removed; server, cloudflared, one-off jobs and other projects untouched"; pass_count=$((pass_count+1))
 
-# --- a second deploy must not run while another holds the project lock -------
-# The reconciliation above can remove containers this deploy did not start, so two overlapping
-# deploys whose compose files disagree could delete each other's freshly started services. The
-# lock is what makes that impossible; assert it actually blocks, and - the part that matters -
-# that the blocked run mutates NOTHING before giving up.
-# The lock lives beside the compose file, so the directory must exist before we can take it.
-# Deliberately NOT derived from TMPDIR: a lock whose path the caller's environment can change is
-# one two deploys can each miss, which is the property this case exists to pin.
-mkdir -p "$WORK/locked-out"
-lock_file="$WORK/locked-out/.deploy.lock"
+# --- a deploy from ANOTHER checkout of the same project must be refused ------
+# The reconciliation above removes containers selected by the compose PROJECT label, whose scope
+# spans every checkout on the host - so a directory-scoped lock would leave the destructive race
+# open exactly where it does the most damage. This holds the project lock as a deploy running from
+# some other directory would, then deploys from a different directory entirely, and asserts the
+# second run is refused having mutated NOTHING.
+lock_file="$WORK/home/.local/state/citadel-deploy/stubproj.lock"
+mkdir -p "$(dirname "$lock_file")"
 exec 8>>"$lock_file"
 flock -n 8 || fail "could not acquire $lock_file to set up the concurrency test"
+# TMPDIR is deliberately bogus: a lock a caller's environment can relocate is one two deploys can
+# each miss, so the path must not derive from it.
 d=$(TMPDIR=/nonexistent-tmpdir-should-not-matter run_deploy locked-out server)
 exec 8>&-   # release before the assertions, so a failure here never wedges later runs
 assert_failed "$d"
@@ -304,7 +317,22 @@ for verb in 'pull ' 'up -d' 'rm -f'; do
     fail "a deploy that could not take the lock still ran '$verb' - it must mutate nothing: $(grep -F "$verb" "$d/calls.txt" | head -1)"
   fi
 done
-echo "  locked-out  -> refused to start while another deploy held the lock; pulled, restarted and removed nothing"; pass_count=$((pass_count+1))
+echo "  locked-out  -> a different checkout of the same project was refused; pulled, restarted and removed nothing"; pass_count=$((pass_count+1))
+
+# --- a pulled revision that renames the project must abort -------------------
+# The lock is keyed on the project name read before the pull. If the pull renames the project, the
+# run would hold one project's lock while restarting and removing another's containers. Assert it
+# stops instead, and that it stops before touching anything.
+d=$(RENAME_PROJECT_AFTER_PULL=1 run_deploy renamed server)
+assert_failed "$d"
+grep -qi "changes the compose project" "$d/out.txt" \
+  || fail "a project rename mid-deploy did not report why it aborted; output was: $(tail -3 "$d/out.txt")"
+for verb in 'pull ' 'up -d' 'rm -f'; do
+  if grep -qF "$verb" "$d/calls.txt"; then
+    fail "a deploy that detected a project rename still ran '$verb' - it must mutate nothing: $(grep -F "$verb" "$d/calls.txt" | head -1)"
+  fi
+done
+echo "  renamed     -> aborted on a mid-deploy project rename, having mutated nothing"; pass_count=$((pass_count+1))
 
 # --- no server: must abort BEFORE restarting anything ------------------------
 d=$(run_deploy no-server ui)
