@@ -22,9 +22,23 @@
 
 set -euo pipefail
 
+# deploy.sh's canonical lock lives at a CONSTANT path under /run/lock, which is root-owned - and
+# that constancy is the guarantee, so it is not made configurable just to be testable. To exercise
+# the authorized path without root, re-run inside a user+mount namespace with a writable bind mount
+# over /run/lock. Falls through to sudo, and then to skipping those cases loudly.
+if [ -z "${CITADEL_TEST_NS:-}" ] && [ ! -w /run/lock ] && ! sudo -n true 2>/dev/null; then
+    if command -v unshare >/dev/null 2>&1; then
+        _fake=$(mktemp -d)
+        if unshare -r -m true 2>/dev/null; then
+            export CITADEL_TEST_NS=1
+            exec unshare -r -m bash -c "mount --bind '$_fake' /run/lock && exec '$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")'"
+        fi
+        rmdir "$_fake" 2>/dev/null || true
+    fi
+fi
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
 
 fail() { echo "::error::$*"; exit 1; }
 pass_count=0
@@ -179,9 +193,6 @@ run_deploy() { # <name> <service>...
   # touch the real one, and this also exercises the default path derivation rather than bypassing
   # it with DEPLOY_LOCK_FILE.
   export HOME="${HOME_OVERRIDE:-$WORK/home}"
-  # The canonical lock root is host policy; point it at the fixture tree so a case can decide
-  # whether this deployment is authorized to remove containers by provisioning the file or not.
-  export CITADEL_DEPLOY_LOCK_ROOT="${LOCK_ROOT_OVERRIDE:-$WORK/canonical}"
   export CALLS="$dir/calls.txt"
   export CFGCOUNT="$dir/cfgcount.txt"
   export REMOVED="$dir/removed.txt"
@@ -255,10 +266,40 @@ assert_never_mentions() { # <dir> <service>
 echo "== deploy.sh service-selection integration test =="
 make_stub
 
-# Stand in for the administrator having provisioned the canonical lock: with it present, deploys
-# of this project all contend on one inode and are authorized to retire dropped services. The
-# slim-unlocked case points the root elsewhere to exercise the un-provisioned host.
-mkdir -p "$WORK/canonical" && : > "$WORK/canonical/stubproj.lock"
+# deploy.sh's canonical lock path is a CONSTANT - no variable relocates it, which is the whole
+# point of it as a guarantee. So exercising the authorized path means provisioning the real one,
+# which needs root. Where that is not possible the affected cases are SKIPPED LOUDLY rather than
+# quietly weakened: a suite that silently stops covering the gate on a destructive operation is
+# worse than one that says it did not.
+CANONICAL_DIR=/run/lock/citadel-deploy
+CANONICAL_LOCK="$CANONICAL_DIR/stubproj.lock"
+CAN_PROVISION=""
+skipped=0
+if [ -w "$CANONICAL_DIR" ] 2>/dev/null || mkdir -p "$CANONICAL_DIR" 2>/dev/null; then
+  CAN_PROVISION=1
+elif sudo -n true 2>/dev/null; then
+  CAN_PROVISION=sudo
+fi
+
+provision_canonical() {
+  if [ "$CAN_PROVISION" = "sudo" ]; then
+    sudo -n install -d -m 2755 "$CANONICAL_DIR"
+    sudo -n install -g "$(id -gn)" -m 0664 /dev/null "$CANONICAL_LOCK"
+  else
+    mkdir -p "$CANONICAL_DIR"
+    : > "$CANONICAL_LOCK"; chmod 0664 "$CANONICAL_LOCK"
+  fi
+}
+unprovision_canonical() {
+  [ -n "$CAN_PROVISION" ] || return 0
+  if [ "$CAN_PROVISION" = "sudo" ]; then sudo -n rm -f "$CANONICAL_LOCK" 2>/dev/null || true
+  else rm -f "$CANONICAL_LOCK" 2>/dev/null || true; fi
+}
+skip_unprovisioned() { # <case name>
+  echo "  SKIPPED: $1 - needs the canonical lock at $CANONICAL_LOCK, which requires root to provision"
+  skipped=$((skipped+1))
+}
+trap 'unprovision_canonical; rm -rf "$WORK"' EXIT
 
 # --- full stack -------------------------------------------------------------
 d=$(run_deploy full server internal-service ui)
@@ -300,6 +341,8 @@ echo "  server-is   -> never touched ui"; pass_count=$((pass_count+1))
 # cloudflared is in PREEXISTING on purpose: the stub can then hand back cid-cloudflared if the
 # reconciliation ever queries it, which is what makes the "never touches the tunnel" assertion
 # below able to FAIL. Without it that assertion passes no matter what the code does.
+if [ -n "$CAN_PROVISION" ]; then
+provision_canonical
 d=$(PREEXISTING="server internal-service ui cloudflared" PREEXISTING_ONEOFF="ui" run_deploy slim-transition server)
 assert_succeeded "$d"
 assert_pulled "$d" "server"
@@ -322,6 +365,10 @@ if grep -qE '^rm -f .*cid-otherproj-' "$d/calls.txt"; then
   fail "reconciliation removed a container belonging to ANOTHER compose project: $(grep -E '^rm -f .*cid-otherproj-' "$d/calls.txt" | head -1)"
 fi
 echo "  slim-transition -> dropped ui and internal-service removed; server, cloudflared, one-off jobs and other projects untouched"; pass_count=$((pass_count+1))
+unprovision_canonical
+else
+skip_unprovisioned "slim-transition"
+fi
 
 # --- slimming WITHOUT a host-wide lock must report, not remove ---------------
 # Removal matches containers by compose project, which spans every account on the host, so it only
@@ -329,7 +376,7 @@ echo "  slim-transition -> dropped ui and internal-service removed; server, clou
 # one the deploy must still succeed and must still tell the operator what is stale - silently
 # leaving a dropped service serving traffic is the bug this reconciliation exists to fix, and
 # silently removing it is the race the lock exists to prevent.
-d=$(PREEXISTING="server internal-service ui" LOCK_ROOT_OVERRIDE="$WORK/no-canonical" run_deploy slim-unlocked server)
+d=$(PREEXISTING="server internal-service ui" run_deploy slim-unlocked server)
 assert_failed "$d"
 assert_removed_nothing "$d"
 for verb in 'pull ' 'up -d'; do
@@ -348,7 +395,7 @@ echo "  slim-unlocked -> refused before pulling or restarting, and said how to a
 # this project chose the SAME one - two accounts can each set a different valid path, hold two
 # different locks at once, and then remove containers matched by the shared project label. Only
 # the canonical path establishes that, so removal must stay refused here.
-d=$(PREEXISTING="server internal-service ui" LOCK_ROOT_OVERRIDE="$WORK/no-canonical" \
+d=$(PREEXISTING="server internal-service ui" \
     DEPLOY_LOCK_FILE="$WORK/an-explicit-but-private.lock" run_deploy explicit-not-canonical server)
 assert_failed "$d"
 assert_removed_nothing "$d"
@@ -362,7 +409,9 @@ echo "  explicit-lock -> a private lock path did not authorize removal"; pass_co
 # another on its own path would both believe they were serialized and both remove containers.
 # The canonical lock exists here and DEPLOY_LOCK_FILE points elsewhere; holding the CANONICAL one
 # must therefore lock this deploy out.
-exec 8>>"$WORK/canonical/stubproj.lock"
+if [ -n "$CAN_PROVISION" ]; then
+provision_canonical
+exec 8>>"$CANONICAL_LOCK"
 flock -n 8 || fail "could not acquire the canonical lock to set up the override test"
 d=$(DEPLOY_LOCK_FILE="$WORK/ignored-private.lock" run_deploy canonical-wins server)
 exec 8>&-
@@ -372,10 +421,16 @@ grep -qi "another deploy" "$d/out.txt" \
 grep -q "overridden by the canonical lock" "$d/out.txt" \
   || fail "the override was not announced; output was: $(tail -6 "$d/out.txt")"
 echo "  canonical-wins -> an explicit lock path did not escape the canonical lock"; pass_count=$((pass_count+1))
+unprovision_canonical
+else
+skip_unprovisioned "canonical-wins"
+fi
 
 # --- a failed stale-detection query must fail the deploy ---------------------
 # If we cannot tell whether a dropped service is still running, the requested topology is
 # unconfirmed - and reporting success there is the same false green as leaving it running.
+if [ -n "$CAN_PROVISION" ]; then
+provision_canonical
 d=$(PREEXISTING="server internal-service ui" PS_FAIL_AFTER_UP=1 run_deploy ps-fail server)
 assert_failed "$d"
 grep -q "cannot be confirmed" "$d/out.txt" \
@@ -383,11 +438,17 @@ grep -q "cannot be confirmed" "$d/out.txt" \
 grep -q "up -d --no-deps server" "$d/calls.txt" \
   || fail "the failure should come after the deployable services are up"
 echo "  ps-fail     -> failed the run when stale detection could not be completed"; pass_count=$((pass_count+1))
+unprovision_canonical
+else
+skip_unprovisioned "ps-fail"
+fi
 
 # --- removal that does not take effect must fail the deploy ------------------
 # The requested topology is "ui is gone". If it is still there afterwards, exiting 0 would let
 # automation record the slim topology as live while the old ui keeps serving - so the run fails,
 # after the services that did deploy are up.
+if [ -n "$CAN_PROVISION" ]; then
+provision_canonical
 d=$(PREEXISTING="server internal-service ui" RM_NOOP=1 run_deploy rm-noop server)
 assert_failed "$d"
 grep -q "still present after removal" "$d/out.txt" \
@@ -397,6 +458,60 @@ grep -q "does not match" "$d/out.txt" \
 grep -q "up -d --no-deps server" "$d/calls.txt" \
   || fail "the failure should come AFTER the deployable services are up, not instead of it"
 echo "  rm-noop     -> failed the run when a dropped service survived removal, after deploying the rest"; pass_count=$((pass_count+1))
+unprovision_canonical
+else
+skip_unprovisioned "rm-noop"
+fi
+
+# --- the canonical path must not be relocatable by the environment ----------
+# A path a deploy can choose cannot prove every other deploy chose the same one, so the canonical
+# location is a constant. Prove no environment variable moves it: with a stale container present
+# and no provisioned lock, pointing an old-style root override somewhere writable must still
+# refuse, not authorize removal via a lock of its own making.
+# Provision a perfectly good lock at the relocated root. If any variable could move the canonical
+# path, THIS file would be found and would authorize removal - which is what makes the assertion
+# below able to fail rather than passing because nothing was there either way.
+mkdir -p "$WORK/attacker-root" && : > "$WORK/attacker-root/stubproj.lock"
+d=$(PREEXISTING="server internal-service ui" CITADEL_DEPLOY_LOCK_ROOT="$WORK/attacker-root" \
+    run_deploy env-cannot-relocate server)
+assert_failed "$d"
+assert_removed_nothing "$d"
+grep -q "no longer declares" "$d/out.txt" \
+  || fail "an environment variable relocated the canonical lock; output was: $(tail -6 "$d/out.txt")"
+echo "  env-relocate -> no environment variable moved the canonical lock"; pass_count=$((pass_count+1))
+
+# --- naming the canonical path must not create it ----------------------------
+# A lock this script created would belong to whichever account ran first, not to everyone, so
+# authorizing on a matching path string is authorizing on nothing.
+d=$(PREEXISTING="server internal-service ui" DEPLOY_LOCK_FILE="$CANONICAL_LOCK" \
+    run_deploy names-canonical server)
+assert_failed "$d"
+assert_removed_nothing "$d"
+grep -q "not provisioned" "$d/out.txt" \
+  || fail "pointing DEPLOY_LOCK_FILE at the canonical path self-created it; output was: $(tail -6 "$d/out.txt")"
+echo "  names-canonical -> naming the canonical path did not create or authorize it"; pass_count=$((pass_count+1))
+
+# --- an unusable canonical lock must abort, not fall back --------------------
+# Falling back to a private lock would be worse than refusing: this deploy would restart the same
+# project unserialized while another account, holding the real canonical lock, removed containers.
+# A directory at the path stands in for any not-a-usable-regular-file state.
+if [ -n "$CAN_PROVISION" ]; then
+  unprovision_canonical
+  mkdir -p "$CANONICAL_LOCK"
+  d=$(run_deploy canonical-unusable server)
+  rmdir "$CANONICAL_LOCK" 2>/dev/null || true
+  assert_failed "$d"
+  for verb in 'pull ' 'up -d'; do
+    if grep -qF "$verb" "$d/calls.txt"; then
+      fail "a deploy with an unusable canonical lock still ran '$verb' instead of aborting"
+    fi
+  done
+  grep -q "cannot use it" "$d/out.txt" \
+    || fail "an unusable canonical lock did not abort with a provisioning error; output was: $(tail -6 "$d/out.txt")"
+  echo "  canonical-unusable -> aborted rather than falling back to a private lock"; pass_count=$((pass_count+1))
+else
+  skip_unprovisioned "canonical-unusable"
+fi
 
 # --- a deploy from ANOTHER checkout of the same project must be refused ------
 # The reconciliation above removes containers selected by the compose PROJECT label, whose scope
@@ -404,7 +519,8 @@ echo "  rm-noop     -> failed the run when a dropped service survived removal, a
 # open exactly where it does the most damage. This holds the project lock as a deploy running from
 # some other directory would, then deploys from a different directory entirely, and asserts the
 # second run is refused having mutated NOTHING.
-lock_file="$WORK/canonical/stubproj.lock"
+lock_file="$WORK/home/.local/state/citadel-deploy/stubproj.lock"
+mkdir -p "$(dirname "$lock_file")"
 exec 8>>"$lock_file"
 flock -n 8 || fail "could not acquire $lock_file to set up the concurrency test"
 # TMPDIR is deliberately bogus: a lock a caller's environment can relocate is one two deploys can
@@ -431,7 +547,7 @@ exec 8>&-
 shared_lock="$WORK/shared-deploy.lock"
 exec 8>>"$shared_lock"
 flock -n 8 || fail "could not acquire $shared_lock to set up the cross-account test"
-d=$(HOME_OVERRIDE="$WORK/other-account" LOCK_ROOT_OVERRIDE="$WORK/no-canonical" DEPLOY_LOCK_FILE="$shared_lock" run_deploy other-account server)
+d=$(HOME_OVERRIDE="$WORK/other-account" DEPLOY_LOCK_FILE="$shared_lock" run_deploy other-account server)
 exec 8>&-
 assert_failed "$d"
 grep -qi "another deploy" "$d/out.txt" \
@@ -468,4 +584,9 @@ grep -qi "no 'server' service" "$d/out.txt" \
   || fail "no-server case did not report why it aborted; output was: $(head -3 "$d/out.txt")"
 echo "  no-server   -> exited nonzero before any restart, with a clear reason"; pass_count=$((pass_count+1))
 
-echo "== all $pass_count deploy-selection assertions passed =="
+if [ "$skipped" -gt 0 ]; then
+  echo "== $pass_count assertions passed, $skipped SKIPPED (needed root to provision $CANONICAL_LOCK) =="
+  echo "   The skipped cases cover authorization for container removal; CI runs them with sudo."
+else
+  echo "== all $pass_count deploy-selection assertions passed =="
+fi
