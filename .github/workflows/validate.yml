@@ -424,6 +424,28 @@ jobs:
           fi
           echo "PASS: mismatched images are refused."
 
+      - name: A SINGLE image is still inspected
+        # A server-only deployment passes exactly ONE image, so this is a supported production
+        # shape rather than a degenerate call - and it must still be inspected. "Nothing to
+        # compare against" removes the cross-image check, not the provenance check.
+        #
+        # The failure direction is the load-bearing one. An `if [ "$#" -eq 1 ]; then exit 0`
+        # fast path looks harmless and passes both success cases below, but it returns before
+        # `docker image inspect` runs - so a server-only deploy whose pull silently failed, or
+        # whose tag does not exist, would sail through the gate built to catch precisely that.
+        # The end-to-end test cannot see this: its docker stub always inspects successfully.
+        run: |
+          set -euo pipefail
+          ./scripts/verify-image-revisions.sh rev-a
+          echo "PASS: a single labelled image deploys."
+          ./scripts/verify-image-revisions.sh rev-none
+          echo "PASS: a single unlabelled image warns but does not block."
+          if ./scripts/verify-image-revisions.sh definitely-not-pulled:latest 2>/dev/null; then
+            echo "::error::The gate allowed a single image it could not inspect. A server-only deploy whose pull never completed would restart production on a stale or missing image."
+            exit 1
+          fi
+          echo "PASS: a single un-inspectable image is refused."
+
       - name: Deploy restart guards - run deploy.sh end to end
         # The selector test below proves the LIST is right. This proves deploy.sh ACTS on it:
         # it runs the real script against fixture compose files with a recording `docker` stub on

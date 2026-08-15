@@ -273,9 +273,10 @@ fi
 # The comparison itself lives in scripts/verify-image-revisions.sh rather than inline
 # here, because it is the safety gate and an untested safety gate is a liability. As a
 # standalone script that takes images as arguments it is exercised directly in CI
-# (validate.yml -> deploy-gate-tests) against real images with matching, mismatched and
-# absent labels. Inline in this script - wedged between an image pull and a production
-# restart - none of those paths could be tested at all.
+# (validate.yml -> deploy-gate-tests) against real images: matching, mismatched, absent
+# labels, un-inspectable, and the single-image server-only shape. Inline in this script -
+# wedged between an image pull and a production restart - none of those paths could be
+# tested at all.
 echo "  Verifying all images came from the same commit..."
 # Verify exactly the services that were pulled. Every image in the deployment is subject to the
 # same consistency rule - the ui included, since a partially completed `latest` promotion could
