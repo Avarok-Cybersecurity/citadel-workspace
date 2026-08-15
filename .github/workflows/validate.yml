@@ -424,6 +424,68 @@ jobs:
           fi
           echo "PASS: mismatched images are refused."
 
+      - name: Deploy service selection covers every compose shape
+        # This selection decides what is pulled, revision-checked AND restarted. Both error
+        # directions are deployment-critical: too few silently skips a declared service while
+        # still reporting success, too many runs `up -d` on an image that was never pulled.
+        # docker-compose.production.yml documents that ui and internal-service are droppable,
+        # so the slimmed shapes are supported configurations, not hypotheticals.
+        run: |
+          set -euo pipefail
+          # Build fixtures from the real production compose so this tracks the actual file.
+          # Dangling depends_on entries must be stripped or compose rejects the project.
+          python3 - <<'PYEOF'
+          import yaml, pathlib
+          base = yaml.safe_load(open('docker-compose.production.yml'))
+          shapes = {'full':['server','internal-service','ui'], 'server-only':['server'],
+                    'server-ui':['server','ui'], 'server-is':['server','internal-service'],
+                    'no-server':['ui']}
+          for name, keep in shapes.items():
+              d = yaml.safe_load(yaml.safe_dump(base))
+              for svc in list(d['services']):
+                  if svc not in keep: d['services'].pop(svc)
+              for svc, cfg in d['services'].items():
+                  dep = cfg.get('depends_on')
+                  if isinstance(dep, dict):
+                      kept = {k: v for k, v in dep.items() if k in keep}
+                      cfg['depends_on'] = kept
+                      if not kept: cfg.pop('depends_on')
+                  elif isinstance(dep, list):
+                      kept = [x for x in dep if x in keep]
+                      cfg['depends_on'] = kept
+                      if not kept: cfg.pop('depends_on')
+              pathlib.Path(f'/tmp/fx-{name}.yml').write_text(yaml.safe_dump(d))
+          PYEOF
+
+          check() {  # <fixture> <expected space-separated services>
+            local got
+            got=$(./scripts/select-deploy-services.sh "/tmp/fx-$1.yml" | tr '\n' ' ' | sed 's/ $//')
+            if [ "$got" != "$2" ]; then
+              echo "::error::selection for '$1' was [$got], expected [$2]. A wrong set here means a half-applied deploy."
+              exit 1
+            fi
+            echo "  $1 -> $got"
+          }
+          check full        "server internal-service ui"
+          check server-only "server"
+          check server-ui   "server ui"
+          check server-is   "server internal-service"
+
+          # A compose file with no server must ABORT, not return an empty set - "nothing to
+          # deploy" reported as a successful no-op deploy is the worst possible outcome.
+          if ./scripts/select-deploy-services.sh /tmp/fx-no-server.yml >/dev/null 2>&1; then
+            echo "::error::a compose file with no 'server' service was accepted; it must abort."
+            exit 1
+          fi
+          echo "  no-server -> correctly aborts"
+
+          # An unreadable file must fail loudly rather than yield an empty selection.
+          if ./scripts/select-deploy-services.sh /tmp/definitely-absent.yml >/dev/null 2>&1; then
+            echo "::error::a missing compose file was accepted; it must abort."
+            exit 1
+          fi
+          echo "  missing file -> correctly aborts"
+
       - name: THREE images are all checked, not just the first two
         # deploy.sh now passes three images (server, internal-service, ui). The script iterates
         # over "$@", so this works - but nothing pinned it, and the failure mode of a hardcoded

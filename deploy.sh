@@ -195,42 +195,47 @@ fi
 # a cryptic mid-deploy exit into a one-line fix.
 echo "[2/4] Pulling images (tag: ${IMAGE_TAG:-latest})..."
 
-# Pull whichever of the three services this compose file actually declares, rather than a
-# hardcoded list. docker-compose.production.yml documents that `ui` and `internal-service` are
-# droppable for a server-only deployment, and an operator who takes that option would otherwise
-# hit `no such service: ui` here - a deploy broken by following our own documentation. `server`
-# is the one service that is genuinely required.
-declared_services=$(docker compose -f "$COMPOSE_FILE" config --services)
-PULL_SERVICES=()
-for svc in server internal-service ui; do
-    if printf '%s\n' "$declared_services" | grep -qx "$svc"; then
-        PULL_SERVICES+=("$svc")
-    fi
-done
-if ! printf '%s\n' "${PULL_SERVICES[@]}" | grep -qx server; then
-    echo "ERROR: '$COMPOSE_FILE' declares no 'server' service; there is nothing to deploy." >&2
+# Which services this deployment covers. Derived rather than hardcoded, because
+# docker-compose.production.yml documents that `ui` and `internal-service` are droppable for a
+# server-only deployment - an operator who takes that option would otherwise hit
+# `no such service: ui`, a deploy broken by following our own documentation.
+#
+# The selection lives in scripts/select-deploy-services.sh so it can be tested directly (see
+# validate.yml -> deploy-gate-tests). It is safety-critical in both directions: too few and a
+# declared service is silently skipped while the run still reports success; too many and we
+# `up -d` a service that was never pulled. Neither is testable wedged inline between a pull
+# and a production restart.
+if ! mapfile -t DEPLOY_SERVICES < <(./scripts/select-deploy-services.sh "$COMPOSE_FILE"); then
     exit 1
 fi
-echo "  Services in this compose file: ${PULL_SERVICES[*]}"
+if [ "${#DEPLOY_SERVICES[@]}" -eq 0 ]; then
+    echo "ERROR: no deployable services selected from '$COMPOSE_FILE'." >&2
+    exit 1
+fi
+echo "  Services in this deployment: ${DEPLOY_SERVICES[*]}"
 
-# True if this compose file declares $1.
+# True if $1 is part of THIS deployment - i.e. in the set selected above.
 #
-# The rolling restart in step 3 uses this for the same reason the pull list above is derived
-# rather than hardcoded. `ui` and `internal-service` are documented as droppable for a
-# server-only deployment, but the restart step used to run `up -d --no-deps ui` unconditionally.
-# An operator who followed that documentation got `no such service: ui` AFTER the server had
-# already been swapped to its new image - a half-applied deploy, which is the single outcome
-# the ordering in this script exists to prevent. Guarding the pull but not the restart just
-# moved the failure later, to the most expensive possible moment.
+# Named for what it tests, deliberately. It is NOT an independent "does the compose file
+# declare this?" query, and must not become one: the restart set has to be exactly the set
+# that was pulled and revision-checked. A second, independently-derived answer to the same
+# question is how you end up running `up -d` on a service whose image was never refreshed.
+# One source of truth - DEPLOY_SERVICES - for pull, verify and restart alike.
 #
-# `server` is deliberately NOT guarded: the check above already aborts when it is absent, so
-# by this point it is guaranteed present, and a guard there would silently turn "the compose
-# file is malformed" into "nothing was deployed, exit 0".
-service_declared() {
-    printf '%s\n' "${PULL_SERVICES[@]}" | grep -qx "$1"
+# The rolling restart in step 3 needs this because the restart step used to run
+# `up -d --no-deps ui` unconditionally. An operator following the documented server-only
+# option got `no such service: ui` AFTER the server had already been swapped to its new
+# image - a half-applied deploy, the single outcome this script's ordering exists to prevent.
+# Guarding the pull but not the restart just moved the failure to the most expensive moment.
+#
+# `server` is deliberately NOT guarded: selection already aborts when it is absent, so by this
+# point it is guaranteed present, and a guard there would silently turn "the compose file is
+# malformed" into "nothing was deployed, exit 0".
+in_deployment() {
+    printf '%s\n' "${DEPLOY_SERVICES[@]}" | grep -qx "$1"
 }
 
-if ! docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" pull "${PULL_SERVICES[@]}"; then
+if ! docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" pull "${DEPLOY_SERVICES[@]}"; then
     echo "" >&2
     echo "ERROR: failed to pull images (tag: ${IMAGE_TAG:-latest})." >&2
     echo "  Common causes:" >&2
@@ -272,7 +277,7 @@ echo "  Verifying all images came from the same commit..."
 # file instead keeps a legitimately slimmed-down deployment working.
 compose_json=$(docker compose -f "$COMPOSE_FILE" config --format json)
 VERIFY_IMAGES=()
-for svc in "${PULL_SERVICES[@]}"; do
+for svc in "${DEPLOY_SERVICES[@]}"; do
     img=$(printf '%s' "$compose_json" | jq -r --arg s "$svc" '.services[$s].image // empty')
     if [ -z "$img" ]; then
         echo "ERROR: service '$svc' declares no image in '$COMPOSE_FILE'." >&2
@@ -377,18 +382,18 @@ wait_for_port server 12349
 echo "  Server is up."
 
 # Internal service next, when this deployment includes one.
-if service_declared internal-service; then
+if in_deployment internal-service; then
     echo "  Restarting internal-service..."
     docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps internal-service
     echo "  Waiting for internal-service to be healthy..."
     wait_for_port internal-service "${INTERNAL_SERVICE_PORT:-12345}"
     echo "  Internal service is up."
 else
-    echo "  Skipping internal-service: not declared in $COMPOSE_FILE."
+    echo "  Skipping internal-service: not part of this deployment."
 fi
 
 # UI last (lightweight, fast restart), when this deployment includes one.
-if service_declared ui; then
+if in_deployment ui; then
     echo "  Restarting ui..."
     # No `--build`: the ui image was already built in step 2, BEFORE anything was restarted.
     # Rebuilding it here would reopen the exact window step 2 exists to close - a build failure at
@@ -403,7 +408,7 @@ if service_declared ui; then
     wait_for_port ui 8080
     echo "  UI is up."
 else
-    echo "  Skipping ui: not declared in $COMPOSE_FILE."
+    echo "  Skipping ui: not part of this deployment."
 fi
 
 # Cloudflared if tunnel profile is active
@@ -443,9 +448,9 @@ echo ""
 # Advertise only endpoints this deployment actually serves. A server-only stack that
 # printed "Local access: http://localhost:8080" would send the operator to a port nothing
 # is listening on and read as a broken deploy rather than a correctly slimmed-down one.
-if service_declared ui; then
+if in_deployment ui; then
     echo "Local access:  http://localhost:8080"
 fi
-if service_declared internal-service; then
+if in_deployment internal-service; then
     echo "WebSocket:     ws://localhost:${INTERNAL_SERVICE_PORT:-12345}"
 fi
