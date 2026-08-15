@@ -424,6 +424,17 @@ jobs:
           fi
           echo "PASS: mismatched images are refused."
 
+      - name: Deploy restart guards - run deploy.sh end to end
+        # The selector test below proves the LIST is right. This proves deploy.sh ACTS on it:
+        # it runs the real script against fixture compose files with a recording `docker` stub on
+        # PATH, and asserts which services were pulled and restarted - and that an omitted service
+        # is never touched. Without this, the headline fix (no unconditional `up -d --no-deps ui`)
+        # has no coverage and could be reintroduced with every other test still green.
+        #
+        # This is not hypothetical: it immediately caught that a server-only deploy still aborted,
+        # because the release gate rejected a single-image deployment as a usage error.
+        run: ./scripts/test-deploy-services.sh
+
       - name: Deploy service selection covers every compose shape
         # This selection decides what is pulled, revision-checked AND restarted. Both error
         # directions are deployment-critical: too few silently skips a declared service while
@@ -432,6 +443,9 @@ jobs:
         # so the slimmed shapes are supported configurations, not hypotheticals.
         run: |
           set -euo pipefail
+          # PyYAML is declared rather than inherited from the runner image: a runner change would
+          # otherwise turn this deterministic gate into an opaque ModuleNotFoundError.
+          python3 -c 'import yaml' 2>/dev/null || pip install --quiet pyyaml
           # Build fixtures from the real production compose so this tracks the actual file.
           # Dangling depends_on entries must be stripped or compose rejects the project.
           python3 - <<'PYEOF'

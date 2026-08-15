@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+#
+# Integration test for deploy.sh's service selection AND the restart guards.
+#
+# WHY THIS EXISTS RATHER THAN JUST TESTING THE SELECTOR
+#
+# scripts/select-deploy-services.sh is unit-tested, but that only proves the *list* is right.
+# The defect this guards against lives one layer down: an unconditional
+# `up -d --no-deps ui` on a deployment that has no ui service. That aborts AFTER the server
+# has already been swapped to its new image - a half-applied deploy, which is the single
+# outcome deploy.sh's ordering exists to prevent. A selector-only test passes happily while
+# that bug is reintroduced.
+#
+# So this runs the REAL deploy.sh end to end against fixture compose files, with `docker`
+# replaced by a recording stub on PATH, and asserts what deploy.sh actually *did*: which
+# services it pulled, which it restarted, and - the point - that it never touched a service
+# the compose file does not declare.
+#
+# The stub records every invocation to $CALLS. Nothing real is pulled, started or restarted.
+#
+# Usage: scripts/test-deploy-services.sh        (from the repo root)
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+fail() { echo "::error::$*"; exit 1; }
+pass_count=0
+
+# ---------------------------------------------------------------------------
+# The docker stub. Answers only what deploy.sh actually asks for, and records
+# every call so the assertions can inspect them.
+# ---------------------------------------------------------------------------
+make_stub() {
+  mkdir -p "$WORK/bin"
+  cat > "$WORK/bin/docker" <<'STUB'
+#!/usr/bin/env bash
+echo "$*" >> "$CALLS"
+
+# `compose -f <file> <subcommand> ...` - find the subcommand after the -f pair.
+if [ "${1:-}" = "compose" ]; then
+  shift
+  file=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -f) file="$2"; shift 2 ;;
+      --profile) shift 2 ;;
+      *) break ;;
+    esac
+  done
+  sub="${1:-}"; shift || true
+  case "$sub" in
+    config)
+      if [ "${1:-}" = "--services" ]; then
+        # Service names are the top-level keys under `services:`.
+        awk '/^services:/{f=1;next} f&&/^[a-z]/{exit} f&&/^  [a-zA-Z0-9_-]+:/{gsub(/[ :]/,"");print}' "$file"
+      else
+        # `config --format json` - emit just what deploy.sh reads: .services[x].image
+        printf '{"services":{'
+        first=1
+        for s in $(awk '/^services:/{f=1;next} f&&/^[a-z]/{exit} f&&/^  [a-zA-Z0-9_-]+:/{gsub(/[ :]/,"");print}' "$file"); do
+          [ $first -eq 0 ] && printf ','
+          printf '"%s":{"image":"ghcr.io/avarok-cybersecurity/citadel-workspace-%s:latest"}' "$s" "$s"
+          first=0
+        done
+        printf '}}'
+      fi
+      ;;
+    ps)
+      # deploy.sh's wait_for_port reads .State/.Health from the first entry.
+      printf '{"Name":"stub","State":"running","Health":"healthy"}\n'
+      ;;
+    pull|up|logs|down) : ;;
+    *) : ;;
+  esac
+  exit 0
+fi
+
+# verify-image-revisions.sh calls `docker image inspect --format ... <ref>`
+if [ "${1:-}" = "image" ] && [ "${2:-}" = "inspect" ]; then
+  echo "testrevision0000"
+  exit 0
+fi
+exit 0
+STUB
+  chmod +x "$WORK/bin/docker"
+}
+
+# ---------------------------------------------------------------------------
+# Fixtures: minimal compose files with only the services under test. Written by
+# hand (not derived from the production file) so the stub's simple parser is
+# sufficient and the test states its inputs explicitly.
+# ---------------------------------------------------------------------------
+write_fixture() { # <path> <service>...
+  local path="$1"; shift
+  {
+    echo "services:"
+    for s in "$@"; do
+      echo "  $s:"
+      echo "    image: ghcr.io/avarok-cybersecurity/citadel-workspace-$s:latest"
+    done
+  } > "$path"
+}
+
+run_deploy() { # <name> <service>...
+  local name="$1"; shift
+  local dir="$WORK/$name"
+  mkdir -p "$dir/scripts"
+  write_fixture "$dir/docker-compose.production.yml" "$@"
+  cp "$REPO_ROOT/scripts/select-deploy-services.sh" "$REPO_ROOT/scripts/verify-image-revisions.sh" "$dir/scripts/"
+  cp "$REPO_ROOT/deploy.sh" "$dir/deploy.sh"
+  # deploy.sh requires a .env with a real master password.
+  printf 'WORKSPACE_MASTER_PASSWORD=test-password-not-a-placeholder\n' > "$dir/.env"
+  export CALLS="$dir/calls.txt"
+  : > "$CALLS"
+  # --no-pull skips step 1 (git pull); the fixture dir is deliberately not a git repo, and the
+  # git step is not what is under test here.
+  ( cd "$dir" && PATH="$WORK/bin:$PATH" bash ./deploy.sh --no-pull >"$dir/out.txt" 2>&1 ) || true
+  echo "$dir"
+}
+
+assert_pulled() { # <dir> <expected space-separated>
+  local got
+  # `|| true` on each stage: a non-matching grep exits 1, which under `set -e` would abort the
+  # whole run silently instead of reporting which assertion failed.
+  got=$(grep -E '^compose .* pull ' "$1/calls.txt" 2>/dev/null | head -1 | sed 's/.* pull //' || true)
+  [ "$got" = "$2" ] || fail "pull was [$got], expected [$2] (see $1/out.txt)"
+}
+
+assert_restarted() { # <dir> <service>...
+  local dir="$1"; shift
+  local got
+  got=$(grep -oE 'up -d --no-deps [a-z-]+' "$dir/calls.txt" 2>/dev/null | awk '{print $NF}' | tr '\n' ' ' | sed 's/ $//' || true)
+  [ "$got" = "$*" ] || fail "restarts were [$got], expected [$*] (see $dir/out.txt)"
+}
+
+assert_never_mentions() { # <dir> <service>
+  if grep -qE "up -d --no-deps $2\b" "$1/calls.txt"; then
+    fail "deploy.sh tried to restart '$2', which this compose file does not declare - that is the half-applied deploy this guard exists to prevent"
+  fi
+}
+
+echo "== deploy.sh service-selection integration test =="
+make_stub
+
+# --- full stack -------------------------------------------------------------
+d=$(run_deploy full server internal-service ui)
+assert_pulled "$d" "server internal-service ui"
+assert_restarted "$d" server internal-service ui
+echo "  full        -> pulled and restarted all three"; pass_count=$((pass_count+1))
+
+# --- server only: the documented slimmed deployment --------------------------
+d=$(run_deploy server-only server)
+assert_pulled "$d" "server"
+assert_restarted "$d" server
+assert_never_mentions "$d" ui
+assert_never_mentions "$d" internal-service
+echo "  server-only -> pulled/restarted server only; never touched ui or internal-service"; pass_count=$((pass_count+1))
+
+# --- server + ui ------------------------------------------------------------
+d=$(run_deploy server-ui server ui)
+assert_pulled "$d" "server ui"
+assert_restarted "$d" server ui
+assert_never_mentions "$d" internal-service
+echo "  server-ui   -> never touched internal-service"; pass_count=$((pass_count+1))
+
+# --- server + internal-service ----------------------------------------------
+d=$(run_deploy server-is server internal-service)
+assert_pulled "$d" "server internal-service"
+assert_restarted "$d" server internal-service
+assert_never_mentions "$d" ui
+echo "  server-is   -> never touched ui"; pass_count=$((pass_count+1))
+
+# --- no server: must abort BEFORE restarting anything ------------------------
+d=$(run_deploy no-server ui)
+if grep -qE 'up -d' "$d/calls.txt"; then
+  fail "a compose file with no 'server' service still reached the restart phase; it must abort first"
+fi
+grep -qi "no 'server' service" "$d/out.txt" \
+  || fail "no-server case did not report why it aborted; output was: $(head -3 "$d/out.txt")"
+echo "  no-server   -> aborted before any restart, with a clear reason"; pass_count=$((pass_count+1))
+
+echo "== all $pass_count deploy-selection assertions passed =="

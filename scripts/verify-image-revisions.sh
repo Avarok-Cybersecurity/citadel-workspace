@@ -30,9 +30,22 @@
 
 set -euo pipefail
 
-if [ "$#" -lt 2 ]; then
-    echo "usage: $0 <image> <image> [<image> ...]" >&2
+if [ "$#" -lt 1 ]; then
+    echo "usage: $0 <image> [<image> ...]" >&2
     exit 2
+fi
+
+# ONE image is a valid deployment, not a usage error.
+#
+# docker-compose.production.yml documents that `ui` and `internal-service` are droppable, so a
+# server-only stack legitimately has a single image to check - and a single image is trivially
+# self-consistent, there being nothing to disagree with. Requiring two here aborted that deploy
+# at the release gate AFTER the pull had already succeeded, which is precisely the half-applied
+# failure the caller's service selection exists to avoid. Caught by
+# scripts/test-deploy-services.sh, which runs deploy.sh end to end against a server-only fixture.
+if [ "$#" -eq 1 ]; then
+    echo "Only one image in this deployment ($1); nothing to compare against."
+    exit 0
 fi
 
 REVISION_LABEL="org.opencontainers.image.revision"

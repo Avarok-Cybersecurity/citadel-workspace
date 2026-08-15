@@ -205,10 +205,18 @@ echo "[2/4] Pulling images (tag: ${IMAGE_TAG:-latest})..."
 # declared service is silently skipped while the run still reports success; too many and we
 # `up -d` a service that was never pulled. Neither is testable wedged inline between a pull
 # and a production restart.
-if ! mapfile -t DEPLOY_SERVICES < <(./scripts/select-deploy-services.sh "$COMPOSE_FILE"); then
+# Command substitution, NOT `mapfile < <(...)`. Bash does not propagate the exit status of a
+# process substitution: mapfile reads to EOF and returns 0 even when the child exited 1, and it
+# KEEPS whatever partial output the child managed to print. An `if ! mapfile` guard there is dead
+# code, and a selector that failed after printing one service would have been treated as success
+# with a truncated list. Verified both behaviours before changing this.
+if ! selection=$(./scripts/select-deploy-services.sh "$COMPOSE_FILE"); then
     exit 1
 fi
-if [ "${#DEPLOY_SERVICES[@]}" -eq 0 ]; then
+mapfile -t DEPLOY_SERVICES <<<"$selection"
+# Belt and braces: the selector already errors on an empty result, and the check above now
+# actually observes that, but a silent empty selection must never fall through to a restart.
+if [ "${#DEPLOY_SERVICES[@]}" -eq 0 ] || [ -z "${DEPLOY_SERVICES[0]}" ]; then
     echo "ERROR: no deployable services selected from '$COMPOSE_FILE'." >&2
     exit 1
 fi
