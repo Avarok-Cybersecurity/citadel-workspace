@@ -35,7 +35,12 @@ if [ -z "${CITADEL_TEST_NS:-}" ]; then
         _fake=$(mktemp -d)
         export CITADEL_TEST_NS=1
         _self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
-        exec unshare -r -m bash -c "mount --bind '$_fake' /run/lock && exec '$_self'"
+        # A CHILD, not `exec`: exec would replace this process and leave the bind-mount source
+        # directory behind on the host after every run. Run it, keep its status, clean up, exit.
+        _status=0
+        unshare -r -m bash -c "mount --bind '$_fake' /run/lock && exec '$_self'" || _status=$?
+        rm -rf "$_fake"
+        exit "$_status"
     fi
 fi
 
@@ -337,6 +342,8 @@ assert_restarted "$d" server internal-service ui
 echo "  full        -> pulled and restarted all three"; pass_count=$((pass_count+1))
 
 # --- server only: the documented slimmed deployment --------------------------
+if [ -n "$CAN_PROVISION" ]; then
+provision_canonical
 d=$(run_deploy server-only server)
 assert_succeeded "$d"
 assert_removed_nothing "$d"
@@ -345,22 +352,38 @@ assert_restarted "$d" server
 assert_never_mentions "$d" ui
 assert_never_mentions "$d" internal-service
 echo "  server-only -> completed; pulled/restarted server only, never touched ui or internal-service"; pass_count=$((pass_count+1))
+unprovision_canonical
+else
+skip_unprovisioned "server-only"
+fi
 
 # --- server + ui ------------------------------------------------------------
+if [ -n "$CAN_PROVISION" ]; then
+provision_canonical
 d=$(run_deploy server-ui server ui)
 assert_succeeded "$d"
 assert_pulled "$d" "server ui"
 assert_restarted "$d" server ui
 assert_never_mentions "$d" internal-service
 echo "  server-ui   -> never touched internal-service"; pass_count=$((pass_count+1))
+unprovision_canonical
+else
+skip_unprovisioned "server-ui"
+fi
 
 # --- server + internal-service ----------------------------------------------
+if [ -n "$CAN_PROVISION" ]; then
+provision_canonical
 d=$(run_deploy server-is server internal-service)
 assert_succeeded "$d"
 assert_pulled "$d" "server internal-service"
 assert_restarted "$d" server internal-service
 assert_never_mentions "$d" ui
 echo "  server-is   -> never touched ui"; pass_count=$((pass_count+1))
+unprovision_canonical
+else
+skip_unprovisioned "server-is"
+fi
 
 # --- slimming an EXISTING full stack down to server-only ---------------------
 # The case the orphan reconciliation exists for, and the one a clean-environment test cannot see:
@@ -398,6 +421,22 @@ else
 skip_unprovisioned "slim-transition"
 fi
 
+# --- dropping a service requires the lock even with nothing running ----------
+# The decisive regression: with no container for the omitted services, a point-in-time scan finds
+# nothing and would wave the deploy through under a private lock - after which another account can
+# start one a moment later. Authorization must follow what the deploy DROPS, not what it happens
+# to see.
+d=$(run_deploy slim-nothing-running server)
+assert_failed "$d"
+for verb in 'pull ' 'up -d'; do
+  if grep -qF "$verb" "$d/calls.txt"; then
+    fail "a slim deploy without the shared lock ran '$verb' because nothing was running yet: $(grep -F "$verb" "$d/calls.txt" | head -1)"
+  fi
+done
+grep -q "does not declare" "$d/out.txt" \
+  || fail "the refusal did not name the dropped services; output was: $(tail -6 "$d/out.txt")"
+echo "  slim-nothing -> required the shared lock even with nothing running to remove"; pass_count=$((pass_count+1))
+
 # --- slimming WITHOUT a host-wide lock must report, not remove ---------------
 # Removal matches containers by compose project, which spans every account on the host, so it only
 # runs when an explicit shared DEPLOY_LOCK_FILE says deploys are serialized that widely. Without
@@ -412,7 +451,7 @@ for verb in 'pull ' 'up -d'; do
     fail "an unauthorized slim deploy ran '$verb' before refusing - it must refuse before mutating anything: $(grep -F "$verb" "$d/calls.txt" | head -1)"
   fi
 done
-grep -q "no longer declares" "$d/out.txt" \
+grep -q "does not declare" "$d/out.txt" \
   || fail "the refusal did not name the dropped services; output was: $(tail -6 "$d/out.txt")"
 grep -q "install -o root -g docker" "$d/out.txt" \
   || fail "the refusal did not say how to authorize cleanup; output was: $(tail -6 "$d/out.txt")"
@@ -427,7 +466,7 @@ d=$(PREEXISTING="server internal-service ui" \
     DEPLOY_LOCK_FILE="$WORK/an-explicit-but-private.lock" run_deploy explicit-not-canonical server)
 assert_failed "$d"
 assert_removed_nothing "$d"
-grep -q "no longer declares" "$d/out.txt" \
+grep -q "does not declare" "$d/out.txt" \
   || fail "an explicit-but-non-canonical lock authorized removal; output was: $(tail -6 "$d/out.txt")"
 echo "  explicit-lock -> a private lock path did not authorize removal"; pass_count=$((pass_count+1))
 
@@ -504,7 +543,7 @@ d=$(PREEXISTING="server internal-service ui" CITADEL_DEPLOY_LOCK_ROOT="$WORK/att
     run_deploy env-cannot-relocate server)
 assert_failed "$d"
 assert_removed_nothing "$d"
-grep -q "no longer declares" "$d/out.txt" \
+grep -q "does not declare" "$d/out.txt" \
   || fail "an environment variable relocated the canonical lock; output was: $(tail -6 "$d/out.txt")"
 echo "  env-relocate -> no environment variable moved the canonical lock"; pass_count=$((pass_count+1))
 
@@ -559,6 +598,28 @@ if [ -n "$CAN_PROVISION" ]; then
   echo "  replaceable-lock -> refused a canonical lock whose directory allows swapping it"; pass_count=$((pass_count+1))
 else
   skip_unprovisioned "replaceable-lock"
+fi
+
+# --- a dangling canonical symlink must abort, not be ignored -----------------
+# `-e` follows symlinks and is false for a dangling one, so a malformed canonical path could skip
+# the whole validation - including its symlink rejection - and fall back to a private lock,
+# leaving accounts unserialized.
+if [ -n "$CAN_PROVISION" ]; then
+  unprovision_canonical
+  ln -s /nonexistent-canonical-target "$CANONICAL_LOCK"
+  d=$(run_deploy dangling-symlink server)
+  rm -f "$CANONICAL_LOCK"
+  assert_failed "$d"
+  for verb in 'pull ' 'up -d' 'rm -f'; do
+    if grep -qF "$verb" "$d/calls.txt"; then
+      fail "a deploy with a dangling canonical symlink still ran '$verb'"
+    fi
+  done
+  grep -q "symlink" "$d/out.txt" \
+    || fail "a dangling canonical symlink was ignored rather than rejected; output was: $(tail -6 "$d/out.txt")"
+  echo "  dangling-symlink -> rejected a malformed canonical path instead of ignoring it"; pass_count=$((pass_count+1))
+else
+  skip_unprovisioned "dangling-symlink"
 fi
 
 # --- a deploy from ANOTHER checkout of the same project must be refused ------
@@ -636,6 +697,15 @@ if [ "$skipped" -gt 0 ]; then
   echo "== $pass_count assertions passed, $skipped SKIPPED (no private mount namespace available) =="
   echo "   The skipped cases cover authorization for container removal - the host's $CANONICAL_LOCK"
   echo "   is never used for them, because another deploy may be holding it."
+  # Skipping is a local-development affordance, not a CI outcome. Letting the destructive-removal
+  # coverage silently vanish because a runner stopped allowing unprivileged namespaces is exactly
+  # how this gate would regress unobserved, so in CI a skip is a failure.
+  if [ -n "${CI:-}" ]; then
+    echo "::error::$skipped canonical-lock cases were skipped in CI. They cover the authorization"
+    echo "::error::gate on 'docker rm -f'; a run without them proves nothing about it. The runner"
+    echo "::error::must allow an unprivileged mount namespace (unshare -r -m)."
+    exit 1
+  fi
 else
   echo "== all $pass_count deploy-selection assertions passed =="
 fi
