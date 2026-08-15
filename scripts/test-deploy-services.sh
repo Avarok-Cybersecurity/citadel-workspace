@@ -30,16 +30,28 @@ set -euo pipefail
 # real synchronization state: another deploy could be holding it right now, and truncating or
 # unlinking it would leave live deploys unserialized. A bind mount over it gives this run its own
 # empty one, so nothing here can touch the host's.
-if [ -z "${CITADEL_TEST_NS:-}" ]; then
-    if command -v unshare >/dev/null 2>&1 && unshare -r -m true 2>/dev/null; then
+if [ -z "${CITADEL_TEST_NS:-}" ] && command -v unshare >/dev/null 2>&1; then
+    # Two ways in, because unprivileged user namespaces are not universally available: Ubuntu 24.04
+    # (GitHub's runners) restricts them via AppArmor, so `unshare -r` fails there while plain
+    # `unshare -m` under sudo works. Either way the mount namespace is private and the host's
+    # /run/lock is never touched - sudo is used to CREATE the namespace, never to modify host state.
+    _ns=""; _sudo=""
+    if unshare -r -m true 2>/dev/null; then
+        _ns="unshare -r -m"
+    elif sudo -n unshare -m true 2>/dev/null; then
+        _ns="sudo -n unshare -m"; _sudo="sudo -n"
+    fi
+    if [ -n "$_ns" ]; then
         _fake=$(mktemp -d)
-        export CITADEL_TEST_NS=1
         _self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
         # A CHILD, not `exec`: exec would replace this process and leave the bind-mount source
         # directory behind on the host after every run. Run it, keep its status, clean up, exit.
+        # CI is passed through explicitly rather than relying on sudo's environment handling, since
+        # env_reset would otherwise drop it and turn a fatal skip back into a silent pass.
         _status=0
-        unshare -r -m bash -c "mount --bind '$_fake' /run/lock && exec '$_self'" || _status=$?
-        rm -rf "$_fake"
+        $_ns bash -c "mount --bind '$_fake' /run/lock && CITADEL_TEST_NS=1 CI='${CI:-}' exec '$_self'" || _status=$?
+        # Anything written under the bind mount is owned by whoever ran the namespace.
+        $_sudo rm -rf "$_fake"
         exit "$_status"
     fi
 fi
