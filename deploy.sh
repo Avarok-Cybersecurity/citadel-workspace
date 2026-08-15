@@ -245,11 +245,41 @@ if [ -n "${DEPLOY_LOCK_FILE_EXPLICIT:-}" ]; then
 else
     echo "  Deploy lock: ${DEPLOY_LOCK_FILE} (this account only; set DEPLOY_LOCK_FILE to a shared, group-writable path to serialize across accounts)"
 fi
+# Opened in a subshell first: a failed `exec` redirection makes a non-interactive shell exit
+# outright, so the most likely provisioning mistake - a shared lock file another account created
+# mode 644 - would otherwise surface as a bare "Permission denied" with no explanation.
+if ! ( : >>"$DEPLOY_LOCK_FILE" ) 2>/dev/null; then
+    echo "ERROR: cannot open the lock file for writing: ${DEPLOY_LOCK_FILE}" >&2
+    if [ -e "$DEPLOY_LOCK_FILE" ]; then
+        echo "  It exists but this account cannot write to it. A shared lock has to be" >&2
+        echo "  group-writable by every deploy account, e.g.:" >&2
+        echo "    sudo install -o root -g docker -m 0664 /dev/null '${DEPLOY_LOCK_FILE}'" >&2
+        echo "  (see DEPLOY_LOCK_FILE in .env.example for the full recipe)" >&2
+    else
+        echo "  The directory is not writable by this account." >&2
+    fi
+    exit 1
+fi
+
+# `flock -w 0` is `flock -n`, so the default preserves fail-immediately. A cron-driven deploy that
+# overlaps a long one would otherwise turn a routine queue into a failed-deployment alert, hence
+# the opt-in wait.
+DEPLOY_LOCK_TIMEOUT="${DEPLOY_LOCK_TIMEOUT:-0}"
+case "$DEPLOY_LOCK_TIMEOUT" in
+    ''|*[!0-9]*)
+        echo "ERROR: DEPLOY_LOCK_TIMEOUT must be a whole number of seconds (got '$DEPLOY_LOCK_TIMEOUT')." >&2
+        exit 1 ;;
+esac
 exec 9>>"$DEPLOY_LOCK_FILE"
-if ! flock -n 9; then
+if ! flock -w "$DEPLOY_LOCK_TIMEOUT" 9; then
     echo "ERROR: another deploy of project '${deploy_project}' is already running." >&2
     echo "  Lock: ${DEPLOY_LOCK_FILE}" >&2
-    echo "  Nothing was changed. Wait for it to finish, then re-run." >&2
+    if [ "$DEPLOY_LOCK_TIMEOUT" = "0" ]; then
+        echo "  Nothing was changed. Wait for it to finish, then re-run, or set" >&2
+        echo "  DEPLOY_LOCK_TIMEOUT=<seconds> to queue behind it instead (useful from cron)." >&2
+    else
+        echo "  Nothing was changed. Waited ${DEPLOY_LOCK_TIMEOUT}s and it is still held." >&2
+    fi
     exit 1
 fi
 
@@ -577,15 +607,45 @@ while read -r svc; do
     # service labels as the real ones (verified). Without it, slimming a deployment force-removes
     # a migration or debugging job someone is running against the dropped service - a workload
     # this script never started and has no business killing.
-    stale=$(docker ps -aq \
+    # A transient daemon error must not fail a deploy whose services are already up and healthy,
+    # so a failed query skips this service's cleanup rather than aborting under set -e.
+    if ! stale=$(docker ps -aq \
         --filter "label=com.docker.compose.project=${compose_project}" \
         --filter "label=com.docker.compose.service=${svc}" \
-        --filter "label=com.docker.compose.oneoff=False")
-    if [ -n "$stale" ]; then
-        echo "  Removing ${svc}: no longer declared in '${COMPOSE_FILE}', but left running by a previous deploy."
-        # Unquoted on purpose - there may be several ids, and they are hex with no whitespace.
-        # shellcheck disable=SC2086
-        docker rm -f $stale
+        --filter "label=com.docker.compose.oneoff=False" 2>/dev/null); then
+        echo "  WARNING: could not list ${svc} containers; skipping its cleanup." >&2
+        continue
+    fi
+    [ -n "$stale" ] || continue
+    stale_ids=$(printf '%s' "$stale" | tr '\n' ' ')
+
+    # FAIL CLOSED. Removal selects containers by compose project, which spans every account on this
+    # host, so it is only safe when deploys are serialized that widely. The default lock is
+    # per-account (see above), so without an explicitly configured shared lock this deploy cannot
+    # know another account is not mid-flight - and removing then could destroy services it just
+    # started and health-checked. Report instead of removing: the operator gets the container ids
+    # and both ways forward, so a slimmed deployment never silently leaves a stale service serving
+    # traffic OR silently races another deploy.
+    if [ -z "${DEPLOY_LOCK_FILE_EXPLICIT:-}" ]; then
+        echo "  WARNING: '${svc}' is no longer declared in '${COMPOSE_FILE}', but a container from a" >&2
+        echo "    previous deploy is still running: ${stale_ids}" >&2
+        echo "    NOT removing it. Removal matches containers by compose project across every account" >&2
+        echo "    on this host, and this deploy holds only a per-account lock, so another account's" >&2
+        echo "    deploy could be running right now." >&2
+        echo "    Either set DEPLOY_LOCK_FILE so deploys serialize host-wide (see .env.example) and" >&2
+        echo "    re-run, or remove it yourself once no other deploy is in flight:" >&2
+        echo "      docker rm -f ${stale_ids}" >&2
+        continue
+    fi
+
+    echo "  Removing ${svc}: no longer declared in '${COMPOSE_FILE}', but left running by a previous deploy."
+    # Unquoted on purpose - there may be several ids, and they are hex with no whitespace.
+    # A container can vanish between the ps and the rm - a window this loop itself opens - and the
+    # deploy is complete by now, so a failure here is a warning, not a failed deployment.
+    # shellcheck disable=SC2086
+    if ! docker rm -f $stale; then
+        echo "  WARNING: could not remove stale ${svc} container(s): ${stale_ids}" >&2
+        echo "    The deploy itself completed. Remove them manually if they are still present." >&2
     fi
 done <<<"$deployable_all"
 
