@@ -255,8 +255,14 @@ canonical_surroundings_ok() {
     return 0
 }
 
-if [ -e "$CANONICAL_LOCK" ]; then
-    if [ -f "$CANONICAL_LOCK" ] && [ -w "$CANONICAL_LOCK" ] && canonical_surroundings_ok; then
+# `-e` follows symlinks and is FALSE for a dangling one, which would skip this whole block -
+# including its symlink rejection - and quietly fall back to a private lock. `-L` catches the
+# directory entry itself, so a malformed canonical path is rejected rather than ignored.
+if [ -e "$CANONICAL_LOCK" ] || [ -L "$CANONICAL_LOCK" ]; then
+    # canonical_surroundings_ok FIRST: it is the only check that inspects the directory entry
+    # itself. `-f` follows symlinks and fails for a dangling one, so testing it first would
+    # short-circuit past the symlink rejection and lose the reason for refusing.
+    if canonical_surroundings_ok && [ -f "$CANONICAL_LOCK" ] && [ -w "$CANONICAL_LOCK" ]; then
         canonical_usable=1
     else
         echo "ERROR: the canonical deploy lock exists but this account cannot use it:" >&2
@@ -392,6 +398,125 @@ if [ "$pulled_project" != "$deploy_project" ]; then
     echo "  will lock and act under the new project name." >&2
     exit 1
 fi
+
+# Step 2: Pull prebuilt images from GHCR.
+#
+# This used to run `docker compose build`, compiling Rust on the production
+# host. That was slow (a full release build per deploy), it required the source
+# tree and a toolchain on the box, it left no way back to the previous image,
+# and it made every deploy depend on the host's Docker build networking being
+# healthy -- which on at least one deployment host it is not (a k3s/Docker
+# iptables conflict leaves the default bridge with no egress, so any build
+# needing `apt-get` or `npm` fails).
+#
+# CI now builds and publishes the images (.github/workflows/publish-images.yml)
+# and the host simply pulls them. Set IMAGE_TAG to a `sha-<12-char>` tag to
+# deploy or roll back to an exact prior build:
+#
+#     IMAGE_TAG=sha-abc123456789 ./deploy.sh --no-pull
+#
+# `set -euo pipefail` (top of this file) already aborts the deploy if either of
+# the commands below fails, so a failed pull can never fall through to the
+# restart step. The explicit checks exist for the OPERATOR, not for control
+# flow: a bare `set -e` abort prints nothing, and by far the most likely failure
+# here is a 403 because the GHCR packages are still Private (they are created
+# that way and must be flipped to Public once). Naming that cause up front turns
+# a cryptic mid-deploy exit into a one-line fix.
+echo "[2/4] Pulling images (tag: ${IMAGE_TAG:-latest})..."
+
+# Which services this deployment covers. Derived rather than hardcoded, because
+# docker-compose.production.yml documents that `ui` and `internal-service` are droppable for a
+# server-only deployment - an operator who takes that option would otherwise hit
+# `no such service: ui`, a deploy broken by following our own documentation.
+#
+# The selection lives in scripts/select-deploy-services.sh so it can be tested directly (see
+# validate.yml -> deploy-gate-tests). It is safety-critical in both directions: too few and a
+# declared service is silently skipped while the run still reports success; too many and we
+# `up -d` a service that was never pulled. Neither is testable wedged inline between a pull
+# and a production restart.
+# Command substitution, NOT `mapfile < <(...)`. Bash does not propagate the exit status of a
+# process substitution: mapfile reads to EOF and returns 0 even when the child exited 1, and it
+# KEEPS whatever partial output the child managed to print. An `if ! mapfile` guard there is dead
+# code, and a selector that failed after printing one service would have been treated as success
+# with a truncated list. Verified both behaviours before changing this.
+if ! selection=$(./scripts/select-deploy-services.sh "$COMPOSE_FILE"); then
+    exit 1
+fi
+mapfile -t DEPLOY_SERVICES <<<"$selection"
+# Belt and braces: the selector already errors on an empty result, and the check above now
+# actually observes that, but a silent empty selection must never fall through to a restart.
+if [ "${#DEPLOY_SERVICES[@]}" -eq 0 ] || [ -z "${DEPLOY_SERVICES[0]}" ]; then
+    echo "ERROR: no deployable services selected from '$COMPOSE_FILE'." >&2
+    exit 1
+fi
+echo "  Services in this deployment: ${DEPLOY_SERVICES[*]}"
+
+# PREFLIGHT: refuse a deploy we could not finish.
+#
+# If this compose file drops a service that still has a container running, the deploy is only
+# complete once that container is gone - otherwise a slimmed deployment leaves, say, the old ui
+# still serving :8080 while automation keyed on the exit status records the new topology as
+# applied. That is the silent half-applied deploy this script exists to prevent, so it is checked
+# BEFORE anything is pulled or restarted: refusing here leaves the running stack untouched, where
+# refusing at the end would report a failure on a deploy that had already changed production.
+if ! deployable_all=$(./scripts/select-deploy-services.sh --deployable); then
+    exit 1
+fi
+preflight_project=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.name // empty')
+
+# Authorization is decided by what this deploy DROPS, not by what happens to be running when it
+# looks. A point-in-time `docker ps` cannot authorize a topology change: find nothing, proceed
+# under a private lock, and another account can start the omitted service a moment later - leaving
+# a deploy that either fails after already restarting production, or exits 0 with a topology
+# contradicting its own compose file. So: omit a deployable service, and the shared lock is
+# required, full stop.
+omitted=""
+while read -r svc; do
+    [ -n "$svc" ] || continue
+    printf '%s\n' "${DEPLOY_SERVICES[@]}" | grep -qx "$svc" && continue
+    omitted="${omitted}${svc} "
+done <<<"$deployable_all"
+
+if [ -n "$omitted" ] && [ -z "$RECONCILE_AUTHORIZED" ]; then
+    echo "ERROR: '${COMPOSE_FILE}' does not declare: ${omitted% }" >&2
+    echo "  A deploy that drops services has to retire their containers to match, and that" >&2
+    echo "  matches containers by compose project - which spans every account on this host. It is" >&2
+    echo "  therefore only safe when every deploy of this project contends on one lock, and this" >&2
+    echo "  one does not. Nothing has been changed." >&2
+    # Report what is running too, when it can be determined - useful, but never the deciding
+    # factor: a service absent right now can be started by another deploy a moment later.
+    while read -r svc; do
+        [ -n "$svc" ] || continue
+        printf '%s\n' "${DEPLOY_SERVICES[@]}" | grep -qx "$svc" && continue
+        found=$(docker ps -aq \
+            --filter "label=com.docker.compose.project=${preflight_project}" \
+            --filter "label=com.docker.compose.service=${svc}" \
+            --filter "label=com.docker.compose.oneoff=False" 2>/dev/null) || continue
+        [ -n "$found" ] && echo "    ${svc} is currently running: $(printf '%s' "$found" | tr '\n' ' ')" >&2
+    done <<<"$deployable_all"
+    echo "" >&2
+    echo "  Provision the canonical lock once, as an administrator:" >&2
+    echo "    sudo install -d -o root -g docker -m 2755 /run/lock/citadel-deploy" >&2
+    echo "    sudo install -o root -g docker -m 0664 /dev/null '${CANONICAL_LOCK}'" >&2
+    echo "  and re-run. Or deploy a compose file that declares every service." >&2
+    exit 1
+fi
+
+# Authorized, so the containers must at least be listable - otherwise this run cannot know whether
+# it finished the job, and finding that out after restarting production is too late.
+while read -r svc; do
+    [ -n "$svc" ] || continue
+    printf '%s\n' "${DEPLOY_SERVICES[@]}" | grep -qx "$svc" && continue
+    if ! docker ps -aq \
+        --filter "label=com.docker.compose.project=${preflight_project}" \
+        --filter "label=com.docker.compose.service=${svc}" \
+        --filter "label=com.docker.compose.oneoff=False" >/dev/null 2>&1; then
+        echo "ERROR: cannot list containers for the dropped service '${svc}'." >&2
+        echo "  Refusing to deploy: this run could not finish the job it was asked to do, and" >&2
+        echo "  nothing has been changed yet." >&2
+        exit 1
+    fi
+done <<<"$deployable_all"
 
 # Step 2: Pull prebuilt images from GHCR.
 #
