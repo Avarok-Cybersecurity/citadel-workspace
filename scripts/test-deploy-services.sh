@@ -240,6 +240,26 @@ if grep -qE '^rm -f cid-cloudflared' "$d/calls.txt"; then
 fi
 echo "  slim-transition -> dropped ui and internal-service containers removed; server kept, cloudflared untouched"; pass_count=$((pass_count+1))
 
+# --- a second deploy must not run while another holds the project lock -------
+# The reconciliation above can remove containers this deploy did not start, so two overlapping
+# deploys whose compose files disagree could delete each other's freshly started services. The
+# lock is what makes that impossible; assert it actually blocks, and - the part that matters -
+# that the blocked run mutates NOTHING before giving up.
+lock_file="${TMPDIR:-/tmp}/citadel-deploy-stubproj.lock"
+exec 8>"$lock_file"
+flock -n 8 || fail "could not acquire $lock_file to set up the concurrency test"
+d=$(run_deploy locked-out server)
+exec 8>&-   # release before the assertions, so a failure here never wedges later runs
+assert_failed "$d"
+grep -qi "another deploy" "$d/out.txt" \
+  || fail "a deploy blocked by the lock did not say why; output was: $(head -3 "$d/out.txt")"
+for verb in 'pull ' 'up -d' 'rm -f'; do
+  if grep -qF "$verb" "$d/calls.txt"; then
+    fail "a deploy that could not take the lock still ran '$verb' - it must mutate nothing: $(grep -F "$verb" "$d/calls.txt" | head -1)"
+  fi
+done
+echo "  locked-out  -> refused to start while another deploy held the lock; pulled, restarted and removed nothing"; pass_count=$((pass_count+1))
+
 # --- no server: must abort BEFORE restarting anything ------------------------
 d=$(run_deploy no-server ui)
 assert_failed "$d"

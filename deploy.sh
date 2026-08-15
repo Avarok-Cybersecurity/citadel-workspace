@@ -159,6 +159,44 @@ if [ "$TUNNEL_PROFILE_ACTIVE" = true ] && [ -z "${TUNNEL_TOKEN:-}" ]; then
     exit 1
 fi
 
+# Serialize the whole mutating deploy, one at a time per compose project.
+#
+# Everything from here down mutates shared state: the checkout (git pull), the images, the running
+# containers, and - since this script now removes containers for services a slimmed compose file
+# dropped - containers it did not itself start. That last one is why this matters more than it
+# used to. Two overlapping deploys of the same project whose compose files disagree about which
+# services exist (an operator slimming the file while a deploy is in flight) would have one run
+# force-removing containers the other just started and health-checked, ending in a state matching
+# neither invocation. Interleaved `up -d` calls were already unsafe; adding removal made the
+# failure destructive rather than merely confusing.
+#
+# The lock is held for the entire run: the fd stays open until the script exits, by any path,
+# including a failed gate or a Ctrl-C. No trap needed - the kernel releases it with the process.
+#
+# Keyed on the compose PROJECT, not this directory, because the project is what the containers
+# actually belong to; two checkouts deploying the same project must still serialize.
+deploy_project=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.name // empty')
+if [ -z "$deploy_project" ]; then
+    echo "ERROR: could not read the compose project name from '$COMPOSE_FILE'." >&2
+    echo "  Refusing to deploy without it: it is the key this deploy locks on, and an" >&2
+    echo "  unserialized deploy can remove containers another one just started." >&2
+    exit 1
+fi
+if ! command -v flock >/dev/null 2>&1; then
+    echo "ERROR: flock is required to serialize deploys but was not found." >&2
+    echo "  Install util-linux. Running without it risks two concurrent deploys" >&2
+    echo "  removing each other's containers." >&2
+    exit 1
+fi
+DEPLOY_LOCK_FILE="${TMPDIR:-/tmp}/citadel-deploy-${deploy_project}.lock"
+exec 9>"$DEPLOY_LOCK_FILE"
+if ! flock -n 9; then
+    echo "ERROR: another deploy of project '${deploy_project}' is already running." >&2
+    echo "  Lock: ${DEPLOY_LOCK_FILE}" >&2
+    echo "  Nothing was changed. Wait for it to finish, then re-run." >&2
+    exit 1
+fi
+
 # Step 1: Pull latest code
 if [ "$SKIP_PULL" = false ]; then
     echo "[1/4] Pulling latest code..."
