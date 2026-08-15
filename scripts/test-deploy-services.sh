@@ -233,6 +233,16 @@ run_deploy() { # <name> <service>...
   echo "$dir"
 }
 
+# The selection + preflight block must run exactly ONCE. It existed twice at one point, and the
+# second copy carried a weaker authorization rule - so a compose file changing between the two
+# reads could pass the strong check and then be deployed under the weak one. Duplication here is
+# not a tidiness problem, it is an authorization bypass.
+assert_selected_once() { # <dir>
+  local n
+  n=$(grep -c '\[2/4\] Pulling images' "$1/out.txt" || true)
+  [ "$n" = "1" ] || fail "the selection/preflight block ran $n times, expected exactly 1 (see $1/out.txt)"
+}
+
 assert_succeeded() { # <dir>
   local got; got=$(cat "$1/status.txt")
   [ "$got" = "0" ] || fail "deploy.sh exited $got, expected 0. Output:
@@ -349,6 +359,7 @@ trap 'unprovision_canonical; rm -rf "$WORK"' EXIT
 # --- full stack -------------------------------------------------------------
 d=$(run_deploy full server internal-service ui)
 assert_succeeded "$d"
+assert_selected_once "$d"
 assert_pulled "$d" "server internal-service ui"
 assert_restarted "$d" server internal-service ui
 echo "  full        -> pulled and restarted all three"; pass_count=$((pass_count+1))
@@ -358,6 +369,7 @@ if [ -n "$CAN_PROVISION" ]; then
 provision_canonical
 d=$(run_deploy server-only server)
 assert_succeeded "$d"
+assert_selected_once "$d"
 assert_removed_nothing "$d"
 assert_pulled "$d" "server"
 assert_restarted "$d" server
