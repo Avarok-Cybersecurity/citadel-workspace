@@ -173,39 +173,69 @@ fi
 # The lock is held for the entire run: the fd stays open until the script exits, by any path,
 # including a failed gate or a Ctrl-C. No trap needed - the kernel releases it with the process.
 #
-# The lock file lives in the DEPLOYMENT DIRECTORY, beside the compose file, and its name does not
-# depend on the project or the environment. Both properties are load-bearing:
+# Serialize on the COMPOSE PROJECT, host-wide - because that is the scope of the state this
+# script mutates. The reconciliation below force-removes containers selected by the
+# com.docker.compose.project label, which spans every checkout on the box, so a lock narrower than
+# the project leaves the destructive race open exactly where the damage is worst: a slim deploy
+# from one directory removing the ui/internal-service containers another deploy just started and
+# health-checked. Release-directory and worktree deployments make two checkouts of one project a
+# normal operating pattern, not a misconfiguration.
 #
-#   * not ${TMPDIR:-/tmp} - TMPDIR differs between an interactive shell, cron, and a systemd unit
-#     with PrivateTmp, so an environment-derived path means two deploys lock different inodes and
-#     both proceed. A lock that a caller's environment can route around is not a lock. (/run/lock
-#     is the conventional home, but it is root-owned mode 755; a non-root deploy account cannot
-#     create files there without provisioning this script has no business doing.)
-#   * not keyed on the compose project - the project name is only known after `git pull`, which may
-#     itself change it. Keying the lock on a value the locked region can alter means holding the
-#     OLD project's lock while operating on the NEW project's containers.
+# Where the file lives, in order of preference:
 #
-# Opened with >> rather than > because truncation serves no purpose here (nothing reads the
-# contents) and a lock file is not worth a destructive open.
+#   * $DEPLOY_LOCK_FILE if set - an absolute path the operator provisions, for hosts that want the
+#     conventional /run/lock/... location. Validated, because it is opened for writing.
+#   * otherwise $HOME/.local/state/citadel-deploy/<project>.lock - stable per deploy ACCOUNT rather
+#     than per directory, so two checkouts run by the same account do serialize, and present under
+#     cron as well as an interactive shell. NOT ${TMPDIR:-/tmp}: TMPDIR varies between cron, an
+#     interactive shell and a PrivateTmp unit, so deploys would lock different inodes and both
+#     proceed. /run/lock would be conventional but is root-owned mode 755 - a non-root deploy
+#     account cannot create there, which is what $DEPLOY_LOCK_FILE is for.
 #
-# Held for the entire run: the fd stays open until the script exits by any path, including a
-# failed gate or a Ctrl-C. No trap needed - the kernel releases it with the process.
+# The project name is read BEFORE the pull so the lock covers the whole run, and re-read after it
+# (below) so a pulled revision that renames the project fails loudly instead of silently leaving
+# this run holding the wrong project's lock.
 #
-# Trade-off, stated plainly: this serializes deploys FROM THIS DIRECTORY. Two separate checkouts
-# deploying the same compose project would not serialize against each other. That is the accepted
-# limit of a lock that requires no root-provisioned shared directory; a box running two checkouts
-# of one project is already misconfigured in a way this script cannot detect.
+# Opened with >> rather than >: truncation serves no purpose (nothing reads the contents) and a
+# lock file is not worth a destructive open. Held for the entire run - the fd stays open until the
+# process exits by any path, including a failed gate or a Ctrl-C, so no trap is needed.
 if ! command -v flock >/dev/null 2>&1; then
     echo "ERROR: flock is required to serialize deploys but was not found." >&2
     echo "  Install util-linux. Running without it risks two concurrent deploys" >&2
     echo "  removing each other's containers." >&2
     exit 1
 fi
-DEPLOY_LOCK_FILE=".deploy.lock"
+deploy_project=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.name // empty')
+if [ -z "$deploy_project" ]; then
+    echo "ERROR: could not read the compose project name from '$COMPOSE_FILE'." >&2
+    echo "  It identifies both the containers this deploy manages and the lock that keeps two" >&2
+    echo "  deploys from removing each other's. Refusing to continue without it." >&2
+    exit 1
+fi
+if [ -n "${DEPLOY_LOCK_FILE:-}" ]; then
+    case "$DEPLOY_LOCK_FILE" in
+        /*) ;;
+        *)  echo "ERROR: DEPLOY_LOCK_FILE must be an absolute path (got '$DEPLOY_LOCK_FILE')." >&2
+            echo "  A relative path would resolve per working directory, which is precisely the" >&2
+            echo "  scoping bug this setting exists to avoid." >&2
+            exit 1 ;;
+    esac
+else
+    if [ -z "${HOME:-}" ]; then
+        echo "ERROR: HOME is not set, so the default lock location cannot be derived." >&2
+        echo "  Set DEPLOY_LOCK_FILE to an absolute path shared by every deploy of this project." >&2
+        exit 1
+    fi
+    DEPLOY_LOCK_FILE="$HOME/.local/state/citadel-deploy/${deploy_project}.lock"
+fi
+if ! mkdir -p "$(dirname "$DEPLOY_LOCK_FILE")"; then
+    echo "ERROR: cannot create the lock directory '$(dirname "$DEPLOY_LOCK_FILE")'." >&2
+    exit 1
+fi
 exec 9>>"$DEPLOY_LOCK_FILE"
 if ! flock -n 9; then
-    echo "ERROR: another deploy is already running in this directory." >&2
-    echo "  Lock: $(pwd)/${DEPLOY_LOCK_FILE}" >&2
+    echo "ERROR: another deploy of project '${deploy_project}' is already running." >&2
+    echo "  Lock: ${DEPLOY_LOCK_FILE}" >&2
     echo "  Nothing was changed. Wait for it to finish, then re-run." >&2
     exit 1
 fi
@@ -219,6 +249,18 @@ if [ "$SKIP_PULL" = false ]; then
 else
     echo "[1/4] Skipping git pull (--no-pull)"
     echo ""
+fi
+
+# The lock is keyed on the project name read before the pull. If the pulled revision renames the
+# project, this run would hold one project's lock while restarting and removing another's
+# containers - so stop, rather than proceed under a guarantee that no longer applies. Re-running
+# picks up the new name and locks it correctly. Nothing has been mutated at this point.
+pulled_project=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.name // empty')
+if [ "$pulled_project" != "$deploy_project" ]; then
+    echo "ERROR: the pulled revision changes the compose project from '${deploy_project}' to '${pulled_project:-<unreadable>}'." >&2
+    echo "  This deploy holds the lock for '${deploy_project}', so it cannot safely act on" >&2
+    echo "  '${pulled_project}' containers. Nothing was changed - re-run to deploy under the new name." >&2
+    exit 1
 fi
 
 # Step 2: Pull prebuilt images from GHCR.
