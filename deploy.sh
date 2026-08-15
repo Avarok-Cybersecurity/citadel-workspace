@@ -235,13 +235,36 @@ canonical_usable=""
 # Fail closed on a canonical lock that exists but this account cannot use. Falling back to a
 # private lock there would be worse than refusing: this deploy would pull and restart the same
 # project unserialized while another account, holding the canonical lock, removed containers.
+# The file alone is not enough. `-f`/`-w` follow symlinks, and write permission on the PARENT
+# directory allows unlinking whatever is inside it whatever its own mode - so a group-writable
+# directory lets one account replace the lock while another holds it: two live inodes, both "the"
+# lock, both authorized. Check the surroundings, not just the file.
+canonical_surroundings_ok() {
+    local dir perm grp oth owner
+    dir=$(dirname "$CANONICAL_LOCK")
+    [ -L "$CANONICAL_LOCK" ] && { echo "  it is a symlink, not the provisioned file" >&2; return 1; }
+    owner=$(stat -c %u "$dir" 2>/dev/null) || { echo "  cannot stat $dir" >&2; return 1; }
+    [ "$owner" = "0" ] || { echo "  $dir is not root-owned (uid $owner)" >&2; return 1; }
+    perm=$(stat -c %a "$dir" 2>/dev/null) || return 1
+    perm=${perm: -3}
+    grp=${perm:1:1}; oth=${perm:2:1}
+    if [ $(( grp & 2 )) -ne 0 ] || [ $(( oth & 2 )) -ne 0 ]; then
+        echo "  $dir is writable by group or others (mode $perm), so the lock file can be replaced" >&2
+        return 1
+    fi
+    return 0
+}
+
 if [ -e "$CANONICAL_LOCK" ]; then
-    if [ -f "$CANONICAL_LOCK" ] && [ -w "$CANONICAL_LOCK" ]; then
+    if [ -f "$CANONICAL_LOCK" ] && [ -w "$CANONICAL_LOCK" ] && canonical_surroundings_ok; then
         canonical_usable=1
     else
         echo "ERROR: the canonical deploy lock exists but this account cannot use it:" >&2
         echo "    ${CANONICAL_LOCK}" >&2
-        echo "  It must be a regular file, group-writable by every deploy account:" >&2
+        echo "  It must be a regular file, group-writable by every deploy account, inside a" >&2
+        echo "  root-owned directory that is NOT group-writable (or the file could be replaced" >&2
+        echo "  while another deploy holds it):" >&2
+        echo "    sudo install -d -o root -g docker -m 2755 $(dirname "$CANONICAL_LOCK")" >&2
         echo "    sudo install -o root -g docker -m 0664 /dev/null '${CANONICAL_LOCK}'" >&2
         echo "  Refusing rather than falling back to a private lock, which would let this deploy" >&2
         echo "  restart services while another account's deploy is mid-flight." >&2
@@ -358,12 +381,15 @@ fi
 # The lock is keyed on the project name read before the pull. If the pulled revision renames the
 # project, this run would hold one project's lock while restarting and removing another's
 # containers - so stop, rather than proceed under a guarantee that no longer applies. Re-running
-# picks up the new name and locks it correctly. Nothing has been mutated at this point.
+# picks up the new name and locks it correctly. No images or containers have been touched at this
+# point; the CHECKOUT may have moved, since step 1's pull is what introduced the rename.
 pulled_project=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.name // empty')
 if [ "$pulled_project" != "$deploy_project" ]; then
     echo "ERROR: the pulled revision changes the compose project from '${deploy_project}' to '${pulled_project:-<unreadable>}'." >&2
     echo "  This deploy holds the lock for '${deploy_project}', so it cannot safely act on" >&2
-    echo "  '${pulled_project}' containers. Nothing was changed - re-run to deploy under the new name." >&2
+    echo "  '${pulled_project}' containers. No images or containers were changed, but the" >&2
+    echo "  checkout may already have been updated by step 1's git pull - re-run, and the deploy" >&2
+    echo "  will lock and act under the new project name." >&2
     exit 1
 fi
 
@@ -456,7 +482,7 @@ if [ -n "$blocked" ] && [ -z "$RECONCILE_AUTHORIZED" ]; then
     echo "  lock. Nothing has been changed." >&2
     echo "" >&2
     echo "  Provision the canonical lock once, as an administrator:" >&2
-    echo "    sudo install -d -o root -g docker -m 2775 /run/lock/citadel-deploy" >&2
+    echo "    sudo install -d -o root -g docker -m 2755 /run/lock/citadel-deploy" >&2
     echo "    sudo install -o root -g docker -m 0664 /dev/null '${CANONICAL_LOCK}'" >&2
     echo "  and re-run. Or stop those containers yourself first." >&2
     exit 1
