@@ -82,20 +82,39 @@ fi
 # reconciliation. $PREEXISTING lists the services a PREVIOUS deploy left containers for, so a test
 # can model "full stack already running" and assert what a slimmed redeploy does about it.
 if [ "${1:-}" = "ps" ]; then
-  svc=""; want_service_only=0
+  svc=""; proj=""; want_service_only=0
   for a in "$@"; do
     case "$a" in
+      *com.docker.compose.project=*) proj="${a##*=}" ;;
       *com.docker.compose.service=*) svc="${a##*=}" ;;
       *com.docker.compose.oneoff=False) want_service_only=1 ;;
     esac
   done
-  case " ${PREEXISTING:-} " in *" $svc "*) echo "cid-$svc" ;; esac
-  # A `docker compose run` container carries the same project+service labels and is only excluded
-  # by oneoff=False. Emitting it whenever that filter is ABSENT is what makes the test able to
-  # tell whether deploy.sh actually passes the filter.
-  if [ "$want_service_only" = "0" ]; then
-    case " ${PREEXISTING_ONEOFF:-} " in *" $svc "*) echo "cid-oneoff-$svc" ;; esac
-  fi
+  # This host also runs an UNRELATED compose project with the same service names - the normal case
+  # for a box hosting more than one stack. Which containers a query reveals therefore depends on
+  # whether it is scoped by project:
+  #
+  #   proj=stubproj -> only this deployment's containers
+  #   proj=""       -> the query was NOT scoped, so it sees the other project's containers too
+  #   anything else -> nothing here
+  #
+  # The middle case is the point. It is what lets the suite detect a regression that drops the
+  # project filter from a destructive `docker rm -f`, which in production would tear down another
+  # project's identically-named services. Without it the stub answers the same thing either way
+  # and the assertions pass with the safety scoping removed.
+  emit_for_project() { # <id-prefix>
+    case " ${PREEXISTING:-} " in *" $svc "*) echo "$1$svc" ;; esac
+    # A `docker compose run` container carries the same project+service labels and is excluded only
+    # by oneoff=False, so emit it whenever that filter is absent - same trick, different filter.
+    if [ "$want_service_only" = "0" ]; then
+      case " ${PREEXISTING_ONEOFF:-} " in *" $svc "*) echo "${1}oneoff-$svc" ;; esac
+    fi
+  }
+  case "$proj" in
+    stubproj) emit_for_project "cid-" ;;
+    "")       emit_for_project "cid-"; emit_for_project "cid-otherproj-" ;;
+    *)        : ;;
+  esac
   exit 0
 fi
 
@@ -256,7 +275,12 @@ fi
 if grep -qE '^rm -f .*cid-oneoff-' "$d/calls.txt"; then
   fail "reconciliation removed a 'docker compose run' one-off container: $(grep -E '^rm -f .*cid-oneoff-' "$d/calls.txt" | head -1)"
 fi
-echo "  slim-transition -> dropped ui and internal-service removed; server, cloudflared and one-off jobs untouched"; pass_count=$((pass_count+1))
+# Containers of an unrelated compose project on the same host share these service names. Removing
+# one would take down a different stack entirely, so the destructive query must be project-scoped.
+if grep -qE '^rm -f .*cid-otherproj-' "$d/calls.txt"; then
+  fail "reconciliation removed a container belonging to ANOTHER compose project: $(grep -E '^rm -f .*cid-otherproj-' "$d/calls.txt" | head -1)"
+fi
+echo "  slim-transition -> dropped ui and internal-service removed; server, cloudflared, one-off jobs and other projects untouched"; pass_count=$((pass_count+1))
 
 # --- a second deploy must not run while another holds the project lock -------
 # The reconciliation above can remove containers this deploy did not start, so two overlapping
