@@ -232,9 +232,6 @@ fi
 # only the ROOT moves and the filename stays derived from the project.
 CANONICAL_LOCK="${CITADEL_DEPLOY_LOCK_ROOT:-/run/lock/citadel-deploy}/${deploy_project}.lock"
 RECONCILE_AUTHORIZED=""
-if [ -w "$CANONICAL_LOCK" ] && [ -f "$CANONICAL_LOCK" ]; then
-    RECONCILE_AUTHORIZED=1
-fi
 
 if [ -n "${DEPLOY_LOCK_FILE:-}" ]; then
     DEPLOY_LOCK_FILE_EXPLICIT=1
@@ -253,16 +250,24 @@ else
     fi
     DEPLOY_LOCK_FILE="$HOME/.local/state/citadel-deploy/${deploy_project}.lock"
 fi
-# When the canonical lock exists it IS the lock, so that holding it and being authorized to remove
-# are the same fact rather than two things that can drift apart.
-if [ -n "$RECONCILE_AUTHORIZED" ] && [ -z "${DEPLOY_LOCK_FILE_EXPLICIT:-}" ]; then
+# When the canonical lock exists it IS the lock - even if DEPLOY_LOCK_FILE says otherwise, and
+# announced when it overrides. Authorization has to follow the inode actually held, not a file that
+# merely exists: granting it on existence while locking somewhere else lets one deploy hold the
+# canonical lock and another hold its own path, both believing they are serialized, and both
+# removing containers matched by the same project label. The canonical path is host policy and
+# strictly stronger than a private one, so it wins rather than erroring - but never silently.
+if [ -f "$CANONICAL_LOCK" ] && [ -w "$CANONICAL_LOCK" ]; then
+    if [ -n "${DEPLOY_LOCK_FILE_EXPLICIT:-}" ] && [ "$DEPLOY_LOCK_FILE" != "$CANONICAL_LOCK" ]; then
+        echo "  NOTE: DEPLOY_LOCK_FILE=${DEPLOY_LOCK_FILE} is overridden by the canonical lock" >&2
+        echo "    ${CANONICAL_LOCK} - every deploy of this project must contend on one inode." >&2
+    fi
     DEPLOY_LOCK_FILE="$CANONICAL_LOCK"
 fi
 if ! mkdir -p "$(dirname "$DEPLOY_LOCK_FILE")"; then
     echo "ERROR: cannot create the lock directory '$(dirname "$DEPLOY_LOCK_FILE")'." >&2
     exit 1
 fi
-if [ -n "$RECONCILE_AUTHORIZED" ] && [ "$DEPLOY_LOCK_FILE" = "$CANONICAL_LOCK" ]; then
+if [ "$DEPLOY_LOCK_FILE" = "$CANONICAL_LOCK" ]; then
     echo "  Deploy lock: ${DEPLOY_LOCK_FILE} (canonical - every deploy of this project contends here)"
 elif [ -n "${DEPLOY_LOCK_FILE_EXPLICIT:-}" ]; then
     echo "  Deploy lock: ${DEPLOY_LOCK_FILE} (serializes accounts configured with this same path)"
@@ -305,6 +310,14 @@ if ! flock -w "$DEPLOY_LOCK_TIMEOUT" 9; then
         echo "  Nothing was changed. Waited ${DEPLOY_LOCK_TIMEOUT}s and it is still held." >&2
     fi
     exit 1
+fi
+
+# ONLY NOW is reconciliation authorized, and only because the lock just acquired IS the canonical
+# one. Tying it to the acquisition rather than to the file's existence is the whole guarantee:
+# every deploy that may remove containers is holding the same inode, so no two can be doing it at
+# once.
+if [ "$DEPLOY_LOCK_FILE" = "$CANONICAL_LOCK" ]; then
+    RECONCILE_AUTHORIZED=1
 fi
 
 # Step 1: Pull latest code
@@ -681,7 +694,9 @@ while read -r svc; do
         --filter "label=com.docker.compose.project=${compose_project}" \
         --filter "label=com.docker.compose.service=${svc}" \
         --filter "label=com.docker.compose.oneoff=False" 2>/dev/null); then
-        echo "  WARNING: could not list ${svc} containers; skipping its cleanup." >&2
+        echo "  WARNING: could not list ${svc} containers, so whether one is still running is" >&2
+        echo "    unknown - the requested topology cannot be confirmed." >&2
+        reconcile_failed=1
         continue
     fi
     [ -n "$stale" ] || continue
