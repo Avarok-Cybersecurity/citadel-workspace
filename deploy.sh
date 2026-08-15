@@ -427,6 +427,57 @@ if [[ "$TUNNEL_PROFILE_ACTIVE" == "true" ]]; then
     echo "  Cloudflared is up."
 fi
 
+# Reconcile services this deployment DROPPED.
+#
+# `docker compose up` does not remove containers for services the file no longer declares. It
+# prints "Found orphan containers ... you can run this command with the --remove-orphans flag"
+# and leaves them running - verified directly against docker: redeploying a two-service project
+# with a one-service file left the dropped container up.
+#
+# That matters because of what the restart guards above changed. Redeploying an existing full
+# stack with a server-only compose file used to fail loudly at `up -d --no-deps ui` ("no such
+# service: ui"). Now that the restart is guarded, the same deploy reports success - while the old
+# ui keeps serving a stale image on :8080 and the old internal-service keeps running. Guarding
+# the restart without reconciling would just convert a loud half-applied deploy into a silent
+# one, which is worse.
+#
+# Removal is targeted by compose label rather than `--remove-orphans`. That flag removes
+# everything in the project the file does not declare, and which containers those are depends on
+# the compose version's treatment of profile-gated services - it can include `cloudflared` when
+# --tunnel was not passed, taking the tunnel down as a side effect of a routine server deploy.
+# This loop only ever considers the services deploy.sh itself manages, and only those the
+# current selection excludes, so cloudflared is never a candidate.
+#
+# It runs AFTER the selected services are up and healthy: if anything above failed we exited
+# already, leaving the previous stack untouched. Nothing is torn down until its replacement is
+# confirmed running.
+#
+# Named data volumes are unaffected - `docker rm -f` removes the container, never the volume.
+if ! deployable_all=$(./scripts/select-deploy-services.sh --deployable); then
+    exit 1
+fi
+compose_project=$(printf '%s' "$compose_json" | jq -r '.name // empty')
+if [ -z "$compose_project" ]; then
+    echo "ERROR: could not determine the compose project name; refusing to guess which" >&2
+    echo "  containers belong to this deployment." >&2
+    exit 1
+fi
+while read -r svc; do
+    [ -n "$svc" ] || continue
+    if in_deployment "$svc"; then
+        continue
+    fi
+    stale=$(docker ps -aq \
+        --filter "label=com.docker.compose.project=${compose_project}" \
+        --filter "label=com.docker.compose.service=${svc}")
+    if [ -n "$stale" ]; then
+        echo "  Removing ${svc}: no longer declared in '${COMPOSE_FILE}', but left running by a previous deploy."
+        # Unquoted on purpose - there may be several ids, and they are hex with no whitespace.
+        # shellcheck disable=SC2086
+        docker rm -f $stale
+    fi
+done <<<"$deployable_all"
+
 echo ""
 
 # Step 4: Verify

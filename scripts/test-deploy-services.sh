@@ -58,7 +58,7 @@ if [ "${1:-}" = "compose" ]; then
         awk '/^services:/{f=1;next} f&&/^[a-z]/{exit} f&&/^  [a-zA-Z0-9_-]+:/{gsub(/[ :]/,"");print}' "$file"
       else
         # `config --format json` - emit just what deploy.sh reads: .services[x].image
-        printf '{"services":{'
+        printf '{"name":"stubproj","services":{'
         first=1
         for s in $(awk '/^services:/{f=1;next} f&&/^[a-z]/{exit} f&&/^  [a-zA-Z0-9_-]+:/{gsub(/[ :]/,"");print}' "$file"); do
           [ $first -eq 0 ] && printf ','
@@ -75,6 +75,18 @@ if [ "${1:-}" = "compose" ]; then
     pull|up|logs|down) : ;;
     *) : ;;
   esac
+  exit 0
+fi
+
+# `docker ps -aq --filter label=...project=X --filter label=...service=Y` - deploy.sh's orphan
+# reconciliation. $PREEXISTING lists the services a PREVIOUS deploy left containers for, so a test
+# can model "full stack already running" and assert what a slimmed redeploy does about it.
+if [ "${1:-}" = "ps" ]; then
+  svc=""
+  for a in "$@"; do
+    case "$a" in *com.docker.compose.service=*) svc="${a##*=}" ;; esac
+  done
+  case " ${PREEXISTING:-} " in *" $svc "*) echo "cid-$svc" ;; esac
   exit 0
 fi
 
@@ -114,6 +126,7 @@ run_deploy() { # <name> <service>...
   # deploy.sh requires a .env with a real master password.
   printf 'WORKSPACE_MASTER_PASSWORD=test-password-not-a-placeholder\n' > "$dir/.env"
   export CALLS="$dir/calls.txt"
+  export PREEXISTING="${PREEXISTING:-}"
   : > "$CALLS"
   # --no-pull skips step 1 (git pull); the fixture dir is deliberately not a git repo, and the
   # git step is not what is under test here.
@@ -154,6 +167,20 @@ assert_restarted() { # <dir> <service>...
   [ "$got" = "$*" ] || fail "restarts were [$got], expected [$*] (see $dir/out.txt)"
 }
 
+assert_removed() { # <dir> <service>...
+  local dir="$1"; shift
+  local got
+  got=$(grep -oE '^rm -f cid-[a-z-]+' "$dir/calls.txt" 2>/dev/null | sed 's/^rm -f cid-//' | sort | tr '\n' ' ' | sed 's/ $//' || true)
+  local want; want=$(printf '%s\n' "$@" | sort | tr '\n' ' ' | sed 's/ $//')
+  [ "$got" = "$want" ] || fail "removed [$got], expected [$want] (see $dir/out.txt)"
+}
+
+assert_removed_nothing() { # <dir>
+  if grep -qE '^rm -f ' "$1/calls.txt"; then
+    fail "deploy.sh removed a container in a clean environment: $(grep -E '^rm -f ' "$1/calls.txt")"
+  fi
+}
+
 assert_never_mentions() { # <dir> <service>
   if grep -qE "up -d --no-deps $2\b" "$1/calls.txt"; then
     fail "deploy.sh tried to restart '$2', which this compose file does not declare - that is the half-applied deploy this guard exists to prevent"
@@ -173,6 +200,7 @@ echo "  full        -> pulled and restarted all three"; pass_count=$((pass_count
 # --- server only: the documented slimmed deployment --------------------------
 d=$(run_deploy server-only server)
 assert_succeeded "$d"
+assert_removed_nothing "$d"
 assert_pulled "$d" "server"
 assert_restarted "$d" server
 assert_never_mentions "$d" ui
@@ -194,6 +222,23 @@ assert_pulled "$d" "server internal-service"
 assert_restarted "$d" server internal-service
 assert_never_mentions "$d" ui
 echo "  server-is   -> never touched ui"; pass_count=$((pass_count+1))
+
+# --- slimming an EXISTING full stack down to server-only ---------------------
+# The case the orphan reconciliation exists for, and the one a clean-environment test cannot see:
+# `docker compose up` leaves containers for undeclared services running and merely warns. Without
+# reconciliation this deploy reports success while the old ui still serves a stale image on :8080.
+d=$(PREEXISTING="server internal-service ui" run_deploy slim-transition server)
+assert_succeeded "$d"
+assert_pulled "$d" "server"
+assert_restarted "$d" server
+# server stays: it IS this deployment. Only the dropped two are removed.
+assert_removed "$d" internal-service ui
+assert_never_mentions "$d" ui
+assert_never_mentions "$d" internal-service
+if grep -qE '^rm -f cid-cloudflared' "$d/calls.txt"; then
+  fail "reconciliation removed the profile-gated cloudflared - that is the --remove-orphans pitfall this targeted removal exists to avoid"
+fi
+echo "  slim-transition -> dropped ui and internal-service containers removed; server kept, cloudflared untouched"; pass_count=$((pass_count+1))
 
 # --- no server: must abort BEFORE restarting anything ------------------------
 d=$(run_deploy no-server ui)
