@@ -173,26 +173,39 @@ fi
 # The lock is held for the entire run: the fd stays open until the script exits, by any path,
 # including a failed gate or a Ctrl-C. No trap needed - the kernel releases it with the process.
 #
-# Keyed on the compose PROJECT, not this directory, because the project is what the containers
-# actually belong to; two checkouts deploying the same project must still serialize.
-deploy_project=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.name // empty')
-if [ -z "$deploy_project" ]; then
-    echo "ERROR: could not read the compose project name from '$COMPOSE_FILE'." >&2
-    echo "  Refusing to deploy without it: it is the key this deploy locks on, and an" >&2
-    echo "  unserialized deploy can remove containers another one just started." >&2
-    exit 1
-fi
+# The lock file lives in the DEPLOYMENT DIRECTORY, beside the compose file, and its name does not
+# depend on the project or the environment. Both properties are load-bearing:
+#
+#   * not ${TMPDIR:-/tmp} - TMPDIR differs between an interactive shell, cron, and a systemd unit
+#     with PrivateTmp, so an environment-derived path means two deploys lock different inodes and
+#     both proceed. A lock that a caller's environment can route around is not a lock. (/run/lock
+#     is the conventional home, but it is root-owned mode 755; a non-root deploy account cannot
+#     create files there without provisioning this script has no business doing.)
+#   * not keyed on the compose project - the project name is only known after `git pull`, which may
+#     itself change it. Keying the lock on a value the locked region can alter means holding the
+#     OLD project's lock while operating on the NEW project's containers.
+#
+# Opened with >> rather than > because truncation serves no purpose here (nothing reads the
+# contents) and a lock file is not worth a destructive open.
+#
+# Held for the entire run: the fd stays open until the script exits by any path, including a
+# failed gate or a Ctrl-C. No trap needed - the kernel releases it with the process.
+#
+# Trade-off, stated plainly: this serializes deploys FROM THIS DIRECTORY. Two separate checkouts
+# deploying the same compose project would not serialize against each other. That is the accepted
+# limit of a lock that requires no root-provisioned shared directory; a box running two checkouts
+# of one project is already misconfigured in a way this script cannot detect.
 if ! command -v flock >/dev/null 2>&1; then
     echo "ERROR: flock is required to serialize deploys but was not found." >&2
     echo "  Install util-linux. Running without it risks two concurrent deploys" >&2
     echo "  removing each other's containers." >&2
     exit 1
 fi
-DEPLOY_LOCK_FILE="${TMPDIR:-/tmp}/citadel-deploy-${deploy_project}.lock"
-exec 9>"$DEPLOY_LOCK_FILE"
+DEPLOY_LOCK_FILE=".deploy.lock"
+exec 9>>"$DEPLOY_LOCK_FILE"
 if ! flock -n 9; then
-    echo "ERROR: another deploy of project '${deploy_project}' is already running." >&2
-    echo "  Lock: ${DEPLOY_LOCK_FILE}" >&2
+    echo "ERROR: another deploy is already running in this directory." >&2
+    echo "  Lock: $(pwd)/${DEPLOY_LOCK_FILE}" >&2
     echo "  Nothing was changed. Wait for it to finish, then re-run." >&2
     exit 1
 fi
@@ -505,9 +518,14 @@ while read -r svc; do
     if in_deployment "$svc"; then
         continue
     fi
+    # oneoff=False excludes `docker compose run` containers, which carry the SAME project and
+    # service labels as the real ones (verified). Without it, slimming a deployment force-removes
+    # a migration or debugging job someone is running against the dropped service - a workload
+    # this script never started and has no business killing.
     stale=$(docker ps -aq \
         --filter "label=com.docker.compose.project=${compose_project}" \
-        --filter "label=com.docker.compose.service=${svc}")
+        --filter "label=com.docker.compose.service=${svc}" \
+        --filter "label=com.docker.compose.oneoff=False")
     if [ -n "$stale" ]; then
         echo "  Removing ${svc}: no longer declared in '${COMPOSE_FILE}', but left running by a previous deploy."
         # Unquoted on purpose - there may be several ids, and they are hex with no whitespace.

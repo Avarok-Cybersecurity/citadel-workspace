@@ -32,3 +32,5 @@ target
 .playwright-mcp/
 .pr-reviews/
 screenshots/*
+# Deploy serialization lock (see deploy.sh)
+.deploy.lock
