@@ -25,15 +25,17 @@ set -euo pipefail
 # deploy.sh's canonical lock lives at a CONSTANT path under /run/lock, which is root-owned - and
 # that constancy is the guarantee, so it is not made configurable just to be testable. To exercise
 # the authorized path without root, re-run inside a user+mount namespace with a writable bind mount
-# over /run/lock. Falls through to sudo, and then to skipping those cases loudly.
-if [ -z "${CITADEL_TEST_NS:-}" ] && [ ! -w /run/lock ] && ! sudo -n true 2>/dev/null; then
-    if command -v unshare >/dev/null 2>&1; then
+# over /run/lock, and skips those cases loudly when that is not available.
+# ALWAYS in a private namespace, never on the host's /run/lock - not even with sudo. That path is
+# real synchronization state: another deploy could be holding it right now, and truncating or
+# unlinking it would leave live deploys unserialized. A bind mount over it gives this run its own
+# empty one, so nothing here can touch the host's.
+if [ -z "${CITADEL_TEST_NS:-}" ]; then
+    if command -v unshare >/dev/null 2>&1 && unshare -r -m true 2>/dev/null; then
         _fake=$(mktemp -d)
-        if unshare -r -m true 2>/dev/null; then
-            export CITADEL_TEST_NS=1
-            exec unshare -r -m bash -c "mount --bind '$_fake' /run/lock && exec '$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")'"
-        fi
-        rmdir "$_fake" 2>/dev/null || true
+        export CITADEL_TEST_NS=1
+        _self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+        exec unshare -r -m bash -c "mount --bind '$_fake' /run/lock && exec '$_self'"
     fi
 fi
 
@@ -263,6 +265,29 @@ assert_never_mentions() { # <dir> <service>
   fi
 }
 
+# The recipe an operator follows is the one printed at the moment they are blocked, so it must not
+# disagree with the documentation. A group-writable lock directory lets the inode be replaced while
+# another deploy holds it, which defeats the single-inode guarantee entirely.
+#
+# The mode is parsed and tested arithmetically rather than glob-matched: a pattern has to know
+# whether the mode has three digits or four to find the group field, and getting that wrong reads
+# the setgid bit as a permission (2755 "looks" group-writable to a naive 3-digit pattern).
+check_dir_modes() { # <file>
+  local line mode perm grp
+  while IFS= read -r line; do
+    case "$line" in *install*-d*-m\ *) ;; *) continue ;; esac
+    mode=${line#*-m }; mode=${mode%% *}
+    case "$mode" in ''|*[!0-7]*) continue ;; esac
+    perm=${mode: -3}                 # drop any setuid/setgid/sticky digit
+    grp=${perm:1:1}
+    if [ $(( grp & 2 )) -ne 0 ]; then
+      fail "$(basename "$1") hands out a group-writable lock directory (mode $mode): $line"
+    fi
+  done < "$1"
+}
+check_dir_modes "$REPO_ROOT/deploy.sh"
+check_dir_modes "$REPO_ROOT/.env.example"
+
 echo "== deploy.sh service-selection integration test =="
 make_stub
 
@@ -275,28 +300,31 @@ CANONICAL_DIR=/run/lock/citadel-deploy
 CANONICAL_LOCK="$CANONICAL_DIR/stubproj.lock"
 CAN_PROVISION=""
 skipped=0
-if [ -w "$CANONICAL_DIR" ] 2>/dev/null || mkdir -p "$CANONICAL_DIR" 2>/dev/null; then
-  CAN_PROVISION=1
-elif sudo -n true 2>/dev/null; then
-  CAN_PROVISION=sudo
+# Only inside the private namespace, and only after proving the directory is really writable -
+# `mkdir -p` returns 0 for an existing directory this account cannot write to, so its status is
+# not an access check. Anything pre-existing here means the bind mount did not happen, so refuse
+# rather than operate on whatever is really there.
+if [ -n "${CITADEL_TEST_NS:-}" ]; then
+  if [ -e "$CANONICAL_DIR" ]; then
+    fail "$CANONICAL_DIR already exists inside the private namespace - refusing to touch it"
+  fi
+  if mkdir -p "$CANONICAL_DIR" 2>/dev/null && chmod 2755 "$CANONICAL_DIR" 2>/dev/null \
+     && : > "$CANONICAL_DIR/.writable-probe" 2>/dev/null; then
+    rm -f "$CANONICAL_DIR/.writable-probe"
+    CAN_PROVISION=1
+  fi
 fi
 
 provision_canonical() {
-  if [ "$CAN_PROVISION" = "sudo" ]; then
-    sudo -n install -d -m 2755 "$CANONICAL_DIR"
-    sudo -n install -g "$(id -gn)" -m 0664 /dev/null "$CANONICAL_LOCK"
-  else
-    mkdir -p "$CANONICAL_DIR"
-    : > "$CANONICAL_LOCK"; chmod 0664 "$CANONICAL_LOCK"
-  fi
+  : > "$CANONICAL_LOCK"
+  chmod 0664 "$CANONICAL_LOCK"
 }
 unprovision_canonical() {
   [ -n "$CAN_PROVISION" ] || return 0
-  if [ "$CAN_PROVISION" = "sudo" ]; then sudo -n rm -f "$CANONICAL_LOCK" 2>/dev/null || true
-  else rm -f "$CANONICAL_LOCK" 2>/dev/null || true; fi
+  rm -f "$CANONICAL_LOCK" 2>/dev/null || true
 }
 skip_unprovisioned() { # <case name>
-  echo "  SKIPPED: $1 - needs the canonical lock at $CANONICAL_LOCK, which requires root to provision"
+  echo "  SKIPPED: $1 - needs a private mount namespace to provision $CANONICAL_LOCK safely"
   skipped=$((skipped+1))
 }
 trap 'unprovision_canonical; rm -rf "$WORK"' EXIT
@@ -513,6 +541,26 @@ else
   skip_unprovisioned "canonical-unusable"
 fi
 
+# --- a replaceable canonical lock must not authorize anything ----------------
+# Write permission on the directory allows unlinking the file inside it whatever its own mode, so
+# a group-writable directory lets one account swap the inode while another holds it - two live
+# locks, both "the" lock, both authorized. The file itself looks perfect here; only its
+# surroundings are wrong.
+if [ -n "$CAN_PROVISION" ]; then
+  provision_canonical
+  chmod 2775 "$CANONICAL_DIR"
+  d=$(PREEXISTING="server internal-service ui" run_deploy replaceable-lock server)
+  chmod 2755 "$CANONICAL_DIR"
+  unprovision_canonical
+  assert_failed "$d"
+  assert_removed_nothing "$d"
+  grep -q "writable by group or others" "$d/out.txt" \
+    || fail "a replaceable canonical lock was accepted; output was: $(tail -6 "$d/out.txt")"
+  echo "  replaceable-lock -> refused a canonical lock whose directory allows swapping it"; pass_count=$((pass_count+1))
+else
+  skip_unprovisioned "replaceable-lock"
+fi
+
 # --- a deploy from ANOTHER checkout of the same project must be refused ------
 # The reconciliation above removes containers selected by the compose PROJECT label, whose scope
 # spans every checkout on the host - so a directory-scoped lock would leave the destructive race
@@ -585,8 +633,9 @@ grep -qi "no 'server' service" "$d/out.txt" \
 echo "  no-server   -> exited nonzero before any restart, with a clear reason"; pass_count=$((pass_count+1))
 
 if [ "$skipped" -gt 0 ]; then
-  echo "== $pass_count assertions passed, $skipped SKIPPED (needed root to provision $CANONICAL_LOCK) =="
-  echo "   The skipped cases cover authorization for container removal; CI runs them with sudo."
+  echo "== $pass_count assertions passed, $skipped SKIPPED (no private mount namespace available) =="
+  echo "   The skipped cases cover authorization for container removal - the host's $CANONICAL_LOCK"
+  echo "   is never used for them, because another deploy may be holding it."
 else
   echo "== all $pass_count deploy-selection assertions passed =="
 fi
