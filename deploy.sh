@@ -173,24 +173,31 @@ fi
 # The lock is held for the entire run: the fd stays open until the script exits, by any path,
 # including a failed gate or a Ctrl-C. No trap needed - the kernel releases it with the process.
 #
-# Serialize on the COMPOSE PROJECT, host-wide - because that is the scope of the state this
-# script mutates. The reconciliation below force-removes containers selected by the
+# Serialize on the COMPOSE PROJECT - because that is the scope of the state this script mutates. The reconciliation below force-removes containers selected by the
 # com.docker.compose.project label, which spans every checkout on the box, so a lock narrower than
 # the project leaves the destructive race open exactly where the damage is worst: a slim deploy
 # from one directory removing the ui/internal-service containers another deploy just started and
 # health-checked. Release-directory and worktree deployments make two checkouts of one project a
 # normal operating pattern, not a misconfiguration.
 #
-# Where the file lives, in order of preference:
+# Where the file lives, and exactly what each choice guarantees:
 #
-#   * $DEPLOY_LOCK_FILE if set - an absolute path the operator provisions, for hosts that want the
-#     conventional /run/lock/... location. Validated, because it is opened for writing.
-#   * otherwise $HOME/.local/state/citadel-deploy/<project>.lock - stable per deploy ACCOUNT rather
-#     than per directory, so two checkouts run by the same account do serialize, and present under
-#     cron as well as an interactive shell. NOT ${TMPDIR:-/tmp}: TMPDIR varies between cron, an
-#     interactive shell and a PrivateTmp unit, so deploys would lock different inodes and both
-#     proceed. /run/lock would be conventional but is root-owned mode 755 - a non-root deploy
-#     account cannot create there, which is what $DEPLOY_LOCK_FILE is for.
+#   * $DEPLOY_LOCK_FILE if set - an absolute path, validated because it is opened for writing.
+#     This is the ONLY way to get serialization across multiple deploy ACCOUNTS, and it requires
+#     provisioning: an administrator creates e.g. /run/lock/citadel-deploy/<project>.lock owned by
+#     a group every deploy account belongs to, mode 664. Read from .env like every other setting,
+#     so it can be committed to the deployment's environment rather than remembered.
+#   * otherwise $HOME/.local/state/citadel-deploy/<project>.lock - covers every deploy made by THIS
+#     ACCOUNT, including from different checkouts, and works under cron as well as an interactive
+#     shell. NOT ${TMPDIR:-/tmp}: TMPDIR varies between cron, an interactive shell and a
+#     PrivateTmp unit, so deploys would lock different inodes and both proceed.
+#
+# The default deliberately does NOT claim to serialize across accounts, and no default can: a lock
+# file one account creates is mode 644, so a second account cannot even open it for append
+# (verified) - a shared lock is only possible with a group-writable file somebody provisions, which
+# this script has no business creating. Rather than imply a guarantee it cannot keep, the default
+# path and its scope are printed on every run, so two operators on one host can see at a glance
+# that they hold different locks. Set DEPLOY_LOCK_FILE to close that gap.
 #
 # The project name is read BEFORE the pull so the lock covers the whole run, and re-read after it
 # (below) so a pulled revision that renames the project fails loudly instead of silently leaving
@@ -213,6 +220,7 @@ if [ -z "$deploy_project" ]; then
     exit 1
 fi
 if [ -n "${DEPLOY_LOCK_FILE:-}" ]; then
+    DEPLOY_LOCK_FILE_EXPLICIT=1
     case "$DEPLOY_LOCK_FILE" in
         /*) ;;
         *)  echo "ERROR: DEPLOY_LOCK_FILE must be an absolute path (got '$DEPLOY_LOCK_FILE')." >&2
@@ -231,6 +239,11 @@ fi
 if ! mkdir -p "$(dirname "$DEPLOY_LOCK_FILE")"; then
     echo "ERROR: cannot create the lock directory '$(dirname "$DEPLOY_LOCK_FILE")'." >&2
     exit 1
+fi
+if [ -n "${DEPLOY_LOCK_FILE_EXPLICIT:-}" ]; then
+    echo "  Deploy lock: ${DEPLOY_LOCK_FILE} (shared - serializes every account using this path)"
+else
+    echo "  Deploy lock: ${DEPLOY_LOCK_FILE} (this account only; set DEPLOY_LOCK_FILE to a shared, group-writable path to serialize across accounts)"
 fi
 exec 9>>"$DEPLOY_LOCK_FILE"
 if ! flock -n 9; then
