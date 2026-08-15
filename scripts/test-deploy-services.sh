@@ -164,7 +164,7 @@ run_deploy() { # <name> <service>...
   # HOME drives the default lock location, so point it at the fixture tree: the suite must never
   # touch the real one, and this also exercises the default path derivation rather than bypassing
   # it with DEPLOY_LOCK_FILE.
-  export HOME="$WORK/home"
+  export HOME="${HOME_OVERRIDE:-$WORK/home}"
   export CALLS="$dir/calls.txt"
   export CFGCOUNT="$dir/cfgcount.txt"
   export PREEXISTING="${PREEXISTING:-}"
@@ -318,6 +318,27 @@ for verb in 'pull ' 'up -d' 'rm -f'; do
   fi
 done
 echo "  locked-out  -> a different checkout of the same project was refused; pulled, restarted and removed nothing"; pass_count=$((pass_count+1))
+exec 8>&-
+
+# --- a shared DEPLOY_LOCK_FILE serializes across ACCOUNTS --------------------
+# The per-account default cannot cover two accounts deploying one project: the lock file the first
+# creates is mode 644, so the second cannot open it for append. A group-writable path every account
+# points at is the supported way to close that, so pin that it actually works - different HOME,
+# same DEPLOY_LOCK_FILE, second run refused before touching anything.
+shared_lock="$WORK/shared-deploy.lock"
+exec 8>>"$shared_lock"
+flock -n 8 || fail "could not acquire $shared_lock to set up the cross-account test"
+d=$(HOME_OVERRIDE="$WORK/other-account" DEPLOY_LOCK_FILE="$shared_lock" run_deploy other-account server)
+exec 8>&-
+assert_failed "$d"
+grep -qi "another deploy" "$d/out.txt" \
+  || fail "a deploy blocked by the shared lock did not say why; output was: $(head -3 "$d/out.txt")"
+for verb in 'pull ' 'up -d' 'rm -f'; do
+  if grep -qF "$verb" "$d/calls.txt"; then
+    fail "a deploy blocked by the shared lock still ran '$verb': $(grep -F "$verb" "$d/calls.txt" | head -1)"
+  fi
+done
+echo "  other-acct  -> a different account sharing DEPLOY_LOCK_FILE was refused; mutated nothing"; pass_count=$((pass_count+1))
 
 # --- a pulled revision that renames the project must abort -------------------
 # The lock is keyed on the project name read before the pull. If the pull renames the project, the
