@@ -110,12 +110,16 @@ if [ "${1:-}" = "ps" ]; then
   # project filter from a destructive `docker rm -f`, which in production would tear down another
   # project's identically-named services. Without it the stub answers the same thing either way
   # and the assertions pass with the safety scoping removed.
+  # A removed container must stop being listed, otherwise deploy.sh's confirm-it-is-gone re-query
+  # can never succeed and the test could not tell a real failure from a working removal.
+  # $RM_NOOP makes `rm` a no-op instead, to exercise the "still present afterwards" path.
+  gone() { [ -f "$REMOVED" ] && grep -qx "$1" "$REMOVED"; }
   emit_for_project() { # <id-prefix>
-    case " ${PREEXISTING:-} " in *" $svc "*) echo "$1$svc" ;; esac
+    case " ${PREEXISTING:-} " in *" $svc "*) gone "$1$svc" || echo "$1$svc" ;; esac
     # A `docker compose run` container carries the same project+service labels and is excluded only
     # by oneoff=False, so emit it whenever that filter is absent - same trick, different filter.
     if [ "$want_service_only" = "0" ]; then
-      case " ${PREEXISTING_ONEOFF:-} " in *" $svc "*) echo "${1}oneoff-$svc" ;; esac
+      case " ${PREEXISTING_ONEOFF:-} " in *" $svc "*) gone "${1}oneoff-$svc" || echo "${1}oneoff-$svc" ;; esac
     fi
   }
   case "$proj" in
@@ -123,6 +127,13 @@ if [ "${1:-}" = "ps" ]; then
     "")       emit_for_project "cid-"; emit_for_project "cid-otherproj-" ;;
     *)        : ;;
   esac
+  exit 0
+fi
+
+if [ "${1:-}" = "rm" ]; then
+  if [ -z "${RM_NOOP:-}" ]; then
+    shift; for a in "$@"; do case "$a" in -*) ;; *) echo "$a" >> "$REMOVED" ;; esac; done
+  fi
   exit 0
 fi
 
@@ -165,8 +176,13 @@ run_deploy() { # <name> <service>...
   # touch the real one, and this also exercises the default path derivation rather than bypassing
   # it with DEPLOY_LOCK_FILE.
   export HOME="${HOME_OVERRIDE:-$WORK/home}"
+  # The canonical lock root is host policy; point it at the fixture tree so a case can decide
+  # whether this deployment is authorized to remove containers by provisioning the file or not.
+  export CITADEL_DEPLOY_LOCK_ROOT="${LOCK_ROOT_OVERRIDE:-$WORK/canonical}"
   export CALLS="$dir/calls.txt"
   export CFGCOUNT="$dir/cfgcount.txt"
+  export REMOVED="$dir/removed.txt"
+  export RM_NOOP="${RM_NOOP:-}"
   export PREEXISTING="${PREEXISTING:-}"
   export PREEXISTING_ONEOFF="${PREEXISTING_ONEOFF:-}"
   : > "$CALLS"
@@ -235,6 +251,11 @@ assert_never_mentions() { # <dir> <service>
 echo "== deploy.sh service-selection integration test =="
 make_stub
 
+# Stand in for the administrator having provisioned the canonical lock: with it present, deploys
+# of this project all contend on one inode and are authorized to retire dropped services. The
+# slim-unlocked case points the root elsewhere to exercise the un-provisioned host.
+mkdir -p "$WORK/canonical" && : > "$WORK/canonical/stubproj.lock"
+
 # --- full stack -------------------------------------------------------------
 d=$(run_deploy full server internal-service ui)
 assert_succeeded "$d"
@@ -275,7 +296,7 @@ echo "  server-is   -> never touched ui"; pass_count=$((pass_count+1))
 # cloudflared is in PREEXISTING on purpose: the stub can then hand back cid-cloudflared if the
 # reconciliation ever queries it, which is what makes the "never touches the tunnel" assertion
 # below able to FAIL. Without it that assertion passes no matter what the code does.
-d=$(PREEXISTING="server internal-service ui cloudflared" PREEXISTING_ONEOFF="ui" DEPLOY_LOCK_FILE="$WORK/slim.lock" run_deploy slim-transition server)
+d=$(PREEXISTING="server internal-service ui cloudflared" PREEXISTING_ONEOFF="ui" run_deploy slim-transition server)
 assert_succeeded "$d"
 assert_pulled "$d" "server"
 assert_restarted "$d" server
@@ -304,14 +325,46 @@ echo "  slim-transition -> dropped ui and internal-service removed; server, clou
 # one the deploy must still succeed and must still tell the operator what is stale - silently
 # leaving a dropped service serving traffic is the bug this reconciliation exists to fix, and
 # silently removing it is the race the lock exists to prevent.
-d=$(PREEXISTING="server internal-service ui" run_deploy slim-unlocked server)
-assert_succeeded "$d"
+d=$(PREEXISTING="server internal-service ui" LOCK_ROOT_OVERRIDE="$WORK/no-canonical" run_deploy slim-unlocked server)
+assert_failed "$d"
 assert_removed_nothing "$d"
-grep -q "NOT removing" "$d/out.txt" \
-  || fail "an unserialized deploy silently ignored stale containers; output was: $(tail -5 "$d/out.txt")"
-grep -q "docker rm -f cid-ui" "$d/out.txt" \
-  || fail "the warning did not tell the operator how to remove the stale container; output was: $(tail -5 "$d/out.txt")"
-echo "  slim-unlocked -> reported stale containers with the removal command, removed nothing"; pass_count=$((pass_count+1))
+for verb in 'pull ' 'up -d'; do
+  if grep -qF "$verb" "$d/calls.txt"; then
+    fail "an unauthorized slim deploy ran '$verb' before refusing - it must refuse before mutating anything: $(grep -F "$verb" "$d/calls.txt" | head -1)"
+  fi
+done
+grep -q "no longer declares" "$d/out.txt" \
+  || fail "the refusal did not name the dropped services; output was: $(tail -6 "$d/out.txt")"
+grep -q "install -o root -g docker" "$d/out.txt" \
+  || fail "the refusal did not say how to authorize cleanup; output was: $(tail -6 "$d/out.txt")"
+echo "  slim-unlocked -> refused before pulling or restarting, and said how to authorize cleanup"; pass_count=$((pass_count+1))
+
+# --- an explicit lock path must NOT authorize removal ------------------------
+# Supplying an absolute DEPLOY_LOCK_FILE proves a path was chosen, not that every deployment of
+# this project chose the SAME one - two accounts can each set a different valid path, hold two
+# different locks at once, and then remove containers matched by the shared project label. Only
+# the canonical path establishes that, so removal must stay refused here.
+d=$(PREEXISTING="server internal-service ui" LOCK_ROOT_OVERRIDE="$WORK/no-canonical" \
+    DEPLOY_LOCK_FILE="$WORK/an-explicit-but-private.lock" run_deploy explicit-not-canonical server)
+assert_failed "$d"
+assert_removed_nothing "$d"
+grep -q "no longer declares" "$d/out.txt" \
+  || fail "an explicit-but-non-canonical lock authorized removal; output was: $(tail -6 "$d/out.txt")"
+echo "  explicit-lock -> a private lock path did not authorize removal"; pass_count=$((pass_count+1))
+
+# --- removal that does not take effect must fail the deploy ------------------
+# The requested topology is "ui is gone". If it is still there afterwards, exiting 0 would let
+# automation record the slim topology as live while the old ui keeps serving - so the run fails,
+# after the services that did deploy are up.
+d=$(PREEXISTING="server internal-service ui" RM_NOOP=1 run_deploy rm-noop server)
+assert_failed "$d"
+grep -q "still present after removal" "$d/out.txt" \
+  || fail "a removal that did not take effect was not detected; output was: $(tail -6 "$d/out.txt")"
+grep -q "does not match" "$d/out.txt" \
+  || fail "the deploy did not report the topology mismatch; output was: $(tail -6 "$d/out.txt")"
+grep -q "up -d --no-deps server" "$d/calls.txt" \
+  || fail "the failure should come AFTER the deployable services are up, not instead of it"
+echo "  rm-noop     -> failed the run when a dropped service survived removal, after deploying the rest"; pass_count=$((pass_count+1))
 
 # --- a deploy from ANOTHER checkout of the same project must be refused ------
 # The reconciliation above removes containers selected by the compose PROJECT label, whose scope
@@ -319,8 +372,7 @@ echo "  slim-unlocked -> reported stale containers with the removal command, rem
 # open exactly where it does the most damage. This holds the project lock as a deploy running from
 # some other directory would, then deploys from a different directory entirely, and asserts the
 # second run is refused having mutated NOTHING.
-lock_file="$WORK/home/.local/state/citadel-deploy/stubproj.lock"
-mkdir -p "$(dirname "$lock_file")"
+lock_file="$WORK/canonical/stubproj.lock"
 exec 8>>"$lock_file"
 flock -n 8 || fail "could not acquire $lock_file to set up the concurrency test"
 # TMPDIR is deliberately bogus: a lock a caller's environment can relocate is one two deploys can
