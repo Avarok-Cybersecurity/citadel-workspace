@@ -219,6 +219,23 @@ if [ -z "$deploy_project" ]; then
     echo "  deploys from removing each other's. Refusing to continue without it." >&2
     exit 1
 fi
+# The CANONICAL host-wide lock. Its path is fixed, not configurable, and that is the whole point:
+# a path an operator chooses cannot prove that every other deployment of this project chose the
+# same one, so "an absolute path was supplied" is not evidence of serialization. A constant is.
+# Provisioned once by an administrator (see .env.example); if it is present and writable, every
+# deploy of this project on this host contends on the same inode, and only then is it safe to
+# remove containers matched by the project label - which is why this, not DEPLOY_LOCK_FILE, is
+# what authorizes reconciliation.
+# The root is relocatable for hosts without /run/lock, and it is what the test suite points at -
+# but it is HOST policy, not a per-deploy choice: the guarantee is that every deploy of a project
+# lands on one inode, so a host that overrides this must override it for all of them. That is why
+# only the ROOT moves and the filename stays derived from the project.
+CANONICAL_LOCK="${CITADEL_DEPLOY_LOCK_ROOT:-/run/lock/citadel-deploy}/${deploy_project}.lock"
+RECONCILE_AUTHORIZED=""
+if [ -w "$CANONICAL_LOCK" ] && [ -f "$CANONICAL_LOCK" ]; then
+    RECONCILE_AUTHORIZED=1
+fi
+
 if [ -n "${DEPLOY_LOCK_FILE:-}" ]; then
     DEPLOY_LOCK_FILE_EXPLICIT=1
     case "$DEPLOY_LOCK_FILE" in
@@ -236,14 +253,21 @@ else
     fi
     DEPLOY_LOCK_FILE="$HOME/.local/state/citadel-deploy/${deploy_project}.lock"
 fi
+# When the canonical lock exists it IS the lock, so that holding it and being authorized to remove
+# are the same fact rather than two things that can drift apart.
+if [ -n "$RECONCILE_AUTHORIZED" ] && [ -z "${DEPLOY_LOCK_FILE_EXPLICIT:-}" ]; then
+    DEPLOY_LOCK_FILE="$CANONICAL_LOCK"
+fi
 if ! mkdir -p "$(dirname "$DEPLOY_LOCK_FILE")"; then
     echo "ERROR: cannot create the lock directory '$(dirname "$DEPLOY_LOCK_FILE")'." >&2
     exit 1
 fi
-if [ -n "${DEPLOY_LOCK_FILE_EXPLICIT:-}" ]; then
-    echo "  Deploy lock: ${DEPLOY_LOCK_FILE} (shared - serializes every account using this path)"
+if [ -n "$RECONCILE_AUTHORIZED" ] && [ "$DEPLOY_LOCK_FILE" = "$CANONICAL_LOCK" ]; then
+    echo "  Deploy lock: ${DEPLOY_LOCK_FILE} (canonical - every deploy of this project contends here)"
+elif [ -n "${DEPLOY_LOCK_FILE_EXPLICIT:-}" ]; then
+    echo "  Deploy lock: ${DEPLOY_LOCK_FILE} (serializes accounts configured with this same path)"
 else
-    echo "  Deploy lock: ${DEPLOY_LOCK_FILE} (this account only; set DEPLOY_LOCK_FILE to a shared, group-writable path to serialize across accounts)"
+    echo "  Deploy lock: ${DEPLOY_LOCK_FILE} (this account only)"
 fi
 # Opened in a subshell first: a failed `exec` redirection makes a non-interactive shell exit
 # outright, so the most likely provisioning mistake - a shared lock file another account created
@@ -357,6 +381,49 @@ if [ "${#DEPLOY_SERVICES[@]}" -eq 0 ] || [ -z "${DEPLOY_SERVICES[0]}" ]; then
     exit 1
 fi
 echo "  Services in this deployment: ${DEPLOY_SERVICES[*]}"
+
+# PREFLIGHT: refuse a deploy we could not finish.
+#
+# If this compose file drops a service that still has a container running, the deploy is only
+# complete once that container is gone - otherwise a slimmed deployment leaves, say, the old ui
+# still serving :8080 while automation keyed on the exit status records the new topology as
+# applied. That is the silent half-applied deploy this script exists to prevent, so it is checked
+# BEFORE anything is pulled or restarted: refusing here leaves the running stack untouched, where
+# refusing at the end would report a failure on a deploy that had already changed production.
+if ! deployable_all=$(./scripts/select-deploy-services.sh --deployable); then
+    exit 1
+fi
+preflight_project=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.name // empty')
+blocked=""
+while read -r svc; do
+    [ -n "$svc" ] || continue
+    printf '%s\n' "${DEPLOY_SERVICES[@]}" | grep -qx "$svc" && continue
+    if ! found=$(docker ps -aq \
+        --filter "label=com.docker.compose.project=${preflight_project}" \
+        --filter "label=com.docker.compose.service=${svc}" \
+        --filter "label=com.docker.compose.oneoff=False" 2>/dev/null); then
+        echo "ERROR: cannot list containers for the dropped service '${svc}'." >&2
+        echo "  Refusing to deploy: this run could not finish the job it was asked to do, and" >&2
+        echo "  nothing has been changed yet." >&2
+        exit 1
+    fi
+    [ -n "$found" ] || continue
+    blocked="${blocked}${svc} "
+done <<<"$deployable_all"
+
+if [ -n "$blocked" ] && [ -z "$RECONCILE_AUTHORIZED" ]; then
+    echo "ERROR: '${COMPOSE_FILE}' no longer declares: ${blocked% }" >&2
+    echo "  Containers for those services are still running, and this deploy is not authorized to" >&2
+    echo "  remove them - removal matches containers by compose project, which spans every account" >&2
+    echo "  on this host, so it is only safe when every deploy of this project contends on one" >&2
+    echo "  lock. Nothing has been changed." >&2
+    echo "" >&2
+    echo "  Provision the canonical lock once, as an administrator:" >&2
+    echo "    sudo install -d -o root -g docker -m 2775 /run/lock/citadel-deploy" >&2
+    echo "    sudo install -o root -g docker -m 0664 /dev/null '${CANONICAL_LOCK}'" >&2
+    echo "  and re-run. Or stop those containers yourself first." >&2
+    exit 1
+fi
 
 # True if $1 is part of THIS deployment - i.e. in the set selected above.
 #
@@ -589,6 +656,7 @@ fi
 # confirmed running.
 #
 # Named data volumes are unaffected - `docker rm -f` removes the container, never the volume.
+reconcile_failed=""
 if ! deployable_all=$(./scripts/select-deploy-services.sh --deployable); then
     exit 1
 fi
@@ -619,37 +687,51 @@ while read -r svc; do
     [ -n "$stale" ] || continue
     stale_ids=$(printf '%s' "$stale" | tr '\n' ' ')
 
-    # FAIL CLOSED. Removal selects containers by compose project, which spans every account on this
-    # host, so it is only safe when deploys are serialized that widely. The default lock is
-    # per-account (see above), so without an explicitly configured shared lock this deploy cannot
-    # know another account is not mid-flight - and removing then could destroy services it just
-    # started and health-checked. Report instead of removing: the operator gets the container ids
-    # and both ways forward, so a slimmed deployment never silently leaves a stale service serving
-    # traffic OR silently races another deploy.
-    if [ -z "${DEPLOY_LOCK_FILE_EXPLICIT:-}" ]; then
-        echo "  WARNING: '${svc}' is no longer declared in '${COMPOSE_FILE}', but a container from a" >&2
-        echo "    previous deploy is still running: ${stale_ids}" >&2
-        echo "    NOT removing it. Removal matches containers by compose project across every account" >&2
-        echo "    on this host, and this deploy holds only a per-account lock, so another account's" >&2
-        echo "    deploy could be running right now." >&2
-        echo "    Either set DEPLOY_LOCK_FILE so deploys serialize host-wide (see .env.example) and" >&2
-        echo "    re-run, or remove it yourself once no other deploy is in flight:" >&2
-        echo "      docker rm -f ${stale_ids}" >&2
+    # Authorized by the CANONICAL lock only - see its definition. Reaching here unauthorized
+    # should be impossible, because the preflight refuses such a deploy before anything is pulled
+    # or restarted. Kept as a belt-and-braces refusal rather than removing anyway, because the
+    # cost of being wrong here is destroying another deployment's containers.
+    if [ -z "$RECONCILE_AUTHORIZED" ]; then
+        echo "  WARNING: '${svc}' is no longer declared but a container is still running:" >&2
+        echo "    ${stale_ids}" >&2
+        echo "    Not removing it - this deploy is not authorized to (see the preflight message)." >&2
+        reconcile_failed=1
         continue
     fi
 
     echo "  Removing ${svc}: no longer declared in '${COMPOSE_FILE}', but left running by a previous deploy."
     # Unquoted on purpose - there may be several ids, and they are hex with no whitespace.
-    # A container can vanish between the ps and the rm - a window this loop itself opens - and the
-    # deploy is complete by now, so a failure here is a warning, not a failed deployment.
+    #
+    # The rm's own exit status is deliberately ignored: a container can vanish between the ps and
+    # the rm - a window this loop itself opens - and that is the DESIRED end state, not a failure.
+    # What matters is whether the container is gone, so the re-query below decides, not the rm.
     # shellcheck disable=SC2086
-    if ! docker rm -f $stale; then
-        echo "  WARNING: could not remove stale ${svc} container(s): ${stale_ids}" >&2
-        echo "    The deploy itself completed. Remove them manually if they are still present." >&2
+    docker rm -f $stale >/dev/null 2>&1 || true
+    if ! remaining=$(docker ps -aq \
+        --filter "label=com.docker.compose.project=${compose_project}" \
+        --filter "label=com.docker.compose.service=${svc}" \
+        --filter "label=com.docker.compose.oneoff=False" 2>/dev/null); then
+        echo "  WARNING: could not confirm '${svc}' was removed." >&2
+        reconcile_failed=1
+    elif [ -n "$remaining" ]; then
+        echo "  ERROR: '${svc}' container(s) still present after removal: $(printf '%s' "$remaining" | tr '\n' ' ')" >&2
+        reconcile_failed=1
     fi
 done <<<"$deployable_all"
 
 echo ""
+
+# A deploy that could not retire the services it was asked to drop has NOT applied the requested
+# topology - the old service is still serving. Exiting 0 there would let automation keyed on the
+# status record the slim topology as live while the fat one keeps running, which is the silent
+# half-applied deploy this reconciliation exists to prevent. Reported after the restarts, so the
+# services that DID deploy are up, but the run still fails.
+if [ -n "$reconcile_failed" ]; then
+    echo "" >&2
+    echo "ERROR: the deployed services are up, but stale containers for dropped services could" >&2
+    echo "  not be retired (see above). The running topology does not match '${COMPOSE_FILE}'." >&2
+    exit 1
+fi
 
 # Step 4: Verify
 echo "[4/4] Verifying deployment..."
