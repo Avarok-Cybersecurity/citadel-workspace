@@ -117,8 +117,26 @@ run_deploy() { # <name> <service>...
   : > "$CALLS"
   # --no-pull skips step 1 (git pull); the fixture dir is deliberately not a git repo, and the
   # git step is not what is under test here.
-  ( cd "$dir" && PATH="$WORK/bin:$PATH" bash ./deploy.sh --no-pull >"$dir/out.txt" 2>&1 ) || true
+  #
+  # The status is RECORDED rather than discarded. Asserting only on the recorded docker calls
+  # would let a deploy that makes every expected call and then dies in a later step pass the
+  # whole suite - "it called the right things" is not the same claim as "it completed", and this
+  # test exists to make the second one.
+  local status=0
+  ( cd "$dir" && PATH="$WORK/bin:$PATH" bash ./deploy.sh --no-pull >"$dir/out.txt" 2>&1 ) || status=$?
+  echo "$status" > "$dir/status.txt"
   echo "$dir"
+}
+
+assert_succeeded() { # <dir>
+  local got; got=$(cat "$1/status.txt")
+  [ "$got" = "0" ] || fail "deploy.sh exited $got, expected 0. Output:
+$(cat "$1/out.txt")"
+}
+
+assert_failed() { # <dir>
+  local got; got=$(cat "$1/status.txt")
+  [ "$got" != "0" ] || fail "deploy.sh exited 0 on a compose file it must reject (see $1/out.txt)"
 }
 
 assert_pulled() { # <dir> <expected space-separated>
@@ -147,20 +165,23 @@ make_stub
 
 # --- full stack -------------------------------------------------------------
 d=$(run_deploy full server internal-service ui)
+assert_succeeded "$d"
 assert_pulled "$d" "server internal-service ui"
 assert_restarted "$d" server internal-service ui
 echo "  full        -> pulled and restarted all three"; pass_count=$((pass_count+1))
 
 # --- server only: the documented slimmed deployment --------------------------
 d=$(run_deploy server-only server)
+assert_succeeded "$d"
 assert_pulled "$d" "server"
 assert_restarted "$d" server
 assert_never_mentions "$d" ui
 assert_never_mentions "$d" internal-service
-echo "  server-only -> pulled/restarted server only; never touched ui or internal-service"; pass_count=$((pass_count+1))
+echo "  server-only -> completed; pulled/restarted server only, never touched ui or internal-service"; pass_count=$((pass_count+1))
 
 # --- server + ui ------------------------------------------------------------
 d=$(run_deploy server-ui server ui)
+assert_succeeded "$d"
 assert_pulled "$d" "server ui"
 assert_restarted "$d" server ui
 assert_never_mentions "$d" internal-service
@@ -168,6 +189,7 @@ echo "  server-ui   -> never touched internal-service"; pass_count=$((pass_count
 
 # --- server + internal-service ----------------------------------------------
 d=$(run_deploy server-is server internal-service)
+assert_succeeded "$d"
 assert_pulled "$d" "server internal-service"
 assert_restarted "$d" server internal-service
 assert_never_mentions "$d" ui
@@ -175,11 +197,12 @@ echo "  server-is   -> never touched ui"; pass_count=$((pass_count+1))
 
 # --- no server: must abort BEFORE restarting anything ------------------------
 d=$(run_deploy no-server ui)
+assert_failed "$d"
 if grep -qE 'up -d' "$d/calls.txt"; then
   fail "a compose file with no 'server' service still reached the restart phase; it must abort first"
 fi
 grep -qi "no 'server' service" "$d/out.txt" \
   || fail "no-server case did not report why it aborted; output was: $(head -3 "$d/out.txt")"
-echo "  no-server   -> aborted before any restart, with a clear reason"; pass_count=$((pass_count+1))
+echo "  no-server   -> exited nonzero before any restart, with a clear reason"; pass_count=$((pass_count+1))
 
 echo "== all $pass_count deploy-selection assertions passed =="
