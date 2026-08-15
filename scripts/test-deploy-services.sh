@@ -272,7 +272,10 @@ echo "  server-is   -> never touched ui"; pass_count=$((pass_count+1))
 # The case the orphan reconciliation exists for, and the one a clean-environment test cannot see:
 # `docker compose up` leaves containers for undeclared services running and merely warns. Without
 # reconciliation this deploy reports success while the old ui still serves a stale image on :8080.
-d=$(PREEXISTING="server internal-service ui" PREEXISTING_ONEOFF="ui" run_deploy slim-transition server)
+# cloudflared is in PREEXISTING on purpose: the stub can then hand back cid-cloudflared if the
+# reconciliation ever queries it, which is what makes the "never touches the tunnel" assertion
+# below able to FAIL. Without it that assertion passes no matter what the code does.
+d=$(PREEXISTING="server internal-service ui cloudflared" PREEXISTING_ONEOFF="ui" DEPLOY_LOCK_FILE="$WORK/slim.lock" run_deploy slim-transition server)
 assert_succeeded "$d"
 assert_pulled "$d" "server"
 assert_restarted "$d" server
@@ -294,6 +297,21 @@ if grep -qE '^rm -f .*cid-otherproj-' "$d/calls.txt"; then
   fail "reconciliation removed a container belonging to ANOTHER compose project: $(grep -E '^rm -f .*cid-otherproj-' "$d/calls.txt" | head -1)"
 fi
 echo "  slim-transition -> dropped ui and internal-service removed; server, cloudflared, one-off jobs and other projects untouched"; pass_count=$((pass_count+1))
+
+# --- slimming WITHOUT a host-wide lock must report, not remove ---------------
+# Removal matches containers by compose project, which spans every account on the host, so it only
+# runs when an explicit shared DEPLOY_LOCK_FILE says deploys are serialized that widely. Without
+# one the deploy must still succeed and must still tell the operator what is stale - silently
+# leaving a dropped service serving traffic is the bug this reconciliation exists to fix, and
+# silently removing it is the race the lock exists to prevent.
+d=$(PREEXISTING="server internal-service ui" run_deploy slim-unlocked server)
+assert_succeeded "$d"
+assert_removed_nothing "$d"
+grep -q "NOT removing" "$d/out.txt" \
+  || fail "an unserialized deploy silently ignored stale containers; output was: $(tail -5 "$d/out.txt")"
+grep -q "docker rm -f cid-ui" "$d/out.txt" \
+  || fail "the warning did not tell the operator how to remove the stale container; output was: $(tail -5 "$d/out.txt")"
+echo "  slim-unlocked -> reported stale containers with the removal command, removed nothing"; pass_count=$((pass_count+1))
 
 # --- a deploy from ANOTHER checkout of the same project must be refused ------
 # The reconciliation above removes containers selected by the compose PROJECT label, whose scope
