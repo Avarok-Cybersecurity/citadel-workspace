@@ -468,6 +468,13 @@ jobs:
           # PyYAML is declared rather than inherited from the runner image: a runner change would
           # otherwise turn this deterministic gate into an opaque ModuleNotFoundError.
           python3 -c 'import yaml' 2>/dev/null || pip install --quiet pyyaml
+          # Fixtures are written into the CHECKOUT, not /tmp. `docker compose -f <file>` takes the
+          # file's directory as the project directory, so a fixture in /tmp resolves `env_file:`
+          # paths and ${VAR} references against /tmp instead of the repo root - the test could then
+          # fail, or silently resolve a variable to empty, for reasons having nothing to do with
+          # service selection, and it would not match how deploy.sh invokes the same command.
+          trap 'rm -f fx-*.yml' EXIT
+
           # Build fixtures from the real production compose so this tracks the actual file.
           # Dangling depends_on entries must be stripped or compose rejects the project.
           python3 - <<'PYEOF'
@@ -490,12 +497,12 @@ jobs:
                       kept = [x for x in dep if x in keep]
                       cfg['depends_on'] = kept
                       if not kept: cfg.pop('depends_on')
-              pathlib.Path(f'/tmp/fx-{name}.yml').write_text(yaml.safe_dump(d))
+              pathlib.Path(f'fx-{name}.yml').write_text(yaml.safe_dump(d))
           PYEOF
 
           check() {  # <fixture> <expected space-separated services>
             local got
-            got=$(./scripts/select-deploy-services.sh "/tmp/fx-$1.yml" | tr '\n' ' ' | sed 's/ $//')
+            got=$(./scripts/select-deploy-services.sh "fx-$1.yml" | tr '\n' ' ' | sed 's/ $//')
             if [ "$got" != "$2" ]; then
               echo "::error::selection for '$1' was [$got], expected [$2]. A wrong set here means a half-applied deploy."
               exit 1
@@ -509,18 +516,49 @@ jobs:
 
           # A compose file with no server must ABORT, not return an empty set - "nothing to
           # deploy" reported as a successful no-op deploy is the worst possible outcome.
-          if ./scripts/select-deploy-services.sh /tmp/fx-no-server.yml >/dev/null 2>&1; then
+          if ./scripts/select-deploy-services.sh fx-no-server.yml >/dev/null 2>&1; then
             echo "::error::a compose file with no 'server' service was accepted; it must abort."
             exit 1
           fi
           echo "  no-server -> correctly aborts"
 
           # An unreadable file must fail loudly rather than yield an empty selection.
-          if ./scripts/select-deploy-services.sh /tmp/definitely-absent.yml >/dev/null 2>&1; then
+          if ./scripts/select-deploy-services.sh fx-definitely-absent.yml >/dev/null 2>&1; then
             echo "::error::a missing compose file was accepted; it must abort."
             exit 1
           fi
           echo "  missing file -> correctly aborts"
+
+          # DRIFT GUARD: every deployable service the production compose declares must appear in
+          # the selection. The selector filters against a hardcoded DEPLOYABLE list, so a service
+          # added to docker-compose.production.yml but not to that list would be silently dropped
+          # from pull, revision-check and restart - the selector's own documented "too few ->
+          # silently skipped while the run still reports success" failure, and the direction the
+          # shape checks above cannot see.
+          #
+          # This runs against the REAL compose file, not fx-full.yml: the fixture builder keeps a
+          # hardcoded ['server','internal-service','ui'], so it would strip a newly added service
+          # before the assertion ever saw it and this guard would pass while the drift shipped.
+          #
+          # cloudflared is excluded deliberately - it is profile-gated and handled by deploy.sh's
+          # TUNNEL_PROFILE_ACTIVE branch rather than by this selection.
+          # Both sides are captured into variables rather than compared as `diff <(a) <(b)`.
+          # Process substitution discards the child's exit status, so if `docker compose config`
+          # failed, both sides would be EMPTY and diff would report no difference - a guard that
+          # passes precisely when it cannot see anything. Assigning first means `set -e` aborts on
+          # a failed read, and the emptiness check below makes a vacuous pass impossible.
+          declared=$(docker compose -f docker-compose.production.yml config --services | grep -vx cloudflared | sort)
+          selected=$(./scripts/select-deploy-services.sh docker-compose.production.yml | sort)
+          if [ -z "$declared" ] || [ -z "$selected" ]; then
+            echo "::error::could not read services from docker-compose.production.yml; the drift guard cannot run and must not pass silently."
+            exit 1
+          fi
+          if [ "$declared" != "$selected" ]; then
+            echo "::error::docker-compose.production.yml declares a deployable service the selector does not return. Add it to DEPLOYABLE in scripts/select-deploy-services.sh, or it will be silently skipped by pull, revision-check and restart."
+            diff <(printf '%s\n' "$declared") <(printf '%s\n' "$selected") || true
+            exit 1
+          fi
+          echo "  production compose -> no service missing from the selection"
 
       - name: THREE images are all checked, not just the first two
         # deploy.sh now passes three images (server, internal-service, ui). The script iterates
