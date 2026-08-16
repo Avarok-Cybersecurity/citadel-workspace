@@ -256,7 +256,18 @@ while read -r svc; do
     printf '%s\n' "${DEPLOY_SERVICES[@]}" | grep -qx "$svc" && continue
     # oneoff=False excludes `docker compose run` containers, which carry the same project and
     # service labels: a migration or debugging job is not a stale service.
-    if ! found=$(docker ps -aq \
+    #
+    # `ps -q`, NOT `ps -aq`. The refusal is about services that are still SERVING - an exited or
+    # never-started container for a dropped service answers no requests and holds no ports, so
+    # refusing over one would block the documented slim deploy on any host that still has leftovers
+    # from an old topology, and tell the operator to force-remove something already inert. `-q`
+    # covers exactly the states that can serve: running, paused (still holds its ports) and
+    # restarting (crash-looping, comes back). It leaves out `created`, `exited` and `dead`.
+    #
+    # Nor does an exited container come back on its own: under `restart: always` the daemon
+    # restarts it immediately, so it would be seen as running or restarting, and `unless-stopped`
+    # only stays exited when an operator stopped it deliberately.
+    if ! found=$(docker ps -q \
         --filter "label=com.docker.compose.project=${preflight_project}" \
         --filter "label=com.docker.compose.service=${svc}" \
         --filter "label=com.docker.compose.oneoff=False" 2>/dev/null); then
