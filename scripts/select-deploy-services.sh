@@ -31,16 +31,29 @@
 # "nothing to deploy" should never be reported as a successful no-op deploy.
 #
 # Usage:  select-deploy-services.sh <compose-file>
+#         select-deploy-services.sh --deployable
 # Exit 0: prints one service per line.  Exit 1: no server service, message on stderr.
 
 set -euo pipefail
-
-COMPOSE_FILE="${1:?usage: select-deploy-services.sh <compose-file>}"
 
 # The services this project knows how to deploy, in restart order. `cloudflared` is
 # deliberately absent: it is profile-gated and handled separately by deploy.sh's
 # TUNNEL_PROFILE_ACTIVE branch, not by this selection.
 DEPLOYABLE=(server internal-service ui)
+
+# `--deployable` prints that full list without consulting any compose file.
+#
+# deploy.sh needs it to spot the services a slimmed deployment DROPPED, which by definition are
+# the ones the compose file no longer mentions - so they cannot be derived from the file, and the
+# set has to come from somewhere. It comes from here, for the same reason the selection does: two
+# hand-maintained lists of "the services we deploy" drift, and the direction they drift in is a
+# service nobody pulls, verifies, restarts, or notices is stale.
+if [ "${1:-}" = "--deployable" ]; then
+    printf '%s\n' "${DEPLOYABLE[@]}"
+    exit 0
+fi
+
+COMPOSE_FILE="${1:?usage: select-deploy-services.sh <compose-file> | --deployable}"
 
 declared=$(docker compose -f "$COMPOSE_FILE" config --services)
 

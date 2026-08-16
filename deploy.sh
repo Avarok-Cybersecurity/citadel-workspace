@@ -222,6 +222,70 @@ if [ "${#DEPLOY_SERVICES[@]}" -eq 0 ] || [ -z "${DEPLOY_SERVICES[0]}" ]; then
 fi
 echo "  Services in this deployment: ${DEPLOY_SERVICES[*]}"
 
+# A service this compose file DROPS, whose container is still running, has to be dealt with before
+# the deploy can honestly claim to have applied it.
+#
+# `docker compose up` does not remove containers for services the file no longer declares - it
+# warns about "orphan containers" and leaves them running (verified). Guarding the restart above
+# without noticing that would turn one failure into a worse one: before this change a slimmed
+# deploy died at `up -d --no-deps ui` with "no such service", loudly; now it would succeed while
+# the old ui kept serving stale code on :8080, silently. A silent half-applied deploy is the one
+# outcome this script's ordering exists to prevent.
+#
+# So it REFUSES, here, before anything is pulled or restarted - the running stack is left exactly
+# as it was - and prints the command to clear the leftovers.
+#
+# Deliberately not `docker rm -f` on the operator's behalf. Removal would have to match containers
+# by the com.docker.compose.project label, which spans every checkout and account on the daemon,
+# so doing it safely needs a lock proving no other deploy is mid-flight - a large mechanism, and a
+# destructive one, for a transition that happens rarely and takes one command by hand. Reporting
+# is race-free by construction: the worst case is a stale container this deploy did not remove,
+# which is exactly where master already is.
+if ! deployable_all=$(./scripts/select-deploy-services.sh --deployable); then
+    exit 1
+fi
+preflight_project=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.name // empty')
+if [ -z "$preflight_project" ]; then
+    echo "ERROR: could not read the compose project name from '$COMPOSE_FILE'." >&2
+    exit 1
+fi
+
+stale_report=""
+while read -r svc; do
+    [ -n "$svc" ] || continue
+    printf '%s\n' "${DEPLOY_SERVICES[@]}" | grep -qx "$svc" && continue
+    # oneoff=False excludes `docker compose run` containers, which carry the same project and
+    # service labels: a migration or debugging job is not a stale service.
+    if ! found=$(docker ps -aq \
+        --filter "label=com.docker.compose.project=${preflight_project}" \
+        --filter "label=com.docker.compose.service=${svc}" \
+        --filter "label=com.docker.compose.oneoff=False" 2>/dev/null); then
+        echo "ERROR: cannot list containers for the dropped service '${svc}'." >&2
+        echo "  Refusing to deploy rather than guess; nothing has been changed." >&2
+        exit 1
+    fi
+    [ -n "$found" ] && stale_report="${stale_report}${svc}|$(printf '%s' "$found" | tr '\n' ' ')"$'\n'
+done <<<"$deployable_all"
+
+if [ -n "$stale_report" ]; then
+    echo "ERROR: '${COMPOSE_FILE}' no longer declares these services, but they are still running:" >&2
+    while IFS='|' read -r svc ids; do
+        [ -n "$svc" ] || continue
+        echo "    ${svc}: ${ids}" >&2
+    done <<<"$stale_report"
+    echo "" >&2
+    echo "  Deploying now would restart the services this file DOES declare while those kept" >&2
+    echo "  serving their old images - a deployment that matches neither the old topology nor the" >&2
+    echo "  new one. Nothing has been changed." >&2
+    echo "" >&2
+    echo "  Remove them, then re-run:" >&2
+    while IFS='|' read -r svc ids; do
+        [ -n "$ids" ] || continue
+        echo "    docker rm -f ${ids% }" >&2
+    done <<<"$stale_report"
+    exit 1
+fi
+
 # True if $1 is part of THIS deployment - i.e. in the set selected above.
 #
 # Named for what it tests, deliberately. It is NOT an independent "does the compose file
