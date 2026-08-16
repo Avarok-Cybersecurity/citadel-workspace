@@ -96,6 +96,16 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 1
 fi
 
+# flock serializes deploys of the same compose project (see the lock below). Checked here rather
+# than tolerated, because a deploy that silently skipped the lock would silently reintroduce the
+# interleaving the lock exists to stop - and there is nothing to weigh against that, since flock
+# ships with util-linux and is present on every Linux host this deploys to.
+if ! command -v flock >/dev/null 2>&1; then
+    echo "ERROR: 'flock' is required to serialize deploys. Install with:"
+    echo "  apt-get install util-linux   # Debian/Ubuntu"
+    exit 1
+fi
+
 # Load .env into the shell. Docker Compose already auto-reads .env, but the
 # wait_for_port probe below shell-expands ${INTERNAL_SERVICE_PORT} BEFORE it
 # hands off to docker compose, so an operator who customised the port would
@@ -249,6 +259,46 @@ fi
 preflight_project=$(docker compose -f "$COMPOSE_FILE" config --format json | jq -r '.name // empty')
 if [ -z "$preflight_project" ]; then
     echo "ERROR: could not read the compose project name from '$COMPOSE_FILE'." >&2
+    exit 1
+fi
+
+# Serialize deploys of this compose project, for the whole run.
+#
+# The check below is a point-in-time snapshot, and everything it protects happens afterwards. A
+# second deploy of the same project - typically the same operator from a different checkout, or a
+# rerun fired before the first finished - can start a `ui` container between the check and the
+# restarts, and this run would then report "Deploy complete" over a topology it never verified.
+#
+# The lock is taken BEFORE the check and held to the end of the script, so the snapshot stays true
+# for as long as anything depends on it. `exec 9>` keeps the descriptor open for the process
+# lifetime and the kernel drops the lock when the process exits, so there is no unlock path to get
+# wrong and no trap to misfire - and the file is deliberately never removed, since unlinking a lock
+# other deploys may already hold reintroduces the race it exists to close.
+#
+# Scoped to the account, under a directory it owns, so it needs no provisioning and cannot be
+# squatted in a shared world-writable directory. Two DIFFERENT accounts deploying the same project
+# therefore still will not serialize - but that only leaves them where this script already was, and
+# nothing here acts on the lock's authority: it gates no removal and no destructive step, so the
+# worst a missing or unshared lock costs is the missed refusal described above.
+#
+# Keyed off HOME alone, deliberately - NOT $XDG_RUNTIME_DIR. Two deploys serialize only if they
+# pick the same file, and XDG_RUNTIME_DIR is set inside a login session and absent from cron or a
+# bare ssh command, so honouring it would hand the same operator two different locks depending on
+# how the deploy was started, which is precisely when the two runs must contend.
+lock_dir="${HOME:?HOME must be set to locate the deploy lock}/.cache/citadel-deploy"
+if ! mkdir -p -m 700 "$lock_dir" 2>/dev/null; then
+    echo "ERROR: could not create the deploy lock directory '${lock_dir}'." >&2
+    exit 1
+fi
+lock_file="${lock_dir}/${preflight_project}.lock"
+if ! exec 9>"$lock_file"; then
+    echo "ERROR: could not open the deploy lock '${lock_file}'." >&2
+    exit 1
+fi
+if ! flock -n 9; then
+    echo "ERROR: another deploy of project '${preflight_project}' is already running." >&2
+    echo "  It holds ${lock_file}. Wait for it to finish, then re-run." >&2
+    echo "  Nothing has been changed." >&2
     exit 1
 fi
 

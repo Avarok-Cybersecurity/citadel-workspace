@@ -190,8 +190,16 @@ run_deploy() { # <name> <service>...
   # in the real user's runtime directory - otherwise the suite would contend with an actual deploy
   # on the same machine, and leave files behind outside its own workspace.
   local status=0
+  if [ -n "${HOLD_LOCK:-}" ]; then
+    # Model a deploy of the same project already in flight: hold its lock across the run. The
+    # second deploy must refuse instead of interleaving with the first.
+    mkdir -p "$dir/.cache/citadel-deploy"
+    exec 8>"$dir/.cache/citadel-deploy/stubproj.lock"
+    flock -n 8 || fail "test harness could not take the lock it is meant to hold"
+  fi
   ( cd "$dir" && HOME="$dir" PATH="$WORK/bin:$PATH" \
       bash ./deploy.sh --no-pull >"$dir/out.txt" 2>&1 ) || status=$?
+  [ -n "${HOLD_LOCK:-}" ] && exec 8>&-
   echo "$status" > "$dir/status.txt"
   echo "$dir"
 }
@@ -357,6 +365,33 @@ assert_failed "$d"
 grep -q "cannot inspect container" "$d/out.txt" \
   || fail "an uninspectable leftover did not stop the deploy; output was: $(tail -8 "$d/out.txt")"
 echo "  inspect-fails -> refused on a leftover it could not classify"; pass_count=$((pass_count+1))
+
+# --- a concurrent deploy of the same project: refuse -------------------------
+# The stale-service check is a point-in-time snapshot and everything it protects happens after it.
+# A second deploy of the same project can start a dropped service's container in that window,
+# leaving this run to report success over a topology it never verified. It must refuse to start
+# while another deploy holds the project lock, and must do so before touching anything.
+d=$(HOLD_LOCK=1 run_deploy concurrent server ui internal-service)
+assert_failed "$d"
+for verb in 'pull ' 'up -d'; do
+  grep -qF "$verb" "$d/calls.txt" && fail "a deploy that could not take the lock still ran '$verb'"
+done
+grep -q "another deploy of project" "$d/out.txt" \
+  || fail "the refusal did not say a concurrent deploy holds the lock; output was: $(tail -8 "$d/out.txt")"
+echo "  concurrent  -> refused while another deploy held the project lock"; pass_count=$((pass_count+1))
+
+# --- the lock must not outlive the deploy that took it -----------------------
+# Same fixture, so the same HOME and the same lock file, run twice in a row. The kernel drops the
+# lock when the process exits and the file is deliberately left in place; if that ever became a
+# lock that had to be released explicitly - a trap, a stale marker, a lock directory - the second
+# run would refuse and every deploy after the first would be blocked until someone cleaned up.
+d=$(run_deploy lock-reuse server)
+assert_succeeded "$d"
+d=$(run_deploy lock-reuse server)
+assert_succeeded "$d"
+grep -q "another deploy of project" "$d/out.txt" \
+  && fail "the lock outlived the deploy that took it; the next run was refused"
+echo "  lock-reuse  -> a second sequential deploy took the same lock again"; pass_count=$((pass_count+1))
 
 # --- no server: must abort BEFORE restarting anything ------------------------
 d=$(run_deploy no-server ui)
