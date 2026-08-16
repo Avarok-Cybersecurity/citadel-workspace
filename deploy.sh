@@ -301,16 +301,23 @@ fi
 # restarts, and this run would then report "Deploy complete" over a topology it never verified.
 #
 # The lock is taken BEFORE the check and held to the end of the script, so the snapshot stays true
-# for as long as anything depends on it. `exec 9>` keeps the descriptor open for the process
-# lifetime and the kernel drops the lock when the process exits, so there is no unlock path to get
-# wrong and no trap to misfire - and the file is deliberately never removed, since unlinking a lock
-# other deploys may already hold reintroduces the race it exists to close.
+# for as long as anything depends on it - against every deploy that takes this same lock, which is
+# the precise limit of the guarantee; see the scoping note below for who that leaves out. `exec 9>`
+# keeps the descriptor open for the process lifetime and the kernel drops the lock when the process
+# exits, so there is no unlock path to get wrong and no trap to misfire - and the file is
+# deliberately never removed, since unlinking a lock other deploys may already hold reintroduces
+# the race it exists to close.
 #
 # Scoped to the account, under a directory it owns, so it needs no provisioning and cannot be
-# squatted in a shared world-writable directory. Two DIFFERENT accounts deploying the same project
-# therefore still will not serialize - but that only leaves them where this script already was, and
-# nothing here acts on the lock's authority: it gates no removal and no destructive step, so the
-# worst a missing or unshared lock costs is the missed refusal described above.
+# squatted in a shared world-writable directory. The cost is that the scope is narrower than the
+# thing being protected: containers and project labels live on the shared daemon, and the stale
+# check matches by project label across every account on it, so two accounts deploying the same
+# project take different lock files and do NOT serialize. Closing that needs a lock file both
+# accounts can open, which means an administrator provisioning it with ownership and permissions
+# that stop either account replacing it - a deployment-provisioning change, deliberately not made
+# here. What keeps it out of blocking territory is that nothing acts on this lock's authority: it
+# gates no removal and no destructive step, so an unshared lock costs the missed refusal described
+# above - exactly where this script already was - and never a destructive action.
 #
 # Keyed off HOME alone, deliberately - NOT $XDG_RUNTIME_DIR. Two deploys serialize only if they
 # pick the same file, and XDG_RUNTIME_DIR is set inside a login session and absent from cron or a
