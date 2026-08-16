@@ -58,7 +58,7 @@ if [ "${1:-}" = "compose" ]; then
         awk '/^services:/{f=1;next} f&&/^[a-z]/{exit} f&&/^  [a-zA-Z0-9_-]+:/{gsub(/[ :]/,"");print}' "$file"
       else
         # `config --format json` - emit just what deploy.sh reads: .services[x].image
-        printf '{"services":{'
+        printf '{"name":"stubproj","services":{'
         first=1
         for s in $(awk '/^services:/{f=1;next} f&&/^[a-z]/{exit} f&&/^  [a-zA-Z0-9_-]+:/{gsub(/[ :]/,"");print}' "$file"); do
           [ $first -eq 0 ] && printf ','
@@ -75,6 +75,26 @@ if [ "${1:-}" = "compose" ]; then
     pull|up|logs|down) : ;;
     *) : ;;
   esac
+  exit 0
+fi
+
+# `docker ps -aq --filter label=...project=X --filter label=...service=Y` - deploy.sh's check for
+# services this compose file dropped that are still running. $PREEXISTING lists the services a
+# PREVIOUS deploy left containers for, so a case can model "full stack already running" and assert
+# what a slimmed redeploy does about it. $PREEXISTING_ONEOFF models a `docker compose run` job,
+# which carries the same project+service labels and is excluded only by oneoff=False.
+if [ "${1:-}" = "ps" ]; then
+  svc=""; want_service_only=0
+  for a in "$@"; do
+    case "$a" in
+      *com.docker.compose.service=*) svc="${a##*=}" ;;
+      *com.docker.compose.oneoff=False) want_service_only=1 ;;
+    esac
+  done
+  case " ${PREEXISTING:-} " in *" $svc "*) echo "cid-$svc" ;; esac
+  if [ "$want_service_only" = "0" ]; then
+    case " ${PREEXISTING_ONEOFF:-} " in *" $svc "*) echo "cid-oneoff-$svc" ;; esac
+  fi
   exit 0
 fi
 
@@ -114,6 +134,8 @@ run_deploy() { # <name> <service>...
   # deploy.sh requires a .env with a real master password.
   printf 'WORKSPACE_MASTER_PASSWORD=test-password-not-a-placeholder\n' > "$dir/.env"
   export CALLS="$dir/calls.txt"
+  export PREEXISTING="${PREEXISTING:-}"
+  export PREEXISTING_ONEOFF="${PREEXISTING_ONEOFF:-}"
   : > "$CALLS"
   # --no-pull skips step 1 (git pull); the fixture dir is deliberately not a git repo, and the
   # git step is not what is under test here.
@@ -194,6 +216,38 @@ assert_pulled "$d" "server internal-service"
 assert_restarted "$d" server internal-service
 assert_never_mentions "$d" ui
 echo "  server-is   -> never touched ui"; pass_count=$((pass_count+1))
+
+# --- slimming an EXISTING full stack: refuse, do not half-apply --------------
+# `docker compose up` leaves containers for undeclared services running and merely warns, so
+# guarding the restart alone would turn a loud failure into a silent one: the deploy would succeed
+# while the old ui kept serving its previous image. The deploy must refuse BEFORE pulling or
+# restarting - leaving the running stack exactly as it was - and say how to clear the leftovers.
+d=$(PREEXISTING="server internal-service ui" PREEXISTING_ONEOFF="ui" run_deploy slim-transition server)
+assert_failed "$d"
+for verb in 'pull ' 'up -d'; do
+  if grep -qF "$verb" "$d/calls.txt"; then
+    fail "a deploy that cannot be completed still ran '$verb' - it must refuse before mutating anything: $(grep -F "$verb" "$d/calls.txt" | head -1)"
+  fi
+done
+grep -q "no longer declares" "$d/out.txt" \
+  || fail "the refusal did not name the dropped services; output was: $(tail -8 "$d/out.txt")"
+grep -q "docker rm -f cid-ui" "$d/out.txt" \
+  || fail "the refusal did not print the command to clear the leftovers; output was: $(tail -8 "$d/out.txt")"
+# A `docker compose run` job shares the project+service labels. It is somebody's migration or
+# debugging session, not a stale service, and must not be reported as one.
+grep -q "cid-oneoff-" "$d/out.txt" \
+  && fail "a 'docker compose run' one-off container was reported as a stale service"
+echo "  slim-transition -> refused before pulling or restarting, named the leftovers and how to clear them"; pass_count=$((pass_count+1))
+
+# --- slimming with nothing left over: just deploys ---------------------------
+# The refusal is about leftovers, not about the shape. A server-only deploy on a host where ui was
+# never running has nothing to reconcile and must proceed untouched - otherwise the documented
+# slim option would need a manual step it does not actually need.
+d=$(run_deploy slim-clean server)
+assert_succeeded "$d"
+assert_pulled "$d" "server"
+assert_restarted "$d" server
+echo "  slim-clean  -> deployed normally when the dropped services left nothing behind"; pass_count=$((pass_count+1))
 
 # --- no server: must abort BEFORE restarting anything ------------------------
 d=$(run_deploy no-server ui)
