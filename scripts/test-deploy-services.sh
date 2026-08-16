@@ -78,20 +78,29 @@ if [ "${1:-}" = "compose" ]; then
   exit 0
 fi
 
-# `docker ps -aq --filter label=...project=X --filter label=...service=Y` - deploy.sh's check for
+# `docker ps -q --filter label=...project=X --filter label=...service=Y` - deploy.sh's check for
 # services this compose file dropped that are still running. $PREEXISTING lists the services a
-# PREVIOUS deploy left containers for, so a case can model "full stack already running" and assert
-# what a slimmed redeploy does about it. $PREEXISTING_ONEOFF models a `docker compose run` job,
-# which carries the same project+service labels and is excluded only by oneoff=False.
+# PREVIOUS deploy left RUNNING containers for, so a case can model "full stack already running" and
+# assert what a slimmed redeploy does about it. $PREEXISTING_ONEOFF models a `docker compose run`
+# job, which carries the same project+service labels and is excluded only by oneoff=False.
+#
+# $PREEXISTING_EXITED models leftovers that are no longer serving. Real `docker ps` hides those
+# unless `-a` is passed, so the stub keys off the flag rather than ignoring it: that is what lets a
+# case assert a slim deploy PROCEEDS past an inert leftover, and what makes re-adding `-a` to
+# deploy.sh fail that case instead of silently passing it.
 if [ "${1:-}" = "ps" ]; then
-  svc=""; want_service_only=0
+  svc=""; want_service_only=0; want_all=0
   for a in "$@"; do
     case "$a" in
+      -a|-aq|-qa|--all) want_all=1 ;;
       *com.docker.compose.service=*) svc="${a##*=}" ;;
       *com.docker.compose.oneoff=False) want_service_only=1 ;;
     esac
   done
   case " ${PREEXISTING:-} " in *" $svc "*) echo "cid-$svc" ;; esac
+  if [ "$want_all" = "1" ]; then
+    case " ${PREEXISTING_EXITED:-} " in *" $svc "*) echo "cid-exited-$svc" ;; esac
+  fi
   if [ "$want_service_only" = "0" ]; then
     case " ${PREEXISTING_ONEOFF:-} " in *" $svc "*) echo "cid-oneoff-$svc" ;; esac
   fi
@@ -136,6 +145,7 @@ run_deploy() { # <name> <service>...
   export CALLS="$dir/calls.txt"
   export PREEXISTING="${PREEXISTING:-}"
   export PREEXISTING_ONEOFF="${PREEXISTING_ONEOFF:-}"
+  export PREEXISTING_EXITED="${PREEXISTING_EXITED:-}"
   : > "$CALLS"
   # --no-pull skips step 1 (git pull); the fixture dir is deliberately not a git repo, and the
   # git step is not what is under test here.
@@ -248,6 +258,31 @@ assert_succeeded "$d"
 assert_pulled "$d" "server"
 assert_restarted "$d" server
 echo "  slim-clean  -> deployed normally when the dropped services left nothing behind"; pass_count=$((pass_count+1))
+
+# --- slimming past INERT leftovers: also just deploys -------------------------
+# The refusal exists because a dropped service would keep SERVING its old image. An exited
+# container serves nothing and holds no ports, so it is not that hazard - and every host that has
+# ever run the full stack accumulates them. Refusing here would make the documented slim deploy
+# fail on exactly the hosts it is meant for, and send the operator to force-remove something
+# already inert. It must deploy, and must not name the inert containers as a reason to stop.
+d=$(PREEXISTING_EXITED="ui internal-service" run_deploy slim-exited server)
+assert_succeeded "$d"
+assert_pulled "$d" "server"
+assert_restarted "$d" server
+grep -q "cid-exited-" "$d/out.txt" \
+  && fail "an exited container was reported as a service that is still running"
+echo "  slim-exited -> deployed past exited leftovers instead of refusing over them"; pass_count=$((pass_count+1))
+
+# --- a RUNNING leftover still refuses, even beside exited ones ----------------
+# Pins the boundary from the other side: narrowing the query to running containers must not have
+# narrowed it into missing the hazard it exists to catch.
+d=$(PREEXISTING="ui" PREEXISTING_EXITED="internal-service" run_deploy slim-mixed server)
+assert_failed "$d"
+grep -q "docker rm -f cid-ui" "$d/out.txt" \
+  || fail "a running leftover was not reported when an exited one was also present; output was: $(tail -8 "$d/out.txt")"
+grep -q "cid-exited-" "$d/out.txt" \
+  && fail "an exited container was listed alongside the running one the operator must clear"
+echo "  slim-mixed  -> refused on the running leftover, ignored the exited one"; pass_count=$((pass_count+1))
 
 # --- no server: must abort BEFORE restarting anything ------------------------
 d=$(run_deploy no-server ui)
