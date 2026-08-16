@@ -238,9 +238,18 @@ echo "  Services in this deployment: ${DEPLOY_SERVICES[*]}"
 # Deliberately not `docker rm -f` on the operator's behalf. Removal would have to match containers
 # by the com.docker.compose.project label, which spans every checkout and account on the daemon,
 # so doing it safely needs a lock proving no other deploy is mid-flight - a large mechanism, and a
-# destructive one, for a transition that happens rarely and takes one command by hand. Reporting
-# is race-free by construction: the worst case is a stale container this deploy did not remove,
-# which is exactly where master already is.
+# destructive one, for a transition that happens rarely and takes one command by hand.
+#
+# What that buys is a bounded failure, not an absence of races. This is a point-in-time check, and
+# nothing holds the project still afterwards: a CONCURRENT deploy of the same project from a
+# checkout whose compose file still declares `ui` can start one between this check and the restarts
+# below, and this run will finish without noticing. But because the check only ever REPORTS, losing
+# that race costs a missed refusal - never a container removed out from under another deploy, and
+# never a half-applied topology this script created. The stale container is left exactly where
+# master already leaves it, and the next deploy refuses on it.
+#
+# Closing that window means serializing every deploy of a project host-wide, which is a change to
+# how deployments are provisioned rather than a fix to this check; it is tracked separately.
 if ! deployable_all=$(./scripts/select-deploy-services.sh --deployable); then
     exit 1
 fi
