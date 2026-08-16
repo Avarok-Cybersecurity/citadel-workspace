@@ -169,6 +169,37 @@ if [ "$TUNNEL_PROFILE_ACTIVE" = true ] && [ -z "${TUNNEL_TOKEN:-}" ]; then
     exit 1
 fi
 
+# Serialize runs from THIS CHECKOUT, before anything reads or writes it.
+#
+# The project lock further down cannot cover this. It is keyed on the compose project name, which
+# is only knowable by reading the compose file - so by the time it can be taken, `git pull` has
+# already run and the service selection has already read that file. A second run started from the
+# same directory would pull new code into the checkout underneath the first, which then goes on to
+# re-read the compose file for `pull`, `up -d` and `ps`: it would verify one revision and restart
+# another. Refusing the second run only after its git step is too late; the damage is done there.
+#
+# So this lock is taken first and covers the whole run, git step included. It is keyed on the one
+# thing already known before any file is read: the checkout itself. That is the working directory,
+# which is what every relative path in this script - `docker-compose.production.yml`,
+# `./scripts/...` - already resolves against, so it is exactly the resource at risk. Locking the
+# DIRECTORY's inode rather than a path-derived name means the identity is exact: no hashing, no
+# name collisions between checkouts, no path-length limit, and two runs from the same directory
+# necessarily open the same inode. The lock is advisory and only this script takes it, so it does
+# not interfere with git's own locking.
+#
+# Both locks are taken in this order, checkout then project, and both are non-blocking, so they
+# cannot deadlock: a run that cannot get the second lock exits and drops the first.
+checkout_dir="$PWD"
+if ! exec 8<"$checkout_dir"; then
+    echo "ERROR: could not open '${checkout_dir}' to lock this checkout." >&2
+    exit 1
+fi
+if ! flock -n 8; then
+    echo "ERROR: another deploy is already running from this checkout (${checkout_dir})." >&2
+    echo "  Wait for it to finish, then re-run. Nothing has been changed." >&2
+    exit 1
+fi
+
 # Step 1: Pull latest code
 if [ "$SKIP_PULL" = false ]; then
     echo "[1/4] Pulling latest code..."

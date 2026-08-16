@@ -196,6 +196,12 @@ run_deploy() { # <name> <service>...
   # in the real user's runtime directory - otherwise the suite would contend with an actual deploy
   # on the same machine, and leave files behind outside its own workspace.
   local status=0
+  if [ -n "${HOLD_CHECKOUT:-}" ]; then
+    # Model a deploy already running from this same checkout: hold the directory's own lock. The
+    # second run must refuse before its git step, not after mutating the shared working tree.
+    exec 7<"$dir"
+    flock -n 7 || fail "test harness could not take the checkout lock it is meant to hold"
+  fi
   if [ -n "${HOLD_LOCK:-}" ]; then
     # Model a deploy of the same project already in flight: hold its lock across the run. The
     # second deploy must refuse instead of interleaving with the first.
@@ -206,6 +212,7 @@ run_deploy() { # <name> <service>...
   ( cd "$dir" && HOME="$dir" PATH="$WORK/bin:$PATH" \
       bash ./deploy.sh --no-pull >"$dir/out.txt" 2>&1 ) || status=$?
   [ -n "${HOLD_LOCK:-}" ] && exec 8>&-
+  [ -n "${HOLD_CHECKOUT:-}" ] && exec 7<&-
   echo "$status" > "$dir/status.txt"
   echo "$dir"
 }
@@ -399,6 +406,20 @@ done
 grep -q "another deploy of project" "$d/out.txt" \
   || fail "the refusal did not say a concurrent deploy holds the lock; output was: $(tail -8 "$d/out.txt")"
 echo "  concurrent  -> refused while another deploy held the project lock"; pass_count=$((pass_count+1))
+
+# --- a second deploy from the SAME CHECKOUT: refuse before the git step -------
+# The project lock cannot cover this: it is keyed on the compose project name, so it cannot be
+# taken until the compose file has been read - by which point a competing run has already pulled
+# new code into the shared working tree. The first run would then verify one revision of the
+# compose file and restart against another. The checkout lock is taken before anything reads or
+# writes the directory, so the second run stops there.
+d=$(HOLD_CHECKOUT=1 run_deploy same-checkout server ui internal-service)
+assert_failed "$d"
+grep -q "already running from this checkout" "$d/out.txt" \
+  || fail "a second deploy from the same checkout was not refused; output was: $(tail -8 "$d/out.txt")"
+grep -q "\[1/4\]" "$d/out.txt" \
+  && fail "the refusal came after step 1 had already run against the shared working tree"
+echo "  same-checkout -> refused before touching the shared working tree"; pass_count=$((pass_count+1))
 
 # --- the lock must not outlive the deploy that took it -----------------------
 # Same fixture, so the same HOME and the same lock file, run twice in a row. The kernel drops the
