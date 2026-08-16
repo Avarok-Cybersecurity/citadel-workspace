@@ -337,7 +337,19 @@ while read -r svc; do
         if ! info=$(docker inspect -f '{{.State.Status}} {{.HostConfig.RestartPolicy.Name}}' "$cid" 2>/dev/null); then
             # Judge by outcome: a container that vanished between the list and the inspect is the
             # state we wanted anyway. Anything still there that we cannot read, we refuse on.
-            if docker ps -aq --filter "id=${cid}" 2>/dev/null | grep -q .; then
+            #
+            # The re-query's SUCCESS is checked separately from its RESULT, and the difference is
+            # the whole point. `docker ps ... | grep -q .` collapses the two: it is equally false
+            # when the container is gone and when the query itself failed - and a failing query is
+            # the LIKELY case here, since whatever stopped `docker inspect` from answering
+            # (daemon down, API error) will usually stop this one too. Skipping on that reading
+            # would fail open on the one path written to fail closed.
+            if ! remaining=$(docker ps -aq --filter "id=${cid}" 2>/dev/null); then
+                echo "ERROR: cannot inspect container ${cid} of the dropped service '${svc}'," >&2
+                echo "  and cannot confirm whether it is still there. Nothing has been changed." >&2
+                exit 1
+            fi
+            if [ -n "$remaining" ]; then
                 echo "ERROR: cannot inspect container ${cid} of the dropped service '${svc}'." >&2
                 echo "  Refusing to deploy rather than guess; nothing has been changed." >&2
                 exit 1

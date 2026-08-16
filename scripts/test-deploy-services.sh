@@ -103,8 +103,13 @@ if [ "${1:-}" = "ps" ]; then
     esac
   done
   # `ps -aq --filter id=X` is deploy.sh re-checking whether a container it failed to inspect is
-  # still there. Nothing in these fixtures removes containers mid-run, so it still exists.
-  if [ -n "$by_id" ]; then echo "$by_id"; exit 0; fi
+  # still there. $PS_ID_FAILS models the daemon refusing that question too - the likely case, since
+  # whatever broke `docker inspect` usually breaks this as well. Nothing in these fixtures removes
+  # containers mid-run, so otherwise it still exists.
+  if [ -n "$by_id" ]; then
+    if [ -n "${PS_ID_FAILS:-}" ]; then exit 1; fi
+    echo "$by_id"; exit 0
+  fi
   case " ${PREEXISTING:-} " in *" $svc "*) echo "cid-$svc" ;; esac
   # Real `docker ps` lists paused and restarting containers WITHOUT -a: both are still holding
   # their published ports, so they belong with the running ones, not with the exited ones.
@@ -177,6 +182,7 @@ run_deploy() { # <name> <service>...
   export PREEXISTING_LATENT="${PREEXISTING_LATENT:-}"
   export PREEXISTING_PAUSED="${PREEXISTING_PAUSED:-}"
   export INSPECT_FAILS="${INSPECT_FAILS:-}"
+  export PS_ID_FAILS="${PS_ID_FAILS:-}"
   : > "$CALLS"
   # --no-pull skips step 1 (git pull); the fixture dir is deliberately not a git repo, and the
   # git step is not what is under test here.
@@ -365,6 +371,20 @@ assert_failed "$d"
 grep -q "cannot inspect container" "$d/out.txt" \
   || fail "an uninspectable leftover did not stop the deploy; output was: $(tail -8 "$d/out.txt")"
 echo "  inspect-fails -> refused on a leftover it could not classify"; pass_count=$((pass_count+1))
+
+# --- the recheck query ALSO fails: still refuse, never skip -------------------
+# Whatever stops `docker inspect` answering usually stops `docker ps` answering too, so this is the
+# likely shape of the case above rather than an exotic one. "Query returned nothing" and "query
+# failed" must not collapse into the same branch: reading a failed query as "the container is gone"
+# would skip the one leftover the guard could not classify, and proceed.
+d=$(PREEXISTING="ui" INSPECT_FAILS="cid-ui" PS_ID_FAILS=1 run_deploy inspect-and-ps-fail server)
+assert_failed "$d"
+grep -q "cannot confirm whether it is still there" "$d/out.txt" \
+  || fail "a failed re-query was treated as proof the container vanished; output was: $(tail -8 "$d/out.txt")"
+for verb in 'pull ' 'up -d'; do
+  grep -qF "$verb" "$d/calls.txt" && fail "ran '$verb' despite being unable to classify a leftover"
+done
+echo "  inspect+ps-fail -> refused when it could not confirm the leftover was gone"; pass_count=$((pass_count+1))
 
 # --- a concurrent deploy of the same project: refuse -------------------------
 # The stale-service check is a point-in-time snapshot and everything it protects happens after it.
