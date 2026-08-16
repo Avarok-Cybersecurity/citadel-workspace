@@ -235,21 +235,14 @@ echo "  Services in this deployment: ${DEPLOY_SERVICES[*]}"
 # So it REFUSES, here, before anything is pulled or restarted - the running stack is left exactly
 # as it was - and prints the command to clear the leftovers.
 #
-# Deliberately not `docker rm -f` on the operator's behalf. Removal would have to match containers
-# by the com.docker.compose.project label, which spans every checkout and account on the daemon,
-# so doing it safely needs a lock proving no other deploy is mid-flight - a large mechanism, and a
-# destructive one, for a transition that happens rarely and takes one command by hand.
-#
-# What that buys is a bounded failure, not an absence of races. This is a point-in-time check, and
-# nothing holds the project still afterwards: a CONCURRENT deploy of the same project from a
-# checkout whose compose file still declares `ui` can start one between this check and the restarts
-# below, and this run will finish without noticing. But because the check only ever REPORTS, losing
-# that race costs a missed refusal - never a container removed out from under another deploy, and
-# never a half-applied topology this script created. The stale container is left exactly where
-# master already leaves it, and the next deploy refuses on it.
-#
-# Closing that window means serializing every deploy of a project host-wide, which is a change to
-# how deployments are provisioned rather than a fix to this check; it is tracked separately.
+# Deliberately not `docker rm -f` on the operator's behalf, even though a lock is taken below.
+# These are two different jobs with two different bars. That lock SERIALIZES: it gates nothing
+# destructive, so an account that never contends for it is left exactly where this script already
+# was. Removing containers would make the lock AUTHORIZE destruction, and matching by the
+# com.docker.compose.project label reaches every checkout and account on the daemon - so it would
+# have to prove no other deploy is mid-flight anywhere on the host, which the per-account lock
+# below does not and cannot. That is a far larger mechanism, and a destructive one, for a
+# transition that happens rarely and takes one command by hand.
 if ! deployable_all=$(./scripts/select-deploy-services.sh --deployable); then
     exit 1
 fi
@@ -265,18 +258,7 @@ while read -r svc; do
     printf '%s\n' "${DEPLOY_SERVICES[@]}" | grep -qx "$svc" && continue
     # oneoff=False excludes `docker compose run` containers, which carry the same project and
     # service labels: a migration or debugging job is not a stale service.
-    #
-    # `ps -q`, NOT `ps -aq`. The refusal is about services that are still SERVING - an exited or
-    # never-started container for a dropped service answers no requests and holds no ports, so
-    # refusing over one would block the documented slim deploy on any host that still has leftovers
-    # from an old topology, and tell the operator to force-remove something already inert. `-q`
-    # covers exactly the states that can serve: running, paused (still holds its ports) and
-    # restarting (crash-looping, comes back). It leaves out `created`, `exited` and `dead`.
-    #
-    # Nor does an exited container come back on its own: under `restart: always` the daemon
-    # restarts it immediately, so it would be seen as running or restarting, and `unless-stopped`
-    # only stays exited when an operator stopped it deliberately.
-    if ! found=$(docker ps -q \
+    if ! found=$(docker ps -aq \
         --filter "label=com.docker.compose.project=${preflight_project}" \
         --filter "label=com.docker.compose.service=${svc}" \
         --filter "label=com.docker.compose.oneoff=False" 2>/dev/null); then
@@ -284,25 +266,63 @@ while read -r svc; do
         echo "  Refusing to deploy rather than guess; nothing has been changed." >&2
         exit 1
     fi
-    [ -n "$found" ] && stale_report="${stale_report}${svc}|$(printf '%s' "$found" | tr '\n' ' ')"$'\n'
+
+    # A leftover is a hazard if it serves now, or if it will serve again without anyone asking.
+    # Anything else is inert and must NOT block the deploy: hosts that once ran the full stack
+    # accumulate dead containers, and refusing over those would fail the documented slim deploy on
+    # exactly the hosts it is for, telling the operator to force-remove something already harmless.
+    #
+    # Serving now is `running`, plus `paused` (frozen, but still holding its published ports) and
+    # `restarting` (crash-looping back into service).
+    #
+    # Serving again is decided by the restart policy, and ONLY `always` qualifies. That is the sole
+    # difference between `always` and `unless-stopped`: both bring a crashed container back while
+    # the daemon runs, but a container stopped by hand stays stopped under `unless-stopped` and is
+    # started again under `always` the next time the daemon does - so an exited `always` container
+    # for a dropped service is a stale service waiting on the next host reboot. `no` never returns,
+    # and `on-failure` has either exited clean, where the policy does not apply, or exhausted its
+    # retries while the daemon was up.
+    while read -r cid; do
+        [ -n "$cid" ] || continue
+        if ! info=$(docker inspect -f '{{.State.Status}} {{.HostConfig.RestartPolicy.Name}}' "$cid" 2>/dev/null); then
+            # Judge by outcome: a container that vanished between the list and the inspect is the
+            # state we wanted anyway. Anything still there that we cannot read, we refuse on.
+            if docker ps -aq --filter "id=${cid}" 2>/dev/null | grep -q .; then
+                echo "ERROR: cannot inspect container ${cid} of the dropped service '${svc}'." >&2
+                echo "  Refusing to deploy rather than guess; nothing has been changed." >&2
+                exit 1
+            fi
+            continue
+        fi
+        read -r cstatus cpolicy <<<"$info"
+        case "$cstatus" in
+            running|paused|restarting) reason="$cstatus" ;;
+            *) [ "$cpolicy" = "always" ] && reason="restarts on reboot" || continue ;;
+        esac
+        stale_report="${stale_report}${svc}|${reason}|${cid}"$'\n'
+    done <<<"$found"
 done <<<"$deployable_all"
 
 if [ -n "$stale_report" ]; then
-    echo "ERROR: '${COMPOSE_FILE}' no longer declares these services, but they are still running:" >&2
-    while IFS='|' read -r svc ids; do
+    echo "ERROR: '${COMPOSE_FILE}' no longer declares these services, but they are still on this host:" >&2
+    while IFS='|' read -r svc reason cid; do
         [ -n "$svc" ] || continue
-        echo "    ${svc}: ${ids}" >&2
+        echo "    ${svc}: ${cid} (${reason})" >&2
     done <<<"$stale_report"
     echo "" >&2
     echo "  Deploying now would restart the services this file DOES declare while those kept" >&2
     echo "  serving their old images - a deployment that matches neither the old topology nor the" >&2
-    echo "  new one. Nothing has been changed." >&2
+    echo "  new one. A container marked 'restarts on reboot' is not serving yet, but its" >&2
+    echo "  restart: always policy will start it again the next time the Docker daemon does." >&2
+    echo "  Nothing has been changed." >&2
     echo "" >&2
     echo "  Remove them, then re-run:" >&2
-    while IFS='|' read -r svc ids; do
-        [ -n "$ids" ] || continue
-        echo "    docker rm -f ${ids% }" >&2
-    done <<<"$stale_report"
+    # `if`, not `[ -n ... ] &&`: the trailing blank line makes the test fail, which would be the
+    # loop's - and so the substitution's - exit status, and `set -e` would kill the script here.
+    stale_ids=$(while IFS='|' read -r _ _ cid; do
+        if [ -n "$cid" ]; then printf '%s ' "$cid"; fi
+    done <<<"$stale_report")
+    echo "    docker rm -f ${stale_ids% }" >&2
     exit 1
 fi
 
