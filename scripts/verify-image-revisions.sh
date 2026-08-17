@@ -20,20 +20,41 @@
 # gate is a liability. Pulled out here it takes images as arguments, touches no
 # global state, and is exercised directly by CI
 # (.github/workflows/validate.yml -> deploy-gate-tests) against real images with
-# matching, mismatched, and absent labels.
+# matching, mismatched, and absent labels, an image that cannot be inspected at
+# all, and the single-image server-only deployment.
 #
 # Usage:   verify-image-revisions.sh <image> [<image> ...]
-# Exit 0:  all images carry the same revision, OR one or more carry no label at
-#          all (a warning - locally-built and pre-label images are not blocked).
-# Exit 1:  two images carry DIFFERENT revisions.
+# Exit 0:  every image was inspected successfully, AND they all carry the same
+#          revision OR one or more carry no label at all (a warning - locally-built
+#          and pre-label images are not blocked).
+# Exit 1:  an image could not be inspected, or two images carry DIFFERENT revisions.
+# Exit 2:  no images given.
 # =============================================================================
 
 set -euo pipefail
 
-if [ "$#" -lt 2 ]; then
-    echo "usage: $0 <image> <image> [<image> ...]" >&2
+if [ "$#" -lt 1 ]; then
+    echo "usage: $0 <image> [<image> ...]" >&2
     exit 2
 fi
+
+# ONE image is a valid deployment, not a usage error - and it deliberately gets NO fast path.
+#
+# docker-compose.production.yml documents that `ui` and `internal-service` are droppable, so a
+# server-only stack legitimately has a single image to check. Requiring two aborted that deploy
+# at the release gate AFTER the pull had already succeeded - precisely the half-applied failure
+# the caller's service selection exists to avoid.
+#
+# The tempting fix is `[ "$#" -eq 1 ] && exit 0` right here. Do not add it. "Nothing to compare
+# against" removes only the CROSS-image comparison; it does not make the image's provenance
+# unnecessary. Returning early skips image_revision() altogether and with it the
+# un-inspectable-image check below, so a server-only deploy whose pull silently failed, or whose
+# tag does not exist, would sail through the gate built to catch exactly that. The loop below
+# already handles one image correctly: it inspects it, refuses it if it cannot, warns if the
+# label is absent, and finds nothing to disagree with.
+#
+# Pinned by validate.yml -> "A SINGLE image is still inspected". The end-to-end deploy test
+# cannot catch a regression here - its docker stub always inspects successfully.
 
 REVISION_LABEL="org.opencontainers.image.revision"
 
@@ -109,4 +130,11 @@ if [ "$unlabelled" -eq 1 ]; then
     exit 0
 fi
 
-echo "All images are from commit ${reference_rev}."
+# Distinguish the two successes. "All images are from commit X" over a single image would read
+# as a cross-check that never happened; the point of the gate is that images AGREE, and one
+# image agreeing with itself is not evidence of a consistent promotion.
+if [ "$#" -eq 1 ]; then
+    echo "Single-image deployment: ${reference_img} is from commit ${reference_rev} (nothing to cross-check)."
+else
+    echo "All images are from commit ${reference_rev}."
+fi

@@ -424,6 +424,142 @@ jobs:
           fi
           echo "PASS: mismatched images are refused."
 
+      - name: A SINGLE image is still inspected
+        # A server-only deployment passes exactly ONE image, so this is a supported production
+        # shape rather than a degenerate call - and it must still be inspected. "Nothing to
+        # compare against" removes the cross-image check, not the provenance check.
+        #
+        # The failure direction is the load-bearing one. An `if [ "$#" -eq 1 ]; then exit 0`
+        # fast path looks harmless and passes both success cases below, but it returns before
+        # `docker image inspect` runs - so a server-only deploy whose pull silently failed, or
+        # whose tag does not exist, would sail through the gate built to catch precisely that.
+        # The end-to-end test cannot see this: its docker stub always inspects successfully.
+        run: |
+          set -euo pipefail
+          ./scripts/verify-image-revisions.sh rev-a
+          echo "PASS: a single labelled image deploys."
+          ./scripts/verify-image-revisions.sh rev-none
+          echo "PASS: a single unlabelled image warns but does not block."
+          if ./scripts/verify-image-revisions.sh definitely-not-pulled:latest 2>/dev/null; then
+            echo "::error::The gate allowed a single image it could not inspect. A server-only deploy whose pull never completed would restart production on a stale or missing image."
+            exit 1
+          fi
+          echo "PASS: a single un-inspectable image is refused."
+
+      - name: Deploy restart guards - run deploy.sh end to end
+        # The selector test below proves the LIST is right. This proves deploy.sh ACTS on it:
+        # it runs the real script against fixture compose files with a recording `docker` stub on
+        # PATH, and asserts which services were pulled and restarted - and that an omitted service
+        # is never touched. Without this, the headline fix (no unconditional `up -d --no-deps ui`)
+        # has no coverage and could be reintroduced with every other test still green.
+        #
+        # This is not hypothetical: it immediately caught that a server-only deploy still aborted,
+        # because the release gate rejected a single-image deployment as a usage error.
+        run: ./scripts/test-deploy-services.sh
+
+      - name: Deploy service selection covers every compose shape
+        # This selection decides what is pulled, revision-checked AND restarted. Both error
+        # directions are deployment-critical: too few silently skips a declared service while
+        # still reporting success, too many runs `up -d` on an image that was never pulled.
+        # docker-compose.production.yml documents that ui and internal-service are droppable,
+        # so the slimmed shapes are supported configurations, not hypotheticals.
+        run: |
+          set -euo pipefail
+          # PyYAML is declared rather than inherited from the runner image: a runner change would
+          # otherwise turn this deterministic gate into an opaque ModuleNotFoundError.
+          python3 -c 'import yaml' 2>/dev/null || pip install --quiet pyyaml
+          # Fixtures are written into the CHECKOUT, not /tmp. `docker compose -f <file>` takes the
+          # file's directory as the project directory, so a fixture in /tmp resolves `env_file:`
+          # paths and ${VAR} references against /tmp instead of the repo root - the test could then
+          # fail, or silently resolve a variable to empty, for reasons having nothing to do with
+          # service selection, and it would not match how deploy.sh invokes the same command.
+          trap 'rm -f fx-*.yml' EXIT
+
+          # Build fixtures from the real production compose so this tracks the actual file.
+          # Dangling depends_on entries must be stripped or compose rejects the project.
+          python3 - <<'PYEOF'
+          import yaml, pathlib
+          base = yaml.safe_load(open('docker-compose.production.yml'))
+          shapes = {'full':['server','internal-service','ui'], 'server-only':['server'],
+                    'server-ui':['server','ui'], 'server-is':['server','internal-service'],
+                    'no-server':['ui']}
+          for name, keep in shapes.items():
+              d = yaml.safe_load(yaml.safe_dump(base))
+              for svc in list(d['services']):
+                  if svc not in keep: d['services'].pop(svc)
+              for svc, cfg in d['services'].items():
+                  dep = cfg.get('depends_on')
+                  if isinstance(dep, dict):
+                      kept = {k: v for k, v in dep.items() if k in keep}
+                      cfg['depends_on'] = kept
+                      if not kept: cfg.pop('depends_on')
+                  elif isinstance(dep, list):
+                      kept = [x for x in dep if x in keep]
+                      cfg['depends_on'] = kept
+                      if not kept: cfg.pop('depends_on')
+              pathlib.Path(f'fx-{name}.yml').write_text(yaml.safe_dump(d))
+          PYEOF
+
+          check() {  # <fixture> <expected space-separated services>
+            local got
+            got=$(./scripts/select-deploy-services.sh "fx-$1.yml" | tr '\n' ' ' | sed 's/ $//')
+            if [ "$got" != "$2" ]; then
+              echo "::error::selection for '$1' was [$got], expected [$2]. A wrong set here means a half-applied deploy."
+              exit 1
+            fi
+            echo "  $1 -> $got"
+          }
+          check full        "server internal-service ui"
+          check server-only "server"
+          check server-ui   "server ui"
+          check server-is   "server internal-service"
+
+          # A compose file with no server must ABORT, not return an empty set - "nothing to
+          # deploy" reported as a successful no-op deploy is the worst possible outcome.
+          if ./scripts/select-deploy-services.sh fx-no-server.yml >/dev/null 2>&1; then
+            echo "::error::a compose file with no 'server' service was accepted; it must abort."
+            exit 1
+          fi
+          echo "  no-server -> correctly aborts"
+
+          # An unreadable file must fail loudly rather than yield an empty selection.
+          if ./scripts/select-deploy-services.sh fx-definitely-absent.yml >/dev/null 2>&1; then
+            echo "::error::a missing compose file was accepted; it must abort."
+            exit 1
+          fi
+          echo "  missing file -> correctly aborts"
+
+          # DRIFT GUARD: every deployable service the production compose declares must appear in
+          # the selection. The selector filters against a hardcoded DEPLOYABLE list, so a service
+          # added to docker-compose.production.yml but not to that list would be silently dropped
+          # from pull, revision-check and restart - the selector's own documented "too few ->
+          # silently skipped while the run still reports success" failure, and the direction the
+          # shape checks above cannot see.
+          #
+          # This runs against the REAL compose file, not fx-full.yml: the fixture builder keeps a
+          # hardcoded ['server','internal-service','ui'], so it would strip a newly added service
+          # before the assertion ever saw it and this guard would pass while the drift shipped.
+          #
+          # cloudflared is excluded deliberately - it is profile-gated and handled by deploy.sh's
+          # TUNNEL_PROFILE_ACTIVE branch rather than by this selection.
+          # Both sides are captured into variables rather than compared as `diff <(a) <(b)`.
+          # Process substitution discards the child's exit status, so if `docker compose config`
+          # failed, both sides would be EMPTY and diff would report no difference - a guard that
+          # passes precisely when it cannot see anything. Assigning first means `set -e` aborts on
+          # a failed read, and the emptiness check below makes a vacuous pass impossible.
+          declared=$(docker compose -f docker-compose.production.yml config --services | grep -vx cloudflared | sort)
+          selected=$(./scripts/select-deploy-services.sh docker-compose.production.yml | sort)
+          if [ -z "$declared" ] || [ -z "$selected" ]; then
+            echo "::error::could not read services from docker-compose.production.yml; the drift guard cannot run and must not pass silently."
+            exit 1
+          fi
+          if [ "$declared" != "$selected" ]; then
+            echo "::error::docker-compose.production.yml declares a deployable service the selector does not return. Add it to DEPLOYABLE in scripts/select-deploy-services.sh, or it will be silently skipped by pull, revision-check and restart."
+            diff <(printf '%s\n' "$declared") <(printf '%s\n' "$selected") || true
+            exit 1
+          fi
+          echo "  production compose -> no service missing from the selection"
+
       - name: THREE images are all checked, not just the first two
         # deploy.sh now passes three images (server, internal-service, ui). The script iterates
         # over "$@", so this works - but nothing pinned it, and the failure mode of a hardcoded
