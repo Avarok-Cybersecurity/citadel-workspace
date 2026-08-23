@@ -31,6 +31,23 @@ PROFILE_ARGS=()
 TUNNEL_PROFILE_ACTIVE=false
 SKIP_PULL=false
 
+# One description of the interface, printed both on request and on a mistake, so
+# the two can never drift apart.
+usage() {
+    cat <<USAGE
+Citadel Workspace - deploy / update the running production stack.
+
+Usage: $0 [--no-pull] [--tunnel] [--help]
+
+  --no-pull   Skip the git pull and rebuild from the code already checked out.
+  --tunnel    Include the Cloudflare tunnel profile. Requires TUNNEL_TOKEN in .env.
+  --help, -h  Print this and exit.
+
+Data volumes (server_data, internal_service_data) are never touched; only
+container images are rebuilt and replaced.
+USAGE
+}
+
 # Parse arguments
 for arg in "$@"; do
     case $arg in
@@ -41,9 +58,16 @@ for arg in "$@"; do
             PROFILE_ARGS=(--profile tunnel)
             TUNNEL_PROFILE_ACTIVE=true
             ;;
+        --help|-h)
+            # Asking what a deploy script does should not be an error, and should
+            # not exit non-zero — a wrapper checking the status would read that as
+            # a failed deploy.
+            usage
+            exit 0
+            ;;
         *)
-            echo "Unknown argument: $arg"
-            echo "Usage: $0 [--no-pull] [--tunnel]"
+            echo "Unknown argument: $arg" >&2
+            usage >&2
             exit 1
             ;;
     esac
