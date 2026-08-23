@@ -42,7 +42,7 @@ You understand:
 ## WASM Development Practices
 
 When editing WASM client code:
-- Consult ./WASM_SYNC.md before making changes
+- Consult ./docs/WASM_SYNC.md before making changes
 - Use ./sync-wasm-clients.sh for automated building when appropriate
 - Understand the manual build process as a fallback
 - Ensure TypeScript bindings stay synchronized with Rust code

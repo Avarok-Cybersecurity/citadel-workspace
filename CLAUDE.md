@@ -346,8 +346,8 @@ See [ARCHITECTURE.md § Multi-Tab Coordination](./ARCHITECTURE.md#multi-tab-coor
 
 ## WASM Client Development
 
-- When editing the wasm client code in any of the crates, consult ./WASM_SYNC.md and consider using ./sync-wasm-clients.sh to potentially automate the building process.
-- Review and understand both the narrative documentation in WASM_SYNC.md and the automation script for comprehensive WASM client development and synchronization workflows.
+- When editing the wasm client code in any of the crates, consult ./docs/WASM_SYNC.md and consider using ./sync-wasm-clients.sh to potentially automate the building process.
+- Review and understand both the narrative documentation in docs/WASM_SYNC.md and the automation script for comprehensive WASM client development and synchronization workflows.
 - Be prepared to manually follow the step-by-step process for building and syncing WASM clients if the automation script does not fully meet your needs.
 - **CRITICAL**: After any WASM changes, run the `sync-executor` agent to ensure bindings are updated.
 

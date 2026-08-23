@@ -32,3 +32,11 @@ target
 .playwright-mcp/
 .pr-reviews/
 screenshots/*
+# Test artifacts (regenerated on every run)
+test-screenshots/
+reports/
+test-results/
+playwright-report/
+docs.zip
+.memory.jsonl
+*.tsbuildinfo

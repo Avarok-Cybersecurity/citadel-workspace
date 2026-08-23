@@ -203,3 +203,12 @@ Check out our [Getting Started Guide](/office/tutorials/getting-started) to lear
 - [ ] Verify bundle size is under 500 kB after optimizations
 - [ ] Add lazy loading for route-based code splitting
 - [ ] Consider tree-shaking improvements for unused code
+
+## WASM WebSocket auto-reconnect
+
+*(carried over from the former root `NOTES.md`)*
+
+The WASM WebSocket module in the frontend should have an auto-reconnect mechanism with
+exponential backoff, so the internal service can be `tilt trigger`ed while the UI is up
+without dropping the connection. Ideally, if the internal service restarts, the WASM
+module reconnects without a page reload.
