@@ -60,53 +60,6 @@ DEST3="$WORKSPACE_ROOT/citadel-workspace-client-ts/"
 # Ensure destination directories exist
 mkdir -p "$DEST1" "$DEST2" "$DEST3"
 
-# Define the correct package.json content for typescript-client
-TYPESCRIPT_CLIENT_PACKAGE_JSON=$(cat << 'EOF'
-{
-  "name": "citadel-internal-service-wasm-client",
-  "type": "module",
-  "version": "0.1.0",
-  "files": [
-    "citadel_internal_service_wasm_client_bg.wasm",
-    "citadel_internal_service_wasm_client.js",
-    "citadel_internal_service_wasm_client.d.ts",
-    "src/**/*",
-    "dist/**/*"
-  ],
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
-  },
-  "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf dist",
-    "test": "echo \"No tests configured yet\" && exit 0"
-  },
-  "sideEffects": [
-    "./snippets/*"
-  ],
-  "dependencies": {
-    "@avarok/citadel-protocol-types": "^0.14.0",
-    "ws": "^8.0.0",
-    "uuid": "^9.0.0"
-  },
-  "devDependencies": {
-    "typescript": "^5.0.0",
-    "@types/node": "^20.0.0",
-    "@types/ws": "^8.0.0",
-    "@types/uuid": "^9.0.0"
-  }
-}
-EOF
-)
-
 print_status "Starting WASM client synchronization..."
 
 # Step 0: Clean
@@ -114,8 +67,12 @@ print_status "Cleaning previous build artifacts..."
 rm -f "$DEST1"/*.wasm "$DEST1"/*.d.ts "$DEST1"/*.js 2>/dev/null || true
 rm -rf "$DEST1/dist" 2>/dev/null || true
 rm -rf "$DEST1/node_modules" 2>/dev/null || true
-# Explicitly remove old package.json to ensure we write fresh
-rm -f "$DEST1/package.json" 2>/dev/null || true
+# NOTE: $DEST1/package.json is tracked in git and is the single source of truth for this
+# package's name, exports, scripts and dependencies. It is deliberately NOT deleted or
+# rewritten here. wasm-pack emits its own package.json into pkg/, but the copy step below
+# only takes *.wasm/*.js/*.d.ts, so the tracked file is never overwritten. Rewriting it from
+# a copy embedded in this script is what previously stripped its "scripts" and "dependencies"
+# blocks, which broke `npm run build` and left every downstream typecheck resolving a stale dist.
 echo "Cleaned $DEST1"
 
 rm -rf "$DEST2"/* 2>/dev/null || true
@@ -190,67 +147,15 @@ if [ -d "$DEST1" ]; then
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.wasm "$DEST1/"
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.js "$DEST1/"
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.d.ts "$DEST1/"
-    # Restore the correct package.json (use printf for reliability with multiline content)
-    print_status "Writing package.json to $DEST1..."
-    printf '%s\n' "$TYPESCRIPT_CLIENT_PACKAGE_JSON" > "$DEST1/package.json"
-
-    # Verify package.json was written correctly
-    if ! grep -q '"build"' "$DEST1/package.json"; then
-        print_error "Failed to write package.json correctly! Trying alternative method..."
-        cat > "$DEST1/package.json" << 'PKGJSON'
-{
-  "name": "citadel-internal-service-wasm-client",
-  "type": "module",
-  "version": "0.1.0",
-  "files": [
-    "citadel_internal_service_wasm_client_bg.wasm",
-    "citadel_internal_service_wasm_client.js",
-    "citadel_internal_service_wasm_client.d.ts",
-    "src/**/*",
-    "dist/**/*"
-  ],
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
-  },
-  "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf dist",
-    "test": "echo \"No tests configured yet\" && exit 0"
-  },
-  "sideEffects": [
-    "./snippets/*"
-  ],
-  "dependencies": {
-    "@avarok/citadel-protocol-types": "^0.14.0",
-    "ws": "^8.0.0",
-    "uuid": "^9.0.0"
-  },
-  "devDependencies": {
-    "typescript": "^5.0.0",
-    "@types/node": "^20.0.0",
-    "@types/ws": "^8.0.0",
-    "@types/uuid": "^9.0.0"
-  }
-}
-PKGJSON
-    fi
-
-    # Final verification
-    if grep -q '"build"' "$DEST1/package.json"; then
-        print_status "package.json verified - contains build script"
-    else
-        print_error "CRITICAL: package.json still missing build script after all attempts!"
-        cat "$DEST1/package.json"
+    # Sanity-check the tracked package.json survived the copy. We no longer write it (see the
+    # note in the clean step); this only catches the case where something else clobbered it.
+    if ! grep -q '"build"' "$DEST1/package.json" 2>/dev/null; then
+        print_error "CRITICAL: $DEST1/package.json is missing its build script."
+        print_error "It is tracked in git - restore it with:"
+        print_error "  git -C \"$INTERNAL_SERVICE_ROOT\" checkout -- typescript-client/package.json"
         exit 1
     fi
+    print_status "package.json intact (tracked file preserved)"
 
     # Add cache busting to WASM loader
     TIMESTAMP=$(date +%s)
