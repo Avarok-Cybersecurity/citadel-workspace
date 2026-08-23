@@ -265,6 +265,44 @@ server {
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
     }
 
+    # ---------------------------------------------------------------------------
+    # PWA: service worker and web app manifest.
+    #
+    # Both live at the document root and would otherwise fall through to the SPA
+    # `location /` below, which sets no cache policy and no explicit type. Two
+    # things break if that happens:
+    #
+    #   * sw.js picks up heuristic caching, so a browser can keep serving the OLD
+    #     service worker and the app never learns an update exists. The service
+    #     worker is the one file that must always be revalidated.
+    #   * manifest.webmanifest is not in nginx's default mime.types, so it ships
+    #     as application/octet-stream. Chrome rejects a manifest served with the
+    #     wrong type, and the app silently stops being installable — no error, the
+    #     install button simply never appears.
+    #
+    # CAUTION: every `add_header` resets inherited headers, so both blocks repeat
+    # the full security header set — see the note at the top of the server block.
+    # ---------------------------------------------------------------------------
+    location = /sw.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+    }
+
+    location = /manifest.webmanifest {
+        types { application/manifest+json webmanifest; }
+        default_type application/manifest+json;
+        add_header Cache-Control "public, max-age=3600" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+    }
+
     # SPA fallback - serve index.html for all non-file routes.
     #
     # CAUTION: do NOT add an `add_header` here without repeating ALL the security

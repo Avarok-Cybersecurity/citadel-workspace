@@ -89,6 +89,16 @@ services:
       # exposes the write attempt before any port probe succeeds.
       - /var/lib/internal-service:size=128m,mode=1777
     environment:
+      # Bind dual-stack, not IPv4-only. `localhost` resolves to ::1 before
+      # 127.0.0.1 on macOS, and Node 17+ no longer reorders DNS results to
+      # prefer IPv4 — so anything that dials the agent by hostname (the Vite
+      # dev proxy did) hit ECONNREFUSED on ::1 while the IPv4 socket sat there
+      # accepting connections. A `[::]` listener accepts IPv6 and IPv4-mapped
+      # connections both, so either resolution order works.
+      # Brackets are required: the Dockerfile builds "--bind ${HOST}:${PORT}",
+      # so a bare "::" yields ":::12345", which is not valid socket-address
+      # syntax and the service exits 1 on startup.
+      - "INTERNAL_SERVICE_BIND_HOST=[::]"
       - RUST_LOG=citadel=info
       - DOCKER_CONTAINER=1
       - SKIP_WASM_BUILD=1

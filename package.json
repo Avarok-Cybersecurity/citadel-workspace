@@ -17,5 +17,8 @@
     "eslint": "^9.18.0",
     "playwright": "^1.57.0",
     "typescript-eslint": "^8.20.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
