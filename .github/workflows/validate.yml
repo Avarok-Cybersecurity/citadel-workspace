@@ -161,8 +161,6 @@ jobs:
             "components/ui/sidebar.tsx"
             "components/layout/sidebar/TreeNodesSection.tsx"
             "components/p2p/ChatSettingsPanel.tsx"
-            "components/tree/TreeGraphEditor.tsx"
-            "lib/file-transfer/io.ts"
             "lib/file-transfer/service.ts"
             "pages/Landing.tsx"
             "types/messaging-layer.ts"
@@ -385,6 +383,86 @@ jobs:
         with:
           name: screenshots-${{ matrix.artifact }}
           path: citadel-workspaces/integration-tests/screenshots/
+
+  playwright-tests:
+    # The @playwright/test suite under integration-tests/src/tests-pw. It existed
+    # but ran in NO job, so those specs were dead weight: written, compiled by the
+    # typecheck job, and never executed against a running stack.
+    #
+    # Sharded rather than one job per spec (which is how the legacy suite is laid
+    # out): the runner distributes specs across shards itself, so adding a spec
+    # needs no matrix edit, and a slow spec no longer defines the critical path.
+    name: Playwright - shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/.ghcup "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
+          df -h
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Dependencies
+        # Root install first, for the same module-resolution reason documented on
+        # the integration-tests job: two copies of playwright make tsc see two
+        # distinct playwright-core type identities.
+        run: npm ci
+      - name: Install Playwright Browsers
+        run: npx playwright install chromium --with-deps
+      - name: Symlink workspace deps for integration-tests
+        run: |
+          mkdir -p citadel-workspaces/integration-tests/node_modules
+          ln -sf ${{ github.workspace }}/node_modules/playwright \
+                 citadel-workspaces/integration-tests/node_modules/playwright
+          ln -sf ${{ github.workspace }}/node_modules/@playwright \
+                 citadel-workspaces/integration-tests/node_modules/@playwright
+      - name: Start Services
+        env:
+          INTERNAL_SERVICE_PORT: '12345'
+          WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
+        run: docker compose up -d --build --wait
+      - name: Dump Service Logs on Start Failure
+        if: failure()
+        run: |
+          docker compose logs sync-wasm-client 2>&1 | tail -200
+          docker compose logs server 2>&1 | tail -50
+          docker compose logs internal-service 2>&1 | tail -50
+      - name: Clean Docker Build Cache
+        run: |
+          docker builder prune -af
+          docker image prune -af
+          df -h
+      - name: Run Playwright Tests
+        env:
+          IN_CI: 'true'
+          # No test.config.json in CI — it is gitignored, so lib/config.ts falls
+          # through to this env var. It previously WAS committed, carrying a
+          # different password than the one the server boots with, and
+          # `externalConfig.workspacePassword ?? process.env...` meant the file
+          # silently won.
+          WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
+          INTERNAL_SERVICE_PORT: '12345'
+        run: npx playwright test --shard=${{ matrix.shard }}/3
+        working-directory: citadel-workspaces/integration-tests
+      - name: Upload Playwright Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-shard-${{ matrix.shard }}
+          # Includes the traces referenced by the HTML report; `trace:
+          # on-first-retry` in playwright.config.ts means a flake that passes on
+          # retry still leaves a trace of the failing attempt.
+          path: |
+            citadel-workspaces/integration-tests/playwright-report/
+            citadel-workspaces/integration-tests/test-results/
 
   deploy-gate-tests:
     # Regression coverage for the release-consistency gate that stands between a `docker

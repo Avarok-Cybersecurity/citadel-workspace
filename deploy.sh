@@ -21,7 +21,7 @@
 set -euo pipefail
 
 COMPOSE_FILE="docker-compose.production.yml"
-# Bash array (not a string) so `"${PROFILE_ARGS[@]}"` expands to nothing
+# Bash array (not a string) so `${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"}` expands to nothing
 # when no profile is selected and to a properly quoted multi-token list
 # when one is. Storing "--profile tunnel" as a single string and relying
 # on word-splitting (`$PROFILE_ARGS` unquoted) is the classic shell
@@ -254,7 +254,16 @@ echo "[2/4] Pulling images (tag: ${IMAGE_TAG:-latest})..."
 if ! selection=$(./scripts/select-deploy-services.sh "$COMPOSE_FILE"); then
     exit 1
 fi
-mapfile -t DEPLOY_SERVICES <<<"$selection"
+# Read into the array with a while-read loop rather than `mapfile -t`. mapfile is a
+# bash 4 builtin and macOS still ships bash 3.2, so `#!/usr/bin/env bash` there
+# resolves to a shell without it and the deploy aborted at this line with
+# "mapfile: command not found" (exit 127) — before touching anything, but also
+# before doing anything. CI runs Ubuntu, so this only ever failed for a developer
+# deploying from a Mac. The loop below is equivalent and works on both.
+DEPLOY_SERVICES=()
+while IFS= read -r _svc; do
+    [ -n "$_svc" ] && DEPLOY_SERVICES+=("$_svc")
+done <<<"$selection"
 # Belt and braces: the selector already errors on an empty result, and the check above now
 # actually observes that, but a silent empty selection must never fall through to a restart.
 if [ "${#DEPLOY_SERVICES[@]}" -eq 0 ] || [ -z "${DEPLOY_SERVICES[0]}" ]; then
@@ -447,7 +456,7 @@ in_deployment() {
     printf '%s\n' "${DEPLOY_SERVICES[@]}" | grep -qx "$1"
 }
 
-if ! docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" pull "${DEPLOY_SERVICES[@]}"; then
+if ! docker compose -f "$COMPOSE_FILE" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} pull "${DEPLOY_SERVICES[@]}"; then
     echo "" >&2
     echo "ERROR: failed to pull images (tag: ${IMAGE_TAG:-latest})." >&2
     echo "  Common causes:" >&2
@@ -589,7 +598,7 @@ wait_for_port() {
 # No `--build`: the image was pulled in step 2. Leaving `--build` here would
 # silently re-compile on the host and defeat the whole point of the registry.
 echo "  Restarting server..."
-docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps server
+docker compose -f "$COMPOSE_FILE" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} up -d --no-deps server
 echo "  Waiting for server to be healthy..."
 wait_for_port server 12349
 echo "  Server is up."
@@ -597,7 +606,7 @@ echo "  Server is up."
 # Internal service next, when this deployment includes one.
 if in_deployment internal-service; then
     echo "  Restarting internal-service..."
-    docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps internal-service
+    docker compose -f "$COMPOSE_FILE" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} up -d --no-deps internal-service
     echo "  Waiting for internal-service to be healthy..."
     wait_for_port internal-service "${INTERNAL_SERVICE_PORT:-12345}"
     echo "  Internal service is up."
@@ -613,7 +622,7 @@ if in_deployment ui; then
     # this point (cache invalidation, disk pressure, a transient npm error) would land AFTER the
     # server and internal-service have already been swapped to their new images, leaving production
     # on a new backend with the old UI. Build everything first, restart afterwards.
-    docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps ui
+    docker compose -f "$COMPOSE_FILE" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} up -d --no-deps ui
     # Wait for nginx to actually serve (the ui healthcheck does a wget --spider
     # on :8080). Without this the deploy reports success even if nginx failed to
     # start (bad config, missing dist/) — the cloudflared step would then start
@@ -627,7 +636,7 @@ fi
 # Cloudflared if tunnel profile is active
 if [[ "$TUNNEL_PROFILE_ACTIVE" == "true" ]]; then
     echo "  Restarting cloudflared..."
-    docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps cloudflared
+    docker compose -f "$COMPOSE_FILE" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} up -d --no-deps cloudflared
     echo "  Cloudflared is up."
 fi
 
@@ -635,7 +644,7 @@ echo ""
 
 # Step 4: Verify
 echo "[4/4] Verifying deployment..."
-docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" ps
+docker compose -f "$COMPOSE_FILE" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} ps
 echo ""
 
 # Show data volume status. Two `--filter name=` flags AND-combine on
