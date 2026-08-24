@@ -171,6 +171,45 @@ Cloudflare TLS/Access boundary entirely (an attacker can hit
                     └─────────────┘
 ```
 
+## Audio and video calls
+
+Calls are peer to peer. There is no SFU, no TURN server and no media relay — the
+workspace server never sees a frame — so what they need from a deployment is
+different from what messaging needs.
+
+**A datagram path between peers.** Peer connections are established with
+`UdpMode::Enabled`, and media rides that channel. Media deliberately does not
+fall back to the reliable channel: on a reliable ordered transport there is no
+such thing as a lost packet, so congestion becomes unbounded latency instead,
+and a call running seconds behind is worse than one that dropped a frame.
+
+If UDP cannot be negotiated between two peers, messaging still works and only
+calling is lost. The client says so explicitly rather than appearing to connect
+and carrying nothing.
+
+Practical consequences:
+
+- Peers behind symmetric NAT or a UDP-blocking firewall may fail to establish
+  the datagram path. Nothing needs to be opened on the SERVER for this; it is a
+  property of the two clients' networks.
+- No media ports need to be exposed on the workspace server. It carries call
+  SIGNALLING inside ordinary messages, and nothing else.
+
+**Browser requirements.** Encoding and decoding happen in the browser via
+WebCodecs, which is the only route to hardware encoders. The client probes
+support at runtime and disables the call buttons with the reason when it is
+missing, so an unsupported browser degrades to a working messaging client rather
+than a broken call.
+
+**Group calls are a full mesh**, capped at 8 participants with video and 12
+audio-only. Each participant uploads one stream per peer, so the practical limit
+is uplink bandwidth rather than server capacity. Above the cap the UI refuses
+with an explanation instead of starting a call that would collapse.
+
+**Membership matters.** A room's callable roster comes from its members.
+Registering an account does not make someone a member of any domain, so a
+brand-new room has nobody to call until members are added.
+
 ## Existing Remote Deployment
 
 Two scripts exist for deploying to `avarok2` (51.81.107.44):
