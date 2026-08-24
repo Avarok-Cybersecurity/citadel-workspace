@@ -205,6 +205,53 @@ lsof -i :5291
 # If not, check Tiltfile for port config
 ```
 
+### The whole app is broken and the internal service logs nothing
+
+Check `citadel-workspaces/public/wasm/` is not empty. An empty directory makes
+the browser fetch `index.html` for the `.wasm` URL — the console shows
+`expected magic word 00 61 73 6d, found 3c 21 44 4f` (that is `<!DO`) — WASM init
+throws, and **every internal-service call silently does nothing**. It presents as
+a dozen unrelated failures at once (login, workspace init, directory navigation)
+while the service logs only health checks.
+
+Recover with `./sync-wasm-clients.sh`, or `cargo check -p citadel-workspace-internal-service`
+from the repo root, which rebuilds and redistributes the client.
+
+### Playwright cannot launch a browser
+
+If the error names an impossible browser build (`chromium-1234`) and tells you to
+run `npx playwright install`, installing browsers will not help. Two Playwright
+copies are resolving differently: `npx` finds the root's, `require()` walks up
+from `integration-tests` and finds another. Remove the shadow:
+
+```bash
+rm -rf citadel-workspaces/node_modules/{playwright,playwright-core,@playwright}
+```
+
+### vitest or the build complains about a platform binary
+
+The Docker sync installs Linux binaries into the bind-mounted
+`citadel-workspaces/node_modules` on a macOS host. Restore the tree with `npm ci`
+from the REPO ROOT — not a targeted delete, which leaves a version-mixed tree
+that fails in more confusing ways.
+
+### Code changes not taking effect in a container
+
+`docker compose restart` reuses what is in the image. Rust services AND
+`sync-wasm-clients.sh` (which is copied into the sync image, not mounted) need:
+
+```bash
+docker compose build internal-service server sync-wasm-client
+docker compose up -d
+```
+
+### Audio/video call specs
+
+`call-audio-video.spec.ts` and `call-group.spec.ts` launch their own browsers
+with `--use-fake-device-for-media-stream`, so they need no camera, microphone or
+permission prompt. They do need peers connected with a UDP path; a call that
+cannot get one reports that explicitly rather than hanging.
+
 ### Need more detailed logs
 ```bash
 # Follow internal-service logs in real-time
