@@ -269,6 +269,23 @@ print_status "Installing dependencies for citadel-workspaces.."
 # our workspace npm-ci flow uses.
 npm install --package-lock=false --legacy-peer-deps
 
+# Drop the Playwright copies this install just placed here.
+#
+# `--package-lock=false` resolves fresh, so it installs whatever version the
+# range allows rather than the one the root lockfile pins. The result is TWO
+# Playwright installs: `npx` picks the root's, while `require()` walks up from
+# integration-tests and finds this one. They disagree about which browser build
+# to use, and the failure is a browser path with an impossible build number
+# (chromium-1234) and a "Please run npx playwright install" banner that does not
+# help, because installing browsers is not the problem.
+#
+# Removed rather than pinned: nothing under citadel-workspaces/ needs Playwright
+# at all — the tests live in integration-tests/ and resolve from the root.
+if [ -d node_modules/playwright ] || [ -d node_modules/playwright-core ] || [ -d node_modules/@playwright ]; then
+    print_status "Removing Playwright from citadel-workspaces/node_modules (it shadows the root install)"
+    rm -rf node_modules/playwright node_modules/playwright-core node_modules/@playwright
+fi
+
 # Recreate symlinks for WASM client (removed when node_modules was deleted)
 print_status "Recreating symlinks for citadel-internal-service-wasm-client..."
 ln -sf ../../citadel-internal-service/typescript-client node_modules/citadel-internal-service-wasm-client

@@ -77,12 +77,15 @@ workspace server on `:12349`.
 The first account to register initialises the workspace and becomes its
 administrator. Everyone after that joins it.
 
-**Rust changes need a rebuilt image, not a restart.** `docker compose restart`
-reuses the compiled binary, so the container keeps running the old code while the
-source looks correct — a genuinely confusing failure. Use:
+**Code inside a container needs a rebuilt image, not a restart.**
+`docker compose restart` reuses what is already in the image, so the container
+keeps running old code while the source looks correct — a genuinely confusing
+failure. This applies to the Rust services AND to `sync-wasm-clients.sh`, which
+is copied into the sync image rather than mounted:
 
 ```bash
-docker compose build internal-service server && docker compose up -d
+docker compose build internal-service server sync-wasm-client
+docker compose up -d
 ```
 
 ## Tests
