@@ -264,6 +264,24 @@ jobs:
         run: npm run check:lighthouse
         working-directory: citadel-workspaces
 
+      - name: Install Chromium for the offline check
+        # check:pwa is a static read of dist/ and needs no browser. Proving the
+        # app actually LOADS offline needs a real service worker to register,
+        # activate and serve a navigation from cache, which only a browser does.
+        if: matrix.project == 'citadel-workspaces'
+        run: npx playwright install --with-deps chromium
+        working-directory: citadel-workspaces
+
+      - name: PWA offline behaviour
+        # The app tells the user "will now load without a connection" once the
+        # worker is ready. Nothing verified that promise until this step: a
+        # precache that silently stopped covering the shell would leave an
+        # installed app opening to a blank page with no connection, and every
+        # other check would stay green.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:pwa-offline
+        working-directory: citadel-workspaces
+
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
     runs-on: ubuntu-latest
