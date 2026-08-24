@@ -288,6 +288,24 @@ jobs:
             artifact: account-mgmt
           - test: test:hierarchy-nav
             artifact: hierarchy-nav
+          # The tree specs ran in NO CI job at all. Seven of them had npm
+          # scripts and none was in this matrix, so the workspace hierarchy —
+          # including the permission checks that verify a member cannot create
+          # or delete tree structure — was never exercised on a PR.
+          - test: test:tree-validator
+            artifact: tree-validator
+          - test: test:tree-cascade
+            artifact: tree-cascade
+          - test: test:tree-structure
+            artifact: tree-structure
+          - test: test:tree-permissions
+            artifact: tree-permissions
+          - test: test:tree-deep
+            artifact: tree-deep
+          - test: test:tree-move
+            artifact: tree-move
+          - test: test:tree-custom-types
+            artifact: tree-custom-types
     steps:
       - uses: actions/checkout@v4
         with:
