@@ -233,6 +233,15 @@ jobs:
           ${{ github.workspace }}/node_modules/.bin/eslint . --max-warnings 0
         working-directory: ${{ matrix.path }}
 
+      - name: Landing bundle budget
+        # Only the UI has a critical path to defend. "Lightning fast" is easy to
+        # achieve once and lose gradually — one eager import in a shared provider
+        # pulls a chunk onto the first paint and nobody notices, because nothing
+        # was measuring.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run build && npm run check:bundle
+        working-directory: citadel-workspaces
+
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
     runs-on: ubuntu-latest
