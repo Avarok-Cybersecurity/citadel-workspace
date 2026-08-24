@@ -6,8 +6,71 @@ Consolidated from the former `TESTING_QUICK_START.md`, `P2P_TESTING.md` and `P2P
 
 ## Quick start
 
+Everything below assumes the stack is up (`docker compose up -d --wait`, or Tilt)
+and the UI is on **http://localhost:5291**.
 
-## TL;DR
+```bash
+cd citadel-workspaces
+
+npm run typecheck        # strict tsc, no emit
+npm run lint             # eslint, zero warnings tolerated
+npm test                 # unit + component tests (vitest, jsdom)
+npm run build            # production build
+npm run check:bundle     # landing critical path must stay under budget
+npm run check:pwa        # the app must remain installable
+```
+
+`check:bundle` and `check:pwa` exist because both properties fail silently. A
+chunk pulled onto the first paint just makes the app slower, and a broken
+manifest field just means the browser stops offering to install it — nothing
+errors in either case, so only an explicit check notices.
+
+### Browser tests
+
+Two suites, for historical reasons, both real:
+
+```bash
+cd citadel-workspaces/integration-tests
+
+npx playwright test                       # accessibility, responsive, keyboard,
+                                          # login, P2P, multi-tab, office CRUD
+npm run build && node dist/tests/<name>.test.js   # the legacy runner
+```
+
+The Playwright suite includes gates that are easy to lose and hard to notice
+losing:
+
+| Spec | What it defends |
+|---|---|
+| `accessibility.spec.ts` | axe over nine screens; fails on serious/critical only |
+| `responsive.spec.ts` | no horizontal overflow at 375px, and controls stay reachable |
+| `keyboard-navigation.spec.ts` | every flow usable without a mouse; dialogs escapable |
+
+The legacy runner covers the protocol-heavy scenarios — P2P messaging, file
+transfer, the workspace tree, reconnection. `.github/workflows/validate.yml`
+lists the full set it runs.
+
+### Two things that will waste your time if you do not know them
+
+**The suite shares one backend.** Every spec registers real accounts against the
+same server, so specs cannot run concurrently — `playwright.config.ts` pins
+`workers: 1` for this reason, and running two suites at once produces failures
+that look exactly like product bugs. A batch run also degrades as it goes: state
+accumulates, and a spec that times out at the end of a long batch will often pass
+in seconds on its own. **Re-run a failure alone before diagnosing it.**
+
+**`locator.isVisible({ timeout })` does not wait.** The timeout is ignored and it
+answers about the current instant. Use `isVisibleWithin(locator, ms)` /
+`isHiddenWithin(...)` from `src/lib` for a presence or absence assertion, and
+plain `isVisible()` with no argument when you genuinely mean "right now". This
+one API is where most of this suite's sleeps came from, and where several
+assertions that appeared to pass were never checking anything.
+
+---
+
+## Session management (specific scenario)
+
+### TL;DR
 
 ```bash
 # 1. Verify fixes are in code
@@ -56,7 +119,7 @@ The "Session Already Connected" bug fix that:
 ```
 
 Follow the prompts:
-1. Create account at http://localhost:5173/
+1. Create account at http://localhost:5291/
 2. Logout via avatar dropdown
 3. Login again with same credentials
 
@@ -115,8 +178,8 @@ tilt get uiresources
 
 ### Can't access UI
 ```bash
-# Check if UI is on port 5173
-lsof -i :5173
+# Check if UI is on port 5291
+lsof -i :5291
 
 # If not, check Tiltfile for port config
 ```
@@ -217,10 +280,10 @@ Browser Window
 
 ```bash
 # Open Tab 1
-http://localhost:5173/ → Create testuser1
+http://localhost:5291/ → Create testuser1
 
 # Open Tab 2 (same browser)
-http://localhost:5173/ → Create testuser2
+http://localhost:5291/ → Create testuser2
 
 # Test P2P between Tab 1 and Tab 2
 # Both users share the same WebSocket connection
@@ -243,7 +306,7 @@ Browser 2 (or incognito) → testuser2
 ### Phase 1: Create Test Users
 
 #### Tab 1: Create First User
-1. Navigate to `http://localhost:5173/`
+1. Navigate to `http://localhost:5291/`
 2. Fill in workspace connection:
    - Workspace: `127.0.0.1:12349`
    - Password: (leave empty)
@@ -257,7 +320,7 @@ Browser 2 (or incognito) → testuser2
 
 #### Tab 2: Create Second User
 1. Open new tab (same browser)
-2. Navigate to `http://localhost:5173/`
+2. Navigate to `http://localhost:5291/`
 3. Repeat connection steps (same workspace)
 4. Create user profile:
    - Full Name: `Test User Two`
@@ -710,12 +773,12 @@ fi
 
 ## Prerequisites
 - Tilt services running (`tilt up`)
-- Browser at http://localhost:5173/
+- Browser at http://localhost:5291/
 
 ## Test Steps
 
 ### 1. Create User 1 (Tab 0)
-1. Open http://localhost:5173/
+1. Open http://localhost:5291/
 2. Click "Join Workspace"
 3. Enter username: `p2ptestA_<timestamp>` (e.g., `p2ptestA_1765482949`)
 4. Enter password: `test12345`
@@ -725,7 +788,7 @@ fi
 
 ### 2. Create User 2 (Tab 1)
 1. Open new browser tab
-2. Navigate to http://localhost:5173/
+2. Navigate to http://localhost:5291/
 3. Click "Join Workspace"
 4. Enter username: `p2ptestB_<timestamp>` (same timestamp as user1)
 5. Enter password: `test12345`

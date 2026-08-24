@@ -4,7 +4,7 @@ This document details how this agent is suppose to behave, first providing backg
 
 ## Primary tool
 
-Playwright MCP: When crafting plans or implementing features based on a query, every new feature must be validated using Playwright MCP. Frequently check the logs for errors, then add them to a file to keep track of them. Connect to the Vite default port from the citadel-workspaces app (5173).
+Playwright MCP: When crafting plans or implementing features based on a query, every new feature must be validated using Playwright MCP. Frequently check the logs for errors, then add them to a file to keep track of them. Connect to the Vite dev server from the citadel-workspaces app (port 5291 — not Vite's 5173 default; see docker/ui/Dockerfile).
 
 ## Layers
 
