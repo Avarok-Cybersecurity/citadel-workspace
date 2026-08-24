@@ -185,8 +185,19 @@ fn copy_wasm_files(src: &Path, dst: &Path) -> std::io::Result<()> {
   ]
 }"#;
 
-    // Only write package.json to wasm-client-ts, not to public/wasm
-    if dst.ends_with("wasm-client-ts") || dst.ends_with("typescript-client") {
+    // Generated destinations only. typescript-client/package.json is TRACKED IN
+    // GIT and is the source of truth for that package — it carries the build,
+    // clean and test scripts, the dist entry points, the exports map and the
+    // dependencies, none of which the minimal literal above has.
+    //
+    // Writing it here destroyed all of that on every `cargo check` of this
+    // workspace. The damage was not local: sync-wasm-clients.sh refuses to run
+    // against a package.json with no build script, and it deletes
+    // citadel-workspaces/public/wasm first, so a sync after a plain cargo check
+    // left the browser fetching a WASM binary that no longer existed and every
+    // internal-service call silently doing nothing. It also got committed twice,
+    // because `git add -A` cannot tell a generated file from an edited one.
+    if dst.ends_with("wasm-client-ts") {
         let package_file = dst.join("package.json");
         fs::write(&package_file, package_json)?;
         println!(
