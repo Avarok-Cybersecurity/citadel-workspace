@@ -188,6 +188,21 @@ pub enum WorkspaceProtocolRequest {
         node_id: String,
     },
 
+    /// Set the workspace theme every member sees.
+    ///
+    /// Separate from UpdateWorkspace because that requires the workspace master
+    /// password — the right gate for renaming or deleting a workspace, and the
+    /// wrong one for changing a colour. This is gated on Permission::Themes
+    /// instead, so an authorised member can edit the appearance without holding
+    /// the credential that lets them destroy the workspace.
+    UpdateWorkspaceTheme {
+        /// None targets the root workspace, matching UpdateWorkspace.
+        workspace_id: Option<String>,
+        /// Serialized theme, stored verbatim in the workspace's metadata.
+        #[cfg_attr(feature = "typescript", ts(type = "number[]"))]
+        theme: Vec<u8>,
+    },
+
     /// Update an existing node's properties
     UpdateNode {
         node_id: String,

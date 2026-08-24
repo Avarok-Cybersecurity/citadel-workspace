@@ -292,6 +292,10 @@ impl Permission {
                 permissions.insert(Self::DeleteWorkspace);
                 permissions.insert(Self::EditTreeStructure);
                 permissions.insert(Self::ManageNodeTypes);
+                // The workspace owner sets its appearance. Admin reaches this
+                // through the All wildcard; Owner's set is explicit, so a new
+                // permission has to be listed here or the owner silently lacks it.
+                permissions.insert(Self::Themes);
             }
             UserRole::Member => {
                 // Basic member permissions

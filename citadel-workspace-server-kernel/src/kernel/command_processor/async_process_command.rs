@@ -128,6 +128,57 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             }
         }
 
+        WorkspaceProtocolRequest::UpdateWorkspaceTheme {
+            workspace_id,
+            theme,
+        } => {
+            use citadel_workspace_types::structs::Permission;
+
+            let target_id = workspace_id.as_deref().unwrap_or(crate::WORKSPACE_ROOT_ID);
+
+            // Gated on Permission::Themes rather than the master password: this
+            // changes how the workspace looks, not what it is, so it must not
+            // require the credential that also permits deleting it.
+            let allowed = {
+                use crate::handlers::domain::async_ops::AsyncPermissionOperations;
+                kernel
+                    .domain_operations
+                    .check_entity_permission(actor_user_id, target_id, Permission::Themes)
+                    .await
+                    .unwrap_or(false)
+            };
+
+            if !allowed {
+                return Ok(WorkspaceProtocolResponse::Error(
+                    "Permission denied: Themes required".to_string(),
+                ));
+            }
+
+            match kernel
+                .domain_operations
+                .backend_tx_manager
+                .get_workspace(target_id)
+                .await
+            {
+                Ok(Some(mut workspace)) => {
+                    workspace.metadata = theme.clone();
+                    kernel
+                        .domain_operations
+                        .backend_tx_manager
+                        .insert_workspace(target_id.to_string(), workspace.clone())
+                        .await?;
+                    Ok(WorkspaceProtocolResponse::Workspace(workspace))
+                }
+                Ok(None) => Ok(WorkspaceProtocolResponse::Error(
+                    "Workspace not found".to_string(),
+                )),
+                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
+                    "Failed to update workspace theme: {}",
+                    e
+                ))),
+            }
+        }
+
         WorkspaceProtocolRequest::DeleteWorkspace {
             workspace_id,
             workspace_master_password,
