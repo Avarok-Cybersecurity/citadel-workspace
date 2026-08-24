@@ -269,6 +269,8 @@ pub enum Permission {
     EditTreeStructure,
     /// Manage custom node types
     ManageNodeTypes,
+    /// Edit the workspace theme every member sees
+    Themes,
 }
 
 impl Permission {
@@ -425,6 +427,8 @@ pub struct DomainPermissions {
     pub edit_tree_structure: bool,
     /// Whether users can manage custom node types
     pub manage_node_types: bool,
+    /// Whether users can edit the workspace theme shown to every member
+    pub themes: bool,
 }
 
 impl Default for DomainPermissions {
@@ -468,6 +472,7 @@ impl Default for DomainPermissions {
             // Tree structure - disabled by default
             edit_tree_structure: false,
             manage_node_types: false,
+            themes: false,
         }
     }
 }
@@ -522,6 +527,7 @@ impl DomainPermissions {
             configure_system: true,
             edit_tree_structure: true,
             manage_node_types: true,
+            themes: true,
         }
     }
 
@@ -554,6 +560,7 @@ impl DomainPermissions {
                     && self.configure_system
                     && self.edit_tree_structure
                     && self.manage_node_types
+                    && self.themes
             }
             Permission::ViewContent => self.view_content,
             Permission::ReadMessages => self.read_messages,
@@ -580,6 +587,7 @@ impl DomainPermissions {
             Permission::ConfigureSystem => self.configure_system,
             Permission::EditTreeStructure => self.edit_tree_structure,
             Permission::ManageNodeTypes => self.manage_node_types,
+            Permission::Themes => self.themes,
         }
     }
 }
