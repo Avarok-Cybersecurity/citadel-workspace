@@ -342,6 +342,23 @@ jobs:
             artifact: revfs-peer
           - test: test:revfs:server
             artifact: revfs-server
+          # Peer group chat, plus the five reconnection specs. These had scripts
+          # but no matrix entry, so the reconnection paths — C2S drop, P2P drop,
+          # and the combinations — had never been exercised by CI at all.
+          # office-chat and room-chat are deliberately absent: they fail today,
+          # and the reason is documented in group-chat/office-chat.test.ts.
+          - test: test:peer-group
+            artifact: peer-group
+          - test: test:reconnect-c2s
+            artifact: reconnect-c2s
+          - test: test:reconnect-p2p-only
+            artifact: reconnect-p2p-only
+          - test: test:reconnect-one-c2s
+            artifact: reconnect-one-c2s
+          - test: test:reconnect-both-c2s
+            artifact: reconnect-both-c2s
+          - test: test:reconnect-p2p-one-c2s
+            artifact: reconnect-p2p-one-c2s
     steps:
       - uses: actions/checkout@v4
         with:
