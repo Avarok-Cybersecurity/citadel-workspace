@@ -55,31 +55,41 @@ Number(cid) // Returns: 2283033082066832400 (lost precision!)
 - Keep CIDs as strings in JavaScript
 - Update `convert_string_cids_to_numbers` in WASM client to handle `session_cid`
 
-### 2. Package.json Overwriting
-`wasm-pack` overwrites `package.json` with minimal content.
+### 2. package.json is TRACKED — nothing may overwrite it
 
-**Solution:**
-The sync script restores the correct `package.json` with:
-```json
-{
-  "name": "citadel-internal-service-wasm-client",
-  "type": "module",
-  "version": "0.1.0",
-  "files": ["*.wasm", "*.js", "*.d.ts", "src/**/*", "dist/**/*"],
-  "main": "src/index.ts",
-  "types": "src/index.ts"
-}
+`citadel-internal-service/typescript-client/package.json` is tracked in git and
+is the source of truth for that package: the build/clean/test scripts, the dist
+entry points, the exports map and the dependencies. `wasm-pack` emits its own
+minimal package.json into `pkg/`, and `build.rs` used to copy a similar minimal
+one over the tracked file on every `cargo check`.
+
+**Why this was disproportionately bad.** `sync-wasm-clients.sh` refuses to run
+against a package.json with no build script — and it deletes
+`citadel-workspaces/public/wasm/*` first. So a sync after any plain
+`cargo check` left the browser loading its glue JS while fetching a WASM binary
+from an empty directory. WASM init throws, and **every internal-service call
+silently no-ops**, registration included. It presents as unrelated UI failures
+(login, workspace init, directory navigation) while the internal service logs
+nothing but health checks.
+
+**Current behaviour (fixed 2026-08-24):**
+
+- `build.rs` writes a generated package.json ONLY to genuinely generated
+  destinations, never to `typescript-client/`.
+- `sync-wasm-clients.sh` validates the tracked file BEFORE any destructive step,
+  so a bad input fails fast and leaves a working environment behind.
+- The copy step takes only `*.wasm`, `*.js` and `*.d.ts`, so nothing in the
+  script can clobber it.
+
+**If it happens anyway:**
+
+```bash
+git -C citadel-internal-service checkout -- typescript-client/package.json
 ```
 
-### 3. Import Path Confusion
-Vite may try to import from raw WASM files instead of TypeScript wrappers.
-
-**Solution:**
-Ensure imports use the TypeScript wrapper:
-```typescript
-import { InternalServiceWasmClient } from 'citadel-websocket-client';
-// NOT from '../citadel_internal_service_wasm_client.js'
-```
+Then re-run the sync. And never `git add -A` after a `cargo check` or a sync in
+this repo — that is how the clobbered file got committed twice. Stage explicit
+paths.
 
 ## Automated Synchronization
 
@@ -132,7 +142,13 @@ npm run dev
 
 ## Integration with build.rs
 
-The `citadel-workspace-internal-service/build.rs` script also builds WASM automatically when building the internal service. However, it may not update all locations correctly. Use `sync-wasm-clients.sh` for complete synchronization.
+The `citadel-workspace-internal-service/build.rs` script also builds WASM
+automatically when building the internal service, and distributes it to the
+three consuming locations. It does NOT write `typescript-client/package.json` —
+see the section above for why that matters.
+
+Use `sync-wasm-clients.sh` when you want the full pipeline (types, npm builds,
+cache-busting) rather than just the binary.
 
 ## Troubleshooting
 
@@ -152,6 +168,15 @@ if (key == "cid" || key == "peer_cid" || key == "session_cid") && v.is_string() 
 1. Ensure all WASM files are synchronized (check file sizes)
 2. Restart the Vite dev server
 3. Clear browser cache and hard refresh
+
+### The whole app is broken and the service logs nothing
+Check `citadel-workspaces/public/wasm/` is not empty, and that
+`citadel-internal-service/typescript-client/package.json` still has its
+`scripts` block. An empty wasm directory makes the browser fetch `index.html`
+for the `.wasm` URL — the console shows
+`expected magic word 00 61 73 6d, found 3c 21 44 4f` (that is `<!DO`). Every
+internal-service call then silently does nothing, which looks like a dozen
+unrelated bugs at once.
 
 ## Best Practices
 
