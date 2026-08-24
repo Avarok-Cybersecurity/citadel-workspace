@@ -60,6 +60,19 @@ DEST3="$WORKSPACE_ROOT/citadel-workspace-client-ts/"
 # Ensure destination directories exist
 mkdir -p "$DEST1" "$DEST2" "$DEST3"
 
+# Validate the tracked package.json BEFORE any destructive step. The clean step below
+# wipes public/wasm, so a check that only runs later (as it once did, after the copy)
+# turns a bad package.json into a dead dev environment: the browser fetches an empty
+# /wasm/ directory, WASM init fails, and every internal-service operation silently
+# no-ops. Failing here leaves the previous, working artifacts untouched.
+if ! grep -q '"build"' "$DEST1/package.json" 2>/dev/null; then
+    print_error "CRITICAL: $DEST1/package.json is missing its build script."
+    print_error "It is tracked in git - restore it with:"
+    print_error "  git -C \"$INTERNAL_SERVICE_ROOT\" checkout -- typescript-client/package.json"
+    exit 1
+fi
+print_status "package.json intact (tracked file preserved)"
+
 print_status "Starting WASM client synchronization..."
 
 # Step 0: Clean
@@ -147,15 +160,8 @@ if [ -d "$DEST1" ]; then
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.wasm "$DEST1/"
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.js "$DEST1/"
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.d.ts "$DEST1/"
-    # Sanity-check the tracked package.json survived the copy. We no longer write it (see the
-    # note in the clean step); this only catches the case where something else clobbered it.
-    if ! grep -q '"build"' "$DEST1/package.json" 2>/dev/null; then
-        print_error "CRITICAL: $DEST1/package.json is missing its build script."
-        print_error "It is tracked in git - restore it with:"
-        print_error "  git -C \"$INTERNAL_SERVICE_ROOT\" checkout -- typescript-client/package.json"
-        exit 1
-    fi
-    print_status "package.json intact (tracked file preserved)"
+    # package.json is validated up front, before the clean step - the copy above only
+    # takes *.wasm/*.js/*.d.ts, so nothing in this script can clobber it anymore.
 
     # Add cache busting to WASM loader
     TIMESTAMP=$(date +%s)
