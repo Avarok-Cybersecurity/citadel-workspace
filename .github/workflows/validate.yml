@@ -242,6 +242,14 @@ jobs:
         run: npm run build && npm run check:bundle
         working-directory: citadel-workspaces
 
+      - name: PWA installability
+        # The install button is drawn by the browser, not the app: if a manifest
+        # field or an icon breaks, the button simply stops appearing. Nothing
+        # errors and nothing logs, so only an explicit check notices.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:pwa
+        working-directory: citadel-workspaces
+
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
     runs-on: ubuntu-latest
