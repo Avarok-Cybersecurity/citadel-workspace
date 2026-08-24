@@ -55,9 +55,30 @@ lists the full set it runs.
 **The suite shares one backend.** Every spec registers real accounts against the
 same server, so specs cannot run concurrently — `playwright.config.ts` pins
 `workers: 1` for this reason, and running two suites at once produces failures
-that look exactly like product bugs. A batch run also degrades as it goes: state
-accumulates, and a spec that times out at the end of a long batch will often pass
-in seconds on its own. **Re-run a failure alone before diagnosing it.**
+that look exactly like product bugs. Each spec resets the backend before it runs
+(`restartBackend` on `TestHarness.create`, which is required rather than
+defaulted, so a new spec cannot forget). **Re-run a failure alone before
+diagnosing it** — that habit predates the reset and is still the cheapest way to
+separate a real defect from an environment one.
+
+**Do not edit `citadel-workspaces/src` while specs are running.** Vite serves the
+working tree with hot reloading, so a mid-run edit swaps the component under test
+and you get a failure that will not reproduce, or a pass that was never earned.
+Editing files under `integration-tests/` is safe — the runner builds `dist/` once
+before the first spec.
+
+To run a few specs and keep partial results, use the batch runner:
+
+```bash
+cd citadel-workspaces/integration-tests
+./scripts/run-specs.sh p2p-messaging file-manager group-chat/office-chat
+```
+
+It prints one line per spec and writes the full output to `/tmp/spec-<name>.log`.
+A verdict of **NO VERDICT** means the process died before reporting — a crash
+rather than a failed assertion, so read the tail of the log. An uncaught
+rejection inside a spec takes node down and discards every result it had already
+collected.
 
 **`locator.isVisible({ timeout })` does not wait.** The timeout is ignored and it
 answers about the current instant. Use `isVisibleWithin(locator, ms)` /
