@@ -75,6 +75,20 @@ fn main() {
         .arg("--out-dir")
         .arg("pkg")
         .current_dir(&wasm_client_dir)
+        // wasm-pack spawns its own cargo, and a nested cargo inherits the
+        // toolchain wiring of the one that spawned it. Under `cargo clippy` that
+        // means RUSTC_WORKSPACE_WRAPPER points at clippy-driver, which the inner
+        // build cannot use for a different target, so the whole workspace lint
+        // run dies inside a build script with only "wasm-pack build failed!".
+        // The same build succeeds under `cargo check`, which sets no wrapper —
+        // which is exactly what makes this confusing to diagnose.
+        .env_remove("RUSTC_WORKSPACE_WRAPPER")
+        .env_remove("RUSTC_WRAPPER")
+        .env_remove("RUSTC")
+        .env_remove("CARGO")
+        .env_remove("CARGO_MAKEFLAGS")
+        .env_remove("CARGO_ENCODED_RUSTFLAGS")
+        .env_remove("RUSTFLAGS")
         .output()
         .expect("Failed to execute wasm-pack");
 

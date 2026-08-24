@@ -70,4 +70,15 @@ limit: number | null, } } | { "GetThreadMessages": { group_id: string,
 /**
  * The parent message ID
  */
-parent_message_id: string, } } | "GetServerCapabilities" | { "CreateNode": { parent_id: string | null, entity_type: NodeEntityType, name: string, description: string, } } | { "GetNode": { node_id: string, } } | { "UpdateNode": { node_id: string, name: string | null, description: string | null, mdx_content: string | null, rules: string | null, chat_enabled: boolean | null, } } | { "DeleteNode": { node_id: string, cascade: boolean, } } | { "MoveNode": { node_id: string, new_parent_id: string | null, } } | { "ListNodes": { parent_id: string | null, depth: number | null, entity_types: Array<NodeEntityType> | null, } } | { "GetTreeStructure": { root_id: string | null, max_depth: number | null, } } | "GetTreeSchema" | { "UpdateTreeSchema": { schema: TreeSchema, } } | { "CreateNodeType": { name: string, display_name: string, icon: string | null, allowed_parents: Array<string>, } } | "ListNodeTypes";
+parent_message_id: string, } } | "GetServerCapabilities" | { "CreateNode": { parent_id: string | null, entity_type: NodeEntityType, name: string, description: string, } } | { "GetNode": { node_id: string, } } | { "UpdateWorkspaceTheme": { 
+/**
+ * None targets the root workspace, matching UpdateWorkspace.
+ */
+workspace_id: string | null, 
+/**
+ * The serialized theme envelope. The server merges it into the
+ * workspace's metadata under a `theme` key rather than storing it as
+ * the whole document — metadata is shared with other features, and
+ * overwriting it erased the initialisation marker.
+ */
+theme: number[], } } | { "UpdateNode": { node_id: string, name: string | null, description: string | null, mdx_content: string | null, rules: string | null, chat_enabled: boolean | null, } } | { "DeleteNode": { node_id: string, cascade: boolean, } } | { "MoveNode": { node_id: string, new_parent_id: string | null, } } | { "ListNodes": { parent_id: string | null, depth: number | null, entity_types: Array<NodeEntityType> | null, } } | { "GetTreeStructure": { root_id: string | null, max_depth: number | null, } } | "GetTreeSchema" | { "UpdateTreeSchema": { schema: TreeSchema, } } | { "CreateNodeType": { name: string, display_name: string, icon: string | null, allowed_parents: Array<string>, } } | "ListNodeTypes";

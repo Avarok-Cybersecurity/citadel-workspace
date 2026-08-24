@@ -105,4 +105,8 @@ edit_tree_structure: boolean,
 /**
  * Whether users can manage custom node types
  */
-manage_node_types: boolean, };
+manage_node_types: boolean, 
+/**
+ * Whether users can edit the workspace theme shown to every member
+ */
+themes: boolean, };
