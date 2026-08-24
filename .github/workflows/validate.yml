@@ -342,13 +342,19 @@ jobs:
             artifact: revfs-peer
           - test: test:revfs:server
             artifact: revfs-server
-          # Peer group chat, plus the five reconnection specs. These had scripts
-          # but no matrix entry, so the reconnection paths — C2S drop, P2P drop,
-          # and the combinations — had never been exercised by CI at all.
-          # office-chat and room-chat are deliberately absent: they fail today,
-          # and the reason is documented in group-chat/office-chat.test.ts.
+          # Group chat, plus the five reconnection specs. These had scripts but
+          # no matrix entry, so the reconnection paths — C2S drop, P2P drop, and
+          # the combinations — had never been exercised by CI at all.
           - test: test:peer-group
             artifact: peer-group
+          - test: test:office-chat
+            artifact: office-chat
+          - test: test:room-chat
+            artifact: room-chat
+          # native-file-picker had no npm script at all, so it was invisible to
+          # both CI and `npm run` — the only spec in the suite with neither.
+          - test: test:native-file-picker
+            artifact: native-file-picker
           - test: test:reconnect-c2s
             artifact: reconnect-c2s
           - test: test:reconnect-p2p-only
