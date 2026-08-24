@@ -73,6 +73,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         }
 
         // Get current nodes for validation
+        // Serialize the whole read-modify-write below. The nodes collection is
+        // one HashMap-shaped backend key, so `get_all_nodes` ... `save_nodes`
+        // is a load-modify-save cycle: without this, two concurrent callers
+        // both load the prior map and the second save silently drops the
+        // other's node. The per-mutator lock does not cover this path because
+        // the cycle spans our own awaits, not one mutator's.
+        let _nodes_guard = self.backend_tx_manager.lock_nodes().await;
         let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
 
         // Get schema for validation
@@ -330,6 +337,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         }
 
         // Get all nodes for validation and manipulation
+        // Serialize the whole read-modify-write below. The nodes collection is
+        // one HashMap-shaped backend key, so `get_all_nodes` ... `save_nodes`
+        // is a load-modify-save cycle: without this, two concurrent callers
+        // both load the prior map and the second save silently drops the
+        // other's node. The per-mutator lock does not cover this path because
+        // the cycle spans our own awaits, not one mutator's.
+        let _nodes_guard = self.backend_tx_manager.lock_nodes().await;
         let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
 
         // Validate delete mutation
@@ -410,6 +424,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         })?;
 
         // Get all nodes
+        // Serialize the whole read-modify-write below. The nodes collection is
+        // one HashMap-shaped backend key, so `get_all_nodes` ... `save_nodes`
+        // is a load-modify-save cycle: without this, two concurrent callers
+        // both load the prior map and the second save silently drops the
+        // other's node. The per-mutator lock does not cover this path because
+        // the cycle spans our own awaits, not one mutator's.
+        let _nodes_guard = self.backend_tx_manager.lock_nodes().await;
         let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
 
         // Get schema for validation
