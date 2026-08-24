@@ -198,8 +198,11 @@ pub enum WorkspaceProtocolRequest {
     UpdateWorkspaceTheme {
         /// None targets the root workspace, matching UpdateWorkspace.
         workspace_id: Option<String>,
-        /// Serialized theme, stored verbatim in the workspace's metadata.
-        #[cfg_attr(feature = "typescript", ts(type = "number[]"))]
+        /// The serialized theme envelope. The server merges it into the
+        /// workspace's metadata under a `theme` key rather than storing it as
+        /// the whole document — metadata is shared with other features, and
+        /// overwriting it erased the initialisation marker.
+        #[ts(type = "number[]")]
         theme: Vec<u8>,
     },
 

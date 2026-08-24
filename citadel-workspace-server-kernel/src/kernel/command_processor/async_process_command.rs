@@ -161,7 +161,41 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 .await
             {
                 Ok(Some(mut workspace)) => {
-                    workspace.metadata = theme.clone();
+                    // Merge, do not replace. `metadata` is one JSON object that
+                    // several features share — initialisation writes
+                    // {"initialized": true} there, and the client decides whether
+                    // to show the setup modal from it. Assigning the theme bytes
+                    // over the top erased that marker, so an initialised
+                    // workspace came back looking unconfigured and the setup
+                    // modal opened over a working workspace and blocked every
+                    // click behind its backdrop.
+                    let mut root = serde_json::from_slice::<serde_json::Value>(&workspace.metadata)
+                        .unwrap_or_else(|_| serde_json::json!({}));
+                    if !root.is_object() {
+                        // Not an object, so there are no sibling keys to keep.
+                        // Starting fresh is the only option that yields a
+                        // well-formed document.
+                        root = serde_json::json!({});
+                    }
+                    let theme_value: serde_json::Value = match serde_json::from_slice(theme) {
+                        Ok(value) => value,
+                        Err(e) => {
+                            return Ok(WorkspaceProtocolResponse::Error(format!(
+                                "Theme payload is not valid JSON: {}",
+                                e
+                            )))
+                        }
+                    };
+                    root["theme"] = theme_value;
+                    workspace.metadata = match serde_json::to_vec(&root) {
+                        Ok(bytes) => bytes,
+                        Err(e) => {
+                            return Ok(WorkspaceProtocolResponse::Error(format!(
+                                "Failed to encode workspace metadata: {}",
+                                e
+                            )))
+                        }
+                    };
                     kernel
                         .domain_operations
                         .backend_tx_manager
