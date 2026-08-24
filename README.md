@@ -1,53 +1,110 @@
 # Citadel Workspace
 
-A post-quantum-secure, peer-to-peer collaborative workspace built on the
-[Citadel Protocol](https://github.com/Avarok-Cybersecurity/Citadel-Protocol).
+A collaborative workspace where every message, file and call is encrypted end to
+end with post-quantum cryptography, and traffic travels **directly between
+people** rather than through a server that could read it.
 
-## Layout
+Built on the [Citadel Protocol](https://github.com/Avarok-Cybersecurity/Citadel-Protocol).
 
-This repository uses nested git submodules:
+## What it does
+
+- **Messaging** — direct and group conversations. Messages sent while someone is
+  offline are held and delivered when they return.
+- **Audio and video calls** — one-to-one and group, encoded in the browser and
+  carried over the same encrypted peer channel. No SFU, no TURN server, no third
+  party in the media path.
+- **File transfer** — files go straight to the people in the conversation,
+  without being uploaded to storage in between.
+- **Live documents** — several people editing at once, with changes appearing as
+  they type.
+- **Workspaces, offices and rooms** — a structure teams can map onto how they
+  actually work, with permissions that inherit downward.
+- **Workspace theming** — an administrator sets the palette and icon everyone
+  sees; each person still chooses light or dark for themselves.
+- **Installable** — a PWA that installs to the desktop or home screen and loads
+  without a connection.
+
+## How it fits together
+
+```
+Browser (React + WASM)
+   │  WebSocket, localhost only
+   ▼
+Internal service  ── a LOCAL agent, one per user, that owns protocol connections
+   │
+   ├─ Citadel P2P (reliable)   → chat, signalling, file transfer
+   ├─ Citadel P2P (datagram)   → audio and video frames
+   └─ Citadel C2S              → the workspace server: structure, membership, permissions
+```
+
+The internal service runs on the user's own machine. The workspace server stores
+structure and membership — it never sees message contents, file contents, or
+media.
+
+Media is encoded and decoded in the browser with WebCodecs, so calls reach the
+platform's hardware encoders. The protocol carries opaque encrypted frames and
+never inspects them.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for protocol layers and the full message
+flow.
+
+## Repository layout
+
+Nested git submodules — commit innermost first (see [CLAUDE.md](CLAUDE.md)):
 
 | Path | What it is |
 |------|------------|
 | `citadel-workspaces/` | React + TypeScript UI (submodule) |
-| `citadel-internal-service/` | Rust internal service — the local agent that owns protocol connections (submodule) |
-| `citadel-internal-service/intersession-layer-messaging/` | Reliable offline-capable messaging layer (nested submodule) |
+| `citadel-internal-service/` | Rust internal service, the local agent (submodule) |
+| `citadel-internal-service/intersession-layer-messaging/` | Reliable offline-capable messaging (nested submodule) |
 | `citadel-workspace-client-ts/` | TypeScript/WASM client bindings |
-| `citadel-workspace-server-kernel/` | Rust workspace server kernel |
+| `citadel-workspace-server-kernel/` | Rust workspace server |
 | `citadel-workspace-types/` | Shared Rust protocol types |
 
-## Quick start
+## Running it
 
 ```bash
 git clone --recurse-submodules https://github.com/Avarok-Cybersecurity/citadel-workspace
 cd citadel-workspace
-npm ci
+npm ci                                   # from the ROOT: it is an npm workspace
 
-# bring up server + internal service + UI
-docker compose up -d --build --wait     # or: tilt up
+docker compose up -d --build --wait      # or: tilt up
 ```
 
-The UI is served at <http://127.0.0.1:5291>, the internal service on `:12345`,
-and the workspace server on `:12349`.
+The UI is at <http://127.0.0.1:5291>, the internal service on `:12345`, and the
+workspace server on `:12349`.
+
+The first account to register initialises the workspace and becomes its
+administrator. Everyone after that joins it.
+
+**Rust changes need a rebuilt image, not a restart.** `docker compose restart`
+reuses the compiled binary, so the container keeps running the old code while the
+source looks correct — a genuinely confusing failure. Use:
+
+```bash
+docker compose build internal-service server && docker compose up -d
+```
 
 ## Tests
 
 ```bash
 # Rust
-cargo test -p citadel-workspace-types -p citadel-workspace-internal-service -p citadel-workspace-server-kernel
+cargo test -p citadel-workspace-types -p citadel-workspace-server-kernel
 (cd citadel-internal-service && cargo nextest run)
 
-# TypeScript unit tests
+# TypeScript units
 (cd citadel-workspaces && npx vitest run)
 
-# End-to-end
+# End to end — these share ONE backend, so never run two at once
 (cd citadel-workspaces/integration-tests && npx playwright test)
 ```
 
-See [docs/TESTING.md](docs/TESTING.md) for the full guide.
+The suite also gates accessibility (axe, zero serious violations), Lighthouse
+baselines, PWA installability and offline behaviour, and a landing-page bundle
+budget. See [docs/TESTING.md](docs/TESTING.md).
 
 ## Documentation
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — system architecture, protocol layers, P2P message flow
-- [docs/](docs/README.md) — deployment, testing, WASM build/sync, roadmap and reference docs
-- [CLAUDE.md](CLAUDE.md) — conventions and workflow rules for contributors and AI agents
+- [ARCHITECTURE.md](ARCHITECTURE.md) — protocol layers, P2P message flow, multi-tab coordination
+- [docs/](docs/README.md) — deployment, testing, WASM build and sync, roadmap
+- [CLAUDE.md](CLAUDE.md) — conventions, commit order across submodules, and the rules agents follow
