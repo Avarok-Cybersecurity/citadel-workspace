@@ -104,6 +104,39 @@ export function send_direct_to_internal_service(message) {
 }
 
 /**
+ * Send one encoded media frame to a peer.
+ *
+ * A dedicated binding rather than send_direct_to_internal_service, purely for
+ * the hot path: frames arrive 30-60 times a second per track, and routing each
+ * through a JsValue and serde-wasm-bindgen would deserialize a whole request
+ * object — payload included — per frame. This takes the bytes directly and
+ * builds the request in Rust.
+ *
+ * Fire-and-forget by design. There is no ack to wait for; a frame that cannot
+ * be queued is a frame worth dropping, because by the time a retry arrived it
+ * would be too late to play.
+ * @param {string} local_cid_str
+ * @param {string} peer_cid_str
+ * @param {number} track
+ * @param {number} kind
+ * @param {number} timestamp
+ * @param {number} flags
+ * @param {Uint8Array} payload
+ */
+export function send_media_frame(local_cid_str, peer_cid_str, track, kind, timestamp, flags, payload) {
+    const ptr0 = passStringToWasm0(local_cid_str, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(peer_cid_str, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArray8ToWasm0(payload, wasm.__wbindgen_malloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.send_media_frame(ptr0, len0, ptr1, len1, track, kind, timestamp, flags, ptr2, len2);
+    if (ret[1]) {
+        throw takeFromExternrefTable0(ret[0]);
+    }
+}
+
+/**
  * Sends a P2P message using ISM-routed reliable messaging.
  * Unlike send_p2p_message which bypasses ISM, this function uses
  * send_message_to_with_security_level for guaranteed delivery.
@@ -543,22 +576,22 @@ function __wbg_get_imports() {
             return ret;
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 223, function: Function { arguments: [NamedExternref("CloseEvent")], shim_idx: 224, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 346, function: Function { arguments: [NamedExternref("CloseEvent")], shim_idx: 347, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_9ffe5dd229831af7___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut__web_sys_c92d036cc15e8351___features__gen_CloseEvent__CloseEvent____Output_______, wasm_bindgen_9ffe5dd229831af7___convert__closures_____invoke___web_sys_c92d036cc15e8351___features__gen_CloseEvent__CloseEvent_____);
             return ret;
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 432, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 433, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 446, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 447, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_9ffe5dd229831af7___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut__web_sys_c92d036cc15e8351___features__gen_MessageEvent__MessageEvent____Output_______, wasm_bindgen_9ffe5dd229831af7___convert__closures_____invoke___web_sys_c92d036cc15e8351___features__gen_MessageEvent__MessageEvent_____);
             return ret;
         },
         __wbindgen_cast_0000000000000003: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 502, function: Function { arguments: [Externref], shim_idx: 503, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 516, function: Function { arguments: [Externref], shim_idx: 517, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_9ffe5dd229831af7___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut__wasm_bindgen_9ffe5dd229831af7___JsValue____Output_______, wasm_bindgen_9ffe5dd229831af7___convert__closures_____invoke___wasm_bindgen_9ffe5dd229831af7___JsValue_____);
             return ret;
         },
         __wbindgen_cast_0000000000000004: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 513, function: Function { arguments: [], shim_idx: 514, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 527, function: Function { arguments: [], shim_idx: 528, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_9ffe5dd229831af7___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut_____Output_______, wasm_bindgen_9ffe5dd229831af7___convert__closures_____invoke______);
             return ret;
         },
@@ -805,6 +838,12 @@ function passStringToWasm0(arg, malloc, realloc) {
 
     WASM_VECTOR_LEN = offset;
     return ptr;
+}
+
+function takeFromExternrefTable0(idx) {
+    const value = wasm.__wbindgen_externrefs.get(idx);
+    wasm.__externref_table_dealloc(idx);
+    return value;
 }
 
 let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });

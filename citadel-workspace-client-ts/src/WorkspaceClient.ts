@@ -10,6 +10,15 @@ import { WorkspaceSessionManager, type SessionConfig } from './session';
 interface WorkspaceWasmModule extends WasmModule {
   open_messenger_for(cid_str: string): Promise<void>;
   ensure_messenger_open(cid_str: string): Promise<boolean>;
+  send_media_frame(
+    local_cid_str: string,
+    peer_cid_str: string,
+    track: number,
+    kind: number,
+    timestamp: number,
+    flags: number,
+    payload: Uint8Array,
+  ): void;
 }
 
 // MessageDelivered is not in InternalServiceResponse (type gap in auto-generated bindings).
@@ -311,6 +320,35 @@ export class WorkspaceClient extends InternalServiceWasmClient {
       throw new Error('WASM module not initialized');
     }
     return this.wasmModule as unknown as WorkspaceWasmModule;
+  }
+
+  /**
+   * Send one encoded media frame to a peer.
+   *
+   * Synchronous and unawaited on purpose. Frames arrive 30-60 times a second
+   * per track; a promise per frame would allocate thousands of microtasks a
+   * minute for a result nobody inspects, and there is nothing to await — a
+   * frame that cannot be queued is one worth dropping, because a retry would
+   * arrive too late to play.
+   */
+  sendMediaFrame(
+    localCid: bigint,
+    peerCid: bigint,
+    track: number,
+    kind: number,
+    timestamp: number,
+    flags: number,
+    payload: Uint8Array,
+  ): void {
+    this.getWorkspaceWasmModule().send_media_frame(
+      localCid.toString(),
+      peerCid.toString(),
+      track,
+      kind,
+      timestamp,
+      flags,
+      payload,
+    );
   }
 
   /**
