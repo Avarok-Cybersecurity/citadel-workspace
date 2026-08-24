@@ -129,7 +129,7 @@ The `message` field contains a **serialized `MessageEventType`** from `citadel-w
 - `TextMessage` — plain or markdown text with metadata
 - `LiveDocument` — collaborative document diff with `document_id` and `document_title`
 - `FileMessage` — file transfer metadata
-- `TypingIndicator` — real-time typing state
+- `P2PChatHeader` — shows peer presence and real-time typing state
 - `UserPresence` — online/away/busy status
 - `ReactionAdded` / `ReactionRemoved` — emoji reactions
 - `MessageEdited` / `MessageDeleted` — message lifecycle events
@@ -193,7 +193,7 @@ flowchart TD
         TextMsg[TextMessage]
         LiveDoc[LiveDocument]
         FileMsg[FileMessage]
-        Typing[TypingIndicator]
+        Typing[P2PChatHeader peerTyping]
         Presence[UserPresence]
         Reaction[ReactionAdded/Removed]
         Edit[MessageEdited]

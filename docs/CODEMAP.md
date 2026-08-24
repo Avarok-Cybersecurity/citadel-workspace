@@ -67,7 +67,7 @@
 | Connection retry | `ConnectionRetryModal` | WebSocket reconnection UI |
 | Workspace init | `WorkspaceInitializationModal` | First-time workspace setup |
 | Workspace not init | `WorkspaceNotInitializedModal` | Prompt when workspace doesn't exist |
-| Connection preferences | `PreferencesDialog` | Connection preferences |
+| Connection preferences | Settings → Connections (`ConnectionsSettingsTab`) | Auto-accept P2P registrations, auto-reconnect |
 | Permission manager | `PermissionManagerModal` → `PermissionManager` | Role-based permission editing |
 | Member management | `MemberManagementModal` | Add/remove members |
 | Room content | `Room` → `RoomContentView` | Room-specific content display |
@@ -107,8 +107,8 @@
 | Role management | `GroupRoleEditor` + `GroupRoleHelpers` | Create/edit custom roles |
 | Member management | `GroupMemberManagement` + `GroupMemberManagementHelpers` | Kick, change role |
 | Delete group | `GroupDeleteConfirmDialog` | Owner-only destructive action |
-| Retryable send | `RetryableMessageSender` | Auto-retry failed messages |
-| Typing indicator | `TypingIndicator` | Shows who is typing |
+| Retryable send | `useP2PMessages.handleRetryMessage` | Retry a failed message from its bubble |
+| Typing indicator | `P2PChatHeader` (`peerTyping`) | Shows the peer is typing |
 | Back to workspace | Arrow button | Navigate to `/workspace` |
 
 ---
