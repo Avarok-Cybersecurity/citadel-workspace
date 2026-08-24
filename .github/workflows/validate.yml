@@ -250,6 +250,20 @@ jobs:
         run: npm run check:pwa
         working-directory: citadel-workspaces
 
+      - name: Lighthouse baselines
+        # Accessibility and SEO are held at 100 because they are rule checks, not
+        # measurements — they pass today, so anything less is a regression
+        # somebody introduced. Performance has a deliberately loose floor: it IS
+        # a measurement, a shared runner is slower and noisier than a laptop, and
+        # a tight perf gate produces a flaky red build. A flaky gate is worse
+        # than no gate, because people learn to re-run it without reading it.
+        # Drift is caught precisely by the bundle budget above; this catches a
+        # collapse. The actual scores print either way, so a downward trend is
+        # visible before it trips.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:lighthouse
+        working-directory: citadel-workspaces
+
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
     runs-on: ubuntu-latest
