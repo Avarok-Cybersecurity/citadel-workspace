@@ -181,7 +181,12 @@ jobs:
               echo "::error file=$file::$file has $lines lines (limit: 250)"
               VIOLATIONS=$((VIOLATIONS + 1))
             fi
-          done < <(find citadel-workspaces/src -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.bak')
+          # Tests are excluded on purpose. The cap exists to stop a MODULE
+          # accreting responsibilities; a test file's length measures how many
+          # cases are covered, which is the opposite signal. Splitting one
+          # scatters assertions about a single unit across files and makes the
+          # set harder to read, not easier.
+          done < <(find citadel-workspaces/src -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.bak' ! -path '*/__tests__/*')
 
           if [ "$VIOLATIONS" -gt 0 ]; then
             echo "FAIL: $VIOLATIONS file(s) exceed the 250-line limit"
