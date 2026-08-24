@@ -323,6 +323,25 @@ jobs:
             artifact: tree-move
           - test: test:tree-custom-types
             artifact: tree-custom-types
+          # Specs that existed with an npm script but were never in this matrix,
+          # so they had never run in CI. Each was verified passing locally before
+          # being added here — an unverified entry just turns the pipeline red.
+          - test: test:chat-settings
+            artifact: chat-settings
+          - test: test:directory
+            artifact: directory
+          - test: test:file-manager
+            artifact: file-manager
+          - test: test:notifications
+            artifact: notifications
+          - test: test:settings
+            artifact: settings
+          - test: test:workspace-init
+            artifact: workspace-init
+          - test: test:revfs:peer
+            artifact: revfs-peer
+          - test: test:revfs:server
+            artifact: revfs-server
     steps:
       - uses: actions/checkout@v4
         with:
