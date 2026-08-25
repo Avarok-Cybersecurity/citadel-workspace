@@ -961,8 +961,18 @@ independently — A→B can work while B→A does not, and a channel that report
 
 The specs therefore exchange a verified message in both directions per pair
 before doing anything that matters. Reaching attempt 40 of 60 is normal on a
-cold stack; a three-peer group call warms three pairs, so budget for it. It only
-indicates a real failure if it exhausts all 60.
+cold stack; a three-peer group call warms three pairs, so budget for it.
+
+Exhausting all 60 is usually still the flake, not a defect. Observed: one
+direction warms instantly while the other never does — the log shows only
+`B -> A` retrying, never `A -> B` — and the same spec passed 8/8 on an immediate
+re-run with no retries at all. Before investigating, re-run the spec ALONE. Two
+consecutive failures, or retries in both directions, are what make it worth
+looking at the code.
+
+Read the direction before concluding anything. A failure here is in warm-up,
+which uses ordinary chat messages, so it implicates P2P messaging rather than
+whatever feature the spec was about to test.
 
 Do not "fix" this by lowering the retry count. The wait exists because the
 alternative is a call that fails later, somewhere less obvious.
