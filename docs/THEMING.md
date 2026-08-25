@@ -81,3 +81,35 @@ The generated palettes and `index.css` must agree, and a test enforces it. They
 can silently diverge otherwise: the AA suite reads the PRESET while the browser
 reads `index.css`, so a change applied to only one leaves every test green and
 the product wrong.
+
+
+## Known: `text-primary` fails contrast on every dark surface
+
+Measured against the dark tokens as they stand (`--primary: 257 30% 50%`):
+
+| surface | ratio | body text (4.5:1) | large text / icons (3:1) |
+|---|---|---|---|
+| `--background` 235 18% 13% | 2.94:1 | FAIL | FAIL |
+| `--card` 234 21% 17%       | 2.67:1 | FAIL | FAIL |
+| `--muted` 234 21% 17%      | 2.67:1 | FAIL | FAIL |
+
+There are 212 `text-primary` usages in `src/`. That is EXPOSURE, not 212
+violations: axe checks text, not SVG icons, and most of those usages appear to
+be icons or decorative. The a11y gate passes today, so whatever text usages are
+reachable in scanned states are either absent or on light surfaces.
+
+It surfaced when `AgentDownloadHint` put a `text-primary` link on a muted panel
+and axe reported 2.83:1 — one serious violation. That component was fixed
+locally by moving the link to `text-foreground`, but the token is unchanged and
+the next `text-primary` link on a dark surface will fail the same way.
+
+Why this is not simply "raise the lightness": `--primary` is also a BACKGROUND
+(`bg-primary` with white `--primary-foreground`, e.g. the Retry Now button).
+Lightening it to clear 4.5:1 as text would change the brand colour of every
+primary button. For reference, on `--background`:
+
+    L=50% -> 2.94:1   L=55% -> 3.67:1   L=60% -> 4.50:1   L=65% -> 5.50:1
+
+The likely answer is a separate token for primary-as-text on dark surfaces
+rather than moving `--primary` itself, but that is a design decision about the
+brand, not a bug fix, and it is recorded here rather than made unilaterally.
