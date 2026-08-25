@@ -91,8 +91,15 @@ find "$DEST1/node_modules" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null
 # blocks, which broke `npm run build` and left every downstream typecheck resolving a stale dist.
 echo "Cleaned $DEST1"
 
-rm -rf "$DEST2"/* 2>/dev/null || true
-echo "Cleaned $DEST2"
+# NOT cleaned here. public/wasm is wiped just before the copy below, once the
+# build has actually produced artifacts to replace it with.
+#
+# Wiping at this point meant any failure between here and the copy -- a compile
+# error is the common one -- left the directory empty. The browser then fetches
+# /wasm/*_bg.wasm, gets a 404, WASM init throws, and EVERY internal-service
+# operation silently no-ops: register and login do nothing, with no error that
+# names the cause. A failed build should leave the previous working artifacts
+# exactly where they were.
 
 # Step 1: Build the WASM client
 print_status "Building WASM client from citadel-internal-service..."
@@ -196,6 +203,12 @@ fi
 
 # Copy to citadel-workspace/citadel-workspaces/public/wasm
 if [ -d "$DEST2" ]; then
+    # Deferred to here, deliberately: see the note where the old clean step was.
+    # By this line wasm-pack has succeeded, so replacing the previous artifacts
+    # is safe -- there is something to replace them WITH.
+    print_status "Cleaning $DEST2 now that a build exists..."
+    rm -rf "$DEST2"/* 2>/dev/null || true
+
     print_status "Copying to $DEST2..."
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.wasm "$DEST2/"
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.js "$DEST2/"
