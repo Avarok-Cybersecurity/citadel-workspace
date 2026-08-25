@@ -55,8 +55,15 @@ jobs:
       - name: Install Rust
         run: rustup target add ${{ matrix.target }}
 
+      # --features vendored builds OpenSSL from source instead of linking the
+      # host's. Required on Windows, where openssl-sys finds no installation on
+      # the MSVC runner and the build dies in a `-sys` crate (observed: run
+      # 32880378921). Applied on every platform deliberately: this artifact is
+      # DOWNLOADED and run on someone else's machine, so linking against
+      # whatever OpenSSL the build agent happened to have is a runtime failure
+      # waiting to happen on a machine that has a different one, or none.
       - name: Build the agent
-        run: cargo build --release --target ${{ matrix.target }} -p citadel_service_bin --bin internal-service
+        run: cargo build --release --target ${{ matrix.target }} -p citadel_service_bin --bin internal-service --features vendored
         working-directory: citadel-internal-service
 
       # Packaged with the run instructions beside the binary. `--bind` has no
