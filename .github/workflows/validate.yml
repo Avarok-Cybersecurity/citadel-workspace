@@ -298,6 +298,15 @@ jobs:
         run: npm run check:pwa-update
         working-directory: citadel-workspaces
 
+      - name: Reduced motion
+        # Neither axe nor Lighthouse reports motion, so ninety of the app's
+        # hundred animations opted out of prefers-reduced-motion unnoticed.
+        # Also checks that suppressing motion did not suppress the dialogs the
+        # motion was attached to — a failure only reduced-motion users would see.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:reduced-motion
+        working-directory: citadel-workspaces
+
       - name: Documented env vars have consumers
         # A deployment doc is the one place a reader cannot verify a claim by
         # running it. A variable named there but read by nothing looks like a
