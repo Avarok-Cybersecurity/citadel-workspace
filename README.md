@@ -98,8 +98,15 @@ cargo test -p citadel-workspace-types -p citadel-workspace-server-kernel
 # TypeScript units
 (cd citadel-workspaces && npx vitest run)
 
-# End to end — these share ONE backend, so never run two at once
-(cd citadel-workspaces/integration-tests && npx playwright test)
+# End to end — these share ONE backend, so never run two at once.
+#
+# The suite has TWO runners, and `npx playwright test` is only one of them:
+# its testDir is ./src/tests-pw (11 specs). The other 40 are driven by npm
+# scripts, which is what CI runs, so the playwright command alone covers well
+# under a quarter of the E2E suite.
+(cd citadel-workspaces/integration-tests && npx playwright test)   # the 11 ported specs
+(cd citadel-workspaces/integration-tests && npm run test:all)      # the npm-script specs
+(cd citadel-workspaces/integration-tests && npm run test:login)    # or just one
 ```
 
 The suite also gates accessibility (axe, zero serious violations), Lighthouse
