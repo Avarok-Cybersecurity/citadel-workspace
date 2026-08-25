@@ -24,6 +24,18 @@ services:
       # the runner user afterwards.
       - sync_tsclient_node_modules:/workspace/citadel-internal-service/typescript-client/node_modules
       - sync_wasmclient_node_modules:/workspace/citadel-workspace-client-ts/node_modules
+      # And the UI's own dist. Step 9 runs a throwaway `vite build --mode
+      # development` there purely to prove the UI compiles; the artefacts are of
+      # no use to anyone outside the container, and leaving them root-owned on
+      # the host made the CI gates fail with
+      #   EACCES: permission denied, open '.../citadel-workspaces/dist/sw.js'
+      # when they tried to produce a real production build afterwards.
+      #
+      # Deliberately NOT applied to typescript-client/dist or
+      # citadel-workspace-client-ts/dist: those ARE the sync's product, and the
+      # host build imports from them. Hiding those in a volume would leave the
+      # UI build with nothing to resolve.
+      - sync_ui_dist:/workspace/citadel-workspaces/dist
       # Cache volumes for faster rebuilds
       - rust_cache:/root/.cargo
       - sync_node_modules:/workspace/node_modules
@@ -204,5 +216,6 @@ volumes:
   sync_ui_node_modules:
   sync_tsclient_node_modules:
   sync_wasmclient_node_modules:
+  sync_ui_dist:
   sync_target_cache:
   ui_node_modules:

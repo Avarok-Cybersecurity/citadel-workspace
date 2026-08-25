@@ -119,7 +119,9 @@ find "$WORKSPACE_ROOT" -name ".vite" -type d -exec rm -rf {} + 2>/dev/null || tr
 # Clear Vite dist folder which may contain old WASM files
 if [ -d "$WORKSPACE_ROOT/citadel-workspaces/dist" ]; then
     print_status "Clearing Vite dist folder..."
-    rm -rf "$WORKSPACE_ROOT/citadel-workspaces/dist"
+    # Emptied, not removed: mount point under Docker (sync_ui_dist volume).
+    mkdir -p "$WORKSPACE_ROOT/citadel-workspaces/dist"
+    find "$WORKSPACE_ROOT/citadel-workspaces/dist" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 fi
 
 # Clear any .vite cache in the workspace
@@ -260,7 +262,9 @@ fi
 # Step 9: Rebuild citadel-workspaces
 print_status "Rebuilding citadel-workspaces..."
 cd "$WORKSPACE_ROOT/citadel-workspaces"
-rm -rf ./dist
+# Emptied, not removed: mount point under Docker (sync_ui_dist volume).
+mkdir -p ./dist
+find ./dist -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 
 # Empty node_modules rather than deleting it. Under Docker it is a mount point
 # (see the sync_ui_node_modules volume in docker-compose.yml), and `rm -rf` on a
