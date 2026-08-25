@@ -222,6 +222,18 @@ depends on a browser permission or a CSP directive, assert the header text in
 `smoke-ui-ws.sh` and the browser's own verdict in `check-production-image.mjs`
 — a policy can be present, well-formed, and still not grant what the app needs.
 
+Do not reach for Chrome's `Page.getInstallabilityErrors` to gate installability.
+Measured 2026-08-25: it returns an empty array for a page with NO manifest at
+all, and `Page.getAppManifest` reports `errors: []` for a manifest that is not
+even valid JSON. Empty means "nothing was evaluated", not "installable", so a
+gate built on either would pass a completely broken PWA while looking like the
+strongest check in the suite.
+
+What actually covers installability: `check-pwa-installable.mjs` validates the
+built manifest's fields and icon sizes, and `smoke-ui-ws.sh` asserts the image
+serves it at the right URL with `application/manifest+json`. Content and
+delivery, between them.
+
 Offline is covered twice, deliberately, and the difference is the server.
 `check-pwa-offline.mjs` drives the production BUNDLE through `vite preview` and
 asserts the full user-visible story: the worker activates, the shell renders
