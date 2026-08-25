@@ -305,6 +305,70 @@ should be read as "converges wrongly", not "not built".
 
 ## Partly fixed: one message still lost on reconnect under load
 
+### Run 32892372131: a mechanism that explains the shape, and a fix — with the causal link still unproven
+
+**What the screenshots show** (`screenshots-offline` artifact, which is
+available while the run's LOGS are not — worth remembering, it is the faster
+route to evidence): Alice sent all three offline messages and her UI shows a
+delivery check on **all three**. Bob received message 1 only. So this is not
+random loss; it is "first one through, everything behind it stuck", with the
+sender believing it succeeded.
+
+**The mechanism, from the code.** ILM's outbound path is stop-and-wait per peer
+and `break`s on the first message it cannot send (`process_outbound`,
+lib.rs:551). A message stays at the head of that queue until its ACK arrives —
+`can_send` requires `msg_id > last_sent`, which the message's own id fails the
+moment it is sent — so one unacknowledged message blocks every message behind
+it.
+
+That makes the receiver's duplicate handling load-bearing, and it was wrong:
+`process_inbound` recognised an already-delivered message, cleared it, and
+`continue`d **without sending an ACK**. Retransmission is the only recovery this
+protocol has, and that branch made it useless: the sender retransmits, the
+receiver drops it silently, forever. `MAX_CONSECUTIVE_BLOCKS` recovery does not
+help — it clears the tracker and resends message 1, straight back into the same
+branch. Messages 2 and 3 are never sent at all, which is why they appear nowhere
+in the logs on Bob's side.
+
+**Fixed** in intersession-layer-messaging `26e1038`: a duplicate is now
+re-ACKed. De-duplication is unchanged; the application still sees the message
+once. The test asserts both halves — not delivered twice, and acknowledged
+twice — and fails on the second against the previous code.
+
+**What is NOT established.** The fix is protocol-correct on its own terms, but
+the causal link to this failure is unproven. Running `test:offline` locally
+twice against a rebuilt WASM carrying the fix passed all three messages — and
+the fixed path never executed:
+
+```
+Re-ACKing duplicate          occurrences: 0
+Skipping already delivered   occurrences: 0
+```
+
+So those passes are NOT evidence for the fix; the test simply passes locally and
+fails in CI. The first link — Bob's original ACK going missing — remains
+inferred, not observed. Confirming it needs the `[ILM-ACK-RECV]` lines from a
+CI run.
+
+**The finding worth more than the passes.** From that same *passing* local run:
+
+```
+ILM-BLOCKED                  69
+ILM-BLOCKED-RECOVERY          6
+ILM-ACK-RECV                 60
+[ILM-SEND] SUCCESS           36
+```
+
+Head-of-line blocking is not an edge case here: 69 blocks in a run that
+succeeded, and the emergency path that wipes `last_sent`/`last_acked` fired 6
+times. That path exists because ACKs go missing often enough to need it. The
+sender routinely stalls and routinely resorts to discarding its tracking state
+to move again. CI just has the timing that turns a stall into a permanent one.
+Stop-and-wait with a single outstanding message, no retransmission timer, and a
+break-on-first-blocked loop is the underlying fragility; re-ACKing removes the
+permanent failure but not the stalling.
+
+
 ### Run 32866171470: the shortfall is at the WASM->JS handoff, and it is not "the middle message"
 
 **Correction first.** Two earlier runs each lost exactly "offline message 2", and
@@ -355,7 +419,13 @@ Caveat on how firmly this rules it out: the rescue path logs through
 have fired). So the fix's own log proves nothing either way; what is established
 is only that the OUTCOME is unchanged.
 
-### The sharpest fact so far: it is always the middle message
+### SUPERSEDED: "it is always the middle message"
+
+**This heading was wrong and is kept only so the reasoning below can be read in
+context.** It was written from two samples; run 32866171470 lost messages 2 AND
+3, and run 32892372131 lost 2 and 3 as well. Severity varies per run and the
+"middle" framing does not hold. The index evidence below is still accurate as a
+record of that one run — it is the generalisation that failed.
 
 Messages carry an app-level `index`. On Bob's reconnected session the handler
 received index 6 (offline 1), 8 (offline 3), 9 (welcome), 10 — with **index 7
