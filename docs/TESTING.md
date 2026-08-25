@@ -251,6 +251,31 @@ that only looks for the banner is satisfied either way.
 Neither is reachable from `tests-pw`, which runs against the Vite dev server and
 registers no service worker at all.
 
+## A matching .spec.ts does NOT mean the .test.ts is redundant
+
+The `@playwright/test` migration is partial, and the file names hide how
+partial. Three legacy specs have a same-named port. Only ONE of the three
+actually covers the same ground:
+
+| legacy `src/tests/`      | ported `src/tests-pw/`    | faithful? | what the port omits |
+|--------------------------|---------------------------|-----------|---------------------|
+| `login-flow.test.ts`     | `login-flow.spec.ts`      | yes       | nothing — same 7 assertions; legacy since deleted |
+| `p2p-messaging.test.ts`  | `p2p-messaging.spec.ts`   | **no**    | connected badge, message ordering, seen/read status, timestamps, online status |
+| `office-room-crud.test.ts` | `office-room-crud.spec.ts` | **no**  | admin indicator, office rename, toast conflict handling |
+
+The line counts are the tell: 445 → 174 and 869 → 158. A port that drops
+two thirds of a file is a subset, not a migration.
+
+**So do not delete a legacy spec because a spec of the same name exists.**
+Diff the recorded outcomes first — the legacy suites accumulate a `results.*`
+object, and every field in it is an assertion the port has to reproduce
+before the legacy file can go. `login-flow` was removed only after that diff
+came back clean AND the port was run on its own.
+
+This matters because deleting the other two would look like tidying and would
+silently drop the only coverage of message ordering, read receipts and office
+rename anywhere in the suite.
+
 ## Which suites actually run in CI
 
 Two suites exist, and they reach CI by different routes. The difference matters
