@@ -62,8 +62,22 @@ would remove the meaning, the state is not communicated yet.
 
 ## Adding a new colour
 
-Don't, unless it is genuinely a new semantic role. If it is, add it to BOTH
-`:root` and `.dark` in `index.css`, extend `ThemePalette` in
-`src/lib/theme/theme-types.ts` so presets can set it, and add its text-on-fill
-pair to the AA test. A token only present in one mode is worse than a hardcoded
-colour, because it fails in exactly one theme.
+Don't, unless it is genuinely a new semantic role. If it is:
+
+1. Add it to BOTH `:root` and `.dark` in `index.css`. A token present in only
+   one mode is worse than a hardcoded colour, because it fails in exactly one
+   theme and looks deliberate in the other.
+2. Extend `ThemePalette` in `src/lib/theme/theme-types.ts` so presets can set it.
+3. Give it a guarantee in `palette-contrast.ts`, and pick the right one — this is
+   the step that is easy to skip and hard to notice. A FILL that carries text
+   goes through `ensureFillContrast`, which moves the fill away from its label.
+   A colour read AS text goes through `ensureTextContrast`, which moves the text
+   away from every surface it can sit on. `primaryAccent` shipped with neither,
+   because it is not a fill and nobody asked which of the two it needed; five
+   light presets rendered it between 3.5:1 and 4.5:1 on their own cards.
+4. Add its pair to the AA test in `theme-foundation.test.ts`.
+
+The generated palettes and `index.css` must agree, and a test enforces it. They
+can silently diverge otherwise: the AA suite reads the PRESET while the browser
+reads `index.css`, so a change applied to only one leaves every test green and
+the product wrong.
