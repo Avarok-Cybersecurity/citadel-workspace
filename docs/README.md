@@ -18,7 +18,6 @@
 
 ## Testing
 - [TESTING.md](TESTING.md) — test suites, how to run them, P2P manual steps
-- [TEST_RESULTS.md](TEST_RESULTS.md) — deployment verification results
 
 ## Planning
 - [TODO_FUTURE.md](TODO_FUTURE.md) — backlog
