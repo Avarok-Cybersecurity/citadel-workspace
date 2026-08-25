@@ -5,7 +5,27 @@ WORKDIR /app
 
 # Copy package.json only (not package-lock.json to avoid platform-specific deps)
 COPY citadel-workspaces/package.json ./
-RUN npm install --package-lock-only && npm install
+# Retried, because this resolves dependency RANGES against the live registry on
+# every build rather than installing a committed lockfile.
+#
+# That makes the build inherit whatever npm published minutes ago. Observed
+# 2026-08-24: `typescript-eslint: "^8.20.0"` resolved to a freshly released
+# 8.68.0 whose sibling `@typescript-eslint/parser@8.68.0` had not propagated
+# yet, so five integration jobs died with ETARGET at `Start Services` — before
+# the test step, which is then SKIPPED, leaving a red job with no test output
+# and nothing wrong with anyone's code.
+#
+# A monorepo publish race resolves within minutes, so a bounded retry converts a
+# hard failure into a slower success. It does NOT make the build reproducible:
+# the real fix is installing the committed lockfile, which is blocked by the
+# `sed` rewriting of file: paths below invalidating it. Retrying is the
+# mitigation, not the cure.
+RUN for attempt in 1 2 3; do \
+      npm install --package-lock-only && npm install && break; \
+      echo "npm install failed (attempt $attempt/3); registry may be mid-publish, retrying in $((attempt * 20))s"; \
+      sleep $((attempt * 20)); \
+    done; \
+    npm ls --depth=0 >/dev/null 2>&1 || npm install
 
 # Note: Configuration files (vite.config.ts, tsconfig.json, etc.)
 # are mounted via volumes at runtime, not copied at build time.
@@ -88,7 +108,13 @@ COPY citadel-workspaces/package.json ./
 RUN sed -i 's|file:../citadel-internal-service/typescript-client|file:/workspace/citadel-internal-service-wasm-client|' package.json && \
     sed -i 's|file:../citadel-workspace-client-ts|file:/workspace/citadel-workspace-client-ts|' package.json
 
-RUN npm install --package-lock-only && npm install
+# Same retry, same reason — see the build stage above.
+RUN for attempt in 1 2 3; do \
+      npm install --package-lock-only && npm install && break; \
+      echo "npm install failed (attempt $attempt/3); registry may be mid-publish, retrying in $((attempt * 20))s"; \
+      sleep $((attempt * 20)); \
+    done; \
+    npm ls --depth=0 >/dev/null 2>&1 || npm install
 
 # Copy the full UI source tree
 COPY citadel-workspaces/ ./
