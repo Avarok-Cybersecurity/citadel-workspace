@@ -975,6 +975,19 @@ jobs:
         # Shared with publish-images.yml so the two gates cannot drift into testing
         # different things.
         run: ./scripts/smoke-ui-ws.sh ghcr.io/avarok-cybersecurity/citadel-workspace-ui:latest 18080
+      - name: Smoke Test - the production image in a real browser
+        # The only check that drives a browser against the artefact users get.
+        # Every Playwright spec runs on the Vite dev server, which sends no CSP
+        # and no Permissions-Policy, so a feature can pass all 84 and be dead on
+        # deploy. Calling did exactly that: production shipped
+        # `Permissions-Policy: microphone=(), camera=()` and getUserMedia was
+        # refused for the app's own origin.
+        #
+        # smoke-ui-ws.sh asserts the header TEXT; this asserts what the browser
+        # DOES with it. A policy can be present, well-formed, and still not grant
+        # what the app needs — and note that `getUserMedia` remains defined when
+        # denied, so probing for the API is not enough.
+        run: node scripts/check-production-image.mjs ghcr.io/avarok-cybersecurity/citadel-workspace-ui:latest 18085
       - name: Smoke Test - Services Start
         env:
           WORKSPACE_MASTER_PASSWORD: 'ci-smoke-test'
