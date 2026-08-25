@@ -228,7 +228,52 @@ pub enum WorkspaceErrorResponse {
    - CRUD operations for all entities
    - Permission validation for all operations
    - Error handling for all failure cases
-## Partly fixed: messages still lost on reconnect under load
+## Partly fixed: one message still lost on reconnect under load
+
+**Narrowed 2026-08-25 from CI run 32849810636.** One message is now lost, not
+two of three — the peer-write-lock fix accounts for the difference. What the
+diagnostics establish, with the counts they rest on:
+
+* **The send side is clean.** Alice's ILM outbound queue went 0 -> 1 -> 2 -> 3
+  as each offline message was written, so all three were enqueued; all three
+  were sent, each with `[ILM-SEND] SUCCESS` and a matching ACK.
+* **ILM did not drop it.** Delivery across both Bob sessions is gapless:
+  msg_id 1-8 to the original session, 9-14 to the reconnected one.
+* **No client exit path fired.** On Bob-Reconnect: 9 raw messages received, 9
+  reaching `handleP2PCommand` (5 `MessagingLayerCommand` + 4 `MessageAck`), and
+  ZERO hits for "Message for different session", "Unexpected message format",
+  "Failed to deserialize", or either payload type-check failure. The session
+  filter — long suspected — dropped nothing at all.
+* **No stale-tab interference.** The original Bob tab's last log line precedes
+  the reconnected tab's first, so the two never overlapped and no leader/follower
+  handoff could have swallowed it.
+
+Those five `MessagingLayerCommand`s carried only three distinct texts (offline 3,
+offline 1, welcome — the duplicates are broadcast echoes, correctly de-duped).
+"Bob, this is offline message 2" appears in NO browser context anywhere in the
+run. So it is lost between ILM's delivery inside WASM and the client's decode.
+
+**Why it cannot be closed from this log.** ILM logs `msg_id` with no content;
+the client logs content with no `msg_id`. Neither side can be joined to the
+other, so which ILM delivery carried the lost text is unanswerable from what is
+currently emitted. Payload length does not discriminate either — the three
+offline messages differ only in one digit and are the same length.
+
+**The blocked next step.** `citadel-internal-service-connector/src/messenger/mod.rs`
+already brackets exactly the handoff in question, logging `[P2P-DEBUG]
+MessageNotification arrived` and `[P2P-DEBUG] FORWARDED ISM MessageNotification
+to JS` with lengths. Comparing those two counts would settle it immediately —
+but **neither appears anywhere in the run**. They log to `target: "citadel"`,
+which the WASM log filter drops, while `target: "ism"` comes through at info.
+Making that target visible is the cheapest path to an answer, and needs no new
+instrumentation.
+
+Note also that `if (!isMessage(layer)) return;` in `message-handler-routing.ts`
+is unreachable: `handleIncomingMessage` is only called from the
+`case MessagingLayerType.Message` branch, so the guard can never be false. It is
+not a candidate drop site despite looking like one.
+
+## Superseded notes: messages still lost on reconnect under load
 
 **One real cause was found and fixed. It is not the only one.**
 
