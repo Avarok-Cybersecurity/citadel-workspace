@@ -228,6 +228,52 @@ pub enum WorkspaceErrorResponse {
    - CRUD operations for all entities
    - Permission validation for all operations
    - Error handling for all failure cases
+## Peer folder deletion: not unimplemented, not durable
+
+`file-manager.test.ts` reports `Peer Sees Folder Removed` as a KNOWN GAP and
+deliberately leaves it out of the pass criteria, while the sibling check
+`peerSeesFileRemoved` IS gated and passes. Files disappear from the peer;
+folders do not. That reads like a missing feature. It is not.
+
+Traced end to end, every link exists:
+
+* UI — `useFileManagerHandlers.ts:82` picks `rmdir` for directories;
+* hook — `useRevfsTree.ts:80` calls `revfsService.rmdir(myCid, peerCid, path)`;
+* service — `revfs-service.ts:115` delegates to `dirOps.peerRmdir`;
+* send — `peerRmdir` mutates the tree, persists it, and `sendAndAwaitAck`s the
+  operation, structurally identical to `removeFileFromPeer`, which works;
+* receive — `tree-sync.ts:53` handles `case RevfsOpType.Rmdir`.
+
+So the deletion is sent and applied. The problem is that it does not STAY
+applied.
+
+`mergeTrees` (tree-copy-merge.ts) is a union: it adds remote children that are
+missing locally and never removes anything, with an explicit note that
+"deletions are handled by explicit RemoveFile/RemoveDir operations, not inferred
+from missing children". That is the right call — a tree that lacks a node cannot
+be distinguished from a tree that never had it, and inferring deletion from
+absence is the heuristic that was correctly removed earlier.
+
+The consequence is that a deletion survives only until the next merge with any
+tree that still contains the folder. Applying `Rmdir` removes the node; a
+subsequent sync whose payload predates the delete puts it straight back, and
+nothing in the tree records that it was ever deleted. Deletion is therefore not
+idempotent under merge, and whether it sticks depends on message ordering.
+
+Why files behave better is not that their path is more correct — it is that
+`removeFileFromPeer` also issues `backend-delete-file`, so the file's content is
+gone from the backing store even if the tree node returns. A resurrected folder
+node has nothing to contradict it.
+
+Fixing this is a design decision, not a patch. The usual answer is a tombstone —
+record the deletion with a timestamp/version in the tree so a merge can tell
+"deleted at T" from "never present", which is what union merge structurally
+cannot express today. That changes the on-wire tree format and needs to be
+chosen deliberately.
+
+Recorded rather than fixed, and the test's KNOWN GAP label is accurate — but it
+should be read as "converges wrongly", not "not built".
+
 ## Partly fixed: one message still lost on reconnect under load
 
 ### Verdict on the receiver-drop fix (CI run 32857173644): it did NOT fix this
