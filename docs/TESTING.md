@@ -950,3 +950,19 @@ fi
 ### Messages Not Delivering
 - Verify P2P connection is established (peer shows in WORKSPACE MEMBERS)
 - Check console for WebSocket connection status
+
+### Call specs sit on "Still waiting for channel ready... (attempt N/60)"
+
+Expected, not a hang. The line reads `connected but not yet ready (no message
+received)`, and that wording is exact: a P2P channel counts as ready only once a
+message has actually arrived over it, because ILM's two directions warm up
+independently — A→B can work while B→A does not, and a channel that reports
+"connected" can still drop the first thing you send.
+
+The specs therefore exchange a verified message in both directions per pair
+before doing anything that matters. Reaching attempt 40 of 60 is normal on a
+cold stack; a three-peer group call warms three pairs, so budget for it. It only
+indicates a real failure if it exhausts all 60.
+
+Do not "fix" this by lowering the retry count. The wait exists because the
+alternative is a call that fails later, somewhere less obvious.
