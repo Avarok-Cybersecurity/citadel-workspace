@@ -120,11 +120,25 @@ server {
     #     exfiltrate to wss://attacker.example. Same-origin proxying is what lets
     #     this stay strict.
     #   * object-src 'none'             - defence in depth against legacy plugins.
+    #
+    # Permissions-Policy rationale:
+    #   * microphone=(self), camera=(self), display-capture=(self) - the app
+    #     places audio and video calls, and getUserMedia/getDisplayMedia are
+    #     blocked outright by an EMPTY allowlist. `()` denies every origin,
+    #     including this one; `(self)` is the narrowest grant that still lets
+    #     the feature work.
+    #
+    #     This header predates calling and denied all three. The dev server
+    #     sends no Permissions-Policy at all, so every test passed while
+    #     production would have refused the camera - the same dev/production
+    #     divergence the CSP notes above were written about.
+    #
+    #   * geolocation=() - genuinely unused, so it stays denied.
     # -------------------------------------------------------------------------
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
     add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
 
     # -------------------------------------------------------------------------
@@ -249,7 +263,7 @@ server {
         add_header X-Frame-Options "SAMEORIGIN" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
     }
 
@@ -261,7 +275,7 @@ server {
         add_header X-Frame-Options "SAMEORIGIN" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
     }
 
@@ -288,7 +302,7 @@ server {
         add_header X-Frame-Options "SAMEORIGIN" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
     }
 
@@ -299,7 +313,7 @@ server {
         add_header X-Frame-Options "SAMEORIGIN" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
     }
 

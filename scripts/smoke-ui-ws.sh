@@ -140,7 +140,27 @@ docker exec "$CTR" grep -q 'proxy_set_header Upgrade \$http_upgrade' /etc/nginx/
 curl -s -D - -o /dev/null -H "Origin: http://evil.example" "$BASE/ws" | grep -qi '^content-security-policy' \
   || fail "/ws error responses lost the Content-Security-Policy header."
 
-echo "  enabled: SPA served; envsubst intact; same-origin enforced (403 cross-origin, 403 no-Origin, 403 rebinding, 403 LAN, 403 both-fail); same-origin proxied; no prefix match; CSP preserved."
+# Media capture must be PERMITTED for this origin.
+#
+# `microphone=()` is an EMPTY allowlist: it denies every origin including this
+# one, so getUserMedia fails and audio/video calling is dead. The header shipped
+# that way, written before the app had calling, and nothing noticed because the
+# dev server sends no Permissions-Policy at all — every test passed against a
+# policy production does not use.
+#
+# Asserted here rather than trusted, because the failure is silent: the app
+# loads, the call UI opens, and only the camera never starts.
+PERMPOL="$(curl -s -D - -o /dev/null "$BASE/" | grep -i '^permissions-policy' || true)"
+[ -n "$PERMPOL" ] \
+  || fail "The SPA response carries no Permissions-Policy header at all."
+echo "$PERMPOL" | grep -qi 'microphone=(self)' \
+  || fail "Permissions-Policy does not allow microphone for this origin - calling will not work. Got: $PERMPOL"
+echo "$PERMPOL" | grep -qi 'camera=(self)' \
+  || fail "Permissions-Policy does not allow camera for this origin - video calling will not work. Got: $PERMPOL"
+echo "$PERMPOL" | grep -qi 'display-capture=(self)' \
+  || fail "Permissions-Policy does not allow display-capture - screen sharing will not work. Got: $PERMPOL"
+
+echo "  enabled: SPA served; envsubst intact; same-origin enforced (403 cross-origin, 403 no-Origin, 403 rebinding, 403 LAN, 403 both-fail); same-origin proxied; no prefix match; CSP preserved; media capture permitted."
 
 # ---------------------------------------------------------------------------
 # 2. The switch is OPT-IN. Only the literal "1" may enable the proxy.
