@@ -276,6 +276,43 @@ should be read as "converges wrongly", not "not built".
 
 ## Partly fixed: one message still lost on reconnect under load
 
+### Run 32866171470: the shortfall is at the WASM->JS handoff, and it is not "the middle message"
+
+**Correction first.** Two earlier runs each lost exactly "offline message 2", and
+I wrote that the loss was structurally the MIDDLE of the three, reasoning that a
+race would not pick the middle twice running. This run lost messages 2 AND 3.
+Three samples, not two, and the pattern does not hold: severity varies per run.
+That inference was over-fitted to a sample of two and should not be relied on.
+
+**What this run establishes, by count:**
+
+* ILM delivered SIX messages to Bob's reconnected session (msg_id 7-12).
+* The client logged SEVEN raw receipts carrying only FOUR distinct content
+  fingerprints — every payload arrived twice except one, which arrived once.
+* Of those four, only two were conversation texts ("offline message 1" and the
+  welcome); the other two are ack-sized (124B, 119B).
+* The test lost two texts, matching the shortfall exactly.
+
+So ILM hands over six messages and the client's raw-receipt log accounts for
+four distinct payloads. The gap is between ILM's `deliver()` and the client's
+first sight of the bytes — the WASM->JS handoff — not in decode, not in routing,
+and not in the conversation store, all of which log everything they are given.
+
+**Why the join is still half-built.** The client fingerprint works (47 `fp=`
+lines). The matching ILM-side `[ILM-DELIVER]` line did NOT appear even once,
+despite `Compiling citadel-internal-service-connector` in the same job's build
+and `LocalDeliveryTx` being the delivery type ILM is instantiated with
+(`messenger/mod.rs:197`, wired at :302). The code is in the binary and its
+branch is on the only path messages can take, yet it is silent — the same
+silence that makes every other `messenger/mod.rs` log invisible. Whatever
+explains that explains where the two payloads go, and it is now the single
+highest-value thing to find.
+
+Note the one asymmetry worth carrying forward: duplicate delivery is the NORM
+here (every payload logged twice), and the messages that go missing are near
+payloads that arrived only once. Whether the duplicate is a retry that usually
+covers a lossy first hop is untested and would explain the variability.
+
 ### Verdict on the receiver-drop fix (CI run 32857173644): it did NOT fix this
 
 The `restore_message_stream` fix — which stopped a replaced `UnboundedReceiver`
