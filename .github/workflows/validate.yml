@@ -287,6 +287,17 @@ jobs:
         run: npm run check:pwa-offline
         working-directory: citadel-workspaces
 
+      - name: PWA update flow
+        # The upgrade half of the lifecycle, and the half that fails silently:
+        # an installed worker keeps serving its cached bundle by design, so a
+        # broken update path produces no error and no complaint — the app just
+        # stops changing. The unit test beside PwaUpdatePrompt mocks the
+        # register hook, proving the component reacts to needRefresh but never
+        # that anything sets it.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:pwa-update
+        working-directory: citadel-workspaces
+
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
     runs-on: ubuntu-latest
