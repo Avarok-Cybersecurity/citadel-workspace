@@ -154,6 +154,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 ));
             }
 
+            // Held across the whole read-modify-write below. A workspace is
+            // stored whole, so without this a concurrent member or settings
+            // update reads the same record, and whichever writes second
+            // discards the other's field.
+            let _workspace_guard = kernel
+                .domain_operations
+                .backend_tx_manager
+                .lock_workspaces()
+                .await;
+
             match kernel
                 .domain_operations
                 .backend_tx_manager
@@ -201,6 +211,23 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         .backend_tx_manager
                         .insert_workspace(target_id.to_string(), workspace.clone())
                         .await?;
+
+                    // The denormalized copy, which every other workspace
+                    // mutator also writes. Updating only the workspace record
+                    // left the Domain::Workspace copy holding the previous
+                    // metadata, so a reader that goes through the domain saw
+                    // the old theme and would eventually write it back.
+                    kernel
+                        .domain_operations
+                        .backend_tx_manager
+                        .insert_domain(
+                            target_id.to_string(),
+                            citadel_workspace_types::structs::Domain::Workspace {
+                                workspace: workspace.clone(),
+                            },
+                        )
+                        .await?;
+
                     Ok(WorkspaceProtocolResponse::Workspace(workspace))
                 }
                 Ok(None) => Ok(WorkspaceProtocolResponse::Error(
