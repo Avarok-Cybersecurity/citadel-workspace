@@ -265,8 +265,24 @@ MessageNotification arrived` and `[P2P-DEBUG] FORWARDED ISM MessageNotification
 to JS` with lengths. Comparing those two counts would settle it immediately —
 but **neither appears anywhere in the run**. They log to `target: "citadel"`,
 which the WASM log filter drops, while `target: "ism"` comes through at info.
-Making that target visible is the cheapest path to an answer, and needs no new
-instrumentation.
+**Correction, verified after writing the above: the log filter is not the cause.**
+The WASM client calls `console_log::init_with_level(log::Level::Info)` with no
+target filtering, so `target: "citadel"` is not being dropped. The binary is not
+stale either — `strings` on the shipped
+`citadel-workspaces/public/wasm/*_bg.wasm` finds both `P2P-DEBUG` sites and the
+`ILM-INBOUND` site compiled in, matching the source exactly.
+
+The real finding is sharper: across the entire run, the ONLY Rust file that logs
+is `intersession-layer-messaging/src/lib.rs` (2600 lines).
+`citadel-internal-service-connector/src/messenger/mod.rs` logs **zero** lines,
+though its code is linked and ILM — which it wraps — is plainly running.
+
+So the `InternalServiceResponse::MessageNotification` arm at messenger/mod.rs:379
+is never reached. Inbound P2P messages do not flow through the path
+ARCHITECTURE/CLAUDE.md describes (`messenger/mod.rs:341` receiving
+MessageNotification and forwarding to JS). Whatever consumes them does so
+earlier, and that undocumented path is where the lost message has to be chased.
+Do not spend time adding instrumentation to messenger/mod.rs: it will not run.
 
 Note also that `if (!isMessage(layer)) return;` in `message-handler-routing.ts`
 is unreachable: `handleIncomingMessage` is only called from the
