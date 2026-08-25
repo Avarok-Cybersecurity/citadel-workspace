@@ -804,7 +804,17 @@ jobs:
         # Docker mounts over them and the ownership underneath is untouched.
         # This cannot be reproduced on macOS, where the daemon does not recreate
         # missing mount points at all — which is why it took a CI run to see.
-        run: mkdir -p citadel-workspaces/dist
+        run: |
+          # EVERY volume-backed path in the sync service, not just the one that
+          # failed. npm ci creates the workspace node_modules today, but npm
+          # hoists — a workspace whose dependencies all hoist to the root gets no
+          # local node_modules, and the daemon would then create that mount
+          # point as root exactly as it did for dist/. Listing them all costs
+          # nothing and closes the class rather than the instance.
+          mkdir -p citadel-workspaces/dist
+          mkdir -p citadel-workspaces/node_modules
+          mkdir -p citadel-internal-service/typescript-client/node_modules
+          mkdir -p citadel-workspace-client-ts/node_modules
       - name: Generate WASM artifacts (required for UI production build)
         # The UI production build embeds the wasm-pack generated
         # `citadel_internal_service_wasm_client.js` (and the matching
