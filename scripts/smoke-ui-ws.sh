@@ -150,6 +150,23 @@ curl -s -D - -o /dev/null -H "Origin: http://evil.example" "$BASE/ws" | grep -qi
 #
 # Asserted here rather than trusted, because the failure is silent: the app
 # loads, the call UI opens, and only the camera never starts.
+# The service worker must NOT be cacheable.
+#
+# This is the upgrade path: a browser that keeps serving an old sw.js never
+# learns a new version exists, so the app silently stops updating for everyone
+# who already installed it. nginx applies heuristic caching without an explicit
+# policy, and the failure produces no error anywhere — the deploy succeeds and
+# users simply stay on yesterday's build.
+SWHDR="$(curl -s -D - -o /dev/null "$BASE/sw.js" || true)"
+echo "$SWHDR" | grep -qi '^cache-control:.*no-store' \
+  || fail "sw.js is cacheable - installed apps will never see an update. Got: $(echo "$SWHDR" | grep -i '^cache-control' || echo 'no Cache-Control at all')"
+
+# And the manifest needs its own media type, or Chrome refuses it and the app
+# stops being installable.
+MANHDR="$(curl -s -D - -o /dev/null "$BASE/manifest.webmanifest" || true)"
+echo "$MANHDR" | grep -qi '^content-type:.*application/manifest+json' \
+  || fail "manifest.webmanifest is not served as application/manifest+json - Chrome will reject it and the app stops being installable. Got: $(echo "$MANHDR" | grep -i '^content-type' || echo 'no Content-Type')"
+
 PERMPOL="$(curl -s -D - -o /dev/null "$BASE/" | grep -i '^permissions-policy' || true)"
 [ -n "$PERMPOL" ] \
   || fail "The SPA response carries no Permissions-Policy header at all."
@@ -160,7 +177,7 @@ echo "$PERMPOL" | grep -qi 'camera=(self)' \
 echo "$PERMPOL" | grep -qi 'display-capture=(self)' \
   || fail "Permissions-Policy does not allow display-capture - screen sharing will not work. Got: $PERMPOL"
 
-echo "  enabled: SPA served; envsubst intact; same-origin enforced (403 cross-origin, 403 no-Origin, 403 rebinding, 403 LAN, 403 both-fail); same-origin proxied; no prefix match; CSP preserved; media capture permitted."
+echo "  enabled: SPA served; envsubst intact; same-origin enforced (403 cross-origin, 403 no-Origin, 403 rebinding, 403 LAN, 403 both-fail); same-origin proxied; no prefix match; CSP preserved; media capture permitted; sw.js uncacheable; manifest typed."
 
 # ---------------------------------------------------------------------------
 # 2. The switch is OPT-IN. Only the literal "1" may enable the proxy.
