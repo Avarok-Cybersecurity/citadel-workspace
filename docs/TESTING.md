@@ -211,13 +211,21 @@ What DOES cover production, and what each part covers:
 | Check | Runs against | Sees |
 |---|---|---|
 | `scripts/smoke-ui-ws.sh` | the built nginx image | headers, /ws proxy, SPA fallback, sw.js caching, manifest type |
+| `scripts/check-production-image.mjs` | the built nginx image, in a real browser | that the app MOUNTS under the real CSP, what the browser actually grants for camera/microphone/display-capture, and the offline path: service worker activation, the shell rendering with the network cut, and nothing modal blocking it |
 | `check:bundle`, `check:pwa*`, `check:lighthouse`, `check:mobile`, `check:reduced-motion` | `vite preview` on `dist/` | the production BUNDLE, but not nginx |
 | `tests-pw` | the dev server | app behaviour, under no security headers |
 
-So the production image is checked for what it SERVES, and the production bundle
-for what it CONTAINS, but neither is driven through a real user flow. When a
-feature depends on a browser permission or a CSP directive, assert it in
-`smoke-ui-ws.sh` — that is the only place that sees the policy the user gets.
+So the production image is checked both for what it SERVES (`smoke-ui-ws.sh`,
+via curl) and for what a browser DOES with it (`check-production-image.mjs`),
+while the production bundle is checked for what it CONTAINS. When a feature
+depends on a browser permission or a CSP directive, assert the header text in
+`smoke-ui-ws.sh` and the browser's own verdict in `check-production-image.mjs`
+— a policy can be present, well-formed, and still not grant what the app needs.
+
+The offline assertions live there for a structural reason: `tests-pw` runs
+against the Vite dev server, which registers no service worker at all, so
+nothing else in this repository can see the offline path. A release could break
+"the app opens with no network" — the core PWA claim — with every spec green.
 
 ## Which suites actually run in CI
 
