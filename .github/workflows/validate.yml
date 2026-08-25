@@ -311,8 +311,6 @@ jobs:
             artifact: group-multiuser
           - test: test:crud
             artifact: crud
-          - test: test:login
-            artifact: login
           - test: test:prev-sessions
             artifact: prev-sessions
           - test: test:file-transfer

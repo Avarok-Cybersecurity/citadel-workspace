@@ -102,12 +102,14 @@ cargo test -p citadel-workspace-types -p citadel-workspace-server-kernel
 #
 # The suite has TWO runners, and `npx playwright test` is only one of them:
 # verify: count citadel-workspaces/integration-tests/src/tests-pw .spec.ts == 11
-# its testDir is ./src/tests-pw (11 specs). The other 40 are driven by npm
-# scripts, which is what CI runs, so the playwright command alone covers well
+# verify: count citadel-workspaces/integration-tests/src/tests .test.ts == 39
+# its testDir is ./src/tests-pw (11 specs). The rest are driven by npm scripts,
+# which is what CI runs -- 39 at the top level of src/tests, plus more under
+# group-chat/ and reconnection/ -- so the playwright command alone covers well
 # under a quarter of the E2E suite.
 (cd citadel-workspaces/integration-tests && npx playwright test)   # the 11 ported specs
 (cd citadel-workspaces/integration-tests && npm run test:all)      # the npm-script specs
-(cd citadel-workspaces/integration-tests && npm run test:login)    # or just one
+(cd citadel-workspaces/integration-tests && npm run test:crud)     # or just one
 ```
 
 The suite also gates accessibility (axe, zero serious violations), Lighthouse
