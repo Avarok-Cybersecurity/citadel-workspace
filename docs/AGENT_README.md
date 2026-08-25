@@ -41,10 +41,29 @@ clears once the agent is listening. From a terminal:
 nc -z 127.0.0.1 12345 && echo "agent is listening"
 ```
 
-## Verifying your download
-
-Each release ships a `.sha256` beside every archive:
+If `nc` is not installed:
 
 ```bash
-shasum -a 256 -c citadel-agent-<platform>.tar.gz.sha256
+curl -sS --max-time 2 http://127.0.0.1:12345 >/dev/null 2>&1; \
+  [ $? -ne 7 ] && echo "agent is listening"
 ```
+
+(The agent speaks WebSocket, not HTTP, so curl will not get a useful reply — but
+exit code 7 is specifically "failed to connect", which is the question being
+asked.)
+
+## Verifying your download
+
+Each release ships a `.sha256` beside every archive. Run this in the directory
+holding both files:
+
+```bash
+# macOS
+shasum -a 256 -c citadel-agent-<platform>.tar.gz.sha256
+
+# Linux (shasum is Perl-based and not always installed)
+sha256sum -c citadel-agent-<platform>.tar.gz.sha256
+```
+
+Both print `OK`. Anything else means the download is not the file that was
+published, and you should not run it.
