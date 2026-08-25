@@ -93,8 +93,11 @@ jobs:
           (cd "$staging" && 7z a -tzip "$OLDPWD/${{ matrix.asset }}" .)
           sha256sum "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"
 
+      # Windows was excluded here while the smoke test only understood tar.gz,
+      # which meant the Windows archive shipped WITHOUT the one check that
+      # proves a downloaded agent runs — on the platform where "it built" and
+      # "it runs" are least likely to coincide.
       - name: Smoke-test the packaged binary
-        if: runner.os != 'Windows'
         shell: bash
         run: ./scripts/smoke-agent.sh "${{ matrix.asset }}"
 
