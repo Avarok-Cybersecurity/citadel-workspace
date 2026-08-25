@@ -228,73 +228,31 @@ pub enum WorkspaceErrorResponse {
    - CRUD operations for all entities
    - Permission validation for all operations
    - Error handling for all failure cases
-## Known defect: one offline message is lost on reconnect
+## Fixed: one offline message was lost on reconnect
 
-**Status:** reproducible, uncharacterised at the ILM level, not fixed.
+**Cause: a lost update in the message pagination store.**
 
-`test:offline` queues three messages to a peer whose TCP connection has been
-dropped, reconnects them, and checks all three arrive. Exactly one of the three
-does not — and **which one varies**, which is what makes this a race rather than
-an off-by-one:
+`appendMessageToPage` was a read-modify-write against IndexedDB — load the
+metadata, load the page, mutate, save — with four awaits between the read and
+the write, and no serialisation. Two messages appended concurrently both read
+the same page, each pushed their own message onto their own copy, and the second
+save overwrote the first. The message was gone from the page the UI renders,
+while every layer beneath reported success.
 
-| Run | Delivered | Lost |
-|---|---|---|
-| CI, 2026-08-25 | 1, 3 | **2** |
-| Local, same commit | 2, 3 | **1** |
+That explains the whole shape of it: exactly one message lost, which one
+varying between runs, and only when several arrive together — a reconnect
+flushing a queue is precisely that. In ordinary conversation, messages arrive
+seconds apart and never collide.
 
-`test:reconnect-both-c2s` fails with what is probably the same fault seen from a
-different angle: 14 of its 15 phases pass, P2P re-establishes in both
-directions, and then the first message after reconnect never arrives inside 30s.
+Appends are now chained per peer. Verified: `test:offline` passed three
+consecutive times, nine of nine messages delivered, having failed on every run
+before (CI lost message 2, local lost message 1 on the same commit); and
+`test:reconnect-both-c2s` went from 14/15 to 15/15, its post-reconnect message
+now arriving.
 
-**The loss is in the CLIENT, not in ILM.** An earlier version of this entry
-said the opposite; that was wrong, and the correction is the useful part.
-
-What the logs establish, from the local run:
-
-- The message IS sent — the sender's UI confirms it and the spec records SENT.
-- The sender's ILM queues it: `[ILM-OUTBOUND]` reaches a depth of 3 during the
-  offline window, and the sender is correctly `[ILM-BLOCKED]` while the peer is
-  down.
-- **ILM delivers every message.** `[ILM-INBOUND] Delivered msg_id=N` covers ids
-  0–12 from the sender with NO gap (and 0–16 in the other direction). Whichever
-  message the spec reports missing, ILM delivered it.
-- The recipient's client receives and routes them: 14 `handleP2PCommand`
-  dispatches after reconnect, with `MessageNotification` routed by CID.
-- The text still never appears in the recipient's conversation.
-
-So the message survives the queue, the wire, ILM delivery and the inbound
-router, and is lost after that — in the client's message handling or
-conversation cache. Ruled out along the way, each by log evidence rather than
-reasoning: the inbound de-duplication (it only defers by one poll, proven by
-test), `has_delivered` treating it as a duplicate (that path never logged
-"Skipping already delivered message" once), and a missing ILM id.
-
-Start in `p2p-messenger-manager.ts` / the conversation cache, not in Rust.
-
-Narrowed further, and what is left to do. Two drop paths in
-`lib/p2p/message-handler.ts` were checked and are NOT it:
-
-- `Skipping: no peer_cid or peer_cid is 0` fires exactly 7 times in EVERY
-  browser context in the failing run — identical counts, so those are the
-  server's own C2S notifications being correctly ignored, not a race.
-- `Message for different session, broadcasting to follower tabs` never fires
-  once. Worth stating because that branch returns WITHOUT processing locally,
-  and with a single tab the broadcast goes nowhere — it would have been a
-  perfect explanation. It simply is not what happens.
-
-The existing logs cannot settle it beyond this: the handler logs byte counts,
-not contents, so there is no way to tell from them whether the lost message was
-decoded and then dropped by the conversation cache, or never decoded at all.
-The next step is temporary instrumentation at the decode/addMessage boundary
-recording the message text, run against this spec until it reproduces.
-
-**Why this is not patched here.** The obvious workaround — a longer timeout, or
-a warm-up message before the assertion — would make the suite green while a
-messaging product silently drops a message a user believes was sent. That is
-worth failing a build over. The fix belongs in the ILM delivery loop, with the
-race understood first.
-
-Note the related test-level fix in `tests-pw/call-helpers.ts`: a freshly
-connected ILM channel is one-way-warm, so specs warm both directions before
-asserting. That was correct for the call specs, where the warm-up is setup — it
-would be wrong here, where delivery after reconnect IS the thing under test.
+Worth keeping for the next person: everything above this layer looked perfect
+and was checked in turn — ILM delivered ids 0-12 with no gap, the inbound router
+dispatched every notification, deserialisation never failed, and the
+conversation cache's de-duplication only ever matched genuine UUID repeats. The
+loss was in the last step before rendering, which is the easiest place to stop
+looking.
