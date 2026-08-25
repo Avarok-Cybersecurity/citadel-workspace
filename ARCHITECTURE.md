@@ -376,6 +376,25 @@ encryption is per-pair. Above those caps a sender's uplink and encoder count
 stop being survivable, so the UI refuses rather than starting a call that will
 collapse.
 
+**The invite carries the caller's whole roster, and every invitee keeps it.**
+That is what makes the mesh a mesh. An invitee seeds its participant map with
+the caller *and* every co-invitee, then announces its acceptance to all of them,
+so B and C open a session with each other directly and neither waits on A. Drop
+the roster on the receiving side and the call still looks correct from the
+caller's seat — A sees and hears everyone — while the invitees never exchange a
+signal, let alone a frame. The result is hub-and-spoke wearing a mesh's clothes,
+and only a third participant can tell the difference.
+
+A test that asserts "a remote tile is decoding" cannot catch that either: on
+each invitee, the assertion has to find **two** distinct remote tiles with
+`videoWidth > 0`, because one of those senders is the other invitee.
+
+Signal ordering matters as much as delivery. Call control travels the reliable
+path, but a group invite fans out to several peers in one tick, and concurrent
+sends through the messenger could interleave badly enough to lose one — one peer
+simply never rings while the caller's logs show both sends. Signal sends are
+therefore serialised per transport.
+
 ### Liveness
 
 A participant announces presence on the reliable path, and silence means gone.
