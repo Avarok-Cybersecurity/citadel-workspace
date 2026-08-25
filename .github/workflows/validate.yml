@@ -792,6 +792,19 @@ jobs:
           node-version: '22'
       - name: Install workspace dependencies for the gates
         run: npm ci
+      - name: Create the sync's mount points before Docker does
+        # Docker creates a missing bind/volume mount point itself, as ROOT,
+        # inside the source tree. `npm ci` happens to create the node_modules
+        # ones; nothing creates dist/, so the sync_ui_dist volume made the
+        # daemon create a root-owned citadel-workspaces/dist — and the
+        # production build could then not write its own service worker into it:
+        #   EACCES: permission denied, open '.../dist/sw.js'
+        #
+        # Creating them here means they already exist and belong to the runner;
+        # Docker mounts over them and the ownership underneath is untouched.
+        # This cannot be reproduced on macOS, where the daemon does not recreate
+        # missing mount points at all — which is why it took a CI run to see.
+        run: mkdir -p citadel-workspaces/dist
       - name: Generate WASM artifacts (required for UI production build)
         # The UI production build embeds the wasm-pack generated
         # `citadel_internal_service_wasm_client.js` (and the matching
