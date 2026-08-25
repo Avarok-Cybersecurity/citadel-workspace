@@ -8,6 +8,7 @@
 - [WORKSPACE.md](WORKSPACE.md) — workspace domain model
 - [WORKSPACE_IMPLEMENTATION_GAPS.md](WORKSPACE_IMPLEMENTATION_GAPS.md) — UI action vs backend support
 - [EXIT_VS_SIGNOUT_IMPLEMENTATION.md](EXIT_VS_SIGNOUT_IMPLEMENTATION.md) — exit vs sign-out semantics
+- [THEMING.md](THEMING.md) — semantic colour tokens, and why hardcoded palette classes break workspace theming
 
 ## Build & deploy
 - [WASM_BUILD.md](WASM_BUILD.md) — building the WASM client
