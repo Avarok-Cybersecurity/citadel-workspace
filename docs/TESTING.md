@@ -222,10 +222,22 @@ depends on a browser permission or a CSP directive, assert the header text in
 `smoke-ui-ws.sh` and the browser's own verdict in `check-production-image.mjs`
 — a policy can be present, well-formed, and still not grant what the app needs.
 
-The offline assertions live there for a structural reason: `tests-pw` runs
-against the Vite dev server, which registers no service worker at all, so
-nothing else in this repository can see the offline path. A release could break
-"the app opens with no network" — the core PWA claim — with every spec green.
+Offline is covered twice, deliberately, and the difference is the server.
+`check-pwa-offline.mjs` drives the production BUNDLE through `vite preview` and
+asserts the full user-visible story: the worker activates, the shell renders
+with the network cut, the banner appears, and it clears when the connection
+returns. `check-production-image.mjs` repeats the load against the nginx IMAGE,
+because the bundle can be perfect while the server in front of it is not — a
+`sw.js` served with the wrong cache headers, or a missing SPA fallback, breaks
+offline without touching a line of app code.
+
+The image check adds one assertion the bundle check does not make: that nothing
+MODAL is covering the shell. The banner and a blocking "check your internet
+connection" dialog were both being shown for the same condition, and a check
+that only looks for the banner is satisfied either way.
+
+Neither is reachable from `tests-pw`, which runs against the Vite dev server and
+registers no service worker at all.
 
 ## Which suites actually run in CI
 

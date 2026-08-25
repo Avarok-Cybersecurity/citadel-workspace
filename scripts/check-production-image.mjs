@@ -106,9 +106,15 @@ async function main() {
 
     // ---- The PWA promise: it opens with no network at all. ----
     //
-    // Only checkable here. The Playwright specs run against the Vite dev
-    // server, which registers no service worker, so nothing else in this
-    // repository ever exercises the offline path on the artifact we ship.
+    // check-pwa-offline.mjs already asserts this story in full, but against the
+    // BUNDLE via `vite preview`. This repeats the load against the nginx IMAGE,
+    // where the bundle can be perfect and the server in front of it wrong: a
+    // `sw.js` with the wrong cache headers, or a missing SPA fallback, breaks
+    // offline without touching a line of app code.
+    //
+    // The dialog assertion below is the one this adds outright. A check that
+    // looks for the offline BANNER passes whether or not a modal is sitting on
+    // top of it, and for a while one was.
     const swState = await page.evaluate(async () => {
       if (!('serviceWorker' in navigator)) return 'no serviceWorker API';
       const reg = await navigator.serviceWorker.ready.catch(() => null);
