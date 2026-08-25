@@ -4,17 +4,29 @@
 # =============================================================================
 #
 # This script safely updates the running production stack:
-#   1. Pulls latest code
-#   2. Rebuilds only changed images
-#   3. Restarts services sequentially (data-safe, minimal downtime)
+#   1. Pulls latest code (skippable with --no-pull)
+#   2. Pulls prebuilt images from GHCR at ${IMAGE_TAG:-latest}
+#   3. Verifies every image was built from the SAME commit, and refuses
+#      the deploy if they disagree (scripts/verify-image-revisions.sh)
+#   4. Restarts services sequentially (data-safe, minimal downtime)
 #
 # Data volumes (server_data, internal_service_data) are NEVER touched.
-# Only container images are rebuilt and replaced.
+# Only container images are replaced.
+#
+# NOTE: this header used to say "rebuilds only changed images". It no longer
+# builds anything -- compiling Rust on the production host was removed
+# deliberately (see the comment above the pull step). An operator trusting the
+# old wording would provision a build toolchain this script never uses and
+# expect a deploy far slower than it is.
 #
 # Usage:
-#   ./deploy.sh              # Update all services
-#   ./deploy.sh --no-pull    # Skip git pull (rebuild from current code)
+#   ./deploy.sh              # Update all services to ${IMAGE_TAG:-latest}
+#   ./deploy.sh --no-pull    # Skip the git pull; deploy the checked-out tree's compose file
 #   ./deploy.sh --tunnel     # Include Cloudflare tunnel profile
+#
+#   IMAGE_TAG=sha-abc123456789 ./deploy.sh --no-pull   # pin / roll back to an exact build
+#
+# See docs/UPGRADING.md for the upgrade and rollback runbook.
 #
 # =============================================================================
 
@@ -39,12 +51,17 @@ Citadel Workspace - deploy / update the running production stack.
 
 Usage: $0 [--no-pull] [--tunnel] [--help]
 
-  --no-pull   Skip the git pull and rebuild from the code already checked out.
+  --no-pull   Skip the git pull; deploy using the compose file already checked out.
   --tunnel    Include the Cloudflare tunnel profile. Requires TUNNEL_TOKEN in .env.
   --help, -h  Print this and exit.
 
+Images are PULLED from GHCR at \${IMAGE_TAG:-latest}; nothing is built here.
+Pin IMAGE_TAG to a sha-<12-char> tag to deploy or roll back to an exact build:
+
+  IMAGE_TAG=sha-abc123456789 $0 --no-pull
+
 Data volumes (server_data, internal_service_data) are never touched; only
-container images are rebuilt and replaced.
+container images are replaced. See docs/UPGRADING.md.
 USAGE
 }
 
