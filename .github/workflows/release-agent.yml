@@ -38,7 +38,24 @@ jobs:
           - os: macos-14
             target: aarch64-apple-darwin
             asset: citadel-agent-macos-arm64.tar.gz
-          - os: macos-13
+          # Intel Mac is CROSS-COMPILED from the Apple Silicon runner, not built
+          # on macos-13. GitHub has retired the macOS 13 image, and a job asking
+          # for a label that no longer exists does not fail — it queues forever.
+          # In the first tagged release (run 32884394417) this leg sat queued
+          # while the other three finished, and since `publish` needs all four,
+          # the release could never have been cut.
+          #
+          # Apple's toolchain targets x86_64 from arm64 natively, so this needs
+          # only `rustup target add`. Verified locally: a full
+          # `cargo build --release --target x86_64-apple-darwin --features
+          # vendored` produces a Mach-O x86_64 binary, and smoke-agent.sh's
+          # architecture assertion checks the result matches the asset name.
+          #
+          # Caveat worth knowing: the smoke test runs this binary on an arm64
+          # runner, so it executes under Rosetta. That proves the binary runs and
+          # binds a port; it does not prove it runs on real Intel silicon, which
+          # nothing in this matrix can prove now that no Intel runner exists.
+          - os: macos-14
             target: x86_64-apple-darwin
             asset: citadel-agent-macos-x64.tar.gz
           - os: ubuntu-latest
