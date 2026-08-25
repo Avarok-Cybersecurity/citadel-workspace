@@ -338,8 +338,20 @@ server {
     # It is also the file that NAMES the content-hashed /assets/ bundles, and those
     # are served `immutable`. So a browser holding a stale index.html keeps asking
     # for the OLD bundle names - which still exist, and still load perfectly. The
-    # user silently runs yesterday's app: no console error, no failed request, and
+    # user silently runs an older build: no console error, no failed request, and
     # nothing that looks like a caching problem to anyone debugging it.
+    #
+    # SCOPE, precisely: once the service worker is controlling the page it answers
+    # navigations from its own precache (`navigateFallback: /index.html`), so this
+    # header does not decide which shell those users get. It decides for every
+    # state where the SW is NOT in control, and those are ordinary, not exotic:
+    #   * the first visit, before the SW has installed and taken control;
+    #   * any browser with service workers unavailable or disabled;
+    #   * a returning user whose SW registration was evicted - Safari discards
+    #     service workers for sites unused for ~7 days, so this is the common
+    #     case for an app someone opens weekly, not a corner case.
+    # In each of those the browser talks to nginx directly, which is why the shell
+    # needs a real policy rather than nginx's heuristic guess.
     #
     # `no-cache` still stores the shell; it only forces revalidation, so an
     # unchanged index.html costs a 304 rather than a re-download.
