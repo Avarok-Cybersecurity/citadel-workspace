@@ -16,8 +16,13 @@ use citadel_workspace_types::structs::DomainPermissions;
 /// a stale copy of an old schema.
 fn record_without(field: &str) -> String {
     let mut value = serde_json::to_value(DomainPermissions::default()).expect("serialise");
-    let object = value.as_object_mut().expect("permissions serialise to an object");
-    assert!(object.remove(field).is_some(), "`{field}` should exist to be removed");
+    let object = value
+        .as_object_mut()
+        .expect("permissions serialise to an object");
+    assert!(
+        object.remove(field).is_some(),
+        "`{field}` should exist to be removed"
+    );
     value.to_string()
 }
 
@@ -30,13 +35,15 @@ fn a_record_written_before_themes_existed_still_deserialises() {
 
     // False, not true: an old record must not silently acquire a permission it
     // was never granted.
-    assert!(!parsed.themes, "themes should default to denied for legacy records");
+    assert!(
+        !parsed.themes,
+        "themes should default to denied for legacy records"
+    );
 }
 
 #[test]
 fn the_rest_of_a_legacy_record_survives_intact() {
-    let mut value =
-        serde_json::to_value(DomainPermissions::default()).expect("serialise");
+    let mut value = serde_json::to_value(DomainPermissions::default()).expect("serialise");
     let object = value.as_object_mut().expect("object");
     object.remove("themes");
     // Something explicitly true, so this cannot pass by everything defaulting.
@@ -44,17 +51,26 @@ fn the_rest_of_a_legacy_record_survives_intact() {
 
     let parsed: DomainPermissions = serde_json::from_str(&value.to_string()).expect("load");
 
-    assert!(parsed.view_content, "fields the record did carry must be preserved");
+    assert!(
+        parsed.view_content,
+        "fields the record did carry must be preserved"
+    );
     assert!(!parsed.themes);
 }
 
 #[test]
 fn a_current_record_round_trips() {
-    let permissions = DomainPermissions { themes: true, ..DomainPermissions::default() };
+    let permissions = DomainPermissions {
+        themes: true,
+        ..DomainPermissions::default()
+    };
 
     let encoded = serde_json::to_string(&permissions).expect("serialise");
     let decoded: DomainPermissions = serde_json::from_str(&encoded).expect("deserialise");
 
     assert_eq!(permissions, decoded);
-    assert!(decoded.themes, "an explicit true must survive the round trip");
+    assert!(
+        decoded.themes,
+        "an explicit true must survive the round trip"
+    );
 }
