@@ -254,7 +254,15 @@ fi
 # Step 9: Rebuild citadel-workspaces
 print_status "Rebuilding citadel-workspaces..."
 cd "$WORKSPACE_ROOT/citadel-workspaces"
-rm -rf ./dist ./node_modules
+rm -rf ./dist
+
+# Empty node_modules rather than deleting it. Under Docker it is a mount point
+# (see the sync_ui_node_modules volume in docker-compose.yml), and `rm -rf` on a
+# mount point fails with EBUSY — which, with `set -e` above, would abort the
+# whole sync rather than just this step. Emptying works in both cases, and
+# `mkdir -p` covers a first native run where the directory does not exist yet.
+mkdir -p ./node_modules
+find ./node_modules -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
 print_status "Installing dependencies for citadel-workspaces.."
 # Use --package-lock=false to avoid platform-specific lockfile issues when running in Docker.

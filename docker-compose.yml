@@ -9,6 +9,15 @@ services:
       - ./citadel-internal-service:/workspace/citadel-internal-service:rw
       - ./citadel-workspace-client-ts:/workspace/citadel-workspace-client-ts:rw
       - ./citadel-workspaces:/workspace/citadel-workspaces:rw
+      # Shadows the host's node_modules for this container only.
+      #
+      # Step 9 runs `rm -rf ./node_modules && npm install` inside the bind mount
+      # above, so without this the container reaches through and rebuilds the
+      # developer's tree with Linux binaries — a macOS host is left with
+      # @esbuild/linux-arm64 and every subsequent vitest/vite run dies on
+      # "You installed esbuild for another platform". It also installed a second
+      # Playwright there, which is why step 9 has to delete one again below.
+      - sync_ui_node_modules:/workspace/citadel-workspaces/node_modules
       # Cache volumes for faster rebuilds
       - rust_cache:/root/.cargo
       - sync_node_modules:/workspace/node_modules
@@ -186,5 +195,6 @@ volumes:
   target_cache:
   rust_cache:
   sync_node_modules:
+  sync_ui_node_modules:
   sync_target_cache:
   ui_node_modules:
