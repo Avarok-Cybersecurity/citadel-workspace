@@ -167,6 +167,19 @@ MANHDR="$(curl -s -D - -o /dev/null "$BASE/manifest.webmanifest" || true)"
 echo "$MANHDR" | grep -qi '^content-type:.*application/manifest+json' \
   || fail "manifest.webmanifest is not served as application/manifest+json - Chrome will reject it and the app stops being installable. Got: $(echo "$MANHDR" | grep -i '^content-type' || echo 'no Content-Type')"
 
+# The WASM binary must revalidate, because its URL is NOT content-hashed.
+#
+# /wasm/citadel_internal_service_wasm_client_bg.wasm keeps the same name across
+# builds, so `immutable` would be a lie: browsers would hold the old binary for
+# the full max-age while the JS bindings that call into it — which ARE hashed —
+# updated underneath. That mismatch surfaces as undefined-function errors in the
+# console, nowhere near anything that looks like a caching problem.
+WASMHDR="$(curl -s -D - -o /dev/null "$BASE/wasm/citadel_internal_service_wasm_client_bg.wasm" || true)"
+echo "$WASMHDR" | grep -qi '^cache-control:' \
+  || fail "The WASM binary carries no Cache-Control at all - nginx will apply heuristic caching to a file whose name never changes."
+echo "$WASMHDR" | grep -i '^cache-control:' | grep -qi 'immutable' \
+  && fail "The WASM binary is marked immutable, but its filename is not content-hashed - an updated app will keep loading the old binary. Got: $(echo "$WASMHDR" | grep -i '^cache-control')"
+
 PERMPOL="$(curl -s -D - -o /dev/null "$BASE/" | grep -i '^permissions-policy' || true)"
 [ -n "$PERMPOL" ] \
   || fail "The SPA response carries no Permissions-Policy header at all."

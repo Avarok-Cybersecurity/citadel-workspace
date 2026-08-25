@@ -270,8 +270,19 @@ server {
     # WASM files
     location ~* \.wasm$ {
         types { application/wasm wasm; }
-        expires 1y;
-        add_header Cache-Control "public, immutable" always;
+        # Revalidate, do NOT mark immutable.
+        #
+        # `immutable` is a promise that the bytes at this URL will never change,
+        # and it is only true for a content-hashed filename. The app fetches
+        # /wasm/citadel_internal_service_wasm_client_bg.wasm — a stable name —
+        # so `expires 1y; immutable` told browsers to keep the OLD binary for a
+        # year across app updates, while the JS bindings that call into it are
+        # hashed and do update. Old WASM against new bindings shows up as
+        # undefined-function errors, not as anything that looks like caching.
+        #
+        # `no-cache` still caches; it requires revalidation, so an unchanged
+        # binary costs a 304 rather than 2.3 MB.
+        add_header Cache-Control "public, no-cache" always;
         add_header X-Frame-Options "SAMEORIGIN" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
