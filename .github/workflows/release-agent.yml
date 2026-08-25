@@ -39,8 +39,12 @@ jobs:
             target: aarch64-apple-darwin
             asset: citadel-agent-macos-arm64.tar.gz
           # Intel Mac is CROSS-COMPILED from the Apple Silicon runner, not built
-          # on macos-13. GitHub has retired the macOS 13 image, and a job asking
-          # for a label that no longer exists does not fail — it queues forever.
+          # on macos-13. Across three runs here, no runner was EVER assigned to
+          # that label (`runner=` stayed empty for 45+ minutes) while macos-14
+          # siblings were assigned within seconds. Retirement of the macOS 13
+          # image is the likely explanation, but the established fact is the
+          # unassigned runner — and either way a job whose label cannot be
+          # satisfied does not fail, it queues.
           # In the first tagged release (run 32884394417) this leg sat queued
           # while the other three finished, and since `publish` needs all four,
           # the release could never have been cut.
