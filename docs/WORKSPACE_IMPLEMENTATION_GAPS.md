@@ -230,6 +230,59 @@ pub enum WorkspaceErrorResponse {
    - Error handling for all failure cases
 ## Partly fixed: one message still lost on reconnect under load
 
+### Verdict on the receiver-drop fix (CI run 32857173644): it did NOT fix this
+
+The `restore_message_stream` fix — which stopped a replaced `UnboundedReceiver`
+from being dropped with its queue — is a real defect fix and is kept, but the
+loss is unchanged. Exactly the same message is missing: "Bob, this is offline
+message 2". Do not treat that fix as the resolution.
+
+Caveat on how firmly this rules it out: the rescue path logs through
+`console_log!`, and macro output is not captured in these runs at all (the
+`WASM client initialized successfully` line is absent too, and that cannot not
+have fired). So the fix's own log proves nothing either way; what is established
+is only that the OUTCOME is unchanged.
+
+### The sharpest fact so far: it is always the middle message
+
+Messages carry an app-level `index`. On Bob's reconnected session the handler
+received index 6 (offline 1), 8 (offline 3), 9 (welcome), 10 — with **index 7
+absent**. The prior run showed the same shape one lower: 5 and 7 present, 6
+missing. Both times the lost message is the MIDDLE of the three sent while the
+peer was offline.
+
+Arrival order is stranger still, and consistent across both runs: offline 3
+arrives FIRST (`had=0`), then offline 1 (`had=1`), and offline 2 never. Last,
+then first, never the middle. A race would not pick the middle element twice
+running; this looks structural — a slot being overwritten or skipped rather than
+a message being dropped in flight.
+
+### What is eliminated, by counts, in this run
+
+* ILM delivered to Bob-Reconnect **gapless**: msg_ids 11,12,13,14,15,16.
+* The client received 8 raw P2P messages and handled all 8 — 4
+  `MessagingLayerCommand` and 4 `MessageAck`, with no exit path logging a drop.
+* Those 4 commands carried offline 1, offline 3, welcome and Bob's own echo.
+  Offline 2 is in none of them.
+
+So ILM hands over a complete sequence and the client decodes everything it is
+given, yet one text is missing from the result.
+
+### The join that is still missing
+
+ILM logs `msg_id` with no content; the client logs content and app `index` with
+no `msg_id`. Nothing connects them, so "which ILM delivery carried index 7, and
+what did it decode to" remains unanswerable. Note the three offline messages are
+the same length, so length cannot be used as the key either.
+
+The next instrumentation should therefore log a content fingerprint alongside
+`msg_id` at ILM's `deliver()`, and the same fingerprint at the client's raw
+receipt. Not in `messenger/mod.rs`'s MessageNotification arm — verified twice,
+with grep and again with python, that nothing in that file logs during these
+runs.
+
+## Superseded notes: messages still lost on reconnect under load
+
 **Narrowed 2026-08-25 from CI run 32849810636.** One message is now lost, not
 two of three — the peer-write-lock fix accounts for the difference. What the
 diagnostics establish, with the counts they rest on:
