@@ -282,7 +282,50 @@ is never reached. Inbound P2P messages do not flow through the path
 ARCHITECTURE/CLAUDE.md describes (`messenger/mod.rs:341` receiving
 MessageNotification and forwarding to JS). Whatever consumes them does so
 earlier, and that undocumented path is where the lost message has to be chased.
-Do not spend time adding instrumentation to messenger/mod.rs: it will not run.
+Do not spend time adding instrumentation to messenger/mod.rs's
+MessageNotification arm.
+
+(Caveat on that inference: the harness's console capture is demonstrably lossy —
+the WASM client's `console_log!` MACRO output is absent entirely, including
+"WASM client initialized successfully", which cannot not have fired. The
+`log`-crate channel does work, since ILM's 2600 lines arrive through it, so the
+messenger conclusion rests on a channel known to function. Treat it as strong,
+not certain.)
+
+### The concrete mechanism, found by reading rather than logging
+
+`citadel-internal-service-wasm-client/src/lib.rs` — `next_message()` TAKES the
+delivery stream out of the shared state, awaits exactly one message, then calls
+`restore_message_stream()` to put it back. That helper discards the receiver on
+two paths:
+
+```rust
+let Some(state) = guard.as_mut() else { return; };   // torn down -> receiver dropped
+if state.stream.is_none() { state.stream.replace(stream); }
+                                                     // else    -> receiver dropped
+```
+
+An `UnboundedReceiver` dropped this way takes **every message still queued in it**
+with it. The `else` branch is not hypothetical — the comment above it names the
+case: `restart` installing a fresh state with its own stream while we awaited.
+That is precisely the reconnect this test performs.
+
+This fits every observation that survived the eliminations: ILM logs `Delivered`
+because it successfully sent into `final_tx` (`LocalDeliveryTx::deliver`), so
+delivery genuinely succeeded from ILM's side; and the client never sees the
+message because the receiving half was thrown away before JS drained it. It also
+explains why no client-side exit path fired — the message never reached JS to be
+dropped by one.
+
+Note the window is wide open by construction: between `take()` and restore, the
+stream lives on the stack of a single in-flight call, so anything that replaces
+state during that await loses whatever arrived in the meantime.
+
+**Proposed fix:** never drop a receiver that may hold messages. On replacement,
+drain the old receiver and hand its contents to the surviving stream (a pending
+queue in `WorkspaceState` that `next_message` checks before awaiting), rather
+than letting it fall out of scope. Same for the torn-down path, where the
+messages should at least be logged rather than vanishing silently.
 
 Note also that `if (!isMessage(layer)) return;` in `message-handler-routing.ts`
 is unreachable: `handleIncomingMessage` is only called from the
