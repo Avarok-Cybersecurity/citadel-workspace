@@ -1,0 +1,124 @@
+# Builds and publishes the Citadel agent (the local internal service) so a user
+# whose browser cannot reach it can download and run one.
+#
+# The UI links straight at
+#   /releases/latest/download/<asset>
+# which GitHub resolves to the newest published release. That is deliberate: no
+# API call, no token, no rate limit, and nothing to break when the release list
+# changes. It does mean the ASSET NAMES here are a contract with the UI —
+# citadel-workspaces/src/lib/agent-download.ts holds the same list, and a test
+# there reads this file and fails if the two drift apart.
+name: Release agent
+
+on:
+  push:
+    tags:
+      - 'agent-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. agent-v0.1.0). Dry run if the tag does not exist.'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.asset }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Platform TOKENS, not Rust target triples. The UI maps
+          # navigator.userAgentData/platform onto these, and "macos-arm64" is
+          # something a human can also pick off a release page correctly;
+          # "aarch64-apple-darwin" is not.
+          - os: macos-14
+            target: aarch64-apple-darwin
+            asset: citadel-agent-macos-arm64.tar.gz
+          - os: macos-13
+            target: x86_64-apple-darwin
+            asset: citadel-agent-macos-x64.tar.gz
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset: citadel-agent-linux-x64.tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset: citadel-agent-windows-x64.zip
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build the agent
+        run: cargo build --release --target ${{ matrix.target }} -p citadel_service_bin --bin internal-service
+        working-directory: citadel-internal-service
+
+      # Packaged with the run instructions beside the binary. `--bind` has no
+      # default in the agent's CLI, so a downloaded binary run bare exits with a
+      # structopt usage error; and the default account backend is in-memory, so
+      # anyone who omits --backend loses their account on restart and reports it
+      # as a bug.
+      - name: Package (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging="$(mktemp -d)"
+          cp citadel-internal-service/target/${{ matrix.target }}/release/internal-service "$staging/citadel-agent"
+          cp docs/AGENT_README.md "$staging/README.md"
+          tar -czf "${{ matrix.asset }}" -C "$staging" .
+          shasum -a 256 "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"
+
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging="$(mktemp -d)"
+          cp citadel-internal-service/target/${{ matrix.target }}/release/internal-service.exe "$staging/citadel-agent.exe"
+          cp docs/AGENT_README.md "$staging/README.md"
+          (cd "$staging" && 7z a -tzip "$OLDPWD/${{ matrix.asset }}" .)
+          sha256sum "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"
+
+      - name: Smoke-test the packaged binary
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./scripts/smoke-agent.sh "${{ matrix.asset }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: |
+            ${{ matrix.asset }}
+            ${{ matrix.asset }}.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    # Only a real tag push publishes. workflow_dispatch builds and smoke-tests
+    # every platform without creating a release, so the pipeline is exercisable
+    # without minting a version.
+    if: startsWith(github.ref, 'refs/tags/agent-v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ls -la dist
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "Citadel agent ${GITHUB_REF_NAME#agent-}" \
+            --notes "The local agent that Citadel Workspace connects to. Download the build for your platform, unpack it, and run it as described in the bundled README."
