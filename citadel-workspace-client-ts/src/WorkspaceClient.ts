@@ -56,6 +56,28 @@ export interface WorkspaceClientConfig extends WasmClientConfig {
   sessionConfig?: SessionConfig;
 }
 
+/**
+ * Whether a MessageNotification payload is workspace-protocol JSON.
+ *
+ * Workspace protocol is JSON and always serialises to an object, so the first
+ * non-whitespace byte is '{' (0x7b). P2P chat is CBOR, whose first byte is a
+ * major-type tag — 0xa0-0xbf for the maps it produces — and never 0x7b. One
+ * byte therefore separates the two without decoding the payload or throwing.
+ *
+ * Deliberately conservative: anything that looks like JSON is still handed to
+ * the real parser, so a malformed workspace message still surfaces as a
+ * warning rather than being silently reclassified as chat.
+ */
+function looksLikeWorkspaceJson(payload: number[] | Uint8Array): boolean {
+  const bytes = payload instanceof Uint8Array ? payload : new Uint8Array(payload);
+  for (const byte of bytes) {
+    // Skip leading ASCII whitespace: space, tab, LF, CR.
+    if (byte === 0x20 || byte === 0x09 || byte === 0x0a || byte === 0x0d) continue;
+    return byte === 0x7b;
+  }
+  return false;
+}
+
 export class WorkspaceClient extends InternalServiceWasmClient {
   public readonly auth: WorkspaceAuth;
   public readonly session: WorkspaceSessionManager;
@@ -76,6 +98,21 @@ export class WorkspaceClient extends InternalServiceWasmClient {
       // Check if this is a MessageNotification that contains workspace protocol
       if (isResponseType(message, 'MessageNotification')) {
         const notification = message.MessageNotification;
+
+        // Workspace protocol is JSON; P2P chat is CBOR. Both arrive as
+        // MessageNotification, so this used to JSON.parse every chat message,
+        // throw, and warn — 83 warnings in a single integration run for
+        // traffic that is behaving exactly as designed. A JSON document here
+        // always starts with '{', and CBOR never does (its first byte is a
+        // major-type tag), so one byte separates them without decoding
+        // anything. Exceptions are for the unexpected; this was the norm.
+        if (!looksLikeWorkspaceJson(notification.message)) {
+          if (originalHandler) {
+            originalHandler(message);
+          }
+          return;
+        }
+
         try {
           // Decode the message bytes as UTF-8 string
           const messageText = new TextDecoder().decode(new Uint8Array(notification.message));
@@ -106,7 +143,9 @@ export class WorkspaceClient extends InternalServiceWasmClient {
             originalHandler(enrichedMessage);
           }
         } catch (e) {
-          // Not a workspace protocol message — pass through unchanged
+          // Reached only when the payload LOOKED like workspace JSON and still
+          // failed, which is a genuine anomaly rather than routine chat
+          // traffic — so this stays a warning.
           console.warn('[WorkspaceClient] Failed to parse MessageNotification as workspace protocol:', e);
           if (originalHandler) {
             originalHandler(message);
