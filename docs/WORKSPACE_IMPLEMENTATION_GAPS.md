@@ -228,6 +228,35 @@ pub enum WorkspaceErrorResponse {
    - CRUD operations for all entities
    - Permission validation for all operations
    - Error handling for all failure cases
+## RESOLVED: why messenger/mod.rs never logged (and what it invalidates)
+
+`messenger/mod.rs:27` is `use citadel_logging as log;`, and citadel_logging wraps
+TRACING, not the `log` facade. Every `log::info!` in that file is therefore a
+tracing macro needing a subscriber, and the WASM client installs only
+`console_log::init_with_level` — a `log`-facade logger. Nothing subscribes to
+tracing in the browser, so those records went nowhere.
+
+ILM's lines appear because its Cargo.toml declares BOTH citadel_logging and
+`log = "0.4.21"` and it uses the real facade. The connector declared only
+citadel_logging. The entire difference is one `use` alias.
+
+**This invalidates everything below that reasons from that silence.** Several
+sections conclude the `InternalServiceResponse::MessageNotification` arm "never
+executes", "does not run", and that inbound P2P messages therefore take some
+undocumented path. That was inferred from missing log output and is NOT
+supported: the arm may well run, it simply could not log. The claim was checked
+twice — with grep, then again with python after grep proved unreliable — and both
+checks were correct about the OUTPUT while wrong about the CONCLUSION drawn from
+it. Absence of logging is not absence of execution.
+
+Fixed: the connector now depends on the `log` facade and the four P2P
+diagnostics use `::log::info!`. The two pre-existing [P2P-DEBUG] lines bracket
+the WASM->JS handoff where payloads go missing, and comparing their counts is
+the obvious next measurement — they have existed all along and could never be
+read.
+
+Read the sections below with that correction applied.
+
 ## Peer folder deletion: not unimplemented, not durable
 
 `file-manager.test.ts` reports `Peer Sees Folder Removed` as a KNOWN GAP and
@@ -418,8 +447,9 @@ is never reached. Inbound P2P messages do not flow through the path
 ARCHITECTURE/CLAUDE.md describes (`messenger/mod.rs:341` receiving
 MessageNotification and forwarding to JS). Whatever consumes them does so
 earlier, and that undocumented path is where the lost message has to be chased.
-Do not spend time adding instrumentation to messenger/mod.rs's
-MessageNotification arm.
+SUPERSEDED — see the RESOLVED section at the top of this document. The
+instruction not to instrument that arm was based on the mistaken belief that it
+never runs; the arm's logs were simply going to tracing with no subscriber.
 
 (Caveat on that inference: the harness's console capture is demonstrably lossy —
 the WASM client's `console_log!` MACRO output is absent entirely, including
