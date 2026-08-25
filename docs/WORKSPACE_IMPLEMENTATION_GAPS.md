@@ -271,6 +271,23 @@ test), `has_delivered` treating it as a duplicate (that path never logged
 
 Start in `p2p-messenger-manager.ts` / the conversation cache, not in Rust.
 
+Narrowed further, and what is left to do. Two drop paths in
+`lib/p2p/message-handler.ts` were checked and are NOT it:
+
+- `Skipping: no peer_cid or peer_cid is 0` fires exactly 7 times in EVERY
+  browser context in the failing run — identical counts, so those are the
+  server's own C2S notifications being correctly ignored, not a race.
+- `Message for different session, broadcasting to follower tabs` never fires
+  once. Worth stating because that branch returns WITHOUT processing locally,
+  and with a single tab the broadcast goes nowhere — it would have been a
+  perfect explanation. It simply is not what happens.
+
+The existing logs cannot settle it beyond this: the handler logs byte counts,
+not contents, so there is no way to tell from them whether the lost message was
+decoded and then dropped by the conversation cache, or never decoded at all.
+The next step is temporary instrumentation at the decode/addMessage boundary
+recording the message text, run against this spec until it reproduces.
+
 **Why this is not patched here.** The obvious workaround — a longer timeout, or
 a warm-up message before the assertion — would make the suite green while a
 messaging product silently drops a message a user believes was sent. That is
