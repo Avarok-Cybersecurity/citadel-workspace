@@ -79,7 +79,10 @@ print_status "Starting WASM client synchronization..."
 print_status "Cleaning previous build artifacts..."
 rm -f "$DEST1"/*.wasm "$DEST1"/*.d.ts "$DEST1"/*.js 2>/dev/null || true
 rm -rf "$DEST1/dist" 2>/dev/null || true
-rm -rf "$DEST1/node_modules" 2>/dev/null || true
+# Emptied, not removed: under Docker this is a mount point (see the
+# sync_tsclient_node_modules volume) and `rm -rf` on one fails with EBUSY.
+mkdir -p "$DEST1/node_modules"
+find "$DEST1/node_modules" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 # NOTE: $DEST1/package.json is tracked in git and is the single source of truth for this
 # package's name, exports, scripts and dependencies. It is deliberately NOT deleted or
 # rewritten here. wasm-pack emits its own package.json into pkg/, but the copy step below
@@ -223,7 +226,10 @@ fi
 # Step 6: Rebuild citadel-workspace-client-ts
 print_status "Rebuilding citadel-workspace-client-ts..."
 cd "$WORKSPACE_ROOT/citadel-workspace-client-ts"
-rm -rf ./dist ./node_modules
+rm -rf ./dist
+# Emptied, not removed — mount point under Docker; see DEST1 above.
+mkdir -p ./node_modules
+find ./node_modules -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 
 print_status "Installing dependencies for citadel-workspace-client-ts..."
 npm install

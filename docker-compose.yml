@@ -18,6 +18,12 @@ services:
       # "You installed esbuild for another platform". It also installed a second
       # Playwright there, which is why step 9 has to delete one again below.
       - sync_ui_node_modules:/workspace/citadel-workspaces/node_modules
+      # Same reasoning for the other two directories the script installs into.
+      # Missing these is what made CI's `npm ci` fail with EACCES: the container
+      # runs as root, so the node_modules it left behind could not be removed by
+      # the runner user afterwards.
+      - sync_tsclient_node_modules:/workspace/citadel-internal-service/typescript-client/node_modules
+      - sync_wasmclient_node_modules:/workspace/citadel-workspace-client-ts/node_modules
       # Cache volumes for faster rebuilds
       - rust_cache:/root/.cargo
       - sync_node_modules:/workspace/node_modules
@@ -196,5 +202,7 @@ volumes:
   rust_cache:
   sync_node_modules:
   sync_ui_node_modules:
+  sync_tsclient_node_modules:
+  sync_wasmclient_node_modules:
   sync_target_cache:
   ui_node_modules:
