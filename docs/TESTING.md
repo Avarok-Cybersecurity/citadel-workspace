@@ -184,6 +184,51 @@ Retry attempt 2/3 for Session Already Connected error
 
 ---
 
+## Which suites actually run in CI
+
+Two suites exist, and they reach CI by different routes. The difference matters
+because one of them silently leaves most of itself out.
+
+**`integration-tests/src/tests-pw`** — `@playwright/test`, 11 specs. Run by the
+`playwright-tests` job, **sharded**: the runner distributes specs across shards
+itself, so a new spec joins CI with no workflow edit.
+
+**`integration-tests/src/tests`** — the legacy custom runner, 48 spec files
+driven by `test:*` npm scripts. Run by the `integration-tests` job as an
+explicit **matrix of script names**, so a spec only runs if someone remembers to
+add its script to the matrix.
+
+Measured 2026-08-25: **20 of the 48 run. 28 never do.**
+
+    account-management            reconnection/both-c2s-reconnect
+    chat-settings                 reconnection/c2s-reconnect
+    file-manager                  reconnection/one-c2s-reconnect
+    group-chat/office-chat        reconnection/p2p-one-c2s-reconnect
+    group-chat/peer-group         reconnection/p2p-only-reconnect
+    group-chat/room-chat          revfs-peer
+    hierarchy-navigation          revfs-server
+    misc-routes                   settings-modal
+    native-file-picker            tree-cascade-delete
+    notification-center           tree-custom-types
+    office-mdx-content            tree-deep-hierarchy
+    user-directory                tree-move-operations
+    workspace-init                tree-permissions-inheritance
+                                  tree-structure-editor
+                                  tree-validator-protocol
+
+That is every reconnection scenario, the whole tree-operation suite, both revfs
+suites, and the notification, settings, directory and workspace-init flows —
+written, typechecked, and never executed against a running stack.
+
+**The fix is porting, not matrix entries.** Adding 28 names to the matrix would
+work and would rot the same way, because the list has to be maintained by hand.
+Moving a spec into `src/tests-pw` puts it in the sharded job automatically and
+deletes a hand-maintained line at the same time. Porting also buys web-first
+assertions, which is what removes the sleeps the legacy suite is built on.
+
+Until then, treat a green CI run as covering the ported suite plus 20 legacy
+specs — not the whole of `src/tests`.
+
 ## Troubleshooting
 
 ### Script won't run
