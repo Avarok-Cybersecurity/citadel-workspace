@@ -55,6 +55,49 @@ jobs:
       - name: Run Cargo Clippy
         run: cargo clippy -p ${{ matrix.crate }} -- -D warnings
 
+  # The citadel-internal-service workspace, covered WHOLESALE rather than
+  # crate-by-crate.
+  #
+  # Its 7 members had no fmt or clippy job at all: the matrices above name only
+  # the root workspace's crates, so a committed file failed `cargo fmt --check`
+  # in intersession-layer-messaging while every run stayed green. Nobody removed
+  # a check — the check never looked there.
+  #
+  # `--all` / `--workspace` rather than another crate list, deliberately: a list
+  # is the thing that drifted, and it drifts silently every time a crate is
+  # added. This covers members that do not exist yet.
+  # Cheap, first-class, and deliberately NOT inside another job's matrix: the
+  # existing doc gate hangs off `if: matrix.project == 'citadel-workspaces'`,
+  # so renaming that matrix leg would silently take the gate with it — the same
+  # class of disappearance this job exists to detect.
+  crate-coverage:
+    name: Every workspace crate has a lint job
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check crate coverage
+        run: node scripts/check-crate-coverage.mjs
+
+  internal-service-rust-lint:
+    name: Cargo Fmt + Clippy - citadel-internal-service workspace
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: Avarok-Cybersecurity/gh-actions-deps@master
+      - name: Run Cargo Fmt
+        run: cargo fmt --all --check
+        working-directory: citadel-internal-service
+      - name: Run Cargo Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        working-directory: citadel-internal-service
+
   rust-tests:
     name: Rust Tests - ${{ matrix.crate }}
     runs-on: ubuntu-latest
