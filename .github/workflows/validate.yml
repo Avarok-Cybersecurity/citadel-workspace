@@ -774,6 +774,24 @@ jobs:
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           sudo apt-get clean
           df -h
+      # BEFORE the sync container runs, not after.
+      #
+      # The sync mounts named volumes over three node_modules directories. On a
+      # fresh checkout those directories do not exist, so Docker CREATES each
+      # mount point — as root — inside the bind-mounted source tree. A later
+      # `npm ci` then cannot write into them: EACCES on mkdir .../@types.
+      #
+      # Running the install first means the directories already exist and are
+      # owned by the runner; Docker mounts over them and the host ownership
+      # underneath is untouched. This passed locally either way, because a
+      # developer checkout already has node_modules — the difference only shows
+      # on a clean one.
+      - name: Set up Node for the production-bundle gates
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install workspace dependencies for the gates
+        run: npm ci
       - name: Generate WASM artifacts (required for UI production build)
         # The UI production build embeds the wasm-pack generated
         # `citadel_internal_service_wasm_client.js` (and the matching
@@ -798,12 +816,6 @@ jobs:
       #
       # This job already pays for the artefacts, and these gates measure the
       # PRODUCTION bundle, so this is also where they belong conceptually.
-      - name: Set up Node for the production-bundle gates
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Install workspace dependencies for the gates
-        run: npm ci
       - name: Landing bundle budget
         # Only the UI has a critical path to defend. "Lightning fast" is easy to
         # achieve once and lose gradually — one eager import in a shared provider
