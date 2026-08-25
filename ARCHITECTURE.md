@@ -395,6 +395,14 @@ sends through the messenger could interleave badly enough to lose one — one pe
 simply never rings while the caller's logs show both sends. Signal sends are
 therefore serialised per transport.
 
+The queue is bounded, because nothing below it is: the path down to the WASM
+messenger carries no timeout, so an unbounded queue would let one stalled send
+hold every later signal behind it — including the hang-up, which is precisely
+what the ordering was protecting. The bound applies only to how long the NEXT
+send waits; each caller still awaits its own result. Ordering holds in the
+normal case and gives way to concurrency exactly when waiting has become the
+worse failure.
+
 ### Liveness
 
 A participant announces presence on the reliable path, and silence means gone.
