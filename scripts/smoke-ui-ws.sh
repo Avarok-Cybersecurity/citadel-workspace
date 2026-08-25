@@ -180,6 +180,17 @@ echo "$WASMHDR" | grep -qi '^cache-control:' \
 echo "$WASMHDR" | grep -i '^cache-control:' | grep -qi 'immutable' \
   && fail "The WASM binary is marked immutable, but its filename is not content-hashed - an updated app will keep loading the old binary. Got: $(echo "$WASMHDR" | grep -i '^cache-control')"
 
+# The SPA shell must revalidate too. index.html is the file that NAMES the
+# content-hashed /assets/ bundles, and those are served `immutable` - so a stale
+# index.html keeps requesting the OLD bundle names, which still exist and still
+# load. The user runs yesterday's build with no error anywhere. This is the same
+# defect as the two above, on the one URL that decides which app version loads.
+IDXHDR="$(curl -s -D - -o /dev/null "$BASE/" || true)"
+echo "$IDXHDR" | grep -qi '^cache-control:' \
+  || fail "index.html carries no Cache-Control - nginx applies heuristic caching to the SPA shell, so browsers can keep loading a stale app version."
+echo "$IDXHDR" | grep -i '^cache-control:' | grep -qi 'immutable' \
+  && fail "index.html is marked immutable, but it changes on every deploy. Got: $(echo "$IDXHDR" | grep -i '^cache-control')"
+
 PERMPOL="$(curl -s -D - -o /dev/null "$BASE/" | grep -i '^permissions-policy' || true)"
 [ -n "$PERMPOL" ] \
   || fail "The SPA response carries no Permissions-Policy header at all."

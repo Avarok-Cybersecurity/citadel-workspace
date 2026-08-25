@@ -332,7 +332,27 @@ server {
     #
     # CAUTION: do NOT add an `add_header` here without repeating ALL the security
     # headers above; see the note at the top of the server block.
+    # index.html must revalidate, for the same reason sw.js and the WASM binary do:
+    # its URL is stable while its bytes change on every deploy.
+    #
+    # It is also the file that NAMES the content-hashed /assets/ bundles, and those
+    # are served `immutable`. So a browser holding a stale index.html keeps asking
+    # for the OLD bundle names - which still exist, and still load perfectly. The
+    # user silently runs yesterday's app: no console error, no failed request, and
+    # nothing that looks like a caching problem to anyone debugging it.
+    #
+    # `no-cache` still stores the shell; it only forces revalidation, so an
+    # unchanged index.html costs a 304 rather than a re-download.
+    #
+    # CAUTION: this add_header REPLACES the inherited server-level set, so the full
+    # security header set is repeated here - see the note at the top of the server block.
     location / {
         try_files $uri $uri/ /index.html;
+        add_header Cache-Control "public, no-cache" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
     }
 }
