@@ -228,3 +228,45 @@ pub enum WorkspaceErrorResponse {
    - CRUD operations for all entities
    - Permission validation for all operations
    - Error handling for all failure cases
+## Known defect: one offline message is lost on reconnect
+
+**Status:** reproducible, uncharacterised at the ILM level, not fixed.
+
+`test:offline` queues three messages to a peer whose TCP connection has been
+dropped, reconnects them, and checks all three arrive. Exactly one of the three
+does not — and **which one varies**, which is what makes this a race rather than
+an off-by-one:
+
+| Run | Delivered | Lost |
+|---|---|---|
+| CI, 2026-08-25 | 1, 3 | **2** |
+| Local, same commit | 2, 3 | **1** |
+
+`test:reconnect-both-c2s` fails with what is probably the same fault seen from a
+different angle: 14 of its 15 phases pass, P2P re-establishes in both
+directions, and then the first message after reconnect never arrives inside 30s.
+
+What the logs establish:
+
+- The message IS sent — the sender's UI confirms it and the spec records SENT.
+- The sender's ILM queues it: `[ILM-OUTBOUND] CID <alice>: N messages in 1
+  group` reaches a depth of 3 during the offline window.
+- While the peer is down the sender is correctly `[ILM-BLOCKED]`, and after
+  reconnect `[ILM-INBOUND] Delivered msg_id=...` fires — for the other two.
+- The lost message never appears in the recipient's UI across three retries,
+  and never appears in the recipient's console either.
+
+So the loss is between "queued and blocked" and "delivered on unblock", inside
+intersession-layer-messaging. It is NOT a rendering problem: the text never
+reaches the recipient at all.
+
+**Why this is not patched here.** The obvious workaround — a longer timeout, or
+a warm-up message before the assertion — would make the suite green while a
+messaging product silently drops a message a user believes was sent. That is
+worth failing a build over. The fix belongs in the ILM delivery loop, with the
+race understood first.
+
+Note the related test-level fix in `tests-pw/call-helpers.ts`: a freshly
+connected ILM channel is one-way-warm, so specs warm both directions before
+asserting. That was correct for the call specs, where the warm-up is setup — it
+would be wrong here, where delivery after reconnect IS the thing under test.
