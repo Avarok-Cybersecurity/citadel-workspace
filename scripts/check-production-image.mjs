@@ -104,6 +104,38 @@ async function main() {
       unexpected.map((i) => i.details?.contentSecurityPolicyIssueDetails?.violatedDirective).join(', '),
     );
 
+    // ---- The PWA promise: it opens with no network at all. ----
+    //
+    // Only checkable here. The Playwright specs run against the Vite dev
+    // server, which registers no service worker, so nothing else in this
+    // repository ever exercises the offline path on the artifact we ship.
+    const swState = await page.evaluate(async () => {
+      if (!('serviceWorker' in navigator)) return 'no serviceWorker API';
+      const reg = await navigator.serviceWorker.ready.catch(() => null);
+      return reg?.active ? 'active' : 'never activated';
+    });
+    record('the service worker activates', swState === 'active', swState);
+
+    await context.setOffline(true);
+    // domcontentloaded, not networkidle: offline there is no network to go
+    // idle, and waiting for it times out on a page that loaded perfectly.
+    await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
+    await page.waitForTimeout(6_000);
+
+    const offline = await page.evaluate(() => ({
+      mounted: Boolean(document.getElementById('root')?.children.length),
+      heading: document.querySelector('h1')?.textContent?.trim().length ?? 0,
+      // Nothing modal should stand between the user and a shell that loaded
+      // fine. The offline banner says what happened; a dialog telling them to
+      // check a connection they know is down only blocks the page.
+      dialogs: document.querySelectorAll('[role="dialog"]').length,
+    }));
+    record('the shell renders with no network', offline.mounted && offline.heading > 0,
+      `mounted=${offline.mounted} headingChars=${offline.heading}`);
+    record('nothing blocks the page while offline', offline.dialogs === 0,
+      `${offline.dialogs} dialog(s)`);
+    await context.setOffline(false);
+
     await context.close();
   } finally {
     await browser.close();
