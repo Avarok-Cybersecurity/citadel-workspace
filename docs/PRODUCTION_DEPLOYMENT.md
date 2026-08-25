@@ -114,12 +114,16 @@ Cloudflare TLS/Access boundary entirely (an attacker can hit
 - **nginx UI (:8080)** — intentionally reachable by cloudflared over
   loopback; serves only the static SPA with a restrictive CSP. Low risk, but
   a host firewall blocking :8080 publicly is still recommended.
-- **workspace-server (Citadel C2S, :12349)** — still binds `0.0.0.0` (its
-  `bind_addr` lives in `docker/workspace-server/kernel.toml`, shared with
-  dev). The Citadel protocol is end-to-end encrypted, so this is lower risk
-  than the plaintext WS, but it remains an unguarded attack surface.
-  **Remaining work:** make the server bind host configurable (env or a
-  prod-specific `kernel.toml`) and bind it to `127.0.0.1` in production.
+- **workspace-server (Citadel C2S, :12349)** — binds `127.0.0.1` in
+  production via `WORKSPACE_BIND_ADDR` (`docker-compose.production.yml`, and
+  the same value in `publish-images.yml`). The kernel reads that env var and
+  falls back to `kernel.toml`'s `bind_addr` — still `0.0.0.0:12349`, which is
+  what dev wants and why the file is shared.
+
+  Set `WORKSPACE_BIND_ADDR=0.0.0.0:12349` only for a deployment where remote
+  clients reach this server directly rather than through the co-located
+  ingress; the Citadel protocol is end-to-end encrypted, so a public bind is
+  by design in that mode, but pair it with a host firewall.
 - **Mandatory regardless:** run a host firewall (ufw / cloud security group)
   that allows only Cloudflare ingress and blocks `8080`/`12345`/`12349` from
   the public internet. Host networking means Docker's own port mapping does
