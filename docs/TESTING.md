@@ -184,6 +184,41 @@ Retry attempt 2/3 for Session Already Connected error
 
 ---
 
+## What the suites CANNOT see
+
+Every Playwright spec runs against the Vite **dev server** on 5291. That is not
+an accident and cannot easily change: the specs reach for `window.__websocketService`,
+`window.__serverAutoConnectService` and friends, which `main.tsx` attaches only
+under `import.meta.env.DEV`. Rollup drops that branch from a production build,
+so the handles the suite depends on do not exist there.
+
+The consequence is worth stating plainly, because it has already cost a
+production defect:
+
+**No test exercises the app's features against the production artefact.** The
+dev server applies no `Content-Security-Policy` and no `Permissions-Policy` at
+all. Production nginx applies both. A feature can therefore pass every spec and
+be dead on deploy.
+
+That is exactly what happened to audio/video calling: production shipped
+`Permissions-Policy: microphone=(), camera=()` — an empty allowlist denies every
+origin, including its own — so `getUserMedia` was refused. The feature passed
+19/19 end-to-end because dev sends no such header. Nothing was wrong with the
+app; the policy it runs under in production had never been tested.
+
+What DOES cover production, and what each part covers:
+
+| Check | Runs against | Sees |
+|---|---|---|
+| `scripts/smoke-ui-ws.sh` | the built nginx image | headers, /ws proxy, SPA fallback, sw.js caching, manifest type |
+| `check:bundle`, `check:pwa*`, `check:lighthouse`, `check:mobile`, `check:reduced-motion` | `vite preview` on `dist/` | the production BUNDLE, but not nginx |
+| `tests-pw` | the dev server | app behaviour, under no security headers |
+
+So the production image is checked for what it SERVES, and the production bundle
+for what it CONTAINS, but neither is driven through a real user flow. When a
+feature depends on a browser permission or a CSP directive, assert it in
+`smoke-ui-ws.sh` — that is the only place that sees the policy the user gets.
+
 ## Which suites actually run in CI
 
 Two suites exist, and they reach CI by different routes. The difference matters
