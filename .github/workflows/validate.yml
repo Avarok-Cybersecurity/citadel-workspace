@@ -854,6 +854,16 @@ jobs:
         run: npm run check:pwa
         working-directory: citadel-workspaces
 
+      - name: Source maps are usable
+        # The deterministic half of Lighthouse's valid-source-maps. That audit
+        # FETCHES each map, so on a loaded runner it reports "missing" against a
+        # build whose maps are correct, and it has appeared in some runs here and
+        # not others. This reads the files instead: every chunk names a map, the
+        # map exists, and it carries sourcesContent — without which a production
+        # stack trace still cannot be resolved back to source.
+        run: npm run check:sourcemaps
+        working-directory: citadel-workspaces
+
       - name: Lighthouse baselines
         # Accessibility and SEO are held at 100 because they are rule checks, not
         # measurements — they pass today, so anything less is a regression
