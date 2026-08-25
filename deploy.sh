@@ -13,6 +13,8 @@
 # Data volumes (server_data, internal_service_data) are NEVER touched.
 # Only container images are replaced.
 #
+# verify: absent 'docker compose build' in-body deploy.sh
+#
 # NOTE: this header used to say "rebuilds only changed images". It no longer
 # builds anything -- compiling Rust on the production host was removed
 # deliberately (see the comment above the pull step). An operator trusting the

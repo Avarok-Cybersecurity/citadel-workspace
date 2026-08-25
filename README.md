@@ -101,6 +101,7 @@ cargo test -p citadel-workspace-types -p citadel-workspace-server-kernel
 # End to end — these share ONE backend, so never run two at once.
 #
 # The suite has TWO runners, and `npx playwright test` is only one of them:
+# verify: count citadel-workspaces/integration-tests/src/tests-pw .spec.ts == 11
 # its testDir is ./src/tests-pw (11 specs). The other 40 are driven by npm
 # scripts, which is what CI runs, so the playwright command alone covers well
 # under a quarter of the E2E suite.
