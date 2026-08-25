@@ -246,19 +246,30 @@ an off-by-one:
 different angle: 14 of its 15 phases pass, P2P re-establishes in both
 directions, and then the first message after reconnect never arrives inside 30s.
 
-What the logs establish:
+**The loss is in the CLIENT, not in ILM.** An earlier version of this entry
+said the opposite; that was wrong, and the correction is the useful part.
+
+What the logs establish, from the local run:
 
 - The message IS sent — the sender's UI confirms it and the spec records SENT.
-- The sender's ILM queues it: `[ILM-OUTBOUND] CID <alice>: N messages in 1
-  group` reaches a depth of 3 during the offline window.
-- While the peer is down the sender is correctly `[ILM-BLOCKED]`, and after
-  reconnect `[ILM-INBOUND] Delivered msg_id=...` fires — for the other two.
-- The lost message never appears in the recipient's UI across three retries,
-  and never appears in the recipient's console either.
+- The sender's ILM queues it: `[ILM-OUTBOUND]` reaches a depth of 3 during the
+  offline window, and the sender is correctly `[ILM-BLOCKED]` while the peer is
+  down.
+- **ILM delivers every message.** `[ILM-INBOUND] Delivered msg_id=N` covers ids
+  0–12 from the sender with NO gap (and 0–16 in the other direction). Whichever
+  message the spec reports missing, ILM delivered it.
+- The recipient's client receives and routes them: 14 `handleP2PCommand`
+  dispatches after reconnect, with `MessageNotification` routed by CID.
+- The text still never appears in the recipient's conversation.
 
-So the loss is between "queued and blocked" and "delivered on unblock", inside
-intersession-layer-messaging. It is NOT a rendering problem: the text never
-reaches the recipient at all.
+So the message survives the queue, the wire, ILM delivery and the inbound
+router, and is lost after that — in the client's message handling or
+conversation cache. Ruled out along the way, each by log evidence rather than
+reasoning: the inbound de-duplication (it only defers by one poll, proven by
+test), `has_delivered` treating it as a duplicate (that path never logged
+"Skipping already delivered message" once), and a missing ILM id.
+
+Start in `p2p-messenger-manager.ts` / the conversation cache, not in Rust.
 
 **Why this is not patched here.** The obvious workaround — a longer timeout, or
 a warm-up message before the assertion — would make the suite green while a
