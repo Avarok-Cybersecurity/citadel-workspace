@@ -228,31 +228,40 @@ pub enum WorkspaceErrorResponse {
    - CRUD operations for all entities
    - Permission validation for all operations
    - Error handling for all failure cases
-## Fixed: one offline message was lost on reconnect
+## Partly fixed: messages still lost on reconnect under load
 
-**Cause: a lost update in the message pagination store.**
+**One real cause was found and fixed. It is not the only one.**
 
-`appendMessageToPage` was a read-modify-write against IndexedDB — load the
-metadata, load the page, mutate, save — with four awaits between the read and
-the write, and no serialisation. Two messages appended concurrently both read
-the same page, each pushed their own message onto their own copy, and the second
-save overwrote the first. The message was gone from the page the UI renders,
-while every layer beneath reported success.
+`appendMessageToPage` was a read-modify-write against IndexedDB — load metadata,
+load the page, mutate, save — with four awaits between read and write and no
+serialisation. Two messages appended concurrently both read the same page, each
+pushed onto their own copy, and the second save overwrote the first. Appends and
+the three other per-peer mutators (`updateMessageInPages`,
+`updatePeerUsernameInMetadata`, `updateUnreadCount`) now run one at a time
+through `peer-write-lock`.
 
-That explains the whole shape of it: exactly one message lost, which one
-varying between runs, and only when several arrive together — a reconnect
-flushing a queue is precisely that. In ordinary conversation, messages arrive
-seconds apart and never collide.
+That fix is genuine: `test:offline` passed three consecutive local runs (9 of 9
+messages) having failed every run before, and `test:reconnect-both-c2s` went
+14/15 to 15/15.
 
-Appends are now chained per peer. Verified: `test:offline` passed three
-consecutive times, nine of nine messages delivered, having failed on every run
-before (CI lost message 2, local lost message 1 on the same commit); and
-`test:reconnect-both-c2s` went from 14/15 to 15/15, its post-reconnect message
-now arriving.
+**But CI still fails**, on a slower and more contended runner, losing TWO of the
+three offline messages rather than one. So at least one more loss path exists.
 
-Worth keeping for the next person: everything above this layer looked perfect
-and was checked in turn — ILM delivered ids 0-12 with no gap, the inbound router
-dispatched every notification, deserialisation never failed, and the
-conversation cache's de-duplication only ever matched genuine UUID repeats. The
-loss was in the last step before rendering, which is the easiest place to stop
-looking.
+What the CI failure rules out, checked the same way as before:
+
+- ILM delivered every message; there is no gap in the delivered ids. (An
+  apparent gap at id 8 was a grep artefact — the peer id is truncated in the
+  log — not a missing delivery.)
+- No `Message for different session` skips, no deserialisation failures, and the
+  `no peer_cid` skips number exactly 21 in every context, which is the server's
+  own C2S traffic being correctly ignored.
+- Not pagination: `MESSAGES_PER_PAGE` is 50 and no page rollover occurred for
+  roughly thirteen messages.
+- The conversation de-duplication matched six times, all genuine UUID repeats
+  from ILM retransmission.
+
+The one asymmetry worth chasing: the reconnected client dispatched 11
+`handleP2PCommand` calls in CI against 14 locally. Messages ILM delivered
+therefore appear not to have reached the reconnected instance's handler at all,
+which points at session routing between the pre-disconnect context and the
+reconnected one rather than at storage. Instrument there next.
