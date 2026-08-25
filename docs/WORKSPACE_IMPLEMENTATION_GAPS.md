@@ -260,8 +260,19 @@ What the CI failure rules out, checked the same way as before:
 - The conversation de-duplication matched six times, all genuine UUID repeats
   from ILM retransmission.
 
-The one asymmetry worth chasing: the reconnected client dispatched 11
-`handleP2PCommand` calls in CI against 14 locally. Messages ILM delivered
-therefore appear not to have reached the reconnected instance's handler at all,
-which points at session routing between the pre-disconnect context and the
-reconnected one rather than at storage. Instrument there next.
+Session routing is ruled out too, and that one looked promising. Cumulative
+counts suggested the pre-disconnect context was still handling messages after
+the reconnect; splitting them at the reconnect line shows otherwise — the old
+context dispatches ZERO after that point, and the reconnected one dispatches
+seven. Beware the cumulative reading: it invited exactly the wrong conclusion.
+
+So the messages reach `handleP2PCommand` on the right instance, and two of them
+never reach the conversation the UI renders. Everything above that boundary is
+now eliminated by evidence; the remaining span is `handleP2PCommand` →
+`addMessageToConversation` → the rendered list.
+
+The logs cannot narrow it further: the handler records byte counts, not
+contents, so there is no way to tell which of the seven dispatches carried which
+message. The next step is temporary instrumentation logging the decoded text at
+`addMessageToConversation` and at the point the list renders, run against this
+spec under CI-like load until it reproduces.
