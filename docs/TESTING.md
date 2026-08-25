@@ -253,36 +253,25 @@ driven by `test:*` npm scripts. Run by the `integration-tests` job as an
 explicit **matrix of script names**, so a spec only runs if someone remembers to
 add its script to the matrix.
 
-Measured 2026-08-25: **20 of the 48 run. 28 never do.**
+Re-measured 2026-08-25, after the matrix was extended: **all 48 run.** The
+matrix now carries one entry per spec, including every reconnection scenario,
+the whole tree-operation suite and both revfs suites — the groups that were
+previously written, typechecked and never executed.
 
-    account-management            reconnection/both-c2s-reconnect
-    chat-settings                 reconnection/c2s-reconnect
-    file-manager                  reconnection/one-c2s-reconnect
-    group-chat/office-chat        reconnection/p2p-one-c2s-reconnect
-    group-chat/peer-group         reconnection/p2p-only-reconnect
-    group-chat/room-chat          revfs-peer
-    hierarchy-navigation          revfs-server
-    misc-routes                   settings-modal
-    native-file-picker            tree-cascade-delete
-    notification-center           tree-custom-types
-    office-mdx-content            tree-deep-hierarchy
-    user-directory                tree-move-operations
-    workspace-init                tree-permissions-inheritance
-                                  tree-structure-editor
-                                  tree-validator-protocol
+How to check this yourself rather than trusting the number, since it went stale
+once already: take the `- test: test:x` lines out of the `integration-tests`
+matrix in `.github/workflows/validate.yml`, resolve each through
+`integration-tests/package.json` (some scripts chain others with `npm run`), and
+compare the resulting `dist/tests/*.test.js` list against `src/tests/**`. Note
+that grepping the workflow for `test:` strings instead will overcount — it picks
+up aggregates like `test:all`, which reference everything and would make any
+matrix look complete.
 
-That is every reconnection scenario, the whole tree-operation suite, both revfs
-suites, and the notification, settings, directory and workspace-init flows —
-written, typechecked, and never executed against a running stack.
-
-**The fix is porting, not matrix entries.** Adding 28 names to the matrix would
-work and would rot the same way, because the list has to be maintained by hand.
-Moving a spec into `src/tests-pw` puts it in the sharded job automatically and
-deletes a hand-maintained line at the same time. Porting also buys web-first
-assertions, which is what removes the sleeps the legacy suite is built on.
-
-Until then, treat a green CI run as covering the ported suite plus 20 legacy
-specs — not the whole of `src/tests`.
+**Porting is still worth doing, but it is no longer a coverage argument.** The
+matrix has to be maintained by hand and will rot again; a spec moved into
+`src/tests-pw` joins the sharded job automatically and deletes a hand-maintained
+line. Porting also buys web-first assertions, which is what removes the sleeps
+the legacy suite is built on.
 
 ## Troubleshooting
 
