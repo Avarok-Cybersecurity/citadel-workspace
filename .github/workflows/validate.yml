@@ -307,6 +307,14 @@ jobs:
         run: npm run check:reduced-motion
         working-directory: citadel-workspaces
 
+      - name: Mobile layout
+        # axe measures colour, names and roles — not size. Three controls
+        # shipped under the WCAG 2.2 24px target floor, including the close
+        # button on every dialog in the app, with every a11y gate green.
+        if: matrix.project == 'citadel-workspaces'
+        run: npm run check:mobile
+        working-directory: citadel-workspaces
+
       - name: Documented env vars have consumers
         # A deployment doc is the one place a reader cannot verify a claim by
         # running it. A variable named there but read by nothing looks like a
