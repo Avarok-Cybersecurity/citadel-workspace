@@ -66,8 +66,17 @@ reverse proxy in front, not widening the bind address.
 ### Back up before you upgrade
 
 ```bash
+# Production stack (the default):
 ./scripts/backup-volumes.sh
+
+# Local stack — you MUST name its compose file, or none of your volumes match:
+COMPOSE_FILE=docker-compose.local.yml ./scripts/backup-volumes.sh
 ```
+
+Archives land in `~/.local/share/citadel-backups` (override with `BACKUP_DIR`),
+deliberately outside the checkout. The script exits non-zero if it archived
+nothing, so a wrong compose file fails loudly instead of reporting success over
+an empty backup.
 
 There is **no server-side key escrow, by design**. Account keys live in the
 agent's volume and nowhere else, so losing it does not mean "restore from the

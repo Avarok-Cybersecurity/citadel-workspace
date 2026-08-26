@@ -16,7 +16,10 @@
 set -euo pipefail
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.production.yml}"
-BACKUP_DIR="${BACKUP_DIR:-./backups}"
+# Outside the checkout by default. The deploy host runs `git pull` in this
+# working tree, and commit.sh runs `git add --all` -- so an archive of the
+# key material sitting in ./backups is one command away from being committed.
+BACKUP_DIR="${BACKUP_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/citadel-backups}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 
 if [ ! -f "$COMPOSE_FILE" ]; then
@@ -41,14 +44,24 @@ if [ "${#VOLUMES[@]}" -eq 0 ]; then
   exit 1
 fi
 
-PROJECT="$(basename "$(pwd)")"
+# Ask Compose, do not guess. Compose names volumes after the PROJECT name,
+# which it normalises (lowercased, invalid characters stripped) and which
+# COMPOSE_PROJECT_NAME overrides -- none of which basename(pwd) knows. It
+# happens to match in a checkout named exactly like the project, which is why
+# this survived. deploy.sh already does it correctly; this is that lookup.
+PROJECT="$(docker compose -f "$COMPOSE_FILE" config --format json 2>/dev/null | jq -r '.name // empty')"
+if [ -z "$PROJECT" ]; then
+  PROJECT="$(basename "$(pwd)")"
+  echo "WARNING: could not read the compose project name; falling back to '$PROJECT'." >&2
+fi
 mkdir -p "$BACKUP_DIR"
 echo "Backing up ${#VOLUMES[@]} volume(s) from $COMPOSE_FILE to $BACKUP_DIR"
 
+ARCHIVED=0
 for vol in "${VOLUMES[@]}"; do
   full="${PROJECT}_${vol}"
   if ! docker volume inspect "$full" >/dev/null 2>&1; then
-    echo "  skip $vol (no volume named $full on this host)"
+    echo "  skip $vol (no volume named $full on this host)" >&2
     continue
   fi
   out="${BACKUP_DIR}/${vol}-${STAMP}.tar.gz"
@@ -60,7 +73,28 @@ for vol in "${VOLUMES[@]}"; do
     alpine:3 \
     tar czf "/backup/$(basename "$out")" -C /source . >/dev/null
   echo "  $vol -> $out ($(du -h "$out" | cut -f1))"
+  ARCHIVED=$((ARCHIVED + 1))
 done
+
+# Exit non-zero when nothing was captured. The guard above checks that volumes
+# were declared in the compose file, not that any were archived -- so with the
+# wrong project name, or the wrong COMPOSE_FILE for this host, every volume was
+# skipped and the script still printed "Done." and exited 0.
+#
+# That matters more here than anywhere else in the repo: UPGRADING.md tells the
+# operator to run this before every upgrade precisely because there is no
+# server-side key escrow, so a user's account keys live in these volumes and
+# nowhere else.
+if [ "$ARCHIVED" -eq 0 ]; then
+  echo >&2
+  echo "ERROR: archived 0 of ${#VOLUMES[@]} volume(s) -- nothing was backed up." >&2
+  echo "  project name: $PROJECT" >&2
+  echo "  compose file: $COMPOSE_FILE" >&2
+  echo >&2
+  echo "If this is the local stack, point at its compose file:" >&2
+  echo "  COMPOSE_FILE=docker-compose.local.yml $0" >&2
+  exit 1
+fi
 
 echo
 echo "Done. Verify a backup is readable before relying on it:"

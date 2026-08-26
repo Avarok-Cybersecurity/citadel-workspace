@@ -25,7 +25,16 @@ if [ "$running" != "0" ]; then
   exit 1
 fi
 
-PROJECT="$(basename "$(pwd)")"
+# Ask Compose, do not guess. Compose names volumes after the PROJECT name,
+# which it normalises (lowercased, invalid characters stripped) and which
+# COMPOSE_PROJECT_NAME overrides -- none of which basename(pwd) knows. It
+# happens to match in a checkout named exactly like the project, which is why
+# this survived. deploy.sh already does it correctly; this is that lookup.
+PROJECT="$(docker compose -f "$COMPOSE_FILE" config --format json 2>/dev/null | jq -r '.name // empty')"
+if [ -z "$PROJECT" ]; then
+  PROJECT="$(basename "$(pwd)")"
+  echo "WARNING: could not read the compose project name; falling back to '$PROJECT'." >&2
+fi
 
 for archive in "$@"; do
   [ -f "$archive" ] || { echo "ERROR: no such archive: $archive" >&2; exit 1; }

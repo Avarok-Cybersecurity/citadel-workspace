@@ -8,7 +8,7 @@ a description of how to use it. Every claim below is taken from
 ## Before you upgrade: back up
 
 ```bash
-./scripts/backup-volumes.sh            # writes ./backups/<volume>-<UTC stamp>.tar.gz
+./scripts/backup-volumes.sh            # writes ~/.local/share/citadel-backups/<volume>-<stamp>.tar.gz
 ```
 
 Do this even though an upgrade never touches data volumes, because the cost of
@@ -22,7 +22,7 @@ Restoring:
 
 ```bash
 docker compose -f docker-compose.production.yml down
-./scripts/restore-volumes.sh ./backups/server_data-<stamp>.tar.gz
+./scripts/restore-volumes.sh ~/.local/share/citadel-backups/server_data-<stamp>.tar.gz
 docker compose -f docker-compose.production.yml up -d --wait
 ```
 
@@ -31,7 +31,21 @@ underneath a running server races its own writes and can persist a mixture of
 old and new state, which is worse than either. It also verifies each archive is
 readable *before* it wipes the volume it is about to replace.
 
-Verify a backup rather than assuming it: `tar tzf ./backups/<file>.tar.gz | head`.
+Verify a backup rather than assuming it: `tar tzf <file>.tar.gz | head`.
+
+The archives live outside the checkout on purpose — the deploy host runs
+`git pull` in this working tree, and they contain the key material.
+Override with `BACKUP_DIR=/mnt/backups`.
+
+**If you run the local stack**, point the script at its compose file, or it
+will find none of your volumes:
+
+```bash
+COMPOSE_FILE=docker-compose.local.yml ./scripts/backup-volumes.sh
+```
+
+It exits non-zero when it archives nothing, so a wrong compose file or project
+name fails loudly rather than reporting success over an empty backup.
 
 ## What a release is
 
