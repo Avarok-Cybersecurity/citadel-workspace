@@ -23,10 +23,22 @@ use citadel_sdk::prelude::*;
 fn ts_credential_rules_still_match_the_sdk() {
     let reqs = ServerMiscSettings::default().credential_requirements;
 
-    assert_eq!(reqs.min_username_length, 3, "credential-rules.ts username.min");
-    assert_eq!(reqs.max_username_length, 37, "credential-rules.ts username.max");
-    assert_eq!(reqs.min_password_length, 7, "credential-rules.ts password.min");
-    assert_eq!(reqs.max_password_length, 17, "credential-rules.ts password.max");
+    assert_eq!(
+        reqs.min_username_length, 3,
+        "credential-rules.ts username.min"
+    );
+    assert_eq!(
+        reqs.max_username_length, 37,
+        "credential-rules.ts username.max"
+    );
+    assert_eq!(
+        reqs.min_password_length, 7,
+        "credential-rules.ts password.min"
+    );
+    assert_eq!(
+        reqs.max_password_length, 17,
+        "credential-rules.ts password.max"
+    );
     assert_eq!(reqs.min_name_length, 2, "credential-rules.ts fullName.min");
     assert_eq!(reqs.max_name_length, 77, "credential-rules.ts fullName.max");
 }

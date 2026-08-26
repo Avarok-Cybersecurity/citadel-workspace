@@ -66,13 +66,19 @@ Nested git submodules — commit innermost first (see [CLAUDE.md](CLAUDE.md)):
 ```bash
 git clone --recurse-submodules https://github.com/Avarok-Cybersecurity/citadel-workspace
 cd citadel-workspace
-npm ci                                   # from the ROOT: it is an npm workspace
+npm ci                                   # from the ROOT: it is an npm workspace (needs Node >= 20)
 
 cp .env.example .env                     # then edit it: set WORKSPACE_MASTER_PASSWORD
                                          # to a real value, e.g. `openssl rand -hex 32`
 
 docker compose up -d --build --wait      # or: tilt up
 ```
+
+Node 20 or newer is required — it is declared in `engines` but npm does not
+enforce that by default, so an older runtime gets no useful warning: the build
+runs most of the way and then dies with `ReferenceError: crypto is not defined`
+from a transitive dependency that expects the Web Crypto global Node added in
+19. CI runs Node 20.
 
 `.env` is required, not optional. `docker-compose.yml` reads
 `WORKSPACE_MASTER_PASSWORD` with no fallback, and the workspace server
@@ -110,9 +116,9 @@ cargo test -p citadel-workspace-types -p citadel-workspace-server-kernel
 # End to end — these share ONE backend, so never run two at once.
 #
 # The suite has TWO runners, and `npx playwright test` is only one of them:
-# verify: count citadel-workspaces/integration-tests/src/tests-pw .spec.ts == 11
+# verify: count citadel-workspaces/integration-tests/src/tests-pw .spec.ts == 12
 # verify: count citadel-workspaces/integration-tests/src/tests .test.ts == 39
-# its testDir is ./src/tests-pw (11 specs). The rest are driven by npm scripts,
+# its testDir is ./src/tests-pw (12 specs). The rest are driven by npm scripts,
 # which is what CI runs -- 39 at the top level of src/tests, plus more under
 # group-chat/ and reconnection/ -- so the playwright command alone covers well
 # under a quarter of the E2E suite.
