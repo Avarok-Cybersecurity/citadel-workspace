@@ -41,6 +41,42 @@ for (const file of walk(ROOT)) {
   });
 }
 
+// The other half of the contract: the utility those sites depend on has to keep
+// its guard. All eight controls share `.reveal-on-hover`, so if the media query
+// or the focus rules are edited away, every one of them silently reverts to
+// being hover-only — and the check above would still pass, because no file uses
+// the forbidden pattern any more. Two integration tests
+// (tests-pw/touch-controls.spec.ts) prove the mechanism works in a real browser;
+// this makes sure the mechanism still exists.
+const css = readFileSync('citadel-workspaces/src/index.css', 'utf8');
+const utility = /\.reveal-on-hover[\s\S]*$/.exec(css)?.[0] ?? '';
+
+const required = [
+  {
+    test: /@media\s*\(hover:\s*hover\)[^{]*\{[\s\S]*?\.reveal-on-hover\s*\{[^}]*opacity:\s*0/,
+    why: 'the `opacity: 0` must sit inside `@media (hover: hover)`, or the fade applies on touch devices too and the controls become unreachable again',
+  },
+  {
+    test: /\.reveal-on-hover:focus-visible/,
+    why: 'without `:focus-visible` a keyboard user tabs onto an invisible control',
+  },
+  {
+    test: /\.reveal-on-hover:focus-within/,
+    why: 'without `:focus-within` the sites that put the class on a wrapper rather than the button stay hidden when focused',
+  },
+];
+
+if (!/\.reveal-on-hover\s*\{/.test(css)) {
+  offenders.push('citadel-workspaces/src/index.css: the .reveal-on-hover utility is missing entirely');
+} else {
+  for (const { test, why } of required) {
+    if (!test.test(css)) {
+      offenders.push(`citadel-workspaces/src/index.css: .reveal-on-hover — ${why}`);
+    }
+  }
+}
+void utility;
+
 const unique = [...new Set(offenders)];
 if (unique.length > 0) {
   console.error('Controls revealed by hover alone (unreachable on touch, invisible to keyboard focus):\n');
