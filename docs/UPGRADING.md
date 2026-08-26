@@ -5,6 +5,34 @@ a description of how to use it. Every claim below is taken from
 `deploy.sh`, `docker-compose.production.yml`,
 `.github/workflows/publish-images.yml` and `scripts/verify-image-revisions.sh`.
 
+## Before you upgrade: back up
+
+```bash
+./scripts/backup-volumes.sh            # writes ./backups/<volume>-<UTC stamp>.tar.gz
+```
+
+Do this even though an upgrade never touches data volumes, because the cost of
+being wrong is asymmetric here. **There is no server-side key escrow, by
+design.** A user's account keys live in the internal-service volume and nowhere
+else, so losing that volume does not mean "restore from the server" — it means
+that identity is gone and the user re-registers as somebody new. No amount of
+care elsewhere recovers it.
+
+Restoring:
+
+```bash
+docker compose -f docker-compose.production.yml down
+./scripts/restore-volumes.sh ./backups/server_data-<stamp>.tar.gz
+docker compose -f docker-compose.production.yml up -d --wait
+```
+
+`restore-volumes.sh` refuses to run while any service is up — restoring
+underneath a running server races its own writes and can persist a mixture of
+old and new state, which is worse than either. It also verifies each archive is
+readable *before* it wipes the volume it is about to replace.
+
+Verify a backup rather than assuming it: `tar tzf ./backups/<file>.tar.gz | head`.
+
 ## What a release is
 
 CI builds the three images — `citadel-workspace-server`,
