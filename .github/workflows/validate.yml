@@ -104,6 +104,8 @@ jobs:
         run: node scripts/check-responsive-label-loss.mjs
       - name: Check every colour utility resolves to a defined token
         run: node scripts/check-color-tokens-exist.mjs
+      - name: Check message senders come from the transport, not the payload
+        run: node scripts/check-sender-identity.mjs
 
   internal-service-rust-lint:
     name: Cargo Fmt + Clippy - citadel-internal-service workspace
