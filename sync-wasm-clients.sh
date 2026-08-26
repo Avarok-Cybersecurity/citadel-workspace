@@ -257,6 +257,30 @@ if [ -d "$INTERNAL_SERVICE_ROOT/citadel-internal-service-types/bindings" ]; then
     fi
 fi
 
+# Step 5b: The OTHER types crate.
+#
+# citadel-workspace-types emits its ts-rs bindings the same way, and the client
+# package holds a copy under src/types/generated -- but nothing copied it. The
+# step above existed for citadel-internal-service-types only, so that copy sat
+# six months stale: the client was missing Permission::Themes,
+# DomainPermissions.themes and the whole UpdateWorkspaceTheme variant, i.e.
+# every type the theming feature added. tsc could not see it because
+# toWasmWorkspaceRequest casts through `as unknown as`.
+#
+# `|| true` is deliberately NOT used here. The internal-service copy above
+# tolerates an absent bindings dir because that crate's generation is
+# conditional; this one is not, and silently skipping is exactly how the drift
+# accumulated. scripts/check-generated-types-fresh.mjs gates it in CI either
+# way.
+WS_TYPES_BINDINGS="$WORKSPACE_ROOT/citadel-workspace-types/bindings"
+WS_TYPES_DEST="$WORKSPACE_ROOT/citadel-workspace-client-ts/src/types/generated"
+if [ -d "$WS_TYPES_BINDINGS" ] && [ -d "$WS_TYPES_DEST" ]; then
+    print_status "Copying citadel-workspace-types bindings..."
+    cp "$WS_TYPES_BINDINGS/"*.ts "$WS_TYPES_DEST/"
+else
+    print_warning "Skipping citadel-workspace-types bindings: $WS_TYPES_BINDINGS or $WS_TYPES_DEST is missing"
+fi
+
 # Step 6: Rebuild citadel-workspace-client-ts
 print_status "Rebuilding citadel-workspace-client-ts..."
 cd "$WORKSPACE_ROOT/citadel-workspace-client-ts"

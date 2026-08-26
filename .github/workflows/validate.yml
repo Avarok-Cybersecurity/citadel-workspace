@@ -106,6 +106,8 @@ jobs:
         run: node scripts/check-color-tokens-exist.mjs
       - name: Check message senders come from the transport, not the payload
         run: node scripts/check-sender-identity.mjs
+      - name: Check the client TypeScript bindings match the Rust types
+        run: node scripts/check-generated-types-fresh.mjs
 
   internal-service-rust-lint:
     name: Cargo Fmt + Clippy - citadel-internal-service workspace
