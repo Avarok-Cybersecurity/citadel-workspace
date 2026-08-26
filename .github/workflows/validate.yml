@@ -102,6 +102,8 @@ jobs:
         run: node scripts/check-restart-policies.mjs
       - name: Check no control loses its name at narrow widths
         run: node scripts/check-responsive-label-loss.mjs
+      - name: Check every colour utility resolves to a defined token
+        run: node scripts/check-color-tokens-exist.mjs
 
   internal-service-rust-lint:
     name: Cargo Fmt + Clippy - citadel-internal-service workspace
