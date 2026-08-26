@@ -58,8 +58,23 @@ permissions:
   packages: write
 
 jobs:
+  # Nothing gated publication. `validate.yml` declares `workflow_call:` at its
+  # top and a repo-wide grep for `uses:.*validate.yml` returned only that
+  # declaration — so the entrypoint existed and was never wired. `publish` had
+  # no `needs` at all, and `promote-latest` needs only `publish`.
+  #
+  # A master commit failing every integration test, every Rust test, clippy,
+  # typecheck and lint therefore still built three images, pushed sha-<12>, and
+  # promoted `latest` — which is the tag docker-compose.production.yml and
+  # deploy.sh pull by default. The existing smoke test is a port-liveness probe;
+  # it proves the container starts, not that the code works.
+  validate:
+    name: Validate before publishing
+    uses: ./.github/workflows/validate.yml
+
   publish:
     name: Publish ${{ matrix.image }}
+    needs: validate
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
