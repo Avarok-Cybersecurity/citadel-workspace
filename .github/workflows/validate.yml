@@ -88,6 +88,8 @@ jobs:
         run: node scripts/check-doc-assertions.mjs
       - name: Check the quickstart works on a clean clone
         run: node scripts/check-doc-setup-steps.mjs
+      - name: Check icon-only buttons have accessible names
+        run: node scripts/check-icon-button-names.mjs
 
   internal-service-rust-lint:
     name: Cargo Fmt + Clippy - citadel-internal-service workspace
