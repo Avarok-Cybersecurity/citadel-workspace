@@ -36,6 +36,55 @@ impl<R: Ratchet> Clone for AsyncDomainServerOperations<R> {
 }
 
 impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
+    /// Refuse anything that would leave the workspace with no administrator.
+    ///
+    /// Demoting or removing the last Admin is unrecoverable: promotion requires
+    /// an admin, so there is no way back from a workspace that has none. The
+    /// admin UI offers both actions on the acting user's own row, which puts
+    /// that state one click away — and it is exactly the state that made the
+    /// product read-only for everyone before joining users were promoted.
+    ///
+    /// A no-op when the target is not an Admin, so ordinary member management is
+    /// unaffected.
+    async fn ensure_not_last_admin(
+        &self,
+        target_user_id: &str,
+        action: &str,
+    ) -> Result<(), NetworkError> {
+        let target = match self.backend_tx_manager.get_user(target_user_id).await? {
+            Some(user) => user,
+            None => return Ok(()),
+        };
+        if target.role != UserRole::Admin {
+            return Ok(());
+        }
+
+        let workspace = match self
+            .backend_tx_manager
+            .get_workspace(crate::WORKSPACE_ROOT_ID)
+            .await?
+        {
+            Some(ws) => ws,
+            None => return Ok(()),
+        };
+
+        let mut admins = 0usize;
+        for member_id in &workspace.members {
+            if let Some(member) = self.backend_tx_manager.get_user(member_id).await? {
+                if member.role == UserRole::Admin {
+                    admins += 1;
+                }
+            }
+        }
+
+        if admins <= 1 {
+            return Err(NetworkError::msg(format!(
+                "Cannot {action} the only administrator. Promote another member to Admin first —                  otherwise nobody could manage the workspace, and the change cannot be undone."
+            )));
+        }
+        Ok(())
+    }
+
     /// Create a new AsyncDomainServerOperations instance
     pub fn new(
         backend_tx_manager: Arc<BackendTransactionManager<R>>,
@@ -270,6 +319,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
 
         // If this is the workspace root, use the workspace storage
         if domain_id == crate::WORKSPACE_ROOT_ID {
+            self.ensure_not_last_admin(user_id_to_remove, "remove")
+                .await?;
+
             let mut workspace = match self.backend_tx_manager.get_workspace(domain_id).await? {
                 Some(ws) => ws,
                 None => return Err(NetworkError::msg("Workspace not found")),
@@ -313,6 +365,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             return Err(NetworkError::msg(
                 "Permission denied: Only admins can update member roles",
             ));
+        }
+
+        if role != UserRole::Admin {
+            self.ensure_not_last_admin(target_user_id, "demote").await?;
         }
 
         // Get user and update role
