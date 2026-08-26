@@ -291,7 +291,17 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             }
         };
 
-        // Set the user's role
+        // The third writer of `user.role`, and the one that was ungated.
+        //
+        // UpdateMemberRole and RemoveMember both call ensure_not_last_admin;
+        // this did not. Adding an EXISTING member with a lower role is a role
+        // change by another name, so the sole administrator adding themselves as
+        // Member left the workspace with no admin at all — and promotion
+        // requires an admin, so there is no way back. It is reachable from the
+        // ordinary "Add member" dialog by typing an existing admin's name.
+        if role != UserRole::Admin {
+            self.ensure_not_last_admin(user_id_to_add, "demote").await?;
+        }
         user.role = role;
 
         // Use the set_role_permissions method to properly set permissions for this domain
@@ -332,6 +342,23 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             self.backend_tx_manager
                 .insert_workspace(domain_id.to_string(), workspace)
                 .await?;
+
+            // Drop the role as well as the membership, or the removed user is a
+            // "ghost admin": `is_admin` reads the GLOBAL `user.role` and never
+            // consults the member list, so a removed administrator keeps passing
+            // every permission gate — while ensure_not_last_admin, which counts
+            // admins among `workspace.members`, can no longer see them. Two
+            // admins could then remove each other down to zero and the next
+            // account to register would be promoted as "first member".
+            if let Some(mut removed) = self.backend_tx_manager.get_user(user_id_to_remove).await? {
+                if removed.role == UserRole::Admin {
+                    removed.role = UserRole::Member;
+                    removed.set_role_permissions(crate::WORKSPACE_ROOT_ID);
+                    self.backend_tx_manager
+                        .insert_user(user_id_to_remove.to_string(), removed)
+                        .await?;
+                }
+            }
         } else {
             // For all other entities, use DomainNode tree storage
             let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
