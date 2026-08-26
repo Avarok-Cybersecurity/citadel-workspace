@@ -128,6 +128,29 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
         working-directory: citadel-internal-service
 
+  internal-service-rust-tests:
+    # The citadel-internal-service workspace got a dedicated LINT job and its
+    # tests were never brought with it, so `cargo fmt` and `cargo clippy` ran on
+    # eight crates whose tests ran nowhere at all — including the media lane and
+    # intersession-layer-messaging. `rust-tests` below is the ROOT workspace
+    # only; `-p <crate>` cannot reach a separate workspace.
+    #
+    # The submodule's own workflow runs these, but on pull_request TO THAT REPO.
+    # CLAUDE.md has developers editing inside citadel-internal-service/ in this
+    # worktree, so a main-repo PR carrying those changes passed with zero test
+    # execution.
+    name: Rust Tests - citadel-internal-service workspace
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: Avarok-Cybersecurity/gh-actions-deps@master
+      - uses: taiki-e/install-action@nextest
+      - name: Run Cargo Nextest
+        run: cargo nextest run --workspace
+        working-directory: citadel-internal-service
+
   rust-tests:
     name: Rust Tests - ${{ matrix.crate }}
     runs-on: ubuntu-latest

@@ -93,7 +93,13 @@ if (all.length < 8) {
 function wholesaleDirs(kind) {
   const dirs = new Set();
   const jobs = workflow.split(/\n  (?=[a-z][\w-]*:)/);
-  const wanted = kind === 'fmt' ? /cargo fmt\s+--all/ : /cargo clippy\s+--workspace/;
+  // A job covering a whole workspace at once, rather than crate by crate.
+  const WHOLESALE = {
+    fmt: /cargo fmt\s+--all/,
+    clippy: /cargo clippy\s+--workspace/,
+    test: /cargo (?:nextest run|test)\s+--workspace/,
+  };
+  const wanted = WHOLESALE[kind];
   for (const job of jobs) {
     if (!wanted.test(job)) continue;
     // Steps that set no working-directory operate on the repo root.
@@ -104,8 +110,14 @@ function wholesaleDirs(kind) {
   return dirs;
 }
 
-for (const job of ['fmt', 'clippy']) {
-  const covered = matrixCrates(workflow, job);
+// `test` included because the citadel-internal-service workspace had a lint job
+// and no test job at all: fmt and clippy ran on eight crates whose tests ran
+// nowhere. A guard that only checks linting cannot report that, and the gap was
+// found by audit rather than by CI.
+for (const job of ['fmt', 'clippy', 'test']) {
+  // The per-crate matrix job's name in the workflow, which is not the kind.
+  const JOB_NAMES = { fmt: 'fmt', clippy: 'clippy', test: 'rust-tests' };
+  const covered = matrixCrates(workflow, JOB_NAMES[job]);
   if (!covered) continue;
   const wholesale = wholesaleDirs(job);
   if (covered.size < 3) {
@@ -142,4 +154,4 @@ if (failures.length) {
   for (const f of failures) console.error(`  - ${f}\n`);
   process.exit(1);
 }
-console.log(`Crate coverage: all ${all.length - Object.keys(EXCLUDED).length} workspace crates are covered by cargo fmt and clippy.`);
+console.log(`Crate coverage: all ${all.length - Object.keys(EXCLUDED).length} workspace crates are covered by cargo fmt, clippy and tests.`);
