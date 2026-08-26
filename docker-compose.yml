@@ -71,7 +71,20 @@ services:
       # unset. Production mounts `server_data:/data/server` in
       # docker-compose.production.yml and sets WORKSPACE_BACKEND there.
     environment:
-      - RUST_LOG=citadel=info
+      # citadel=info alone silently deletes the entire ILM subsystem. EnvFilter
+      # adds its ERROR default only when the parsed directive set is EMPTY, so a
+      # non-empty `citadel=info` leaves every non-matching target off at EVERY
+      # level -- including error!. That drops all 85 `target: "ism"` lines, of
+      # which 28 are error! and 23 are warn!, and they are precisely the ones
+      # that answer "my message never arrived": [ILM-SEND] FAILED, "Peer not
+      # connected, skipping N messages", and the three "processing task
+      # prematurely ended" lines that are the only record of a dead background
+      # task. Verified against live logs: 0 matches in 5000 lines.
+      #
+      # citadel_crypt=warn because double-ratchet internals were 76% of the
+      # log (2285 of 3000 lines), which is what made the remaining signal
+      # unreadable rather than merely verbose.
+      - RUST_LOG=citadel=info,ism=info,citadel_crypt=warn
       - WORKSPACE_MASTER_PASSWORD=${WORKSPACE_MASTER_PASSWORD}
     deploy:
       resources:
@@ -138,7 +151,20 @@ services:
       # so a bare "::" yields ":::12345", which is not valid socket-address
       # syntax and the service exits 1 on startup.
       - "INTERNAL_SERVICE_BIND_HOST=[::]"
-      - RUST_LOG=citadel=info
+      # citadel=info alone silently deletes the entire ILM subsystem. EnvFilter
+      # adds its ERROR default only when the parsed directive set is EMPTY, so a
+      # non-empty `citadel=info` leaves every non-matching target off at EVERY
+      # level -- including error!. That drops all 85 `target: "ism"` lines, of
+      # which 28 are error! and 23 are warn!, and they are precisely the ones
+      # that answer "my message never arrived": [ILM-SEND] FAILED, "Peer not
+      # connected, skipping N messages", and the three "processing task
+      # prematurely ended" lines that are the only record of a dead background
+      # task. Verified against live logs: 0 matches in 5000 lines.
+      #
+      # citadel_crypt=warn because double-ratchet internals were 76% of the
+      # log (2285 of 3000 lines), which is what made the remaining signal
+      # unreadable rather than merely verbose.
+      - RUST_LOG=citadel=info,ism=info,citadel_crypt=warn
       - DOCKER_CONTAINER=1
       - SKIP_WASM_BUILD=1
       - INTERNAL_SERVICE_BACKEND=filesystem
