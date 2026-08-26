@@ -133,6 +133,10 @@ budget. See [docs/TESTING.md](docs/TESTING.md).
 
 ## Documentation
 
+- [docs/INSTALL.md](docs/INSTALL.md) — **start here to USE or HOST a workspace.** The
+  quickstart above builds the *development* stack, which is deliberately ephemeral:
+  accounts are lost on reload. Using or hosting is a different compose file.
+- [docs/UPGRADING.md](docs/UPGRADING.md) — upgrading, rolling back, backup and restore
 - [ARCHITECTURE.md](ARCHITECTURE.md) — protocol layers, P2P message flow, multi-tab coordination
 - [docs/](docs/README.md) — deployment, testing, WASM build and sync, roadmap
 - [CLAUDE.md](CLAUDE.md) — conventions, commit order across submodules, and the rules agents follow

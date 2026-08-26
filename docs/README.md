@@ -11,6 +11,8 @@
 - [THEMING.md](THEMING.md) — semantic colour tokens, and why hardcoded palette classes break workspace theming
 
 ## Build & deploy
+- [INSTALL.md](INSTALL.md) — using, hosting, or developing: which compose file, and why it matters
+- [UPGRADING.md](UPGRADING.md) — releases, upgrades, rollback, backup and restore
 - [WASM_BUILD.md](WASM_BUILD.md) — building the WASM client
 - [WASM_SYNC.md](WASM_SYNC.md) — syncing WASM bindings across packages
 - [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) — production deployment
