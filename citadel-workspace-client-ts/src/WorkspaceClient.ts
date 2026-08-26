@@ -106,7 +106,27 @@ export class WorkspaceClient extends InternalServiceWasmClient {
         // always starts with '{', and CBOR never does (its first byte is a
         // major-type tag), so one byte separates them without decoding
         // anything. Exceptions are for the unexpected; this was the norm.
-        if (!looksLikeWorkspaceJson(notification.message)) {
+        // Workspace traffic comes from the SERVER, not from a peer.
+        //
+        // The byte check below distinguishes JSON from CBOR, which separates
+        // workspace protocol from chat under HONEST traffic — but it is not an
+        // authenticity check. A peer can send raw JSON over the P2P channel and
+        // land in the session manager below, where `{"Response":{"Error":"Not
+        // in workspace"}}` clears the victim's workspace session and persisted
+        // workspace id, and a `Workspace` variant repoints it. Any registered
+        // peer could do that repeatedly.
+        //
+        // The frontend's message-extraction.ts already applies exactly this
+        // guard; it was simply never applied here.
+        const notificationPeer = (notification as { peer_cid?: bigint }).peer_cid;
+        const notificationCid = (notification as { cid?: bigint }).cid;
+        const fromServer =
+          notificationPeer === undefined ||
+          notificationPeer === null ||
+          notificationPeer === BigInt(0) ||
+          (notificationCid !== undefined && notificationPeer === notificationCid);
+
+        if (!fromServer || !looksLikeWorkspaceJson(notification.message)) {
           if (originalHandler) {
             originalHandler(message);
           }
