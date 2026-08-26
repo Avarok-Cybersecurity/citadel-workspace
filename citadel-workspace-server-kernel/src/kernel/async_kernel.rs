@@ -8,7 +8,7 @@ use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainSer
 use crate::kernel::rate_limiter::{RateLimiter, DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL};
 use crate::kernel::transaction::BackendTransactionManager;
 use crate::WorkspaceProtocolResponse;
-use citadel_logging::{error, info, warn};
+use citadel_logging::{debug, error, info, warn};
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, ObjectTransferStatus, Ratchet};
 use parking_lot::RwLock;
 use std::path::PathBuf;
@@ -281,18 +281,52 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     ) -> Result<(), NetworkError> {
         info!(target: "citadel", "Initializing root workspace (no pre-created admin user)");
 
-        // Pre-populate the master password BEFORE any workspace checks
-        // This ensures first-time initialization via CreateWorkspace can validate the password
-        if !workspace_master_password.is_empty() {
-            info!(target: "citadel", "Pre-populating master password for root workspace");
-            self.domain_operations
-                .backend_tx_manager
-                .set_workspace_password(crate::WORKSPACE_ROOT_ID, workspace_master_password)
-                .await?;
-        }
-
         // Check if root workspace exists
         let workspace_exists = self.get_domain(crate::WORKSPACE_ROOT_ID).await?.is_some();
+
+        // Seed the master password only on FIRST boot. This used to run
+        // unconditionally, before the existence check above, so every start
+        // overwrote the stored root credential with whatever the environment
+        // currently said. Any drift in `.env` — a lost file, a second checkout,
+        // a host restored from an image — silently rotated the root password
+        // with no warning and no audit line, locking out whoever held the old
+        // one. It also meant restoring a backed-up `server_data` did not
+        // restore its password: the next boot overwrote it again.
+        //
+        // A rotation is a legitimate thing to want, so this warns rather than
+        // refusing — but it says so, once, in a line an operator can grep for.
+        if !workspace_master_password.is_empty() {
+            let stored = self
+                .domain_operations
+                .backend_tx_manager
+                .get_workspace_password(crate::WORKSPACE_ROOT_ID)
+                .await?;
+            match stored.as_deref() {
+                None => {
+                    info!(target: "citadel", "Seeding master password for the root workspace (first boot)");
+                    self.domain_operations
+                        .backend_tx_manager
+                        .set_workspace_password(crate::WORKSPACE_ROOT_ID, workspace_master_password)
+                        .await?;
+                }
+                Some(existing) if existing == workspace_master_password => {
+                    debug!(target: "citadel", "Master password unchanged");
+                }
+                Some(_) => {
+                    warn!(
+                        target: "citadel",
+                        "WORKSPACE_MASTER_PASSWORD differs from the password stored for the root \
+                         workspace. ROTATING it: anyone holding the previous password loses \
+                         access. If this was not intended, stop the server and restore the \
+                         previous value before anyone reconnects."
+                    );
+                    self.domain_operations
+                        .backend_tx_manager
+                        .set_workspace_password(crate::WORKSPACE_ROOT_ID, workspace_master_password)
+                        .await?;
+                }
+            }
+        }
 
         if !workspace_exists {
             info!(target: "citadel", "Creating root workspace with no owner (first user with master password becomes admin)");
