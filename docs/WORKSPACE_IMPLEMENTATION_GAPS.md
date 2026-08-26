@@ -303,6 +303,66 @@ chosen deliberately.
 Recorded rather than fixed, and the test's KNOWN GAP label is accurate — but it
 should be read as "converges wrongly", not "not built".
 
+## RESOLVED: the reconnect message loss, and why every earlier theory missed it
+
+**Root cause (CI run 32912073077, line-level evidence).** The lost message was
+emitted to the tab's subscribers TWICE, each time with `listeners=8`, and that
+tab's first P2P handler entry appears AFTERWARDS, once the count had climbed to
+twelve. Eight services were listening; none of them was the one that handles
+chat. `P2PMessengerManager` is a lazy singleton behind a Proxy, so it is not
+constructed until something touches chat — and on a reconnecting tab, messages
+arrive before that.
+
+The message was never lost by ILM, the transport, or the router. It was
+delivered to a room with nobody in it.
+
+**Why `listenerCount` is the wrong guard**, which is the trap this bug is built
+from: several unrelated services subscribe to `websocket-message` at module load
+— peer registration, workspace responses, group responses, auto-connect. The
+count is therefore nonzero exactly when it is least meaningful. Gating on
+`listenerCount('websocket-message') > 0` would have read EIGHT here and emitted
+into the void. That guard was proposed and rejected before it shipped, on a
+fable agent's objection; this run is the proof it would have failed.
+
+**Fixed** in citadel-workspaces:
+
+* `b0e9519` — inbound `MessageNotification`s are held until the P2P handler
+  attaches, then replayed in order. Only that type: everything else has
+  subscribers attached at module load, so holding it would delay traffic that
+  already had a receiver.
+* `38ab981` — the messenger is constructed during boot rather than on first
+  chat view, which shrinks the window from "whenever the user opens chat" to
+  milliseconds. Imported dynamically, so the P2P graph stays off the landing
+  critical path (10KB of headroom against a 300KB budget).
+
+**Two mistakes in the fix itself, both caught by an existing test** rather than
+by review, which is worth recording:
+
+1. The first version held indefinitely. The self-heal spec asserts the leader's
+   fallback DELIVERS rather than strands, and it failed — correctly. An
+   unbounded hold trades a rare lost message for a permanently stranded one.
+   The hold is now bounded: after 2s it releases to whoever is listening.
+2. The release then re-held everything it had just released, because a replay
+   re-enters the path that held it. The hazard was described in a comment and
+   not actually guarded. Same test caught it.
+
+**Superseded theories.** Each of these was investigated and is NOT the cause;
+they are listed so the same ground is not covered again:
+
+| theory | verdict |
+|---|---|
+| ILM dropping messages | No. 27 delivered, every id 0-14 delivered both directions. |
+| Duplicate ACK suppression (`re-ACK`) | No. `Skipping already delivered` = 0 in every failing run; the branch never fires. |
+| Stream replacement rescue | No. `ILM-RESCUE` = 0. |
+| Teardown destroying the queue | No. `ILM-TEARDOWN` = 0 in the failing run (the probe is still worth keeping). |
+| Cross-tab forward loss | No. `forward ->` = 0; no forwards occurred in this test at all. |
+| "always the middle message" | No. Retracted; severity varies per run. |
+
+**Still open:** the acked-forward work (`a8f39b2`) addresses a real defect —
+forwards had no ack, no retry and no leader-side copy — but it is NOT what fixed
+this test, because this test never forwards. It matters for genuine multi-tab
+use and is unverified there.
+
 ## Partly fixed: one message still lost on reconnect under load
 
 ### Run 32892372131: a mechanism that explains the shape, and a fix — with the causal link still unproven
