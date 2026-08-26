@@ -552,7 +552,25 @@ for svc in "${DEPLOY_SERVICES[@]}"; do
     VERIFY_IMAGES+=("$img")
 done
 
-if ! ./scripts/verify-image-revisions.sh "${VERIFY_IMAGES[@]}"; then
+# Also require the images to be built from the commit we just pulled.
+#
+# Cross-checking the images against each other proves they were promoted
+# together, not WHICH commit they are: `git pull` and `docker compose pull` are
+# independent. On the ordinary merge-then-deploy workflow, CI is often still
+# building the Rust images, so `latest` still points at the previous commit —
+# all three images agree, the gate passes, every service restarts, and "Deploy
+# complete!" prints over the old binaries with the new source beside them.
+#
+# Only when we pulled: with --no-pull the checked-out tree is whatever the
+# operator chose, and an explicit IMAGE_TAG rollback deliberately deploys an
+# older commit than HEAD.
+EXPECT_ARGS=()
+if [ "$SKIP_PULL" != "true" ] && [ -z "${IMAGE_TAG:-}" ]; then
+    head_rev=$(git rev-parse HEAD 2>/dev/null || true)
+    [ -n "$head_rev" ] && EXPECT_ARGS=(--expect "$head_rev")
+fi
+
+if ! ./scripts/verify-image-revisions.sh "${EXPECT_ARGS[@]+"${EXPECT_ARGS[@]}"}" "${VERIFY_IMAGES[@]}"; then
     echo "" >&2
     echo "  Nothing was restarted; the running stack is untouched." >&2
     exit 1

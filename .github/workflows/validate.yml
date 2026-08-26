@@ -661,6 +661,34 @@ jobs:
           fi
           echo "PASS: a single un-inspectable image is refused."
 
+      - name: --expect refuses images built from a different commit
+        # Cross-checking the images against each other proves they were promoted
+        # TOGETHER, not which commit they are. `git pull` and `docker compose pull`
+        # are independent, so on the ordinary merge-then-deploy workflow - where CI
+        # is often still building the Rust images - `latest` still points at the
+        # previous commit. All images agree, the gate passes, everything restarts,
+        # and "Deploy complete!" prints over the old binaries.
+        #
+        # The failure case is the load-bearing one: a --expect that silently
+        # ignores a mismatch is indistinguishable from not passing it at all.
+        run: |
+          set -euo pipefail
+          ref_a=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' rev-a)
+          ./scripts/verify-image-revisions.sh --expect "$ref_a" rev-a
+          echo "PASS: images matching the expected commit deploy."
+          ./scripts/verify-image-revisions.sh --expect "${ref_a:0:12}" rev-a
+          echo "PASS: the short form of the same sha is accepted."
+          if ./scripts/verify-image-revisions.sh --expect 0000000000000000000000000000000000000000 rev-a 2>/dev/null; then
+            echo "::error::The gate accepted images built from a different commit than the one being deployed. A deploy run before CI finished publishing would ship the previous commit and report success."
+            exit 1
+          fi
+          echo "PASS: a commit mismatch is refused."
+          if ./scripts/verify-image-revisions.sh --expect 2>/dev/null; then
+            echo "::error::--expect with no value was accepted."
+            exit 1
+          fi
+          echo "PASS: --expect requires a value."
+
       - name: Deploy restart guards - run deploy.sh end to end
         # The selector test below proves the LIST is right. This proves deploy.sh ACTS on it:
         # it runs the real script against fixture compose files with a recording `docker` stub on
