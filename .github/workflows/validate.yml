@@ -94,6 +94,8 @@ jobs:
         run: node scripts/check-destructive-contrast.mjs
       - name: Check no storage key is read but never written
         run: node scripts/check-storage-keys.mjs
+      - name: Check the Permission enum matches between Rust and TypeScript
+        run: node scripts/check-permission-parity.mjs
 
   internal-service-rust-lint:
     name: Cargo Fmt + Clippy - citadel-internal-service workspace

@@ -458,11 +458,49 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 .await
             {
                 Ok(Some(user)) => {
-                    // Get permissions for the specific domain
-                    let permissions: Vec<Permission> = user
-                        .get_permissions(domain_id)
-                        .map(|p| p.iter().cloned().collect())
-                        .unwrap_or_default();
+                    // Report what enforcement would actually allow, not the raw
+                    // map.
+                    //
+                    // `user.get_permissions(domain_id)` is an EXACT-domain
+                    // lookup: empty for any domain the user was never
+                    // explicitly added to. `check_entity_permission` — the path
+                    // that decides whether an operation is permitted — is
+                    // admin short-circuit, then direct grant, then inheritance
+                    // up the parent chain, which is the model CLAUDE.md
+                    // describes as "Workspace -> Office -> Room".
+                    //
+                    // The two disagreed, and the UI believes this one. The
+                    // workspace creator is added to WORKSPACE_ROOT_ID as Admin
+                    // at initialisation, so `check_entity_permission` grants
+                    // them EditMdx on every office — while this endpoint
+                    // answered "0 permissions" for the same office, and the
+                    // Edit button stayed disabled forever. Measured: disabled
+                    // at 2s, 10s, 20s, 40s and 60s after load, on a freshly
+                    // created workspace.
+                    //
+                    // Computed THROUGH check_entity_permission rather than by
+                    // reimplementing the walk here, so this answer cannot drift
+                    // from enforcement or report access that would then be
+                    // refused. It widens nothing: every permission listed is
+                    // one the server would already have honoured.
+                    let permissions: Vec<Permission> = {
+                        use crate::handlers::domain::async_ops::AsyncPermissionOperations;
+                        // Permission::ALL_VARIANTS is the single source of truth for
+                        // which permissions exist; enumerating it here means a new
+                        // variant is reported without touching this file.
+                        let mut granted = Vec::new();
+                        for permission in Permission::ALL_VARIANTS {
+                            if kernel
+                                .domain_ops()
+                                .check_entity_permission(user_id, domain_id, permission)
+                                .await
+                                .unwrap_or(false)
+                            {
+                                granted.push(permission);
+                            }
+                        }
+                        granted
+                    };
 
                     Ok(WorkspaceProtocolResponse::UserPermissions {
                         domain_id: domain_id.clone(),

@@ -1142,6 +1142,12 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             .await?
                             .ok_or_else(|| NetworkError::msg("Root workspace not found"))?;
 
+                        // The root workspace is seeded at boot from the master password, so
+                        // no user ever runs the "initialize workspace" flow that would grant
+                        // Admin. Without this, every account stays a Member with no editing
+                        // rights and the workspace has no administrator at all.
+                        let is_first_member = ws.members.is_empty();
+
                         if !ws.members.contains(&user_id) {
                             ws.members.push(user_id.clone());
                             this.domain_operations
@@ -1157,6 +1163,19 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                 .backend_tx_manager
                                 .insert_domain(crate::WORKSPACE_ROOT_ID.to_string(), ws_domain)
                                 .await?;
+                        }
+
+                        if is_first_member {
+                            use citadel_workspace_types::structs::UserRole;
+                            if let Some(mut user) = this.get_user(&user_id).await? {
+                                user.role = UserRole::Admin;
+                                user.set_role_permissions(crate::WORKSPACE_ROOT_ID);
+                                this.domain_operations
+                                    .backend_tx_manager
+                                    .insert_user(user_id.clone(), user)
+                                    .await?;
+                                info!(target: "citadel", "[ASYNC_KERNEL] User {} is the first workspace member; promoted to Admin", user_id);
+                            }
                         }
 
                         info!(target: "citadel", "[ASYNC_KERNEL] User {} added to workspace domain", user_id);

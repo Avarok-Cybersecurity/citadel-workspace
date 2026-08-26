@@ -274,6 +274,78 @@ pub enum Permission {
 }
 
 impl Permission {
+    /// Every permission variant, in declaration order.
+    ///
+    /// This is the single source of truth for "what permissions exist": role
+    /// definitions derive from it by subtraction, and the server enumerates it
+    /// when reporting a user's effective permissions. `exhaustiveness_guard`
+    /// below stops compiling when a variant is added to the enum, which is what
+    /// keeps this list honest.
+    pub const ALL_VARIANTS: [Permission; 27] = [
+        Self::All,
+        Self::CreateNode,
+        Self::DeleteNode,
+        Self::UpdateNode,
+        Self::CreateWorkspace,
+        Self::UpdateWorkspace,
+        Self::DeleteWorkspace,
+        Self::EditContent,
+        Self::AddUsers,
+        Self::RemoveUsers,
+        Self::EditMdx,
+        Self::EditNodeConfig,
+        Self::AddNode,
+        Self::UpdateNodeSettings,
+        Self::ViewContent,
+        Self::ManageNodeMembers,
+        Self::SendMessages,
+        Self::ReadMessages,
+        Self::UploadFiles,
+        Self::DownloadFiles,
+        Self::ManageDomains,
+        Self::ConfigureSystem,
+        Self::EditWorkspaceConfig,
+        Self::BanUser,
+        Self::EditTreeStructure,
+        Self::ManageNodeTypes,
+        Self::Themes,
+    ];
+
+    /// Not called at runtime. Adding a variant to `Permission` fails to compile
+    /// here, as a prompt to add it to `ALL_VARIANTS` as well.
+    #[allow(dead_code)]
+    fn exhaustiveness_guard(permission: &Permission) {
+        match permission {
+            Self::All => (),
+            Self::CreateNode => (),
+            Self::DeleteNode => (),
+            Self::UpdateNode => (),
+            Self::CreateWorkspace => (),
+            Self::UpdateWorkspace => (),
+            Self::DeleteWorkspace => (),
+            Self::EditContent => (),
+            Self::AddUsers => (),
+            Self::RemoveUsers => (),
+            Self::EditMdx => (),
+            Self::EditNodeConfig => (),
+            Self::AddNode => (),
+            Self::UpdateNodeSettings => (),
+            Self::ViewContent => (),
+            Self::ManageNodeMembers => (),
+            Self::SendMessages => (),
+            Self::ReadMessages => (),
+            Self::UploadFiles => (),
+            Self::DownloadFiles => (),
+            Self::ManageDomains => (),
+            Self::ConfigureSystem => (),
+            Self::EditWorkspaceConfig => (),
+            Self::BanUser => (),
+            Self::EditTreeStructure => (),
+            Self::ManageNodeTypes => (),
+            Self::Themes => (),
+        }
+    }
+
     /// Get a set of permissions for a specific role
     pub fn for_role(role: &UserRole) -> HashSet<Self> {
         let mut permissions = HashSet::new();
@@ -283,19 +355,22 @@ impl Permission {
                 permissions.insert(Self::All);
             }
             UserRole::Owner => {
-                permissions.insert(Self::EditContent);
-                permissions.insert(Self::AddUsers);
-                permissions.insert(Self::RemoveUsers);
-                permissions.insert(Self::CreateNode);
-                permissions.insert(Self::DeleteNode);
-                permissions.insert(Self::CreateWorkspace);
-                permissions.insert(Self::DeleteWorkspace);
-                permissions.insert(Self::EditTreeStructure);
-                permissions.insert(Self::ManageNodeTypes);
-                // The workspace owner sets its appearance. Admin reaches this
-                // through the All wildcard; Owner's set is explicit, so a new
-                // permission has to be listed here or the owner silently lacks it.
-                permissions.insert(Self::Themes);
+                // The owner runs the workspace, so they hold everything except the
+                // `All` wildcard (Admin's) and `ConfigureSystem` (server-level).
+                //
+                // This used to be an explicit insert list, and the warning that
+                // carried — "a new permission has to be listed here or the owner
+                // silently lacks it" — came true several times over: Owner had no
+                // ViewContent, SendMessages, ReadMessages, UploadFiles or
+                // DownloadFiles, making the role strictly weaker than Member for
+                // everyday use, and no EditMdx, so promoting someone to Owner in
+                // the admin UI left them unable to edit a document. Deriving the
+                // set by subtraction means a new variant is included by default.
+                permissions.extend(
+                    Self::ALL_VARIANTS
+                        .into_iter()
+                        .filter(|p| !matches!(p, Self::All | Self::ConfigureSystem)),
+                );
             }
             UserRole::Member => {
                 // Basic member permissions
