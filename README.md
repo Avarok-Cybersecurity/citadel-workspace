@@ -68,8 +68,17 @@ git clone --recurse-submodules https://github.com/Avarok-Cybersecurity/citadel-w
 cd citadel-workspace
 npm ci                                   # from the ROOT: it is an npm workspace
 
+cp .env.example .env                     # then edit it: set WORKSPACE_MASTER_PASSWORD
+                                         # to a real value, e.g. `openssl rand -hex 32`
+
 docker compose up -d --build --wait      # or: tilt up
 ```
+
+`.env` is required, not optional. `docker-compose.yml` reads
+`WORKSPACE_MASTER_PASSWORD` with no fallback, and the workspace server
+deliberately refuses to start when it is empty or still the `__CHANGE_ME__`
+placeholder that `.env.example` ships — so skipping this step fails the stack
+at `--wait` rather than booting something insecure.
 
 The UI is at <http://127.0.0.1:5291>, the internal service on `:12345`, and the
 workspace server on `:12349`.
