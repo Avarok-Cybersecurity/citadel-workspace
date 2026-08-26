@@ -633,7 +633,45 @@ wait_for_port() {
     done
     echo "ERROR: ${svc} did not become healthy on port ${port} within ${deadline}s (last health=${health:-<none>})"
     docker compose -f "$COMPOSE_FILE" logs "$svc" --tail 80
+    echo
+    # Services are swapped one at a time, gated on health. A failure here means
+    # THIS service is on the new image and the ones after it are still on the
+    # old one — the mixed-version state the ordering exists to avoid on a
+    # build/pull failure, but which a STARTUP failure lands in anyway. Say so,
+    # rather than leaving an exit 1 that reads like "nothing happened".
+    echo "The stack is now MIXED-VERSION: ${svc} is on the new image, later services are not."
+    rollback_hint "${PREVIOUS_TAGS:-}"
     exit 1
+}
+
+# Record what is running BEFORE anything is swapped.
+#
+# Rolling back needs the tag you were on, and nothing recorded it. The docs said
+# to "list the published versions under the org's GHCR packages" — no URL, no
+# command, in a runbook where every other step is copy-pasteable — and the tag
+# is otherwise printed once into an Actions log subject to 90-day retention.
+# An operator mid-incident should not be archaeologising a registry.
+DEPLOY_HISTORY="${DEPLOY_HISTORY:-$HOME/.cache/citadel-deploy/history}"
+mkdir -p "$(dirname "$DEPLOY_HISTORY")"
+
+previous_images() {
+    docker compose -f "$COMPOSE_FILE" images --format json 2>/dev/null \
+        | tr ',' '\n' | grep -o '"Tag":"[^"]*"' | cut -d'"' -f4 | sort -u | tr '\n' ' '
+}
+PREVIOUS_TAGS="$(previous_images)"
+[ -n "$PREVIOUS_TAGS" ] && echo "  Currently deployed tag(s): ${PREVIOUS_TAGS}"
+
+# Named so the failure path can tell the operator exactly what to type.
+rollback_hint() {
+    local tags="$1"
+    local first
+    first="$(echo "$tags" | awk '{print $1}')"
+    if [ -n "$first" ] && [ "$first" != "latest" ]; then
+        echo "  Roll back with:  IMAGE_TAG=${first} $0"
+    else
+        echo "  Roll back with:  IMAGE_TAG=sha-<previous-commit> $0"
+        echo "  Previous tags seen on this host: ${DEPLOY_HISTORY}"
+    fi
 }
 
 # Server first (other services depend on it).
@@ -709,6 +747,18 @@ echo ""
 echo "============================================"
 echo "  Deploy complete!"
 echo "============================================"
+echo ""
+
+# Append what we just deployed, so the NEXT deploy has a previous tag to name
+# and an operator has a local record that does not depend on registry retention
+# or a 90-day Actions log.
+{
+    printf '%s\t%s\t%s\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        "${IMAGE_TAG:-latest}" \
+        "$(previous_images)"
+} >> "$DEPLOY_HISTORY" 2>/dev/null || true
+echo "Recorded in ${DEPLOY_HISTORY}"
 echo ""
 # Advertise only endpoints this deployment actually serves. A server-only stack that
 # printed "Local access: http://localhost:8080" would send the operator to a port nothing
