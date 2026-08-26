@@ -212,11 +212,15 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
         user_id: &str,
         domain_id: &str,
     ) -> Result<bool, NetworkError> {
-        // Check if this is the workspace root (use Domain::Workspace for workspace)
-        if domain_id == crate::WORKSPACE_ROOT_ID {
-            if let Some(workspace) = self.backend_tx_manager.get_workspace(domain_id).await? {
-                return Ok(workspace.members.contains(&user_id.to_string()));
-            }
+        // Workspaces are stored as Workspace records; DomainNodes are the tree
+        // BELOW them. This used to test `domain_id == WORKSPACE_ROOT_ID`, which
+        // is true of exactly one workspace — the seeded root. Every workspace
+        // `create_workspace` mints gets a UUID id and is stored the same way, so
+        // the node lookup below missed it and this returned false to EVERYONE,
+        // including the creator we had just written into `members`. get_workspace
+        // returns None for a node id, so trying it first covers all of them.
+        if let Some(workspace) = self.backend_tx_manager.get_workspace(domain_id).await? {
+            return Ok(workspace.members.contains(&user_id.to_string()));
         }
 
         // For all other entities, use DomainNode tree storage
@@ -264,10 +268,32 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             }
 
             self.backend_tx_manager
-                .insert_workspace(domain_id.to_string(), workspace)
+                .insert_workspace(domain_id.to_string(), workspace.clone())
+                .await?;
+
+            // The denormalized Domain::Workspace copy, which UpdateWorkspaceTheme
+            // documents as the invariant every workspace mutator maintains — and
+            // which the two membership mutators did not. ListMembers reads the
+            // Domain copy FIRST, so an added member never appeared in the roster
+            // and a removed one never left it, while enforcement read the fresh
+            // workspace record. The displayed roster and the enforced roster
+            // disagreed permanently, in both directions, with no race required.
+            self.backend_tx_manager
+                .insert_domain(
+                    domain_id.to_string(),
+                    Domain::Workspace {
+                        workspace: workspace.clone(),
+                    },
+                )
                 .await?;
         } else {
-            // For all other entities, use DomainNode tree storage
+            // For all other entities, use DomainNode tree storage.
+            // lock_nodes across the whole get_all_nodes ... save_nodes cycle:
+            // create/delete/move_node all take it, but these two did not, and a
+            // mutex only excludes participants. A member add overlapping a room
+            // creation loaded the pre-insert map and saved it back — erasing the
+            // room create_node had already reported as created.
+            let _nodes_guard = self.backend_tx_manager.lock_nodes().await;
             let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
             let node = nodes
                 .get_mut(domain_id)
@@ -340,7 +366,23 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             workspace.members.retain(|m| m != user_id_to_remove);
 
             self.backend_tx_manager
-                .insert_workspace(domain_id.to_string(), workspace)
+                .insert_workspace(domain_id.to_string(), workspace.clone())
+                .await?;
+
+            // The denormalized Domain::Workspace copy, which UpdateWorkspaceTheme
+            // documents as the invariant every workspace mutator maintains — and
+            // which the two membership mutators did not. ListMembers reads the
+            // Domain copy FIRST, so an added member never appeared in the roster
+            // and a removed one never left it, while enforcement read the fresh
+            // workspace record. The displayed roster and the enforced roster
+            // disagreed permanently, in both directions, with no race required.
+            self.backend_tx_manager
+                .insert_domain(
+                    domain_id.to_string(),
+                    Domain::Workspace {
+                        workspace: workspace.clone(),
+                    },
+                )
                 .await?;
 
             // Drop the role as well as the membership, or the removed user is a
@@ -360,7 +402,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
                 }
             }
         } else {
-            // For all other entities, use DomainNode tree storage
+            // For all other entities, use DomainNode tree storage.
+            // lock_nodes across the whole get_all_nodes ... save_nodes cycle:
+            // create/delete/move_node all take it, but these two did not, and a
+            // mutex only excludes participants. A member add overlapping a room
+            // creation loaded the pre-insert map and saved it back — erasing the
+            // room create_node had already reported as created.
+            let _nodes_guard = self.backend_tx_manager.lock_nodes().await;
             let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
             let node = nodes
                 .get_mut(domain_id)
