@@ -16,6 +16,12 @@
  * submodule". Locally everything looks fine, because the commit is right there.
  *
  * Checked before push rather than after, since after is a red run.
+ *
+ * Deliberately NOT wired into CI. By the time any CI job could run this,
+ * `actions/checkout` has already succeeded — which means the pointers were
+ * pushed — so a CI copy could never fail. That is a check that reports success
+ * unconditionally, which is worse than no check: it reads as coverage. This is
+ * a pre-push guard and belongs only there.
  */
 import { execFileSync } from 'node:child_process';
 

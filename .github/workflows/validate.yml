@@ -86,6 +86,8 @@ jobs:
         run: node scripts/check-doc-commands.mjs
       - name: "Check verify: annotations still hold"
         run: node scripts/check-doc-assertions.mjs
+      - name: Check the Docker root manifest defines every inherited dep
+        run: node scripts/check-docker-workspace-manifest.mjs
       - name: Check the quickstart works on a clean clone
         run: node scripts/check-doc-setup-steps.mjs
       - name: Check icon-only buttons have accessible names
