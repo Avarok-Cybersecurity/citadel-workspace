@@ -90,6 +90,8 @@ jobs:
         run: node scripts/check-doc-setup-steps.mjs
       - name: Check icon-only buttons have accessible names
         run: node scripts/check-icon-button-names.mjs
+      - name: Check destructive text clears AA on every background
+        run: node scripts/check-destructive-contrast.mjs
 
   internal-service-rust-lint:
     name: Cargo Fmt + Clippy - citadel-internal-service workspace
