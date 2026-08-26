@@ -264,18 +264,39 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         rules: Option<&str>,
         chat_enabled: Option<bool>,
     ) -> Result<DomainNode, NetworkError> {
-        // Check permission
+        // Gate on what is actually being changed, at the node being changed.
+        //
+        // Every update required EditTreeStructure at WORKSPACE_ROOT_ID, so
+        // saving a document — which changes no structure at all — was refused
+        // unless the user could restructure the entire workspace. That is not a
+        // permission any custom role receives: `Permission::for_role` never
+        // inserts EditTreeStructure for Custom, while EditMdx is directly
+        // grantable in the permission matrix. So an admin could grant exactly
+        // the persona ("can edit MDX documents") whose every save was refused,
+        // while the UI — which gates its Edit button on EditMdx — correctly
+        // enabled it. The two ends disagreed about which permission the feature
+        // needs.
+        //
+        // Scoped to `node_id` rather than the root because
+        // check_entity_permission walks UP the parent chain, so a grant at the
+        // root still covers every descendant: node-scoped is strictly more
+        // precise here, never less permissive.
+        let changes_structure =
+            name.is_some() || description.is_some() || rules.is_some() || chat_enabled.is_some();
+
+        let (required, label) = if changes_structure {
+            (Permission::EditTreeStructure, "EditTreeStructure")
+        } else {
+            (Permission::EditMdx, "EditMdx")
+        };
+
         if !self
-            .check_entity_permission(
-                user_id,
-                crate::WORKSPACE_ROOT_ID,
-                Permission::EditTreeStructure,
-            )
+            .check_entity_permission(user_id, node_id, required)
             .await?
         {
-            return Err(NetworkError::msg(
-                "Permission denied: EditTreeStructure required",
-            ));
+            return Err(NetworkError::msg(format!(
+                "Permission denied: {label} required"
+            )));
         }
 
         // Get current node
