@@ -335,7 +335,28 @@ bug", one-directional delivery, and registry lag.
 
 **What is established:** delivery LATENCY, not loss. The message does arrive.
 
-**What is NOT established:** why the receive path stalls ~100s in CI. ILM
+**Measured: multi-second delivery gaps are NORMAL in CI, in passing runs too.**
+Timestamps between consecutive ILM/revfs events in the same CI run:
+
+| job | events | span | median gap | max gap |
+|---|---|---|---|---|
+| test:offline (PASSED) | 30 | 71s | 0.13s | **35.0s** |
+| test:file-manager (FAILED) | 86 | 123s | 0.03s | 27.1s |
+
+The PASSING job survived a LARGER maximum gap than the failing one. So the
+stall is not a file-manager defect and not unique to it. Median latency is
+sub-100ms in both; the distribution has a long tail that CI hits routinely and
+local runs essentially never do.
+
+What separates them is the assertion budget against the work: file-manager's
+~53s window must cover a folder create AND its propagation, and the cumulative
+tail exceeds it. `test:offline` has more slack for the same class of delay.
+
+**Still NOT established:** whether the long tail is a product defect (something
+in the receive path genuinely stalls) or CI resource starvation (many concurrent
+jobs, `--renderer-process-limit=2`, constrained CPU) simply descheduling the
+browser. This data cannot separate those two, and the difference decides whether
+the fix is in the product or in the harness. Do not assume either. ILM
 blocking is heavy even in runs that pass (58 blocks per 35 sends, 5 recoveries),
 but the arithmetic does not obviously reach 100s: `OUTBOUND_POLL` is 200ms, so
 `MAX_CONSECUTIVE_BLOCKS = 10` costs ~2s per recovery and 58 blocks is ~12s of
