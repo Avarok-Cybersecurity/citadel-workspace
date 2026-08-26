@@ -100,6 +100,8 @@ jobs:
         run: node scripts/check-hover-only-controls.mjs
       - name: Check every service declares a restart policy
         run: node scripts/check-restart-policies.mjs
+      - name: Check no control loses its name at narrow widths
+        run: node scripts/check-responsive-label-loss.mjs
 
   internal-service-rust-lint:
     name: Cargo Fmt + Clippy - citadel-internal-service workspace

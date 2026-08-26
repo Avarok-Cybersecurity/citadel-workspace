@@ -227,6 +227,25 @@ if [ -d "$DEST2" ]; then
     fi
 fi
 
+# Step 4: Copy to citadel-workspace-client-ts/pkg
+#
+# DEST3 was declared and mkdir'd at the top of this script and then never
+# written to, so the tracked copy under citadel-workspace-client-ts/pkg drifted
+# away from the two live ones. It is not unmaintained, which is what makes it
+# dangerous: citadel-workspace-internal-service/build.rs writes the same path,
+# so an ordinary `cargo build` refreshes it while a sync does not. Two producers
+# for one tracked artifact means whichever ran last wins, silently.
+#
+# No cache-busting rewrite here on purpose. That `?v=$TIMESTAMP` edit is what
+# makes the other two copies byte-different on every run; leaving it off keeps
+# this copy comparable to build.rs output.
+if [ -d "$DEST3/pkg" ] || mkdir -p "$DEST3/pkg"; then
+    print_status "Copying to $DEST3/pkg..."
+    cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.wasm "$DEST3/pkg/"
+    cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.js "$DEST3/pkg/"
+    cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.d.ts "$DEST3/pkg/"
+fi
+
 # Step 5: Copy TypeScript types if they were generated
 if [ -d "$INTERNAL_SERVICE_ROOT/citadel-internal-service-types/bindings" ]; then
     print_status "Copying TypeScript types..."
@@ -260,17 +279,39 @@ if pgrep -f "vite" > /dev/null; then
 fi
 
 # Step 8: Verify synchronization
+#
+# This must compare CONTENT and must exit non-zero. It previously compared
+# `stat` sizes and, in the failure branch, only called print_error — which
+# echoes and returns 0, so `set -e` saw nothing and the script continued to
+# Step 9 and exited 0. Every consumer treats that as success: compose's
+# `condition: service_completed_successfully` is satisfied and CI publishes a
+# UI image built on top of desynchronized WASM, all while the log reads
+# "WASM files are NOT synchronized!". A check whose failure branch cannot fail
+# is not a check.
+#
+# Size is also the wrong comparison. Two builds from different Citadel-Protocol
+# revisions land within bytes of each other and routinely tie, so the one
+# divergence that matters is exactly the one a size check cannot see.
 print_status "Verifying synchronization..."
-WASM_SIZE1=$(stat -f%z "$DEST1/citadel_internal_service_wasm_client_bg.wasm" 2>/dev/null || stat -c%s "$DEST1/citadel_internal_service_wasm_client_bg.wasm" 2>/dev/null || echo "0")
-WASM_SIZE3=$(stat -f%z "$DEST2/citadel_internal_service_wasm_client_bg.wasm" 2>/dev/null || stat -c%s "$DEST2/citadel_internal_service_wasm_client_bg.wasm" 2>/dev/null || echo "0")
+wasm_digest() {
+    shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1
+}
+WASM_HASH1=$(wasm_digest "$DEST1/citadel_internal_service_wasm_client_bg.wasm")
+WASM_HASH2=$(wasm_digest "$DEST2/citadel_internal_service_wasm_client_bg.wasm")
+WASM_HASH3=$(wasm_digest "$DEST3/pkg/citadel_internal_service_wasm_client_bg.wasm")
 
-if [ "$WASM_SIZE1" = "$WASM_SIZE3" ] && [ "$WASM_SIZE1" != "0" ]; then
-    print_status "✅ All WASM files are synchronized (size: $WASM_SIZE1 bytes)"
-else
-    print_error "❌ WASM files are NOT synchronized!"
-    print_error "  typescript-client: $WASM_SIZE1 bytes"
-    print_error "  public/wasm: $WASM_SIZE3 bytes"
+if [ -z "$WASM_HASH1" ] || [ "$WASM_HASH1" != "$WASM_HASH2" ] || [ "$WASM_HASH1" != "$WASM_HASH3" ]; then
+    print_error "❌ WASM files are NOT synchronized — refusing to continue."
+    print_error "  typescript-client: ${WASM_HASH1:-missing}"
+    print_error "  public/wasm:       ${WASM_HASH2:-missing}"
+    print_error "  client-ts/pkg:     ${WASM_HASH3:-missing}"
+    print_error ""
+    print_error "Continuing past this point builds the UI against a WASM binary"
+    print_error "the backend was not built from. Re-run the sync; if it recurs,"
+    print_error "one of the two copy steps is not reaching its destination."
+    exit 1
 fi
+print_status "✅ All WASM files are synchronized (sha256: ${WASM_HASH1:0:12})"
 
 # Step 9: Rebuild citadel-workspaces
 print_status "Rebuilding citadel-workspaces..."
