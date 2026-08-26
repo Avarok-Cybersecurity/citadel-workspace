@@ -303,7 +303,51 @@ chosen deliberately.
 Recorded rather than fixed, and the test's KNOWN GAP label is accurate — but it
 should be read as "converges wrongly", not "not built".
 
-## OPEN: test:file-manager is NOT message loss — the op arrives and the view does not follow
+## OPEN: test:file-manager — the op arrives ~100s late, and the test has already given up
+
+**CORRECTION.** This section previously argued the failure was NOT delivery —
+that the op arrived, was applied, and the view simply did not follow. That was
+wrong, and the reasoning behind it was wrong in an instructive way.
+
+A log-timeline diff of the CI-failing run against a local-passing one settles it:
+
+| event | CI (failing) | local (passing) |
+|---|---|---|
+| Alice sends `Mkdir /test-folder` | 01:13:11.48 | line 1706 |
+| Bob APPLIES it | **01:14:51.26** | ~20 lines later, sub-second |
+| gap | **~99.8 seconds** | effectively instant |
+| test's visibility budget (3 x retry) | ~53s, FAILS at 01:14:10 | passes on attempt 1 |
+
+The test gave up FORTY SECONDS before the message arrived. At 01:14:51 the
+whole backlog lands at once — Mkdir twice, then ~20 queued SyncResponses in a
+1.2s burst. A flush, not a revert.
+
+**The screenshot that misled me.** `07_bob_sees_folder.png` shows Bob rendering
+the default tree, and I read that as proof something had overwritten an applied
+Mkdir. The screenshot is captured at 01:14:10.899 — at the moment of failure,
+BEFORE the op arrived at 01:14:51. Bob's tree was default because nothing had
+been applied yet. A screenshot carries no ordering information, and I treated it
+as if it did.
+
+That also kills the `getTree` default-tree-overwrite theory outright, which was
+the fourth theory raised and refuted on this defect after: unqualified "revfs
+bug", one-directional delivery, and registry lag.
+
+**What is established:** delivery LATENCY, not loss. The message does arrive.
+
+**What is NOT established:** why the receive path stalls ~100s in CI. ILM
+blocking is heavy even in runs that pass (58 blocks per 35 sends, 5 recoveries),
+but the arithmetic does not obviously reach 100s: `OUTBOUND_POLL` is 200ms, so
+`MAX_CONSECUTIVE_BLOCKS = 10` costs ~2s per recovery and 58 blocks is ~12s of
+polling. Do not assume ILM blocking is the cause without the numbers.
+
+**What would settle it:** the file-manager job's own ILM diagnostics, which its
+console filter was dropping (`['error','Error','revfs','RE-VFS']`, no `ILM`).
+Fixed in `7bbd098`. Note the ILM lines are NOT suppressed by the workflow's
+`RUST_LOG: citadel=warn` — they use `target: "ism"` and originate browser-side
+in WASM; the offline job in the SAME CI run carries 935 `ILM-OUTBOUND` lines
+while file-manager carries zero, which is the filter and nothing else.
+
 
 Grouped with the delivery failures for most of this session. It does not belong
 there. From CI run 32915200004, the full chain on Bob's side:
