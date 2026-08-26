@@ -154,18 +154,30 @@ pub enum WorkspaceErrorResponse {
 | UI Functionality | Transport | Request Type | Response Type | Handler Location | Persistence | Status | Notes |
 |-----------------|-----------|--------------|---------------|------------------|-------------|---------|-------|
 | Send Message (Server) | InternalService::Message → WorkspaceProtocol | `Message` | `Error(String)` | `async_process_command.rs:545-548` | N/A | ❌ Not Implemented | "Only peers may receive this type" |
-| Send Message (P2P) | InternalService::Message → WorkspaceProtocol::Message → MessageProtocol | WorkspaceProtocol::Message { contents } | N/A | Not implemented | ❌ No | ❌ Not Implemented | Triple-nested protocols |
+| Send Message (P2P) | InternalService::Message → WorkspaceProtocol::Message → MessageProtocol | WorkspaceProtocol::Message { contents } | `MessageNotification` | send: `messenger/mod.rs`; receive: `requests/message.rs`, `responses/peer_channel_created.rs`; UI routing: `lib/p2p/message-handler-routing.ts` | ✅ IndexedDB `messages` store | ✅ Implemented | Triple-nested protocols. Covered by `p2p-messaging.spec.ts` and the reconnection/offline suites. |
 
 ### Message System Checklist
-- [ ] P2P messaging uses triple-nested protocols:
-  1. InternalService::Message for P2P transport
-  2. WorkspaceProtocol::Message inscribed within
-  3. MessageProtocol (chat subprotocol) serialized in contents field
-- [ ] TypeScript WASM bindings needed for `send_p2p_message`
-- [ ] Message subprotocol already defined in `message-protocol.ts`
-- [ ] Read receipts defined but not implemented
-- [ ] Typing indicators defined but not implemented
-- [ ] Message history/persistence not implemented
+
+Corrected 2026-08-26: this list described P2P messaging as unbuilt long after it
+shipped. Each line below states how it was checked, so the next reader can
+re-check rather than trust it.
+
+- [x] P2P messaging uses triple-nested protocols (InternalService::Message →
+      WorkspaceProtocol::Message → MessageProtocol). Working; the full causal
+      chain is documented in CLAUDE.md.
+- [x] TypeScript WASM binding for `send_p2p_message` — exists in
+      `citadel-workspace-client-ts/pkg/*.d.ts`.
+- [x] Message subprotocol defined in `message-protocol.ts`.
+- [x] Message history/persistence — IndexedDB `messages` object store
+      (`lib/storage-migrations.ts`), written via `lib/p2p/conversation-manager.ts`
+      and paged by `lib/p2p/message-page-operations.ts`.
+- [ ] Read receipts — `MessageEventType.createReadReceipt` exists in
+      `types/message-protocol.ts`, but nothing sends it and no handler consumes
+      it. Defined only.
+- [ ] Typing indicators — built from ONE END: `handleTypingIndicator` in
+      `lib/p2p/message-handler-routing.ts` consumes an inbound indicator, but no
+      code path ever sends one, so it can never fire. Either wire the send side
+      to the composer or drop the receive handler.
 
 ## TypeScript WASM Binding Gaps
 
