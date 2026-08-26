@@ -17,12 +17,25 @@ COPY citadel-workspaces/package.json ./
 #
 # A monorepo publish race resolves within minutes, so a bounded retry converts a
 # hard failure into a slower success. It does NOT make the build reproducible:
-# the real fix is installing the committed lockfile, which is blocked by the
-# `sed` rewriting of file: paths below invalidating it. Retrying is the
-# mitigation, not the cure.
-RUN for attempt in 1 2 3; do \
+# the real fix is installing the committed lockfile, which is blocked twice over
+# — this is an npm WORKSPACE, so the lockfile lives at the repo root and covers
+# every package, and citadel-workspaces/package.json carries two `file:` deps
+# pointing outside its own directory. Installing it here would mean copying the
+# root manifest, every workspace manifest and both file: targets, then rewriting
+# their paths — which is what the production stage does with `sed`, and that
+# rewriting is exactly what invalidates a lockfile. Retrying is the mitigation,
+# not the cure.
+#
+# Five attempts, not three. Observed 2026-08-26: `@tanstack/react-query@5.102.5`
+# published requiring `@tanstack/query-core@5.102.5`, which had not propagated.
+# Three attempts spend ~2 minutes total and all five jobs depending on this
+# image went red — the shards and two integration tests — with nothing wrong in
+# any of them. The version was available shortly afterwards. Five attempts spend
+# ~5 minutes, which covers the races seen so far without letting a genuinely
+# missing dependency hang the build indefinitely.
+RUN for attempt in 1 2 3 4 5; do \
       npm install --package-lock-only && npm install && break; \
-      echo "npm install failed (attempt $attempt/3); registry may be mid-publish, retrying in $((attempt * 20))s"; \
+      echo "npm install failed (attempt $attempt/5); registry may be mid-publish, retrying in $((attempt * 20))s"; \
       sleep $((attempt * 20)); \
     done; \
     npm ls --depth=0 >/dev/null 2>&1 || npm install
@@ -108,10 +121,13 @@ COPY citadel-workspaces/package.json ./
 RUN sed -i 's|file:../citadel-internal-service/typescript-client|file:/workspace/citadel-internal-service-wasm-client|' package.json && \
     sed -i 's|file:../citadel-workspace-client-ts|file:/workspace/citadel-workspace-client-ts|' package.json
 
-# Same retry, same reason — see the build stage above.
-RUN for attempt in 1 2 3; do \
+# Same retry, same window, same reason — see the build stage above. Widened
+# with it: leaving this at three would have kept the Production Docker Build
+# exposed to exactly the race that took out the other five jobs, while the
+# comment above claimed they matched.
+RUN for attempt in 1 2 3 4 5; do \
       npm install --package-lock-only && npm install && break; \
-      echo "npm install failed (attempt $attempt/3); registry may be mid-publish, retrying in $((attempt * 20))s"; \
+      echo "npm install failed (attempt $attempt/5); registry may be mid-publish, retrying in $((attempt * 20))s"; \
       sleep $((attempt * 20)); \
     done; \
     npm ls --depth=0 >/dev/null 2>&1 || npm install
