@@ -10,6 +10,22 @@ exclude = ["./citadel-internal-service"]
 
 resolver = "3"
 
+# Release profile.
+#
+# `overflow-checks` is the point of this block. Cargo's default has it ON for
+# `cargo test` (via debug-assertions) and OFF for `--release`, so an integer
+# overflow panics in CI and wraps silently in every shipped binary. In a
+# codebase of u64 CIDs, ticket counters, byte offsets, chunk indices and
+# quotas, that is the divergence most likely to make a real bug pass the suite
+# and then misbehave in production — the tests cannot reproduce the field
+# failure because they are not running the same arithmetic.
+#
+# The cost is a bounds check on arithmetic that overflows; the benefit is that
+# a wrap becomes a loud, located panic instead of a silently wrong CID or a
+# quota that reads as satisfied.
+[profile.release]
+overflow-checks = true
+
 [workspace.dependencies]
 # Workspace-specific packages
 citadel-workspace-server-kernel = { path = "./citadel-workspace-server-kernel" }
