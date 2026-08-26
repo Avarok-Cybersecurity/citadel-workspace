@@ -15,9 +15,23 @@
  * forever. It declares `restart: "no"` so the intent is explicit rather than
  * absent, which is what this check requires.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 
-const COMPOSE = 'docker-compose.yml';
+// Every compose file, not just the dev one. docker-compose.production.yml is
+// the file an operator actually deploys, so checking only docker-compose.yml
+// would enforce the rule precisely where it matters least.
+const COMPOSE_FILES = [
+  'docker-compose.yml',
+  'docker-compose.production.yml',
+  'docker-compose.local.yml',
+].filter((f) => existsSync(f));
+
+if (COMPOSE_FILES.length === 0) throw new Error('no docker-compose files found');
+
+let checked = 0;
+const missing = [];
+
+for (const COMPOSE of COMPOSE_FILES) {
 const text = readFileSync(COMPOSE, 'utf8');
 
 // Services are the two-space-indented keys under `services:`; volumes and
@@ -29,10 +43,11 @@ if (!servicesBlock) throw new Error(`could not find a services: block in ${COMPO
 const names = [...servicesBlock[1].matchAll(/^  ([a-z][\w-]*):$/gm)].map((m) => m[1]);
 if (names.length === 0) throw new Error(`parsed no services from ${COMPOSE}`);
 
-const missing = [];
 for (const name of names) {
   const body = new RegExp(`^  ${name}:$\\n([\\s\\S]*?)(?=^  [a-z][\\w-]*:$|^[a-z]+:$|$(?![\\s\\S]))`, 'm').exec(text)?.[1] ?? '';
-  if (!/^\s*restart:\s*\S+/m.test(body)) missing.push(name);
+  if (!/^\s*restart:\s*\S+/m.test(body)) missing.push(`${COMPOSE}: ${name}`);
+}
+checked += names.length;
 }
 
 if (missing.length > 0) {
@@ -45,4 +60,4 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-console.log(`Restart policies declared for all ${names.length} services.`);
+console.log(`Restart policies declared for all ${checked} services across ${COMPOSE_FILES.length} compose files.`);
