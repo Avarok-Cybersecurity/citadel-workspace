@@ -11,4 +11,9 @@ ts-rs = { version = "11", features = ["serde-compat", "uuid"] }
 custom_debug = { version = "0.6.2" }
 citadel-internal-service-types = { path = "../citadel-internal-service/citadel-internal-service-types" }
 
+[dev-dependencies]
+# Only the credential-mirror test needs this; it reads the SDK's own constants
+# rather than restating them, so the assertion cannot drift with the mirror.
+citadel_user = { workspace = true }
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

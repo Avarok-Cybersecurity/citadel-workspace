@@ -877,6 +877,7 @@ name = "citadel-workspace-types"
 version = "0.1.0"
 dependencies = [
  "citadel-internal-service-types",
+ "citadel_user",
  "custom_debug",
  "serde",
  "serde_json",

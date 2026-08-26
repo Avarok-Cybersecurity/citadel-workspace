@@ -24,6 +24,9 @@ citadel-workspace-types = { path = "./citadel-workspace-types" }
 # Avarok deps
 citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
+# Dev-only: the credential-mirror test reads MIN/MAX_{PASSWORD,USERNAME,NAME}_LENGTH
+# directly, so a client-side mirror cannot drift from the SDK unnoticed.
+citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 
 # Avarok deps (for dev purposes, use the local path at ../Citadel-Protocol)
