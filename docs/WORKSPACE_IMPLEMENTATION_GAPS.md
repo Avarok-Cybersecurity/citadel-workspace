@@ -303,6 +303,46 @@ chosen deliberately.
 Recorded rather than fixed, and the test's KNOWN GAP label is accurate — but it
 should be read as "converges wrongly", not "not built".
 
+## OPEN: test:file-manager is NOT message loss — the op arrives and the view does not follow
+
+Grouped with the delivery failures for most of this session. It does not belong
+there. From CI run 32915200004, the full chain on Bob's side:
+
+| step | result |
+|---|---|
+| Alice creates the folder, sends `Mkdir` | ok |
+| Bob RECEIVES it (twice) | ok |
+| Bob applies it — `applied Mkdir, updating tree` | ok |
+| Bob acks it | ok |
+| Bob's UI shows the folder | **no** |
+
+Delivery is fine in both directions: Alice sent 21 ops and Bob received 50; Bob
+sent 18 and Alice received 36. `setTree` does call `notifyTreeChanged`, and
+`peerPairKey` sorts its inputs, so the key the service writes and the key the
+hook watches are identical — that mismatch was checked and ruled out.
+
+The failure counts are byte-identical across two runs (`Folder visible:false` 1,
+`File visible:false` 6), which is what makes this look deterministic rather than
+like a race.
+
+**Leading hypothesis, NOT confirmed.** `useFileManagerContent` subscribes via
+`useRevfsTree(myCid, selectedPeerCid)`, and `selectedPeerCid` is populated by an
+effect that reads `registeredPeers[0]`. The peer registry is known to lag 15-20s
+behind registration acceptance. If it has not populated when the op lands, the
+hook's key is null, nothing is subscribed, and the tree updates for a peer the
+UI has not selected. That would explain the deterministic shape.
+
+Confirming needs the revfs/ILM diagnostics, which this spec's console filter was
+dropping — its keywords were `['error','Error','revfs','RE-VFS']` with no `ILM`.
+Fixed in `7bbd098` across all 22 specs, so the next run carries them.
+
+**Two wrong turns on the way here, recorded so they are not repeated.** First I
+called it a functional revfs bug from the identical-counts heuristic alone — a
+guess presented as a conclusion. Then I called it a one-directional delivery
+failure because a 28-line log window contained no `[Bob] handleRevfsOperation`
+lines; the full count refutes that outright. Reading a window and generalising
+is the same error behind the retracted "always the middle message" claim.
+
 ## RESOLVED: the reconnect message loss, and why every earlier theory missed it
 
 **Root cause (CI run 32912073077, line-level evidence).** The lost message was
