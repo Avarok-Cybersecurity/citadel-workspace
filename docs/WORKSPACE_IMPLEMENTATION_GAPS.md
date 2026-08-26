@@ -325,12 +325,20 @@ The failure counts are byte-identical across two runs (`Folder visible:false` 1,
 `File visible:false` 6), which is what makes this look deterministic rather than
 like a race.
 
-**Leading hypothesis, NOT confirmed.** `useFileManagerContent` subscribes via
-`useRevfsTree(myCid, selectedPeerCid)`, and `selectedPeerCid` is populated by an
-effect that reads `registeredPeers[0]`. The peer registry is known to lag 15-20s
-behind registration acceptance. If it has not populated when the op lands, the
-hook's key is null, nothing is subscribed, and the tree updates for a peer the
-UI has not selected. That would explain the deterministic shape.
+**Registry-lag hypothesis: RAISED AND REFUTED, within the hour.** The idea was
+that `useRevfsTree(myCid, selectedPeerCid)` sees a null key while
+`selectedPeerCid` waits on `registeredPeers[0]`, and the registry lags 15-20s
+behind registration acceptance — so nothing is subscribed when the op lands.
+
+Two facts kill it. `loadTree` depends on `[myCid, peerCid]`, so when the peer is
+finally selected the hook re-runs `getTree` and picks up the current tree
+including the folder — the hook recovers on its own. And `verifyPeerSeesChanges`
+retries three times at 15s each, clicking Sync before every attempt: a 45-second
+window against a 20-second lag.
+
+So the folder is missing from what Bob's UI reads even after three explicit
+syncs across 45 seconds, despite the log saying the op was applied. That is a
+stranger failure than the lag would produce and the cause is still unknown.
 
 Confirming needs the revfs/ILM diagnostics, which this spec's console filter was
 dropping — its keywords were `['error','Error','revfs','RE-VFS']` with no `ILM`.
