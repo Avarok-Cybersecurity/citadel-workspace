@@ -41,6 +41,20 @@ function check(repo, prefix = '') {
   for (const { path, sha } of pointers(repo)) {
     const full = `${prefix}${path}`;
     const dir = `${repo}/${path}`;
+    // Refresh remote-tracking refs before trusting them. `branch -r --contains`
+    // reads LOCAL tracking refs, which can lag the remote arbitrarily — a push
+    // through a repository redirect updated the remote and left origin/<branch>
+    // pointing at the previous commit, and this script then reported a correctly
+    // pushed pointer as missing on its own first real use. A guard that blocks
+    // correct work gets switched off, so the round-trip is the price of being
+    // believed.
+    try {
+      git(['fetch', '--quiet', 'origin'], dir);
+    } catch {
+      // Offline, or no such remote. Fall through and judge on what we have —
+      // a verdict from a stale-but-present ref beats failing closed with no
+      // network.
+    }
     let onRemote = '';
     try {
       onRemote = git(['branch', '-r', '--contains', sha], dir);
