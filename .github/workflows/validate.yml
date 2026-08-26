@@ -92,6 +92,8 @@ jobs:
         run: node scripts/check-icon-button-names.mjs
       - name: Check destructive text clears AA on every background
         run: node scripts/check-destructive-contrast.mjs
+      - name: Check no storage key is read but never written
+        run: node scripts/check-storage-keys.mjs
 
   internal-service-rust-lint:
     name: Cargo Fmt + Clippy - citadel-internal-service workspace
