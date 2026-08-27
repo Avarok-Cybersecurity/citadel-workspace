@@ -338,10 +338,24 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 )
                 .await
             {
-                Ok(_) => Ok(WorkspaceProtocolResponse::MemberRoleUpdated {
-                    user_id: user_id.clone(),
-                    new_role: role.clone(),
-                }),
+                Ok(_) => {
+                    // Broadcast, not just answered.
+                    //
+                    // Only the acting admin ever received this, and the client's
+                    // permission-cache clear is gated on the payload naming the
+                    // CURRENT user -- which it never is for the admin doing the
+                    // demoting. So a demoted admin kept every gated control
+                    // until a full reload, with the server refusing each use as
+                    // a raw error toast, and a promoted member saw nothing new.
+                    // The whole client-side role-changed pathway could only fire
+                    // for an admin editing themselves.
+                    let notification = WorkspaceProtocolResponse::MemberRoleUpdated {
+                        user_id: user_id.clone(),
+                        new_role: role.clone(),
+                    };
+                    kernel.broadcast(notification.clone(), requester_cid);
+                    Ok(notification)
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to update member role: {}",
                     e
@@ -367,9 +381,32 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 )
                 .await
             {
-                Ok(_) => Ok(WorkspaceProtocolResponse::Success(
-                    "Member permissions updated successfully".to_string(),
-                )),
+                Ok(_) => {
+                    // Same reasoning as UpdateMemberRole above: the person whose
+                    // permissions changed has to be told, and only the acting
+                    // admin was. `Success` carries no user id, so the broadcast
+                    // is the role-shaped notification with the member's CURRENT
+                    // role -- what the client needs is "your permissions moved,
+                    // drop your cache", and the role is how it identifies whose.
+                    let subject_role = kernel
+                        .get_user(user_id)
+                        .await
+                        .ok()
+                        .flatten()
+                        .map(|user| user.role);
+                    if let Some(new_role) = subject_role {
+                        kernel.broadcast(
+                            WorkspaceProtocolResponse::MemberRoleUpdated {
+                                user_id: user_id.clone(),
+                                new_role,
+                            },
+                            requester_cid,
+                        );
+                    }
+                    Ok(WorkspaceProtocolResponse::Success(
+                        "Member permissions updated successfully".to_string(),
+                    ))
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to update member permissions: {}",
                     e
