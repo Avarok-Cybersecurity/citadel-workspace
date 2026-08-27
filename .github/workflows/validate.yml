@@ -180,6 +180,20 @@ jobs:
       - name: Run Cargo Test
         run: cargo test -p ${{ matrix.crate }}
 
+      # check-generated-types-fresh compares the committed bindings against the
+      # client's copy. Both can be stale and identical: the bindings are only
+      # rewritten when someone runs this crate's ts-rs export tests, and nothing
+      # checked that the result matched what was committed. Edit a Rust struct,
+      # skip the cargo test, commit -- and the parity gate stays green while the
+      # client is built against a type the server no longer sends. No protocol
+      # enum has a version field or a serde(other) arm, so an unknown variant
+      # fails the whole message: the client drops responses rather than
+      # degrading. The step above has just regenerated them, so this diff is the
+      # freshness check the parity gate cannot make.
+      - name: Committed bindings match the Rust types
+        if: matrix.crate == 'citadel-workspace-types'
+        run: git diff --exit-code -- citadel-workspace-types/bindings
+
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest

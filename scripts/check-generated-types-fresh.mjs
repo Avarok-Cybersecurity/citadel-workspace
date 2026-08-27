@@ -45,7 +45,9 @@ for (const file of copied) {
 if (problems.length > 0) {
   console.error('The client TypeScript bindings are out of sync with the Rust types:\n');
   for (const p of problems) console.error(`  ${p}`);
-  console.error(`\nRefresh them:  cp ${GENERATED}/*.ts ${COPY}/`);
+  console.error('\nRegenerate FIRST, then copy -- `cp` alone propagates whatever is');
+  console.error('in bindings/, which is only rewritten by this crate\'s ts-rs tests:');
+  console.error(`\n  cargo test -p citadel-workspace-types && cp ${GENERATED}/*.ts ${COPY}/`);
   console.error('\nThis is not cosmetic. No protocol enum has a version field or a');
   console.error('serde(other) catch-all, so a variant the client does not know fails the');
   console.error('whole message — the client drops responses rather than degrading.');

@@ -28,8 +28,8 @@ const GROUP_NOTIFICATIONS: &[&str] = &[
 #[test]
 fn every_group_notification_is_broadcast_to_the_group() {
     let path = Path::new("src/kernel/command_processor/async_process_command.rs");
-    let source = fs::read_to_string(path)
-        .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
+    let source =
+        fs::read_to_string(path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
 
     for notification in GROUP_NOTIFICATIONS {
         let Some(start) = source.find(notification) else {
