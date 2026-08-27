@@ -30,6 +30,7 @@ const CHECKS = [
   ['intent results checked', 'node', ['scripts/check-intent-results-checked.mjs'], ROOT],
   ['crate coverage', 'node', ['scripts/check-crate-coverage.mjs'], ROOT],
   ['doc file references', 'node', ['scripts/check-doc-file-refs.mjs'], ROOT],
+  ['handlers cannot panic', 'node', ['scripts/check-handlers-cannot-panic.mjs'], ROOT],
   ['event listeners have emitters', 'node', ['scripts/check-event-listeners-have-emitters.mjs'], UI],
   ['typecheck', 'npx', ['tsc', '-p', 'tsconfig.app.json', '--noEmit'], UI],
   ['eslint', 'npx', ['eslint', '.', '--max-warnings', '0'], UI],

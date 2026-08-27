@@ -84,6 +84,8 @@ jobs:
         run: node scripts/check-crate-coverage.mjs
       - name: Check the docs' commands resolve
         run: node scripts/check-doc-commands.mjs
+      - name: Check request handlers cannot panic
+        run: node scripts/check-handlers-cannot-panic.mjs
       - name: Check doc file references still resolve
         run: node scripts/check-doc-file-refs.mjs
       - name: "Check verify: annotations still hold"
