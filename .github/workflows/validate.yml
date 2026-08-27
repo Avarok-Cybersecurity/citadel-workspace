@@ -249,50 +249,10 @@ jobs:
           fi
       - name: Enforce 250-line file limit
         if: matrix.project == 'citadel-workspaces'
-        run: |
-          # Skip list: generated/external files exempt from 250-line limit
-          # Files that pre-date the 250-line cap and already exceed
-          # it. The cap was introduced after they were written; this
-          # PR is not the right place to refactor them. Tracked as
-          # known violations so the cap still keeps NEW files in
-          # check. Mirrors the equivalent allowlist in the
-          # citadel-workspaces submodule's own validate.yml.
-          SKIP_FILES=(
-            "components/ui/sidebar.tsx"
-            "components/layout/sidebar/TreeNodesSection.tsx"
-            "components/p2p/ChatSettingsPanel.tsx"
-            "lib/file-transfer/service.ts"
-            "pages/Landing.tsx"
-            "types/messaging-layer.ts"
-            "types/workspace-protocol.ts"
-          )
-
-          VIOLATIONS=0
-          while IFS= read -r file; do
-            rel="${file#citadel-workspaces/src/}"
-            skip=false
-            for s in "${SKIP_FILES[@]}"; do
-              if [ "$rel" = "$s" ]; then skip=true; break; fi
-            done
-            if $skip; then continue; fi
-
-            lines=$(wc -l < "$file")
-            if [ "$lines" -gt 250 ]; then
-              echo "::error file=$file::$file has $lines lines (limit: 250)"
-              VIOLATIONS=$((VIOLATIONS + 1))
-            fi
-          # Tests are excluded on purpose. The cap exists to stop a MODULE
-          # accreting responsibilities; a test file's length measures how many
-          # cases are covered, which is the opposite signal. Splitting one
-          # scatters assertions about a single unit across files and makes the
-          # set harder to read, not easier.
-          done < <(find citadel-workspaces/src -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.bak' ! -path '*/__tests__/*')
-
-          if [ "$VIOLATIONS" -gt 0 ]; then
-            echo "FAIL: $VIOLATIONS file(s) exceed the 250-line limit"
-            exit 1
-          fi
-          echo "All TypeScript files within 250-line limit"
+        # The rule and its skip list live in the script, not here, so the same
+        # check can be run locally. It was inline bash, which meant it could only
+        # be run by copying it — and it was broken three times as a result.
+        run: node scripts/check-file-length.mjs
 
   lint:
     name: ESLint - ${{ matrix.project }}
