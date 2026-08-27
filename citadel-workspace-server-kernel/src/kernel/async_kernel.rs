@@ -1363,7 +1363,8 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                         // still needs it, which is why it survives at all, but
                         // it now has to be asked for by name.
                         let ws_was_empty = ws.members.is_empty();
-                        let is_first_member = this.first_connect_admin && ws_was_empty;
+                        let outcome =
+                            crate::first_member_outcome(this.first_connect_admin, ws_was_empty);
 
                         if !ws.members.contains(&user_id) {
                             ws.members.push(user_id.clone());
@@ -1382,7 +1383,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                 .await?;
                         }
 
-                        if is_first_member {
+                        if outcome == crate::FirstMemberOutcome::Promote {
                             use citadel_workspace_types::structs::UserRole;
                             if let Some(mut user) = this.get_user(&user_id).await? {
                                 user.role = UserRole::Admin;
@@ -1393,7 +1394,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                     .await?;
                                 info!(target: "citadel", "[ASYNC_KERNEL] User {} is the first workspace member; promoted to Admin", user_id);
                             }
-                        } else if ws_was_empty {
+                        } else if outcome == crate::FirstMemberOutcome::AwaitInitialization {
                             info!(target: "citadel", "[ASYNC_KERNEL] User {} is the first workspace member, but first-connect admin promotion is off. The workspace awaits initialization with the master password.", user_id);
                         }
 

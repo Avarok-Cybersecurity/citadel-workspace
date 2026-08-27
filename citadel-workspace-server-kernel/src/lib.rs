@@ -506,6 +506,46 @@ pub fn resolve_first_connect_admin(
     }
 }
 
+/// What happens to the first account to join an empty workspace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FirstMemberOutcome {
+    /// Promote to Admin. Only ever when the operator asked for it by name.
+    Promote,
+    /// The workspace is empty and stays without an administrator until someone
+    /// runs the initialize flow with the master password.
+    AwaitInitialization,
+    /// Somebody was already here; this account joins as a Member.
+    JoinAsMember,
+}
+
+/// Whether the account now connecting becomes the workspace administrator.
+///
+/// Extracted so the decision can be tested. It lived inline in a match arm of
+/// the connection handler -- reachable only by standing up a kernel, a backend
+/// and a live Citadel session -- so nothing covered it, and reverting the line
+/// to `let is_first_member = ws_was_empty;` reinstated the vulnerability with
+/// every test still green. The integration suite could not have caught it
+/// either: it runs with WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN=1, which makes the
+/// gated and ungated versions behave identically.
+///
+/// The vulnerability: registration has no invite gate, so on a deployment
+/// reachable from anywhere, whoever finds the port and registers first becomes
+/// the administrator. A local dev stack genuinely needs the promotion, which is
+/// why it survives at all -- but it has to be asked for.
+pub fn first_member_outcome(
+    first_connect_admin_enabled: bool,
+    workspace_was_empty: bool,
+) -> FirstMemberOutcome {
+    if !workspace_was_empty {
+        return FirstMemberOutcome::JoinAsMember;
+    }
+    if first_connect_admin_enabled {
+        FirstMemberOutcome::Promote
+    } else {
+        FirstMemberOutcome::AwaitInitialization
+    }
+}
+
 /// Run the workspace server with the given configuration and base path.
 pub async fn run_server_with_base_path(
     config: ServerConfig,
