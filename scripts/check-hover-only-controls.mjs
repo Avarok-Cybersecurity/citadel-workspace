@@ -35,8 +35,36 @@ for (const file of walk(ROOT)) {
     // literal is still checked line by line, so require both tokens within a
     // small window rather than on the exact same line.
     const window = lines.slice(Math.max(0, i - 2), i + 3).join(' ');
-    if (/\bopacity-0\b/.test(line) && /group-hover:opacity-100/.test(window)) {
-      offenders.push(`${file}:${i + 1}`);
+
+    // Every way Tailwind hides a control and reveals it on hover, not just the
+    // one spelling this originally looked for.
+    //
+    // It required the literal `group-hover:opacity-100`, so a NAMED group —
+    // `group-hover/menu-item:opacity-100 … md:opacity-0`, which is exactly what
+    // ui/sidebar.tsx uses — sailed straight through, as would
+    // `invisible group-hover:visible` or `hidden group-hover:flex`. The check
+    // could not fail for whole families of the defect it exists to catch.
+    //
+    // `md:` and friends count as hiding: a control hidden only at desktop
+    // widths is still hidden on a desktop, and hover is the only way back.
+    const HIDDEN_THEN_REVEALED = [
+      [/(?:^|[\s"'`:])(?:[a-z]+:)?opacity-0\b/, /group-hover(?:\/[\w-]+)?:opacity-(?:100|[1-9]\d)/],
+      [/(?:^|[\s"'`:])(?:[a-z]+:)?invisible\b/, /group-hover(?:\/[\w-]+)?:visible/],
+      [/(?:^|[\s"'`:])(?:[a-z]+:)?hidden\b/, /group-hover(?:\/[\w-]+)?:(?:flex|block|grid|inline|inline-flex|inline-block)/],
+      [/(?:^|[\s"'`:])(?:[a-z]+:)?scale-0\b/, /group-hover(?:\/[\w-]+)?:scale-(?:100|[1-9]\d)/],
+    ];
+
+    // Hiding gated on an actual hover-capable pointer is the correct pattern —
+    // the control simply stays visible where hover does not exist. `md:` is NOT
+    // this: it uses viewport width as a proxy for pointer type, so a tablet at
+    // desktop width hides the control with no way to reveal it.
+    if (/\[@media\(hover:hover\)[^\]]*\]:(?:opacity-0|invisible|hidden)/.test(window)) return;
+
+    for (const [hidden, revealed] of HIDDEN_THEN_REVEALED) {
+      if (hidden.test(line) && revealed.test(window)) {
+        offenders.push(`${file}:${i + 1}`);
+        break;
+      }
     }
   });
 }
