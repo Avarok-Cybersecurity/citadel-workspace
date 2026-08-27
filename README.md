@@ -72,7 +72,20 @@ cp .env.example .env                     # then edit it: set WORKSPACE_MASTER_PA
                                          # to a real value, e.g. `openssl rand -hex 32`
 
 docker compose up -d --build --wait      # or: tilt up
+
+node scripts/check-stack-reachable.mjs   # confirm you can actually reach it
 ```
+
+That last step is not ceremony. Every dev service uses `network_mode: host`, and
+on **macOS and Windows** Docker runs inside a VM, so "host" is the VM's network
+rather than your machine's — the ports get bound where your browser cannot see
+them. The healthchecks cannot detect this, because they probe `127.0.0.1` from
+*inside* their own container, where it is genuinely listening: `--wait` prints
+success and the browser gets connection refused, with no diagnostic anywhere.
+
+If that check fails, enable Docker Desktop's host-networking mode (Settings →
+Resources → Network, opt-in and off by default), or use
+`docker-compose.local.yml`, which does not rely on it.
 
 Node 20 or newer is required — it is declared in `engines` but npm does not
 enforce that by default, so an older runtime gets no useful warning: the build
