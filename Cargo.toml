@@ -3,6 +3,7 @@ members = [
     "citadel-workspace-server-kernel",
     "citadel-workspace-internal-service",
     "citadel-workspace-types",
+    "citadel-workspace-executor",
     "citadel-workspace-server-kernel/tests/common",
 ]
 
@@ -32,6 +33,7 @@ citadel-workspace-server-kernel = { path = "./citadel-workspace-server-kernel" }
 citadel-workspace-server-kernel-test-common = { path = "./citadel-workspace-server-kernel/tests/common" }
 citadel-workspace-internal-service = { path = "./citadel-workspace-internal-service" }
 citadel-workspace-types = { path = "./citadel-workspace-types" }
+citadel-workspace-executor = { path = "./citadel-workspace-executor" }
 
 # Secondary packages
 

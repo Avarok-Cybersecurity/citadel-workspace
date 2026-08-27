@@ -808,6 +808,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "citadel-workspace-executor"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio 1.49.0",
+]
+
+[[package]]
 name = "citadel-workspace-internal-service"
 version = "0.1.0"
 dependencies = [
