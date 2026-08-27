@@ -21,7 +21,13 @@ use citadel_workspace_types::structs::{DomainNode, DomainPermissions, NodeEntity
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 use std::collections::HashMap;
 
-fn mk_node(id: &str, name: &str, parent: Option<&str>, children: Vec<String>, depth: u32) -> DomainNode {
+fn mk_node(
+    id: &str,
+    name: &str,
+    parent: Option<&str>,
+    children: Vec<String>,
+    depth: u32,
+) -> DomainNode {
     DomainNode {
         id: id.to_string(),
         parent_id: parent.map(|s| s.to_string()),
@@ -52,7 +58,13 @@ async fn seed(kernel: &TestKernel) {
     let mut nodes = HashMap::new();
     nodes.insert(
         "office-1".to_string(),
-        mk_node("office-1", "Engineering", Some(WORKSPACE_ROOT_ID), vec!["room-1".to_string()], 1),
+        mk_node(
+            "office-1",
+            "Engineering",
+            Some(WORKSPACE_ROOT_ID),
+            vec!["room-1".to_string()],
+            1,
+        ),
     );
     nodes.insert(
         "room-1".to_string(),
@@ -101,14 +113,32 @@ async fn two_rooms_named_alike_in_different_offices_do_not_collide() {
     let mut nodes = HashMap::new();
     nodes.insert(
         "office-a".to_string(),
-        mk_node("office-a", "Alpha", Some(WORKSPACE_ROOT_ID), vec!["room-a".to_string()], 1),
+        mk_node(
+            "office-a",
+            "Alpha",
+            Some(WORKSPACE_ROOT_ID),
+            vec!["room-a".to_string()],
+            1,
+        ),
     );
     nodes.insert(
         "office-b".to_string(),
-        mk_node("office-b", "Beta", Some(WORKSPACE_ROOT_ID), vec!["room-b".to_string()], 1),
+        mk_node(
+            "office-b",
+            "Beta",
+            Some(WORKSPACE_ROOT_ID),
+            vec!["room-b".to_string()],
+            1,
+        ),
     );
-    nodes.insert("room-a".to_string(), mk_node("room-a", "Standup", Some("office-a"), vec![], 2));
-    nodes.insert("room-b".to_string(), mk_node("room-b", "Standup", Some("office-b"), vec![], 2));
+    nodes.insert(
+        "room-a".to_string(),
+        mk_node("room-a", "Standup", Some("office-a"), vec![], 2),
+    );
+    nodes.insert(
+        "room-b".to_string(),
+        mk_node("room-b", "Standup", Some("office-b"), vec![], 2),
+    );
     kernel
         .domain_operations
         .backend_tx_manager
@@ -121,7 +151,10 @@ async fn two_rooms_named_alike_in_different_offices_do_not_collide() {
 
     // Under the old single-name path both were {base}/Standup/CONTENT.md, so
     // editing one silently overwrote the other.
-    assert_ne!(a, b, "same-named rooms in different offices must not share a file");
+    assert_ne!(
+        a, b,
+        "same-named rooms in different offices must not share a file"
+    );
     assert_eq!(a, vec!["Alpha".to_string(), "Standup".to_string()]);
     assert_eq!(b, vec!["Beta".to_string(), "Standup".to_string()]);
 }
@@ -132,13 +165,19 @@ async fn an_unresolvable_node_yields_no_path_rather_than_a_guess() {
     seed(&kernel).await;
 
     assert!(
-        kernel.content_path_segments("does-not-exist").await.is_empty(),
+        kernel
+            .content_path_segments("does-not-exist")
+            .await
+            .is_empty(),
         "an unknown node must not resolve to a path"
     );
 
     // And the writer refuses rather than inventing one.
     assert!(
-        kernel.persist_node_content_at(&[], "content").await.is_err(),
+        kernel
+            .persist_node_content_at(&[], "content")
+            .await
+            .is_err(),
         "writing with no resolved path must fail loudly"
     );
 }
@@ -164,6 +203,8 @@ async fn a_parent_cycle_does_not_hang_the_walk() {
     .await
     .expect("the ancestor walk must terminate on a cyclic tree");
 
-    assert!(segments.is_empty(), "a corrupt chain must not produce a path");
+    assert!(
+        segments.is_empty(),
+        "a corrupt chain must not produce a path"
+    );
 }
-

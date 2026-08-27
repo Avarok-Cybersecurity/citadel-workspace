@@ -57,7 +57,9 @@ async fn creating_a_node_is_broadcast_to_everyone_else() {
 
     let broadcast = drain(&mut rx).await;
     assert!(
-        broadcast.iter().any(|r| matches!(r, WorkspaceProtocolResponse::Node(n) if n.name == "Engineering")),
+        broadcast
+            .iter()
+            .any(|r| matches!(r, WorkspaceProtocolResponse::Node(n) if n.name == "Engineering")),
         "a created node must reach every other member; without this it is \
          invisible to them until they sign in again"
     );

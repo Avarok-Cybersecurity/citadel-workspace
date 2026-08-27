@@ -61,7 +61,8 @@ fn a_missing_structure_file_refuses_to_boot() {
     let dir = temp_dir("missing");
 
     assert!(
-        resolve_workspace_structure(&config_naming(Some("does-not-exist.json")), Some(&dir)).is_err(),
+        resolve_workspace_structure(&config_naming(Some("does-not-exist.json")), Some(&dir))
+            .is_err(),
         "a named structure file that is not there is the same class of error",
     );
     let _ = std::fs::remove_dir_all(&dir);
@@ -73,7 +74,13 @@ fn a_config_naming_no_structure_still_boots() {
     // the ordinary case for a server that seeds nothing.
     let dir = temp_dir("none");
     let resolved = resolve_workspace_structure(&config_naming(None), Some(&dir));
-    assert!(resolved.is_ok(), "a server with no configured structure must still boot");
-    assert!(resolved.expect("ok").is_none(), "and it resolves to no structure");
+    assert!(
+        resolved.is_ok(),
+        "a server with no configured structure must still boot"
+    );
+    assert!(
+        resolved.expect("ok").is_none(),
+        "and it resolves to no structure"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -23,9 +23,7 @@ use citadel_workspace_server_kernel::handlers::domain::tree_validator::{
     NodeMutation, TreeValidator,
 };
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
-use citadel_workspace_types::structs::{
-    DomainNode, DomainPermissions, NodeEntityType, TreeSchema,
-};
+use citadel_workspace_types::structs::{DomainNode, DomainPermissions, NodeEntityType, TreeSchema};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -99,10 +97,7 @@ async fn update_node_reads_under_the_lock_and_does_not_revert_a_concurrent_write
 
     // A legitimate concurrent writer, holding the lock as the contract requires.
     let mut nodes = backend.get_all_nodes().await.expect("read nodes");
-    nodes
-        .get_mut("A")
-        .expect("node A")
-        .description = "set-by-concurrent-writer".to_string();
+    nodes.get_mut("A").expect("node A").description = "set-by-concurrent-writer".to_string();
     backend.save_nodes(&nodes).await.expect("concurrent write");
 
     drop(guard);
@@ -113,7 +108,10 @@ async fn update_node_reads_under_the_lock_and_does_not_revert_a_concurrent_write
         .expect("update task should not panic")
         .expect("update_node should return Ok");
 
-    assert_eq!(updated.name, "renamed-by-update", "the update itself must land");
+    assert_eq!(
+        updated.name, "renamed-by-update",
+        "the update itself must land"
+    );
 
     let persisted = backend
         .get_node("A")

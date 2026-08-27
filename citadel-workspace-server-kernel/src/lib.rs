@@ -434,7 +434,10 @@ pub fn resolve_workspace_structure(
             Ok(structure) => {
                 info!(target: "citadel", "Loaded workspace structure: {} with {} offices",
                     structure.name, structure.offices.len());
-                Ok(Some((structure, full_path.parent().map(|p| p.to_path_buf()))))
+                Ok(Some((
+                    structure,
+                    full_path.parent().map(|p| p.to_path_buf()),
+                )))
             }
             Err(e) => {
                 // Fatal, exactly as the `content_base_dir` branch above is.
