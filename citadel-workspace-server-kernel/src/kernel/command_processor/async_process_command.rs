@@ -283,6 +283,27 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         }
 
         WorkspaceProtocolRequest::GetMember { user_id } => {
+            // A `User` carries the role, the FULL per-domain permissions map and
+            // the metadata, and this had no check at all — so any authenticated
+            // account could enumerate every other account and read the entire
+            // enforced permission state of the workspace. `GetUserPermissions`,
+            // fifteen lines below, already gates exactly this data correctly;
+            // the same rule applies here.
+            {
+                use crate::handlers::domain::async_ops::AsyncDomainOperations;
+                let is_admin = kernel
+                    .domain_ops()
+                    .is_admin(actor_user_id)
+                    .await
+                    .unwrap_or(false);
+                if actor_user_id != user_id && !is_admin {
+                    return Ok(WorkspaceProtocolResponse::Error(
+                        "Permission denied: Can only view your own member record or must be admin"
+                            .to_string(),
+                    ));
+                }
+            }
+
             // Get member returns the user if they exist
             match kernel
                 .domain_operations
@@ -392,6 +413,31 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
 
         WorkspaceProtocolRequest::ListMembers { domain_id } => {
             let target_id = domain_id.as_deref().unwrap_or(crate::WORKSPACE_ROOT_ID);
+
+            // `domain_id` comes from the request and was trusted, with no check
+            // that the caller belongs to it — so any authenticated account could
+            // read the complete roster, roles and permission maps of every
+            // office and room, including ones they were never added to.
+            {
+                use crate::handlers::domain::async_ops::{
+                    AsyncDomainOperations, AsyncPermissionOperations,
+                };
+                let is_admin = kernel
+                    .domain_ops()
+                    .is_admin(actor_user_id)
+                    .await
+                    .unwrap_or(false);
+                let is_member = kernel
+                    .domain_ops()
+                    .is_member_of_domain(actor_user_id, target_id)
+                    .await
+                    .unwrap_or(false);
+                if !is_admin && !is_member {
+                    return Ok(WorkspaceProtocolResponse::Error(
+                        "Permission denied: not a member of this domain".to_string(),
+                    ));
+                }
+            }
 
             // Collect member IDs from legacy Domain storage or DomainNode tree storage
             let member_ids = if let Ok(Some(domain)) = kernel
