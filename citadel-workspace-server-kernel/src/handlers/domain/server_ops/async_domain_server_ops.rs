@@ -258,6 +258,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
 
         // If this is the workspace root, use the workspace storage
         if domain_id == crate::WORKSPACE_ROOT_ID {
+            // Same lock as the connect path and update_workspace — this branch
+            // reads the workspace whole and writes it back, so without it those
+            // fixes only exclude each other.
+            let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+
             let mut workspace = match self.backend_tx_manager.get_workspace(domain_id).await? {
                 Some(ws) => ws,
                 None => return Err(NetworkError::msg("Workspace not found")),
@@ -355,6 +360,20 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
 
         // If this is the workspace root, use the workspace storage
         if domain_id == crate::WORKSPACE_ROOT_ID {
+            // BEFORE the last-admin check, not after.
+            //
+            // `ensure_not_last_admin` counts admins and returns; the write
+            // happens separately. Two admins removing each other both counted
+            // 2, both passed, and both writes landed — leaving ZERO admins,
+            // which the check's own doc calls unrecoverable: "promotion
+            // requires an admin, so there is no way back".
+            //
+            // Holding the lock across check AND write is what makes the guard
+            // mean anything. It also covers the workspace read-modify-write
+            // below, which is the same erased-member race the connect path and
+            // update_workspace take this lock for.
+            let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+
             self.ensure_not_last_admin(user_id_to_remove, "remove")
                 .await?;
 
@@ -824,6 +843,21 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
                 "Invalid workspace master access password",
             ));
         }
+
+        // Held across the whole read-modify-write, like the connect path.
+        //
+        // A mutex only excludes PARTICIPANTS. The connect-time member-add takes
+        // this lock, but that bought nothing while this function did not: it
+        // reads the record whole, appends the caller to `members`, and writes it
+        // back — so it could read `[user1]`, and write `[user1]` over the
+        // `[user1, user2]` that the connect path had just written under the
+        // lock. user2's membership vanishes, and `get_workspace` then refuses
+        // them with "Not a member", which the command processor maps to
+        // WorkspaceNotInitialized — so their client re-shows the setup flow.
+        //
+        // Same first-run window the connect-side fix targeted; that fix was only
+        // half of it.
+        let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
 
         // Get workspace directly from backend without permission check
         // since we've verified the master password
