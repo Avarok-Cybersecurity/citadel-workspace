@@ -42,6 +42,12 @@ pub mod config {
         pub content_base_dir: Option<String>,
         /// File transfer configuration
         pub file_transfer: Option<FileTransferConfig>,
+        /// Whether the first account to CONNECT becomes the workspace admin.
+        ///
+        /// Overridden by WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN. Defaults to
+        /// false: see `resolve_first_connect_admin` for why the safe value is
+        /// the default and why the unsafe one has to be asked for by name.
+        pub allow_first_connect_admin: Option<bool>,
     }
 
     impl std::fmt::Debug for ServerConfig {
@@ -68,6 +74,7 @@ pub mod config {
                 .field("workspace_structure", &self.workspace_structure)
                 .field("content_base_dir", &self.content_base_dir)
                 .field("file_transfer", &self.file_transfer)
+                .field("allow_first_connect_admin", &self.allow_first_connect_admin)
                 .finish()
         }
     }
@@ -470,6 +477,44 @@ pub async fn run_server(config: ServerConfig) -> Result<(), NetworkError> {
     run_server_with_base_path(config, None).await
 }
 
+/// Whether the first account to connect becomes the workspace administrator.
+///
+/// The root workspace is seeded at boot with no owner, and on connect any
+/// authenticated account is added to it. If it is the first, it was promoted to
+/// Admin unconditionally — so on a deployment bound to a public interface,
+/// whoever found the port and registered first became the administrator of the
+/// workspace, and everybody after them joined as a Member of a workspace they
+/// did not control. Registration has no invite gate, so the race is open to
+/// anyone who can reach the port.
+///
+/// The behaviour still exists, because a local dev stack depends on it: without
+/// it every account stays a Member with no editing rights. But it now has to be
+/// asked for by name. Unset means OFF — the safe value is the one you get by
+/// not thinking about it, and the workspace instead waits for someone to
+/// present the master password through the initialization flow, which is the
+/// documented and already-implemented alternative.
+///
+/// A malformed value is an error rather than a falsy default: "yes", "on" and
+/// "TRUE " are all things an operator would reasonably write believing they had
+/// enabled it, and silently reading them as "off" would leave a dev stack with
+/// no administrator and no explanation.
+pub fn resolve_first_connect_admin(
+    env_value: Option<&str>,
+    config_value: Option<bool>,
+) -> Result<bool, NetworkError> {
+    match env_value.map(str::trim).filter(|v| !v.is_empty()) {
+        Some(raw) => match raw.to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => Ok(true),
+            "0" | "false" | "no" | "off" => Ok(false),
+            other => Err(NetworkError::msg(format!(
+                "WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN must be one of 1/0, true/false, \
+                 yes/no, on/off — got '{other}'"
+            ))),
+        },
+        None => Ok(config_value.unwrap_or(false)),
+    }
+}
+
 /// Run the workspace server with the given configuration and base path.
 pub async fn run_server_with_base_path(
     config: ServerConfig,
@@ -496,6 +541,18 @@ pub async fn run_server_with_base_path(
 
     let workspace_structure = resolve_workspace_structure(&config, config_base_path)?;
 
+    let first_connect_admin = resolve_first_connect_admin(
+        std::env::var("WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN")
+            .ok()
+            .as_deref(),
+        config.allow_first_connect_admin,
+    )?;
+    if first_connect_admin {
+        citadel_logging::warn!(target: "citadel", "⚠️  WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN is on: the first account to connect becomes the workspace administrator. Intended for local development. On a reachable deployment this hands ownership to whoever registers first.");
+    } else {
+        info!(target: "citadel", "First-connect admin promotion is off. The workspace awaits initialization with the master password.");
+    }
+
     // Select backend type from env-var override (preferred) or config file.
     let backend_type_for_node_builder = select_backend_type(
         std::env::var("WORKSPACE_BACKEND").ok().as_deref(),
@@ -516,11 +573,12 @@ pub async fn run_server_with_base_path(
     }
 
     // Create AsyncWorkspaceServerKernel with admin user from config
-    let kernel = kernel::async_kernel::AsyncWorkspaceServerKernel::<StackedRatchet>::with_workspace_master_password_and_structure_and_file_transfer(
+    let mut kernel = kernel::async_kernel::AsyncWorkspaceServerKernel::<StackedRatchet>::with_workspace_master_password_and_structure_and_file_transfer(
         &workspace_password,
         workspace_structure,
         config.file_transfer.clone(),
     ).await?;
+    kernel.set_first_connect_admin(first_connect_admin);
 
     // `NodeType::server` and `NodeBuilder::build` now return `anyhow::Error`
     // (newer citadel_sdk); map into this fn's `NetworkError`, which no longer
@@ -751,6 +809,7 @@ mod server_config_debug_tests {
             workspace_structure: None,
             content_base_dir: Some("/srv/content".to_string()),
             file_transfer: Some(FileTransferConfig::default()),
+            allow_first_connect_admin: None,
         }
     }
 

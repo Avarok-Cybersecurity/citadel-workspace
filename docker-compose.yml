@@ -86,6 +86,12 @@ services:
       # unreadable rather than merely verbose.
       - RUST_LOG=citadel=info,ism=info,citadel_crypt=warn
       - WORKSPACE_MASTER_PASSWORD=${WORKSPACE_MASTER_PASSWORD}
+      # Dev only. The first account to CONNECT becomes the workspace admin,
+      # which is what makes `tilt up` -> create an account -> have editing
+      # rights work without anyone typing the master password. On a reachable
+      # deployment this hands the workspace to whoever registers first, so
+      # docker-compose.production.yml deliberately leaves it off.
+      - WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN=1
     deploy:
       resources:
         limits:

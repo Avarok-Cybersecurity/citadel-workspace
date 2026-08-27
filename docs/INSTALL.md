@@ -60,6 +60,20 @@ Optional: `IMAGE_TAG` (defaults to `latest`; pin it to `sha-<commit>` to control
 exactly what runs), `WORKSPACE_BIND_ADDR`, `INTERNAL_SERVICE_PORT`, and
 `TUNNEL_TOKEN` with `--profile tunnel` to expose it via Cloudflare Tunnel.
 
+### Claiming the workspace
+
+Bring the stack up, register an account, and initialize the workspace with
+`WORKSPACE_MASTER_PASSWORD` when the app asks for it. That is what makes you the
+administrator; nothing else does.
+
+Do this before anyone else can reach the port, but note that being first is no
+longer what grants ownership. On the production compose file
+`WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN` is `0`, so a fresh workspace has no
+administrator until somebody presents the master password. Registration has no
+invite gate, so if the first account to connect were promoted automatically —
+as it is on the dev stack, where the same variable is `1` — a stranger who found
+the port before you did would own your workspace.
+
 **If remote people will use this workspace, set `WORKSPACE_BIND_ADDR=0.0.0.0:12349`
 in `.env` and open that port on your firewall.**
 

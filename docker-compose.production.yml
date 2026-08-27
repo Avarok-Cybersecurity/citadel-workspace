@@ -95,6 +95,12 @@ services:
       # unreadable rather than merely verbose.
       - RUST_LOG=citadel=info,ism=info,citadel_crypt=warn
       - WORKSPACE_MASTER_PASSWORD=${WORKSPACE_MASTER_PASSWORD}
+      # Explicitly off, and stated rather than left to the default: the first
+      # account to connect must NOT become the administrator. Registration has
+      # no invite gate, so on a public bind that is a race any stranger can
+      # win. The operator claims ownership through the initialization flow with
+      # WORKSPACE_MASTER_PASSWORD instead. See docs/INSTALL.md.
+      - WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN=0
       # Persistence is opt-in via env vars so the same `kernel.toml`
       # baked into the Docker image stays ephemeral by default for
       # `tilt`-driven dev. Production sets both vars below to mount

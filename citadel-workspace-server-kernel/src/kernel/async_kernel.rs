@@ -108,6 +108,13 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     /// per-connection - opening multiple connections from the same
     /// account no longer multiplies the budget.
     rate_limiter: RateLimiter,
+    /// Whether the first account to CONNECT is promoted to Admin.
+    ///
+    /// False unless the operator asks for it by name. See
+    /// `crate::resolve_first_connect_admin` for the reasoning; in short, on a
+    /// reachable deployment the promotion handed the workspace to whoever
+    /// registered first.
+    first_connect_admin: bool,
 }
 
 // Placeholder for entities that don't have an owner yet.
@@ -123,6 +130,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             workspace_structure: self.workspace_structure.clone(),
             broadcast_tx: self.broadcast_tx.clone(),
             file_transfer_config: self.file_transfer_config.clone(),
+            first_connect_admin: self.first_connect_admin,
             // RateLimiter::Clone shares the same Arc<Mutex<HashMap>>,
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
@@ -161,7 +169,18 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             broadcast_tx,
             file_transfer_config: FileTransferConfig::default(),
             rate_limiter: RateLimiter::new(DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL),
+            first_connect_admin: false,
         }
+    }
+
+    /// Set by the server bootstrap from configuration. Off unless asked for.
+    pub fn set_first_connect_admin(&mut self, allowed: bool) {
+        self.first_connect_admin = allowed;
+    }
+
+    /// Whether the first account to connect is promoted to Admin.
+    pub fn first_connect_admin(&self) -> bool {
+        self.first_connect_admin
     }
 
     /// Create a new kernel with file transfer configuration
@@ -1327,7 +1346,15 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                         // no user ever runs the "initialize workspace" flow that would grant
                         // Admin. Without this, every account stays a Member with no editing
                         // rights and the workspace has no administrator at all.
-                        let is_first_member = ws.members.is_empty();
+                        // Gated. Unconditional promotion meant that on a
+                        // deployment reachable from anywhere, whoever found the
+                        // port and registered first became the administrator of
+                        // the workspace -- registration has no invite gate, so
+                        // the race is open to any stranger. A local dev stack
+                        // still needs it, which is why it survives at all, but
+                        // it now has to be asked for by name.
+                        let ws_was_empty = ws.members.is_empty();
+                        let is_first_member = this.first_connect_admin && ws_was_empty;
 
                         if !ws.members.contains(&user_id) {
                             ws.members.push(user_id.clone());
@@ -1357,6 +1384,8 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                     .await?;
                                 info!(target: "citadel", "[ASYNC_KERNEL] User {} is the first workspace member; promoted to Admin", user_id);
                             }
+                        } else if ws_was_empty {
+                            info!(target: "citadel", "[ASYNC_KERNEL] User {} is the first workspace member, but first-connect admin promotion is off. The workspace awaits initialization with the master password.", user_id);
                         }
 
                         info!(target: "citadel", "[ASYNC_KERNEL] User {} added to workspace domain", user_id);

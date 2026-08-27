@@ -102,15 +102,25 @@ at `--wait` rather than booting something insecure.
 The UI is at <http://127.0.0.1:5291>, the internal service on `:12345`, and the
 workspace server on `:12349`.
 
-The first account to connect becomes the workspace administrator, automatically —
-the root workspace itself is created at boot from `WORKSPACE_MASTER_PASSWORD`,
-not by anyone registering. Everyone after that joins as a member.
+On this dev stack, the first account to connect becomes the workspace
+administrator automatically — the root workspace itself is created at boot from
+`WORKSPACE_MASTER_PASSWORD`, not by anyone registering. Everyone after that
+joins as a member.
+
+That promotion is `WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN=1`, set in
+`docker-compose.yml` because a dev stack is unreachable and typing the master
+password to get editing rights is pure friction. It is **off** in
+`docker-compose.production.yml` and off by default in the binary: registration
+has no invite gate, so on a reachable deployment automatic promotion hands the
+workspace to whoever finds the port first. See [docs/INSTALL.md](docs/INSTALL.md).
 
 You will also see an **Initialize Workspace** prompt asking for that same master
-password. It is optional: the workspace is already usable without it, and it
-grants nothing the first account does not already have. If you are not the
-operator and do not have the value from `.env`, choose **Not now** — nothing is
-blocked. (It is shown to every user until somebody completes it.)
+password. On this stack it is optional: the workspace is already usable without
+it, and it grants nothing the first account does not already have. If you are not
+the operator and do not have the value from `.env`, choose **Not now** — nothing
+is blocked. (It is shown to every user until somebody completes it.) On a
+production deployment it is not optional — it is how the operator claims the
+workspace.
 
 **Code inside a container needs a rebuilt image, not a restart.**
 `docker compose restart` reuses what is already in the image, so the container
