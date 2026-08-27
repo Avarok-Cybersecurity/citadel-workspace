@@ -25,8 +25,12 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CSS = join(ROOT, 'citadel-workspaces', 'src', 'index.css');
 
 if (!existsSync(CSS)) {
-  console.log('check-destructive-contrast: index.css absent (submodule not checked out); skipping.');
-  process.exit(0);
+  // A guard that cannot find what it guards has verified NOTHING, so this is a
+  // failure, not a skip. Every CI job that runs these uses
+  // `submodules: recursive`, so an absent path means a broken checkout — which
+  // used to be reported as a pass.
+  console.error('check-destructive-contrast: index.css is missing, so nothing was checked.');
+  process.exit(1);
 }
 
 const css = readFileSync(CSS, 'utf8');

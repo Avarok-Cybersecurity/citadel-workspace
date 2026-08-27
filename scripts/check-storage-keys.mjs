@@ -31,8 +31,12 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = join(ROOT, 'citadel-workspaces', 'src');
 
 if (!existsSync(SRC)) {
-  console.log('check-storage-keys: citadel-workspaces/src absent (submodule not checked out); skipping.');
-  process.exit(0);
+  // A guard that cannot find what it guards has verified NOTHING, so this is a
+  // failure, not a skip. Every CI job that runs these uses
+  // `submodules: recursive`, so an absent path means a broken checkout — which
+  // used to be reported as a pass.
+  console.error('check-storage-keys: citadel-workspaces/src is missing, so nothing was checked.');
+  process.exit(1);
 }
 
 function walk(dir) {
