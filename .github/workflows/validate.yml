@@ -88,6 +88,8 @@ jobs:
         run: node scripts/check-doc-assertions.mjs
       - name: Check the Docker root manifest defines every inherited dep
         run: node scripts/check-docker-workspace-manifest.mjs
+      - name: Check failure-reporting intent results are read
+        run: node scripts/check-intent-results-checked.mjs
       - name: Check the quickstart works on a clean clone
         run: node scripts/check-doc-setup-steps.mjs
       - name: Check icon-only buttons have accessible names
