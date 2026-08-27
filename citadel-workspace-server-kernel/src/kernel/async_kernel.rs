@@ -1168,6 +1168,27 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                         }
 
                         // Add user directly to workspace members (no admin required for initial connection)
+                        // Held across the whole read-decide-write cycle.
+                        //
+                        // A workspace is stored WHOLE, so this reads the record,
+                        // decides `is_first_member` from it, and writes it back —
+                        // across two awaits. Two accounts connecting to a fresh
+                        // workspace both observed `members == []`, so BOTH were
+                        // promoted to Admin, and the second write erased the first's
+                        // membership. The promoted-but-unlisted admin still passes
+                        // every gate (`is_admin` reads the global role and never
+                        // consults membership) while `ensure_not_last_admin`, which
+                        // counts admins among `workspace.members`, cannot see them.
+                        //
+                        // `lock_workspaces` was built for exactly this and its only
+                        // caller was the theme handler. First-run is precisely when
+                        // two people are most likely to connect at once.
+                        let _workspace_guard = this
+                            .domain_operations
+                            .backend_tx_manager
+                            .lock_workspaces()
+                            .await;
+
                         // This bypasses the permission check since authenticated users should be allowed
                         let mut ws = this
                             .domain_operations
