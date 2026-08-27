@@ -743,8 +743,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                                 new_content: new_content.clone(),
                                 edited_at,
                             };
-                            // Broadcast to all clients except the sender
-                            kernel.broadcast(notification.clone(), requester_cid);
+                            // Group-scoped, like the send path above. The
+                            // membership filter was added for SendGroupMessage
+                            // and never copied here, so an edit -- which
+                            // carries the full new_content -- fanned out to
+                            // every connected session regardless of membership.
+                            kernel.broadcast_to_group(
+                                notification.clone(),
+                                requester_cid,
+                                group_id.clone(),
+                            );
                             Ok(notification)
                         }
                         Ok(None) => Ok(WorkspaceProtocolResponse::Error(
@@ -813,8 +821,12 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                                 message_id: message_id.clone(),
                                 deleted_by: actor_user_id.to_string(),
                             };
-                            // Broadcast to all clients except the sender
-                            kernel.broadcast(notification.clone(), requester_cid);
+                            // Group-scoped, like the send path above.
+                            kernel.broadcast_to_group(
+                                notification.clone(),
+                                requester_cid,
+                                group_id.clone(),
+                            );
                             Ok(notification)
                         }
                         Ok(None) => Ok(WorkspaceProtocolResponse::Error(

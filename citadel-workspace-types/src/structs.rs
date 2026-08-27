@@ -916,10 +916,18 @@ impl Default for TreeSchema {
 }
 
 impl TreeSchema {
-    /// Check if a child type is allowed under the given parent type.
-    /// If no rules are defined for the parent type, allows all child types by default.
+    /// Whether a child type may be created under the given parent type.
+    ///
+    /// A schema with no rules at all constrains nothing -- that is what "no
+    /// schema configured" means, and it is the state a workspace boots in.
+    ///
+    /// A schema that HAS rules but none for this parent used to allow every
+    /// child type, which made an unruled parent a hole in an otherwise enforced
+    /// schema: anything created under it was unconstrained. Its sibling
+    /// `get_allowed_children` already answered "nothing" for the same case, so
+    /// the UI never offered those children while the validator accepted them.
+    /// The two now agree, and they agree on the closed answer.
     pub fn is_child_allowed(&self, parent_type: &str, child_type: &str) -> bool {
-        // If no rules are defined at all, allow everything
         if self.rules.is_empty() {
             return true;
         }
@@ -928,8 +936,7 @@ impl TreeSchema {
             .iter()
             .find(|r| r.parent_type == parent_type)
             .map(|r| r.allowed_child_types.contains(&child_type.to_string()))
-            // If no rule exists for this parent type, allow all children by default
-            .unwrap_or(true)
+            .unwrap_or(false)
     }
 
     /// Get allowed child types for a parent type

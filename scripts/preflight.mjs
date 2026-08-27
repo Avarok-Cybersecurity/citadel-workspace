@@ -77,18 +77,69 @@ const derived = ciScriptGates().flatMap((script) => {
   return [[name.replace(/^check-/, '').replace(/-/g, ' '), 'node', [script], ROOT]];
 });
 
+/**
+ * The cargo gates, which preflight ran none of.
+ *
+ * The header above named workspace-wide clippy as one of three gates found red
+ * only by hand — and then omitted it, invisibly: the derived list matches
+ * `node scripts/*.mjs` only, so the cargo steps never entered the list and so
+ * never reached the skip report either. A Rust-only edit passed preflight
+ * untouched and failed CI half an hour later. Both were red when this was
+ * written: an unformatted file in intersession-layer-messaging, an orphaned doc
+ * comment and four redundant field patterns in the server kernel.
+ *
+ * SKIP_WASM_BUILD is not a convenience. citadel-workspace-internal-service has
+ * a build script that runs wasm-pack and copies the result over the tracked
+ * artifacts in citadel-workspace-client-ts/pkg/ and citadel-workspaces/public/
+ * wasm — so a plain `cargo clippy` silently replaces the committed WASM the UI
+ * imports. A gate that mutates the tree it is checking is not one you can run
+ * before every commit.
+ *
+ * Skipped rather than failed when cargo is absent: a frontend-only checkout is
+ * a legitimate way to work here, and a missing toolchain is not a red gate.
+ */
+const CARGO_WORKSPACES = [
+  ['rust workspace', ROOT],
+  ['rust internal-service workspace', join(ROOT, 'citadel-internal-service')],
+];
+
+const haveCargo = spawnSync('cargo', ['--version'], { stdio: 'ignore' }).status === 0;
+
+const cargoChecks = CARGO_WORKSPACES.flatMap(([label, cwd]) => {
+  if (!haveCargo) {
+    skipped.push([`${label} fmt + clippy`, 'cargo is not on PATH']);
+    return [];
+  }
+  return [
+    [`${label} fmt`, 'cargo', ['fmt', '--all', '--check'], cwd],
+    [
+      `${label} clippy`,
+      'cargo',
+      ['clippy', '--workspace', '--all-targets', '--', '-D', 'warnings'],
+      cwd,
+    ],
+  ];
+});
+
 const CHECKS = [
   ...derived,
   ['event listeners have emitters', 'node', ['scripts/check-event-listeners-have-emitters.mjs'], UI],
   ['typecheck', 'npx', ['tsc', '-p', 'tsconfig.app.json', '--noEmit'], UI],
   ['eslint', 'npx', ['eslint', '.', '--max-warnings', '0'], UI],
   ['unit tests', 'npx', ['vitest', 'run'], UI],
+  ...cargoChecks,
 ];
 
 const failed = [];
 for (const [name, cmd, args, cwd] of CHECKS) {
   process.stdout.write(`  ${name} … `);
-  const run = spawnSync(cmd, args, { cwd, encoding: 'utf8' });
+  // SKIP_WASM_BUILD keeps the cargo gates from rebuilding the WASM client and
+  // overwriting the tracked artifacts under it. Harmless for everything else.
+  const run = spawnSync(cmd, args, {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, SKIP_WASM_BUILD: '1' },
+  });
   if (run.status === 0) {
     console.log('ok');
   } else {

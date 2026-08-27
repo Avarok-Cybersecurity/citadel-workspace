@@ -67,10 +67,7 @@ async fn admin_count<R: citadel_sdk::prelude::Ratchet>(
     .await
     .expect("ListMembers dispatch failed");
 
-    let WorkspaceProtocolResponse::Members {
-        members: members, ..
-    } = listed
-    else {
+    let WorkspaceProtocolResponse::Members { members, .. } = listed else {
         panic!("expected Members, got {listed:?}");
     };
     members.iter().filter(|m| m.role == UserRole::Admin).count()

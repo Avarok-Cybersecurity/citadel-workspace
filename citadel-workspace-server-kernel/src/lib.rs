@@ -380,11 +380,6 @@ pub mod config {
     }
 }
 
-/// Run the workspace server with the given configuration.
-///
-/// If `config_base_path` is provided, it is used to resolve relative paths in the config.
-/// This is typically the directory containing kernel.toml.
-
 /// Resolve the configured workspace structure, or `None` when none is configured.
 ///
 /// Extracted from the boot sequence so the decision is testable: a configured
@@ -421,12 +416,9 @@ pub fn resolve_workspace_structure(
                 }
                 Ok(Some((structure, Some(full_path))))
             }
-            Err(e) => {
-                return Err(NetworkError::msg(format!(
-                    "Failed to load workspace structure from directory: {}",
-                    e
-                )));
-            }
+            Err(e) => Err(NetworkError::msg(format!(
+                "Failed to load workspace structure from directory: {e}"
+            ))),
         }
     } else if let Some(structure_path) = &config.workspace_structure {
         // Legacy JSON file configuration
@@ -461,10 +453,9 @@ pub fn resolve_workspace_structure(
                 // A configured structure that cannot be read is a configuration
                 // error. Refusing to boot is the only outcome an operator can
                 // act on.
-                return Err(NetworkError::msg(format!(
-                    "Failed to load workspace structure from {:?}: {}",
-                    full_path, e
-                )));
+                Err(NetworkError::msg(format!(
+                    "Failed to load workspace structure from {full_path:?}: {e}"
+                )))
             }
         }
     } else {
