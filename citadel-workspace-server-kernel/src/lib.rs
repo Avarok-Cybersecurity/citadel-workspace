@@ -377,6 +377,92 @@ pub mod config {
 ///
 /// If `config_base_path` is provided, it is used to resolve relative paths in the config.
 /// This is typically the directory containing kernel.toml.
+
+/// Resolve the configured workspace structure, or `None` when none is configured.
+///
+/// Extracted from the boot sequence so the decision is testable: a configured
+/// structure that cannot be read must STOP the boot, and that was true of the
+/// `content_base_dir` branch and not of the deprecated `workspace_structure`
+/// one, which logged at info and carried on.
+///
+/// Carrying on is not harmless. The seed-pending marker is armed only when a
+/// structure actually loaded — deliberately, so that a later deploy adding a
+/// structure cannot inject defaults into a workspace that has been live for
+/// weeks. So a first boot that swallowed the error records NEITHER marker; the
+/// next boot sees none, takes the "predates the seed markers" back-fill branch,
+/// and stamps the workspace seeded. It then has no offices, permanently.
+pub fn resolve_workspace_structure(
+    config: &ServerConfig,
+    config_base_path: Option<&std::path::Path>,
+) -> Result<Option<(WorkspaceStructureConfig, Option<std::path::PathBuf>)>, NetworkError> {
+    if let Some(content_dir) = &config.content_base_dir {
+        // New directory-based configuration
+        let full_path = if let Some(base) = config_base_path {
+            base.join(content_dir)
+        } else {
+            std::path::PathBuf::from(content_dir)
+        };
+
+        info!(target: "citadel", "Loading workspace structure from directory: {:?}", full_path);
+        match WorkspaceStructureConfig::from_directory(&full_path) {
+            Ok(structure) => {
+                info!(target: "citadel", "Loaded workspace structure: {} with {} offices (directory-based)",
+                    structure.name, structure.offices.len());
+                for office in &structure.offices {
+                    info!(target: "citadel", "  - Office '{}' with {} rooms",
+                        office.name, office.rooms.len());
+                }
+                Ok(Some((structure, Some(full_path))))
+            }
+            Err(e) => {
+                return Err(NetworkError::msg(format!(
+                    "Failed to load workspace structure from directory: {}",
+                    e
+                )));
+            }
+        }
+    } else if let Some(structure_path) = &config.workspace_structure {
+        // Legacy JSON file configuration
+        let full_path = if let Some(base) = config_base_path {
+            base.join(structure_path)
+        } else {
+            std::path::PathBuf::from(structure_path)
+        };
+
+        info!(target: "citadel", "Loading workspace structure from file: {:?} (deprecated, use content_base_dir)", full_path);
+        match WorkspaceStructureConfig::from_file(&full_path) {
+            Ok(structure) => {
+                info!(target: "citadel", "Loaded workspace structure: {} with {} offices",
+                    structure.name, structure.offices.len());
+                Ok(Some((structure, full_path.parent().map(|p| p.to_path_buf()))))
+            }
+            Err(e) => {
+                // Fatal, exactly as the `content_base_dir` branch above is.
+                //
+                // Continuing without a structure looks harmless and is not: the
+                // seed-pending marker is armed only when a structure loaded, so
+                // a first boot that swallowed this error records NEITHER marker.
+                // The next boot then sees no marker at all, takes the
+                // "predates the markers" back-fill branch, and stamps the
+                // workspace seeded — permanently. The result is a workspace with
+                // no offices, forever, reachable only by wiping the backend, and
+                // announced by a single info-level line saying "Warning".
+                //
+                // A configured structure that cannot be read is a configuration
+                // error. Refusing to boot is the only outcome an operator can
+                // act on.
+                return Err(NetworkError::msg(format!(
+                    "Failed to load workspace structure from {:?}: {}",
+                    full_path, e
+                )));
+            }
+        }
+    } else {
+        info!(target: "citadel", "No workspace structure configured. Use content_base_dir or workspace_structure in kernel.toml");
+        Ok(None)
+    }
+}
+
 pub async fn run_server(config: ServerConfig) -> Result<(), NetworkError> {
     run_server_with_base_path(config, None).await
 }
@@ -405,57 +491,7 @@ pub async fn run_server_with_base_path(
         ))
     })?;
 
-    // Load workspace structure config - prefer content_base_dir over workspace_structure
-    let workspace_structure = if let Some(content_dir) = &config.content_base_dir {
-        // New directory-based configuration
-        let full_path = if let Some(base) = config_base_path {
-            base.join(content_dir)
-        } else {
-            std::path::PathBuf::from(content_dir)
-        };
-
-        info!(target: "citadel", "Loading workspace structure from directory: {:?}", full_path);
-        match WorkspaceStructureConfig::from_directory(&full_path) {
-            Ok(structure) => {
-                info!(target: "citadel", "Loaded workspace structure: {} with {} offices (directory-based)",
-                    structure.name, structure.offices.len());
-                for office in &structure.offices {
-                    info!(target: "citadel", "  - Office '{}' with {} rooms",
-                        office.name, office.rooms.len());
-                }
-                Some((structure, Some(full_path)))
-            }
-            Err(e) => {
-                return Err(NetworkError::msg(format!(
-                    "Failed to load workspace structure from directory: {}",
-                    e
-                )));
-            }
-        }
-    } else if let Some(structure_path) = &config.workspace_structure {
-        // Legacy JSON file configuration
-        let full_path = if let Some(base) = config_base_path {
-            base.join(structure_path)
-        } else {
-            std::path::PathBuf::from(structure_path)
-        };
-
-        info!(target: "citadel", "Loading workspace structure from file: {:?} (deprecated, use content_base_dir)", full_path);
-        match WorkspaceStructureConfig::from_file(&full_path) {
-            Ok(structure) => {
-                info!(target: "citadel", "Loaded workspace structure: {} with {} offices",
-                    structure.name, structure.offices.len());
-                Some((structure, full_path.parent().map(|p| p.to_path_buf())))
-            }
-            Err(e) => {
-                info!(target: "citadel", "Warning: Failed to load workspace structure: {}. Continuing without pre-configured structure.", e);
-                None
-            }
-        }
-    } else {
-        info!(target: "citadel", "No workspace structure configured. Use content_base_dir or workspace_structure in kernel.toml");
-        None
-    };
+    let workspace_structure = resolve_workspace_structure(&config, config_base_path)?;
 
     // Select backend type from env-var override (preferred) or config file.
     let backend_type_for_node_builder = select_backend_type(
