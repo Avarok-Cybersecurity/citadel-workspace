@@ -283,9 +283,20 @@ services:
   #
   # Setup:
   #   1. Create a tunnel in Cloudflare Zero Trust dashboard
-  #   2. Add public hostname rules:
+  #   2. Add ONE public hostname rule:
   #      - yourdomain.com      → http://localhost:8080
-  #      - yourdomain.com/ws*  → ws://localhost:12345
+  #
+  #      DO NOT add a `/ws*` rule to the agent on :12345.
+  #
+  #      These steps used to instruct exactly that, which contradicted the
+  #      capitalised warning at the top of this file: the agent's control plane
+  #      is unauthenticated, it holds every connected user's ratchet keys, and
+  #      a tunnel rule reaches it directly — bypassing nginx and the fail-closed
+  #      WS_PROXY_ENABLED switch that exists to stop precisely this. The switch
+  #      was added to close that door; the setup steps quietly reopened it one
+  #      layer down. Each user runs their own agent locally; nothing about this
+  #      deployment needs a public one.
+  #
   #      (Docker service names like `ui:8080` would only resolve on
   #      a bridge network — this compose file uses `network_mode:
   #      host` for every service including cloudflared, so the
@@ -348,8 +359,8 @@ services:
     depends_on:
       ui:
         condition: service_healthy
-      internal-service:
-        condition: service_healthy
+      # NOT internal-service: the tunnel serves the UI only, and waiting on the
+      # agent implied a route to it that must not exist (see the setup steps).
     network_mode: host
     profiles:
       - tunnel

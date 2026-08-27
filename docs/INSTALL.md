@@ -60,8 +60,19 @@ Optional: `IMAGE_TAG` (defaults to `latest`; pin it to `sha-<commit>` to control
 exactly what runs), `WORKSPACE_BIND_ADDR`, `INTERNAL_SERVICE_PORT`, and
 `TUNNEL_TOKEN` with `--profile tunnel` to expose it via Cloudflare Tunnel.
 
-The server binds `127.0.0.1` by default. Publishing it means putting a tunnel or
-reverse proxy in front, not widening the bind address.
+**If remote people will use this workspace, set `WORKSPACE_BIND_ADDR=0.0.0.0:12349`
+in `.env` and open that port on your firewall.**
+
+The server binds `127.0.0.1` by default, which is correct only when everyone
+using it is on the same machine. Each user runs their own local agent, and that
+agent dials your server directly over the Citadel protocol — so unlike an
+ordinary web app, there is nothing a tunnel or HTTP reverse proxy can do here.
+The tunnel profile publishes the **UI** on `:8080`; it carries no route to
+`:12349` and could not carry the raw protocol if it did.
+
+This paragraph used to say to put a tunnel or proxy in front "not widening the
+bind address", which left every remote user with connection refused and pointed
+away from the one line that fixes it.
 
 ### Back up before you upgrade
 

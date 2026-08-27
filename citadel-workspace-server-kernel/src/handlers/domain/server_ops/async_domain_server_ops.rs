@@ -798,13 +798,40 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
 
     async fn delete_workspace(
         &self,
-        _user_id: &str,
+        user_id: &str,
         workspace_id: &str,
         workspace_master_password: String,
     ) -> Result<(), NetworkError> {
         // System Protection: Prevent deletion of the root workspace
         if workspace_id == crate::WORKSPACE_ROOT_ID {
             return Err(NetworkError::msg("Cannot delete the root workspace"));
+        }
+
+        // WHO is asking, not just what they know.
+        //
+        // The actor used to be discarded — the parameter was literally
+        // `_user_id` — so the password below was the entire gate. And
+        // `create_workspace` stores ROOT's master password against every
+        // workspace it mints, so one shared secret authorised deleting any
+        // non-root workspace, by any authenticated account, member or not.
+        //
+        // The password stays as a second factor; it is no longer the only one.
+        // Owner as well as admin, because a workspace's owner is not
+        // necessarily a global admin and deleting their own workspace is the
+        // ordinary case.
+        let is_admin = self.is_admin(user_id).await.unwrap_or(false);
+        let is_owner = self
+            .backend_tx_manager
+            .get_workspace(workspace_id)
+            .await
+            .ok()
+            .flatten()
+            .map(|w| w.owner_id == user_id)
+            .unwrap_or(false);
+        if !is_admin && !is_owner {
+            return Err(NetworkError::msg(
+                "Permission denied: only an admin or the workspace owner may delete it",
+            ));
         }
 
         // Verify master access password
