@@ -22,7 +22,6 @@ use common::workspace_test_utils::*;
 ///
 /// These drive the request layer as a NON-admin, because `check_entity_permission`
 /// short-circuits for admins and would make every assertion below vacuous.
-
 async fn office_with_editor<R: citadel_sdk::prelude::Ratchet>(
     kernel: &citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorkspaceServerKernel<R>,
     user: &str,

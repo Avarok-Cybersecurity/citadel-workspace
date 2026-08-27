@@ -5,26 +5,26 @@ use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolRespons
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
-/// # A workspace must never reach zero administrators
-///
-/// The guard's own doc explains why that state is terminal: *"Demoting or
-/// removing the last Admin is unrecoverable: promotion requires an admin, so
-/// there is no way back."*
-///
-/// SCOPE, stated plainly: this covers the SEQUENTIAL invariant only — that the
-/// guard refuses a removal which would empty the admin set. It does NOT cover
-/// the concurrent case that motivated the lock, where two admins remove each
-/// other, both counts complete before either write, and both pass.
-///
-/// That interleaving cannot be asserted deterministically from here: the window
-/// between the count and the write is scheduler-dependent, and a probabilistic
-/// test that usually passes is worse than none — it reads as coverage. Verified
-/// by control: this test passes with the lock removed, which is exactly why it
-/// must not be described as testing the race.
-///
-/// What protects the concurrent case is holding `lock_workspaces` across the
-/// check AND the write, in all three role writers. The lock primitive itself has
-/// a 25-way concurrency test in transaction/mod.rs.
+// # A workspace must never reach zero administrators
+//
+// The guard's own doc explains why that state is terminal: *"Demoting or
+// removing the last Admin is unrecoverable: promotion requires an admin, so
+// there is no way back."*
+//
+// SCOPE, stated plainly: this covers the SEQUENTIAL invariant only — that the
+// guard refuses a removal which would empty the admin set. It does NOT cover
+// the concurrent case that motivated the lock, where two admins remove each
+// other, both counts complete before either write, and both pass.
+//
+// That interleaving cannot be asserted deterministically from here: the window
+// between the count and the write is scheduler-dependent, and a probabilistic
+// test that usually passes is worse than none — it reads as coverage. Verified
+// by control: this test passes with the lock removed, which is exactly why it
+// must not be described as testing the race.
+//
+// What protects the concurrent case is holding `lock_workspaces` across the
+// check AND the write, in all three role writers. The lock primitive itself has
+// a 25-way concurrency test in transaction/mod.rs.
 
 /// Two admins in the root workspace, plus the seeded test admin.
 async fn seed_two_admins<R: citadel_sdk::prelude::Ratchet>(
@@ -107,4 +107,51 @@ async fn removing_the_last_admin_is_refused_sequentially() {
         "the workspace reached {after} admins after {removed} removals; \
          zero admins is unrecoverable"
     );
+}
+
+/// The lock IS the protection, so the lock is what this asserts.
+///
+/// The docstring at the top of this file states the contract — `lock_workspaces`
+/// held across the check AND the write, "in all three role writers" — and that
+/// was true in only one of them. `update_workspace_member_role` took no lock at
+/// all, and `add_user_to_domain`'s guard is scoped to its root branch and has
+/// dropped by the time the demote check runs.
+///
+/// A concurrent test is deliberately not the answer here: this file already
+/// argues that a probabilistic race test which usually passes is worse than
+/// none, because it reads as coverage. Checking the source is weaker than
+/// checking behaviour, and it is what remains once that argument is accepted.
+#[test]
+fn every_role_writer_holds_the_workspace_lock() {
+    let source = include_str!("../src/handlers/domain/server_ops/async_domain_server_ops.rs");
+
+    // Comments stripped first: this campaign has already produced one source
+    // assertion that matched the comment explaining the code's absence.
+    let code: String = source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    for writer in [
+        "async fn update_workspace_member_role",
+        "async fn remove_user_from_domain",
+    ] {
+        let start = code
+            .find(writer)
+            .unwrap_or_else(|| panic!("{writer} no longer exists; update this test"));
+        // Up to the next top-level `async fn`, so a lock taken by a NEIGHBOUR
+        // cannot satisfy this.
+        let rest = &code[start + writer.len()..];
+        let end = rest.find("\n    async fn ").unwrap_or(rest.len());
+        let body = &rest[..end];
+
+        assert!(
+            body.contains("lock_workspaces()"),
+            "{writer} does not hold lock_workspaces(), so its last-admin check \
+             and its write can interleave with another role writer — two admins \
+             demoting each other both pass the guard and the workspace is left \
+             with zero admins, which is unrecoverable."
+        );
+    }
 }

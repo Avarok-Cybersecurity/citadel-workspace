@@ -4,21 +4,21 @@ use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolRespons
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
-/// # Membership visibility across the two workspace representations
-///
-/// The root workspace is stored TWICE: once as a `Workspace` record and once,
-/// denormalized, inside `Domain::Workspace`. `UpdateWorkspaceTheme` documents
-/// keeping the two in sync as an invariant that "every other workspace mutator
-/// also writes" — but `add_user_to_domain` and `remove_user_from_domain` wrote
-/// only the `Workspace` record, and `ListMembers` reads the `Domain` copy FIRST.
-///
-/// The result needed no race: an added member never appeared in the roster and a
-/// removed one never left it, while `is_member_of_domain` — which reads the
-/// fresh `Workspace` record — enforced the true list. The displayed roster and
-/// the enforced roster disagreed permanently, in both directions.
-///
-/// These tests read through `ListMembers` rather than the backend, because the
-/// backend is exactly where the two copies still look fine individually.
+// # Membership visibility across the two workspace representations
+//
+// The root workspace is stored TWICE: once as a `Workspace` record and once,
+// denormalized, inside `Domain::Workspace`. `UpdateWorkspaceTheme` documents
+// keeping the two in sync as an invariant that "every other workspace mutator
+// also writes" — but `add_user_to_domain` and `remove_user_from_domain` wrote
+// only the `Workspace` record, and `ListMembers` reads the `Domain` copy FIRST.
+//
+// The result needed no race: an added member never appeared in the roster and a
+// removed one never left it, while `is_member_of_domain` — which reads the
+// fresh `Workspace` record — enforced the true list. The displayed roster and
+// the enforced roster disagreed permanently, in both directions.
+//
+// These tests read through `ListMembers` rather than the backend, because the
+// backend is exactly where the two copies still look fine individually.
 
 /// The workspace-root roster exactly as a client sees it, via ListMembers.
 async fn roster<R: citadel_sdk::prelude::Ratchet>(

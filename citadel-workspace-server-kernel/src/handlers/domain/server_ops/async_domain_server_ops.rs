@@ -461,6 +461,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             ));
         }
 
+        // Held across the check AND the write below. `last_admin_race_test.rs`
+        // states the contract — "in all three role writers" — and this was the
+        // writer that never took it: two admins demoting each other both counted
+        // two admins, both passed the guard, and both wrote. Zero admins is a
+        // state this file's own documentation calls unrecoverable, because
+        // promotion requires an admin.
+        let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+
         if role != UserRole::Admin {
             self.ensure_not_last_admin(target_user_id, "demote").await?;
         }
