@@ -576,6 +576,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             reply_to,
             mentions,
         } => {
+            use crate::kernel::group_access::{authorize_group_access, GROUP_ACCESS_DENIED};
+            if authorize_group_access(kernel, actor_user_id, group_id)
+                .await
+                .is_none()
+            {
+                return Ok(WorkspaceProtocolResponse::Error(
+                    GROUP_ACCESS_DENIED.to_string(),
+                ));
+            }
+
             use citadel_workspace_types::GroupMessage;
             use uuid::Uuid;
 
@@ -621,8 +631,13 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         group_id: group_id.clone(),
                         message: message.clone(),
                     };
-                    // Broadcast to all clients except the sender
-                    kernel.broadcast(notification.clone(), requester_cid);
+                    // Group-scoped: a message in a private room used to be
+                    // pushed to every connected session regardless of membership.
+                    kernel.broadcast_to_group(
+                        notification.clone(),
+                        requester_cid,
+                        group_id.clone(),
+                    );
                     Ok(notification)
                 }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
@@ -637,6 +652,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             message_id,
             new_content,
         } => {
+            use crate::kernel::group_access::{authorize_group_access, GROUP_ACCESS_DENIED};
+            if authorize_group_access(kernel, actor_user_id, group_id)
+                .await
+                .is_none()
+            {
+                return Ok(WorkspaceProtocolResponse::Error(
+                    GROUP_ACCESS_DENIED.to_string(),
+                ));
+            }
+
             // Get the original message to verify ownership
             match kernel
                 .domain_operations
@@ -703,6 +728,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             group_id,
             message_id,
         } => {
+            use crate::kernel::group_access::{authorize_group_access, GROUP_ACCESS_DENIED};
+            if authorize_group_access(kernel, actor_user_id, group_id)
+                .await
+                .is_none()
+            {
+                return Ok(WorkspaceProtocolResponse::Error(
+                    GROUP_ACCESS_DENIED.to_string(),
+                ));
+            }
+
             // Get the original message to verify ownership
             match kernel
                 .domain_operations
@@ -764,6 +799,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             before_timestamp,
             limit,
         } => {
+            use crate::kernel::group_access::{authorize_group_access, GROUP_ACCESS_DENIED};
+            if authorize_group_access(kernel, actor_user_id, group_id)
+                .await
+                .is_none()
+            {
+                return Ok(WorkspaceProtocolResponse::Error(
+                    GROUP_ACCESS_DENIED.to_string(),
+                ));
+            }
+
             let limit = limit.unwrap_or(50).min(100); // Default 50, max 100
 
             match kernel
@@ -788,6 +833,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             group_id,
             parent_message_id,
         } => {
+            use crate::kernel::group_access::{authorize_group_access, GROUP_ACCESS_DENIED};
+            if authorize_group_access(kernel, actor_user_id, group_id)
+                .await
+                .is_none()
+            {
+                return Ok(WorkspaceProtocolResponse::Error(
+                    GROUP_ACCESS_DENIED.to_string(),
+                ));
+            }
+
             match kernel
                 .domain_operations
                 .backend_tx_manager
@@ -845,10 +900,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     // stayed invisible to every other user until they signed in
                     // again. The client handler for this variant already exists;
                     // it just never fired for anyone but the requester.
-                    kernel.broadcast(
-                        WorkspaceProtocolResponse::Node(node.clone()),
-                        requester_cid,
-                    );
+                    kernel.broadcast(WorkspaceProtocolResponse::Node(node.clone()), requester_cid);
                     Ok(WorkspaceProtocolResponse::Node(node))
                 }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(

@@ -63,6 +63,21 @@ pub(crate) fn validate_content_segment(segment: &str) -> Result<(), NetworkError
     Ok(())
 }
 
+/// Who a broadcast is for.
+///
+/// Group chat used to go to `Everyone`: a message posted in a private room was
+/// pushed to every connected session, whatever rooms they belonged to. The
+/// audience is carried on the message so the per-connection forwarding loop —
+/// the only place that knows which user it is writing to — can drop what that
+/// user is not entitled to see.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BroadcastAudience {
+    /// Every connected session (workspace-wide structure and status changes).
+    Everyone,
+    /// Only sessions whose user may view the node owning this chat channel.
+    Group(String),
+}
+
 /// Message for broadcasting workspace updates to connected clients
 #[derive(Clone, Debug)]
 pub struct BroadcastMessage {
@@ -70,6 +85,8 @@ pub struct BroadcastMessage {
     pub response: WorkspaceProtocolResponse,
     /// The CID to exclude from the broadcast (the originator)
     pub exclude_cid: Option<u64>,
+    /// Which connections may receive it
+    pub audience: BroadcastAudience,
 }
 
 /// Async version of WorkspaceServerKernel that uses backend persistence
@@ -187,9 +204,29 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     /// Broadcast a response to all connected clients (except the excluded CID)
     pub fn broadcast(&self, response: WorkspaceProtocolResponse, exclude_cid: Option<u64>) {
+        self.broadcast_to(response, exclude_cid, BroadcastAudience::Everyone)
+    }
+
+    /// Broadcast a response only to sessions entitled to see `group_id`'s chat.
+    pub fn broadcast_to_group(
+        &self,
+        response: WorkspaceProtocolResponse,
+        exclude_cid: Option<u64>,
+        group_id: String,
+    ) {
+        self.broadcast_to(response, exclude_cid, BroadcastAudience::Group(group_id))
+    }
+
+    fn broadcast_to(
+        &self,
+        response: WorkspaceProtocolResponse,
+        exclude_cid: Option<u64>,
+        audience: BroadcastAudience,
+    ) {
         let msg = BroadcastMessage {
             response,
             exclude_cid,
+            audience,
         };
         if let Err(e) = self.broadcast_tx.send(msg) {
             // Only log when there are active receivers (0 receivers at startup is expected)
@@ -462,7 +499,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// Returns an empty vec when the chain cannot be resolved, which the caller
     /// treats as "do not write" rather than guessing at a path.
     pub async fn content_path_segments(&self, node_id: &str) -> Vec<String> {
-        let Ok(nodes) = self.domain_operations.backend_tx_manager.get_all_nodes().await else {
+        let Ok(nodes) = self
+            .domain_operations
+            .backend_tx_manager
+            .get_all_nodes()
+            .await
+        else {
             return Vec::new();
         };
 
@@ -478,7 +520,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             }
             let Some(node) = nodes.get(&id) else { break };
             segments.push(node.name.clone());
-            current = node.parent_id.clone().filter(|p| p != crate::WORKSPACE_ROOT_ID);
+            current = node
+                .parent_id
+                .clone()
+                .filter(|p| p != crate::WORKSPACE_ROOT_ID);
         }
 
         segments.reverse();
@@ -1414,6 +1459,18 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                         // Skip if this connection is excluded (the originator)
                                         if broadcast_msg.exclude_cid == Some(current_cid) {
                                             continue;
+                                        }
+
+                                        // A group-scoped broadcast reaches only
+                                        // sessions entitled to that channel. This
+                                        // is the one place that knows which user
+                                        // the socket belongs to, so it is the only
+                                        // place the check can be made.
+                                        if let BroadcastAudience::Group(ref group_id) = broadcast_msg.audience {
+                                            use crate::kernel::group_access::authorize_group_access;
+                                            if authorize_group_access(&this, &user_id, group_id).await.is_none() {
+                                                continue;
+                                            }
                                         }
 
                                         // Forward the broadcast to this client
