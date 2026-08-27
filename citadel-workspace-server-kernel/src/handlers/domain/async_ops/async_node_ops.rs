@@ -155,6 +155,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             members: vec![String::from(user_id)],
             children: vec![],
             mdx_content: String::new(),
+            mdx_content_hash: None,
             rules: None,
             chat_enabled: false,
             chat_channel_id: None,
@@ -235,6 +236,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                 members,
                 children,
                 mdx_content: String::new(),
+                mdx_content_hash: None,
                 rules: None,
                 chat_enabled: false,
                 chat_channel_id: None,
@@ -327,6 +329,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         }
         if let Some(new_mdx) = mdx_content {
             node.mdx_content = String::from(new_mdx);
+            // Hashed HERE, where the content is stored, and nowhere else. The
+            // client re-hashes before it executes the document and refuses on a
+            // mismatch, so a document altered between this write and that
+            // execution does not run. Computed from the value just assigned
+            // rather than from `new_mdx`, so the two can never disagree.
+            node.mdx_content_hash = Some(citadel_workspace_types::structs::mdx_content_hash(
+                &node.mdx_content,
+            ));
         }
         if let Some(new_rules) = rules {
             node.rules = Some(String::from(new_rules));
@@ -734,6 +744,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                     members,
                     children,
                     mdx_content: String::new(),
+                    mdx_content_hash: None,
                     rules: None,
                     chat_enabled: false,
                     chat_channel_id: None,
@@ -775,6 +786,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                         members: vec![],
                         children,
                         mdx_content: String::new(),
+                        mdx_content_hash: None,
                         rules: None,
                         chat_enabled: false,
                         chat_channel_id: None,
@@ -965,6 +977,7 @@ mod build_tree_tests {
             members: vec![],
             children: children.iter().map(|s| s.to_string()).collect(),
             mdx_content: String::new(),
+            mdx_content_hash: None,
             rules: None,
             chat_enabled: false,
             chat_channel_id: None,

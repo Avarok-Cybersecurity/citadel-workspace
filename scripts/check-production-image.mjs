@@ -86,13 +86,13 @@ async function main() {
     record('the browser grants microphone to this origin', media.microphone === true, `allowsFeature=${media.microphone}`);
     record('the browser grants display-capture', media.display === true, `allowsFeature=${media.display}`);
 
-    // CSP violations, minus the one that is understood and deliberate.
+    // CSP violations.
     //
-    // cbor-x probes for `new Function` inside a try/catch and falls back to its
-    // interpreted path when the policy refuses. Chrome reports the refusal
-    // anyway. Allowing 'unsafe-eval' to silence it would trade a real security
-    // boundary for a quieter console, so the probe is expected and skipped —
-    // but ONLY the eval kind, so a genuine violation still fails this.
+    // The eval exemption below is now historical: 'unsafe-eval' is granted, so
+    // neither cbor-x's `new Function` probe nor the MDX renderer produces a
+    // violation any more. It stays only because a browser that reports an eval
+    // refusal for some other reason should not fail this check on a policy that
+    // permits eval — every other kind of violation still does.
     const csp = issues.filter((i) => i.code === 'ContentSecurityPolicyIssue');
     const unexpected = csp.filter((i) => {
       const d = i.details?.contentSecurityPolicyIssueDetails ?? {};

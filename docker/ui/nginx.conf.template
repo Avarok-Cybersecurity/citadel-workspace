@@ -112,6 +112,21 @@ server {
     # CSP rationale:
     #   * script-src 'wasm-unsafe-eval' - WebAssembly.instantiate is blocked by
     #     default CSP without it, and the Citadel WASM client will not initialise.
+    #   * script-src 'unsafe-eval'      - workspace documents are MDX, and
+    #     rendering one means EXECUTING it: @mdx-js/mdx compiles to JavaScript
+    #     and runs it through the Function constructor. Without this every
+    #     document body was blank in production while rendering perfectly in
+    #     dev, where HMR already adds it. An explicit product decision to render
+    #     client-side, taken with the trade-off understood: this permits eval
+    #     for the whole origin, so an XSS anywhere in the app is no longer
+    #     blocked from calling it. The compensating control is the document
+    #     integrity check in lib/mdx-integrity.ts - a document is hashed when
+    #     the server stores it and re-hashed before it is executed, so content
+    #     altered between the server and the renderer refuses to run.
+    #   * frame-ancestors 'none'        - this app must not be embedded. It is a
+    #     PWA holding a live authenticated session; framing it is only ever
+    #     clickjacking. X-Frame-Options: DENY says the same thing to browsers
+    #     that predate frame-ancestors.
     #   * style-src 'unsafe-inline'     - React/Radix emit inline styles.
     #   * connect-src 'self'            - the app's only outbound connection is the
     #     WebSocket to the agent, and that is now SAME-ORIGIN (see /ws below), so
@@ -135,11 +150,11 @@ server {
     #
     #   * geolocation=() - genuinely unused, so it stays denied.
     # -------------------------------------------------------------------------
-    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Frame-Options "DENY" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
 
     # -------------------------------------------------------------------------
     # The agent socket.
@@ -260,11 +275,11 @@ server {
     location /assets/ {
         expires 1y;
         add_header Cache-Control "public, immutable" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
     }
 
     # WASM files
@@ -283,11 +298,11 @@ server {
         # `no-cache` still caches; it requires revalidation, so an unchanged
         # binary costs a 304 rather than 2.3 MB.
         add_header Cache-Control "public, no-cache" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
     }
 
     # ---------------------------------------------------------------------------
@@ -310,22 +325,22 @@ server {
     # ---------------------------------------------------------------------------
     location = /sw.js {
         add_header Cache-Control "no-cache, no-store, must-revalidate" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
     }
 
     location = /manifest.webmanifest {
         types { application/manifest+json webmanifest; }
         default_type application/manifest+json;
         add_header Cache-Control "public, max-age=3600" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
     }
 
     # SPA fallback - serve index.html for all non-file routes.
@@ -361,10 +376,10 @@ server {
     location / {
         try_files $uri $uri/ /index.html;
         add_header Cache-Control "public, no-cache" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
     }
 }

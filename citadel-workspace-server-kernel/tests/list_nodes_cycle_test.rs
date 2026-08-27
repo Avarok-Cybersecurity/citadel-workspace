@@ -36,6 +36,7 @@ fn mk_node(id: &str, parent: Option<&str>, children: Vec<String>, depth: u32) ->
         members: vec![],
         children,
         mdx_content: String::new(),
+        mdx_content_hash: None,
         rules: None,
         chat_enabled: false,
         chat_channel_id: None,

@@ -957,6 +957,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 owner_id: UNASSIGNED_OWNER.to_string(),
                 members: vec![],
                 children: Vec::new(),
+                // Seeded content is hashed like any other, so a document that
+                // shipped with the workspace is verified on the same terms as
+                // one a member wrote.
+                mdx_content_hash: Some(citadel_workspace_types::structs::mdx_content_hash(
+                    &mdx_content,
+                )),
                 mdx_content,
                 rules: office_config.rules.clone(),
                 chat_enabled: office_config.chat_enabled,
@@ -1033,6 +1039,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                     owner_id: UNASSIGNED_OWNER.to_string(),
                     members: vec![],
                     children: Vec::new(),
+                    mdx_content_hash: Some(citadel_workspace_types::structs::mdx_content_hash(
+                        &room_mdx_content,
+                    )),
                     mdx_content: room_mdx_content,
                     rules: room_config.rules.clone(),
                     chat_enabled: room_config.chat_enabled,
@@ -1900,6 +1909,7 @@ mod structure_seed_idempotency_tests {
             members: vec![],
             children: Vec::new(),
             mdx_content: String::new(),
+            mdx_content_hash: None,
             rules: None,
             chat_enabled: true,
             chat_channel_id: None,

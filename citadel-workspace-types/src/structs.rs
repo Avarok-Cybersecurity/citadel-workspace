@@ -756,6 +756,23 @@ pub struct DomainNode {
     // Content
     #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
     pub mdx_content: String,
+    /// SHA-256 of `mdx_content`, hex-encoded, computed by the SERVER on every
+    /// write.
+    ///
+    /// Rendering a document means executing it: the client compiles the MDX and
+    /// runs the result, so the bytes that reach the renderer must be the bytes
+    /// the server stored. The client re-hashes before it executes and refuses
+    /// on a mismatch.
+    ///
+    /// What this catches is tampering BETWEEN the server and the renderer — a
+    /// corrupted IndexedDB cache, a store-layer bug, another tab writing over
+    /// the content. It is not a defence against an attacker who already has
+    /// script execution in the page, who could patch the check itself; and it
+    /// says nothing about whether the document was hostile when it was written.
+    ///
+    /// `Option` because documents stored before this existed have no hash, and
+    /// a client must be able to tell "not hashed" from "hash does not match".
+    pub mdx_content_hash: Option<String>,
     /// Rules displayed to users
     pub rules: Option<String>,
     /// Whether group chat is enabled for this node
@@ -1200,5 +1217,65 @@ impl Domain {
         match self {
             Domain::Workspace { workspace } => Some(workspace),
         }
+    }
+}
+
+/// The canonical document-integrity hash.
+///
+/// One function, used by the server when it stores a document and mirrored by
+/// the client before it executes one. Hex-encoded SHA-256 of the UTF-8 bytes,
+/// with no normalisation of any kind: normalising here and not there — or
+/// differently there — would make correct documents refuse to render, which is
+/// a worse failure than the one this prevents.
+pub fn mdx_content_hash(content: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(content.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+#[cfg(test)]
+mod mdx_content_hash_tests {
+    use super::mdx_content_hash;
+
+    #[test]
+    fn is_stable_for_the_same_content() {
+        assert_eq!(mdx_content_hash("# Hello"), mdx_content_hash("# Hello"));
+    }
+
+    #[test]
+    fn differs_for_different_content() {
+        assert_ne!(mdx_content_hash("# Hello"), mdx_content_hash("# Hello "));
+    }
+
+    #[test]
+    fn is_the_known_sha256_of_the_empty_string() {
+        // Pinned against the published constant rather than against our own
+        // output: a test that only compares this function to itself would pass
+        // just as happily if the algorithm were swapped for something weaker.
+        assert_eq!(
+            mdx_content_hash(""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    #[test]
+    fn is_the_known_sha256_of_abc() {
+        assert_eq!(
+            mdx_content_hash("abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn does_not_normalise_unicode() {
+        // é as one codepoint vs e + combining acute. They render identically and
+        // hash differently, deliberately: the client must apply the same rule,
+        // and "no normalisation" is the only rule both ends can implement
+        // without a shared library.
+        assert_ne!(
+            mdx_content_hash("caf\u{00e9}"),
+            mdx_content_hash("cafe\u{0301}")
+        );
     }
 }

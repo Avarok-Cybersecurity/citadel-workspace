@@ -801,6 +801,7 @@ mod tests {
             members: vec![],
             children: vec![],
             mdx_content: String::new(),
+            mdx_content_hash: None,
             rules: None,
             chat_enabled: false,
             chat_channel_id: None,

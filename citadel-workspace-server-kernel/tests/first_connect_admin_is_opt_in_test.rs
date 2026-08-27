@@ -95,11 +95,17 @@ async fn a_kernel_is_not_permissive_until_told_otherwise() {
     );
 
     kernel.set_first_connect_admin(true);
-    assert!(kernel.first_connect_admin(), "and must honour being told to");
+    assert!(
+        kernel.first_connect_admin(),
+        "and must honour being told to"
+    );
 
     // Clones share the setting: connection tasks work from a clone, so a clone
     // that lost it would silently reinstate the safe-looking default while the
     // operator had asked for the other one.
     let clone = kernel.clone();
-    assert!(clone.first_connect_admin(), "the setting must survive a clone");
+    assert!(
+        clone.first_connect_admin(),
+        "the setting must survive a clone"
+    );
 }

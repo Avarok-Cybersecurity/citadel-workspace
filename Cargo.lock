@@ -890,8 +890,10 @@ dependencies = [
  "citadel-internal-service-types",
  "citadel_user",
  "custom_debug",
+ "hex",
  "serde",
  "serde_json",
+ "sha2",
  "ts-rs",
  "uuid",
 ]
