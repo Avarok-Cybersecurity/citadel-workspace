@@ -24,6 +24,8 @@
  * itself; only something outside can.
  */
 
+import net from 'node:net';
+
 const TARGETS = [
   { name: 'UI', url: 'http://127.0.0.1:5291/', hint: 'the app itself' },
   { name: 'internal service', url: 'http://127.0.0.1:12345/', hint: 'the local agent', tcpOnly: true },
@@ -31,18 +33,51 @@ const TARGETS = [
 
 const TIMEOUT_MS = 4000;
 
+/**
+ * A raw TCP connect, not an HTTP request.
+ *
+ * This used to fetch() the port and decide from the error TEXT whether the
+ * failure was a refused connection or a protocol mismatch — treating anything
+ * unmatched as proof the port was open. undici puts ECONNREFUSED in
+ * `error.cause` and sets `error.message` to the constant "fetch failed", so the
+ * regex never matched and a REFUSED connection returned reachable. The one
+ * guard for the documented macOS blind spot could not fail on the condition it
+ * was written to catch.
+ *
+ * Connecting a socket answers the actual question — is anything listening —
+ * with no error strings to misread, and works for a WebSocket-only port that
+ * would never speak HTTP.
+ */
+function tcpReachable(host, port) {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host, port });
+    const settle = (result) => {
+      socket.destroy();
+      resolve(result);
+    };
+    socket.setTimeout(TIMEOUT_MS);
+    socket.once('connect', () => settle({ ok: true }));
+    socket.once('timeout', () => settle({ ok: false, message: `no response within ${TIMEOUT_MS}ms` }));
+    socket.once('error', (error) => settle({ ok: false, message: error.message }));
+  });
+}
+
 async function reachable({ url, tcpOnly }) {
+  const { hostname, port, protocol } = new URL(url);
+  const resolvedPort = Number(port || (protocol === 'https:' ? 443 : 80));
+
+  if (tcpOnly) return tcpReachable(hostname, resolvedPort);
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     await fetch(url, { signal: controller.signal });
     return { ok: true };
   } catch (error) {
-    // A WebSocket-only port answers an HTTP request with a protocol error
-    // rather than a connection error — which still proves the port is open.
-    const message = error instanceof Error ? error.message : String(error);
-    if (tcpOnly && !/ECONNREFUSED|abort|timeout/i.test(message)) return { ok: true };
-    return { ok: false, message };
+    // Report the cause when there is one: "fetch failed" alone tells the reader
+    // nothing about which of the several possible failures happened.
+    const detail = error?.cause ?? error;
+    return { ok: false, message: detail instanceof Error ? detail.message : String(detail) };
   } finally {
     clearTimeout(timer);
   }
