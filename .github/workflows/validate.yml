@@ -84,6 +84,8 @@ jobs:
         run: node scripts/check-crate-coverage.mjs
       - name: Check the docs' commands resolve
         run: node scripts/check-doc-commands.mjs
+      - name: Check doc file references still resolve
+        run: node scripts/check-doc-file-refs.mjs
       - name: "Check verify: annotations still hold"
         run: node scripts/check-doc-assertions.mjs
       - name: Check the Docker root manifest defines every inherited dep

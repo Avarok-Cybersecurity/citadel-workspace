@@ -1136,17 +1136,17 @@ session_security_settings: {
 ### Frontend (TypeScript)
 
 **Services**:
-- WebSocket service: `citadel-workspaces/src/lib/websocket-service.ts`
-- Connection manager: `citadel-workspaces/src/lib/connection-manager.ts`
-- P2P registration: `citadel-workspaces/src/lib/p2p-registration-service.ts`
-- P2P messenger: `citadel-workspaces/src/lib/p2p-messenger-manager.ts`
-- Workspace service: `citadel-workspaces/src/lib/workspace-service.ts`
+- WebSocket service: `citadel-workspaces/src/lib/websocket-service/`
+- Connection manager: `citadel-workspaces/src/lib/connection/`
+- P2P registration: `citadel-workspaces/src/lib/p2p-registration-service/`
+- P2P messenger: `citadel-workspaces/src/lib/p2p/p2p-messenger-manager.ts`
+- Workspace service: `citadel-workspaces/src/lib/workspace-service/`
 
 **UI Components**:
 - App layout: `citadel-workspaces/src/components/layout/AppLayout.tsx`
 - Sidebar: `citadel-workspaces/src/components/layout/sidebar/`
 - P2P Chat: `citadel-workspaces/src/components/p2p/P2PChat.tsx`
-- Messages section: `citadel-workspaces/src/components/layout/sidebar/MessagesSection.tsx`
+- Conversation list: `citadel-workspaces/src/components/layout/sidebar/GroupConversationRow.tsx`
 
 ### WASM Client
 

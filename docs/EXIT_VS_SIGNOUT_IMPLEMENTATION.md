@@ -180,7 +180,7 @@ const handleSignOut = async () => {
 };
 ```
 
-#### `citadel-workspaces/src/lib/websocket-service.ts` (lines 276-295)
+#### `citadel-workspaces/src/lib/websocket-service/` (lines 276-295)
 
 **Bug Fix**: BigInt serialization error in disconnect()
 
@@ -538,8 +538,8 @@ Next day: Must re-authenticate to access workspace
 - `citadel-workspaces/src/components/ExitConfirmModal.tsx`
 - `citadel-workspaces/src/components/layout/sidebar/TopBar.tsx` (lines 56-110)
 - `citadel-workspaces/src/components/OrphanSessionsNavbar.tsx` (lines 69-115)
-- `citadel-workspaces/src/lib/websocket-service.ts` (lines 276-295, 410-471)
-- `citadel-workspaces/src/lib/connection-manager.ts` (line 991)
+- `citadel-workspaces/src/lib/websocket-service/` (lines 276-295, 410-471)
+- `citadel-workspaces/src/lib/connection/` (line 991)
 
 ### Backend Protocol
 - **InternalServiceRequest::Disconnect**: Terminates session

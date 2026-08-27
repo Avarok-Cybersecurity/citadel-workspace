@@ -4,10 +4,10 @@ This document describes the multi‑layer architecture of the Citadel project, f
 
 | Layer # | Name | Code File(s) | Payload Type | Notes |
 |--------|------|--------------|--------------|-------|
-| 5 | **UI / Frontend** | `citadel-workspaces/src/pages/*.tsx` (e.g., `Messages.tsx`, `PeerTest.tsx`) | React component props / UI events | Highest level – renders the chat UI, invokes the workspace client, and displays messages. |
+| 5 | **UI / Frontend** | `citadel-workspaces/src/pages/*.tsx` (e.g. `Messages.tsx`, `GroupChatPage.tsx`) | React component props / UI events | Highest level – renders the chat UI, invokes the workspace client, and displays messages. |
 | 4 | **Workspace Client (TS Wrapper)** | `citadel-workspace-client-ts/src/WorkspaceClient.ts` | `WorkspaceProtocolPayload` (request | response) | Thin wrapper around the WASM client; exposes high‑level methods (`createWorkspace`, `sendMessage`, …) that internally serialize to `WorkspaceProtocolRequest` / `WorkspaceProtocolResponse`. |
 | 3 | **Workspace Protocol** | `citadel-workspace-types/bindings/WorkspaceProtocolRequest.ts`<br>`citadel-workspace-types/bindings/WorkspaceProtocolResponse.ts`<br>`citadel-workspace-types/bindings/WorkspaceProtocolPayload.ts` | `WorkspaceProtocolRequest` / `WorkspaceProtocolResponse` | Triple‑layered protocol (lowest → highest):<br>1️⃣ **InternalServiceRequest/Response** – low‑level commands sent to the internal service.<br>2️⃣ **WorkspaceCommand** – higher‑level workspace operations (create, update, list, etc.).<br>3️⃣ **MessageNotification** – the `Message` variant inside `WorkspaceProtocolRequest` that carries the actual chat payload (implemented as the `MessageNotification` struct). |
-| 2 | **Internal Service Request / Response** | `citadel-workspace-client-ts/src/types/InternalServiceRequest.ts` | `InternalServiceRequest` | Enumerates all possible commands the internal service can handle (connect, register, message, file transfer, group ops, etc.). |
+| 2 | **Internal Service Request / Response** | `citadel-internal-service/typescript-client/src/types/InternalServiceRequest.ts` | `InternalServiceRequest` | Enumerates all possible commands the internal service can handle (connect, register, message, file transfer, group ops, etc.). |
 | 2.5 | **Intersession Layer Messaging (ILM)** | `citadel-internal-service/intersession-layer-messaging/src/lib.rs` | `Payload<M>` enum & related structs | Uses the **Internal Service Request/Response** layer to provide reliable, ordered messaging, ACK handling, and polling between sessions. **Only used for peer‑to‑peer messaging**. |
 | 1 | **Internal Service (Rust)** | `citadel-workspace-internal-service/src/main.rs` (entry point) | Custom binary protocol over the Citadel connection | Manages a per‑client instance of the Citadel protocol, receives messages from the **ILM**, and routes them to the Citadel protocol layer. |
 | 0 | **WASM Client (WebSocket Wrapper)** | `citadel-internal-service-wasm-client/src/lib.rs` | WebSocket frames (binary) | Wraps a WebSocket connection to the internal service, providing a low‑level transport for the ILM. |
@@ -27,10 +27,10 @@ This document describes the multi‑layer architecture of the Citadel project, f
 
 | Layer # | Name | Code File(s) | Action / Payload |
 |--------|------|--------------|------------------|
-| 5 | UI / Frontend | `citadel-workspaces/src/pages/PeerTest.tsx` (register button, message input) | User clicks **Register** → UI calls `workspaceClient.auth.register(...)`. After registration, user types a message and clicks **Send** → UI calls `workspaceClient.sendMessage(...)`. |
+| 5 | UI / Frontend | `citadel-workspaces/src/pages/Messages.tsx` (conversation list, message input) | User clicks **Register** → UI calls `workspaceClient.auth.register(...)`. After registration, user types a message and clicks **Send** → UI calls `workspaceClient.sendMessage(...)`. |
 | 4 | Workspace Client (TS Wrapper) | `citadel-workspace-client-ts/src/WorkspaceClient.ts` | `register` builds an `InternalServiceRequest.Register` and sends it via the WASM client. `sendMessage` builds an `InternalServiceRequest.Message` with the message bytes. |
 | 3 | Workspace Protocol | `citadel-workspace-types/bindings/WorkspaceProtocolPayload.ts` | The client serialises the request into a `WorkspaceProtocolPayload` containing a `WorkspaceProtocolRequest` (`Register` or `Message`). |
-| 2 | Internal Service Request / Response | `citadel-workspace-client-ts/src/types/InternalServiceRequest.ts` | Payload is an `InternalServiceRequest.Register` or `InternalServiceRequest.Message` variant, carrying fields such as `request_id`, `username`, `message`, `cid`, etc. |
+| 2 | Internal Service Request / Response | `citadel-internal-service/typescript-client/src/types/InternalServiceRequest.ts` | Payload is an `InternalServiceRequest.Register` or `InternalServiceRequest.Message` variant, carrying fields such as `request_id`, `username`, `message`, `cid`, etc. |
 | 2.5 | Intersession Layer Messaging (ILM) | `citadel-internal-service/intersession-layer-messaging/src/lib.rs` | Takes the request, adds reliable‑ordering, ACK handling, and queues it for transport. |
 | 0 | WASM Client (WebSocket) | `citadel-internal-service-wasm-client/src/lib.rs` | Sends the framed message over a WebSocket to the remote peer’s internal service. |
 | 1 | Internal Service (Rust) | `citadel-workspace-internal-service/src/main.rs` | Receives the WebSocket payload, strips ILM framing, and forwards the low‑level message to the Citadel protocol. |
@@ -57,7 +57,7 @@ flowchart LR
 | 5 | UI / Frontend | `citadel-workspaces/src/pages/Connect.tsx` (connect button) | User clicks **Connect** → UI calls `workspaceClient.connect(...)`. |
 | 4 | Workspace Client (TS Wrapper) | `citadel-workspace-client-ts/src/WorkspaceClient.ts` | `connect` builds an `InternalServiceRequest.Connect` with server address, credentials, etc., and sends it via the WASM client. |
 | 3 | Workspace Protocol | `citadel-workspace-types/bindings/WorkspaceProtocolPayload.ts` | Serialises to a `WorkspaceProtocolPayload` containing a `WorkspaceProtocolRequest.Connect`. |
-| 2 | Internal Service Request / Response | `citadel-workspace-client-ts/src/types/InternalServiceRequest.ts` | `InternalServiceRequest.Connect` variant with fields like `username`, `password`, `server_addr`, `connect_mode`, `session_security_settings`, etc. |
+| 2 | Internal Service Request / Response | `citadel-internal-service/typescript-client/src/types/InternalServiceRequest.ts` | `InternalServiceRequest.Connect` variant with fields like `username`, `password`, `server_addr`, `connect_mode`, `session_security_settings`, etc. |
 | 1 | Internal Service (Rust) | `citadel-workspace-internal-service/src/main.rs` | Directly opens a Citadel connection to the **server** (instead of another peer) and forwards the request. No ILM is involved because the target is a server endpoint. |
 | -1 | Citadel Protocol | *Citadel core crates* | Handles the encrypted transport to the server. The server processes the connection request and returns a response (`Connect` success/failure) that travels back up the stack to the UI. |
 
@@ -78,7 +78,7 @@ flowchart LR
 ## Payload Types
 
 ### InternalServiceRequest
-*Defined in:* `citadel-workspace-client-ts/src/types/InternalServiceRequest.ts`
+*Defined in:* `citadel-internal-service/typescript-client/src/types/InternalServiceRequest.ts`
 
 The `InternalServiceRequest` enum represents the low‑level commands that the **Workspace Client** sends to the **Internal Service**. It is the bridge between the TypeScript side and the Rust side.
 

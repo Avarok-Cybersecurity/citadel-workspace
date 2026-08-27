@@ -773,7 +773,7 @@ peerUsername: message.PeerRegisterNotification.peer_username
 
 **Verify Fix**:
 ```bash
-grep -n "peer_username" citadel-workspaces/src/lib/p2p-registration-service.ts
+grep -n "peer_username" citadel-workspaces/src/lib/p2p-registration-service/
 ```
 
 ---
