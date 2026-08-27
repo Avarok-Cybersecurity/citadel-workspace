@@ -29,6 +29,7 @@ jobs:
           - citadel-workspace-types
           - citadel-workspace-internal-service
           - citadel-workspace-server-kernel
+          - citadel-workspace-executor
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,6 +48,7 @@ jobs:
           - citadel-workspace-types
           - citadel-workspace-internal-service
           - citadel-workspace-server-kernel
+          - citadel-workspace-executor
     steps:
       - uses: actions/checkout@v4
         with:
@@ -169,6 +171,7 @@ jobs:
           - citadel-workspace-types
           - citadel-workspace-internal-service
           - citadel-workspace-server-kernel
+          - citadel-workspace-executor
     steps:
       - uses: actions/checkout@v4
         with:
