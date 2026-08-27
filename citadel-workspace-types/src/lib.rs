@@ -298,7 +298,23 @@ pub enum WorkspaceProtocolResponse {
     Success(String),
     Error(String),
     WorkspaceNotInitialized,
-    Members(Vec<User>),
+    /// The members of a domain, and WHICH domain they are.
+    ///
+    /// The domain used to be absent, and the protocol carries no request id, so
+    /// a response could not be attributed to the request that asked for it. Four
+    /// separate client subscribers each accepted any member list that arrived
+    /// and took last-writer-wins: the sidebar, the admin members tab, the
+    /// user-search corpus, and the group-call roster. A list fetched for one
+    /// domain would render inside another, and the admin tab would then send
+    /// role changes naming ITS entity with users taken from somebody else's.
+    ///
+    /// `Option` because a client may be talking to a server that predates the
+    /// field; a client that cannot tell which domain a list is for should keep
+    /// its old behaviour rather than discard the list.
+    Members {
+        domain_id: Option<String>,
+        members: Vec<User>,
+    },
     Member(User),
     /// Response containing a user's role and permissions for a domain
     UserPermissions {

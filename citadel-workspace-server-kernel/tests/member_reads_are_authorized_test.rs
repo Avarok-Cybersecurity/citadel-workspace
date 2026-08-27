@@ -150,7 +150,7 @@ async fn an_admin_can_list_the_roster() {
     .expect("dispatch");
 
     assert!(
-        matches!(response, WorkspaceProtocolResponse::Members(_)),
+        matches!(response, WorkspaceProtocolResponse::Members { .. }),
         "the admin panel must still be able to list members; got {response:?}"
     );
 }

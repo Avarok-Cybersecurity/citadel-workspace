@@ -358,7 +358,7 @@ async fn test_list_members_invalid_parameters() {
     .unwrap();
 
     match result {
-        WorkspaceProtocolResponse::Members(_) => {
+        WorkspaceProtocolResponse::Members { .. } => {
             // Expected - None defaults to workspace root which exists
         }
         other => panic!(

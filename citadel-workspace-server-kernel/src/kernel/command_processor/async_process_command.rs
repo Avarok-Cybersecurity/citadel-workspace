@@ -508,7 +508,12 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     users.push(user);
                 }
             }
-            Ok(WorkspaceProtocolResponse::Members(users))
+            Ok(WorkspaceProtocolResponse::Members {
+                // Echoed from the request, resolved the same way the lookup
+                // above resolved it, so the answer says what it is about.
+                domain_id: Some(target_id.to_string()),
+                members: users,
+            })
         }
 
         WorkspaceProtocolRequest::GetUserPermissions { user_id, domain_id } => {

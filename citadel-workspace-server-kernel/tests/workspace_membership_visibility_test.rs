@@ -30,7 +30,10 @@ async fn roster<R: citadel_sdk::prelude::Ratchet>(
     )
     .await
     .expect("ListMembers dispatch failed");
-    let WorkspaceProtocolResponse::Members(members) = listed else {
+    let WorkspaceProtocolResponse::Members {
+        members: members, ..
+    } = listed
+    else {
         panic!("expected Members, got {listed:?}");
     };
     members.into_iter().map(|m| m.id).collect()
@@ -64,7 +67,10 @@ async fn added_member_appears_in_the_roster() {
     .await
     .expect("ListMembers dispatch failed");
 
-    let WorkspaceProtocolResponse::Members(members) = listed else {
+    let WorkspaceProtocolResponse::Members {
+        members: members, ..
+    } = listed
+    else {
         panic!("expected Members, got {listed:?}");
     };
 
