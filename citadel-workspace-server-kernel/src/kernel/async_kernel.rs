@@ -449,6 +449,87 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// Writes the content to `{content_base_path}/{node_name}/CONTENT.md`.
     /// `node_name` is rejected if it would escape the content base
     /// directory — see `validate_content_segment`.
+    /// Where a node's CONTENT.md belongs on disk: its ancestor names, root first.
+    ///
+    /// The boot loader reads offices from `{base}/{office}/CONTENT.md` and rooms
+    /// from `{base}/{office}/{room}/CONTENT.md`, so a room's file needs both
+    /// segments. `persist_node_content` used to take a single name, so every
+    /// room was written to `{base}/{room}/CONTENT.md` — a path the loader
+    /// interprets as an OFFICE. The user's edit went somewhere the room would
+    /// never be read from, the room resurrected with its seed content at the
+    /// next restart, and a phantom office appeared holding the orphaned text.
+    ///
+    /// Returns an empty vec when the chain cannot be resolved, which the caller
+    /// treats as "do not write" rather than guessing at a path.
+    pub async fn content_path_segments(&self, node_id: &str) -> Vec<String> {
+        let Ok(nodes) = self.domain_operations.backend_tx_manager.get_all_nodes().await else {
+            return Vec::new();
+        };
+
+        let mut segments: Vec<String> = Vec::new();
+        let mut current = Some(node_id.to_string());
+        let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        while let Some(id) = current {
+            // A cyclic parent chain must not spin here; the tree validator
+            // guards mutations, but this reads whatever is on disk.
+            if !visited.insert(id.clone()) {
+                return Vec::new();
+            }
+            let Some(node) = nodes.get(&id) else { break };
+            segments.push(node.name.clone());
+            current = node.parent_id.clone().filter(|p| p != crate::WORKSPACE_ROOT_ID);
+        }
+
+        segments.reverse();
+        segments
+    }
+
+    /// Persist a node's content at its full ancestor path.
+    pub async fn persist_node_content_at(
+        &self,
+        segments: &[String],
+        mdx_content: &str,
+    ) -> Result<(), NetworkError> {
+        // Checked BEFORE the base-path lookup on purpose. An empty chain means
+        // the node could not be resolved at all, which is a data problem worth
+        // surfacing whether or not file persistence happens to be configured —
+        // and it must never fall through to a guessed path. `content_path_segments`
+        // reads the nodes map, not the filesystem, so this is not noisy on a
+        // deployment with persistence off.
+        if segments.is_empty() {
+            return Err(NetworkError::msg(
+                "Refusing to persist content: could not resolve the node's path",
+            ));
+        }
+        let Some(base_path) = self.get_content_base_path() else {
+            return Ok(());
+        };
+
+        let mut content_path = base_path;
+        for segment in segments {
+            validate_content_segment(segment)?;
+            content_path = content_path.join(segment);
+        }
+        let content_path = content_path.join("CONTENT.md");
+        info!(target: "citadel", "[ASYNC_KERNEL] Persisting node content to {:?}", content_path);
+
+        if let Some(parent) = content_path.parent() {
+            tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                NetworkError::msg(format!("Failed to create directory {:?}: {}", parent, e))
+            })?;
+        }
+
+        tokio::fs::write(&content_path, mdx_content)
+            .await
+            .map_err(|e| {
+                NetworkError::msg(format!(
+                    "Failed to persist node content to {:?}: {}",
+                    content_path, e
+                ))
+            })
+    }
+
     pub async fn persist_node_content(
         &self,
         node_name: &str,

@@ -855,7 +855,12 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                             node_id
                         );
 
-                        if let Err(e) = kernel.persist_node_content(&node.name, content).await {
+                        // Full ancestor path, not the bare name: a room lives at
+                        // {office}/{room}/CONTENT.md, and writing it to
+                        // {room}/CONTENT.md put the edit where the loader reads
+                        // OFFICES from — losing the edit and inventing an office.
+                        let segments = kernel.content_path_segments(node_id).await;
+                        if let Err(e) = kernel.persist_node_content_at(&segments, content).await {
                             warn!(
                                 target: "citadel",
                                 "[ASYNC_PROCESS_COMMAND] Failed to persist node content: {}",
