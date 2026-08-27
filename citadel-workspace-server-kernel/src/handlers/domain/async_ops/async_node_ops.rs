@@ -299,11 +299,23 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             )));
         }
 
-        // Get current node
-        let mut node = self
-            .backend_tx_manager
-            .get_node(node_id)
-            .await?
+        // Hold the nodes lock across the READ and the WRITE, as create, delete and
+        // move already do. The backend's `update_node` does take this mutex, so
+        // the write alone was safe — but the read below it was not, and the gap
+        // between them spans our own awaits. Two callers editing the same node
+        // both read the original and both write: the first one's field silently
+        // reverts. Worse, a delete landing in that gap is undone, because the
+        // write re-inserts the node the other caller just removed.
+        //
+        // tokio's Mutex is not reentrant, so calling the backend's `update_node`
+        // while holding the guard would deadlock. Mutate the map already held and
+        // persist it with `save_nodes`.
+        let _nodes_guard = self.backend_tx_manager.lock_nodes().await;
+        let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
+
+        let mut node = nodes
+            .get(node_id)
+            .cloned()
             .ok_or_else(|| NetworkError::msg(format!("Node '{}' not found", node_id)))?;
 
         // Apply updates
@@ -329,10 +341,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
 
         node.updated_at = current_timestamp();
 
-        // Save the updated node
-        self.backend_tx_manager
-            .update_node(node_id, node.clone())
-            .await?;
+        // Persist through the map we hold, not the backend mutator (see above).
+        nodes.insert(String::from(node_id), node.clone());
+        self.backend_tx_manager.save_nodes(&nodes).await?;
 
         Ok(node)
     }
@@ -552,7 +563,20 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         let nodes = self.backend_tx_manager.get_all_nodes().await?;
         let schema = self.backend_tx_manager.get_tree_schema_or_default().await?;
 
-        // Start from specified parent or root
+        // Start from specified parent or root.
+        //
+        // WORKSPACE_ROOT_ID is a sentinel, not a stored DomainNode, so
+        // `nodes.get("workspace-root")` is always None and the lookup below would
+        // fall through to `unwrap_or_default()` — returning an empty list, with
+        // Ok, on a fully populated workspace. `get_node` and `get_tree_structure`
+        // both special-case the sentinel already; this listing never did. Callers
+        // that pass the root explicitly (rather than None) saw an empty tree and
+        // no error. Normalize it to the None branch, which is what it means.
+        let parent_id = match parent_id {
+            Some(pid) if pid == crate::WORKSPACE_ROOT_ID => None,
+            other => other,
+        };
+
         let start_nodes: Vec<DomainNode> = if let Some(pid) = parent_id {
             // Get children of the specified parent
             nodes
