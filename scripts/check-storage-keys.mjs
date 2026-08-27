@@ -57,10 +57,24 @@ const files = walk(SRC);
 
 // `const STORAGE_KEY = 'citadel-privacy'` — so a key held in a constant compares
 // equal to the same key written literally elsewhere.
+//
+// Class fields count too. Resolving only `const NAME = '...'` meant a key held
+// as `private static readonly STORAGE_KEY_TRANSFERS = '...'` resolved to null,
+// so every one of its call sites was dropped while the summary printed OK —
+// silently exempting `lib/file-transfer/service.ts`, one of the modules this
+// check exists to cover. A guard that skips what it cannot parse, quietly, is
+// the shape of every hole recorded in this repo.
 const constants = new Map();
 for (const file of files) {
-  for (const m of readFileSync(file, 'utf8').matchAll(
+  const source = readFileSync(file, 'utf8');
+  for (const m of source.matchAll(
     /const\s+([A-Z_][A-Z0-9_]*)\s*=\s*['"]([^'"]+)['"]/g,
+  )) {
+    constants.set(m[1], m[2]);
+  }
+  // `[static] [readonly] NAME = '...'` inside a class body.
+  for (const m of source.matchAll(
+    /(?:private\s+|public\s+|protected\s+)?(?:static\s+)?readonly\s+([A-Z_][A-Z0-9_]*)\s*(?::[^=]+)?=\s*['"]([^'"]+)['"]/g,
   )) {
     constants.set(m[1], m[2]);
   }
@@ -74,6 +88,10 @@ function keyOf(rawArg) {
   // `foo:${peerCid}` are the same namespace written by different callers.
   if (arg.startsWith('`')) return arg.slice(1).split('${')[0];
   if (constants.has(arg)) return constants.get(arg);
+  // `Foo.STORAGE_KEY` / `this.STORAGE_KEY` — resolved by member name, which is
+  // what makes a class-field key comparable to the same key written literally.
+  const member = arg.match(/(?:^|\.)([A-Z_][A-Z0-9_]*)$/);
+  if (member && constants.has(member[1])) return constants.get(member[1]);
   return null; // computed at runtime — cannot be compared, so not judged
 }
 

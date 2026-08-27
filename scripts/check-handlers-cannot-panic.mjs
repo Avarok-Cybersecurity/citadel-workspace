@@ -31,10 +31,14 @@ const DIRS = [
  * Panics that are genuinely unreachable, each with the argument for why. An
  * entry here is a claim someone has to defend, not a way to quiet the check.
  */
+//
+// Keyed by file AND the exact source text, not by file alone. A per-file
+// exemption excuses every future panic added to that file, which is the
+// opposite of what an argued exception means: the argument was about ONE line.
 const ALLOWED = new Map([
   [
-    'requests/media/open.rs',
-    'take().expect("checked Some above") — the check and the take share one write lock with no await between them',
+    'requests/media/open.rs::let session = peer.media.take().expect("checked Some above");',
+    'the check and the take share one write lock with no await between them',
   ],
 ]);
 
@@ -85,8 +89,11 @@ for (const dir of DIRS) {
       if (line.includes('unreachable!')) return;
       // Doc comments describing a panic that was REMOVED are prose.
       if (line.trim().startsWith('//')) return;
-      if (!/\.expect\(|\.unwrap\(\)/.test(line)) return;
-      if (ALLOWED.has(rel)) return;
+      // A check named "handlers cannot panic" that only knows two spellings is
+      // not checking what it claims. `panic!`, `todo!` and `unimplemented!` all
+      // abort a request handler exactly as hard as an `unwrap`.
+      if (!/\.expect\(|\.unwrap\(\)|\bpanic!|\btodo!|\bunimplemented!/.test(line)) return;
+      if (ALLOWED.has(`${rel}::${line.trim()}`)) return;
       offenders.push({ rel, line: i + 1, text: line.trim().slice(0, 100) });
     });
   }
