@@ -792,7 +792,19 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 )
                 .await
             {
-                Ok(node) => Ok(WorkspaceProtocolResponse::Node(node)),
+                Ok(node) => {
+                    // Everyone else has to learn the tree changed. Only
+                    // NodeContentUpdated was ever broadcast, and the client calls
+                    // listNodes exactly once, at login — so a room created here
+                    // stayed invisible to every other user until they signed in
+                    // again. The client handler for this variant already exists;
+                    // it just never fired for anyone but the requester.
+                    kernel.broadcast(
+                        WorkspaceProtocolResponse::Node(node.clone()),
+                        requester_cid,
+                    );
+                    Ok(WorkspaceProtocolResponse::Node(node))
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to create node: {}",
                     e
@@ -869,6 +881,20 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         }
                     }
 
+                    // A rename (or any structural edit) is not a content update,
+                    // so NodeContentUpdated above does not cover it — other
+                    // users kept showing the old name until they signed in again.
+                    if name.is_some()
+                        || description.is_some()
+                        || rules.is_some()
+                        || chat_enabled.is_some()
+                    {
+                        kernel.broadcast(
+                            WorkspaceProtocolResponse::Node(node.clone()),
+                            requester_cid,
+                        );
+                    }
+
                     Ok(WorkspaceProtocolResponse::Node(node))
                 }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
@@ -885,10 +911,19 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 .delete_node(actor_user_id, node_id, *cascade)
                 .await
             {
-                Ok(deleted_ids) => Ok(WorkspaceProtocolResponse::NodeDeleted {
-                    node_id: node_id.clone(),
-                    children_deleted: deleted_ids.into_iter().filter(|id| id != node_id).collect(),
-                }),
+                Ok(deleted_ids) => {
+                    let response = WorkspaceProtocolResponse::NodeDeleted {
+                        node_id: node_id.clone(),
+                        children_deleted: deleted_ids
+                            .into_iter()
+                            .filter(|id| id != node_id)
+                            .collect(),
+                    };
+                    // Without this, a deleted office stayed in every other
+                    // user's sidebar and they kept opening and typing into it.
+                    kernel.broadcast(response.clone(), requester_cid);
+                    Ok(response)
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to delete node: {}",
                     e
@@ -911,11 +946,15 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 .move_node(actor_user_id, node_id, new_parent_id.as_deref())
                 .await
             {
-                Ok(node) => Ok(WorkspaceProtocolResponse::NodeMoved {
-                    node_id: node_id.clone(),
-                    old_parent_id,
-                    new_parent_id: node.parent_id,
-                }),
+                Ok(node) => {
+                    let response = WorkspaceProtocolResponse::NodeMoved {
+                        node_id: node_id.clone(),
+                        old_parent_id,
+                        new_parent_id: node.parent_id,
+                    };
+                    kernel.broadcast(response.clone(), requester_cid);
+                    Ok(response)
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to move node: {}",
                     e
