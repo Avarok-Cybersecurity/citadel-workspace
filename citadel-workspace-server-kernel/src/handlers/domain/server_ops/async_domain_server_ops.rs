@@ -874,7 +874,15 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             workspace.description = new_desc.to_string();
         }
         if let Some(meta_bytes) = metadata {
-            workspace.metadata = meta_bytes;
+            // Merge, do not replace. `metadata` is one JSON object shared by
+            // several features: this path writes {"initialized": true} while
+            // theming writes a `theme` key. Assigning over the top erased any
+            // theme configured before the workspace was initialised — the same
+            // defect already fixed on the theme path, which this call site
+            // never received.
+            workspace.metadata =
+                super::metadata_merge::merge_metadata_document(&workspace.metadata, &meta_bytes)
+                    .map_err(NetworkError::msg)?;
         }
 
         // Add the user as a member if they're not already (since they have the master password)
