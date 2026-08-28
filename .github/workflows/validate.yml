@@ -136,6 +136,14 @@ jobs:
         # skipped by the time the test fails. Twenty-four failing legs uploaded
         # screenshots and discarded the backend logs that would have said why.
         run: node scripts/check-service-logs-are-captured.mjs
+      - name: Controls are pressed by testid, not by their words
+        # Five checks in one session failed because the app improved its
+        # wording; the worst took the whole reconnection family down for a
+        # button that had said "Sign In" for months. Asserting on copy is the
+        # point of a text assertion -- FINDING a control by copy is a lookup
+        # keyed on prose, and it taxes every improvement to that prose.
+        run: node scripts/check-controls-are-addressed-by-testid.mjs
+        working-directory: citadel-workspaces
       - name: Gates run where their dependencies exist
         # Twice a gate landed in the job that installs nothing, and both times
         # the whole job went red on `Cannot find package`, taking twenty-five
