@@ -38,6 +38,10 @@ COPY ./Cargo.toml /usr/src/app/Cargo.toml
 COPY ./citadel-workspace-server-kernel /usr/src/app/citadel-workspace-server-kernel
 COPY ./citadel-workspace-internal-service /usr/src/app/citadel-workspace-internal-service
 COPY ./citadel-workspace-types /usr/src/app/citadel-workspace-types
+# A workspace member. Cargo loads EVERY member's manifest before building any
+# of them, so omitting a crate this image never builds still fails the build
+# with "failed to load manifest for workspace member".
+COPY ./citadel-workspace-executor /usr/src/app/citadel-workspace-executor
 COPY ./citadel-internal-service /usr/src/app/citadel-internal-service
 
 # Build release binary during docker build (not at container startup).

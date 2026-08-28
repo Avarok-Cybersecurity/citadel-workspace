@@ -673,11 +673,28 @@ DEPLOY_HISTORY="${DEPLOY_HISTORY:-$HOME/.cache/citadel-deploy/history}"
 mkdir -p "$(dirname "$DEPLOY_HISTORY")"
 
 previous_images() {
+    # `|| true` because finding nothing is the NORMAL first-deploy answer, and
+    # `set -o pipefail` makes grep's exit 1 the whole pipeline's — which under
+    # `set -e` aborted the script at the assignment below. A machine with
+    # nothing deployed yet printed "[3/4] Updating services", exited 1, and
+    # restarted nothing, AFTER pulling every image: the one path with no
+    # previous version to roll back to was the one path that could not run.
     docker compose -f "$COMPOSE_FILE" images --format json 2>/dev/null \
-        | tr ',' '\n' | grep -o '"Tag":"[^"]*"' | cut -d'"' -f4 | sort -u | tr '\n' ' '
+        | tr ',' '\n' | grep -o '"Tag":"[^"]*"' | cut -d'"' -f4 | sort -u | tr '\n' ' ' \
+        || true
 }
 PREVIOUS_TAGS="$(previous_images)"
-[ -n "$PREVIOUS_TAGS" ] && echo "  Currently deployed tag(s): ${PREVIOUS_TAGS}"
+# An `if`, not `[ -n … ] && echo`.
+#
+# Under `set -e` that form aborts the script whenever the test is false, because
+# the && chain's exit status becomes the statement's. So a deploy with nothing
+# currently running -- the FIRST deploy on a machine, and every deploy in the
+# integration test's stub environment -- printed "[3/4] Updating services" and
+# exited 1, after the images had already been pulled. A failure on the one path
+# that has no previous version to roll back to.
+if [ -n "$PREVIOUS_TAGS" ]; then
+    echo "  Currently deployed tag(s): ${PREVIOUS_TAGS}"
+fi
 
 # Named so the failure path can tell the operator exactly what to type.
 rollback_hint() {
