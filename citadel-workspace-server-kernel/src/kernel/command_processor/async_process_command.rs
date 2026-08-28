@@ -46,15 +46,14 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 Err(e) => {
                     let error_msg = e.to_string();
                     warn!(target: "citadel", "GetWorkspace error: {}", error_msg);
-                    if error_msg.contains("not found") || error_msg.contains("Not a member") {
-                        info!(target: "citadel", "Returning WorkspaceNotInitialized");
-                        Ok(WorkspaceProtocolResponse::WorkspaceNotInitialized)
-                    } else {
-                        Ok(WorkspaceProtocolResponse::Error(format!(
-                            "Failed to get workspace: {}",
-                            e
-                        )))
-                    }
+                    let failure = super::workspace_lookup::classify(&error_msg);
+                    let response = super::workspace_lookup::response_for(
+                        target_id == crate::WORKSPACE_ROOT_ID,
+                        failure,
+                        &error_msg,
+                    );
+                    info!(target: "citadel", "GetWorkspace failure {failure:?} -> {response:?}");
+                    Ok(response)
                 }
             }
         }

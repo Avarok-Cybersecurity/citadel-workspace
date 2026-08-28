@@ -664,14 +664,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         // Check if user is member of workspace
         if !self.is_member_of_domain(user_id, workspace_id).await? {
             return Err(NetworkError::msg(
-                "Permission denied: Not a member of this workspace",
+                crate::handlers::domain::workspace_errors::NOT_A_MEMBER,
             ));
         }
 
         // Get workspace from backend
         match self.backend_tx_manager.get_workspace(workspace_id).await? {
             Some(ws) => Ok(ws),
-            None => Err(NetworkError::msg("Workspace not found")),
+            None => Err(NetworkError::msg(
+                crate::handlers::domain::workspace_errors::NO_SUCH_WORKSPACE,
+            )),
         }
     }
 

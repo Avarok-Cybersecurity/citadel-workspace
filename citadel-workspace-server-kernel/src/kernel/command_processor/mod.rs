@@ -32,3 +32,6 @@
 
 /// Async command processor
 pub mod async_process_command;
+
+/// What a failed workspace lookup means, decided from facts rather than prose.
+pub mod workspace_lookup;

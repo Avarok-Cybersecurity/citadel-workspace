@@ -52,6 +52,9 @@ pub mod tree_validator;
 pub mod entity;
 pub mod server_ops;
 
+/// The workspace-lookup failure messages, spelled once for producer and reader.
+pub mod workspace_errors;
+
 // ═══════════════════════════════════════════════════════════════════════════════════
 // RE-EXPORTS FOR PUBLIC API
 // ═══════════════════════════════════════════════════════════════════════════════════
