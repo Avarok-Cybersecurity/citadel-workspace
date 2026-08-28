@@ -463,6 +463,21 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         // Save updated nodes
         self.backend_tx_manager.save_nodes(&nodes).await?;
 
+        // And the messages those rooms held. Removing the node removed the only
+        // reference to `citadel_workspace.group_messages.<id>`; the messages
+        // themselves stayed in the backend forever, unreachable and so
+        // unpurgeable. A room that is deleted has to take its history with it.
+        //
+        // After the nodes are saved, not before: if this fails the tree is
+        // already correct and the leftover keys are recoverable by deleting
+        // again, whereas failing first would leave a room whose history is gone
+        // but which is still listed and still writable.
+        for id in &deleted_ids {
+            self.backend_tx_manager
+                .delete_all_group_messages(id)
+                .await?;
+        }
+
         Ok(deleted_ids)
     }
 

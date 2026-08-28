@@ -765,6 +765,23 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(deleted_message)
     }
 
+    /// Drop every message a room ever held.
+    ///
+    /// Deleting a node removed it from the node map and nothing else, so the
+    /// room's entire message history stayed in the backend under
+    /// `citadel_workspace.group_messages.<id>` -- unreachable, because the node
+    /// that named it was gone, and therefore unlistable and unpurgeable. Every
+    /// message anyone ever sent in a deleted room was retained indefinitely,
+    /// which is not what deleting a room means to the person who pressed it.
+    ///
+    /// Serialized through `group_msg_mutex` like every other writer of this key,
+    /// so a send racing the delete cannot re-create the entry after it is gone.
+    pub async fn delete_all_group_messages(&self, group_id: &str) -> Result<(), NetworkError> {
+        let _guard = self.group_msg_mutex.lock().await;
+        self.backend_delete(&Self::group_messages_key(group_id))
+            .await
+    }
+
     /// Get a single message by ID
     pub async fn get_group_message(
         &self,
@@ -979,6 +996,36 @@ mod group_message_tests {
             mentions: vec![],
             edited_at: None,
         }
+    }
+
+    /// Deleting a room's history must remove the key, not empty the list.
+    ///
+    /// Nothing deleted it at all before: `delete_node` removed the node and
+    /// left `citadel_workspace.group_messages.<id>` behind, unreachable because
+    /// the node that named it was gone. Every message in every deleted room was
+    /// retained for the life of the backend.
+    #[tokio::test]
+    async fn deleting_a_group_takes_its_messages_with_it() {
+        let mgr = fresh();
+        mgr.store_group_message(msg("m1", "doomed")).await.unwrap();
+        mgr.store_group_message(msg("m2", "doomed")).await.unwrap();
+        mgr.store_group_message(msg("m3", "kept")).await.unwrap();
+
+        // Precondition, so a later refactor that stops storing cannot make this
+        // pass by finding nothing to delete.
+        assert_eq!(mgr.get_group_messages("doomed").await.unwrap().len(), 2);
+
+        mgr.delete_all_group_messages("doomed").await.unwrap();
+
+        assert!(
+            mgr.get_group_messages("doomed").await.unwrap().is_empty(),
+            "a deleted room's messages must not survive it"
+        );
+        assert_eq!(
+            mgr.get_group_messages("kept").await.unwrap().len(),
+            1,
+            "and only that room's -- deletion must not reach a sibling"
+        );
     }
 
     /// 50 concurrent `store_group_message` calls into the same group
