@@ -120,6 +120,8 @@ jobs:
         run: node scripts/check-sender-identity.mjs
       - name: Check the client TypeScript bindings match the Rust types
         run: node scripts/check-generated-types-fresh.mjs
+      - name: Check the UI submodule runs every integration leg this workflow does
+        run: node scripts/check-ci-matrices-agree.mjs
       - name: Check no shipped binary carries a test-only cargo feature
         run: node scripts/check-no-test-features-shipped.mjs
 
