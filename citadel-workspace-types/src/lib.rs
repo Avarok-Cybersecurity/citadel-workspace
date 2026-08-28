@@ -337,6 +337,20 @@ pub enum WorkspaceProtocolResponse {
     NodeContentUpdated {
         node_id: String,
         mdx_content: String,
+        /// The content's SHA-256, so a watcher can verify what it just received.
+        ///
+        /// Without it, a watcher merged the new content over its cached node
+        /// and kept the OLD hash — so the integrity check refused to render a
+        /// document that had merely been edited by a colleague, and went on
+        /// refusing until the reader navigated away and back. The verifier and
+        /// this broadcast were built two rounds apart and their intersection
+        /// was never exercised: ordinary collaborative editing was the trigger.
+        ///
+        /// Optional so an older server, which does not send it, degrades to
+        /// "unhashed" rather than "mismatch" — refusing content because the
+        /// server predates the field would be the same defect wearing the fix's
+        /// clothes.
+        mdx_content_hash: Option<String>,
         updated_by: String,
         #[ts(type = "bigint")]
         timestamp: u64,

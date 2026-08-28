@@ -1008,6 +1008,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         let broadcast_response = WorkspaceProtocolResponse::NodeContentUpdated {
                             node_id: node_id.clone(),
                             mdx_content: content.clone(),
+                            // The same hash update_node just stored. Sending the
+                            // content without it left every watcher verifying
+                            // new content against the hash it already had.
+                            mdx_content_hash: node.mdx_content_hash.clone(),
                             updated_by: actor_user_id.to_string(),
                             timestamp,
                         };
