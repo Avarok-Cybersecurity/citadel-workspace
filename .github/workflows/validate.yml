@@ -104,6 +104,12 @@ jobs:
         run: node citadel-workspaces/scripts/check-event-listeners-have-emitters.mjs
       - name: Check destructive text clears AA on every background
         run: node scripts/check-destructive-contrast.mjs
+      - name: Semantic token contrast
+        # The sibling gate above covers the destructive family, including the
+        # tinted backgrounds it appears on. This covers the other ten pairings,
+        # which nothing checked: axe only measures what is rendered during a
+        # scan, and most of these surfaces are behind a login.
+        run: node scripts/check-token-contrast.mjs
       - name: Check no storage key is read but never written
         run: node scripts/check-storage-keys.mjs
       - name: Check the Permission enum matches between Rust and TypeScript
