@@ -1059,6 +1059,15 @@ jobs:
         run: npm run check:a11y
         working-directory: citadel-workspaces
 
+      - name: The agent-down first run
+        # The most common state a new user is in -- app installed, agent not
+        # started -- and nothing tested it. /ws is pointed at a dead port, so it
+        # needs no stack and no account. The check proves its own premise: if
+        # anything answers on that port it fails rather than reporting on a
+        # state it is not in, which is exactly the mistake made once by hand.
+        run: npm run check:agent-down
+        working-directory: citadel-workspaces
+
       - name: Mobile layout
         # axe measures colour, names and roles — not size. Three controls
         # shipped under the WCAG 2.2 24px target floor, including the close
