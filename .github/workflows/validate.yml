@@ -122,6 +122,14 @@ jobs:
         # Content-Security-Policy serves the same bytes with the same status and
         # nothing fails -- the loss is silent. Derived from `location /`.
         run: node scripts/check-nginx-headers-are-complete.mjs
+      - name: Browser gates pin the world they measure
+        # `vite preview` proxies /ws to the developer's live stack or, in CI, to
+        # nothing. A gate that does not decide which measures two different
+        # applications: check-accessibility failed in CI and passed locally on
+        # identical code, and four other gates had the same shape without having
+        # failed yet -- green about the wrong screen.
+        run: node scripts/check-gates-pin-their-world.mjs
+        working-directory: citadel-workspaces
       - name: Service logs survive a failing test
         # `if: failure()` on a step reads as "run if anything failed" and is not:
         # steps run in order, so a dump placed before the test has already been

@@ -30,6 +30,7 @@
  * workflow means adding a gate to CI adds it here, with no second edit.
  */
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,6 +43,8 @@ const UI = join(ROOT, 'citadel-workspaces');
  * run — so a new CI gate is included by default and this file has to be edited
  * to exclude it, rather than edited to include it.
  */
+const yaml = createRequire(import.meta.url)('js-yaml');
+
 const NEEDS_MORE_THAN_A_CHECKOUT = new Map([
   ['check-production-image.mjs', 'drives a real browser against a built production image'],
 ]);
@@ -58,8 +61,21 @@ function ciScriptGates() {
     console.error(`preflight: cannot read ${path}; the gate list would be empty.`);
     process.exit(1);
   }
-  const found = [...workflow.matchAll(/node\s+(scripts\/[a-z0-9-]+\.mjs)/g)].map((m) => m[1]);
-  const unique = [...new Set(found)];
+  // Parsed, so each gate carries the DIRECTORY its step runs in.
+  //
+  // The regex version took the script path and ran everything from the repo
+  // root, which is right for most steps and wrong for any step with a
+  // `working-directory:`. The first such gate reported a module-not-found from
+  // preflight while passing in CI, which is the failure mode preflight exists to
+  // prevent, pointed the other way.
+  const found = [];
+  const steps = Object.values(yaml.load(workflow).jobs ?? {}).flatMap((job) => job.steps ?? []);
+  for (const step of steps) {
+    for (const match of String(step.run ?? '').matchAll(/node\s+(scripts\/[a-z0-9-]+\.mjs)/g)) {
+      found.push([match[1], step['working-directory'] ?? '.']);
+    }
+  }
+  const unique = [...new Map(found.map(([script, dir]) => [`${dir}:${script}`, [script, dir]])).values()];
   // A guard that silently checks nothing is the thing this repo keeps finding.
   // If the workflow is renamed or its shape changes, say so rather than
   // reporting a clean run over an empty list.
@@ -74,14 +90,14 @@ function ciScriptGates() {
 }
 
 const skipped = [];
-const derived = ciScriptGates().flatMap((script) => {
+const derived = ciScriptGates().flatMap(([script, dir]) => {
   const name = script.replace(/^scripts\//, '').replace(/\.mjs$/, '');
   const reason = NEEDS_MORE_THAN_A_CHECKOUT.get(script.replace(/^scripts\//, ''));
   if (reason) {
     skipped.push([name, reason]);
     return [];
   }
-  return [[name.replace(/^check-/, '').replace(/-/g, ' '), 'node', [script], ROOT]];
+  return [[name.replace(/^check-/, '').replace(/-/g, ' '), 'node', [script], join(ROOT, dir)]];
 });
 
 /**
