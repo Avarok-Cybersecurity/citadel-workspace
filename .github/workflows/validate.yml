@@ -136,6 +136,13 @@ jobs:
         # skipped by the time the test fails. Twenty-four failing legs uploaded
         # screenshots and discarded the backend logs that would have said why.
         run: node scripts/check-service-logs-are-captured.mjs
+      - name: Helpers survive a target that vanishes
+        # closeAnyModals clicked a Cancel button that was mid-animation; when
+        # the dialog finished closing on its own the element detached, and
+        # Playwright retried for the rest of its thirty seconds and then threw
+        # out of a HELPER, killing whichever spec had called it.
+        run: node scripts/check-helpers-survive-a-vanishing-target.mjs
+        working-directory: citadel-workspaces
       - name: Controls are pressed by testid, not by their words
         # Five checks in one session failed because the app improved its
         # wording; the worst took the whole reconnection family down for a
