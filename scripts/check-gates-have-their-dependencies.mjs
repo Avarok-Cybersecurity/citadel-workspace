@@ -54,7 +54,13 @@ if (jobs.length < 5) {
 function packagesNeededBy(script, directory) {
   const path = join(ROOT, directory, script);
   if (!existsSync(path)) return [];
-  const source = readFileSync(path, 'utf-8');
+  // Comments stripped first. This gate's own doc comment contains the literal
+  // `createRequire(...)('pkg')` as an example, and the first version of it read
+  // that as an import and reported itself. A checker that cannot tell code from
+  // the prose explaining the code will find prose everywhere.
+  const source = readFileSync(path, 'utf-8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
   const needed = new Set();
   for (const match of source.matchAll(BARE_IMPORT)) {
     if (!match[1].startsWith('node:')) needed.add(match[1]);
