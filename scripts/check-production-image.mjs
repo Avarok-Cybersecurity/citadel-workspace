@@ -17,6 +17,7 @@
  */
 import { execFileSync, execSync } from 'node:child_process';
 import { chromium } from 'playwright';
+import { appMounted } from './lib/app-mounted.mjs';
 
 const IMAGE = process.argv[2] ?? 'ghcr.io/avarok-cybersecurity/citadel-workspace-ui:latest';
 const PORT = Number(process.argv[3] ?? 18100);
@@ -61,12 +62,11 @@ async function main() {
     await page.waitForTimeout(4_000);
 
     // The app has to actually mount. A blank page under a correct CSP is still
-    // a broken deploy.
-    const mounted = await page.evaluate(() => {
-      const root = document.getElementById('root');
-      return Boolean(root && root.children.length > 0);
-    });
-    record('the app mounts under the production policy', mounted);
+    // a broken deploy -- and so is a page whose only content is the root error
+    // boundary, which is what this asserted for as long as it read
+    // `root.children.length > 0`.
+    const mounted = await appMounted(page);
+    record('the app mounts under the production policy', mounted.ok, mounted.detail);
 
     // The browser's own verdict on the permission, not our reading of a header.
     const media = await page.evaluate(() => {
@@ -128,16 +128,17 @@ async function main() {
     await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
     await page.waitForTimeout(6_000);
 
+    const offlineMount = await appMounted(page);
     const offline = await page.evaluate(() => ({
-      mounted: Boolean(document.getElementById('root')?.children.length),
-      heading: document.querySelector('h1')?.textContent?.trim().length ?? 0,
       // Nothing modal should stand between the user and a shell that loaded
       // fine. The offline banner says what happened; a dialog telling them to
       // check a connection they know is down only blocks the page.
       dialogs: document.querySelectorAll('[role="dialog"]').length,
     }));
-    record('the shell renders with no network', offline.mounted && offline.heading > 0,
-      `mounted=${offline.mounted} headingChars=${offline.heading}`);
+    // This used to be "#root has children AND an h1 with any text in it". The
+    // error boundary is a div under #root containing an h1 reading "Something
+    // went wrong" -- so a crashed app satisfied both halves.
+    record('the shell renders with no network', offlineMount.ok, offlineMount.detail);
     record('nothing blocks the page while offline', offline.dialogs === 0,
       `${offline.dialogs} dialog(s)`);
     await context.setOffline(false);
