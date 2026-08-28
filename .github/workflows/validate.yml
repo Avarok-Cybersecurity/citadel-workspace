@@ -1026,6 +1026,14 @@ jobs:
         run: npm run check:reduced-motion
         working-directory: citadel-workspaces
 
+      - name: Accessibility on the pre-auth screens
+        # A separate gate from integration-tests' accessibility.spec.ts, which
+        # is better but needs a backend and an account -- so when registration
+        # breaks, it stops running, silently. The screens a visitor meets before
+        # they have an account need nothing but a served bundle, and their
+        # accessibility should not depend on whether an account can be created.
+        run: npm run check:a11y
+
       - name: Mobile layout
         # axe measures colour, names and roles — not size. Three controls
         # shipped under the WCAG 2.2 24px target floor, including the close
