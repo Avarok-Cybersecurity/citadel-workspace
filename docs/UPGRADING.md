@@ -83,7 +83,37 @@ the images come from the tag you named. To find a tag, list the published
 versions of any of the three packages under the org's GHCR packages.
 
 Rolling back is exactly the same operation as upgrading, pointed at an older
-tag. There is no separate rollback path to get wrong.
+tag. There is no separate rollback path to get wrong — **on the server side**.
+
+### What a rollback does to clients, which is not symmetric
+
+Two stores refuse to go backwards, so a rollback across either is a one-way
+door and the deploy will not tell you.
+
+**Browsers.** IndexedDB has no downgrade. A user whose browser holds the newer
+schema gets a `VersionError` on the rolled-back build, and no amount of
+reloading helps — the server is deliberately serving the older bundle. The app
+shows a recovery screen with two options in escalating order: reload (which
+fixes the far commoner *stale cache* case), and, only once that has been tried
+and landed back on the same screen, a local reset that discards the browser's
+cached data. That reset costs the user their locally cached messages and files
+and any saved sign-in; their account and everything on the server survive.
+
+So: **do not roll back across a `DB_VERSION` bump** unless you accept that
+every user who reached the newer build resets their local data. `DB_VERSION`
+lives in `citadel-workspaces/src/lib/storage-migrations.ts`; check whether it
+differs between the two tags before rolling back.
+
+**The agent's data directory.** It now carries a format stamp
+(`.citadel-agent-format`), and an older agent **refuses to start** against a
+newer directory rather than misreading it. That directory holds the ratchet
+keys for every account registered on the device, and they cannot be
+regenerated — deleting the volume to get past the message is not a recovery,
+it is the loss. Run the newer image again, or point
+`INTERNAL_SERVICE_DATA_DIR` at a different directory.
+
+A directory written before the stamp existed is adopted, not refused, so this
+check does not break any agent already running.
 
 ## The guard you should not remove
 
