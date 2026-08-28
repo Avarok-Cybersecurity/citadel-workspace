@@ -9,9 +9,16 @@
  * that failure had been written down. Recording a gap did not close it; a
  * runnable command might.
  *
- * Deliberately does NOT run: anything needing Docker or a live stack, the
- * integration suites (they share one backend), or the submodule-pointer check
- * (that one is about pushing, not about the code being correct).
+ * Deliberately does NOT run: anything needing Docker or a live stack, or the
+ * integration suites (they share one backend).
+ *
+ * It used to exclude the submodule-pointer check too, on the grounds that it
+ * "is about pushing, not about the code being correct". That reasoning was
+ * wrong and cost a whole CI run: an unpushed submodule commit makes
+ * `actions/checkout` fail, so all 73 jobs died before compiling a line and the
+ * run reported nothing at all about the code. Whether a push will produce a
+ * meaningful run is exactly what a pre-push gate is for. The guard existed and
+ * was correct; nothing invoked it.
  *
  * The script list is DERIVED from validate.yml, not written out here.
  *
@@ -123,6 +130,9 @@ const cargoChecks = CARGO_WORKSPACES.flatMap(([label, cwd]) => {
 
 const CHECKS = [
   ...derived,
+  // Not in validate.yml, because by the time CI runs it is already too late:
+  // checkout is what fails.
+  ['submodule pointers pushed', 'node', ['scripts/check-submodule-pointers-pushed.mjs'], ROOT],
   ['event listeners have emitters', 'node', ['scripts/check-event-listeners-have-emitters.mjs'], UI],
   ['typecheck', 'npx', ['tsc', '-p', 'tsconfig.app.json', '--noEmit'], UI],
   ['eslint', 'npx', ['eslint', '.', '--max-warnings', '0'], UI],
