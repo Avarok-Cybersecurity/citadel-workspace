@@ -122,6 +122,15 @@ jobs:
         # Content-Security-Policy serves the same bytes with the same status and
         # nothing fails -- the loss is silent. Derived from `location /`.
         run: node scripts/check-nginx-headers-are-complete.mjs
+      - name: Every declaration carries a type
+        # A ratchet, not a wall: 951 of 1087 files fail these rules outright, and
+        # a gate nobody can pass is a gate that gets switched off. New code is
+        # fully typed from today; a baselined file may not gain violations, and
+        # any file that improves is banked immediately so the debt can only
+        # shrink. `no-explicit-any` is enforced outright in eslint.config.js -
+        # there were nine and they are gone.
+        run: node scripts/check-explicit-types.mjs
+        working-directory: citadel-workspaces
       - name: Browser gates pin the world they measure
         # `vite preview` proxies /ws to the developer's live stack or, in CI, to
         # nothing. A gate that does not decide which measures two different
