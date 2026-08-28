@@ -68,7 +68,11 @@ const constants = new Map();
 for (const file of files) {
   const source = readFileSync(file, 'utf8');
   for (const m of source.matchAll(
-    /const\s+([A-Z_][A-Z0-9_]*)\s*=\s*['"]([^'"]+)['"]/g,
+    // The annotation is optional: `const KEY: string = 'x'` is what the
+    // explicit-types policy asks for, and a pattern that only matched the
+    // unannotated form would quietly stop seeing keys as that policy lands --
+    // and a key it cannot see is a key it reports as never written.
+    /const\s+([A-Z_][A-Z0-9_]*)(?:\s*:\s*[A-Za-z_$][\w$]*)?\s*=\s*['"]([^'"]+)['"]/g,
   )) {
     constants.set(m[1], m[2]);
   }

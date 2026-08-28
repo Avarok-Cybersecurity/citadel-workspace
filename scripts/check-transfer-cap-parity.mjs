@@ -51,7 +51,15 @@ function capFrom(path, pattern) {
     .reduce((a, b) => a * b, 1);
 }
 
-const ts = capFrom(TS_FILE, /MAX_BYTE_CONTENTS_BYTES\s*=\s*([\d\s*]+?);/);
+// The TypeScript side may carry a type annotation.
+//
+// `export const MAX_BYTE_CONTENTS_BYTES: number = 16 * 1024 * 1024;` is what the
+// explicit-types policy asks for, and this pattern -- written before that policy
+// -- matched only the unannotated form. It then failed with "no declaration
+// found", which is the right failure: it refused to report agreement it had not
+// checked. Widened rather than loosened: the annotation is optional and the
+// value is still read from the same place.
+const ts = capFrom(TS_FILE, /MAX_BYTE_CONTENTS_BYTES(?:\s*:\s*[A-Za-z_$][\w$]*)?\s*=\s*([\d\s*]+?);/);
 const rs = capFrom(RS_FILE, /MAX_BYTE_CONTENTS_BYTES:\s*usize\s*=\s*([\d\s*]+?);/);
 
 if (!Number.isFinite(ts) || ts <= 0 || !Number.isFinite(rs) || rs <= 0) {
