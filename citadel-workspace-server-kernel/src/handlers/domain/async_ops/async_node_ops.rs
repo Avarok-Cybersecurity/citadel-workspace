@@ -265,6 +265,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         mdx_content: Option<&str>,
         rules: Option<&str>,
         chat_enabled: Option<bool>,
+        is_default: Option<bool>,
     ) -> Result<DomainNode, NetworkError> {
         // Gate on what is actually being changed, at the node being changed.
         //
@@ -283,8 +284,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         // check_entity_permission walks UP the parent chain, so a grant at the
         // root still covers every descendant: node-scoped is strictly more
         // precise here, never less permissive.
-        let changes_structure =
-            name.is_some() || description.is_some() || rules.is_some() || chat_enabled.is_some();
+        let changes_structure = name.is_some()
+            || description.is_some()
+            || rules.is_some()
+            || chat_enabled.is_some()
+            // Choosing where the workspace opens is a structural decision, and
+            // it writes to every other node, so it needs the structural
+            // permission rather than EditMdx.
+            || is_default.is_some();
 
         let (required, label) = if changes_structure {
             (Permission::EditTreeStructure, "EditTreeStructure")
@@ -347,6 +354,25 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             if new_chat_enabled && node.chat_channel_id.is_none() {
                 node.chat_channel_id = Some(uuid::Uuid::new_v4().to_string());
             }
+        }
+
+        // Exactly one default, so setting it clears the others. Done inside the
+        // same lock and the same save as the node's own change: a client that
+        // saw one write succeed and the other fail would show two defaults, or
+        // none, with no way to tell which.
+        //
+        // Only on `Some(true)` -- `Some(false)` clears this node's flag and
+        // leaves the workspace with no default, which is a legitimate thing to
+        // ask for and must not silently promote something else.
+        if is_default == Some(true) {
+            for (id, other) in nodes.iter_mut() {
+                if id != node_id {
+                    other.is_default = false;
+                }
+            }
+        }
+        if let Some(new_default) = is_default {
+            node.is_default = new_default;
         }
 
         node.updated_at = current_timestamp();

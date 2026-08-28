@@ -75,6 +75,7 @@ pub trait AsyncNodeOperations<R: Ratchet + Send + Sync + 'static>: Send + Sync {
         mdx_content: Option<&str>,
         rules: Option<&str>,
         chat_enabled: Option<bool>,
+        is_default: Option<bool>,
     ) -> Result<DomainNode, NetworkError>;
 
     /// Delete a node from the tree.

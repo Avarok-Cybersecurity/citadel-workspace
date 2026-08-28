@@ -214,6 +214,16 @@ pub enum WorkspaceProtocolRequest {
         mdx_content: Option<String>,
         rules: Option<String>,
         chat_enabled: Option<bool>,
+        /// Make this the node the workspace opens on.
+        ///
+        /// The client had a "Set as default" menu item that sent `is_default`
+        /// in this request. There was no such field, serde ignores unknown
+        /// keys, the write succeeded, and the toast said "X is now the default"
+        /// while nothing changed — the old default came back on reload. The
+        /// field the client was already sending now exists and is honoured.
+        ///
+        /// Exactly one node is the default, so setting it clears the others.
+        is_default: Option<bool>,
     },
 
     /// Delete a node. If cascade is true, also deletes all descendants.

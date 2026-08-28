@@ -85,6 +85,7 @@ async fn a_user_granted_edit_mdx_can_save_a_document() {
             mdx_content: Some("# My notes".to_string()),
             rules: None,
             chat_enabled: None,
+            is_default: None,
         },
         editor,
     )
@@ -112,6 +113,7 @@ async fn edit_mdx_does_not_confer_the_right_to_rename() {
             mdx_content: None,
             rules: None,
             chat_enabled: None,
+            is_default: None,
         },
         editor,
     )
@@ -140,6 +142,7 @@ async fn a_user_with_neither_permission_cannot_save() {
             mdx_content: Some("# Not mine to write".to_string()),
             rules: None,
             chat_enabled: None,
+            is_default: None,
         },
         outsider,
     )

@@ -982,6 +982,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             mdx_content,
             rules,
             chat_enabled,
+            is_default,
         } => {
             use crate::handlers::domain::node_ops::AsyncNodeOperations;
             use std::time::{SystemTime, UNIX_EPOCH};
@@ -995,6 +996,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     mdx_content.as_deref(),
                     rules.as_deref(),
                     *chat_enabled,
+                    *is_default,
                 )
                 .await
             {

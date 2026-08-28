@@ -126,6 +126,8 @@ jobs:
         run: node scripts/check-dockerfiles-copy-every-crate.mjs
       - name: Check the inline-upload byte cap agrees across the wire
         run: node scripts/check-transfer-cap-parity.mjs
+      - name: Check the browser outwaits the agent on peer discovery
+        run: node scripts/check-peer-list-timeout-parity.mjs
       - name: Check no shipped binary carries a test-only cargo feature
         run: node scripts/check-no-test-features-shipped.mjs
 

@@ -91,6 +91,7 @@ async fn test_room_operations() {
             mdx_content: Some("# Updated Room\nThis room content has been updated".to_string()),
             rules: None,
             chat_enabled: None,
+            is_default: None,
         },
     )
     .await
