@@ -65,6 +65,22 @@ function ratio(a, b) {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
+/**
+ * Text tokens that are read on their OWN colour at low alpha.
+ *
+ * `bg-success/20` with `text-success-emphasis` is the "Active" badge in Account
+ * Management; `bg-warning/10` is the protocol warning. A plain
+ * foreground-on-background check never sees these, and they are the tightest
+ * pairings in the palette — `--success` used as text was 3.54:1 on its own
+ * twenty-percent tint, which is what those emphasis tokens exist to fix.
+ */
+const TINTED = [
+  ['success-emphasis', 'success'],
+  ['warning-emphasis', 'warning'],
+  ['destructive-emphasis', 'destructive'],
+];
+const TINTS = [0.1, 0.15, 0.2];
+
 /** [foreground token, surface token] — what is read on what. */
 const PAIRS = [
   ['foreground', 'background'],
@@ -78,9 +94,13 @@ const PAIRS = [
   ['muted-foreground', 'muted'],
   ['muted-foreground', 'background'],
   ['muted-foreground', 'card'],
+  ['success-emphasis', 'background'],
+  ['success-emphasis', 'card'],
+  ['warning-emphasis', 'background'],
+  ['warning-emphasis', 'card'],
 ];
 
-const needed = [...new Set(PAIRS.flat())];
+const needed = [...new Set([...PAIRS.flat(), ...TINTED.flat(), 'card'])];
 const decls = Object.fromEntries(needed.map((t) => [t, declarations(t)]));
 
 for (const [name, list] of Object.entries(decls)) {
@@ -109,6 +129,19 @@ for (const [index, theme] of [[0, 'light'], [1, 'dark']]) {
       failures.push(`${theme}: --${fg} on --${bg} is ${value.toFixed(2)}:1, below ${AA_BODY}`);
     }
   }
+
+  const card = hslToRgb(decls.card[index]);
+  const over = (fg, bg, alpha) => fg.map((c, i) => c * alpha + bg[i] * (1 - alpha));
+  for (const [text, surface] of TINTED) {
+    for (const alpha of TINTS) {
+      const value = ratio(hslToRgb(decls[text][index]), over(hslToRgb(decls[surface][index]), card, alpha));
+      const label = `--${text} on bg-${surface}/${Math.round(alpha * 100)}`;
+      rows.push(`  ${theme.padEnd(5)} ${label.padEnd(46)} ${value.toFixed(2)}:1  (needs ${AA_BODY})`);
+      if (value < AA_BODY) {
+        failures.push(`${theme}: ${label} is ${value.toFixed(2)}:1, below ${AA_BODY}`);
+      }
+    }
+  }
 }
 
 console.log(rows.join('\n'));
@@ -118,4 +151,4 @@ if (failures.length > 0) {
   console.error('');
   process.exit(1);
 }
-console.log(`\ncheck-token-contrast: OK — ${PAIRS.length * 2} pairings clear AA across both themes.`);
+console.log(`\ncheck-token-contrast: OK — ${rows.length} pairings clear AA across both themes.`);
