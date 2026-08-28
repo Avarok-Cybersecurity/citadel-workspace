@@ -38,7 +38,9 @@ const SKIP = new Map([
   ['components/layout/sidebar/TreeNodesSection.tsx', 356],
   ['components/p2p/ChatSettingsPanel.tsx', 330],
   ['lib/file-transfer/service.ts', 324],
-  ['pages/Landing.tsx', 311],
+  // 313: two data-testid attributes, so the integration suite's readiness
+  // probe can stop keying on button copy — see ROBUSTNESS round 168.
+  ['pages/Landing.tsx', 313],
   ['types/messaging-layer.ts', 605],
   ['types/workspace-protocol.ts', 355],
 ]);
