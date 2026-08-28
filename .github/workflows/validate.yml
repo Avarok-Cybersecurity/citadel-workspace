@@ -122,15 +122,6 @@ jobs:
         # Content-Security-Policy serves the same bytes with the same status and
         # nothing fails -- the loss is silent. Derived from `location /`.
         run: node scripts/check-nginx-headers-are-complete.mjs
-      - name: Every declaration carries a type
-        # A ratchet, not a wall: 951 of 1087 files fail these rules outright, and
-        # a gate nobody can pass is a gate that gets switched off. New code is
-        # fully typed from today; a baselined file may not gain violations, and
-        # any file that improves is banked immediately so the debt can only
-        # shrink. `no-explicit-any` is enforced outright in eslint.config.js -
-        # there were nine and they are gone.
-        run: node scripts/check-explicit-types.mjs
-        working-directory: citadel-workspaces
       - name: Browser gates pin the world they measure
         # `vite preview` proxies /ws to the developer's live stack or, in CI, to
         # nothing. A gate that does not decide which measures two different
@@ -145,6 +136,11 @@ jobs:
         # skipped by the time the test fails. Twenty-four failing legs uploaded
         # screenshots and discarded the backend logs that would have said why.
         run: node scripts/check-service-logs-are-captured.mjs
+      - name: Gates run where their dependencies exist
+        # Twice a gate landed in the job that installs nothing, and both times
+        # the whole job went red on `Cannot find package`, taking twenty-five
+        # other gates with it. A gate that cannot run is worth less than no gate.
+        run: node scripts/check-gates-have-their-dependencies.mjs
       - name: Every gate is invoked by something
         # check-submodule-pointers-pushed.mjs was written, was correct, and had
         # never run once -- a whole CI run died in checkout for exactly the
@@ -374,6 +370,21 @@ jobs:
           ${{ github.workspace }}/node_modules/.bin/eslint . --max-warnings 0
         working-directory: ${{ matrix.path }}
 
+      - name: Every declaration carries a type
+        # In the LINT job, not with the other gates: this one runs ESLint
+        # programmatically, and the crate-coverage job installs nothing --
+        # it failed there with `Cannot find package 'eslint'` and took the
+        # other twenty-five gates in that job down with it, which is the
+        # same mistake check-service-logs-are-captured made with js-yaml.
+        #
+        # A ratchet, not a wall: 951 of 1087 files fail these rules outright, and
+        # a gate nobody can pass is a gate that gets switched off. New code is
+        # fully typed from today; a baselined file may not gain violations, and
+        # any file that improves is banked immediately so the debt can only
+        # shrink. `no-explicit-any` is enforced outright in eslint.config.js -
+        # there were nine and they are gone.
+        run: node scripts/check-explicit-types.mjs
+        working-directory: citadel-workspaces
       - name: Documented env vars have consumers
         # A deployment doc is the one place a reader cannot verify a claim by
         # running it. A variable named there but read by nothing looks like a
