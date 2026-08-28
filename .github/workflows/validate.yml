@@ -110,6 +110,12 @@ jobs:
         # which nothing checked: axe only measures what is rendered during a
         # scan, and most of these surfaces are behind a login.
         run: node scripts/check-token-contrast.mjs
+      - name: Workflow npm steps name a script that exists
+        # A gate was added without the working-directory its neighbours carry,
+        # so it ran from the repo root and died on "Missing script" after a
+        # Docker build and three browser checks had already run. The directory
+        # is a property of each step here, not of the job.
+        run: node scripts/check-workflow-npm-scripts-exist.mjs
       - name: Check no storage key is read but never written
         run: node scripts/check-storage-keys.mjs
       - name: Check the Permission enum matches between Rust and TypeScript
@@ -1039,6 +1045,7 @@ jobs:
         # they have an account need nothing but a served bundle, and their
         # accessibility should not depend on whether an account can be created.
         run: npm run check:a11y
+        working-directory: citadel-workspaces
 
       - name: Mobile layout
         # axe measures colour, names and roles — not size. Three controls
