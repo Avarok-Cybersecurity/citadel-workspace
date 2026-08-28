@@ -1366,6 +1366,34 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                         let outcome =
                             crate::first_member_outcome(this.first_connect_admin, ws_was_empty);
 
+                        // A promoted first member also INITIALISES the workspace.
+                        //
+                        // The frontend shows its "Initialize & Become Admin"
+                        // modal whenever the metadata lacks `initialized: true`,
+                        // and promotion did not write it -- so the one account
+                        // that IS the administrator was asked to become one, and
+                        // declining that modal navigates back to the index
+                        // rather than into the workspace. The flag exists so
+                        // that `tilt up` -> create an account -> have editing
+                        // rights works without anyone typing the master
+                        // password, and it only half did.
+                        //
+                        // Written here, before the workspace is persisted below,
+                        // so it costs no extra write. Merged, never assigned:
+                        // this document is shared with theming and with whatever
+                        // is added next. See metadata_merge.
+                        if outcome == crate::FirstMemberOutcome::Promote {
+                            match crate::handlers::domain::server_ops::metadata_merge::merge_metadata_document(
+                                &ws.metadata,
+                                br#"{"initialized":true}"#,
+                            ) {
+                                Ok(merged) => ws.metadata = merged,
+                                Err(err) => {
+                                    warn!(target: "citadel", "[ASYNC_KERNEL] Could not mark the workspace initialised: {err}");
+                                }
+                            }
+                        }
+
                         if !ws.members.contains(&user_id) {
                             ws.members.push(user_id.clone());
                             this.domain_operations
@@ -1394,8 +1422,6 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                     .await?;
                                 info!(target: "citadel", "[ASYNC_KERNEL] User {} is the first workspace member; promoted to Admin", user_id);
                             }
-                        } else if outcome == crate::FirstMemberOutcome::AwaitInitialization {
-                            info!(target: "citadel", "[ASYNC_KERNEL] User {} is the first workspace member, but first-connect admin promotion is off. The workspace awaits initialization with the master password.", user_id);
                         }
 
                         info!(target: "citadel", "[ASYNC_KERNEL] User {} added to workspace domain", user_id);
