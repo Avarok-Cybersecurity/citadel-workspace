@@ -726,12 +726,15 @@ regardless of orphan-mode setting, so a page refresh, a navigation or a closed
 tab leaves the session intact and reconnectable. The `orphan_sessions` map is no
 longer consulted for cleanup decisions at all.
 
-Sessions are removed in exactly three places:
+Sessions are removed in exactly two places:
 
 1. **Disconnect** (`requests/peer/disconnect.rs`) — user-initiated logout.
 2. **Deregister** — account deletion.
-3. **GetSessions reconciliation** (`requests/get_sessions.rs`) — syncing the map
-   with the SDK's own view.
+> There is no third path. `requests/get_sessions.rs` once reconciled the map
+> against the SDK's view; every branch of that filter returned false, so the
+> cleanup never ran, and the query whose result it used was discarded. Both are
+> gone — the handler reports what the connection map holds. An earlier revision
+> of this file listed it as a cleanup path; it was not one.
 
 ### Connecting when a session already exists
 
