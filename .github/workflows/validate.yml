@@ -122,6 +122,12 @@ jobs:
         # Content-Security-Policy serves the same bytes with the same status and
         # nothing fails -- the loss is silent. Derived from `location /`.
         run: node scripts/check-nginx-headers-are-complete.mjs
+      - name: Service logs survive a failing test
+        # `if: failure()` on a step reads as "run if anything failed" and is not:
+        # steps run in order, so a dump placed before the test has already been
+        # skipped by the time the test fails. Twenty-four failing legs uploaded
+        # screenshots and discarded the backend logs that would have said why.
+        run: node scripts/check-service-logs-are-captured.mjs
       - name: Every gate is invoked by something
         # check-submodule-pointers-pushed.mjs was written, was correct, and had
         # never run once -- a whole CI run died in checkout for exactly the
@@ -562,6 +568,26 @@ jobs:
           INTERNAL_SERVICE_PORT: '12345'
         run: npm run ${{ matrix.test }}
         working-directory: citadel-workspaces/integration-tests
+      # AFTER the test, not only after startup.
+      #
+      # The pre-test dump has `if: failure()`, which reads as "dump on any
+      # failure" and is not: steps run in order, so by the time the test fails
+      # that step has already been skipped. Every failing leg therefore uploaded
+      # screenshots and threw the backend logs away -- and the questions those
+      # failures raise are backend questions. "Was the first account promoted to
+      # Admin, or is the workspace awaiting initialization?" is answered by one
+      # line in the server log, and that line was never captured.
+      - name: Dump Service Logs on Test Failure
+        if: failure()
+        run: |
+          echo "=== server: membership and refusal decisions ==="
+          docker compose logs server 2>&1 \
+            | grep -E "first workspace member|awaits initialization|promoted to Admin|Refusing" \
+            | tail -40 || true
+          echo "=== server (tail) ==="
+          docker compose logs server 2>&1 | tail -120
+          echo "=== internal-service (tail) ==="
+          docker compose logs internal-service 2>&1 | tail -120
       - name: Upload Screenshots on Failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -637,6 +663,26 @@ jobs:
           INTERNAL_SERVICE_PORT: '12345'
         run: npx playwright test --shard=${{ matrix.shard }}/3
         working-directory: citadel-workspaces/integration-tests
+      # AFTER the test, not only after startup.
+      #
+      # The pre-test dump has `if: failure()`, which reads as "dump on any
+      # failure" and is not: steps run in order, so by the time the test fails
+      # that step has already been skipped. Every failing leg therefore uploaded
+      # screenshots and threw the backend logs away -- and the questions those
+      # failures raise are backend questions. "Was the first account promoted to
+      # Admin, or is the workspace awaiting initialization?" is answered by one
+      # line in the server log, and that line was never captured.
+      - name: Dump Service Logs on Test Failure
+        if: failure()
+        run: |
+          echo "=== server: membership and refusal decisions ==="
+          docker compose logs server 2>&1 \
+            | grep -E "first workspace member|awaits initialization|promoted to Admin|Refusing" \
+            | tail -40 || true
+          echo "=== server (tail) ==="
+          docker compose logs server 2>&1 | tail -120
+          echo "=== internal-service (tail) ==="
+          docker compose logs internal-service 2>&1 | tail -120
       - name: Upload Playwright Report
         if: failure()
         uses: actions/upload-artifact@v4
