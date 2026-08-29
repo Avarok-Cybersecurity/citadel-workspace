@@ -45,7 +45,13 @@ const SKIP = new Map([
   // growth is the branch and its explanation.
   ['lib/connection/service.ts', 252],
   ['components/chat/GroupMemberManagement.tsx', 251],
-  ['lib/call/call-manager.ts', 251],
+  // 252, up one from 251: `openingSessions`, the map that stops two callers
+  // opening the same peer's media session at once. `accept()` opens for every
+  // peer that has answered and the CallAccept handler opens for the one that
+  // just did, so in a group call they raced and the service refused the second
+  // with "a media open or teardown is already in progress with this peer".
+  // One field, and the explanation lives with the code that uses it.
+  ['lib/call/call-manager.ts', 252],
   ['lib/multi-instance/instance-inbound-router.ts', 251],
   ['lib/p2p-auto-connect-service/connection-logic.ts', 251],
   // 798: seventeen forwardRef components each gained a two-line return type,
