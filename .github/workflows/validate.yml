@@ -21,6 +21,10 @@ env:
 jobs:
   fmt:
     name: Cargo Fmt - ${{ matrix.crate }}
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 2m; this is generous headroom over it, not a target.
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -40,6 +44,10 @@ jobs:
 
   clippy:
     name: Cargo Clippy - ${{ matrix.crate }}
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 3m; this is generous headroom over it, not a target.
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -74,6 +82,10 @@ jobs:
   # class of disappearance this job exists to detect.
   crate-coverage:
     name: Every workspace crate has a lint job
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is under a minute; this is generous headroom over it, not a target.
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -194,6 +206,13 @@ jobs:
         run: node scripts/check-transfer-cap-parity.mjs
       - name: Check the browser outwaits the agent on peer discovery
         run: node scripts/check-peer-list-timeout-parity.mjs
+      - name: Every CI job declares how long it may run
+        # None of them did. GitHub's default is 360 minutes, so a job that hangs
+        # -- a spec waiting on a stack that never came up, a `compose up --wait`
+        # against an image that will not start -- holds a runner for six hours
+        # and says nothing for six hours. The slowest job here is 41 minutes.
+        # Budgets are roughly twice the observed maximum, recorded beside each.
+        run: node scripts/check-ci-job-timeouts.mjs
       - name: Every network fetch in an image build is retried
         # docker/sync installed wasm-pack with one `curl … | sh`. A run died on
         # "curl: (35) Recv failure: Connection reset by peer" and took
@@ -216,6 +235,10 @@ jobs:
 
   internal-service-rust-lint:
     name: Cargo Fmt + Clippy - citadel-internal-service workspace
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 3m; this is generous headroom over it, not a target.
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -241,6 +264,10 @@ jobs:
     # worktree, so a main-repo PR carrying those changes passed with zero test
     # execution.
     name: Rust Tests - citadel-internal-service workspace
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 15m; this is generous headroom over it, not a target.
+    timeout-minutes: 40
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -254,6 +281,10 @@ jobs:
 
   rust-tests:
     name: Rust Tests - ${{ matrix.crate }}
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 3m; this is generous headroom over it, not a target.
+    timeout-minutes: 25
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -287,6 +318,10 @@ jobs:
 
   unit-tests:
     name: Unit Tests
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 6m; this is generous headroom over it, not a target.
+    timeout-minutes: 25
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -316,6 +351,10 @@ jobs:
 
   typecheck:
     name: TypeScript Type Check - ${{ matrix.project }}
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is under a minute; this is generous headroom over it, not a target.
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -368,6 +407,10 @@ jobs:
 
   lint:
     name: ESLint - ${{ matrix.project }}
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 1m; this is generous headroom over it, not a target.
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -482,6 +525,10 @@ jobs:
 
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 26m; this is generous headroom over it, not a target.
+    timeout-minutes: 55
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -718,6 +765,10 @@ jobs:
     # out): the runner distributes specs across shards itself, so adding a spec
     # needs no matrix edit, and a slow spec no longer defines the critical path.
     name: Playwright - shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 41m; this is generous headroom over it, not a target.
+    timeout-minutes: 80
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -820,6 +871,10 @@ jobs:
     # `<no value>` string docker prints for an absent label, which is exactly the sort of
     # detail a stub would paper over.
     name: Deploy Gate - image revision check
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 9m; this is generous headroom over it, not a target.
+    timeout-minutes: 40
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -1058,6 +1113,10 @@ jobs:
 
   production-build:
     name: Production Docker Build
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 26m; this is generous headroom over it, not a target.
+    timeout-minutes: 55
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

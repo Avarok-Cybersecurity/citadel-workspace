@@ -26,6 +26,9 @@ permissions:
 jobs:
   build:
     name: ${{ matrix.asset }}
+    # Observed 16m (the Windows target; the others are 5m); this bounds a hang, not performance.
+    # Without it a stuck job holds a runner for GitHub's 360-minute default.
+    timeout-minutes: 45
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -101,6 +104,9 @@ jobs:
 
   publish:
     name: Publish release
+    # Observed under a minute; this bounds a hang, not performance.
+    # Without it a stuck job holds a runner for GitHub's 360-minute default.
+    timeout-minutes: 15
     needs: build
     runs-on: ubuntu-latest
     # Only a real tag push publishes. workflow_dispatch builds and smoke-tests

@@ -70,10 +70,16 @@ jobs:
   # it proves the container starts, not that the code works.
   validate:
     name: Validate before publishing
+    # Observed under a minute; this bounds a hang, not performance.
+    # Without it a stuck job holds a runner for GitHub's 360-minute default.
+    timeout-minutes: 15
     uses: ./.github/workflows/validate.yml
 
   publish:
     name: Publish ${{ matrix.image }}
+    # Observed 8m; this bounds a hang, not performance.
+    # Without it a stuck job holds a runner for GitHub's 360-minute default.
+    timeout-minutes: 40
     needs: validate
     runs-on: ubuntu-latest
     strategy:
@@ -264,6 +270,9 @@ jobs:
 
   promote-latest:
     name: Promote latest
+    # Observed under a minute; this bounds a hang, not performance.
+    # Without it a stuck job holds a runner for GitHub's 360-minute default.
+    timeout-minutes: 15
     # `needs` requires EVERY matrix job to have succeeded. Combined with the
     # master-only guard, this is what guarantees `latest` never points at a
     # half-published release or at unmerged code from a manual branch dispatch.
