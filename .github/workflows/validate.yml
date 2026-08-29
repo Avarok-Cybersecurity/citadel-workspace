@@ -151,6 +151,14 @@ jobs:
         # keyed on prose, and it taxes every improvement to that prose.
         run: node scripts/check-controls-are-addressed-by-testid.mjs
         working-directory: citadel-workspaces
+      - name: Specs search for copy the app actually has
+        # The other half of the same problem. The check above catches a control
+        # PRESSED by its words; this catches one LOOKED FOR by words the app no
+        # longer contains -- "CONNECTED PEERS", "LIVE DOCS", "Create Live Doc" --
+        # which is worse, because it does not fail. It waits out a timeout, or
+        # falls through to the next strategy, and the report names the feature.
+        run: node scripts/check-specs-search-for-real-copy.mjs
+        working-directory: citadel-workspaces
       - name: Gates run where their dependencies exist
         # Twice a gate landed in the job that installs nothing, and both times
         # the whole job went red on `Cannot find package`, taking twenty-five
