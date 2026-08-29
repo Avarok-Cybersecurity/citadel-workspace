@@ -206,6 +206,14 @@ jobs:
         run: node scripts/check-transfer-cap-parity.mjs
       - name: Check the browser outwaits the agent on peer discovery
         run: node scripts/check-peer-list-timeout-parity.mjs
+      - name: No gate needs a newer Node than its job runs
+        # check-permission-gates imported globSync from node:fs, which arrived
+        # in Node 22. The lint job pins 20 and `engines` says >=20, so it threw
+        # at import and took the ESLint jobs for all three projects with it. It
+        # passed locally, and would pass locally for anybody: the shell that
+        # wrote it runs 22. Bumping CI to 22 would have made the red go away and
+        # left `engines` lying.
+        run: node scripts/check-gates-run-on-the-oldest-node.mjs
       - name: Every CI job declares how long it may run
         # None of them did. GitHub's default is 360 minutes, so a job that hangs
         # -- a spec waiting on a stack that never came up, a `compose up --wait`
