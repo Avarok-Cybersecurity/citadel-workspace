@@ -43,7 +43,6 @@ const SKIP = new Map([
   // 262: a guard that refuses to sign out of a session with no CID, after the
   // decision itself was moved to orphan-session-disconnect.ts. The remaining
   // growth is the branch and its explanation.
-  ['components/useOrphanSessions.ts', 262],
   ['lib/connection/service.ts', 252],
   ['pages/UserDirectory.tsx', 252],
   ['components/chat/GroupMemberManagement.tsx', 251],
