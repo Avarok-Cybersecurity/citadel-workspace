@@ -511,6 +511,17 @@ jobs:
         # indistinguishable from a test that passes.
         run: node scripts/check-every-test-runs.mjs
         working-directory: citadel-workspaces
+      - name: A CID is a bigint
+        # CLAUDE.md: "CID canonical type is bigint ... NEVER use string CIDs in
+        # function parameters, interface definitions, Map/Set keys, or
+        # serialization boundaries." Seventy-six field types do, none with a
+        # reason given, and the code around them calls .toString() on CIDs that
+        # arrive as bigint. The cost is two incompatible `Peer` types for the
+        # same peers, differing in that field -- so every crossing needs a
+        # conversion, and a forgotten one is a comparison that never matches.
+        # A ratchet, like check-explicit-types, which went 7,823 to zero.
+        run: node scripts/check-cid-is-bigint.mjs
+        working-directory: citadel-workspaces
       - name: Check permission gates go through usePermission
         # hasPermission reads the cache, and a domain nobody loaded reads
         # exactly like a denial. usePermission carries the bounded retry, the
