@@ -19,13 +19,45 @@
  * budget raised, deliberately, in a commit that says so.
  */
 import { readFileSync, existsSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(import.meta.url);
-const yaml = require('js-yaml');
+
+/**
+ * Jobs and their declared budgets, read as text.
+ *
+ * The first version of this used `js-yaml`, and the job it runs in installs
+ * nothing — so it died on `Cannot find module 'js-yaml'` and took the other
+ * gates in that job with it. The workflow file already carries a comment about
+ * exactly this, naming the same package: the explicit-types gate lives in the
+ * LINT job "because the crate-coverage job installs nothing … which is the same
+ * mistake check-service-logs-are-captured made with js-yaml". Third time.
+ *
+ * So no dependency. A GitHub workflow's shape is fixed enough for this: job
+ * keys are the only two-space-indented keys under `jobs:`, and everything
+ * belonging to a job is indented further. `jobsFound` is checked by the caller,
+ * so a file that stops matching fails loudly instead of reporting agreement it
+ * never established.
+ */
+function jobsWithBudgets(source) {
+  const lines = source.split('\n');
+  const jobs = new Map();
+  let inJobs = false;
+  let current = null;
+  for (const line of lines) {
+    if (/^jobs:\s*$/.test(line)) { inJobs = true; continue; }
+    if (!inJobs) continue;
+    // A top-level key ends the jobs block.
+    if (/^\S/.test(line)) { inJobs = false; continue; }
+    const jobKey = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
+    if (jobKey) { current = jobKey[1]; jobs.set(current, undefined); continue; }
+    if (current === null) continue;
+    const budget = line.match(/^ {4}timeout-minutes:\s*(\S+)\s*$/);
+    if (budget) jobs.set(current, Number(budget[1]));
+  }
+  return jobs;
+}
 
 /** Nothing here should need six hours; a budget above this is a typo or a hang. */
 const CEILING_MINUTES = 120;
@@ -46,18 +78,16 @@ for (const relPath of WORKFLOWS) {
     problems.push([relPath, 'listed here but not present; this check is out of date']);
     continue;
   }
-  const doc = yaml.load(readFileSync(path, 'utf8'));
-  const jobs = doc?.jobs;
-  if (!jobs || Object.keys(jobs).length === 0) {
+  const jobs = jobsWithBudgets(readFileSync(path, 'utf8'));
+  if (jobs.size === 0) {
     problems.push([relPath, 'no jobs found — the file moved or its shape changed, so nothing was checked']);
     continue;
   }
-  for (const [name, job] of Object.entries(jobs)) {
+  for (const [name, budget] of jobs) {
     checked += 1;
-    const budget = job['timeout-minutes'];
     if (budget === undefined) {
       problems.push([`${relPath}:${name}`, 'no timeout-minutes; a hang here holds a runner for six hours']);
-    } else if (typeof budget !== 'number' || budget <= 0 || budget > CEILING_MINUTES) {
+    } else if (!Number.isFinite(budget) || budget <= 0 || budget > CEILING_MINUTES) {
       problems.push([`${relPath}:${name}`, `timeout-minutes is ${budget}; expected 1..${CEILING_MINUTES}`]);
     }
   }

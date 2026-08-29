@@ -65,10 +65,36 @@ function packagesNeededBy(script, directory) {
   for (const match of source.matchAll(BARE_IMPORT)) {
     if (!match[1].startsWith('node:')) needed.add(match[1]);
   }
-  // `createRequire(...)('pkg')` is the other way in, and the one that made this
-  // check necessary in the first place.
-  for (const match of source.matchAll(/createRequire\([^)]*\)\(\s*['"]([^'"]+)['"]/g)) {
-    if (!match[1].startsWith('node:')) needed.add(match[1]);
+  // `require('pkg')` in any form, which is the other way in and the one that
+  // made this check necessary.
+  //
+  // This matched only the INLINE `createRequire(...)('pkg')`. The two-step
+  // form is what anybody actually writes:
+  //
+  //     const require = createRequire(import.meta.url);
+  //     const yaml = require('js-yaml');
+  //
+  // and it went straight past. check-ci-job-timeouts was added to
+  // crate-coverage written exactly that way, died on `Cannot find module
+  // 'js-yaml'`, and took the other gates in the job down with it -- the third
+  // time this has happened, and the second time with js-yaml, under a gate
+  // written to prevent it.
+  //
+  // These are `.mjs`, so a `require(` at all can only have come from a
+  // `createRequire`. Matching the call rather than its provenance is both
+  // simpler and harder to slip past.
+  // Both forms, and the second does not subsume the first: in
+  // `createRequire(import.meta.url)('js-yaml')` the package name is the
+  // argument of the RESULT call, so nothing follows `require(` but
+  // `import.meta.url`. Replacing one pattern with the other silently dropped a
+  // case this gate already caught, which its own negative control found.
+  for (const pattern of [
+    /createRequire\([^)]*\)\(\s*['"]([^'"]+)['"]/g,
+    /\brequire\(\s*['"]([^'"]+)['"]/g,
+  ]) {
+    for (const match of source.matchAll(pattern)) {
+      if (!match[1].startsWith('node:') && !match[1].startsWith('.')) needed.add(match[1]);
+    }
   }
   return [...needed];
 }
