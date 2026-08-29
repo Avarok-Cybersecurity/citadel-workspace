@@ -44,7 +44,6 @@ const SKIP = new Map([
   // decision itself was moved to orphan-session-disconnect.ts. The remaining
   // growth is the branch and its explanation.
   ['lib/connection/service.ts', 252],
-  ['pages/UserDirectory.tsx', 252],
   ['components/chat/GroupMemberManagement.tsx', 251],
   ['lib/call/call-manager.ts', 251],
   ['lib/multi-instance/instance-inbound-router.ts', 251],
