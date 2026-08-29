@@ -194,6 +194,15 @@ jobs:
         run: node scripts/check-transfer-cap-parity.mjs
       - name: Check the browser outwaits the agent on peer discovery
         run: node scripts/check-peer-list-timeout-parity.mjs
+      - name: The workspace-missing sentinel is a string the kernel sends
+        # useMessageEventSetup decides whether to offer workspace initialization
+        # by matching 'No workspace found' inside the server's error text. The
+        # kernel writes that message as an ordinary human-facing string --
+        # nothing at the call site says a client is parsing it -- and it already
+        # has three other phrasings of the same condition. Reword it and
+        # needsInitialization is false forever: the first user of a fresh
+        # deployment is never offered setup, and nothing fails.
+        run: node scripts/check-workspace-missing-parity.mjs
       - name: Check no shipped binary carries a test-only cargo feature
         run: node scripts/check-no-test-features-shipped.mjs
 
@@ -400,12 +409,13 @@ jobs:
         # other twenty-five gates in that job down with it, which is the
         # same mistake check-service-logs-are-captured made with js-yaml.
         #
-        # A ratchet, not a wall: 951 of 1087 files fail these rules outright, and
-        # a gate nobody can pass is a gate that gets switched off. New code is
-        # fully typed from today; a baselined file may not gain violations, and
-        # any file that improves is banked immediately so the debt can only
-        # shrink. `no-explicit-any` is enforced outright in eslint.config.js -
-        # there were nine and they are gone.
+        # It was a ratchet, because 951 of 1087 files failed these rules
+        # outright and a gate nobody can pass is a gate that gets switched
+        # off. The baseline could only shrink: 7,823 findings, then 251, then
+        # zero. It is a wall now -- the baseline and its --write lever are
+        # gone, and one untyped declaration anywhere in src/ fails this.
+        # `no-explicit-any` is enforced outright in eslint.config.js; there
+        # were nine and they are gone.
         run: node scripts/check-explicit-types.mjs
         working-directory: citadel-workspaces
       - name: Check no component prop is honoured but never passed
@@ -415,6 +425,34 @@ jobs:
         # had no caller either, and the tree forgot every branch on reload. Both
         # read as working code, because the component honours the prop perfectly.
         run: node scripts/check-inert-props.mjs
+        working-directory: citadel-workspaces
+      - name: No console listener truncates the message itself
+        # diagnostics.ts printed substring(0, 150) and the WASM tracing prefix
+        # eats ~110 of those, so [ILM-BLOCKED-RECOVERY] reported "peer 15" for
+        # peer 15079777622326333560 with nothing saying the line was cut. That
+        # was fixed, and browser.ts had the same call -- in the helper the
+        # [Alice]/[Bob] lines in those very logs came from. Four sites, one fix.
+        run: node scripts/check-console-printers.mjs
+        working-directory: citadel-workspaces
+      - name: Every test file is one a runner collects
+        # `include` was a recursive glob minus a list of directories, which was
+        # whack-a-mole: every Playwright spec added under integration-tests/
+        # arrived as a vitest failure. Replacing it with a named list fixed
+        # that and silently dropped scripts/__tests__ -- 342 files before, 342
+        # after, one swapped for another. A test that does not run is
+        # indistinguishable from a test that passes.
+        run: node scripts/check-every-test-runs.mjs
+        working-directory: citadel-workspaces
+      - name: Check permission gates go through usePermission
+        # hasPermission reads the cache, and a domain nobody loaded reads
+        # exactly like a denial. usePermission carries the bounded retry, the
+        # reset on reconnection, and the reason that tells "the answer was no"
+        # apart from "we never got an answer". WorkspaceAppearanceSection gated
+        # on the former behind its own fetch-once effect, so one request sent
+        # before the tab knew who was signed in could show the workspace's own
+        # owner a read-only theme editor captioned "Set by a workspace admin",
+        # permanently.
+        run: node scripts/check-permission-gates.mjs
         working-directory: citadel-workspaces
       - name: Documented env vars have consumers
         # A deployment doc is the one place a reader cannot verify a claim by
