@@ -106,11 +106,25 @@ RUN sed -i 's|file:../citadel-internal-service/typescript-client|file:/workspace
 # Build wasm client (innermost dep) first, then workspace client (which
 # depends on it). Both produce dist/ so subsequent installs see the
 # entry points declared in their package.json.
+# Retried, like the two `npm install`s above and for the same reason: this
+# image has no lockfile here, so every build re-resolves against the live
+# registry and a publish race or a reset connection is a red job with no test
+# output. The loop was written twice in this file and these two were left bare.
 WORKDIR /workspace/citadel-internal-service-wasm-client
-RUN npm install && npm run build
+RUN for attempt in 1 2 3 4 5; do \
+      npm install && break; \
+      echo "npm install failed (attempt $attempt/5); registry may be mid-publish, retrying in $((attempt * 20))s"; \
+      sleep $((attempt * 20)); \
+    done; \
+    npm run build
 
 WORKDIR /workspace/citadel-workspace-client-ts
-RUN npm install && npm run build
+RUN for attempt in 1 2 3 4 5; do \
+      npm install && break; \
+      echo "npm install failed (attempt $attempt/5); registry may be mid-publish, retrying in $((attempt * 20))s"; \
+      sleep $((attempt * 20)); \
+    done; \
+    npm run build
 
 # Now build the UI itself.
 WORKDIR /app

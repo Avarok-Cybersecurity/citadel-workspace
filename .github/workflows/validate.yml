@@ -194,6 +194,14 @@ jobs:
         run: node scripts/check-transfer-cap-parity.mjs
       - name: Check the browser outwaits the agent on peer discovery
         run: node scripts/check-peer-list-timeout-parity.mjs
+      - name: Every network fetch in an image build is retried
+        # docker/sync installed wasm-pack with one `curl … | sh`. A run died on
+        # "curl: (35) Recv failure: Connection reset by peer" and took
+        # test:tree-move with it -- a red job with no test signal, because every
+        # integration job needs that image. The retry idiom already existed in
+        # docker/ui, written twice, in a file that then ran `npm install` twice
+        # more without it.
+        run: node scripts/check-image-fetches-retry.mjs
       - name: The workspace-missing sentinel is a string the kernel sends
         # useMessageEventSetup decides whether to offer workspace initialization
         # by matching 'No workspace found' inside the server's error text. The

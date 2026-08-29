@@ -32,7 +32,12 @@ RUN apt-get update && \
     apt-get install -y cmake libclang-dev llvm clang net-tools netcat-openbsd curl && \
     rm -rf /var/lib/apt/lists/*
 
-RUN rustup component add clippy
+RUN for attempt in 1 2 3; do \
+      rustup component add clippy && break; \
+      echo "rustup component add failed (attempt $attempt/3); retrying in $((attempt * 10))s"; \
+      sleep $((attempt * 10)); \
+    done; \
+    cargo clippy --version
 
 COPY ./docker/workspace-server/kernel.toml /usr/src/app/kernel.toml
 COPY ./docker/workspace-server/documents /usr/src/app/documents
