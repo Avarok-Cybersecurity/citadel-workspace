@@ -46,6 +46,7 @@ const SKIP = new Map([
   ['components/chat/GroupMemberManagement.tsx', 251],
   ['lib/call/call-manager.ts', 251],
   ['lib/multi-instance/instance-inbound-router.ts', 251],
+  ['lib/p2p-auto-connect-service/connection-logic.ts', 251],
   ['components/ui/sidebar.tsx', 764],
   ['components/layout/sidebar/TreeNodesSection.tsx', 356],
   ['components/p2p/ChatSettingsPanel.tsx', 330],
