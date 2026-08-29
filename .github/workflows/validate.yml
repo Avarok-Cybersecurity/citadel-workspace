@@ -426,6 +426,15 @@ jobs:
         # read as working code, because the component honours the prop perfectly.
         run: node scripts/check-inert-props.mjs
         working-directory: citadel-workspaces
+      - name: No raw thrown value is shown to a user
+        # toast.error(`Failed to delete: ${err}`) reads as ordinary defensive
+        # code and produces "[object Object]" for anything rejected with a
+        # structured payload -- which the revfs and websocket layers both do.
+        # Eight of them in one file, three different treatments, plus a system
+        # notification and a rethrow elsewhere. describeError renders any of
+        # them and never returns [object Object].
+        run: node scripts/check-user-facing-errors.mjs
+        working-directory: citadel-workspaces
       - name: No console listener truncates the message itself
         # diagnostics.ts printed substring(0, 150) and the WASM tracing prefix
         # eats ~110 of those, so [ILM-BLOCKED-RECOVERY] reported "peer 15" for
