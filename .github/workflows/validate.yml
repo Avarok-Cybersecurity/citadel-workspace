@@ -533,6 +533,17 @@ jobs:
         # permanently.
         run: node scripts/check-permission-gates.mjs
         working-directory: citadel-workspaces
+      - name: Event setups unsubscribe
+        # Three use*EventSetup hooks subscribed to workspace events inside an
+        # async setup and returned no cleanup, so every remount left another
+        # set of live listeners behind, each holding a closure over setState.
+        # Nothing broke visibly -- setState on an unmounted component is a
+        # no-op -- which is exactly why it accumulated. The first pass fixed
+        # two of the three. This gate makes the fourth sibling join the test's
+        # table rather than repeating that.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-event-setups-are-covered.mjs
+        working-directory: citadel-workspaces
       - name: Documented env vars have consumers
         # A deployment doc is the one place a reader cannot verify a claim by
         # running it. A variable named there but read by nothing looks like a
