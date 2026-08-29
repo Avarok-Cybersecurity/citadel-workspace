@@ -572,6 +572,17 @@ jobs:
         if: matrix.project == 'citadel-workspaces'
         run: node scripts/check-peer-names-have-one-answer.mjs
         working-directory: citadel-workspaces
+      - name: Presence is not invented
+        # presence.ts lists the four ways this dot had been wrong. The fifth was
+        # underneath: Peer.isOnline was a plain boolean, so the absent fact was
+        # invented three ways at once -- `!== undefined ? : true` in discovery,
+        # a hardcoded true in registration, `?? false` in the poller -- and an
+        # empty online set before the first poll read as "everyone offline".
+        # presence.ts then ORed the registry flag with the poll, so the
+        # invention outranked the real answer.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-presence-is-not-invented.mjs
+        working-directory: citadel-workspaces
       - name: Documented env vars have consumers
         # A deployment doc is the one place a reader cannot verify a claim by
         # running it. A variable named there but read by nothing looks like a
