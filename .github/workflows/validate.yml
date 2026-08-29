@@ -1139,6 +1139,15 @@ jobs:
         run: npm run check:pwa-update
         working-directory: citadel-workspaces
 
+      - name: A phone toast clears the fixed header
+        # Measured in a browser, because two versions of this fix moved nothing
+        # and a jsdom test asserting the style attribute passed through both:
+        # Sonner's `offset` prop silently not applying, then an override of
+        # `--offset-top` when its stylesheet reads `--mobile-offset-top` below
+        # its own breakpoint. jsdom has no layout and cannot tell a toast that
+        # moved from one that did not.
+        run: npm run check:toast-header
+        working-directory: citadel-workspaces
       - name: Reduced motion
         # Neither axe nor Lighthouse reports motion, so ninety of the app's
         # hundred animations opted out of prefers-reduced-motion unnoticed.
