@@ -408,6 +408,14 @@ jobs:
         # there were nine and they are gone.
         run: node scripts/check-explicit-types.mjs
         working-directory: citadel-workspaces
+      - name: Check no component prop is honoured but never passed
+        # GroupConversationRow.isActive had a default, a class that highlights
+        # the row, and one caller that never supplied it -- so the sidebar could
+        # not say which conversation was open. TreeNodesSection.initialExpandedIds
+        # had no caller either, and the tree forgot every branch on reload. Both
+        # read as working code, because the component honours the prop perfectly.
+        run: node scripts/check-inert-props.mjs
+        working-directory: citadel-workspaces
       - name: Documented env vars have consumers
         # A deployment doc is the one place a reader cannot verify a claim by
         # running it. A variable named there but read by nothing looks like a
