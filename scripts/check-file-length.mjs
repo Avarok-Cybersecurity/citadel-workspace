@@ -39,7 +39,6 @@ const SKIP = new Map([
   // adds none -- but an exemption is still an exemption, so these carry their
   // exact length and cannot grow. They are the natural next candidates to split,
   // and dropping any of them under 250 removes its entry automatically.
-  ['lib/p2p/message-handler-routing.ts', 253],
   // 262: a guard that refuses to sign out of a session with no CID, after the
   // decision itself was moved to orphan-session-disconnect.ts. The remaining
   // growth is the branch and its explanation.
