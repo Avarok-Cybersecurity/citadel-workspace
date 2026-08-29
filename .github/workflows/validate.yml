@@ -229,6 +229,12 @@ jobs:
         # docker/ui, written twice, in a file that then ran `npm install` twice
         # more without it.
         run: node scripts/check-image-fetches-retry.mjs
+      - name: Every image build pre-pulls its base images
+        # That gate covers RUN lines. It cannot see the fetch before any RUN:
+        # resolving `FROM rust:1.92.0` against the registry. A 502 there took
+        # test:tree-permissions down with no test signal -- the same shape as
+        # the failure the gate above was written for, one layer earlier.
+        run: node scripts/check-base-image-pulls-retry.mjs
       - name: The workspace-missing sentinel is a string the kernel sends
         # useMessageEventSetup decides whether to offer workspace initialization
         # by matching 'No workspace found' inside the server's error text. The
@@ -748,6 +754,13 @@ jobs:
                  citadel-workspaces/integration-tests/node_modules/playwright
           ln -sf ${{ github.workspace }}/node_modules/@playwright \
                  citadel-workspaces/integration-tests/node_modules/@playwright
+      - name: Pull base images (retried)
+        # A base-image manifest pull is a network fetch that happens before any
+        # RUN, so the retry gate on RUN fetches cannot see it. A run died on a
+        # 502 from registry-1.docker.io resolving `FROM rust:1.92.0` and took
+        # test:tree-permissions with it -- a red job with no test signal, the
+        # same shape as the failure that gate was written for.
+        run: ./scripts/pull-base-images.sh
       - name: Start Services
         env:
           INTERNAL_SERVICE_PORT: '12345'
@@ -852,6 +865,13 @@ jobs:
                  citadel-workspaces/integration-tests/node_modules/playwright
           ln -sf ${{ github.workspace }}/node_modules/@playwright \
                  citadel-workspaces/integration-tests/node_modules/@playwright
+      - name: Pull base images (retried)
+        # A base-image manifest pull is a network fetch that happens before any
+        # RUN, so the retry gate on RUN fetches cannot see it. A run died on a
+        # 502 from registry-1.docker.io resolving `FROM rust:1.92.0` and took
+        # test:tree-permissions with it -- a red job with no test signal, the
+        # same shape as the failure that gate was written for.
+        run: ./scripts/pull-base-images.sh
       - name: Start Services
         env:
           INTERNAL_SERVICE_PORT: '12345'
@@ -1225,6 +1245,13 @@ jobs:
           mkdir -p citadel-workspaces/node_modules
           mkdir -p citadel-internal-service/typescript-client/node_modules
           mkdir -p citadel-workspace-client-ts/node_modules
+      - name: Pull base images (retried)
+        # A base-image manifest pull is a network fetch that happens before any
+        # RUN, so the retry gate on RUN fetches cannot see it. A run died on a
+        # 502 from registry-1.docker.io resolving `FROM rust:1.92.0` and took
+        # test:tree-permissions with it -- a red job with no test signal, the
+        # same shape as the failure that gate was written for.
+        run: ./scripts/pull-base-images.sh
       - name: Generate WASM artifacts (required for UI production build)
         # The UI production build embeds the wasm-pack generated
         # `citadel_internal_service_wasm_client.js` (and the matching
