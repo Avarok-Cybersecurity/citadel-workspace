@@ -561,6 +561,16 @@ jobs:
         if: matrix.project == 'citadel-workspaces'
         run: node scripts/check-group-permissions-are-enforced.mjs
         working-directory: citadel-workspaces
+      - name: A control that stores nothing says so
+        # ChatSettingsPanel's Advanced tab shipped a select labelled
+        # "Encryption Level: Security level for this conversation" with
+        # defaultValue, no onChange, no store and no consumer -- choosing
+        # "Maximum" changed nothing. The comment on the switches directly above
+        # it says why that is not tolerable here, and those switches had been
+        # fixed while their three siblings were left.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-controls-are-wired.mjs
+        working-directory: citadel-workspaces
       - name: One answer to what a peer is called
         # peer-display.ts exists so "every surface answers the question
         # identically", and was bypassed twice over: four sites built their own
