@@ -822,7 +822,29 @@ jobs:
         # Now that deps are installed, this resolves to the locked
         # version's `playwright install` and downloads the matching
         # chromium build.
-        run: npx playwright install chromium --with-deps
+        # Retried, and each attempt bounded.
+        #
+        # `test:notifications` spent 55 MINUTES on this step in run
+        # 33300992291 and was killed by the job budget without running a
+        # single test -- the orphan-process line at the end of that log is
+        # `npm exec playwright install chromium --with-deps`. It is a network
+        # fetch with no retry and no timeout of its own, so a stalled
+        # connection consumes the whole job.
+        #
+        # Same shape as the image builds, which already wrap every fetch this
+        # way. Ten minutes is generous for a chromium download and short
+        # enough that two retries still fit inside the job.
+        run: |
+          attempt=1
+          until timeout 600 npx playwright install chromium --with-deps; do
+            if [ "$attempt" -ge 3 ]; then
+              echo "playwright install still failing after 3 attempts"
+              exit 1
+            fi
+            echo "playwright install failed or stalled (attempt $attempt/3); retrying"
+            attempt=$((attempt + 1))
+            sleep $((attempt * 15))
+          done
       - name: Symlink workspace deps for integration-tests build
         # `tsc` in integration-tests resolves modules with NodeNext
         # which walks node_modules up the directory tree. After the
@@ -939,7 +961,29 @@ jobs:
         # distinct playwright-core type identities.
         run: npm ci
       - name: Install Playwright Browsers
-        run: npx playwright install chromium --with-deps
+        # Retried, and each attempt bounded.
+        #
+        # `test:notifications` spent 55 MINUTES on this step in run
+        # 33300992291 and was killed by the job budget without running a
+        # single test -- the orphan-process line at the end of that log is
+        # `npm exec playwright install chromium --with-deps`. It is a network
+        # fetch with no retry and no timeout of its own, so a stalled
+        # connection consumes the whole job.
+        #
+        # Same shape as the image builds, which already wrap every fetch this
+        # way. Ten minutes is generous for a chromium download and short
+        # enough that two retries still fit inside the job.
+        run: |
+          attempt=1
+          until timeout 600 npx playwright install chromium --with-deps; do
+            if [ "$attempt" -ge 3 ]; then
+              echo "playwright install still failing after 3 attempts"
+              exit 1
+            fi
+            echo "playwright install failed or stalled (attempt $attempt/3); retrying"
+            attempt=$((attempt + 1))
+            sleep $((attempt * 15))
+          done
       - name: Symlink workspace deps for integration-tests
         run: |
           mkdir -p citadel-workspaces/integration-tests/node_modules
@@ -1400,7 +1444,29 @@ jobs:
         # check:pwa is a static read of dist/ and needs no browser. Proving the
         # app actually LOADS offline needs a real service worker to register,
         # activate and serve a navigation from cache, which only a browser does.
-        run: npx playwright install --with-deps chromium
+        # Retried, and each attempt bounded.
+        #
+        # `test:notifications` spent 55 MINUTES on this step in run
+        # 33300992291 and was killed by the job budget without running a
+        # single test -- the orphan-process line at the end of that log is
+        # `npm exec playwright install chromium --with-deps`. It is a network
+        # fetch with no retry and no timeout of its own, so a stalled
+        # connection consumes the whole job.
+        #
+        # Same shape as the image builds, which already wrap every fetch this
+        # way. Ten minutes is generous for a chromium download and short
+        # enough that two retries still fit inside the job.
+        run: |
+          attempt=1
+          until timeout 600 npx playwright install --with-deps chromium; do
+            if [ "$attempt" -ge 3 ]; then
+              echo "playwright install still failing after 3 attempts"
+              exit 1
+            fi
+            echo "playwright install failed or stalled (attempt $attempt/3); retrying"
+            attempt=$((attempt + 1))
+            sleep $((attempt * 15))
+          done
         working-directory: citadel-workspaces
 
       - name: PWA offline behaviour
