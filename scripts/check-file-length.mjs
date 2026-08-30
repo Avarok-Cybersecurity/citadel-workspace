@@ -49,7 +49,7 @@ const SKIP = new Map([
   // just did, so in a group call they raced and the service refused the second
   // with "a media open or teardown is already in progress with this peer".
   // One field, and the explanation lives with the code that uses it.
-  ['lib/call/call-manager.ts', 252],
+  ['lib/call/call-manager.ts', 251],
   ['lib/multi-instance/instance-inbound-router.ts', 251],
   ['lib/p2p-auto-connect-service/connection-logic.ts', 251],
   // 798: seventeen forwardRef components each gained a two-line return type,
