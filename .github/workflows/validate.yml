@@ -163,6 +163,14 @@ jobs:
         # keyed on prose, and it taxes every improvement to that prose.
         run: node scripts/check-controls-are-addressed-by-testid.mjs
         working-directory: citadel-workspaces
+      - name: Ratcheting baselines are committed
+        # Three gates rewrite their own baseline in the working tree and exit 1
+        # asking for the new count to be committed. That works once: the next
+        # local run compares against the rewrite and passes, while CI compares
+        # against the commit and keeps failing. Round 455 lost three rounds to
+        # exactly that. The leftover is visible as a dirty tracked file.
+        run: node scripts/check-baselines-are-committed.mjs
+        working-directory: citadel-workspaces
       - name: Specs search for copy the app actually has
         # The other half of the same problem. The check above catches a control
         # PRESSED by its words; this catches one LOOKED FOR by words the app no
