@@ -51,7 +51,6 @@ const SKIP = new Map([
   // One field, and the explanation lives with the code that uses it.
   ['lib/call/call-manager.ts', 251],
   ['lib/multi-instance/instance-inbound-router.ts', 251],
-  ['lib/p2p-auto-connect-service/connection-logic.ts', 251],
   // 798: seventeen forwardRef components each gained a two-line return type,
   // which is what the explicit-type policy asks for. Still three times the cap
   // and still the first file that should be split.
