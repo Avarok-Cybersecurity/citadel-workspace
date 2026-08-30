@@ -610,6 +610,14 @@ jobs:
         if: matrix.project == 'citadel-workspaces'
         run: node scripts/check-a-promise-is-not-a-boolean.mjs
         working-directory: citadel-workspaces
+      - name: Every module is imported by something
+        # The TypeScript half of the Rust orphan check. A file with no importer
+        # compiles, type-checks, lints and reads as maintained --
+        # `live-document-store/document-queries.ts` answers four questions that
+        # `yjs-merkle-strategy/tree.ts` already answers for real callers.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-modules-are-imported.mjs
+        working-directory: citadel-workspaces
       - name: One answer to which session this is
         # The CID priority chain -- instance manager, tab selection, tab
         # session, and the global connection LAST -- existed three times. One
