@@ -199,9 +199,27 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
             }
         }
 
-        // Also check if member of domain (membership gives ViewContent permission)
-        if permission == Permission::ViewContent {
-            return self.is_member_of_domain(user_id, entity_id).await;
+        // Membership in a domain confers the permissions of the user's ROLE.
+        //
+        // This used to confer exactly one, ViewContent, and consult the role
+        // for nothing. So a plain member of a workspace could read an office
+        // and never post to it: `Permission::for_role` grants Member
+        // SendMessages and ReadMessages, three separate role tables in this
+        // repo say the same, and enforcement read none of them. Three
+        // integration specs failed on it -- office chat, room chat and
+        // touch-controls -- each with the composer replaced by "You do not
+        // have permission to send messages here", which is how an unasked
+        // question reads on screen.
+        //
+        // Scoped to membership deliberately: `user.role` is global, so
+        // granting on it alone would let a member of one workspace act in
+        // another. It widens nothing beyond the role's own set, so a Guest
+        // still gets ViewContent and a Banned user still gets nothing -- the
+        // previous behaviour granted ViewContent to a banned member.
+        if Permission::for_role(&user.role).contains(&permission)
+            && self.is_member_of_domain(user_id, entity_id).await?
+        {
+            return Ok(true);
         }
 
         Ok(false)
