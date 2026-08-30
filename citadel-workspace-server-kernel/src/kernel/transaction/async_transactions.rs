@@ -234,22 +234,24 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWriteTransaction<R> {
 
         // Update user permissions
         if let Some(mut user) = self.backend_tx_manager.get_user(user_id).await? {
-            // Add domain permissions based on role
-            let permissions = match role {
-                UserRole::Admin => vec![Permission::All],
-                UserRole::Member => vec![
-                    Permission::CreateNode,
-                    Permission::SendMessages,
-                    Permission::ReadMessages,
-                ],
-                UserRole::Guest => vec![Permission::ReadMessages],
-                UserRole::Owner => vec![Permission::All],
-                UserRole::Banned => vec![],
-                UserRole::Custom(_, _) => vec![], // Custom roles start with no default permissions
-            };
-
+            // Domain permissions come from the role's own table, not a copy.
+            //
+            // This match used to restate it, and disagreed with
+            // `Permission::for_role` -- which enforcement consults since round
+            // 409 -- about every role it handled. Member here gained CreateNode
+            // and lost ViewContent, UploadFiles and DownloadFiles; Guest had
+            // ReadMessages instead of ViewContent; and Owner was given
+            // `Permission::All`, the wildcard that `check_entity_permission`
+            // treats as satisfying any check, including the ConfigureSystem
+            // that for_role withholds from Owner deliberately.
+            //
+            // Nothing constructs `AsyncWriteTransaction`, so none of that ever
+            // reached a user -- the same shape as the role table deleted in
+            // round 410, which was also unreachable and also read as
+            // authoritative. Derived here rather than deleted because the
+            // divergence is the hazard, and one line removes it.
             user.permissions
-                .insert(domain_id.to_string(), permissions.into_iter().collect());
+                .insert(domain_id.to_string(), Permission::for_role(&role));
 
             self.update_user(user_id, user).await?;
         }
