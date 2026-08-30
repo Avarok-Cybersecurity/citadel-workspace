@@ -660,6 +660,17 @@ jobs:
         if: matrix.project == 'citadel-workspaces'
         run: node scripts/check-modules-are-imported.mjs
         working-directory: citadel-workspaces
+      - name: Every installer is called by something
+        # A bind/start/setup function wires an application up and renders
+        # nothing, so nothing looks wrong when one is never called. Module
+        # reachability sees it imported -- by its own test. Round 471 nearly
+        # shipped bindPeerGroupDelivery with its single call site missing:
+        # written, tested three ways, and inert. Comments are stripped first,
+        # because a commented-out call is the regression, and the first version
+        # of the scan was satisfied by one.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-installers-are-called.mjs
+        working-directory: citadel-workspaces
       - name: Every component is mounted by something
         # The gate above is not enough for a component: a file whose only
         # importer is its own TEST reads as imported. PeerRefusalNotice and
