@@ -32,6 +32,21 @@ export function restart(ws_url: string): Promise<void>;
 export function send_direct_to_internal_service(message: any): Promise<void>;
 
 /**
+ * Send one encoded media frame to a peer.
+ *
+ * A dedicated binding rather than send_direct_to_internal_service, purely for
+ * the hot path: frames arrive 30-60 times a second per track, and routing each
+ * through a JsValue and serde-wasm-bindgen would deserialize a whole request
+ * object — payload included — per frame. This takes the bytes directly and
+ * builds the request in Rust.
+ *
+ * Fire-and-forget by design. There is no ack to wait for; a frame that cannot
+ * be queued is a frame worth dropping, because by the time a retry arrived it
+ * would be too late to play.
+ */
+export function send_media_frame(local_cid_str: string, peer_cid_str: string, track: number, kind: number, timestamp: number, flags: number, payload: Uint8Array): void;
+
+/**
  * Sends a P2P message using ISM-routed reliable messaging.
  * Unlike send_p2p_message which bypasses ISM, this function uses
  * send_message_to_with_security_level for guaranteed delivery.
@@ -52,24 +67,24 @@ export interface InitOutput {
     readonly open_messenger_for: (a: number, b: number) => any;
     readonly restart: (a: number, b: number) => any;
     readonly send_direct_to_internal_service: (a: any) => any;
+    readonly send_media_frame: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number];
     readonly send_p2p_message_reliable: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => any;
-    readonly wasm_bindgen_5f14a889508d6a35___closure__destroy___dyn_core_7d5f0a2ba6a62c33___ops__function__FnMut__web_sys_9e969595e8421720___features__gen_CloseEvent__CloseEvent____Output_______: (a: number, b: number) => void;
-    readonly wasm_bindgen_5f14a889508d6a35___closure__destroy___dyn_core_7d5f0a2ba6a62c33___ops__function__FnMut__web_sys_9e969595e8421720___features__gen_MessageEvent__MessageEvent____Output_______: (a: number, b: number) => void;
-    readonly wasm_bindgen_5f14a889508d6a35___closure__destroy___dyn_core_7d5f0a2ba6a62c33___ops__function__FnMut__wasm_bindgen_5f14a889508d6a35___JsValue____Output_______: (a: number, b: number) => void;
-    readonly wasm_bindgen_5f14a889508d6a35___closure__destroy___dyn_core_7d5f0a2ba6a62c33___ops__function__FnMut_____Output_______: (a: number, b: number) => void;
-    readonly wasm_bindgen_5f14a889508d6a35___closure__destroy___dyn_core_7d5f0a2ba6a62c33___ops__function__FnMut_____Output________1_: (a: number, b: number) => void;
-    readonly wasm_bindgen_5f14a889508d6a35___convert__closures_____invoke___wasm_bindgen_5f14a889508d6a35___JsValue__wasm_bindgen_5f14a889508d6a35___JsValue_____: (a: number, b: number, c: any, d: any) => void;
-    readonly wasm_bindgen_5f14a889508d6a35___convert__closures_____invoke___web_sys_9e969595e8421720___features__gen_CloseEvent__CloseEvent_____: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen_5f14a889508d6a35___convert__closures_____invoke___web_sys_9e969595e8421720___features__gen_MessageEvent__MessageEvent_____: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen_5f14a889508d6a35___convert__closures_____invoke___wasm_bindgen_5f14a889508d6a35___JsValue_____: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen_5f14a889508d6a35___convert__closures_____invoke______: (a: number, b: number) => void;
-    readonly wasm_bindgen_5f14a889508d6a35___convert__closures_____invoke_______1_: (a: number, b: number) => void;
+    readonly wasm_bindgen_9ffe5dd229831af7___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut__web_sys_c92d036cc15e8351___features__gen_CloseEvent__CloseEvent____Output_______: (a: number, b: number) => void;
+    readonly wasm_bindgen_9ffe5dd229831af7___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut__web_sys_c92d036cc15e8351___features__gen_MessageEvent__MessageEvent____Output_______: (a: number, b: number) => void;
+    readonly wasm_bindgen_9ffe5dd229831af7___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut__wasm_bindgen_9ffe5dd229831af7___JsValue____Output_______: (a: number, b: number) => void;
+    readonly wasm_bindgen_9ffe5dd229831af7___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut_____Output_______: (a: number, b: number) => void;
+    readonly wasm_bindgen_9ffe5dd229831af7___convert__closures_____invoke___wasm_bindgen_9ffe5dd229831af7___JsValue__wasm_bindgen_9ffe5dd229831af7___JsValue_____: (a: number, b: number, c: any, d: any) => void;
+    readonly wasm_bindgen_9ffe5dd229831af7___convert__closures_____invoke___web_sys_c92d036cc15e8351___features__gen_CloseEvent__CloseEvent_____: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen_9ffe5dd229831af7___convert__closures_____invoke___web_sys_c92d036cc15e8351___features__gen_MessageEvent__MessageEvent_____: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen_9ffe5dd229831af7___convert__closures_____invoke___wasm_bindgen_9ffe5dd229831af7___JsValue_____: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen_9ffe5dd229831af7___convert__closures_____invoke______: (a: number, b: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;
     readonly __externref_table_alloc: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+    readonly __externref_table_dealloc: (a: number) => void;
     readonly __wbindgen_start: () => void;
 }
 

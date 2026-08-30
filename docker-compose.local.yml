@@ -69,7 +69,20 @@ services:
   agent:
     image: ghcr.io/avarok-cybersecurity/citadel-workspace-internal-service:${IMAGE_TAG:-latest}
     environment:
-      - RUST_LOG=citadel=info
+      # citadel=info alone silently deletes the entire ILM subsystem. EnvFilter
+      # adds its ERROR default only when the parsed directive set is EMPTY, so a
+      # non-empty `citadel=info` leaves every non-matching target off at EVERY
+      # level -- including error!. That drops all 85 `target: "ism"` lines, of
+      # which 28 are error! and 23 are warn!, and they are precisely the ones
+      # that answer "my message never arrived": [ILM-SEND] FAILED, "Peer not
+      # connected, skipping N messages", and the three "processing task
+      # prematurely ended" lines that are the only record of a dead background
+      # task. Verified against live logs: 0 matches in 5000 lines.
+      #
+      # citadel_crypt=warn because double-ratchet internals were 76% of the
+      # log (2285 of 3000 lines), which is what made the remaining signal
+      # unreadable rather than merely verbose.
+      - RUST_LOG=citadel=info,ism=info,citadel_crypt=warn
       - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT:-12345}
       # 0.0.0.0 is the CONTAINER's interfaces, not your machine's. With no `ports:` block below,
       # nothing is published, so this socket is reachable only from the `ui` container on this

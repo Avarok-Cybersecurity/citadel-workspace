@@ -675,10 +675,22 @@ impl TreeValidator {
         potential_ancestor: &str,
         node_id: &str,
     ) -> bool {
+        // A cycle in parent_id makes this walk run forever. `get_descendants`
+        // below already guards its walk with a visited set; this one and
+        // `get_path_to_root` never got the same treatment. It matters most here:
+        // this is the check that REFUSES to create a cycle, and every caller runs
+        // it while holding `lock_nodes`, so one pre-existing cycle would wedge
+        // every node operation in the workspace forever rather than reporting it.
+        let mut visited: HashSet<&str> = HashSet::new();
         let mut current_id: Option<&str> = Some(node_id);
 
         while let Some(id) = current_id {
             if id == potential_ancestor {
+                return true;
+            }
+            if !visited.insert(id) {
+                // Already-cyclic tree: the ancestor is not reachable, and
+                // continuing would loop. Refuse the move rather than hang.
                 return true;
             }
             current_id = nodes.get(id).and_then(|n| n.parent_id.as_deref());
@@ -696,13 +708,19 @@ impl TreeValidator {
 
         let mut max_depth = node.depth;
         let mut queue: VecDeque<&str> = VecDeque::new();
+        // Without this, a cycle among `children` both loops forever and grows the
+        // queue without bound — a hang that takes the process's memory with it.
+        let mut visited: HashSet<&str> = HashSet::new();
         queue.push_back(node_id);
+        visited.insert(node_id);
 
         while let Some(current_id) = queue.pop_front() {
             if let Some(current) = nodes.get(current_id) {
                 max_depth = max_depth.max(current.depth);
                 for child_id in &current.children {
-                    queue.push_back(child_id.as_str());
+                    if visited.insert(child_id.as_str()) {
+                        queue.push_back(child_id.as_str());
+                    }
                 }
             }
         }
@@ -713,9 +731,15 @@ impl TreeValidator {
     /// Get the path from root to a node (for debugging/display)
     pub fn get_path_to_root(nodes: &HashMap<String, DomainNode>, node_id: &str) -> Vec<String> {
         let mut path: Vec<&str> = Vec::new();
+        let mut visited: HashSet<&str> = HashSet::new();
         let mut current_id: Option<&str> = Some(node_id);
 
         while let Some(id) = current_id {
+            // Same cycle guard as `is_ancestor_of`: stop at the repeat rather
+            // than build an infinite path.
+            if !visited.insert(id) {
+                break;
+            }
             path.push(id);
             current_id = nodes.get(id).and_then(|n| n.parent_id.as_deref());
         }
@@ -777,6 +801,7 @@ mod tests {
             members: vec![],
             children: vec![],
             mdx_content: String::new(),
+            mdx_content_hash: None,
             rules: None,
             chat_enabled: false,
             chat_channel_id: None,

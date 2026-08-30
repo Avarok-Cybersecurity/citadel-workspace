@@ -240,6 +240,16 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         self.node_mutex.lock().await
     }
 
+    /// Hold this across a whole get_workspace ... insert_workspace sequence.
+    ///
+    /// A workspace record is stored and written whole, so two handlers that each
+    /// read it, change one field and write it back will lose one of the changes.
+    /// `insert_workspace` does not take this lock itself, precisely so it can be
+    /// called while the guard is held — tokio's Mutex is not reentrant.
+    pub async fn lock_workspaces(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.workspace_mutex.lock().await
+    }
+
     /// Get a single DomainNode by ID
     pub async fn get_node(&self, node_id: &str) -> Result<Option<DomainNode>, NetworkError> {
         let nodes = self.get_all_nodes().await?;

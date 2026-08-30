@@ -274,6 +274,78 @@ pub enum Permission {
 }
 
 impl Permission {
+    /// Every permission variant, in declaration order.
+    ///
+    /// This is the single source of truth for "what permissions exist": role
+    /// definitions derive from it by subtraction, and the server enumerates it
+    /// when reporting a user's effective permissions. `exhaustiveness_guard`
+    /// below stops compiling when a variant is added to the enum, which is what
+    /// keeps this list honest.
+    pub const ALL_VARIANTS: [Permission; 27] = [
+        Self::All,
+        Self::CreateNode,
+        Self::DeleteNode,
+        Self::UpdateNode,
+        Self::CreateWorkspace,
+        Self::UpdateWorkspace,
+        Self::DeleteWorkspace,
+        Self::EditContent,
+        Self::AddUsers,
+        Self::RemoveUsers,
+        Self::EditMdx,
+        Self::EditNodeConfig,
+        Self::AddNode,
+        Self::UpdateNodeSettings,
+        Self::ViewContent,
+        Self::ManageNodeMembers,
+        Self::SendMessages,
+        Self::ReadMessages,
+        Self::UploadFiles,
+        Self::DownloadFiles,
+        Self::ManageDomains,
+        Self::ConfigureSystem,
+        Self::EditWorkspaceConfig,
+        Self::BanUser,
+        Self::EditTreeStructure,
+        Self::ManageNodeTypes,
+        Self::Themes,
+    ];
+
+    /// Not called at runtime. Adding a variant to `Permission` fails to compile
+    /// here, as a prompt to add it to `ALL_VARIANTS` as well.
+    #[allow(dead_code)]
+    fn exhaustiveness_guard(permission: &Permission) {
+        match permission {
+            Self::All => (),
+            Self::CreateNode => (),
+            Self::DeleteNode => (),
+            Self::UpdateNode => (),
+            Self::CreateWorkspace => (),
+            Self::UpdateWorkspace => (),
+            Self::DeleteWorkspace => (),
+            Self::EditContent => (),
+            Self::AddUsers => (),
+            Self::RemoveUsers => (),
+            Self::EditMdx => (),
+            Self::EditNodeConfig => (),
+            Self::AddNode => (),
+            Self::UpdateNodeSettings => (),
+            Self::ViewContent => (),
+            Self::ManageNodeMembers => (),
+            Self::SendMessages => (),
+            Self::ReadMessages => (),
+            Self::UploadFiles => (),
+            Self::DownloadFiles => (),
+            Self::ManageDomains => (),
+            Self::ConfigureSystem => (),
+            Self::EditWorkspaceConfig => (),
+            Self::BanUser => (),
+            Self::EditTreeStructure => (),
+            Self::ManageNodeTypes => (),
+            Self::Themes => (),
+        }
+    }
+
     /// Get a set of permissions for a specific role
     pub fn for_role(role: &UserRole) -> HashSet<Self> {
         let mut permissions = HashSet::new();
@@ -283,19 +355,22 @@ impl Permission {
                 permissions.insert(Self::All);
             }
             UserRole::Owner => {
-                permissions.insert(Self::EditContent);
-                permissions.insert(Self::AddUsers);
-                permissions.insert(Self::RemoveUsers);
-                permissions.insert(Self::CreateNode);
-                permissions.insert(Self::DeleteNode);
-                permissions.insert(Self::CreateWorkspace);
-                permissions.insert(Self::DeleteWorkspace);
-                permissions.insert(Self::EditTreeStructure);
-                permissions.insert(Self::ManageNodeTypes);
-                // The workspace owner sets its appearance. Admin reaches this
-                // through the All wildcard; Owner's set is explicit, so a new
-                // permission has to be listed here or the owner silently lacks it.
-                permissions.insert(Self::Themes);
+                // The owner runs the workspace, so they hold everything except the
+                // `All` wildcard (Admin's) and `ConfigureSystem` (server-level).
+                //
+                // This used to be an explicit insert list, and the warning that
+                // carried — "a new permission has to be listed here or the owner
+                // silently lacks it" — came true several times over: Owner had no
+                // ViewContent, SendMessages, ReadMessages, UploadFiles or
+                // DownloadFiles, making the role strictly weaker than Member for
+                // everyday use, and no EditMdx, so promoting someone to Owner in
+                // the admin UI left them unable to edit a document. Deriving the
+                // set by subtraction means a new variant is included by default.
+                permissions.extend(
+                    Self::ALL_VARIANTS
+                        .into_iter()
+                        .filter(|p| !matches!(p, Self::All | Self::ConfigureSystem)),
+                );
             }
             UserRole::Member => {
                 // Basic member permissions
@@ -431,7 +506,18 @@ pub struct DomainPermissions {
     pub edit_tree_structure: bool,
     /// Whether users can manage custom node types
     pub manage_node_types: bool,
-    /// Whether users can edit the workspace theme shown to every member
+    /// Whether users can edit the workspace theme shown to every member.
+    ///
+    /// `serde(default)` because this field was added after records were already
+    /// being persisted. `DomainPermissions` is embedded in `DomainNode`, which
+    /// the backend reads with `serde_json::from_slice`, so a stored node written
+    /// before this existed has no `themes` key — and without a default the whole
+    /// read fails with `missing field themes`, taking the node map with it. An
+    /// upgrade would look like data loss rather than a schema change.
+    ///
+    /// It defaults to false, which is also the right direction for a
+    /// permission: an old record grants nothing it did not previously grant.
+    #[serde(default)]
     pub themes: bool,
 }
 
@@ -670,6 +756,23 @@ pub struct DomainNode {
     // Content
     #[debug(with = citadel_internal_service_types::bytes_debug_fmt)]
     pub mdx_content: String,
+    /// SHA-256 of `mdx_content`, hex-encoded, computed by the SERVER on every
+    /// write.
+    ///
+    /// Rendering a document means executing it: the client compiles the MDX and
+    /// runs the result, so the bytes that reach the renderer must be the bytes
+    /// the server stored. The client re-hashes before it executes and refuses
+    /// on a mismatch.
+    ///
+    /// What this catches is tampering BETWEEN the server and the renderer — a
+    /// corrupted IndexedDB cache, a store-layer bug, another tab writing over
+    /// the content. It is not a defence against an attacker who already has
+    /// script execution in the page, who could patch the check itself; and it
+    /// says nothing about whether the document was hostile when it was written.
+    ///
+    /// `Option` because documents stored before this existed have no hash, and
+    /// a client must be able to tell "not hashed" from "hash does not match".
+    pub mdx_content_hash: Option<String>,
     /// Rules displayed to users
     pub rules: Option<String>,
     /// Whether group chat is enabled for this node
@@ -813,10 +916,18 @@ impl Default for TreeSchema {
 }
 
 impl TreeSchema {
-    /// Check if a child type is allowed under the given parent type.
-    /// If no rules are defined for the parent type, allows all child types by default.
+    /// Whether a child type may be created under the given parent type.
+    ///
+    /// A schema with no rules at all constrains nothing -- that is what "no
+    /// schema configured" means, and it is the state a workspace boots in.
+    ///
+    /// A schema that HAS rules but none for this parent used to allow every
+    /// child type, which made an unruled parent a hole in an otherwise enforced
+    /// schema: anything created under it was unconstrained. Its sibling
+    /// `get_allowed_children` already answered "nothing" for the same case, so
+    /// the UI never offered those children while the validator accepted them.
+    /// The two now agree, and they agree on the closed answer.
     pub fn is_child_allowed(&self, parent_type: &str, child_type: &str) -> bool {
-        // If no rules are defined at all, allow everything
         if self.rules.is_empty() {
             return true;
         }
@@ -825,8 +936,7 @@ impl TreeSchema {
             .iter()
             .find(|r| r.parent_type == parent_type)
             .map(|r| r.allowed_child_types.contains(&child_type.to_string()))
-            // If no rule exists for this parent type, allow all children by default
-            .unwrap_or(true)
+            .unwrap_or(false)
     }
 
     /// Get allowed child types for a parent type
@@ -1114,5 +1224,65 @@ impl Domain {
         match self {
             Domain::Workspace { workspace } => Some(workspace),
         }
+    }
+}
+
+/// The canonical document-integrity hash.
+///
+/// One function, used by the server when it stores a document and mirrored by
+/// the client before it executes one. Hex-encoded SHA-256 of the UTF-8 bytes,
+/// with no normalisation of any kind: normalising here and not there — or
+/// differently there — would make correct documents refuse to render, which is
+/// a worse failure than the one this prevents.
+pub fn mdx_content_hash(content: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(content.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+#[cfg(test)]
+mod mdx_content_hash_tests {
+    use super::mdx_content_hash;
+
+    #[test]
+    fn is_stable_for_the_same_content() {
+        assert_eq!(mdx_content_hash("# Hello"), mdx_content_hash("# Hello"));
+    }
+
+    #[test]
+    fn differs_for_different_content() {
+        assert_ne!(mdx_content_hash("# Hello"), mdx_content_hash("# Hello "));
+    }
+
+    #[test]
+    fn is_the_known_sha256_of_the_empty_string() {
+        // Pinned against the published constant rather than against our own
+        // output: a test that only compares this function to itself would pass
+        // just as happily if the algorithm were swapped for something weaker.
+        assert_eq!(
+            mdx_content_hash(""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    #[test]
+    fn is_the_known_sha256_of_abc() {
+        assert_eq!(
+            mdx_content_hash("abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn does_not_normalise_unicode() {
+        // é as one codepoint vs e + combining acute. They render identically and
+        // hash differently, deliberately: the client must apply the same rule,
+        // and "no normalisation" is the only rule both ends can implement
+        // without a shared library.
+        assert_ne!(
+            mdx_content_hash("caf\u{00e9}"),
+            mdx_content_hash("cafe\u{0301}")
+        );
     }
 }

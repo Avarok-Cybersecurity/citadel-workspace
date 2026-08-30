@@ -184,6 +184,132 @@ Retry attempt 2/3 for Session Already Connected error
 
 ---
 
+## What the suites CANNOT see
+
+Every Playwright spec runs against the Vite **dev server** on 5291. That is not
+an accident and cannot easily change: the specs reach for `window.__websocketService`,
+`window.__serverAutoConnectService` and friends, which `main.tsx` attaches only
+under `import.meta.env.DEV`. Rollup drops that branch from a production build,
+so the handles the suite depends on do not exist there.
+
+The consequence is worth stating plainly, because it has already cost a
+production defect:
+
+**No test exercises the app's features against the production artefact.** The
+dev server applies no `Content-Security-Policy` and no `Permissions-Policy` at
+all. Production nginx applies both. A feature can therefore pass every spec and
+be dead on deploy.
+
+That is exactly what happened to audio/video calling: production shipped
+`Permissions-Policy: microphone=(), camera=()` — an empty allowlist denies every
+origin, including its own — so `getUserMedia` was refused. The feature passed
+19/19 end-to-end because dev sends no such header. Nothing was wrong with the
+app; the policy it runs under in production had never been tested.
+
+What DOES cover production, and what each part covers:
+
+| Check | Runs against | Sees |
+|---|---|---|
+| `scripts/smoke-ui-ws.sh` | the built nginx image | headers, /ws proxy, SPA fallback, sw.js caching, manifest type |
+| `scripts/check-production-image.mjs` | the built nginx image, in a real browser | that the app MOUNTS under the real CSP, what the browser actually grants for camera/microphone/display-capture, and the offline path: service worker activation, the shell rendering with the network cut, and nothing modal blocking it |
+| `check:bundle`, `check:pwa*`, `check:lighthouse`, `check:mobile`, `check:reduced-motion` | `vite preview` on `dist/` | the production BUNDLE, but not nginx |
+| `tests-pw` | the dev server | app behaviour, under no security headers |
+
+So the production image is checked both for what it SERVES (`smoke-ui-ws.sh`,
+via curl) and for what a browser DOES with it (`check-production-image.mjs`),
+while the production bundle is checked for what it CONTAINS. When a feature
+depends on a browser permission or a CSP directive, assert the header text in
+`smoke-ui-ws.sh` and the browser's own verdict in `check-production-image.mjs`
+— a policy can be present, well-formed, and still not grant what the app needs.
+
+Do not reach for Chrome's `Page.getInstallabilityErrors` to gate installability.
+Measured 2026-08-25: it returns an empty array for a page with NO manifest at
+all, and `Page.getAppManifest` reports `errors: []` for a manifest that is not
+even valid JSON. Empty means "nothing was evaluated", not "installable", so a
+gate built on either would pass a completely broken PWA while looking like the
+strongest check in the suite.
+
+What actually covers installability: `check-pwa-installable.mjs` validates the
+built manifest's fields and icon sizes, and `smoke-ui-ws.sh` asserts the image
+serves it at the right URL with `application/manifest+json`. Content and
+delivery, between them.
+
+Offline is covered twice, deliberately, and the difference is the server.
+`check-pwa-offline.mjs` drives the production BUNDLE through `vite preview` and
+asserts the full user-visible story: the worker activates, the shell renders
+with the network cut, the banner appears, and it clears when the connection
+returns. `check-production-image.mjs` repeats the load against the nginx IMAGE,
+because the bundle can be perfect while the server in front of it is not — a
+`sw.js` served with the wrong cache headers, or a missing SPA fallback, breaks
+offline without touching a line of app code.
+
+The image check adds one assertion the bundle check does not make: that nothing
+MODAL is covering the shell. The banner and a blocking "check your internet
+connection" dialog were both being shown for the same condition, and a check
+that only looks for the banner is satisfied either way.
+
+Neither is reachable from `tests-pw`, which runs against the Vite dev server and
+registers no service worker at all.
+
+## A matching .spec.ts does NOT mean the .test.ts is redundant
+
+The `@playwright/test` migration is partial, and the file names hide how
+partial. Three legacy specs have a same-named port. Only ONE of the three
+actually covers the same ground:
+
+| legacy `src/tests/`      | ported `src/tests-pw/`    | faithful? | what the port omits |
+|--------------------------|---------------------------|-----------|---------------------|
+| `login-flow.test.ts`     | `login-flow.spec.ts`      | yes       | nothing — same 7 assertions; legacy since deleted |
+| `p2p-messaging.test.ts`  | `p2p-messaging.spec.ts`   | **no**    | connected badge, message ordering, seen/read status, timestamps, online status |
+| `office-room-crud.test.ts` | `office-room-crud.spec.ts` | **no**  | admin indicator, office rename, toast conflict handling |
+
+The line counts are the tell: 445 → 174 and 869 → 158. A port that drops
+two thirds of a file is a subset, not a migration.
+
+**So do not delete a legacy spec because a spec of the same name exists.**
+Diff the recorded outcomes first — the legacy suites accumulate a `results.*`
+object, and every field in it is an assertion the port has to reproduce
+before the legacy file can go. `login-flow` was removed only after that diff
+came back clean AND the port was run on its own.
+
+This matters because deleting the other two would look like tidying and would
+silently drop the only coverage of message ordering, read receipts and office
+rename anywhere in the suite.
+
+## Which suites actually run in CI
+
+Two suites exist, and they reach CI by different routes. The difference matters
+because one of them silently leaves most of itself out.
+
+**`integration-tests/src/tests-pw`** — `@playwright/test`, 11 specs. Run by the
+`playwright-tests` job, **sharded**: the runner distributes specs across shards
+itself, so a new spec joins CI with no workflow edit.
+
+**`integration-tests/src/tests`** — the legacy custom runner, 48 spec files
+driven by `test:*` npm scripts. Run by the `integration-tests` job as an
+explicit **matrix of script names**, so a spec only runs if someone remembers to
+add its script to the matrix.
+
+Re-measured 2026-08-25, after the matrix was extended: **all 48 run.** The
+matrix now carries one entry per spec, including every reconnection scenario,
+the whole tree-operation suite and both revfs suites — the groups that were
+previously written, typechecked and never executed.
+
+How to check this yourself rather than trusting the number, since it went stale
+once already: take the `- test: test:x` lines out of the `integration-tests`
+matrix in `.github/workflows/validate.yml`, resolve each through
+`integration-tests/package.json` (some scripts chain others with `npm run`), and
+compare the resulting `dist/tests/*.test.js` list against `src/tests/**`. Note
+that grepping the workflow for `test:` strings instead will overcount — it picks
+up aggregates like `test:all`, which reference everything and would make any
+matrix look complete.
+
+**Porting is still worth doing, but it is no longer a coverage argument.** The
+matrix has to be maintained by hand and will rot again; a spec moved into
+`src/tests-pw` joins the sharded job automatically and deletes a hand-maintained
+line. Porting also buys web-first assertions, which is what removes the sleeps
+the legacy suite is built on.
+
 ## Troubleshooting
 
 ### Script won't run
@@ -204,6 +330,53 @@ lsof -i :5291
 
 # If not, check Tiltfile for port config
 ```
+
+### The whole app is broken and the internal service logs nothing
+
+Check `citadel-workspaces/public/wasm/` is not empty. An empty directory makes
+the browser fetch `index.html` for the `.wasm` URL — the console shows
+`expected magic word 00 61 73 6d, found 3c 21 44 4f` (that is `<!DO`) — WASM init
+throws, and **every internal-service call silently does nothing**. It presents as
+a dozen unrelated failures at once (login, workspace init, directory navigation)
+while the service logs only health checks.
+
+Recover with `./sync-wasm-clients.sh`, or `cargo check -p citadel-workspace-internal-service`
+from the repo root, which rebuilds and redistributes the client.
+
+### Playwright cannot launch a browser
+
+If the error names an impossible browser build (`chromium-1234`) and tells you to
+run `npx playwright install`, installing browsers will not help. Two Playwright
+copies are resolving differently: `npx` finds the root's, `require()` walks up
+from `integration-tests` and finds another. Remove the shadow:
+
+```bash
+rm -rf citadel-workspaces/node_modules/{playwright,playwright-core,@playwright}
+```
+
+### vitest or the build complains about a platform binary
+
+The Docker sync installs Linux binaries into the bind-mounted
+`citadel-workspaces/node_modules` on a macOS host. Restore the tree with `npm ci`
+from the REPO ROOT — not a targeted delete, which leaves a version-mixed tree
+that fails in more confusing ways.
+
+### Code changes not taking effect in a container
+
+`docker compose restart` reuses what is in the image. Rust services AND
+`sync-wasm-clients.sh` (which is copied into the sync image, not mounted) need:
+
+```bash
+docker compose build internal-service server sync-wasm-client
+docker compose up -d
+```
+
+### Audio/video call specs
+
+`call-audio-video.spec.ts` and `call-group.spec.ts` launch their own browsers
+with `--use-fake-device-for-media-stream`, so they need no camera, microphone or
+permission prompt. They do need peers connected with a UDP path; a call that
+cannot get one reports that explicitly rather than hanging.
 
 ### Need more detailed logs
 ```bash
@@ -600,7 +773,7 @@ peerUsername: message.PeerRegisterNotification.peer_username
 
 **Verify Fix**:
 ```bash
-grep -n "peer_username" citadel-workspaces/src/lib/p2p-registration-service.ts
+grep -n "peer_username" citadel-workspaces/src/lib/p2p-registration-service/
 ```
 
 ---
@@ -903,3 +1076,29 @@ fi
 ### Messages Not Delivering
 - Verify P2P connection is established (peer shows in WORKSPACE MEMBERS)
 - Check console for WebSocket connection status
+
+### Call specs sit on "Still waiting for channel ready... (attempt N/60)"
+
+Expected, not a hang. The line reads `connected but not yet ready (no message
+received)`, and that wording is exact: a P2P channel counts as ready only once a
+message has actually arrived over it, because ILM's two directions warm up
+independently — A→B can work while B→A does not, and a channel that reports
+"connected" can still drop the first thing you send.
+
+The specs therefore exchange a verified message in both directions per pair
+before doing anything that matters. Reaching attempt 40 of 60 is normal on a
+cold stack; a three-peer group call warms three pairs, so budget for it.
+
+Exhausting all 60 is usually still the flake, not a defect. Observed: one
+direction warms instantly while the other never does — the log shows only
+`B -> A` retrying, never `A -> B` — and the same spec passed 8/8 on an immediate
+re-run with no retries at all. Before investigating, re-run the spec ALONE. Two
+consecutive failures, or retries in both directions, are what make it worth
+looking at the code.
+
+Read the direction before concluding anything. A failure here is in warm-up,
+which uses ordinary chat messages, so it implicates P2P messaging rather than
+whatever feature the spec was about to test.
+
+Do not "fix" this by lowering the retry count. The wait exists because the
+alternative is a call that fails later, somewhere less obvious.

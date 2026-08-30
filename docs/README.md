@@ -8,8 +8,11 @@
 - [WORKSPACE.md](WORKSPACE.md) — workspace domain model
 - [WORKSPACE_IMPLEMENTATION_GAPS.md](WORKSPACE_IMPLEMENTATION_GAPS.md) — UI action vs backend support
 - [EXIT_VS_SIGNOUT_IMPLEMENTATION.md](EXIT_VS_SIGNOUT_IMPLEMENTATION.md) — exit vs sign-out semantics
+- [THEMING.md](THEMING.md) — semantic colour tokens, and why hardcoded palette classes break workspace theming
 
 ## Build & deploy
+- [INSTALL.md](INSTALL.md) — using, hosting, or developing: which compose file, and why it matters
+- [UPGRADING.md](UPGRADING.md) — releases, upgrades, rollback, backup and restore
 - [WASM_BUILD.md](WASM_BUILD.md) — building the WASM client
 - [WASM_SYNC.md](WASM_SYNC.md) — syncing WASM bindings across packages
 - [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) — production deployment
@@ -17,7 +20,6 @@
 
 ## Testing
 - [TESTING.md](TESTING.md) — test suites, how to run them, P2P manual steps
-- [TEST_RESULTS.md](TEST_RESULTS.md) — deployment verification results
 
 ## Planning
 - [TODO_FUTURE.md](TODO_FUTURE.md) — backlog

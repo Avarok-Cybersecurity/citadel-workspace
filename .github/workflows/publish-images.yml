@@ -58,8 +58,32 @@ permissions:
   packages: write
 
 jobs:
+  # Nothing gated publication. `validate.yml` declares `workflow_call:` at its
+  # top and a repo-wide grep for `uses:.*validate.yml` returned only that
+  # declaration — so the entrypoint existed and was never wired. `publish` had
+  # no `needs` at all, and `promote-latest` needs only `publish`.
+  #
+  # A master commit failing every integration test, every Rust test, clippy,
+  # typecheck and lint therefore still built three images, pushed sha-<12>, and
+  # promoted `latest` — which is the tag docker-compose.production.yml and
+  # deploy.sh pull by default. The existing smoke test is a port-liveness probe;
+  # it proves the container starts, not that the code works.
+  validate:
+    name: Validate before publishing
+    # No `timeout-minutes` here, deliberately. It is not a permitted key on a
+    # job that calls a reusable workflow, and GitHub rejects the file at
+    # run-creation time: the run appears with ZERO jobs and a red X, so nothing
+    # was published for four days while the failure read as a broken build.
+    # validate.yml bounds each of its own jobs, which check-ci-job-timeouts.mjs
+    # verifies directly.
+    uses: ./.github/workflows/validate.yml
+
   publish:
     name: Publish ${{ matrix.image }}
+    # Observed 8m; this bounds a hang, not performance.
+    # Without it a stuck job holds a runner for GitHub's 360-minute default.
+    timeout-minutes: 40
+    needs: validate
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -249,6 +273,9 @@ jobs:
 
   promote-latest:
     name: Promote latest
+    # Observed under a minute; this bounds a hang, not performance.
+    # Without it a stuck job holds a runner for GitHub's 360-minute default.
+    timeout-minutes: 15
     # `needs` requires EVERY matrix job to have succeeded. Combined with the
     # master-only guard, this is what guarantees `latest` never points at a
     # half-published release or at unmerged code from a manual branch dispatch.

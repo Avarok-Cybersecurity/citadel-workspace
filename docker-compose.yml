@@ -9,6 +9,33 @@ services:
       - ./citadel-internal-service:/workspace/citadel-internal-service:rw
       - ./citadel-workspace-client-ts:/workspace/citadel-workspace-client-ts:rw
       - ./citadel-workspaces:/workspace/citadel-workspaces:rw
+      # Shadows the host's node_modules for this container only.
+      #
+      # Step 9 runs `rm -rf ./node_modules && npm install` inside the bind mount
+      # above, so without this the container reaches through and rebuilds the
+      # developer's tree with Linux binaries — a macOS host is left with
+      # @esbuild/linux-arm64 and every subsequent vitest/vite run dies on
+      # "You installed esbuild for another platform". It also installed a second
+      # Playwright there, which is why step 9 has to delete one again below.
+      - sync_ui_node_modules:/workspace/citadel-workspaces/node_modules
+      # Same reasoning for the other two directories the script installs into.
+      # Missing these is what made CI's `npm ci` fail with EACCES: the container
+      # runs as root, so the node_modules it left behind could not be removed by
+      # the runner user afterwards.
+      - sync_tsclient_node_modules:/workspace/citadel-internal-service/typescript-client/node_modules
+      - sync_wasmclient_node_modules:/workspace/citadel-workspace-client-ts/node_modules
+      # And the UI's own dist. Step 9 runs a throwaway `vite build --mode
+      # development` there purely to prove the UI compiles; the artefacts are of
+      # no use to anyone outside the container, and leaving them root-owned on
+      # the host made the CI gates fail with
+      #   EACCES: permission denied, open '.../citadel-workspaces/dist/sw.js'
+      # when they tried to produce a real production build afterwards.
+      #
+      # Deliberately NOT applied to typescript-client/dist or
+      # citadel-workspace-client-ts/dist: those ARE the sync's product, and the
+      # host build imports from them. Hiding those in a volume would leave the
+      # UI build with nothing to resolve.
+      - sync_ui_dist:/workspace/citadel-workspaces/dist
       # Cache volumes for faster rebuilds
       - rust_cache:/root/.cargo
       - sync_node_modules:/workspace/node_modules
@@ -20,6 +47,16 @@ services:
     network_mode: host
 
   server:
+    # A container that exits stays exited without this, which turns a transient
+    # failure into permanent downtime. The server binds the host's port
+    # (network_mode: host) and has been seen exiting with "Address already in
+    # use" when restarted before the previous process released it — exactly what
+    # an upgrade does. Docker then leaves it dead and the workspace is simply
+    # gone until someone notices.
+    #
+    # `unless-stopped` rather than `always`: a deliberate `docker compose stop`
+    # should stay stopped.
+    restart: unless-stopped
     build:
       context: .
       dockerfile: ./docker/workspace-server/Dockerfile
@@ -34,8 +71,27 @@ services:
       # unset. Production mounts `server_data:/data/server` in
       # docker-compose.production.yml and sets WORKSPACE_BACKEND there.
     environment:
-      - RUST_LOG=citadel=info
+      # citadel=info alone silently deletes the entire ILM subsystem. EnvFilter
+      # adds its ERROR default only when the parsed directive set is EMPTY, so a
+      # non-empty `citadel=info` leaves every non-matching target off at EVERY
+      # level -- including error!. That drops all 85 `target: "ism"` lines, of
+      # which 28 are error! and 23 are warn!, and they are precisely the ones
+      # that answer "my message never arrived": [ILM-SEND] FAILED, "Peer not
+      # connected, skipping N messages", and the three "processing task
+      # prematurely ended" lines that are the only record of a dead background
+      # task. Verified against live logs: 0 matches in 5000 lines.
+      #
+      # citadel_crypt=warn because double-ratchet internals were 76% of the
+      # log (2285 of 3000 lines), which is what made the remaining signal
+      # unreadable rather than merely verbose.
+      - RUST_LOG=citadel=info,ism=info,citadel_crypt=warn
       - WORKSPACE_MASTER_PASSWORD=${WORKSPACE_MASTER_PASSWORD}
+      # Dev only. The first account to CONNECT becomes the workspace admin,
+      # which is what makes `tilt up` -> create an account -> have editing
+      # rights work without anyone typing the master password. On a reachable
+      # deployment this hands the workspace to whoever registers first, so
+      # docker-compose.production.yml deliberately leaves it off.
+      - WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN=1
     deploy:
       resources:
         limits:
@@ -53,6 +109,8 @@ services:
     network_mode: host
 
   internal-service:
+    # See the note on `server`: without this a transient exit is permanent downtime.
+    restart: unless-stopped
     build:
       context: .
       dockerfile: ./docker/internal-service/Dockerfile
@@ -99,7 +157,20 @@ services:
       # so a bare "::" yields ":::12345", which is not valid socket-address
       # syntax and the service exits 1 on startup.
       - "INTERNAL_SERVICE_BIND_HOST=[::]"
-      - RUST_LOG=citadel=info
+      # citadel=info alone silently deletes the entire ILM subsystem. EnvFilter
+      # adds its ERROR default only when the parsed directive set is EMPTY, so a
+      # non-empty `citadel=info` leaves every non-matching target off at EVERY
+      # level -- including error!. That drops all 85 `target: "ism"` lines, of
+      # which 28 are error! and 23 are warn!, and they are precisely the ones
+      # that answer "my message never arrived": [ILM-SEND] FAILED, "Peer not
+      # connected, skipping N messages", and the three "processing task
+      # prematurely ended" lines that are the only record of a dead background
+      # task. Verified against live logs: 0 matches in 5000 lines.
+      #
+      # citadel_crypt=warn because double-ratchet internals were 76% of the
+      # log (2285 of 3000 lines), which is what made the remaining signal
+      # unreadable rather than merely verbose.
+      - RUST_LOG=citadel=info,ism=info,citadel_crypt=warn
       - DOCKER_CONTAINER=1
       - SKIP_WASM_BUILD=1
       - INTERNAL_SERVICE_BACKEND=filesystem
@@ -126,6 +197,8 @@ services:
     network_mode: host
 
   ui:
+    # See the note on `server`: without this a transient exit is permanent downtime.
+    restart: unless-stopped
     build:
       context: .
       dockerfile: ./docker/ui/Dockerfile
@@ -186,5 +259,9 @@ volumes:
   target_cache:
   rust_cache:
   sync_node_modules:
+  sync_ui_node_modules:
+  sync_tsclient_node_modules:
+  sync_wasmclient_node_modules:
+  sync_ui_dist:
   sync_target_cache:
   ui_node_modules:

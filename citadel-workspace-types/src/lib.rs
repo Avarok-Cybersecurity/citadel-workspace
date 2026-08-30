@@ -214,6 +214,16 @@ pub enum WorkspaceProtocolRequest {
         mdx_content: Option<String>,
         rules: Option<String>,
         chat_enabled: Option<bool>,
+        /// Make this the node the workspace opens on.
+        ///
+        /// The client had a "Set as default" menu item that sent `is_default`
+        /// in this request. There was no such field, serde ignores unknown
+        /// keys, the write succeeded, and the toast said "X is now the default"
+        /// while nothing changed — the old default came back on reload. The
+        /// field the client was already sending now exists and is honoured.
+        ///
+        /// Exactly one node is the default, so setting it clears the others.
+        is_default: Option<bool>,
     },
 
     /// Delete a node. If cascade is true, also deletes all descendants.
@@ -298,7 +308,23 @@ pub enum WorkspaceProtocolResponse {
     Success(String),
     Error(String),
     WorkspaceNotInitialized,
-    Members(Vec<User>),
+    /// The members of a domain, and WHICH domain they are.
+    ///
+    /// The domain used to be absent, and the protocol carries no request id, so
+    /// a response could not be attributed to the request that asked for it. Four
+    /// separate client subscribers each accepted any member list that arrived
+    /// and took last-writer-wins: the sidebar, the admin members tab, the
+    /// user-search corpus, and the group-call roster. A list fetched for one
+    /// domain would render inside another, and the admin tab would then send
+    /// role changes naming ITS entity with users taken from somebody else's.
+    ///
+    /// `Option` because a client may be talking to a server that predates the
+    /// field; a client that cannot tell which domain a list is for should keep
+    /// its old behaviour rather than discard the list.
+    Members {
+        domain_id: Option<String>,
+        members: Vec<User>,
+    },
     Member(User),
     /// Response containing a user's role and permissions for a domain
     UserPermissions {
@@ -321,6 +347,20 @@ pub enum WorkspaceProtocolResponse {
     NodeContentUpdated {
         node_id: String,
         mdx_content: String,
+        /// The content's SHA-256, so a watcher can verify what it just received.
+        ///
+        /// Without it, a watcher merged the new content over its cached node
+        /// and kept the OLD hash — so the integrity check refused to render a
+        /// document that had merely been edited by a colleague, and went on
+        /// refusing until the reader navigated away and back. The verifier and
+        /// this broadcast were built two rounds apart and their intersection
+        /// was never exercised: ordinary collaborative editing was the trigger.
+        ///
+        /// Optional so an older server, which does not send it, degrades to
+        /// "unhashed" rather than "mismatch" — refusing content because the
+        /// server predates the field would be the same defect wearing the fix's
+        /// clothes.
+        mdx_content_hash: Option<String>,
         updated_by: String,
         #[ts(type = "bigint")]
         timestamp: u64,

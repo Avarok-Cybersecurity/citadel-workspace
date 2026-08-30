@@ -23,6 +23,7 @@ export class WorkspaceSessionManager {
   private workspaceSession: WorkspaceSessionInfo | null = null;
   private reconnectAttempts = 0;
   private reconnectTimer?: NodeJS.Timeout;
+  private removeErrorListener?: () => void;
   private sessionListeners: Set<(session: WorkspaceSessionInfo | null) => void> = new Set();
 
   constructor(client: WorkspaceClient, config: SessionConfig = {}) {
@@ -108,10 +109,13 @@ export class WorkspaceSessionManager {
   }
 
   private setupErrorHandling(): void {
-    // Listen for connection errors
-    this.client.setErrorHandler((error: Error) => {
+    // ADDS a listener rather than replacing the single handler slot. This used
+    // to call `setErrorHandler`, which overwrites it — so every caller that
+    // passed `errorHandler` in the config had it silently discarded in this
+    // constructor, before their first error. The running app passes one.
+    this.removeErrorListener = this.client.addErrorListener((error: Error) => {
       console.error('Connection error:', error);
-      
+
       if (this.config.autoReconnect && this.reconnectAttempts < this.config.maxReconnectAttempts) {
         this.scheduleReconnect();
       }
@@ -127,6 +131,21 @@ export class WorkspaceSessionManager {
     });
   }
 
+  /**
+   * Release this manager's subscriptions and cancel any pending reconnect.
+   *
+   * Without it a discarded manager could still fire a timer that touched auth
+   * state, and its error listener and session subscription lived forever.
+   */
+  dispose(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
+    this.removeErrorListener?.();
+    this.removeErrorListener = undefined;
+  }
+
   private scheduleReconnect(): void {
     if (this.reconnectTimer) {
       return;
@@ -137,19 +156,24 @@ export class WorkspaceSessionManager {
 
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = undefined;
-      
+
+      // This used to log "Reconnection would require stored credentials" and
+      // then CLEAR the workspace session — on the success path, unconditionally.
+      // Combined with the handler clobber above, any error from the WASM layer,
+      // including a routine message-processing error, threw the user out of
+      // their workspace. It never attempted a reconnection of any kind, while
+      // the base client has had a real one all along.
+      //
+      // The session is deliberately NOT cleared on failure either. A CID is
+      // permanent per account and the session survives a transport drop, so
+      // discarding local session state is both wrong and unrecoverable — the
+      // caller decides what a dead transport means to them.
       try {
-        // Try to reconnect - would need stored credentials
-        // For now, just log that reconnection would require credentials
-        console.log('Reconnection would require stored credentials');
-        
-        // Clear workspace session on disconnect
-        if (this.workspaceSession) {
-          this.clearWorkspaceSession();
-        }
+        await this.client.restart_ws_connection();
+        this.reconnectAttempts = 0;
       } catch (error) {
         console.error('Reconnect failed:', error);
-        
+
         if (this.reconnectAttempts < this.config.maxReconnectAttempts) {
           this.scheduleReconnect();
         }

@@ -105,4 +105,18 @@ edit_tree_structure: boolean,
 /**
  * Whether users can manage custom node types
  */
-manage_node_types: boolean, };
+manage_node_types: boolean, 
+/**
+ * Whether users can edit the workspace theme shown to every member.
+ *
+ * `serde(default)` because this field was added after records were already
+ * being persisted. `DomainPermissions` is embedded in `DomainNode`, which
+ * the backend reads with `serde_json::from_slice`, so a stored node written
+ * before this existed has no `themes` key — and without a default the whole
+ * read fails with `missing field themes`, taking the node map with it. An
+ * upgrade would look like data loss rather than a schema change.
+ *
+ * It defaults to false, which is also the right direction for a
+ * permission: an old record grants nothing it did not previously grant.
+ */
+themes: boolean, };
