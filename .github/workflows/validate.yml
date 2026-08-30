@@ -650,6 +650,17 @@ jobs:
         if: matrix.project == 'citadel-workspaces'
         run: node scripts/check-modules-are-imported.mjs
         working-directory: citadel-workspaces
+      - name: Every component is mounted by something
+        # The gate above is not enough for a component: a file whose only
+        # importer is its own TEST reads as imported. PeerRefusalNotice and
+        # PersistFailureNotice render nothing and exist purely to be mounted --
+        # delete the line in App.tsx that mounts one and its tests still pass,
+        # because they render it directly, and module reachability still says
+        # "all imported ok". Verified: unmounting PeerRefusalNotice leaves that
+        # check green and fails only this one.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-components-are-mounted.mjs
+        working-directory: citadel-workspaces
       - name: Every test id a spec addresses exists
         # The other testid check argues you should not press a control by its
         # copy. Nothing checked the testid then EXISTS: two specs addressed
