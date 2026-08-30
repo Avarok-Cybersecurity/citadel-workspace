@@ -512,6 +512,16 @@ jobs:
         # were nine and they are gone.
         run: node scripts/check-explicit-types.mjs
         working-directory: citadel-workspaces
+      - name: A success flag is read by somebody
+        # sendAndAwaitAck was given a boolean return so an unacknowledged RE-VFS
+        # operation would stop being invisible; all six callers then discarded
+        # it, and so did every layer above them, so the file manager announced
+        # "Deleted" for peers that never heard of the change. The same shape put
+        # a retracted P2P message back on screen after a reload. Both were found
+        # by asking the type checker which calls resolve to a boolean and are
+        # used as statements. This keeps asking.
+        run: node scripts/check-success-flags-are-checked.mjs
+        working-directory: citadel-workspaces
       - name: Check no component prop is honoured but never passed
         # GroupConversationRow.isActive had a default, a class that highlights
         # the row, and one caller that never supplied it -- so the sidebar could
