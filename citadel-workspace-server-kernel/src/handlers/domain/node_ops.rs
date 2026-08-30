@@ -18,6 +18,35 @@ use async_trait::async_trait;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{DomainNode, NodeEntityType, TreeNode};
 
+/// Whether an `UpdateNode` changes the tree's STRUCTURE rather than a document's
+/// content.
+///
+/// Two callers need this answer and had their own copy of the list. The
+/// permission gate in `async_node_ops::update_node` asks it to decide between
+/// `EditTreeStructure` and `EditMdx`; the command processor asks it to decide
+/// whether to broadcast the changed node to everyone else. The lists drifted:
+/// `is_default` was added to the request and honoured by the writer and included
+/// in the permission gate, and never added to the broadcast condition — so
+/// changing which room a workspace opens on was applied on the server and
+/// announced to nobody. Every other client kept its old default until reload.
+///
+/// One list, so a field added to `UpdateNode` cannot be gated and unbroadcast.
+pub fn update_changes_structure(
+    name: Option<&str>,
+    description: Option<&str>,
+    rules: Option<&str>,
+    chat_enabled: Option<bool>,
+    is_default: Option<bool>,
+) -> bool {
+    name.is_some()
+        || description.is_some()
+        || rules.is_some()
+        || chat_enabled.is_some()
+        // Choosing where the workspace opens is a structural decision, and it
+        // writes to every other node.
+        || is_default.is_some()
+}
+
 /// Async operations for the generalized tree hierarchy
 #[async_trait]
 #[auto_impl::auto_impl(Arc)]

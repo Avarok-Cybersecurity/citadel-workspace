@@ -284,14 +284,15 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         // check_entity_permission walks UP the parent chain, so a grant at the
         // root still covers every descendant: node-scoped is strictly more
         // precise here, never less permissive.
-        let changes_structure = name.is_some()
-            || description.is_some()
-            || rules.is_some()
-            || chat_enabled.is_some()
-            // Choosing where the workspace opens is a structural decision, and
-            // it writes to every other node, so it needs the structural
-            // permission rather than EditMdx.
-            || is_default.is_some();
+        // One list, shared with the broadcast decision in the command processor.
+        // They were separate copies and drifted -- see `update_changes_structure`.
+        let changes_structure = crate::handlers::domain::node_ops::update_changes_structure(
+            name,
+            description,
+            rules,
+            chat_enabled,
+            is_default,
+        );
 
         let (required, label) = if changes_structure {
             (Permission::EditTreeStructure, "EditTreeStructure")

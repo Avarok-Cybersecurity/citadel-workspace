@@ -1041,11 +1041,18 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     // A rename (or any structural edit) is not a content update,
                     // so NodeContentUpdated above does not cover it — other
                     // users kept showing the old name until they signed in again.
-                    if name.is_some()
-                        || description.is_some()
-                        || rules.is_some()
-                        || chat_enabled.is_some()
-                    {
+                    // The same predicate the permission gate uses. These were
+                    // two hand-maintained copies of one list, and `is_default`
+                    // reached the gate and never reached here: setting which
+                    // room a workspace opens on was written on the server and
+                    // announced to nobody.
+                    if crate::handlers::domain::node_ops::update_changes_structure(
+                        name.as_deref(),
+                        description.as_deref(),
+                        rules.as_deref(),
+                        *chat_enabled,
+                        *is_default,
+                    ) {
                         kernel.broadcast(
                             WorkspaceProtocolResponse::Node(node.clone()),
                             requester_cid,
