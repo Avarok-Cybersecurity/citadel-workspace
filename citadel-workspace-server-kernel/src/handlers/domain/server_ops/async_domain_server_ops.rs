@@ -36,6 +36,55 @@ impl<R: Ratchet> Clone for AsyncDomainServerOperations<R> {
 }
 
 impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
+    /// Refuse anything that would leave the workspace with no administrator.
+    ///
+    /// Demoting or removing the last Admin is unrecoverable: promotion requires
+    /// an admin, so there is no way back from a workspace that has none. The
+    /// admin UI offers both actions on the acting user's own row, which puts
+    /// that state one click away — and it is exactly the state that made the
+    /// product read-only for everyone before joining users were promoted.
+    ///
+    /// A no-op when the target is not an Admin, so ordinary member management is
+    /// unaffected.
+    async fn ensure_not_last_admin(
+        &self,
+        target_user_id: &str,
+        action: &str,
+    ) -> Result<(), NetworkError> {
+        let target = match self.backend_tx_manager.get_user(target_user_id).await? {
+            Some(user) => user,
+            None => return Ok(()),
+        };
+        if target.role != UserRole::Admin {
+            return Ok(());
+        }
+
+        let workspace = match self
+            .backend_tx_manager
+            .get_workspace(crate::WORKSPACE_ROOT_ID)
+            .await?
+        {
+            Some(ws) => ws,
+            None => return Ok(()),
+        };
+
+        let mut admins = 0usize;
+        for member_id in &workspace.members {
+            if let Some(member) = self.backend_tx_manager.get_user(member_id).await? {
+                if member.role == UserRole::Admin {
+                    admins += 1;
+                }
+            }
+        }
+
+        if admins <= 1 {
+            return Err(NetworkError::msg(format!(
+                "Cannot {action} the only administrator. Promote another member to Admin first —                  otherwise nobody could manage the workspace, and the change cannot be undone."
+            )));
+        }
+        Ok(())
+    }
+
     /// Create a new AsyncDomainServerOperations instance
     pub fn new(
         backend_tx_manager: Arc<BackendTransactionManager<R>>,
@@ -150,9 +199,27 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
             }
         }
 
-        // Also check if member of domain (membership gives ViewContent permission)
-        if permission == Permission::ViewContent {
-            return self.is_member_of_domain(user_id, entity_id).await;
+        // Membership in a domain confers the permissions of the user's ROLE.
+        //
+        // This used to confer exactly one, ViewContent, and consult the role
+        // for nothing. So a plain member of a workspace could read an office
+        // and never post to it: `Permission::for_role` grants Member
+        // SendMessages and ReadMessages, three separate role tables in this
+        // repo say the same, and enforcement read none of them. Three
+        // integration specs failed on it -- office chat, room chat and
+        // touch-controls -- each with the composer replaced by "You do not
+        // have permission to send messages here", which is how an unasked
+        // question reads on screen.
+        //
+        // Scoped to membership deliberately: `user.role` is global, so
+        // granting on it alone would let a member of one workspace act in
+        // another. It widens nothing beyond the role's own set, so a Guest
+        // still gets ViewContent and a Banned user still gets nothing -- the
+        // previous behaviour granted ViewContent to a banned member.
+        if Permission::for_role(&user.role).contains(&permission)
+            && self.is_member_of_domain(user_id, entity_id).await?
+        {
+            return Ok(true);
         }
 
         Ok(false)
@@ -163,11 +230,15 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
         user_id: &str,
         domain_id: &str,
     ) -> Result<bool, NetworkError> {
-        // Check if this is the workspace root (use Domain::Workspace for workspace)
-        if domain_id == crate::WORKSPACE_ROOT_ID {
-            if let Some(workspace) = self.backend_tx_manager.get_workspace(domain_id).await? {
-                return Ok(workspace.members.contains(&user_id.to_string()));
-            }
+        // Workspaces are stored as Workspace records; DomainNodes are the tree
+        // BELOW them. This used to test `domain_id == WORKSPACE_ROOT_ID`, which
+        // is true of exactly one workspace — the seeded root. Every workspace
+        // `create_workspace` mints gets a UUID id and is stored the same way, so
+        // the node lookup below missed it and this returned false to EVERYONE,
+        // including the creator we had just written into `members`. get_workspace
+        // returns None for a node id, so trying it first covers all of them.
+        if let Some(workspace) = self.backend_tx_manager.get_workspace(domain_id).await? {
+            return Ok(workspace.members.contains(&user_id.to_string()));
         }
 
         // For all other entities, use DomainNode tree storage
@@ -205,6 +276,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
 
         // If this is the workspace root, use the workspace storage
         if domain_id == crate::WORKSPACE_ROOT_ID {
+            // Same lock as the connect path and update_workspace — this branch
+            // reads the workspace whole and writes it back, so without it those
+            // fixes only exclude each other.
+            let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+
             let mut workspace = match self.backend_tx_manager.get_workspace(domain_id).await? {
                 Some(ws) => ws,
                 None => return Err(NetworkError::msg("Workspace not found")),
@@ -215,10 +291,32 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             }
 
             self.backend_tx_manager
-                .insert_workspace(domain_id.to_string(), workspace)
+                .insert_workspace(domain_id.to_string(), workspace.clone())
+                .await?;
+
+            // The denormalized Domain::Workspace copy, which UpdateWorkspaceTheme
+            // documents as the invariant every workspace mutator maintains — and
+            // which the two membership mutators did not. ListMembers reads the
+            // Domain copy FIRST, so an added member never appeared in the roster
+            // and a removed one never left it, while enforcement read the fresh
+            // workspace record. The displayed roster and the enforced roster
+            // disagreed permanently, in both directions, with no race required.
+            self.backend_tx_manager
+                .insert_domain(
+                    domain_id.to_string(),
+                    Domain::Workspace {
+                        workspace: workspace.clone(),
+                    },
+                )
                 .await?;
         } else {
-            // For all other entities, use DomainNode tree storage
+            // For all other entities, use DomainNode tree storage.
+            // lock_nodes across the whole get_all_nodes ... save_nodes cycle:
+            // create/delete/move_node all take it, but these two did not, and a
+            // mutex only excludes participants. A member add overlapping a room
+            // creation loaded the pre-insert map and saved it back — erasing the
+            // room create_node had already reported as created.
+            let _nodes_guard = self.backend_tx_manager.lock_nodes().await;
             let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
             let node = nodes
                 .get_mut(domain_id)
@@ -242,7 +340,17 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             }
         };
 
-        // Set the user's role
+        // The third writer of `user.role`, and the one that was ungated.
+        //
+        // UpdateMemberRole and RemoveMember both call ensure_not_last_admin;
+        // this did not. Adding an EXISTING member with a lower role is a role
+        // change by another name, so the sole administrator adding themselves as
+        // Member left the workspace with no admin at all — and promotion
+        // requires an admin, so there is no way back. It is reachable from the
+        // ordinary "Add member" dialog by typing an existing admin's name.
+        if role != UserRole::Admin {
+            self.ensure_not_last_admin(user_id_to_add, "demote").await?;
+        }
         user.role = role;
 
         // Use the set_role_permissions method to properly set permissions for this domain
@@ -270,6 +378,23 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
 
         // If this is the workspace root, use the workspace storage
         if domain_id == crate::WORKSPACE_ROOT_ID {
+            // BEFORE the last-admin check, not after.
+            //
+            // `ensure_not_last_admin` counts admins and returns; the write
+            // happens separately. Two admins removing each other both counted
+            // 2, both passed, and both writes landed — leaving ZERO admins,
+            // which the check's own doc calls unrecoverable: "promotion
+            // requires an admin, so there is no way back".
+            //
+            // Holding the lock across check AND write is what makes the guard
+            // mean anything. It also covers the workspace read-modify-write
+            // below, which is the same erased-member race the connect path and
+            // update_workspace take this lock for.
+            let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+
+            self.ensure_not_last_admin(user_id_to_remove, "remove")
+                .await?;
+
             let mut workspace = match self.backend_tx_manager.get_workspace(domain_id).await? {
                 Some(ws) => ws,
                 None => return Err(NetworkError::msg("Workspace not found")),
@@ -278,10 +403,49 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             workspace.members.retain(|m| m != user_id_to_remove);
 
             self.backend_tx_manager
-                .insert_workspace(domain_id.to_string(), workspace)
+                .insert_workspace(domain_id.to_string(), workspace.clone())
                 .await?;
+
+            // The denormalized Domain::Workspace copy, which UpdateWorkspaceTheme
+            // documents as the invariant every workspace mutator maintains — and
+            // which the two membership mutators did not. ListMembers reads the
+            // Domain copy FIRST, so an added member never appeared in the roster
+            // and a removed one never left it, while enforcement read the fresh
+            // workspace record. The displayed roster and the enforced roster
+            // disagreed permanently, in both directions, with no race required.
+            self.backend_tx_manager
+                .insert_domain(
+                    domain_id.to_string(),
+                    Domain::Workspace {
+                        workspace: workspace.clone(),
+                    },
+                )
+                .await?;
+
+            // Drop the role as well as the membership, or the removed user is a
+            // "ghost admin": `is_admin` reads the GLOBAL `user.role` and never
+            // consults the member list, so a removed administrator keeps passing
+            // every permission gate — while ensure_not_last_admin, which counts
+            // admins among `workspace.members`, can no longer see them. Two
+            // admins could then remove each other down to zero and the next
+            // account to register would be promoted as "first member".
+            if let Some(mut removed) = self.backend_tx_manager.get_user(user_id_to_remove).await? {
+                if removed.role == UserRole::Admin {
+                    removed.role = UserRole::Member;
+                    removed.set_role_permissions(crate::WORKSPACE_ROOT_ID);
+                    self.backend_tx_manager
+                        .insert_user(user_id_to_remove.to_string(), removed)
+                        .await?;
+                }
+            }
         } else {
-            // For all other entities, use DomainNode tree storage
+            // For all other entities, use DomainNode tree storage.
+            // lock_nodes across the whole get_all_nodes ... save_nodes cycle:
+            // create/delete/move_node all take it, but these two did not, and a
+            // mutex only excludes participants. A member add overlapping a room
+            // creation loaded the pre-insert map and saved it back — erasing the
+            // room create_node had already reported as created.
+            let _nodes_guard = self.backend_tx_manager.lock_nodes().await;
             let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
             let node = nodes
                 .get_mut(domain_id)
@@ -313,6 +477,18 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             return Err(NetworkError::msg(
                 "Permission denied: Only admins can update member roles",
             ));
+        }
+
+        // Held across the check AND the write below. `last_admin_race_test.rs`
+        // states the contract — "in all three role writers" — and this was the
+        // writer that never took it: two admins demoting each other both counted
+        // two admins, both passed the guard, and both wrote. Zero admins is a
+        // state this file's own documentation calls unrecoverable, because
+        // promotion requires an admin.
+        let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+
+        if role != UserRole::Admin {
+            self.ensure_not_last_admin(target_user_id, "demote").await?;
         }
 
         // Get user and update role
@@ -506,14 +682,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         // Check if user is member of workspace
         if !self.is_member_of_domain(user_id, workspace_id).await? {
             return Err(NetworkError::msg(
-                "Permission denied: Not a member of this workspace",
+                crate::handlers::domain::workspace_errors::NOT_A_MEMBER,
             ));
         }
 
         // Get workspace from backend
         match self.backend_tx_manager.get_workspace(workspace_id).await? {
             Some(ws) => Ok(ws),
-            None => Err(NetworkError::msg("Workspace not found")),
+            None => Err(NetworkError::msg(
+                crate::handlers::domain::workspace_errors::NO_SUCH_WORKSPACE,
+            )),
         }
     }
 
@@ -640,13 +818,40 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
 
     async fn delete_workspace(
         &self,
-        _user_id: &str,
+        user_id: &str,
         workspace_id: &str,
         workspace_master_password: String,
     ) -> Result<(), NetworkError> {
         // System Protection: Prevent deletion of the root workspace
         if workspace_id == crate::WORKSPACE_ROOT_ID {
             return Err(NetworkError::msg("Cannot delete the root workspace"));
+        }
+
+        // WHO is asking, not just what they know.
+        //
+        // The actor used to be discarded — the parameter was literally
+        // `_user_id` — so the password below was the entire gate. And
+        // `create_workspace` stores ROOT's master password against every
+        // workspace it mints, so one shared secret authorised deleting any
+        // non-root workspace, by any authenticated account, member or not.
+        //
+        // The password stays as a second factor; it is no longer the only one.
+        // Owner as well as admin, because a workspace's owner is not
+        // necessarily a global admin and deleting their own workspace is the
+        // ordinary case.
+        let is_admin = self.is_admin(user_id).await.unwrap_or(false);
+        let is_owner = self
+            .backend_tx_manager
+            .get_workspace(workspace_id)
+            .await
+            .ok()
+            .flatten()
+            .map(|w| w.owner_id == user_id)
+            .unwrap_or(false);
+        if !is_admin && !is_owner {
+            return Err(NetworkError::msg(
+                "Permission denied: only an admin or the workspace owner may delete it",
+            ));
         }
 
         // Verify master access password
@@ -694,6 +899,21 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             ));
         }
 
+        // Held across the whole read-modify-write, like the connect path.
+        //
+        // A mutex only excludes PARTICIPANTS. The connect-time member-add takes
+        // this lock, but that bought nothing while this function did not: it
+        // reads the record whole, appends the caller to `members`, and writes it
+        // back — so it could read `[user1]`, and write `[user1]` over the
+        // `[user1, user2]` that the connect path had just written under the
+        // lock. user2's membership vanishes, and `get_workspace` then refuses
+        // them with "Not a member", which the command processor maps to
+        // WorkspaceNotInitialized — so their client re-shows the setup flow.
+        //
+        // Same first-run window the connect-side fix targeted; that fix was only
+        // half of it.
+        let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+
         // Get workspace directly from backend without permission check
         // since we've verified the master password
         let mut workspace = match self.backend_tx_manager.get_workspace(workspace_id).await? {
@@ -709,7 +929,15 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             workspace.description = new_desc.to_string();
         }
         if let Some(meta_bytes) = metadata {
-            workspace.metadata = meta_bytes;
+            // Merge, do not replace. `metadata` is one JSON object shared by
+            // several features: this path writes {"initialized": true} while
+            // theming writes a `theme` key. Assigning over the top erased any
+            // theme configured before the workspace was initialised — the same
+            // defect already fixed on the theme path, which this call site
+            // never received.
+            workspace.metadata =
+                super::metadata_merge::merge_metadata_document(&workspace.metadata, &meta_bytes)
+                    .map_err(NetworkError::msg)?;
         }
 
         // Add the user as a member if they're not already (since they have the master password)

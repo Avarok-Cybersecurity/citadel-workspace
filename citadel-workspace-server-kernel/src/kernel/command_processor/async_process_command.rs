@@ -46,15 +46,14 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 Err(e) => {
                     let error_msg = e.to_string();
                     warn!(target: "citadel", "GetWorkspace error: {}", error_msg);
-                    if error_msg.contains("not found") || error_msg.contains("Not a member") {
-                        info!(target: "citadel", "Returning WorkspaceNotInitialized");
-                        Ok(WorkspaceProtocolResponse::WorkspaceNotInitialized)
-                    } else {
-                        Ok(WorkspaceProtocolResponse::Error(format!(
-                            "Failed to get workspace: {}",
-                            e
-                        )))
-                    }
+                    let failure = super::workspace_lookup::classify(&error_msg);
+                    let response = super::workspace_lookup::response_for(
+                        target_id == crate::WORKSPACE_ROOT_ID,
+                        failure,
+                        &error_msg,
+                    );
+                    info!(target: "citadel", "GetWorkspace failure {failure:?} -> {response:?}");
+                    Ok(response)
                 }
             }
         }
@@ -128,6 +127,115 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             }
         }
 
+        WorkspaceProtocolRequest::UpdateWorkspaceTheme {
+            workspace_id,
+            theme,
+        } => {
+            use citadel_workspace_types::structs::Permission;
+
+            let target_id = workspace_id.as_deref().unwrap_or(crate::WORKSPACE_ROOT_ID);
+
+            // Gated on Permission::Themes rather than the master password: this
+            // changes how the workspace looks, not what it is, so it must not
+            // require the credential that also permits deleting it.
+            let allowed = {
+                use crate::handlers::domain::async_ops::AsyncPermissionOperations;
+                kernel
+                    .domain_operations
+                    .check_entity_permission(actor_user_id, target_id, Permission::Themes)
+                    .await
+                    .unwrap_or(false)
+            };
+
+            if !allowed {
+                return Ok(WorkspaceProtocolResponse::Error(
+                    "Permission denied: Themes required".to_string(),
+                ));
+            }
+
+            // Held across the whole read-modify-write below. A workspace is
+            // stored whole, so without this a concurrent member or settings
+            // update reads the same record, and whichever writes second
+            // discards the other's field.
+            let _workspace_guard = kernel
+                .domain_operations
+                .backend_tx_manager
+                .lock_workspaces()
+                .await;
+
+            match kernel
+                .domain_operations
+                .backend_tx_manager
+                .get_workspace(target_id)
+                .await
+            {
+                Ok(Some(mut workspace)) => {
+                    // Merge, do not replace: `metadata` is one JSON object
+                    // that several features share, and assigning over it erased
+                    // the initialisation marker, so an initialised workspace
+                    // came back looking unconfigured and the setup modal opened
+                    // over a working workspace and blocked every click behind
+                    // its backdrop. The rule now lives in one place so the next
+                    // writer inherits it instead of rediscovering this.
+                    let patch = serde_json::json!({ "theme": match serde_json::from_slice::<serde_json::Value>(theme) {
+                        Ok(value) => value,
+                        Err(e) => {
+                            return Ok(WorkspaceProtocolResponse::Error(format!(
+                                "Theme payload is not valid JSON: {}",
+                                e
+                            )))
+                        }
+                    } });
+                    let patch_bytes = match serde_json::to_vec(&patch) {
+                        Ok(bytes) => bytes,
+                        Err(e) => {
+                            return Ok(WorkspaceProtocolResponse::Error(format!(
+                                "Failed to encode theme patch: {}",
+                                e
+                            )))
+                        }
+                    };
+                    workspace.metadata = match crate::handlers::domain::server_ops::metadata_merge::merge_metadata_document(
+                        &workspace.metadata,
+                        &patch_bytes,
+                    ) {
+                        Ok(bytes) => bytes,
+                        Err(e) => return Ok(WorkspaceProtocolResponse::Error(e)),
+                    };
+                    kernel
+                        .domain_operations
+                        .backend_tx_manager
+                        .insert_workspace(target_id.to_string(), workspace.clone())
+                        .await?;
+
+                    // The denormalized copy, which every other workspace
+                    // mutator also writes. Updating only the workspace record
+                    // left the Domain::Workspace copy holding the previous
+                    // metadata, so a reader that goes through the domain saw
+                    // the old theme and would eventually write it back.
+                    kernel
+                        .domain_operations
+                        .backend_tx_manager
+                        .insert_domain(
+                            target_id.to_string(),
+                            citadel_workspace_types::structs::Domain::Workspace {
+                                workspace: workspace.clone(),
+                            },
+                        )
+                        .await?;
+
+                    Ok(WorkspaceProtocolResponse::Workspace(workspace))
+                }
+                Ok(None) => Ok(WorkspaceProtocolResponse::Error(
+                    "Workspace not found".to_string(),
+                )),
+                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
+                    "Failed to update workspace theme: {}",
+                    e
+                ))),
+            }
+        }
+
         WorkspaceProtocolRequest::DeleteWorkspace {
             workspace_id,
             workspace_master_password,
@@ -174,6 +282,27 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         }
 
         WorkspaceProtocolRequest::GetMember { user_id } => {
+            // A `User` carries the role, the FULL per-domain permissions map and
+            // the metadata, and this had no check at all — so any authenticated
+            // account could enumerate every other account and read the entire
+            // enforced permission state of the workspace. `GetUserPermissions`,
+            // fifteen lines below, already gates exactly this data correctly;
+            // the same rule applies here.
+            {
+                use crate::handlers::domain::async_ops::AsyncDomainOperations;
+                let is_admin = kernel
+                    .domain_ops()
+                    .is_admin(actor_user_id)
+                    .await
+                    .unwrap_or(false);
+                if actor_user_id != user_id && !is_admin {
+                    return Ok(WorkspaceProtocolResponse::Error(
+                        "Permission denied: Can only view your own member record or must be admin"
+                            .to_string(),
+                    ));
+                }
+            }
+
             // Get member returns the user if they exist
             match kernel
                 .domain_operations
@@ -208,10 +337,24 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 )
                 .await
             {
-                Ok(_) => Ok(WorkspaceProtocolResponse::MemberRoleUpdated {
-                    user_id: user_id.clone(),
-                    new_role: role.clone(),
-                }),
+                Ok(_) => {
+                    // Broadcast, not just answered.
+                    //
+                    // Only the acting admin ever received this, and the client's
+                    // permission-cache clear is gated on the payload naming the
+                    // CURRENT user -- which it never is for the admin doing the
+                    // demoting. So a demoted admin kept every gated control
+                    // until a full reload, with the server refusing each use as
+                    // a raw error toast, and a promoted member saw nothing new.
+                    // The whole client-side role-changed pathway could only fire
+                    // for an admin editing themselves.
+                    let notification = WorkspaceProtocolResponse::MemberRoleUpdated {
+                        user_id: user_id.clone(),
+                        new_role: role.clone(),
+                    };
+                    kernel.broadcast(notification.clone(), requester_cid);
+                    Ok(notification)
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to update member role: {}",
                     e
@@ -237,9 +380,32 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 )
                 .await
             {
-                Ok(_) => Ok(WorkspaceProtocolResponse::Success(
-                    "Member permissions updated successfully".to_string(),
-                )),
+                Ok(_) => {
+                    // Same reasoning as UpdateMemberRole above: the person whose
+                    // permissions changed has to be told, and only the acting
+                    // admin was. `Success` carries no user id, so the broadcast
+                    // is the role-shaped notification with the member's CURRENT
+                    // role -- what the client needs is "your permissions moved,
+                    // drop your cache", and the role is how it identifies whose.
+                    let subject_role = kernel
+                        .get_user(user_id)
+                        .await
+                        .ok()
+                        .flatten()
+                        .map(|user| user.role);
+                    if let Some(new_role) = subject_role {
+                        kernel.broadcast(
+                            WorkspaceProtocolResponse::MemberRoleUpdated {
+                                user_id: user_id.clone(),
+                                new_role,
+                            },
+                            requester_cid,
+                        );
+                    }
+                    Ok(WorkspaceProtocolResponse::Success(
+                        "Member permissions updated successfully".to_string(),
+                    ))
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to update member permissions: {}",
                     e
@@ -284,6 +450,31 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         WorkspaceProtocolRequest::ListMembers { domain_id } => {
             let target_id = domain_id.as_deref().unwrap_or(crate::WORKSPACE_ROOT_ID);
 
+            // `domain_id` comes from the request and was trusted, with no check
+            // that the caller belongs to it — so any authenticated account could
+            // read the complete roster, roles and permission maps of every
+            // office and room, including ones they were never added to.
+            {
+                use crate::handlers::domain::async_ops::{
+                    AsyncDomainOperations, AsyncPermissionOperations,
+                };
+                let is_admin = kernel
+                    .domain_ops()
+                    .is_admin(actor_user_id)
+                    .await
+                    .unwrap_or(false);
+                let is_member = kernel
+                    .domain_ops()
+                    .is_member_of_domain(actor_user_id, target_id)
+                    .await
+                    .unwrap_or(false);
+                if !is_admin && !is_member {
+                    return Ok(WorkspaceProtocolResponse::Error(
+                        "Permission denied: not a member of this domain".to_string(),
+                    ));
+                }
+            }
+
             // Collect member IDs from legacy Domain storage or DomainNode tree storage
             let member_ids = if let Ok(Some(domain)) = kernel
                 .domain_operations
@@ -316,7 +507,12 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     users.push(user);
                 }
             }
-            Ok(WorkspaceProtocolResponse::Members(users))
+            Ok(WorkspaceProtocolResponse::Members {
+                // Echoed from the request, resolved the same way the lookup
+                // above resolved it, so the answer says what it is about.
+                domain_id: Some(target_id.to_string()),
+                members: users,
+            })
         }
 
         WorkspaceProtocolRequest::GetUserPermissions { user_id, domain_id } => {
@@ -346,11 +542,49 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 .await
             {
                 Ok(Some(user)) => {
-                    // Get permissions for the specific domain
-                    let permissions: Vec<Permission> = user
-                        .get_permissions(domain_id)
-                        .map(|p| p.iter().cloned().collect())
-                        .unwrap_or_default();
+                    // Report what enforcement would actually allow, not the raw
+                    // map.
+                    //
+                    // `user.get_permissions(domain_id)` is an EXACT-domain
+                    // lookup: empty for any domain the user was never
+                    // explicitly added to. `check_entity_permission` — the path
+                    // that decides whether an operation is permitted — is
+                    // admin short-circuit, then direct grant, then inheritance
+                    // up the parent chain, which is the model CLAUDE.md
+                    // describes as "Workspace -> Office -> Room".
+                    //
+                    // The two disagreed, and the UI believes this one. The
+                    // workspace creator is added to WORKSPACE_ROOT_ID as Admin
+                    // at initialisation, so `check_entity_permission` grants
+                    // them EditMdx on every office — while this endpoint
+                    // answered "0 permissions" for the same office, and the
+                    // Edit button stayed disabled forever. Measured: disabled
+                    // at 2s, 10s, 20s, 40s and 60s after load, on a freshly
+                    // created workspace.
+                    //
+                    // Computed THROUGH check_entity_permission rather than by
+                    // reimplementing the walk here, so this answer cannot drift
+                    // from enforcement or report access that would then be
+                    // refused. It widens nothing: every permission listed is
+                    // one the server would already have honoured.
+                    let permissions: Vec<Permission> = {
+                        use crate::handlers::domain::async_ops::AsyncPermissionOperations;
+                        // Permission::ALL_VARIANTS is the single source of truth for
+                        // which permissions exist; enumerating it here means a new
+                        // variant is reported without touching this file.
+                        let mut granted = Vec::new();
+                        for permission in Permission::ALL_VARIANTS {
+                            if kernel
+                                .domain_ops()
+                                .check_entity_permission(user_id, domain_id, permission)
+                                .await
+                                .unwrap_or(false)
+                            {
+                                granted.push(permission);
+                            }
+                        }
+                        granted
+                    };
 
                     Ok(WorkspaceProtocolResponse::UserPermissions {
                         domain_id: domain_id.clone(),
@@ -383,6 +617,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             reply_to,
             mentions,
         } => {
+            use crate::kernel::group_access::{authorize_group_access, GROUP_ACCESS_DENIED};
+            if authorize_group_access(kernel, actor_user_id, group_id)
+                .await
+                .is_none()
+            {
+                return Ok(WorkspaceProtocolResponse::Error(
+                    GROUP_ACCESS_DENIED.to_string(),
+                ));
+            }
+
             use citadel_workspace_types::GroupMessage;
             use uuid::Uuid;
 
@@ -428,8 +672,13 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         group_id: group_id.clone(),
                         message: message.clone(),
                     };
-                    // Broadcast to all clients except the sender
-                    kernel.broadcast(notification.clone(), requester_cid);
+                    // Group-scoped: a message in a private room used to be
+                    // pushed to every connected session regardless of membership.
+                    kernel.broadcast_to_group(
+                        notification.clone(),
+                        requester_cid,
+                        group_id.clone(),
+                    );
                     Ok(notification)
                 }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
@@ -444,6 +693,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             message_id,
             new_content,
         } => {
+            use crate::kernel::group_access::{authorize_group_access, GROUP_ACCESS_DENIED};
+            if authorize_group_access(kernel, actor_user_id, group_id)
+                .await
+                .is_none()
+            {
+                return Ok(WorkspaceProtocolResponse::Error(
+                    GROUP_ACCESS_DENIED.to_string(),
+                ));
+            }
+
             // Get the original message to verify ownership
             match kernel
                 .domain_operations
@@ -483,8 +742,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                                 new_content: new_content.clone(),
                                 edited_at,
                             };
-                            // Broadcast to all clients except the sender
-                            kernel.broadcast(notification.clone(), requester_cid);
+                            // Group-scoped, like the send path above. The
+                            // membership filter was added for SendGroupMessage
+                            // and never copied here, so an edit -- which
+                            // carries the full new_content -- fanned out to
+                            // every connected session regardless of membership.
+                            kernel.broadcast_to_group(
+                                notification.clone(),
+                                requester_cid,
+                                group_id.clone(),
+                            );
                             Ok(notification)
                         }
                         Ok(None) => Ok(WorkspaceProtocolResponse::Error(
@@ -510,6 +777,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             group_id,
             message_id,
         } => {
+            use crate::kernel::group_access::{authorize_group_access, GROUP_ACCESS_DENIED};
+            if authorize_group_access(kernel, actor_user_id, group_id)
+                .await
+                .is_none()
+            {
+                return Ok(WorkspaceProtocolResponse::Error(
+                    GROUP_ACCESS_DENIED.to_string(),
+                ));
+            }
+
             // Get the original message to verify ownership
             match kernel
                 .domain_operations
@@ -543,8 +820,12 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                                 message_id: message_id.clone(),
                                 deleted_by: actor_user_id.to_string(),
                             };
-                            // Broadcast to all clients except the sender
-                            kernel.broadcast(notification.clone(), requester_cid);
+                            // Group-scoped, like the send path above.
+                            kernel.broadcast_to_group(
+                                notification.clone(),
+                                requester_cid,
+                                group_id.clone(),
+                            );
                             Ok(notification)
                         }
                         Ok(None) => Ok(WorkspaceProtocolResponse::Error(
@@ -571,6 +852,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             before_timestamp,
             limit,
         } => {
+            use crate::kernel::group_access::{authorize_group_access, GROUP_ACCESS_DENIED};
+            if authorize_group_access(kernel, actor_user_id, group_id)
+                .await
+                .is_none()
+            {
+                return Ok(WorkspaceProtocolResponse::Error(
+                    GROUP_ACCESS_DENIED.to_string(),
+                ));
+            }
+
             let limit = limit.unwrap_or(50).min(100); // Default 50, max 100
 
             match kernel
@@ -595,6 +886,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             group_id,
             parent_message_id,
         } => {
+            use crate::kernel::group_access::{authorize_group_access, GROUP_ACCESS_DENIED};
+            if authorize_group_access(kernel, actor_user_id, group_id)
+                .await
+                .is_none()
+            {
+                return Ok(WorkspaceProtocolResponse::Error(
+                    GROUP_ACCESS_DENIED.to_string(),
+                ));
+            }
+
             match kernel
                 .domain_operations
                 .backend_tx_manager
@@ -645,7 +946,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 )
                 .await
             {
-                Ok(node) => Ok(WorkspaceProtocolResponse::Node(node)),
+                Ok(node) => {
+                    // Everyone else has to learn the tree changed. Only
+                    // NodeContentUpdated was ever broadcast, and the client calls
+                    // listNodes exactly once, at login — so a room created here
+                    // stayed invisible to every other user until they signed in
+                    // again. The client handler for this variant already exists;
+                    // it just never fired for anyone but the requester.
+                    kernel.broadcast(WorkspaceProtocolResponse::Node(node.clone()), requester_cid);
+                    Ok(WorkspaceProtocolResponse::Node(node))
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to create node: {}",
                     e
@@ -671,6 +981,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             mdx_content,
             rules,
             chat_enabled,
+            is_default,
         } => {
             use crate::handlers::domain::node_ops::AsyncNodeOperations;
             use std::time::{SystemTime, UNIX_EPOCH};
@@ -684,6 +995,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     mdx_content.as_deref(),
                     rules.as_deref(),
                     *chat_enabled,
+                    *is_default,
                 )
                 .await
             {
@@ -697,6 +1009,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         let broadcast_response = WorkspaceProtocolResponse::NodeContentUpdated {
                             node_id: node_id.clone(),
                             mdx_content: content.clone(),
+                            // The same hash update_node just stored. Sending the
+                            // content without it left every watcher verifying
+                            // new content against the hash it already had.
+                            mdx_content_hash: node.mdx_content_hash.clone(),
                             updated_by: actor_user_id.to_string(),
                             timestamp,
                         };
@@ -708,13 +1024,32 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                             node_id
                         );
 
-                        if let Err(e) = kernel.persist_node_content(&node.name, content).await {
+                        // Full ancestor path, not the bare name: a room lives at
+                        // {office}/{room}/CONTENT.md, and writing it to
+                        // {room}/CONTENT.md put the edit where the loader reads
+                        // OFFICES from — losing the edit and inventing an office.
+                        let segments = kernel.content_path_segments(node_id).await;
+                        if let Err(e) = kernel.persist_node_content_at(&segments, content).await {
                             warn!(
                                 target: "citadel",
                                 "[ASYNC_PROCESS_COMMAND] Failed to persist node content: {}",
                                 e
                             );
                         }
+                    }
+
+                    // A rename (or any structural edit) is not a content update,
+                    // so NodeContentUpdated above does not cover it — other
+                    // users kept showing the old name until they signed in again.
+                    if name.is_some()
+                        || description.is_some()
+                        || rules.is_some()
+                        || chat_enabled.is_some()
+                    {
+                        kernel.broadcast(
+                            WorkspaceProtocolResponse::Node(node.clone()),
+                            requester_cid,
+                        );
                     }
 
                     Ok(WorkspaceProtocolResponse::Node(node))
@@ -733,10 +1068,19 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 .delete_node(actor_user_id, node_id, *cascade)
                 .await
             {
-                Ok(deleted_ids) => Ok(WorkspaceProtocolResponse::NodeDeleted {
-                    node_id: node_id.clone(),
-                    children_deleted: deleted_ids.into_iter().filter(|id| id != node_id).collect(),
-                }),
+                Ok(deleted_ids) => {
+                    let response = WorkspaceProtocolResponse::NodeDeleted {
+                        node_id: node_id.clone(),
+                        children_deleted: deleted_ids
+                            .into_iter()
+                            .filter(|id| id != node_id)
+                            .collect(),
+                    };
+                    // Without this, a deleted office stayed in every other
+                    // user's sidebar and they kept opening and typing into it.
+                    kernel.broadcast(response.clone(), requester_cid);
+                    Ok(response)
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to delete node: {}",
                     e
@@ -759,11 +1103,15 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 .move_node(actor_user_id, node_id, new_parent_id.as_deref())
                 .await
             {
-                Ok(node) => Ok(WorkspaceProtocolResponse::NodeMoved {
-                    node_id: node_id.clone(),
-                    old_parent_id,
-                    new_parent_id: node.parent_id,
-                }),
+                Ok(node) => {
+                    let response = WorkspaceProtocolResponse::NodeMoved {
+                        node_id: node_id.clone(),
+                        old_parent_id,
+                        new_parent_id: node.parent_id,
+                    };
+                    kernel.broadcast(response.clone(), requester_cid);
+                    Ok(response)
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to move node: {}",
                     e

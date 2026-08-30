@@ -60,52 +60,18 @@ DEST3="$WORKSPACE_ROOT/citadel-workspace-client-ts/"
 # Ensure destination directories exist
 mkdir -p "$DEST1" "$DEST2" "$DEST3"
 
-# Define the correct package.json content for typescript-client
-TYPESCRIPT_CLIENT_PACKAGE_JSON=$(cat << 'EOF'
-{
-  "name": "citadel-internal-service-wasm-client",
-  "type": "module",
-  "version": "0.1.0",
-  "files": [
-    "citadel_internal_service_wasm_client_bg.wasm",
-    "citadel_internal_service_wasm_client.js",
-    "citadel_internal_service_wasm_client.d.ts",
-    "src/**/*",
-    "dist/**/*"
-  ],
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
-  },
-  "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf dist",
-    "test": "echo \"No tests configured yet\" && exit 0"
-  },
-  "sideEffects": [
-    "./snippets/*"
-  ],
-  "dependencies": {
-    "@avarok/citadel-protocol-types": "^0.14.0",
-    "ws": "^8.0.0",
-    "uuid": "^9.0.0"
-  },
-  "devDependencies": {
-    "typescript": "^5.0.0",
-    "@types/node": "^20.0.0",
-    "@types/ws": "^8.0.0",
-    "@types/uuid": "^9.0.0"
-  }
-}
-EOF
-)
+# Validate the tracked package.json BEFORE any destructive step. The clean step below
+# wipes public/wasm, so a check that only runs later (as it once did, after the copy)
+# turns a bad package.json into a dead dev environment: the browser fetches an empty
+# /wasm/ directory, WASM init fails, and every internal-service operation silently
+# no-ops. Failing here leaves the previous, working artifacts untouched.
+if ! grep -q '"build"' "$DEST1/package.json" 2>/dev/null; then
+    print_error "CRITICAL: $DEST1/package.json is missing its build script."
+    print_error "It is tracked in git - restore it with:"
+    print_error "  git -C \"$INTERNAL_SERVICE_ROOT\" checkout -- typescript-client/package.json"
+    exit 1
+fi
+print_status "package.json intact (tracked file preserved)"
 
 print_status "Starting WASM client synchronization..."
 
@@ -113,13 +79,27 @@ print_status "Starting WASM client synchronization..."
 print_status "Cleaning previous build artifacts..."
 rm -f "$DEST1"/*.wasm "$DEST1"/*.d.ts "$DEST1"/*.js 2>/dev/null || true
 rm -rf "$DEST1/dist" 2>/dev/null || true
-rm -rf "$DEST1/node_modules" 2>/dev/null || true
-# Explicitly remove old package.json to ensure we write fresh
-rm -f "$DEST1/package.json" 2>/dev/null || true
+# Emptied, not removed: under Docker this is a mount point (see the
+# sync_tsclient_node_modules volume) and `rm -rf` on one fails with EBUSY.
+mkdir -p "$DEST1/node_modules"
+find "$DEST1/node_modules" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+# NOTE: $DEST1/package.json is tracked in git and is the single source of truth for this
+# package's name, exports, scripts and dependencies. It is deliberately NOT deleted or
+# rewritten here. wasm-pack emits its own package.json into pkg/, but the copy step below
+# only takes *.wasm/*.js/*.d.ts, so the tracked file is never overwritten. Rewriting it from
+# a copy embedded in this script is what previously stripped its "scripts" and "dependencies"
+# blocks, which broke `npm run build` and left every downstream typecheck resolving a stale dist.
 echo "Cleaned $DEST1"
 
-rm -rf "$DEST2"/* 2>/dev/null || true
-echo "Cleaned $DEST2"
+# NOT cleaned here. public/wasm is wiped just before the copy below, once the
+# build has actually produced artifacts to replace it with.
+#
+# Wiping at this point meant any failure between here and the copy -- a compile
+# error is the common one -- left the directory empty. The browser then fetches
+# /wasm/*_bg.wasm, gets a 404, WASM init throws, and EVERY internal-service
+# operation silently no-ops: register and login do nothing, with no error that
+# names the cause. A failed build should leave the previous working artifacts
+# exactly where they were.
 
 # Step 1: Build the WASM client
 print_status "Building WASM client from citadel-internal-service..."
@@ -146,7 +126,9 @@ find "$WORKSPACE_ROOT" -name ".vite" -type d -exec rm -rf {} + 2>/dev/null || tr
 # Clear Vite dist folder which may contain old WASM files
 if [ -d "$WORKSPACE_ROOT/citadel-workspaces/dist" ]; then
     print_status "Clearing Vite dist folder..."
-    rm -rf "$WORKSPACE_ROOT/citadel-workspaces/dist"
+    # Emptied, not removed: mount point under Docker (sync_ui_dist volume).
+    mkdir -p "$WORKSPACE_ROOT/citadel-workspaces/dist"
+    find "$WORKSPACE_ROOT/citadel-workspaces/dist" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 fi
 
 # Clear any .vite cache in the workspace
@@ -190,67 +172,8 @@ if [ -d "$DEST1" ]; then
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.wasm "$DEST1/"
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.js "$DEST1/"
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.d.ts "$DEST1/"
-    # Restore the correct package.json (use printf for reliability with multiline content)
-    print_status "Writing package.json to $DEST1..."
-    printf '%s\n' "$TYPESCRIPT_CLIENT_PACKAGE_JSON" > "$DEST1/package.json"
-
-    # Verify package.json was written correctly
-    if ! grep -q '"build"' "$DEST1/package.json"; then
-        print_error "Failed to write package.json correctly! Trying alternative method..."
-        cat > "$DEST1/package.json" << 'PKGJSON'
-{
-  "name": "citadel-internal-service-wasm-client",
-  "type": "module",
-  "version": "0.1.0",
-  "files": [
-    "citadel_internal_service_wasm_client_bg.wasm",
-    "citadel_internal_service_wasm_client.js",
-    "citadel_internal_service_wasm_client.d.ts",
-    "src/**/*",
-    "dist/**/*"
-  ],
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
-  },
-  "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf dist",
-    "test": "echo \"No tests configured yet\" && exit 0"
-  },
-  "sideEffects": [
-    "./snippets/*"
-  ],
-  "dependencies": {
-    "@avarok/citadel-protocol-types": "^0.14.0",
-    "ws": "^8.0.0",
-    "uuid": "^9.0.0"
-  },
-  "devDependencies": {
-    "typescript": "^5.0.0",
-    "@types/node": "^20.0.0",
-    "@types/ws": "^8.0.0",
-    "@types/uuid": "^9.0.0"
-  }
-}
-PKGJSON
-    fi
-
-    # Final verification
-    if grep -q '"build"' "$DEST1/package.json"; then
-        print_status "package.json verified - contains build script"
-    else
-        print_error "CRITICAL: package.json still missing build script after all attempts!"
-        cat "$DEST1/package.json"
-        exit 1
-    fi
+    # package.json is validated up front, before the clean step - the copy above only
+    # takes *.wasm/*.js/*.d.ts, so nothing in this script can clobber it anymore.
 
     # Add cache busting to WASM loader
     TIMESTAMP=$(date +%s)
@@ -280,6 +203,12 @@ fi
 
 # Copy to citadel-workspace/citadel-workspaces/public/wasm
 if [ -d "$DEST2" ]; then
+    # Deferred to here, deliberately: see the note where the old clean step was.
+    # By this line wasm-pack has succeeded, so replacing the previous artifacts
+    # is safe -- there is something to replace them WITH.
+    print_status "Cleaning $DEST2 now that a build exists..."
+    rm -rf "$DEST2"/* 2>/dev/null || true
+
     print_status "Copying to $DEST2..."
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.wasm "$DEST2/"
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.js "$DEST2/"
@@ -298,6 +227,25 @@ if [ -d "$DEST2" ]; then
     fi
 fi
 
+# Step 4: Copy to citadel-workspace-client-ts/pkg
+#
+# DEST3 was declared and mkdir'd at the top of this script and then never
+# written to, so the tracked copy under citadel-workspace-client-ts/pkg drifted
+# away from the two live ones. It is not unmaintained, which is what makes it
+# dangerous: citadel-workspace-internal-service/build.rs writes the same path,
+# so an ordinary `cargo build` refreshes it while a sync does not. Two producers
+# for one tracked artifact means whichever ran last wins, silently.
+#
+# No cache-busting rewrite here on purpose. That `?v=$TIMESTAMP` edit is what
+# makes the other two copies byte-different on every run; leaving it off keeps
+# this copy comparable to build.rs output.
+if [ -d "$DEST3/pkg" ] || mkdir -p "$DEST3/pkg"; then
+    print_status "Copying to $DEST3/pkg..."
+    cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.wasm "$DEST3/pkg/"
+    cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.js "$DEST3/pkg/"
+    cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.d.ts "$DEST3/pkg/"
+fi
+
 # Step 5: Copy TypeScript types if they were generated
 if [ -d "$INTERNAL_SERVICE_ROOT/citadel-internal-service-types/bindings" ]; then
     print_status "Copying TypeScript types..."
@@ -309,10 +257,37 @@ if [ -d "$INTERNAL_SERVICE_ROOT/citadel-internal-service-types/bindings" ]; then
     fi
 fi
 
+# Step 5b: The OTHER types crate.
+#
+# citadel-workspace-types emits its ts-rs bindings the same way, and the client
+# package holds a copy under src/types/generated -- but nothing copied it. The
+# step above existed for citadel-internal-service-types only, so that copy sat
+# six months stale: the client was missing Permission::Themes,
+# DomainPermissions.themes and the whole UpdateWorkspaceTheme variant, i.e.
+# every type the theming feature added. tsc could not see it because
+# toWasmWorkspaceRequest casts through `as unknown as`.
+#
+# `|| true` is deliberately NOT used here. The internal-service copy above
+# tolerates an absent bindings dir because that crate's generation is
+# conditional; this one is not, and silently skipping is exactly how the drift
+# accumulated. scripts/check-generated-types-fresh.mjs gates it in CI either
+# way.
+WS_TYPES_BINDINGS="$WORKSPACE_ROOT/citadel-workspace-types/bindings"
+WS_TYPES_DEST="$WORKSPACE_ROOT/citadel-workspace-client-ts/src/types/generated"
+if [ -d "$WS_TYPES_BINDINGS" ] && [ -d "$WS_TYPES_DEST" ]; then
+    print_status "Copying citadel-workspace-types bindings..."
+    cp "$WS_TYPES_BINDINGS/"*.ts "$WS_TYPES_DEST/"
+else
+    print_warning "Skipping citadel-workspace-types bindings: $WS_TYPES_BINDINGS or $WS_TYPES_DEST is missing"
+fi
+
 # Step 6: Rebuild citadel-workspace-client-ts
 print_status "Rebuilding citadel-workspace-client-ts..."
 cd "$WORKSPACE_ROOT/citadel-workspace-client-ts"
-rm -rf ./dist ./node_modules
+rm -rf ./dist
+# Emptied, not removed — mount point under Docker; see DEST1 above.
+mkdir -p ./node_modules
+find ./node_modules -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 
 print_status "Installing dependencies for citadel-workspace-client-ts..."
 npm install
@@ -328,22 +303,54 @@ if pgrep -f "vite" > /dev/null; then
 fi
 
 # Step 8: Verify synchronization
+#
+# This must compare CONTENT and must exit non-zero. It previously compared
+# `stat` sizes and, in the failure branch, only called print_error — which
+# echoes and returns 0, so `set -e` saw nothing and the script continued to
+# Step 9 and exited 0. Every consumer treats that as success: compose's
+# `condition: service_completed_successfully` is satisfied and CI publishes a
+# UI image built on top of desynchronized WASM, all while the log reads
+# "WASM files are NOT synchronized!". A check whose failure branch cannot fail
+# is not a check.
+#
+# Size is also the wrong comparison. Two builds from different Citadel-Protocol
+# revisions land within bytes of each other and routinely tie, so the one
+# divergence that matters is exactly the one a size check cannot see.
 print_status "Verifying synchronization..."
-WASM_SIZE1=$(stat -f%z "$DEST1/citadel_internal_service_wasm_client_bg.wasm" 2>/dev/null || stat -c%s "$DEST1/citadel_internal_service_wasm_client_bg.wasm" 2>/dev/null || echo "0")
-WASM_SIZE3=$(stat -f%z "$DEST2/citadel_internal_service_wasm_client_bg.wasm" 2>/dev/null || stat -c%s "$DEST2/citadel_internal_service_wasm_client_bg.wasm" 2>/dev/null || echo "0")
+wasm_digest() {
+    shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1
+}
+WASM_HASH1=$(wasm_digest "$DEST1/citadel_internal_service_wasm_client_bg.wasm")
+WASM_HASH2=$(wasm_digest "$DEST2/citadel_internal_service_wasm_client_bg.wasm")
+WASM_HASH3=$(wasm_digest "$DEST3/pkg/citadel_internal_service_wasm_client_bg.wasm")
 
-if [ "$WASM_SIZE1" = "$WASM_SIZE3" ] && [ "$WASM_SIZE1" != "0" ]; then
-    print_status "✅ All WASM files are synchronized (size: $WASM_SIZE1 bytes)"
-else
-    print_error "❌ WASM files are NOT synchronized!"
-    print_error "  typescript-client: $WASM_SIZE1 bytes"
-    print_error "  public/wasm: $WASM_SIZE3 bytes"
+if [ -z "$WASM_HASH1" ] || [ "$WASM_HASH1" != "$WASM_HASH2" ] || [ "$WASM_HASH1" != "$WASM_HASH3" ]; then
+    print_error "❌ WASM files are NOT synchronized — refusing to continue."
+    print_error "  typescript-client: ${WASM_HASH1:-missing}"
+    print_error "  public/wasm:       ${WASM_HASH2:-missing}"
+    print_error "  client-ts/pkg:     ${WASM_HASH3:-missing}"
+    print_error ""
+    print_error "Continuing past this point builds the UI against a WASM binary"
+    print_error "the backend was not built from. Re-run the sync; if it recurs,"
+    print_error "one of the two copy steps is not reaching its destination."
+    exit 1
 fi
+print_status "✅ All WASM files are synchronized (sha256: ${WASM_HASH1:0:12})"
 
 # Step 9: Rebuild citadel-workspaces
 print_status "Rebuilding citadel-workspaces..."
 cd "$WORKSPACE_ROOT/citadel-workspaces"
-rm -rf ./dist ./node_modules
+# Emptied, not removed: mount point under Docker (sync_ui_dist volume).
+mkdir -p ./dist
+find ./dist -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+
+# Empty node_modules rather than deleting it. Under Docker it is a mount point
+# (see the sync_ui_node_modules volume in docker-compose.yml), and `rm -rf` on a
+# mount point fails with EBUSY — which, with `set -e` above, would abort the
+# whole sync rather than just this step. Emptying works in both cases, and
+# `mkdir -p` covers a first native run where the directory does not exist yet.
+mkdir -p ./node_modules
+find ./node_modules -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
 print_status "Installing dependencies for citadel-workspaces.."
 # Use --package-lock=false to avoid platform-specific lockfile issues when running in Docker.
@@ -357,6 +364,23 @@ print_status "Installing dependencies for citadel-workspaces.."
 # which is the historical npm behavior and matches what the rest of
 # our workspace npm-ci flow uses.
 npm install --package-lock=false --legacy-peer-deps
+
+# Drop the Playwright copies this install just placed here.
+#
+# `--package-lock=false` resolves fresh, so it installs whatever version the
+# range allows rather than the one the root lockfile pins. The result is TWO
+# Playwright installs: `npx` picks the root's, while `require()` walks up from
+# integration-tests and finds this one. They disagree about which browser build
+# to use, and the failure is a browser path with an impossible build number
+# (chromium-1234) and a "Please run npx playwright install" banner that does not
+# help, because installing browsers is not the problem.
+#
+# Removed rather than pinned: nothing under citadel-workspaces/ needs Playwright
+# at all — the tests live in integration-tests/ and resolve from the root.
+if [ -d node_modules/playwright ] || [ -d node_modules/playwright-core ] || [ -d node_modules/@playwright ]; then
+    print_status "Removing Playwright from citadel-workspaces/node_modules (it shadows the root install)"
+    rm -rf node_modules/playwright node_modules/playwright-core node_modules/@playwright
+fi
 
 # Recreate symlinks for WASM client (removed when node_modules was deleted)
 print_status "Recreating symlinks for citadel-internal-service-wasm-client..."

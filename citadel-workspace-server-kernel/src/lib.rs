@@ -42,6 +42,12 @@ pub mod config {
         pub content_base_dir: Option<String>,
         /// File transfer configuration
         pub file_transfer: Option<FileTransferConfig>,
+        /// Whether the first account to CONNECT becomes the workspace admin.
+        ///
+        /// Overridden by WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN. Defaults to
+        /// false: see `resolve_first_connect_admin` for why the safe value is
+        /// the default and why the unsafe one has to be asked for by name.
+        pub allow_first_connect_admin: Option<bool>,
     }
 
     impl std::fmt::Debug for ServerConfig {
@@ -68,6 +74,7 @@ pub mod config {
                 .field("workspace_structure", &self.workspace_structure)
                 .field("content_base_dir", &self.content_base_dir)
                 .field("file_transfer", &self.file_transfer)
+                .field("allow_first_connect_admin", &self.allow_first_connect_admin)
                 .finish()
         }
     }
@@ -373,12 +380,170 @@ pub mod config {
     }
 }
 
-/// Run the workspace server with the given configuration.
+/// Resolve the configured workspace structure, or `None` when none is configured.
 ///
-/// If `config_base_path` is provided, it is used to resolve relative paths in the config.
-/// This is typically the directory containing kernel.toml.
+/// Extracted from the boot sequence so the decision is testable: a configured
+/// structure that cannot be read must STOP the boot, and that was true of the
+/// `content_base_dir` branch and not of the deprecated `workspace_structure`
+/// one, which logged at info and carried on.
+///
+/// Carrying on is not harmless. The seed-pending marker is armed only when a
+/// structure actually loaded — deliberately, so that a later deploy adding a
+/// structure cannot inject defaults into a workspace that has been live for
+/// weeks. So a first boot that swallowed the error records NEITHER marker; the
+/// next boot sees none, takes the "predates the seed markers" back-fill branch,
+/// and stamps the workspace seeded. It then has no offices, permanently.
+pub fn resolve_workspace_structure(
+    config: &ServerConfig,
+    config_base_path: Option<&std::path::Path>,
+) -> Result<Option<(WorkspaceStructureConfig, Option<std::path::PathBuf>)>, NetworkError> {
+    if let Some(content_dir) = &config.content_base_dir {
+        // New directory-based configuration
+        let full_path = if let Some(base) = config_base_path {
+            base.join(content_dir)
+        } else {
+            std::path::PathBuf::from(content_dir)
+        };
+
+        info!(target: "citadel", "Loading workspace structure from directory: {:?}", full_path);
+        match WorkspaceStructureConfig::from_directory(&full_path) {
+            Ok(structure) => {
+                info!(target: "citadel", "Loaded workspace structure: {} with {} offices (directory-based)",
+                    structure.name, structure.offices.len());
+                for office in &structure.offices {
+                    info!(target: "citadel", "  - Office '{}' with {} rooms",
+                        office.name, office.rooms.len());
+                }
+                Ok(Some((structure, Some(full_path))))
+            }
+            Err(e) => Err(NetworkError::msg(format!(
+                "Failed to load workspace structure from directory: {e}"
+            ))),
+        }
+    } else if let Some(structure_path) = &config.workspace_structure {
+        // Legacy JSON file configuration
+        let full_path = if let Some(base) = config_base_path {
+            base.join(structure_path)
+        } else {
+            std::path::PathBuf::from(structure_path)
+        };
+
+        info!(target: "citadel", "Loading workspace structure from file: {:?} (deprecated, use content_base_dir)", full_path);
+        match WorkspaceStructureConfig::from_file(&full_path) {
+            Ok(structure) => {
+                info!(target: "citadel", "Loaded workspace structure: {} with {} offices",
+                    structure.name, structure.offices.len());
+                Ok(Some((
+                    structure,
+                    full_path.parent().map(|p| p.to_path_buf()),
+                )))
+            }
+            Err(e) => {
+                // Fatal, exactly as the `content_base_dir` branch above is.
+                //
+                // Continuing without a structure looks harmless and is not: the
+                // seed-pending marker is armed only when a structure loaded, so
+                // a first boot that swallowed this error records NEITHER marker.
+                // The next boot then sees no marker at all, takes the
+                // "predates the markers" back-fill branch, and stamps the
+                // workspace seeded — permanently. The result is a workspace with
+                // no offices, forever, reachable only by wiping the backend, and
+                // announced by a single info-level line saying "Warning".
+                //
+                // A configured structure that cannot be read is a configuration
+                // error. Refusing to boot is the only outcome an operator can
+                // act on.
+                Err(NetworkError::msg(format!(
+                    "Failed to load workspace structure from {full_path:?}: {e}"
+                )))
+            }
+        }
+    } else {
+        info!(target: "citadel", "No workspace structure configured. Use content_base_dir or workspace_structure in kernel.toml");
+        Ok(None)
+    }
+}
+
 pub async fn run_server(config: ServerConfig) -> Result<(), NetworkError> {
     run_server_with_base_path(config, None).await
+}
+
+/// Whether the first account to connect becomes the workspace administrator.
+///
+/// The root workspace is seeded at boot with no owner, and on connect any
+/// authenticated account is added to it. If it is the first, it was promoted to
+/// Admin unconditionally — so on a deployment bound to a public interface,
+/// whoever found the port and registered first became the administrator of the
+/// workspace, and everybody after them joined as a Member of a workspace they
+/// did not control. Registration has no invite gate, so the race is open to
+/// anyone who can reach the port.
+///
+/// The behaviour still exists, because a local dev stack depends on it: without
+/// it every account stays a Member with no editing rights. But it now has to be
+/// asked for by name. Unset means OFF — the safe value is the one you get by
+/// not thinking about it, and the workspace instead waits for someone to
+/// present the master password through the initialization flow, which is the
+/// documented and already-implemented alternative.
+///
+/// A malformed value is an error rather than a falsy default: "yes", "on" and
+/// "TRUE " are all things an operator would reasonably write believing they had
+/// enabled it, and silently reading them as "off" would leave a dev stack with
+/// no administrator and no explanation.
+pub fn resolve_first_connect_admin(
+    env_value: Option<&str>,
+    config_value: Option<bool>,
+) -> Result<bool, NetworkError> {
+    match env_value.map(str::trim).filter(|v| !v.is_empty()) {
+        Some(raw) => match raw.to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => Ok(true),
+            "0" | "false" | "no" | "off" => Ok(false),
+            other => Err(NetworkError::msg(format!(
+                "WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN must be one of 1/0, true/false, \
+                 yes/no, on/off — got '{other}'"
+            ))),
+        },
+        None => Ok(config_value.unwrap_or(false)),
+    }
+}
+
+/// What happens to the first account to join an empty workspace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FirstMemberOutcome {
+    /// Promote to Admin. Only ever when the operator asked for it by name.
+    Promote,
+    /// The workspace is empty and stays without an administrator until someone
+    /// runs the initialize flow with the master password.
+    AwaitInitialization,
+    /// Somebody was already here; this account joins as a Member.
+    JoinAsMember,
+}
+
+/// Whether the account now connecting becomes the workspace administrator.
+///
+/// Extracted so the decision can be tested. It lived inline in a match arm of
+/// the connection handler -- reachable only by standing up a kernel, a backend
+/// and a live Citadel session -- so nothing covered it, and reverting the line
+/// to `let is_first_member = ws_was_empty;` reinstated the vulnerability with
+/// every test still green. The integration suite could not have caught it
+/// either: it runs with WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN=1, which makes the
+/// gated and ungated versions behave identically.
+///
+/// The vulnerability: registration has no invite gate, so on a deployment
+/// reachable from anywhere, whoever finds the port and registers first becomes
+/// the administrator. A local dev stack genuinely needs the promotion, which is
+/// why it survives at all -- but it has to be asked for.
+pub fn first_member_outcome(
+    first_connect_admin_enabled: bool,
+    workspace_was_empty: bool,
+) -> FirstMemberOutcome {
+    if !workspace_was_empty {
+        return FirstMemberOutcome::JoinAsMember;
+    }
+    if first_connect_admin_enabled {
+        FirstMemberOutcome::Promote
+    } else {
+        FirstMemberOutcome::AwaitInitialization
+    }
 }
 
 /// Run the workspace server with the given configuration and base path.
@@ -405,57 +570,19 @@ pub async fn run_server_with_base_path(
         ))
     })?;
 
-    // Load workspace structure config - prefer content_base_dir over workspace_structure
-    let workspace_structure = if let Some(content_dir) = &config.content_base_dir {
-        // New directory-based configuration
-        let full_path = if let Some(base) = config_base_path {
-            base.join(content_dir)
-        } else {
-            std::path::PathBuf::from(content_dir)
-        };
+    let workspace_structure = resolve_workspace_structure(&config, config_base_path)?;
 
-        info!(target: "citadel", "Loading workspace structure from directory: {:?}", full_path);
-        match WorkspaceStructureConfig::from_directory(&full_path) {
-            Ok(structure) => {
-                info!(target: "citadel", "Loaded workspace structure: {} with {} offices (directory-based)",
-                    structure.name, structure.offices.len());
-                for office in &structure.offices {
-                    info!(target: "citadel", "  - Office '{}' with {} rooms",
-                        office.name, office.rooms.len());
-                }
-                Some((structure, Some(full_path)))
-            }
-            Err(e) => {
-                return Err(NetworkError::msg(format!(
-                    "Failed to load workspace structure from directory: {}",
-                    e
-                )));
-            }
-        }
-    } else if let Some(structure_path) = &config.workspace_structure {
-        // Legacy JSON file configuration
-        let full_path = if let Some(base) = config_base_path {
-            base.join(structure_path)
-        } else {
-            std::path::PathBuf::from(structure_path)
-        };
-
-        info!(target: "citadel", "Loading workspace structure from file: {:?} (deprecated, use content_base_dir)", full_path);
-        match WorkspaceStructureConfig::from_file(&full_path) {
-            Ok(structure) => {
-                info!(target: "citadel", "Loaded workspace structure: {} with {} offices",
-                    structure.name, structure.offices.len());
-                Some((structure, full_path.parent().map(|p| p.to_path_buf())))
-            }
-            Err(e) => {
-                info!(target: "citadel", "Warning: Failed to load workspace structure: {}. Continuing without pre-configured structure.", e);
-                None
-            }
-        }
+    let first_connect_admin = resolve_first_connect_admin(
+        std::env::var("WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN")
+            .ok()
+            .as_deref(),
+        config.allow_first_connect_admin,
+    )?;
+    if first_connect_admin {
+        citadel_logging::warn!(target: "citadel", "⚠️  WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN is on: the first account to connect becomes the workspace administrator. Intended for local development. On a reachable deployment this hands ownership to whoever registers first.");
     } else {
-        info!(target: "citadel", "No workspace structure configured. Use content_base_dir or workspace_structure in kernel.toml");
-        None
-    };
+        info!(target: "citadel", "First-connect admin promotion is off. The workspace awaits initialization with the master password.");
+    }
 
     // Select backend type from env-var override (preferred) or config file.
     let backend_type_for_node_builder = select_backend_type(
@@ -477,11 +604,12 @@ pub async fn run_server_with_base_path(
     }
 
     // Create AsyncWorkspaceServerKernel with admin user from config
-    let kernel = kernel::async_kernel::AsyncWorkspaceServerKernel::<StackedRatchet>::with_workspace_master_password_and_structure_and_file_transfer(
+    let mut kernel = kernel::async_kernel::AsyncWorkspaceServerKernel::<StackedRatchet>::with_workspace_master_password_and_structure_and_file_transfer(
         &workspace_password,
         workspace_structure,
         config.file_transfer.clone(),
     ).await?;
+    kernel.set_first_connect_admin(first_connect_admin);
 
     // `NodeType::server` and `NodeBuilder::build` now return `anyhow::Error`
     // (newer citadel_sdk); map into this fn's `NetworkError`, which no longer
@@ -712,6 +840,7 @@ mod server_config_debug_tests {
             workspace_structure: None,
             content_base_dir: Some("/srv/content".to_string()),
             file_transfer: Some(FileTransferConfig::default()),
+            allow_first_connect_admin: None,
         }
     }
 

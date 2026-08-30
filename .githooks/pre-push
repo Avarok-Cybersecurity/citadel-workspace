@@ -1,0 +1,16 @@
+#!/bin/sh
+#
+# Every submodule pointer this repo records must exist on that submodule's
+# remote before the parent pointer is pushed.
+#
+# Skipping one push aborts EVERY CI job that checks out submodules recursively
+# -- seventeen of them here -- at checkout, before a test compiles, with a
+# message about `upload-pack: not our ref` that names none of it. Locally
+# everything looks fine, because the commit is right there.
+#
+# The check cannot live in CI: by the time any job runs, checkout has already
+# succeeded, which means the pointers were pushed. A CI copy could only ever
+# report success.
+#
+# Enable with:  git config core.hooksPath .githooks
+exec node scripts/check-submodule-pointers-pushed.mjs

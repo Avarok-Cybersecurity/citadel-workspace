@@ -28,6 +28,25 @@ depth: number, name: string, description: string, owner_id: string, members: Arr
  */
 children: Array<string>, mdx_content: string, 
 /**
+ * SHA-256 of `mdx_content`, hex-encoded, computed by the SERVER on every
+ * write.
+ *
+ * Rendering a document means executing it: the client compiles the MDX and
+ * runs the result, so the bytes that reach the renderer must be the bytes
+ * the server stored. The client re-hashes before it executes and refuses
+ * on a mismatch.
+ *
+ * What this catches is tampering BETWEEN the server and the renderer — a
+ * corrupted IndexedDB cache, a store-layer bug, another tab writing over
+ * the content. It is not a defence against an attacker who already has
+ * script execution in the page, who could patch the check itself; and it
+ * says nothing about whether the document was hostile when it was written.
+ *
+ * `Option` because documents stored before this existed have no hash, and
+ * a client must be able to tell "not hashed" from "hash does not match".
+ */
+mdx_content_hash: string | null, 
+/**
  * Rules displayed to users
  */
 rules: string | null, 

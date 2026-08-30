@@ -17,5 +17,14 @@
     "eslint": "^9.18.0",
     "playwright": "^1.57.0",
     "typescript-eslint": "^8.20.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "preflight": "node scripts/preflight.mjs",
+    "check:stack": "node scripts/check-stack-reachable.mjs",
+    "check:pointers": "node scripts/check-submodule-pointers-pushed.mjs",
+    "prepush": "node scripts/check-submodule-pointers-pushed.mjs"
   }
 }

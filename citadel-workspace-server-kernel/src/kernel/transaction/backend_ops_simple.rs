@@ -222,6 +222,34 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     // / update on the floor. Migration to per-entity keys would let
     // us shed the lock; until then this is the cheap, correct fix.
 
+    /// Acquire `node_mutex` for a read-modify-write the caller performs itself.
+    ///
+    /// The mutators below serialize a load-modify-save that they do INTERNALLY.
+    /// Callers that read the map, decide something from it, and then write the
+    /// whole map back (handlers/domain/async_ops/async_node_ops.rs does this for
+    /// create / delete / move) span the same cycle across their own awaits, so
+    /// the per-mutator lock does not cover them — two such callers both load the
+    /// prior map and the second save drops the first one's node.
+    ///
+    /// Hold this across the entire get_all_nodes ... save_nodes sequence.
+    ///
+    /// Do NOT call insert_node / remove_node / update_node while holding it:
+    /// tokio's Mutex is not reentrant and it would deadlock. Mutate the map you
+    /// already hold and persist it with `save_nodes`.
+    pub async fn lock_nodes(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.node_mutex.lock().await
+    }
+
+    /// Hold this across a whole get_workspace ... insert_workspace sequence.
+    ///
+    /// A workspace record is stored and written whole, so two handlers that each
+    /// read it, change one field and write it back will lose one of the changes.
+    /// `insert_workspace` does not take this lock itself, precisely so it can be
+    /// called while the guard is held — tokio's Mutex is not reentrant.
+    pub async fn lock_workspaces(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.workspace_mutex.lock().await
+    }
+
     /// Get a single DomainNode by ID
     pub async fn get_node(&self, node_id: &str) -> Result<Option<DomainNode>, NetworkError> {
         let nodes = self.get_all_nodes().await?;

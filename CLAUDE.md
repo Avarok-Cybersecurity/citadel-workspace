@@ -159,7 +159,7 @@ The CI pipeline builds TypeScript dependencies in this order:
 - Be mindful of hot reloading and what services have it enabled.
 - When services like internal-service or server are reloaded (since they have in-memory backends for ephemerality to make testing easier), any accounts created on one will be lost on reload.
 - Both services will need to reload whenever there are edits to either code base.
-- The UI runs locally, and not in the docker container.
+- The UI runs IN the docker container, with HMR (see the `ui` service in docker-compose.yml and the Tiltfile). An earlier revision of this file said the opposite.
 - If an error or issue occurs, NEVER skip to the next step or do a workaround. Fix it always.
 
 ## Backend/Internal Service Changes - CRITICAL
@@ -346,8 +346,8 @@ See [ARCHITECTURE.md § Multi-Tab Coordination](./ARCHITECTURE.md#multi-tab-coor
 
 ## WASM Client Development
 
-- When editing the wasm client code in any of the crates, consult ./WASM_SYNC.md and consider using ./sync-wasm-clients.sh to potentially automate the building process.
-- Review and understand both the narrative documentation in WASM_SYNC.md and the automation script for comprehensive WASM client development and synchronization workflows.
+- When editing the wasm client code in any of the crates, consult ./docs/WASM_SYNC.md and consider using ./sync-wasm-clients.sh to potentially automate the building process.
+- Review and understand both the narrative documentation in docs/WASM_SYNC.md and the automation script for comprehensive WASM client development and synchronization workflows.
 - Be prepared to manually follow the step-by-step process for building and syncing WASM clients if the automation script does not fully meet your needs.
 - **CRITICAL**: After any WASM changes, run the `sync-executor` agent to ensure bindings are updated.
 
@@ -596,15 +596,20 @@ This documents the full code path when Alice sends a P2P message to Bob. Underst
 
 ### Critical Routing Fix
 
-`MessageNotification` must be routed by `cid` field (recipient), not `request_id` (sender's original request). This is configured in `instance-inbound-router.ts:248`:
+Some notifications carry the RECIPIENT in `cid` while `request_id` belongs to the
+SENDER. Routing those by request_id delivers them to whichever tab issued the
+original request — so with two sessions in one browser, one session receives the
+other's messages, files or call media.
 
-```typescript
-private static readonly CID_ROUTED_NOTIFICATIONS = new Set([
-  'PeerRegisterNotification',
-  'PeerConnectNotification',
-  'MessageNotification',  // Routes by cid (recipient), not request_id
-]);
-```
+The set lives in `citadel-workspaces/src/lib/multi-instance/routing-rules.ts`
+(not in the router itself), and currently holds eight entries: the three peer/
+message notifications, three file-transfer notifications, and both media
+notifications. Read it there rather than trusting a copy here — an earlier
+revision of this file listed three of the eight, which is the kind of excerpt
+that goes stale silently.
+
+A fixture-coverage test requires every member of that set to have a shape fixture,
+so adding one cannot silently skip the extraction tests.
 
 ## Citadel SDK Reconnection Behavior
 
@@ -710,42 +715,49 @@ let peer_handle = conn.propose_target(cid, peer_username).await?;
 ## Session Management & Resource Cleanup
 
 ### Session Lifecycle
-Sessions in `citadel-internal-service` are managed in `server_connection_map` (HashMap<u64, Connection>):
 
-**Creation**: `connect.rs` after successful authentication
-**Cleanup**: Three pathways:
-1. **Explicit disconnect** (`disconnect.rs:24`) - User-initiated logout
-2. **TCP connection drop** (`ext.rs:89`) - Browser close/network issue (unless in orphan mode)
-3. **Pre-connect cleanup** (`connect.rs:37-55`) - Before new connection for same username
+Sessions live in `server_connection_map` (`HashMap<u64, Connection>`) in
+`citadel-internal-service`.
 
-**Orphan Mode**: Sessions persist when TCP drops, allowing reconnection without re-authentication. Managed via `ConnectionManagement` request.
+**Creation**: `requests/connect.rs`, after successful authentication.
 
-### Resource Cleanup Best Practices
-1. **Use RAII**: Connection struct implements Drop for automatic cleanup
-2. **Document cleanup**: See `citadel-internal-service/REQUESTS.md` and `RESPONSES.md`
-3. **No cleanup in background tasks**: Only clean up in request handlers or protocol event handlers
-4. **Check before creating**: Prevent duplicates (e.g., PeerConnect checks if peer already connected)
+**A TCP drop NEVER removes a session.** `kernel/ext.rs` preserves every session
+regardless of orphan-mode setting, so a page refresh, a navigation or a closed
+tab leaves the session intact and reconnectable. The `orphan_sessions` map is no
+longer consulted for cleanup decisions at all.
 
-### Session Management Fixes Implemented
-The "Session Already Connected" bug was a **session lifecycle bug**, not a traditional race condition:
+Sessions are removed in exactly two places:
 
-**Problem**: Sessions were cleaned up in 3 places:
-1. Spawned stream reader task (`connect.rs:139`) - **REMOVED** ✓
-2. Explicit disconnect (`disconnect.rs:24`) - Kept
-3. TCP drop (`ext.rs:89`) - Kept
+1. **Disconnect** (`requests/peer/disconnect.rs`) — user-initiated logout.
+2. **Deregister** — account deletion.
+> There is no third path. `requests/get_sessions.rs` once reconciled the map
+> against the SDK's view; every branch of that filter returned false, so the
+> cleanup never ran, and the query whose result it used was discarded. Both are
+> gone — the handler reports what the connection map holds. An earlier revision
+> of this file listed it as a cleanup path; it was not one.
 
-**Solution Implemented**:
-1. **Removed redundant cleanup** from spawned task (caused race condition)
-2. **Added pre-connect cleanup** by username (`connect.rs:37-55`):
-   - Searches `server_connection_map` for existing sessions with same username
-   - Removes old sessions before creating new one
-   - Adds 50ms delay for protocol layer to process cleanup
-3. **Added Drop implementation** for Connection struct (`mod.rs:145-182`):
-   - RAII pattern ensures cleanup on scope exit
-   - Logs cleanup of peers, file handlers, groups
-4. **Kept exponential backoff retry** as fallback (100ms, 200ms, 400ms)
+### Connecting when a session already exists
 
-**Result**: Sessions are now cleaned up predictably in request handlers only, preventing duplicate session errors.
+`connect.rs` does NOT delete the old session. It looks up any session with the
+same username, asks the SDK whether that session is still active, and:
+
+- **active** → returns `SessionAlreadyActive` and leaves everything alone. The
+  frontend is expected to claim the existing session rather than authenticate
+  again. This is what prevents the ratchet reset that a ClaimSession racing a
+  second Connect used to cause.
+- **not active in the SDK** → removes the stale map entry and proceeds, with a
+  200ms pause for the protocol layer to settle.
+
+### Debugging session issues
+
+- `SessionAlreadyActive` in `tilt logs internal-service` is normal, not an
+  error: it means the frontend should claim, not reconnect.
+- A session surviving a browser close is intended behaviour.
+- Check `server_connection_map` size via the `GetSessions` response.
+
+> There is **no** `impl Drop for Connection`, and no exponential-backoff retry in
+> the connect path. Earlier revisions of this document described both; neither
+> exists in the tree. Cleanup is explicit, in the three request handlers above.
 
 ## Common Debugging Workflows
 

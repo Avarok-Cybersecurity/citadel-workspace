@@ -159,6 +159,7 @@ async fn test_backend_is_being_used() -> Result<(), Box<dyn std::error::Error>> 
             mdx_content: None,
             rules: None,
             chat_enabled: None,
+            is_default: None,
         },
     )
     .await?;

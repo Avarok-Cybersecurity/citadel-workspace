@@ -38,6 +38,10 @@ COPY ./Cargo.toml /usr/src/app/Cargo.toml
 COPY ./citadel-workspace-server-kernel /usr/src/app/citadel-workspace-server-kernel
 COPY ./citadel-workspace-internal-service /usr/src/app/citadel-workspace-internal-service
 COPY ./citadel-workspace-types /usr/src/app/citadel-workspace-types
+# A workspace member. Cargo loads EVERY member's manifest before building any
+# of them, so omitting a crate this image never builds still fails the build
+# with "failed to load manifest for workspace member".
+COPY ./citadel-workspace-executor /usr/src/app/citadel-workspace-executor
 COPY ./citadel-internal-service /usr/src/app/citadel-internal-service
 
 # Build release binary during docker build (not at container startup).
@@ -47,7 +51,29 @@ COPY ./citadel-internal-service /usr/src/app/citadel-internal-service
 # overhead in production where deadlocks should be diagnosed via stack traces,
 # not by paying the constant bookkeeping cost. The feature stays available for
 # local debugging and is OFF for the image that actually ships.
-RUN cargo build --release --bin citadel-workspace-internal-service
+#
+# `-p` is load-bearing, not tidiness. Without it the selected package set is the
+# whole workspace, and `citadel-workspace-server-kernel/tests/common` is a
+# member that pulls citadel_sdk with `features = ["localhost-testing"]`. Cargo
+# unifies features across the selected set, so that landed in the SHIPPED
+# binary. At the pinned SDK revision it is not a logging switch:
+#
+#   citadel_wire/udp_traversal/linear/encrypted_config_container.rs:72
+#     "In localhost-testing mode, encryption is disabled (identity functions
+#      used)" -- NAT-traversal config packets go out in plaintext
+#   citadel_wire/udp_traversal/udp_hole_puncher.rs:275
+#     "there are no reachable STUN servers; skip probing entirely"
+#   plus loopback-only UDP binding and a NAT type of `offline()`
+#
+# So P2P worked in the dev compose stack and could not traverse a real NAT in
+# production, silently. The sibling image already avoids this, via
+# docker/workspace-server/Cargo.docker.toml, whose header says
+# "Excludes tests/common to avoid localhost-testing feature unification".
+# This Dockerfile never got the mitigation.
+#
+# Verified with `cargo tree -e features -i citadel_sdk`: the feature is present
+# workspace-wide and absent under `-p citadel-workspace-internal-service`.
+RUN cargo build --release -p citadel-workspace-internal-service --bin citadel-workspace-internal-service
 
 # Copy binary to /usr/local/bin so it is not shadowed by the target_cache volume
 # mount the dev compose file attaches at /usr/src/app/target.

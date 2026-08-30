@@ -1,0 +1,165 @@
+# Upgrading and rolling back a deployment
+
+The machinery for this already existed and was well built; what was missing was
+a description of how to use it. Every claim below is taken from
+`deploy.sh`, `docker-compose.production.yml`,
+`.github/workflows/publish-images.yml` and `scripts/verify-image-revisions.sh`.
+
+## Before you upgrade: back up
+
+```bash
+./scripts/backup-volumes.sh            # writes ~/.local/share/citadel-backups/<volume>-<stamp>.tar.gz
+```
+
+Do this even though an upgrade never touches data volumes, because the cost of
+being wrong is asymmetric here. **There is no server-side key escrow, by
+design.** A user's account keys live in the internal-service volume and nowhere
+else, so losing that volume does not mean "restore from the server" — it means
+that identity is gone and the user re-registers as somebody new. No amount of
+care elsewhere recovers it.
+
+Restoring:
+
+```bash
+docker compose -f docker-compose.production.yml down
+./scripts/restore-volumes.sh ~/.local/share/citadel-backups/server_data-<stamp>.tar.gz
+docker compose -f docker-compose.production.yml up -d --wait
+```
+
+`restore-volumes.sh` refuses to run while any service is up — restoring
+underneath a running server races its own writes and can persist a mixture of
+old and new state, which is worse than either. It also verifies each archive is
+readable *before* it wipes the volume it is about to replace.
+
+Verify a backup rather than assuming it: `tar tzf <file>.tar.gz | head`.
+
+The archives live outside the checkout on purpose — the deploy host runs
+`git pull` in this working tree, and they contain the key material.
+Override with `BACKUP_DIR=/mnt/backups`.
+
+**If you run the local stack**, point the script at its compose file, or it
+will find none of your volumes:
+
+```bash
+COMPOSE_FILE=docker-compose.local.yml ./scripts/backup-volumes.sh
+```
+
+It exits non-zero when it archives nothing, so a wrong compose file or project
+name fails loudly rather than reporting success over an empty backup.
+
+## What a release is
+
+CI builds the three images — `citadel-workspace-server`,
+`citadel-workspace-internal-service`, `citadel-workspace-ui` — and publishes
+each with a `sha-<12-char-commit>` tag. A **separate** `promote-latest` job then
+moves `latest`, and only once every image in the release has built *and* passed
+its smoke test, and only on `master`.
+
+So `latest` cannot point at a half-published release or at a manually
+dispatched branch build. A `sha-` tag is immutable and is what you pin to when a
+deploy has to be reproducible.
+
+## Upgrading
+
+```bash
+./deploy.sh
+```
+
+That pulls the latest code, pulls images at `${IMAGE_TAG:-latest}`, verifies
+them, and restarts the services sequentially. **Nothing is compiled on the
+host** — that was removed deliberately, so the production box needs no Rust
+toolchain and no working Docker build network.
+
+Data volumes (`server_data`, `internal_service_data`) are never touched.
+
+## Rolling back, or pinning an exact build
+
+```bash
+IMAGE_TAG=sha-abc123456789 ./deploy.sh --no-pull
+```
+
+`--no-pull` skips the `git pull`, so the compose file stays as checked out while
+the images come from the tag you named. To find a tag, list the published
+versions of any of the three packages under the org's GHCR packages.
+
+Rolling back is exactly the same operation as upgrading, pointed at an older
+tag. There is no separate rollback path to get wrong — **on the server side**.
+
+### What a rollback does to clients, which is not symmetric
+
+Two stores refuse to go backwards, so a rollback across either is a one-way
+door and the deploy will not tell you.
+
+**Browsers.** IndexedDB has no downgrade. A user whose browser holds the newer
+schema gets a `VersionError` on the rolled-back build, and no amount of
+reloading helps — the server is deliberately serving the older bundle. The app
+shows a recovery screen with two options in escalating order: reload (which
+fixes the far commoner *stale cache* case), and, only once that has been tried
+and landed back on the same screen, a local reset that discards the browser's
+cached data. That reset costs the user their locally cached messages and files
+and any saved sign-in; their account and everything on the server survive.
+
+So: **do not roll back across a `DB_VERSION` bump** unless you accept that
+every user who reached the newer build resets their local data. `DB_VERSION`
+lives in `citadel-workspaces/src/lib/storage-migrations.ts`; check whether it
+differs between the two tags before rolling back.
+
+**The agent's data directory.** It now carries a format stamp
+(`.citadel-agent-format`), and an older agent **refuses to start** against a
+newer directory rather than misreading it. That directory holds the ratchet
+keys for every account registered on the device, and they cannot be
+regenerated — deleting the volume to get past the message is not a recovery,
+it is the loss. Run the newer image again, or point
+`INTERNAL_SERVICE_DATA_DIR` at a different directory.
+
+A directory written before the stamp existed is adopted, not refused, so this
+check does not break any agent already running.
+
+## The guard you should not remove
+
+`deploy.sh` runs `scripts/verify-image-revisions.sh` and **refuses the deploy**
+if the three images were not built from the same commit.
+
+This is not paranoia. `latest` is a mutable tag on three *independent* registry
+repositories, and no registry offers an atomic multi-repository tag update. A
+promotion that succeeds for one image and then fails partway — a transient auth
+or registry error — leaves `latest` pointing at a mismatched set. Restarting
+production on two backend versions that never shipped together is the failure
+this prevents, and the tag alone cannot tell you it happened. CI stamps each
+image with `org.opencontainers.image.revision`; the script compares the
+artifacts rather than trusting the label.
+
+## What the browser does on upgrade
+
+Server-side upgrade is only half of it — clients are installed PWAs and cache
+themselves deliberately.
+
+* **Installed clients** (a service worker is in control) do not reload on their
+  own, by design: the app holds live P2P sessions and yanking the page from
+  under one would drop them. The new worker installs and waits, the app raises
+  an **"Update available"** prompt with a Reload action, and the user takes it
+  when convenient. `check:pwa-update` covers install → deploy → prompt →
+  activate.
+* **Everyone else** — first visit, service workers unavailable, or a
+  registration evicted (Safari discards them after ~7 days unused) — is served
+  by nginx, where `index.html` carries `Cache-Control: public, no-cache`. It
+  revalidates, so a deploy reaches them on the next load. It must not be
+  `immutable`: the shell names the content-hashed `/assets/` bundles, which
+  *are* immutable, so a stale shell keeps requesting the old bundles — and they
+  still exist and still load, leaving the user silently on an older build with
+  nothing in the console to show for it.
+
+`scripts/smoke-ui-ws.sh` asserts both of those cache headers against a built
+image, so this cannot regress unnoticed.
+
+## Verifying a deploy
+
+```bash
+docker compose -f docker-compose.production.yml ps
+./scripts/smoke-ui-ws.sh <image-ref> 18080
+```
+
+`scripts/check-doc-env-vars.sh` fails CI if a deployment doc names an
+environment variable nothing reads — a doc describing a security control that
+does not exist is worse than no doc, since setting the variable changes nothing
+while the runbook says it is locked down.

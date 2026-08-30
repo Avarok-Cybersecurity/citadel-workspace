@@ -1,0 +1,49 @@
+{
+  "id": "default",
+  "name": "Default Schema",
+  "rules": [
+    {
+      "parent_type": "Workspace",
+      "allowed_child_types": [
+        "Office"
+      ]
+    },
+    {
+      "parent_type": "Office",
+      "allowed_child_types": [
+        "Room"
+      ]
+    },
+    {
+      "parent_type": "Room",
+      "allowed_child_types": []
+    }
+  ],
+  "max_depth": 3,
+  "entity_type_configs": [
+    {
+      "type_name": "Workspace",
+      "icon": "building-2",
+      "label": "Workspace",
+      "plural_label": "Workspaces",
+      "name_placeholder": "e.g., Avarok Cybersecurity",
+      "description_placeholder": "Describe the purpose of this workspace..."
+    },
+    {
+      "type_name": "Office",
+      "icon": "briefcase",
+      "label": "Office",
+      "plural_label": "Offices",
+      "name_placeholder": "e.g., Engineering, Marketing, HR",
+      "description_placeholder": "Describe the purpose of this office..."
+    },
+    {
+      "type_name": "Room",
+      "icon": "message-square",
+      "label": "Room",
+      "plural_label": "Rooms",
+      "name_placeholder": "e.g., General, Design Reviews, Standups",
+      "description_placeholder": "Describe the purpose of this room..."
+    }
+  ]
+}

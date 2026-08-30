@@ -73,6 +73,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         }
 
         // Get current nodes for validation
+        // Serialize the whole read-modify-write below. The nodes collection is
+        // one HashMap-shaped backend key, so `get_all_nodes` ... `save_nodes`
+        // is a load-modify-save cycle: without this, two concurrent callers
+        // both load the prior map and the second save silently drops the
+        // other's node. The per-mutator lock does not cover this path because
+        // the cycle spans our own awaits, not one mutator's.
+        let _nodes_guard = self.backend_tx_manager.lock_nodes().await;
         let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
 
         // Get schema for validation
@@ -148,6 +155,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             members: vec![String::from(user_id)],
             children: vec![],
             mdx_content: String::new(),
+            mdx_content_hash: None,
             rules: None,
             chat_enabled: false,
             chat_channel_id: None,
@@ -228,6 +236,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                 members,
                 children,
                 mdx_content: String::new(),
+                mdx_content_hash: None,
                 rules: None,
                 chat_enabled: false,
                 chat_channel_id: None,
@@ -256,26 +265,66 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         mdx_content: Option<&str>,
         rules: Option<&str>,
         chat_enabled: Option<bool>,
+        is_default: Option<bool>,
     ) -> Result<DomainNode, NetworkError> {
-        // Check permission
+        // Gate on what is actually being changed, at the node being changed.
+        //
+        // Every update required EditTreeStructure at WORKSPACE_ROOT_ID, so
+        // saving a document — which changes no structure at all — was refused
+        // unless the user could restructure the entire workspace. That is not a
+        // permission any custom role receives: `Permission::for_role` never
+        // inserts EditTreeStructure for Custom, while EditMdx is directly
+        // grantable in the permission matrix. So an admin could grant exactly
+        // the persona ("can edit MDX documents") whose every save was refused,
+        // while the UI — which gates its Edit button on EditMdx — correctly
+        // enabled it. The two ends disagreed about which permission the feature
+        // needs.
+        //
+        // Scoped to `node_id` rather than the root because
+        // check_entity_permission walks UP the parent chain, so a grant at the
+        // root still covers every descendant: node-scoped is strictly more
+        // precise here, never less permissive.
+        let changes_structure = name.is_some()
+            || description.is_some()
+            || rules.is_some()
+            || chat_enabled.is_some()
+            // Choosing where the workspace opens is a structural decision, and
+            // it writes to every other node, so it needs the structural
+            // permission rather than EditMdx.
+            || is_default.is_some();
+
+        let (required, label) = if changes_structure {
+            (Permission::EditTreeStructure, "EditTreeStructure")
+        } else {
+            (Permission::EditMdx, "EditMdx")
+        };
+
         if !self
-            .check_entity_permission(
-                user_id,
-                crate::WORKSPACE_ROOT_ID,
-                Permission::EditTreeStructure,
-            )
+            .check_entity_permission(user_id, node_id, required)
             .await?
         {
-            return Err(NetworkError::msg(
-                "Permission denied: EditTreeStructure required",
-            ));
+            return Err(NetworkError::msg(format!(
+                "Permission denied: {label} required"
+            )));
         }
 
-        // Get current node
-        let mut node = self
-            .backend_tx_manager
-            .get_node(node_id)
-            .await?
+        // Hold the nodes lock across the READ and the WRITE, as create, delete and
+        // move already do. The backend's `update_node` does take this mutex, so
+        // the write alone was safe — but the read below it was not, and the gap
+        // between them spans our own awaits. Two callers editing the same node
+        // both read the original and both write: the first one's field silently
+        // reverts. Worse, a delete landing in that gap is undone, because the
+        // write re-inserts the node the other caller just removed.
+        //
+        // tokio's Mutex is not reentrant, so calling the backend's `update_node`
+        // while holding the guard would deadlock. Mutate the map already held and
+        // persist it with `save_nodes`.
+        let _nodes_guard = self.backend_tx_manager.lock_nodes().await;
+        let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
+
+        let mut node = nodes
+            .get(node_id)
+            .cloned()
             .ok_or_else(|| NetworkError::msg(format!("Node '{}' not found", node_id)))?;
 
         // Apply updates
@@ -287,6 +336,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         }
         if let Some(new_mdx) = mdx_content {
             node.mdx_content = String::from(new_mdx);
+            // Hashed HERE, where the content is stored, and nowhere else. The
+            // client re-hashes before it executes the document and refuses on a
+            // mismatch, so a document altered between this write and that
+            // execution does not run. Computed from the value just assigned
+            // rather than from `new_mdx`, so the two can never disagree.
+            node.mdx_content_hash = Some(citadel_workspace_types::structs::mdx_content_hash(
+                &node.mdx_content,
+            ));
         }
         if let Some(new_rules) = rules {
             node.rules = Some(String::from(new_rules));
@@ -299,12 +356,30 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             }
         }
 
+        // Exactly one default, so setting it clears the others. Done inside the
+        // same lock and the same save as the node's own change: a client that
+        // saw one write succeed and the other fail would show two defaults, or
+        // none, with no way to tell which.
+        //
+        // Only on `Some(true)` -- `Some(false)` clears this node's flag and
+        // leaves the workspace with no default, which is a legitimate thing to
+        // ask for and must not silently promote something else.
+        if is_default == Some(true) {
+            for (id, other) in nodes.iter_mut() {
+                if id != node_id {
+                    other.is_default = false;
+                }
+            }
+        }
+        if let Some(new_default) = is_default {
+            node.is_default = new_default;
+        }
+
         node.updated_at = current_timestamp();
 
-        // Save the updated node
-        self.backend_tx_manager
-            .update_node(node_id, node.clone())
-            .await?;
+        // Persist through the map we hold, not the backend mutator (see above).
+        nodes.insert(String::from(node_id), node.clone());
+        self.backend_tx_manager.save_nodes(&nodes).await?;
 
         Ok(node)
     }
@@ -330,6 +405,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         }
 
         // Get all nodes for validation and manipulation
+        // Serialize the whole read-modify-write below. The nodes collection is
+        // one HashMap-shaped backend key, so `get_all_nodes` ... `save_nodes`
+        // is a load-modify-save cycle: without this, two concurrent callers
+        // both load the prior map and the second save silently drops the
+        // other's node. The per-mutator lock does not cover this path because
+        // the cycle spans our own awaits, not one mutator's.
+        let _nodes_guard = self.backend_tx_manager.lock_nodes().await;
         let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
 
         // Validate delete mutation
@@ -381,6 +463,21 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         // Save updated nodes
         self.backend_tx_manager.save_nodes(&nodes).await?;
 
+        // And the messages those rooms held. Removing the node removed the only
+        // reference to `citadel_workspace.group_messages.<id>`; the messages
+        // themselves stayed in the backend forever, unreachable and so
+        // unpurgeable. A room that is deleted has to take its history with it.
+        //
+        // After the nodes are saved, not before: if this fails the tree is
+        // already correct and the leftover keys are recoverable by deleting
+        // again, whereas failing first would leave a room whose history is gone
+        // but which is still listed and still writable.
+        for id in &deleted_ids {
+            self.backend_tx_manager
+                .delete_all_group_messages(id)
+                .await?;
+        }
+
         Ok(deleted_ids)
     }
 
@@ -410,6 +507,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         })?;
 
         // Get all nodes
+        // Serialize the whole read-modify-write below. The nodes collection is
+        // one HashMap-shaped backend key, so `get_all_nodes` ... `save_nodes`
+        // is a load-modify-save cycle: without this, two concurrent callers
+        // both load the prior map and the second save silently drops the
+        // other's node. The per-mutator lock does not cover this path because
+        // the cycle spans our own awaits, not one mutator's.
+        let _nodes_guard = self.backend_tx_manager.lock_nodes().await;
         let mut nodes = self.backend_tx_manager.get_all_nodes().await?;
 
         // Get schema for validation
@@ -510,7 +614,20 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         let nodes = self.backend_tx_manager.get_all_nodes().await?;
         let schema = self.backend_tx_manager.get_tree_schema_or_default().await?;
 
-        // Start from specified parent or root
+        // Start from specified parent or root.
+        //
+        // WORKSPACE_ROOT_ID is a sentinel, not a stored DomainNode, so
+        // `nodes.get("workspace-root")` is always None and the lookup below would
+        // fall through to `unwrap_or_default()` — returning an empty list, with
+        // Ok, on a fully populated workspace. `get_node` and `get_tree_structure`
+        // both special-case the sentinel already; this listing never did. Callers
+        // that pass the root explicitly (rather than None) saw an empty tree and
+        // no error. Normalize it to the None branch, which is what it means.
+        let parent_id = match parent_id {
+            Some(pid) if pid == crate::WORKSPACE_ROOT_ID => None,
+            other => other,
+        };
+
         let start_nodes: Vec<DomainNode> = if let Some(pid) = parent_id {
             // Get children of the specified parent
             nodes
@@ -668,6 +785,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                     members,
                     children,
                     mdx_content: String::new(),
+                    mdx_content_hash: None,
                     rules: None,
                     chat_enabled: false,
                     chat_channel_id: None,
@@ -709,6 +827,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                         members: vec![],
                         children,
                         mdx_content: String::new(),
+                        mdx_content_hash: None,
                         rules: None,
                         chat_enabled: false,
                         chat_channel_id: None,
@@ -899,6 +1018,7 @@ mod build_tree_tests {
             members: vec![],
             children: children.iter().map(|s| s.to_string()).collect(),
             mdx_content: String::new(),
+            mdx_content_hash: None,
             rules: None,
             chat_enabled: false,
             chat_channel_id: None,

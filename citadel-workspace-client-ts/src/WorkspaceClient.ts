@@ -10,6 +10,15 @@ import { WorkspaceSessionManager, type SessionConfig } from './session';
 interface WorkspaceWasmModule extends WasmModule {
   open_messenger_for(cid_str: string): Promise<void>;
   ensure_messenger_open(cid_str: string): Promise<boolean>;
+  send_media_frame(
+    local_cid_str: string,
+    peer_cid_str: string,
+    track: number,
+    kind: number,
+    timestamp: number,
+    flags: number,
+    payload: Uint8Array,
+  ): void;
 }
 
 // MessageDelivered is not in InternalServiceResponse (type gap in auto-generated bindings).
@@ -47,6 +56,28 @@ export interface WorkspaceClientConfig extends WasmClientConfig {
   sessionConfig?: SessionConfig;
 }
 
+/**
+ * Whether a MessageNotification payload is workspace-protocol JSON.
+ *
+ * Workspace protocol is JSON and always serialises to an object, so the first
+ * non-whitespace byte is '{' (0x7b). P2P chat is CBOR, whose first byte is a
+ * major-type tag — 0xa0-0xbf for the maps it produces — and never 0x7b. One
+ * byte therefore separates the two without decoding the payload or throwing.
+ *
+ * Deliberately conservative: anything that looks like JSON is still handed to
+ * the real parser, so a malformed workspace message still surfaces as a
+ * warning rather than being silently reclassified as chat.
+ */
+function looksLikeWorkspaceJson(payload: number[] | Uint8Array): boolean {
+  const bytes = payload instanceof Uint8Array ? payload : new Uint8Array(payload);
+  for (const byte of bytes) {
+    // Skip leading ASCII whitespace: space, tab, LF, CR.
+    if (byte === 0x20 || byte === 0x09 || byte === 0x0a || byte === 0x0d) continue;
+    return byte === 0x7b;
+  }
+  return false;
+}
+
 export class WorkspaceClient extends InternalServiceWasmClient {
   public readonly auth: WorkspaceAuth;
   public readonly session: WorkspaceSessionManager;
@@ -67,6 +98,41 @@ export class WorkspaceClient extends InternalServiceWasmClient {
       // Check if this is a MessageNotification that contains workspace protocol
       if (isResponseType(message, 'MessageNotification')) {
         const notification = message.MessageNotification;
+
+        // Workspace protocol is JSON; P2P chat is CBOR. Both arrive as
+        // MessageNotification, so this used to JSON.parse every chat message,
+        // throw, and warn — 83 warnings in a single integration run for
+        // traffic that is behaving exactly as designed. A JSON document here
+        // always starts with '{', and CBOR never does (its first byte is a
+        // major-type tag), so one byte separates them without decoding
+        // anything. Exceptions are for the unexpected; this was the norm.
+        // Workspace traffic comes from the SERVER, not from a peer.
+        //
+        // The byte check below distinguishes JSON from CBOR, which separates
+        // workspace protocol from chat under HONEST traffic — but it is not an
+        // authenticity check. A peer can send raw JSON over the P2P channel and
+        // land in the session manager below, where `{"Response":{"Error":"Not
+        // in workspace"}}` clears the victim's workspace session and persisted
+        // workspace id, and a `Workspace` variant repoints it. Any registered
+        // peer could do that repeatedly.
+        //
+        // The frontend's message-extraction.ts already applies exactly this
+        // guard; it was simply never applied here.
+        const notificationPeer = (notification as { peer_cid?: bigint }).peer_cid;
+        const notificationCid = (notification as { cid?: bigint }).cid;
+        const fromServer =
+          notificationPeer === undefined ||
+          notificationPeer === null ||
+          notificationPeer === BigInt(0) ||
+          (notificationCid !== undefined && notificationPeer === notificationCid);
+
+        if (!fromServer || !looksLikeWorkspaceJson(notification.message)) {
+          if (originalHandler) {
+            originalHandler(message);
+          }
+          return;
+        }
+
         try {
           // Decode the message bytes as UTF-8 string
           const messageText = new TextDecoder().decode(new Uint8Array(notification.message));
@@ -97,7 +163,9 @@ export class WorkspaceClient extends InternalServiceWasmClient {
             originalHandler(enrichedMessage);
           }
         } catch (e) {
-          // Not a workspace protocol message — pass through unchanged
+          // Reached only when the payload LOOKED like workspace JSON and still
+          // failed, which is a genuine anomaly rather than routine chat
+          // traffic — so this stays a warning.
           console.warn('[WorkspaceClient] Failed to parse MessageNotification as workspace protocol:', e);
           if (originalHandler) {
             originalHandler(message);
@@ -311,6 +379,35 @@ export class WorkspaceClient extends InternalServiceWasmClient {
       throw new Error('WASM module not initialized');
     }
     return this.wasmModule as unknown as WorkspaceWasmModule;
+  }
+
+  /**
+   * Send one encoded media frame to a peer.
+   *
+   * Synchronous and unawaited on purpose. Frames arrive 30-60 times a second
+   * per track; a promise per frame would allocate thousands of microtasks a
+   * minute for a result nobody inspects, and there is nothing to await — a
+   * frame that cannot be queued is one worth dropping, because a retry would
+   * arrive too late to play.
+   */
+  sendMediaFrame(
+    localCid: bigint,
+    peerCid: bigint,
+    track: number,
+    kind: number,
+    timestamp: number,
+    flags: number,
+    payload: Uint8Array,
+  ): void {
+    this.getWorkspaceWasmModule().send_media_frame(
+      localCid.toString(),
+      peerCid.toString(),
+      track,
+      kind,
+      timestamp,
+      flags,
+      payload,
+    );
   }
 
   /**

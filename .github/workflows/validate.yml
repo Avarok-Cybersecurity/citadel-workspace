@@ -21,6 +21,10 @@ env:
 jobs:
   fmt:
     name: Cargo Fmt - ${{ matrix.crate }}
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 2m; this is generous headroom over it, not a target.
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -29,6 +33,7 @@ jobs:
           - citadel-workspace-types
           - citadel-workspace-internal-service
           - citadel-workspace-server-kernel
+          - citadel-workspace-executor
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,6 +44,10 @@ jobs:
 
   clippy:
     name: Cargo Clippy - ${{ matrix.crate }}
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 3m; this is generous headroom over it, not a target.
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -47,6 +56,7 @@ jobs:
           - citadel-workspace-types
           - citadel-workspace-internal-service
           - citadel-workspace-server-kernel
+          - citadel-workspace-executor
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,8 +65,269 @@ jobs:
       - name: Run Cargo Clippy
         run: cargo clippy -p ${{ matrix.crate }} -- -D warnings
 
+  # The citadel-internal-service workspace, covered WHOLESALE rather than
+  # crate-by-crate.
+  #
+  # Its 7 members had no fmt or clippy job at all: the matrices above name only
+  # the root workspace's crates, so a committed file failed `cargo fmt --check`
+  # in intersession-layer-messaging while every run stayed green. Nobody removed
+  # a check — the check never looked there.
+  #
+  # `--all` / `--workspace` rather than another crate list, deliberately: a list
+  # is the thing that drifted, and it drifts silently every time a crate is
+  # added. This covers members that do not exist yet.
+  # Cheap, first-class, and deliberately NOT inside another job's matrix: the
+  # existing doc gate hangs off `if: matrix.project == 'citadel-workspaces'`,
+  # so renaming that matrix leg would silently take the gate with it — the same
+  # class of disappearance this job exists to detect.
+  crate-coverage:
+    name: Every workspace crate has a lint job
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is under a minute; this is generous headroom over it, not a target.
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check crate coverage
+        run: node scripts/check-crate-coverage.mjs
+      - name: Check the docs' commands resolve
+        run: node scripts/check-doc-commands.mjs
+      - name: Check request handlers cannot panic
+        run: node scripts/check-handlers-cannot-panic.mjs
+      - name: Check doc file references still resolve
+        run: node scripts/check-doc-file-refs.mjs
+      - name: "Check verify: annotations still hold"
+        run: node scripts/check-doc-assertions.mjs
+      - name: Check the Docker root manifest defines every inherited dep
+        run: node scripts/check-docker-workspace-manifest.mjs
+      - name: Check failure-reporting intent results are read
+        run: node scripts/check-intent-results-checked.mjs
+      - name: Check the quickstart works on a clean clone
+        run: node scripts/check-doc-setup-steps.mjs
+      - name: Check icon-only buttons have accessible names
+        run: node scripts/check-icon-button-names.mjs
+      - name: Check every subscribed event has an emitter
+        run: node citadel-workspaces/scripts/check-event-listeners-have-emitters.mjs
+      - name: Check destructive text clears AA on every background
+        run: node scripts/check-destructive-contrast.mjs
+      - name: Semantic token contrast
+        # The sibling gate above covers the destructive family, including the
+        # tinted backgrounds it appears on. This covers the other ten pairings,
+        # which nothing checked: axe only measures what is rendered during a
+        # scan, and most of these surfaces are behind a login.
+        run: node scripts/check-token-contrast.mjs
+      - name: Workflow npm steps name a script that exists
+        # A gate was added without the working-directory its neighbours carry,
+        # so it ran from the repo root and died on "Missing script" after a
+        # Docker build and three browser checks had already run. The directory
+        # is a property of each step here, not of the job.
+        run: node scripts/check-workflow-npm-scripts-exist.mjs
+      - name: Every nginx location carries the full header set
+        # add_header does not inherit into a block that adds any header of its
+        # own, so each location repeats all of them by hand. A location missing
+        # Content-Security-Policy serves the same bytes with the same status and
+        # nothing fails -- the loss is silent. Derived from `location /`.
+        run: node scripts/check-nginx-headers-are-complete.mjs
+      - name: Browser gates pin the world they measure
+        # `vite preview` proxies /ws to the developer's live stack or, in CI, to
+        # nothing. A gate that does not decide which measures two different
+        # applications: check-accessibility failed in CI and passed locally on
+        # identical code, and four other gates had the same shape without having
+        # failed yet -- green about the wrong screen.
+        run: node scripts/check-gates-pin-their-world.mjs
+        working-directory: citadel-workspaces
+      - name: Service logs survive a failing test
+        # `if: failure()` on a step reads as "run if anything failed" and is not:
+        # steps run in order, so a dump placed before the test has already been
+        # skipped by the time the test fails. Twenty-four failing legs uploaded
+        # screenshots and discarded the backend logs that would have said why.
+        run: node scripts/check-service-logs-are-captured.mjs
+      - name: Helpers survive a target that vanishes
+        # closeAnyModals clicked a Cancel button that was mid-animation; when
+        # the dialog finished closing on its own the element detached, and
+        # Playwright retried for the rest of its thirty seconds and then threw
+        # out of a HELPER, killing whichever spec had called it.
+        run: node scripts/check-helpers-survive-a-vanishing-target.mjs
+        working-directory: citadel-workspaces
+      - name: Controls are pressed by testid, not by their words
+        # Five checks in one session failed because the app improved its
+        # wording; the worst took the whole reconnection family down for a
+        # button that had said "Sign In" for months. Asserting on copy is the
+        # point of a text assertion -- FINDING a control by copy is a lookup
+        # keyed on prose, and it taxes every improvement to that prose.
+        run: node scripts/check-controls-are-addressed-by-testid.mjs
+        working-directory: citadel-workspaces
+      - name: Ratcheting baselines are committed
+        # Three gates rewrite their own baseline in the working tree and exit 1
+        # asking for the new count to be committed. That works once: the next
+        # local run compares against the rewrite and passes, while CI compares
+        # against the commit and keeps failing. Round 455 lost three rounds to
+        # exactly that. The leftover is visible as a dirty tracked file.
+        run: node scripts/check-baselines-are-committed.mjs
+        working-directory: citadel-workspaces
+      - name: Specs search for copy the app actually has
+        # The other half of the same problem. The check above catches a control
+        # PRESSED by its words; this catches one LOOKED FOR by words the app no
+        # longer contains -- "CONNECTED PEERS", "LIVE DOCS", "Create Live Doc" --
+        # which is worse, because it does not fail. It waits out a timeout, or
+        # falls through to the next strategy, and the report names the feature.
+        run: node scripts/check-specs-search-for-real-copy.mjs
+        working-directory: citadel-workspaces
+      - name: Gates run where their dependencies exist
+        # Twice a gate landed in the job that installs nothing, and both times
+        # the whole job went red on `Cannot find package`, taking twenty-five
+        # other gates with it. A gate that cannot run is worth less than no gate.
+        run: node scripts/check-gates-have-their-dependencies.mjs
+      - name: Every gate is invoked by something
+        # check-submodule-pointers-pushed.mjs was written, was correct, and had
+        # never run once -- a whole CI run died in checkout for exactly the
+        # condition it detects. A gate that runs nowhere looks identical to a
+        # gate that passes.
+        run: node scripts/check-every-gate-is-invoked.mjs
+      - name: Check no storage key is read but never written
+        run: node scripts/check-storage-keys.mjs
+      - name: Check the Permission enum matches between Rust and TypeScript
+        run: node scripts/check-permission-parity.mjs
+      - name: Check no control is revealed by hover alone
+        run: node scripts/check-hover-only-controls.mjs
+      - name: Check every service declares a restart policy
+        run: node scripts/check-restart-policies.mjs
+      - name: Check no control loses its name at narrow widths
+        run: node scripts/check-responsive-label-loss.mjs
+      - name: Check every colour utility resolves to a defined token
+        run: node scripts/check-color-tokens-exist.mjs
+      - name: Check message senders come from the transport, not the payload
+        run: node scripts/check-sender-identity.mjs
+      - name: Check the client TypeScript bindings match the Rust types
+        run: node scripts/check-generated-types-fresh.mjs
+      - name: Check the UI submodule runs every integration leg this workflow does
+        run: node scripts/check-ci-matrices-agree.mjs
+      - name: Check every workspace crate reaches the images that run cargo
+        run: node scripts/check-dockerfiles-copy-every-crate.mjs
+      - name: Check the inline-upload byte cap agrees across the wire
+        run: node scripts/check-transfer-cap-parity.mjs
+      - name: Check the browser outwaits the agent on peer discovery
+        run: node scripts/check-peer-list-timeout-parity.mjs
+      - name: No gate needs a newer Node than its job runs
+        # check-permission-gates imported globSync from node:fs, which arrived
+        # in Node 22. The lint job pins 20 and `engines` says >=20, so it threw
+        # at import and took the ESLint jobs for all three projects with it. It
+        # passed locally, and would pass locally for anybody: the shell that
+        # wrote it runs 22. Bumping CI to 22 would have made the red go away and
+        # left `engines` lying.
+        run: node scripts/check-gates-run-on-the-oldest-node.mjs
+      - name: Every CI job declares how long it may run
+        # None of them did. GitHub's default is 360 minutes, so a job that hangs
+        # -- a spec waiting on a stack that never came up, a `compose up --wait`
+        # against an image that will not start -- holds a runner for six hours
+        # and says nothing for six hours. The slowest job here is 41 minutes.
+        # Budgets are roughly twice the observed maximum, recorded beside each.
+        run: node scripts/check-ci-job-timeouts.mjs
+      - name: Every Rust file is actually compiled
+        # `handlers/permissions.rs` sat in the tree behind a commented-out
+        # `// pub mod permissions;`, carrying a role table that granted
+        # SendMessages to no role at all. Nothing compiled it, so no test could
+        # fail on it and clippy could not see it -- and it read as maintained
+        # code contradicting the table enforcement should use.
+        run: node scripts/check-rust-modules-are-compiled.mjs
+      - name: Browser installs retry and are bounded
+        # `test:notifications` spent 55 minutes on `playwright install` and was
+        # killed by its job budget without running a test. npm retries its own
+        # fetches; this CDN download does not. Three steps here were wrapped and
+        # the submodule's workflow had three more that would have shipped
+        # unwrapped.
+        run: node scripts/check-browser-installs-are-bounded.mjs
+      - name: Network fetches are bounded, not only retried
+        # Two jobs were killed by their budgets in consecutive runs, both in
+        # steps that already retried: `playwright install` for 55 minutes, and
+        # `pull-base-images.sh` with an orphan `docker`. A retry answers a fetch
+        # that fails; a fetch that stalls holds attempt one until something
+        # outside kills the job, and the log shows no failure at all.
+        run: node scripts/check-network-fetches-are-bounded.mjs
+      - name: Every network fetch in an image build is retried
+        # docker/sync installed wasm-pack with one `curl … | sh`. A run died on
+        # "curl: (35) Recv failure: Connection reset by peer" and took
+        # test:tree-move with it -- a red job with no test signal, because every
+        # integration job needs that image. The retry idiom already existed in
+        # docker/ui, written twice, in a file that then ran `npm install` twice
+        # more without it.
+        run: node scripts/check-image-fetches-retry.mjs
+      - name: Every image build pre-pulls its base images
+        # That gate covers RUN lines. It cannot see the fetch before any RUN:
+        # resolving `FROM rust:1.92.0` against the registry. A 502 there took
+        # test:tree-permissions down with no test signal -- the same shape as
+        # the failure the gate above was written for, one layer earlier.
+        run: node scripts/check-base-image-pulls-retry.mjs
+      - name: The workspace-missing sentinel is a string the kernel sends
+        # useMessageEventSetup decides whether to offer workspace initialization
+        # by matching 'No workspace found' inside the server's error text. The
+        # kernel writes that message as an ordinary human-facing string --
+        # nothing at the call site says a client is parsing it -- and it already
+        # has three other phrasings of the same condition. Reword it and
+        # needsInitialization is false forever: the first user of a fresh
+        # deployment is never offered setup, and nothing fails.
+        run: node scripts/check-workspace-missing-parity.mjs
+      - name: Check no shipped binary carries a test-only cargo feature
+        run: node scripts/check-no-test-features-shipped.mjs
+
+  internal-service-rust-lint:
+    name: Cargo Fmt + Clippy - citadel-internal-service workspace
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 3m; this is generous headroom over it, not a target.
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: Avarok-Cybersecurity/gh-actions-deps@master
+      - name: Run Cargo Fmt
+        run: cargo fmt --all --check
+        working-directory: citadel-internal-service
+      - name: Run Cargo Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        working-directory: citadel-internal-service
+
+  internal-service-rust-tests:
+    # The citadel-internal-service workspace got a dedicated LINT job and its
+    # tests were never brought with it, so `cargo fmt` and `cargo clippy` ran on
+    # eight crates whose tests ran nowhere at all — including the media lane and
+    # intersession-layer-messaging. `rust-tests` below is the ROOT workspace
+    # only; `-p <crate>` cannot reach a separate workspace.
+    #
+    # The submodule's own workflow runs these, but on pull_request TO THAT REPO.
+    # CLAUDE.md has developers editing inside citadel-internal-service/ in this
+    # worktree, so a main-repo PR carrying those changes passed with zero test
+    # execution.
+    name: Rust Tests - citadel-internal-service workspace
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 15m; this is generous headroom over it, not a target.
+    timeout-minutes: 40
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: Avarok-Cybersecurity/gh-actions-deps@master
+      - uses: taiki-e/install-action@nextest
+      - name: Run Cargo Nextest
+        run: cargo nextest run --workspace
+        working-directory: citadel-internal-service
+
   rust-tests:
     name: Rust Tests - ${{ matrix.crate }}
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 3m; this is generous headroom over it, not a target.
+    timeout-minutes: 25
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -65,6 +336,7 @@ jobs:
           - citadel-workspace-types
           - citadel-workspace-internal-service
           - citadel-workspace-server-kernel
+          - citadel-workspace-executor
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,8 +345,26 @@ jobs:
       - name: Run Cargo Test
         run: cargo test -p ${{ matrix.crate }}
 
+      # check-generated-types-fresh compares the committed bindings against the
+      # client's copy. Both can be stale and identical: the bindings are only
+      # rewritten when someone runs this crate's ts-rs export tests, and nothing
+      # checked that the result matched what was committed. Edit a Rust struct,
+      # skip the cargo test, commit -- and the parity gate stays green while the
+      # client is built against a type the server no longer sends. No protocol
+      # enum has a version field or a serde(other) arm, so an unknown variant
+      # fails the whole message: the client drops responses rather than
+      # degrading. The step above has just regenerated them, so this diff is the
+      # freshness check the parity gate cannot make.
+      - name: Committed bindings match the Rust types
+        if: matrix.crate == 'citadel-workspace-types'
+        run: git diff --exit-code -- citadel-workspace-types/bindings
+
   unit-tests:
     name: Unit Tests
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 6m; this is generous headroom over it, not a target.
+    timeout-minutes: 25
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -104,6 +394,10 @@ jobs:
 
   typecheck:
     name: TypeScript Type Check - ${{ matrix.project }}
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is under a minute; this is generous headroom over it, not a target.
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -149,50 +443,17 @@ jobs:
           fi
       - name: Enforce 250-line file limit
         if: matrix.project == 'citadel-workspaces'
-        run: |
-          # Skip list: generated/external files exempt from 250-line limit
-          # Files that pre-date the 250-line cap and already exceed
-          # it. The cap was introduced after they were written; this
-          # PR is not the right place to refactor them. Tracked as
-          # known violations so the cap still keeps NEW files in
-          # check. Mirrors the equivalent allowlist in the
-          # citadel-workspaces submodule's own validate.yml.
-          SKIP_FILES=(
-            "components/ui/sidebar.tsx"
-            "components/layout/sidebar/TreeNodesSection.tsx"
-            "components/p2p/ChatSettingsPanel.tsx"
-            "components/tree/TreeGraphEditor.tsx"
-            "lib/file-transfer/io.ts"
-            "lib/file-transfer/service.ts"
-            "pages/Landing.tsx"
-            "types/messaging-layer.ts"
-            "types/workspace-protocol.ts"
-          )
-
-          VIOLATIONS=0
-          while IFS= read -r file; do
-            rel="${file#citadel-workspaces/src/}"
-            skip=false
-            for s in "${SKIP_FILES[@]}"; do
-              if [ "$rel" = "$s" ]; then skip=true; break; fi
-            done
-            if $skip; then continue; fi
-
-            lines=$(wc -l < "$file")
-            if [ "$lines" -gt 250 ]; then
-              echo "::error file=$file::$file has $lines lines (limit: 250)"
-              VIOLATIONS=$((VIOLATIONS + 1))
-            fi
-          done < <(find citadel-workspaces/src -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.bak')
-
-          if [ "$VIOLATIONS" -gt 0 ]; then
-            echo "FAIL: $VIOLATIONS file(s) exceed the 250-line limit"
-            exit 1
-          fi
-          echo "All TypeScript files within 250-line limit"
+        # The rule and its skip list live in the script, not here, so the same
+        # check can be run locally. It was inline bash, which meant it could only
+        # be run by copying it — and it was broken three times as a result.
+        run: node scripts/check-file-length.mjs
 
   lint:
     name: ESLint - ${{ matrix.project }}
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 1m; this is generous headroom over it, not a target.
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -235,8 +496,252 @@ jobs:
           ${{ github.workspace }}/node_modules/.bin/eslint . --max-warnings 0
         working-directory: ${{ matrix.path }}
 
+      - name: Every declaration carries a type
+        # In the LINT job, not with the other gates: this one runs ESLint
+        # programmatically, and the crate-coverage job installs nothing --
+        # it failed there with `Cannot find package 'eslint'` and took the
+        # other twenty-five gates in that job down with it, which is the
+        # same mistake check-service-logs-are-captured made with js-yaml.
+        #
+        # It was a ratchet, because 951 of 1087 files failed these rules
+        # outright and a gate nobody can pass is a gate that gets switched
+        # off. The baseline could only shrink: 7,823 findings, then 251, then
+        # zero. It is a wall now -- the baseline and its --write lever are
+        # gone, and one untyped declaration anywhere in src/ fails this.
+        # `no-explicit-any` is enforced outright in eslint.config.js; there
+        # were nine and they are gone.
+        run: node scripts/check-explicit-types.mjs
+        working-directory: citadel-workspaces
+      - name: A wire field that is read must exist
+        # getVariant hands back Record<string, unknown>, so every property read
+        # off it is an unchecked cast. ServerAutoConnectService read `username`
+        # and `server_addr` off ConnectSuccess -- which declares { cid,
+        # request_id } -- and did all its work inside `if (username)`, so a
+        # session that reconnected kept its retry timer forever. Round 463 was
+        # the same shape on PeerRegisterFailure.peer_cid. The generated ts-rs
+        # bindings make it decidable.
+        run: node scripts/check-wire-fields-exist.mjs
+        working-directory: citadel-workspaces
+      - name: A success flag is read by somebody
+        # sendAndAwaitAck was given a boolean return so an unacknowledged RE-VFS
+        # operation would stop being invisible; all six callers then discarded
+        # it, and so did every layer above them, so the file manager announced
+        # "Deleted" for peers that never heard of the change. The same shape put
+        # a retracted P2P message back on screen after a reload. Both were found
+        # by asking the type checker which calls resolve to a boolean and are
+        # used as statements. This keeps asking.
+        run: node scripts/check-success-flags-are-checked.mjs
+        working-directory: citadel-workspaces
+      - name: Check no component prop is honoured but never passed
+        # GroupConversationRow.isActive had a default, a class that highlights
+        # the row, and one caller that never supplied it -- so the sidebar could
+        # not say which conversation was open. TreeNodesSection.initialExpandedIds
+        # had no caller either, and the tree forgot every branch on reload. Both
+        # read as working code, because the component honours the prop perfectly.
+        run: node scripts/check-inert-props.mjs
+        working-directory: citadel-workspaces
+      - name: No raw thrown value is shown to a user
+        # toast.error(`Failed to delete: ${err}`) reads as ordinary defensive
+        # code and produces "[object Object]" for anything rejected with a
+        # structured payload -- which the revfs and websocket layers both do.
+        # Eight of them in one file, three different treatments, plus a system
+        # notification and a rethrow elsewhere. describeError renders any of
+        # them and never returns [object Object].
+        run: node scripts/check-user-facing-errors.mjs
+        working-directory: citadel-workspaces
+      - name: No console listener truncates the message itself
+        # diagnostics.ts printed substring(0, 150) and the WASM tracing prefix
+        # eats ~110 of those, so [ILM-BLOCKED-RECOVERY] reported "peer 15" for
+        # peer 15079777622326333560 with nothing saying the line was cut. That
+        # was fixed, and browser.ts had the same call -- in the helper the
+        # [Alice]/[Bob] lines in those very logs came from. Four sites, one fix.
+        run: node scripts/check-console-printers.mjs
+        working-directory: citadel-workspaces
+      - name: Every test file is one a runner collects
+        # `include` was a recursive glob minus a list of directories, which was
+        # whack-a-mole: every Playwright spec added under integration-tests/
+        # arrived as a vitest failure. Replacing it with a named list fixed
+        # that and silently dropped scripts/__tests__ -- 342 files before, 342
+        # after, one swapped for another. A test that does not run is
+        # indistinguishable from a test that passes.
+        run: node scripts/check-every-test-runs.mjs
+        working-directory: citadel-workspaces
+      - name: A CID is a bigint
+        # CLAUDE.md: "CID canonical type is bigint ... NEVER use string CIDs in
+        # function parameters, interface definitions, Map/Set keys, or
+        # serialization boundaries." Seventy-six field types do, none with a
+        # reason given, and the code around them calls .toString() on CIDs that
+        # arrive as bigint. The cost is two incompatible `Peer` types for the
+        # same peers, differing in that field -- so every crossing needs a
+        # conversion, and a forgotten one is a comparison that never matches.
+        # A ratchet, like check-explicit-types, which went 7,823 to zero.
+        run: node scripts/check-cid-is-bigint.mjs
+        working-directory: citadel-workspaces
+      - name: Check permission gates go through usePermission
+        # hasPermission reads the cache, and a domain nobody loaded reads
+        # exactly like a denial. usePermission carries the bounded retry, the
+        # reset on reconnection, and the reason that tells "the answer was no"
+        # apart from "we never got an answer". WorkspaceAppearanceSection gated
+        # on the former behind its own fetch-once effect, so one request sent
+        # before the tab knew who was signed in could show the workspace's own
+        # owner a read-only theme editor captioned "Set by a workspace admin",
+        # permanently.
+        run: node scripts/check-permission-gates.mjs
+        working-directory: citadel-workspaces
+      - name: Event setups unsubscribe
+        # Three use*EventSetup hooks subscribed to workspace events inside an
+        # async setup and returned no cleanup, so every remount left another
+        # set of live listeners behind, each holding a closure over setState.
+        # Nothing broke visibly -- setState on an unmounted component is a
+        # no-op -- which is exactly why it accumulated. The first pass fixed
+        # two of the three. This gate makes the fourth sibling join the test's
+        # table rather than repeating that.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-event-setups-are-covered.mjs
+        working-directory: citadel-workspaces
+      - name: Group role switches govern something
+        # The role editor renders a labelled switch for all eight
+        # GroupPermissions keys and the role summary lists them. Two --
+        # sendMessages and viewMemberList -- were read by nothing: the one
+        # composer hardcoded canSendMessages={true} and every roster rendered
+        # unconditionally. Group roles are entirely client-side, so no server
+        # enforces what the client declines to; a muted role sent messages and
+        # saw the whole membership while its settings page said otherwise.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-group-permissions-are-enforced.mjs
+        working-directory: citadel-workspaces
+      - name: A control that stores nothing says so
+        # ChatSettingsPanel's Advanced tab shipped a select labelled
+        # "Encryption Level: Security level for this conversation" with
+        # defaultValue, no onChange, no store and no consumer -- choosing
+        # "Maximum" changed nothing. The comment on the switches directly above
+        # it says why that is not tolerable here, and those switches had been
+        # fixed while their three siblings were left.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-controls-are-wired.mjs
+        working-directory: citadel-workspaces
+      - name: One answer to what a peer is called
+        # peer-display.ts exists so "every surface answers the question
+        # identically", and was bypassed twice over: four sites built their own
+        # handle from raw CID digits (last six here, first eight there), and
+        # five decided for themselves which strings were placeholders, using
+        # three definitions, none covering all of 'Unknown', 'User <digits>'
+        # and 'Loading...'. A name one site rejected another preserved
+        # permanently, in preference to the real one arriving behind it.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-peer-names-have-one-answer.mjs
+        working-directory: citadel-workspaces
+      - name: Presence is not invented
+        # presence.ts lists the four ways this dot had been wrong. The fifth was
+        # underneath: Peer.isOnline was a plain boolean, so the absent fact was
+        # invented three ways at once -- `!== undefined ? : true` in discovery,
+        # a hardcoded true in registration, `?? false` in the poller -- and an
+        # empty online set before the first poll read as "everyone offline".
+        # presence.ts then ORed the registry flag with the poll, so the
+        # invention outranked the real answer.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-presence-is-not-invented.mjs
+        working-directory: citadel-workspaces
+      - name: A promise is not a boolean
+        # `getOrCreateConversation` put an async `isPeerConnected(cid)` in the
+        # middle of an `||` chain. A pending Promise is truthy, so every new
+        # conversation opened as Online with a fresh lastUpdate -- presence
+        # invented from a value nobody awaited. The gate above did not see it:
+        # it watches the files where presence had been wrong before, not the
+        # mechanism.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-a-promise-is-not-a-boolean.mjs
+        working-directory: citadel-workspaces
+      - name: Every module is imported by something
+        # The TypeScript half of the Rust orphan check. A file with no importer
+        # compiles, type-checks, lints and reads as maintained --
+        # `live-document-store/document-queries.ts` answers four questions that
+        # `yjs-merkle-strategy/tree.ts` already answers for real callers.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-modules-are-imported.mjs
+        working-directory: citadel-workspaces
+      - name: Every installer is called by something
+        # A bind/start/setup function wires an application up and renders
+        # nothing, so nothing looks wrong when one is never called. Module
+        # reachability sees it imported -- by its own test. Round 471 nearly
+        # shipped bindPeerGroupDelivery with its single call site missing:
+        # written, tested three ways, and inert. Comments are stripped first,
+        # because a commented-out call is the regression, and the first version
+        # of the scan was satisfied by one.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-installers-are-called.mjs
+        working-directory: citadel-workspaces
+      - name: Every component is mounted by something
+        # The gate above is not enough for a component: a file whose only
+        # importer is its own TEST reads as imported. PeerRefusalNotice and
+        # PersistFailureNotice render nothing and exist purely to be mounted --
+        # delete the line in App.tsx that mounts one and its tests still pass,
+        # because they render it directly, and module reachability still says
+        # "all imported ok". Verified: unmounting PeerRefusalNotice leaves that
+        # check green and fails only this one.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-components-are-mounted.mjs
+        working-directory: citadel-workspaces
+      - name: Every test id a spec addresses exists
+        # The other testid check argues you should not press a control by its
+        # copy. Nothing checked the testid then EXISTS: two specs addressed
+        # `workspace-switcher` and `workspace-name`, the app rendered neither,
+        # and the lookup spent three seconds matching nothing before falling
+        # back to a chevron's CSS class.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-testids-exist.mjs
+        working-directory: citadel-workspaces
+      - name: A clickable element a keyboard can reach
+        # `onClick` on a div is invisible to the keyboard and to assistive
+        # technology: no focus, no Enter, no Space, no announced role. Every
+        # such element today pairs `activateOnKey` with role and tabIndex; this
+        # keeps that true for the next one.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-clickables-are-keyboard-reachable.mjs
+        working-directory: citadel-workspaces
+      - name: No error is discarded without a word
+        # CLAUDE.md: never silently swallow errors. Thirty catches already carry
+        # a comment saying why silence is right; three did not, and two of those
+        # hid a stale peer roster and a ringtone that would not stop -- both of
+        # which present as protocol faults with nothing anywhere to say
+        # otherwise.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-errors-are-not-swallowed.mjs
+        working-directory: citadel-workspaces
+      - name: No new forced clicks in the responsive suite
+        # `force: true` skips the check for "covered by something else", which
+        # is what the responsive suite exists to find — one of its own tests is
+        # "workspace shell has no unhittable controls". It cost a real
+        # diagnosis: the notification bell was clicked through an overlay and
+        # the assertion timed out with nothing to say.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-forced-clicks-are-justified.mjs
+        working-directory: citadel-workspaces
+      - name: One answer to which session this is
+        # The CID priority chain -- instance manager, tab selection, tab
+        # session, and the global connection LAST -- existed three times. One
+        # copy moved the global connection to position two, so a browser with
+        # two sessions scoped one tab's pending contact requests by the other
+        # tab's CID; CallLayer passed the bare connection lookup, the last step
+        # used as the only step.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-one-answer-to-who-am-i.mjs
+        working-directory: citadel-workspaces
+      - name: Documented env vars have consumers
+        # A deployment doc is the one place a reader cannot verify a claim by
+        # running it. A variable named there but read by nothing looks like a
+        # security control you can switch on: set it, and the service keeps its
+        # default while the runbook says it is locked down.
+        if: matrix.project == 'citadel-workspaces'
+        run: ./scripts/check-doc-env-vars.sh
+        working-directory: .
+
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 26m; this is generous headroom over it, not a target.
+    timeout-minutes: 55
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -252,8 +757,6 @@ jobs:
             artifact: group-multiuser
           - test: test:crud
             artifact: crud
-          - test: test:login
-            artifact: login
           - test: test:prev-sessions
             artifact: prev-sessions
           - test: test:file-transfer
@@ -290,6 +793,66 @@ jobs:
             artifact: account-mgmt
           - test: test:hierarchy-nav
             artifact: hierarchy-nav
+          # The tree specs ran in NO CI job at all. Seven of them had npm
+          # scripts and none was in this matrix, so the workspace hierarchy —
+          # including the permission checks that verify a member cannot create
+          # or delete tree structure — was never exercised on a PR.
+          - test: test:tree-validator
+            artifact: tree-validator
+          - test: test:tree-cascade
+            artifact: tree-cascade
+          - test: test:tree-structure
+            artifact: tree-structure
+          - test: test:tree-permissions
+            artifact: tree-permissions
+          - test: test:tree-deep
+            artifact: tree-deep
+          - test: test:tree-move
+            artifact: tree-move
+          - test: test:tree-custom-types
+            artifact: tree-custom-types
+          # Specs that existed with an npm script but were never in this matrix,
+          # so they had never run in CI. Each was verified passing locally before
+          # being added here — an unverified entry just turns the pipeline red.
+          - test: test:chat-settings
+            artifact: chat-settings
+          - test: test:directory
+            artifact: directory
+          - test: test:file-manager
+            artifact: file-manager
+          - test: test:notifications
+            artifact: notifications
+          - test: test:settings
+            artifact: settings
+          - test: test:workspace-init
+            artifact: workspace-init
+          - test: test:revfs:peer
+            artifact: revfs-peer
+          - test: test:revfs:server
+            artifact: revfs-server
+          # Group chat, plus the five reconnection specs. These had scripts but
+          # no matrix entry, so the reconnection paths — C2S drop, P2P drop, and
+          # the combinations — had never been exercised by CI at all.
+          - test: test:peer-group
+            artifact: peer-group
+          - test: test:office-chat
+            artifact: office-chat
+          - test: test:room-chat
+            artifact: room-chat
+          # native-file-picker had no npm script at all, so it was invisible to
+          # both CI and `npm run` — the only spec in the suite with neither.
+          - test: test:native-file-picker
+            artifact: native-file-picker
+          - test: test:reconnect-c2s
+            artifact: reconnect-c2s
+          - test: test:reconnect-p2p-only
+            artifact: reconnect-p2p-only
+          - test: test:reconnect-one-c2s
+            artifact: reconnect-one-c2s
+          - test: test:reconnect-both-c2s
+            artifact: reconnect-both-c2s
+          - test: test:reconnect-p2p-one-c2s
+            artifact: reconnect-p2p-one-c2s
     steps:
       - uses: actions/checkout@v4
         with:
@@ -332,7 +895,29 @@ jobs:
         # Now that deps are installed, this resolves to the locked
         # version's `playwright install` and downloads the matching
         # chromium build.
-        run: npx playwright install chromium --with-deps
+        # Retried, and each attempt bounded.
+        #
+        # `test:notifications` spent 55 MINUTES on this step in run
+        # 33300992291 and was killed by the job budget without running a
+        # single test -- the orphan-process line at the end of that log is
+        # `npm exec playwright install chromium --with-deps`. It is a network
+        # fetch with no retry and no timeout of its own, so a stalled
+        # connection consumes the whole job.
+        #
+        # Same shape as the image builds, which already wrap every fetch this
+        # way. Ten minutes is generous for a chromium download and short
+        # enough that two retries still fit inside the job.
+        run: |
+          attempt=1
+          until timeout 600 npx playwright install chromium --with-deps; do
+            if [ "$attempt" -ge 3 ]; then
+              echo "playwright install still failing after 3 attempts"
+              exit 1
+            fi
+            echo "playwright install failed or stalled (attempt $attempt/3); retrying"
+            attempt=$((attempt + 1))
+            sleep $((attempt * 15))
+          done
       - name: Symlink workspace deps for integration-tests build
         # `tsc` in integration-tests resolves modules with NodeNext
         # which walks node_modules up the directory tree. After the
@@ -346,6 +931,13 @@ jobs:
                  citadel-workspaces/integration-tests/node_modules/playwright
           ln -sf ${{ github.workspace }}/node_modules/@playwright \
                  citadel-workspaces/integration-tests/node_modules/@playwright
+      - name: Pull base images (retried)
+        # A base-image manifest pull is a network fetch that happens before any
+        # RUN, so the retry gate on RUN fetches cannot see it. A run died on a
+        # 502 from registry-1.docker.io resolving `FROM rust:1.92.0` and took
+        # test:tree-permissions with it -- a red job with no test signal, the
+        # same shape as the failure that gate was written for.
+        run: ./scripts/pull-base-images.sh
       - name: Start Services
         env:
           INTERNAL_SERVICE_PORT: '12345'
@@ -379,12 +971,165 @@ jobs:
           INTERNAL_SERVICE_PORT: '12345'
         run: npm run ${{ matrix.test }}
         working-directory: citadel-workspaces/integration-tests
+      # AFTER the test, not only after startup.
+      #
+      # The pre-test dump has `if: failure()`, which reads as "dump on any
+      # failure" and is not: steps run in order, so by the time the test fails
+      # that step has already been skipped. Every failing leg therefore uploaded
+      # screenshots and threw the backend logs away -- and the questions those
+      # failures raise are backend questions. "Was the first account promoted to
+      # Admin, or is the workspace awaiting initialization?" is answered by one
+      # line in the server log, and that line was never captured.
+      - name: Dump Service Logs on Test Failure
+        if: failure()
+        run: |
+          echo "=== server: membership and refusal decisions ==="
+          docker compose logs server 2>&1 \
+            | grep -E "first workspace member|awaits initialization|promoted to Admin|Refusing" \
+            | tail -40 || true
+          echo "=== server (tail) ==="
+          docker compose logs server 2>&1 | tail -120
+          echo "=== internal-service (tail) ==="
+          docker compose logs internal-service 2>&1 | tail -120
       - name: Upload Screenshots on Failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: screenshots-${{ matrix.artifact }}
           path: citadel-workspaces/integration-tests/screenshots/
+
+  playwright-tests:
+    # The @playwright/test suite under integration-tests/src/tests-pw. It existed
+    # but ran in NO job, so those specs were dead weight: written, compiled by the
+    # typecheck job, and never executed against a running stack.
+    #
+    # Sharded rather than one job per spec (which is how the legacy suite is laid
+    # out): the runner distributes specs across shards itself, so adding a spec
+    # needs no matrix edit, and a slow spec no longer defines the critical path.
+    name: Playwright - shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 41m; this is generous headroom over it, not a target.
+    timeout-minutes: 80
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/.ghcup "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
+          df -h
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Dependencies
+        # Root install first, for the same module-resolution reason documented on
+        # the integration-tests job: two copies of playwright make tsc see two
+        # distinct playwright-core type identities.
+        run: npm ci
+      - name: Install Playwright Browsers
+        # Retried, and each attempt bounded.
+        #
+        # `test:notifications` spent 55 MINUTES on this step in run
+        # 33300992291 and was killed by the job budget without running a
+        # single test -- the orphan-process line at the end of that log is
+        # `npm exec playwright install chromium --with-deps`. It is a network
+        # fetch with no retry and no timeout of its own, so a stalled
+        # connection consumes the whole job.
+        #
+        # Same shape as the image builds, which already wrap every fetch this
+        # way. Ten minutes is generous for a chromium download and short
+        # enough that two retries still fit inside the job.
+        run: |
+          attempt=1
+          until timeout 600 npx playwright install chromium --with-deps; do
+            if [ "$attempt" -ge 3 ]; then
+              echo "playwright install still failing after 3 attempts"
+              exit 1
+            fi
+            echo "playwright install failed or stalled (attempt $attempt/3); retrying"
+            attempt=$((attempt + 1))
+            sleep $((attempt * 15))
+          done
+      - name: Symlink workspace deps for integration-tests
+        run: |
+          mkdir -p citadel-workspaces/integration-tests/node_modules
+          ln -sf ${{ github.workspace }}/node_modules/playwright \
+                 citadel-workspaces/integration-tests/node_modules/playwright
+          ln -sf ${{ github.workspace }}/node_modules/@playwright \
+                 citadel-workspaces/integration-tests/node_modules/@playwright
+      - name: Pull base images (retried)
+        # A base-image manifest pull is a network fetch that happens before any
+        # RUN, so the retry gate on RUN fetches cannot see it. A run died on a
+        # 502 from registry-1.docker.io resolving `FROM rust:1.92.0` and took
+        # test:tree-permissions with it -- a red job with no test signal, the
+        # same shape as the failure that gate was written for.
+        run: ./scripts/pull-base-images.sh
+      - name: Start Services
+        env:
+          INTERNAL_SERVICE_PORT: '12345'
+          WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
+        run: docker compose up -d --build --wait
+      - name: Dump Service Logs on Start Failure
+        if: failure()
+        run: |
+          docker compose logs sync-wasm-client 2>&1 | tail -200
+          docker compose logs server 2>&1 | tail -50
+          docker compose logs internal-service 2>&1 | tail -50
+      - name: Clean Docker Build Cache
+        run: |
+          docker builder prune -af
+          docker image prune -af
+          df -h
+      - name: Run Playwright Tests
+        env:
+          IN_CI: 'true'
+          # No test.config.json in CI — it is gitignored, so lib/config.ts falls
+          # through to this env var. It previously WAS committed, carrying a
+          # different password than the one the server boots with, and
+          # `externalConfig.workspacePassword ?? process.env...` meant the file
+          # silently won.
+          WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
+          INTERNAL_SERVICE_PORT: '12345'
+        run: npx playwright test --shard=${{ matrix.shard }}/3
+        working-directory: citadel-workspaces/integration-tests
+      # AFTER the test, not only after startup.
+      #
+      # The pre-test dump has `if: failure()`, which reads as "dump on any
+      # failure" and is not: steps run in order, so by the time the test fails
+      # that step has already been skipped. Every failing leg therefore uploaded
+      # screenshots and threw the backend logs away -- and the questions those
+      # failures raise are backend questions. "Was the first account promoted to
+      # Admin, or is the workspace awaiting initialization?" is answered by one
+      # line in the server log, and that line was never captured.
+      - name: Dump Service Logs on Test Failure
+        if: failure()
+        run: |
+          echo "=== server: membership and refusal decisions ==="
+          docker compose logs server 2>&1 \
+            | grep -E "first workspace member|awaits initialization|promoted to Admin|Refusing" \
+            | tail -40 || true
+          echo "=== server (tail) ==="
+          docker compose logs server 2>&1 | tail -120
+          echo "=== internal-service (tail) ==="
+          docker compose logs internal-service 2>&1 | tail -120
+      - name: Upload Playwright Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-shard-${{ matrix.shard }}
+          # Includes the traces referenced by the HTML report; `trace:
+          # on-first-retry` in playwright.config.ts means a flake that passes on
+          # retry still leaves a trace of the failing attempt.
+          path: |
+            citadel-workspaces/integration-tests/playwright-report/
+            citadel-workspaces/integration-tests/test-results/
 
   deploy-gate-tests:
     # Regression coverage for the release-consistency gate that stands between a `docker
@@ -397,6 +1142,10 @@ jobs:
     # `<no value>` string docker prints for an absent label, which is exactly the sort of
     # detail a stub would paper over.
     name: Deploy Gate - image revision check
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 9m; this is generous headroom over it, not a target.
+    timeout-minutes: 40
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -445,6 +1194,34 @@ jobs:
             exit 1
           fi
           echo "PASS: a single un-inspectable image is refused."
+
+      - name: --expect refuses images built from a different commit
+        # Cross-checking the images against each other proves they were promoted
+        # TOGETHER, not which commit they are. `git pull` and `docker compose pull`
+        # are independent, so on the ordinary merge-then-deploy workflow - where CI
+        # is often still building the Rust images - `latest` still points at the
+        # previous commit. All images agree, the gate passes, everything restarts,
+        # and "Deploy complete!" prints over the old binaries.
+        #
+        # The failure case is the load-bearing one: a --expect that silently
+        # ignores a mismatch is indistinguishable from not passing it at all.
+        run: |
+          set -euo pipefail
+          ref_a=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' rev-a)
+          ./scripts/verify-image-revisions.sh --expect "$ref_a" rev-a
+          echo "PASS: images matching the expected commit deploy."
+          ./scripts/verify-image-revisions.sh --expect "${ref_a:0:12}" rev-a
+          echo "PASS: the short form of the same sha is accepted."
+          if ./scripts/verify-image-revisions.sh --expect 0000000000000000000000000000000000000000 rev-a 2>/dev/null; then
+            echo "::error::The gate accepted images built from a different commit than the one being deployed. A deploy run before CI finished publishing would ship the previous commit and report success."
+            exit 1
+          fi
+          echo "PASS: a commit mismatch is refused."
+          if ./scripts/verify-image-revisions.sh --expect 2>/dev/null; then
+            echo "::error::--expect with no value was accepted."
+            exit 1
+          fi
+          echo "PASS: --expect requires a value."
 
       - name: Deploy restart guards - run deploy.sh end to end
         # The selector test below proves the LIST is right. This proves deploy.sh ACTS on it:
@@ -607,6 +1384,10 @@ jobs:
 
   production-build:
     name: Production Docker Build
+    # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
+    # runner, and six hours before anyone learns anything. The longest observed
+    # here is 26m; this is generous headroom over it, not a target.
+    timeout-minutes: 55
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -622,6 +1403,54 @@ jobs:
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           sudo apt-get clean
           df -h
+      # BEFORE the sync container runs, not after.
+      #
+      # The sync mounts named volumes over three node_modules directories. On a
+      # fresh checkout those directories do not exist, so Docker CREATES each
+      # mount point — as root — inside the bind-mounted source tree. A later
+      # `npm ci` then cannot write into them: EACCES on mkdir .../@types.
+      #
+      # Running the install first means the directories already exist and are
+      # owned by the runner; Docker mounts over them and the host ownership
+      # underneath is untouched. This passed locally either way, because a
+      # developer checkout already has node_modules — the difference only shows
+      # on a clean one.
+      - name: Set up Node for the production-bundle gates
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install workspace dependencies for the gates
+        run: npm ci
+      - name: Create the sync's mount points before Docker does
+        # Docker creates a missing bind/volume mount point itself, as ROOT,
+        # inside the source tree. `npm ci` happens to create the node_modules
+        # ones; nothing creates dist/, so the sync_ui_dist volume made the
+        # daemon create a root-owned citadel-workspaces/dist — and the
+        # production build could then not write its own service worker into it:
+        #   EACCES: permission denied, open '.../dist/sw.js'
+        #
+        # Creating them here means they already exist and belong to the runner;
+        # Docker mounts over them and the ownership underneath is untouched.
+        # This cannot be reproduced on macOS, where the daemon does not recreate
+        # missing mount points at all — which is why it took a CI run to see.
+        run: |
+          # EVERY volume-backed path in the sync service, not just the one that
+          # failed. npm ci creates the workspace node_modules today, but npm
+          # hoists — a workspace whose dependencies all hoist to the root gets no
+          # local node_modules, and the daemon would then create that mount
+          # point as root exactly as it did for dist/. Listing them all costs
+          # nothing and closes the class rather than the instance.
+          mkdir -p citadel-workspaces/dist
+          mkdir -p citadel-workspaces/node_modules
+          mkdir -p citadel-internal-service/typescript-client/node_modules
+          mkdir -p citadel-workspace-client-ts/node_modules
+      - name: Pull base images (retried)
+        # A base-image manifest pull is a network fetch that happens before any
+        # RUN, so the retry gate on RUN fetches cannot see it. A run died on a
+        # 502 from registry-1.docker.io resolving `FROM rust:1.92.0` and took
+        # test:tree-permissions with it -- a red job with no test signal, the
+        # same shape as the failure that gate was written for.
+        run: ./scripts/pull-base-images.sh
       - name: Generate WASM artifacts (required for UI production build)
         # The UI production build embeds the wasm-pack generated
         # `citadel_internal_service_wasm_client.js` (and the matching
@@ -635,6 +1464,144 @@ jobs:
           WORKSPACE_MASTER_PASSWORD: 'ci-prod-build'
           INTERNAL_SERVICE_PORT: '12345'
         run: docker compose up --build sync-wasm-client
+
+      # The production-bundle gates live HERE, not in the typecheck matrix.
+      #
+      # They all begin with `vite build`, and that build embeds the wasm-pack
+      # glue generated by the step above — an artefact that is not git-tracked.
+      # In the typecheck job it does not exist, so every one of these steps
+      # failed to resolve it, and the whole group had never once run in CI while
+      # passing locally on any machine that had done a WASM build.
+      #
+      # This job already pays for the artefacts, and these gates measure the
+      # PRODUCTION bundle, so this is also where they belong conceptually.
+      - name: Landing bundle budget
+        # Only the UI has a critical path to defend. "Lightning fast" is easy to
+        # achieve once and lose gradually — one eager import in a shared provider
+        # pulls a chunk onto the first paint and nobody notices, because nothing
+        # was measuring.
+        run: npm run build && npm run check:bundle
+        working-directory: citadel-workspaces
+
+      - name: PWA installability
+        # The install button is drawn by the browser, not the app: if a manifest
+        # field or an icon breaks, the button simply stops appearing. Nothing
+        # errors and nothing logs, so only an explicit check notices.
+        run: npm run check:pwa
+        working-directory: citadel-workspaces
+
+      - name: Source maps are usable
+        # The deterministic half of Lighthouse's valid-source-maps. That audit
+        # FETCHES each map, so on a loaded runner it reports "missing" against a
+        # build whose maps are correct, and it has appeared in some runs here and
+        # not others. This reads the files instead: every chunk names a map, the
+        # map exists, and it carries sourcesContent — without which a production
+        # stack trace still cannot be resolved back to source.
+        run: npm run check:sourcemaps
+        working-directory: citadel-workspaces
+
+      - name: Lighthouse baselines
+        # Accessibility and SEO are held at 100 because they are rule checks, not
+        # measurements — they pass today, so anything less is a regression
+        # somebody introduced. Performance has a deliberately loose floor: it IS
+        # a measurement, a shared runner is slower and noisier than a laptop, and
+        # a tight perf gate produces a flaky red build. A flaky gate is worse
+        # than no gate, because people learn to re-run it without reading it.
+        # Drift is caught precisely by the bundle budget above; this catches a
+        # collapse. The actual scores print either way, so a downward trend is
+        # visible before it trips.
+        run: npm run check:lighthouse
+        working-directory: citadel-workspaces
+
+      - name: Install Chromium for the offline check
+        # check:pwa is a static read of dist/ and needs no browser. Proving the
+        # app actually LOADS offline needs a real service worker to register,
+        # activate and serve a navigation from cache, which only a browser does.
+        # Retried, and each attempt bounded.
+        #
+        # `test:notifications` spent 55 MINUTES on this step in run
+        # 33300992291 and was killed by the job budget without running a
+        # single test -- the orphan-process line at the end of that log is
+        # `npm exec playwright install chromium --with-deps`. It is a network
+        # fetch with no retry and no timeout of its own, so a stalled
+        # connection consumes the whole job.
+        #
+        # Same shape as the image builds, which already wrap every fetch this
+        # way. Ten minutes is generous for a chromium download and short
+        # enough that two retries still fit inside the job.
+        run: |
+          attempt=1
+          until timeout 600 npx playwright install --with-deps chromium; do
+            if [ "$attempt" -ge 3 ]; then
+              echo "playwright install still failing after 3 attempts"
+              exit 1
+            fi
+            echo "playwright install failed or stalled (attempt $attempt/3); retrying"
+            attempt=$((attempt + 1))
+            sleep $((attempt * 15))
+          done
+        working-directory: citadel-workspaces
+
+      - name: PWA offline behaviour
+        # The app tells the user "will now load without a connection" once the
+        # worker is ready. Nothing verified that promise until this step: a
+        # precache that silently stopped covering the shell would leave an
+        # installed app opening to a blank page with no connection, and every
+        # other check would stay green.
+        run: npm run check:pwa-offline
+        working-directory: citadel-workspaces
+
+      - name: PWA update flow
+        # The upgrade half of the lifecycle, and the half that fails silently:
+        # an installed worker keeps serving its cached bundle by design, so a
+        # broken update path produces no error and no complaint — the app just
+        # stops changing. The unit test beside PwaUpdatePrompt mocks the
+        # register hook, proving the component reacts to needRefresh but never
+        # that anything sets it.
+        run: npm run check:pwa-update
+        working-directory: citadel-workspaces
+
+      - name: A phone toast clears the fixed header
+        # Measured in a browser, because two versions of this fix moved nothing
+        # and a jsdom test asserting the style attribute passed through both:
+        # Sonner's `offset` prop silently not applying, then an override of
+        # `--offset-top` when its stylesheet reads `--mobile-offset-top` below
+        # its own breakpoint. jsdom has no layout and cannot tell a toast that
+        # moved from one that did not.
+        run: npm run check:toast-header
+        working-directory: citadel-workspaces
+      - name: Reduced motion
+        # Neither axe nor Lighthouse reports motion, so ninety of the app's
+        # hundred animations opted out of prefers-reduced-motion unnoticed.
+        # Also checks that suppressing motion did not suppress the dialogs the
+        # motion was attached to — a failure only reduced-motion users would see.
+        run: npm run check:reduced-motion
+        working-directory: citadel-workspaces
+
+      - name: Accessibility on the pre-auth screens
+        # A separate gate from integration-tests' accessibility.spec.ts, which
+        # is better but needs a backend and an account -- so when registration
+        # breaks, it stops running, silently. The screens a visitor meets before
+        # they have an account need nothing but a served bundle, and their
+        # accessibility should not depend on whether an account can be created.
+        run: npm run check:a11y
+        working-directory: citadel-workspaces
+
+      - name: The agent-down first run
+        # The most common state a new user is in -- app installed, agent not
+        # started -- and nothing tested it. /ws is pointed at a dead port, so it
+        # needs no stack and no account. The check proves its own premise: if
+        # anything answers on that port it fails rather than reporting on a
+        # state it is not in, which is exactly the mistake made once by hand.
+        run: npm run check:agent-down
+        working-directory: citadel-workspaces
+
+      - name: Mobile layout
+        # axe measures colour, names and roles — not size. Three controls
+        # shipped under the WCAG 2.2 24px target floor, including the close
+        # button on every dialog in the app, with every a11y gate green.
+        run: npm run check:mobile
+        working-directory: citadel-workspaces
       - name: Build Production Images (server + internal-service + ui)
         run: |
           # The UI image has its own multi-stage `production` target with a
@@ -703,6 +1670,19 @@ jobs:
         # Shared with publish-images.yml so the two gates cannot drift into testing
         # different things.
         run: ./scripts/smoke-ui-ws.sh ghcr.io/avarok-cybersecurity/citadel-workspace-ui:latest 18080
+      - name: Smoke Test - the production image in a real browser
+        # The only check that drives a browser against the artefact users get.
+        # Every Playwright spec runs on the Vite dev server, which sends no CSP
+        # and no Permissions-Policy, so a feature can pass all 84 and be dead on
+        # deploy. Calling did exactly that: production shipped
+        # `Permissions-Policy: microphone=(), camera=()` and getUserMedia was
+        # refused for the app's own origin.
+        #
+        # smoke-ui-ws.sh asserts the header TEXT; this asserts what the browser
+        # DOES with it. A policy can be present, well-formed, and still not grant
+        # what the app needs — and note that `getUserMedia` remains defined when
+        # denied, so probing for the API is not enough.
+        run: node scripts/check-production-image.mjs ghcr.io/avarok-cybersecurity/citadel-workspace-ui:latest 18085
       - name: Smoke Test - Services Start
         env:
           WORKSPACE_MASTER_PASSWORD: 'ci-smoke-test'

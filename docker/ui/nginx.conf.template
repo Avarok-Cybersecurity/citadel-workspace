@@ -112,6 +112,21 @@ server {
     # CSP rationale:
     #   * script-src 'wasm-unsafe-eval' - WebAssembly.instantiate is blocked by
     #     default CSP without it, and the Citadel WASM client will not initialise.
+    #   * script-src 'unsafe-eval'      - workspace documents are MDX, and
+    #     rendering one means EXECUTING it: @mdx-js/mdx compiles to JavaScript
+    #     and runs it through the Function constructor. Without this every
+    #     document body was blank in production while rendering perfectly in
+    #     dev, where HMR already adds it. An explicit product decision to render
+    #     client-side, taken with the trade-off understood: this permits eval
+    #     for the whole origin, so an XSS anywhere in the app is no longer
+    #     blocked from calling it. The compensating control is the document
+    #     integrity check in lib/mdx-integrity.ts - a document is hashed when
+    #     the server stores it and re-hashed before it is executed, so content
+    #     altered between the server and the renderer refuses to run.
+    #   * frame-ancestors 'none'        - this app must not be embedded. It is a
+    #     PWA holding a live authenticated session; framing it is only ever
+    #     clickjacking. X-Frame-Options: DENY says the same thing to browsers
+    #     that predate frame-ancestors.
     #   * style-src 'unsafe-inline'     - React/Radix emit inline styles.
     #   * connect-src 'self'            - the app's only outbound connection is the
     #     WebSocket to the agent, and that is now SAME-ORIGIN (see /ws below), so
@@ -120,12 +135,26 @@ server {
     #     exfiltrate to wss://attacker.example. Same-origin proxying is what lets
     #     this stay strict.
     #   * object-src 'none'             - defence in depth against legacy plugins.
+    #
+    # Permissions-Policy rationale:
+    #   * microphone=(self), camera=(self), display-capture=(self) - the app
+    #     places audio and video calls, and getUserMedia/getDisplayMedia are
+    #     blocked outright by an EMPTY allowlist. `()` denies every origin,
+    #     including this one; `(self)` is the narrowest grant that still lets
+    #     the feature work.
+    #
+    #     This header predates calling and denied all three. The dev server
+    #     sends no Permissions-Policy at all, so every test passed while
+    #     production would have refused the camera - the same dev/production
+    #     divergence the CSP notes above were written about.
+    #
+    #   * geolocation=() - genuinely unused, so it stays denied.
     # -------------------------------------------------------------------------
-    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Frame-Options "DENY" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
 
     # -------------------------------------------------------------------------
     # The agent socket.
@@ -246,30 +275,111 @@ server {
     location /assets/ {
         expires 1y;
         add_header Cache-Control "public, immutable" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
     }
 
     # WASM files
     location ~* \.wasm$ {
         types { application/wasm wasm; }
-        expires 1y;
-        add_header Cache-Control "public, immutable" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
+        # Revalidate, do NOT mark immutable.
+        #
+        # `immutable` is a promise that the bytes at this URL will never change,
+        # and it is only true for a content-hashed filename. The app fetches
+        # /wasm/citadel_internal_service_wasm_client_bg.wasm — a stable name —
+        # so `expires 1y; immutable` told browsers to keep the OLD binary for a
+        # year across app updates, while the JS bindings that call into it are
+        # hashed and do update. Old WASM against new bindings shows up as
+        # undefined-function errors, not as anything that looks like caching.
+        #
+        # `no-cache` still caches; it requires revalidation, so an unchanged
+        # binary costs a 304 rather than 2.3 MB.
+        add_header Cache-Control "public, no-cache" always;
+        add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+    }
+
+    # ---------------------------------------------------------------------------
+    # PWA: service worker and web app manifest.
+    #
+    # Both live at the document root and would otherwise fall through to the SPA
+    # `location /` below, which sets no cache policy and no explicit type. Two
+    # things break if that happens:
+    #
+    #   * sw.js picks up heuristic caching, so a browser can keep serving the OLD
+    #     service worker and the app never learns an update exists. The service
+    #     worker is the one file that must always be revalidated.
+    #   * manifest.webmanifest is not in nginx's default mime.types, so it ships
+    #     as application/octet-stream. Chrome rejects a manifest served with the
+    #     wrong type, and the app silently stops being installable — no error, the
+    #     install button simply never appears.
+    #
+    # CAUTION: every `add_header` resets inherited headers, so both blocks repeat
+    # the full security header set — see the note at the top of the server block.
+    # ---------------------------------------------------------------------------
+    location = /sw.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+    }
+
+    location = /manifest.webmanifest {
+        types { application/manifest+json webmanifest; }
+        default_type application/manifest+json;
+        add_header Cache-Control "public, max-age=3600" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
     }
 
     # SPA fallback - serve index.html for all non-file routes.
     #
     # CAUTION: do NOT add an `add_header` here without repeating ALL the security
     # headers above; see the note at the top of the server block.
+    # index.html must revalidate, for the same reason sw.js and the WASM binary do:
+    # its URL is stable while its bytes change on every deploy.
+    #
+    # It is also the file that NAMES the content-hashed /assets/ bundles, and those
+    # are served `immutable`. So a browser holding a stale index.html keeps asking
+    # for the OLD bundle names - which still exist, and still load perfectly. The
+    # user silently runs an older build: no console error, no failed request, and
+    # nothing that looks like a caching problem to anyone debugging it.
+    #
+    # SCOPE, precisely: once the service worker is controlling the page it answers
+    # navigations from its own precache (`navigateFallback: /index.html`), so this
+    # header does not decide which shell those users get. It decides for every
+    # state where the SW is NOT in control, and those are ordinary, not exotic:
+    #   * the first visit, before the SW has installed and taken control;
+    #   * any browser with service workers unavailable or disabled;
+    #   * a returning user whose SW registration was evicted - Safari discards
+    #     service workers for sites unused for ~7 days, so this is the common
+    #     case for an app someone opens weekly, not a corner case.
+    # In each of those the browser talks to nginx directly, which is why the shell
+    # needs a real policy rather than nginx's heuristic guess.
+    #
+    # `no-cache` still stores the shell; it only forces revalidation, so an
+    # unchanged index.html costs a 304 rather than a re-download.
+    #
+    # CAUTION: this add_header REPLACES the inherited server-level set, so the full
+    # security header set is repeated here - see the note at the top of the server block.
     location / {
         try_files $uri $uri/ /index.html;
+        add_header Cache-Control "public, no-cache" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
     }
 }

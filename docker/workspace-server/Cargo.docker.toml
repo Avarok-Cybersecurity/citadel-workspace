@@ -25,6 +25,12 @@ citadel-workspace-types = { path = "./citadel-workspace-types" }
 
 # Avarok deps
 citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
+# citadel-workspace-types declares this as a dev-dependency (the credential-mirror
+# guard reads the SDK's real constants). Cargo parses EVERY dependency table when
+# it loads a workspace member's manifest, dev-dependencies included, so a missing
+# entry here fails the manifest outright — `cargo clippy` never starts and the
+# production server image cannot be built at all.
+citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 

@@ -3,6 +3,7 @@ members = [
     "citadel-workspace-server-kernel",
     "citadel-workspace-internal-service",
     "citadel-workspace-types",
+    "citadel-workspace-executor",
     "citadel-workspace-server-kernel/tests/common",
 ]
 
@@ -10,12 +11,29 @@ exclude = ["./citadel-internal-service"]
 
 resolver = "3"
 
+# Release profile.
+#
+# `overflow-checks` is the point of this block. Cargo's default has it ON for
+# `cargo test` (via debug-assertions) and OFF for `--release`, so an integer
+# overflow panics in CI and wraps silently in every shipped binary. In a
+# codebase of u64 CIDs, ticket counters, byte offsets, chunk indices and
+# quotas, that is the divergence most likely to make a real bug pass the suite
+# and then misbehave in production — the tests cannot reproduce the field
+# failure because they are not running the same arithmetic.
+#
+# The cost is a bounds check on arithmetic that overflows; the benefit is that
+# a wrap becomes a loud, located panic instead of a silently wrong CID or a
+# quota that reads as satisfied.
+[profile.release]
+overflow-checks = true
+
 [workspace.dependencies]
 # Workspace-specific packages
 citadel-workspace-server-kernel = { path = "./citadel-workspace-server-kernel" }
 citadel-workspace-server-kernel-test-common = { path = "./citadel-workspace-server-kernel/tests/common" }
 citadel-workspace-internal-service = { path = "./citadel-workspace-internal-service" }
 citadel-workspace-types = { path = "./citadel-workspace-types" }
+citadel-workspace-executor = { path = "./citadel-workspace-executor" }
 
 # Secondary packages
 
@@ -24,6 +42,9 @@ citadel-workspace-types = { path = "./citadel-workspace-types" }
 # Avarok deps
 citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
+# Dev-only: the credential-mirror test reads MIN/MAX_{PASSWORD,USERNAME,NAME}_LENGTH
+# directly, so a client-side mirror cannot drift from the SDK unnoticed.
+citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 
 # Avarok deps (for dev purposes, use the local path at ../Citadel-Protocol)
