@@ -512,6 +512,16 @@ jobs:
         # were nine and they are gone.
         run: node scripts/check-explicit-types.mjs
         working-directory: citadel-workspaces
+      - name: A wire field that is read must exist
+        # getVariant hands back Record<string, unknown>, so every property read
+        # off it is an unchecked cast. ServerAutoConnectService read `username`
+        # and `server_addr` off ConnectSuccess -- which declares { cid,
+        # request_id } -- and did all its work inside `if (username)`, so a
+        # session that reconnected kept its retry timer forever. Round 463 was
+        # the same shape on PeerRegisterFailure.peer_cid. The generated ts-rs
+        # bindings make it decidable.
+        run: node scripts/check-wire-fields-exist.mjs
+        working-directory: citadel-workspaces
       - name: A success flag is read by somebody
         # sendAndAwaitAck was given a boolean return so an unacknowledged RE-VFS
         # operation would stop being invisible; all six callers then discarded
