@@ -456,6 +456,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             }
         }
 
+        // The chat channels those nodes owned, captured BEFORE they are removed
+        // -- once the node is gone there is nothing left that knows its
+        // `chat_channel_id`, which is the only key its history is stored under.
+        let deleted_channels: Vec<String> = deleted_ids
+            .iter()
+            .filter_map(|id| nodes.get(id).and_then(|n| n.chat_channel_id.clone()))
+            .collect();
+
         // Remove all deleted nodes
         for id in &deleted_ids {
             nodes.remove(id);
@@ -465,17 +473,23 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         self.backend_tx_manager.save_nodes(&nodes).await?;
 
         // And the messages those rooms held. Removing the node removed the only
-        // reference to `citadel_workspace.group_messages.<id>`; the messages
+        // reference to `citadel_workspace.group_messages.<key>`; the messages
         // themselves stayed in the backend forever, unreachable and so
         // unpurgeable. A room that is deleted has to take its history with it.
+        //
+        // Keyed by `chat_channel_id`, NOT by node id. `group_access` states the
+        // rule -- "a `group_id` is a node's `chat_channel_id`" -- and this loop
+        // passed the node id, so it deleted a key that had never existed and
+        // every deleted room's history survived exactly as before. A node with
+        // no chat channel has no history and contributes nothing here.
         //
         // After the nodes are saved, not before: if this fails the tree is
         // already correct and the leftover keys are recoverable by deleting
         // again, whereas failing first would leave a room whose history is gone
         // but which is still listed and still writable.
-        for id in &deleted_ids {
+        for channel_id in &deleted_channels {
             self.backend_tx_manager
-                .delete_all_group_messages(id)
+                .delete_all_group_messages(channel_id)
                 .await?;
         }
 

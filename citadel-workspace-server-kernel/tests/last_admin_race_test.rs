@@ -247,3 +247,74 @@ fn every_role_writer_calls_the_guarded_writer() {
          check; it is the single place both happen together."
     );
 }
+
+/// Every write of a user record must be serialised, not just the role writes.
+///
+/// `User` is read, modified and written back across awaits in seven places.
+/// Three of them held no lock: `update_member_permissions`, `update_user_profile`
+/// and `create_workspace`. Two such updates landing together both read the same
+/// record, each applies its own change to its own copy, and the second
+/// `insert_user` discards the first — silently, while reporting success to both
+/// callers. A permission grant and a profile edit, or two grants for different
+/// domains, and one of them simply did not happen.
+///
+/// Enumerating the write sites rather than naming the functions is deliberate:
+/// that is what found these three, and it is what will find the eighth.
+#[test]
+fn every_user_write_is_under_the_workspace_lock() {
+    let source = include_str!("../src/handlers/domain/server_ops/async_domain_server_ops.rs");
+
+    let lines: Vec<&str> = source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect();
+
+    let fn_starts: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| {
+            let t = l.trim_start();
+            t.starts_with("fn ")
+                || t.starts_with("async fn ")
+                || t.starts_with("pub fn ")
+                || t.starts_with("pub async fn ")
+        })
+        .map(|(i, _)| i)
+        .collect();
+
+    let mut checked = 0usize;
+    for (i, line) in lines.iter().enumerate() {
+        if !line.contains(".insert_user(") {
+            continue;
+        }
+        checked += 1;
+
+        let owner_idx = *fn_starts
+            .iter()
+            .rfind(|&&f| f < i)
+            .expect("an insert_user outside any function");
+        let end = fn_starts
+            .iter()
+            .find(|&&f| f > owner_idx)
+            .copied()
+            .unwrap_or(lines.len());
+        let owner = lines[owner_idx].trim();
+
+        assert!(
+            lines[owner_idx..end]
+                .join("\n")
+                .contains("lock_workspaces()"),
+            "insert_user at line {} sits in `{owner}`, which holds no workspace \
+             lock. Its read-modify-write can interleave with another user writer, \
+             and the later insert silently discards the earlier change while both \
+             callers are told they succeeded.",
+            i + 1
+        );
+    }
+
+    assert!(
+        checked >= 7,
+        "found only {checked} insert_user site(s); there are seven. Fewer means \
+         this test's matcher has stopped seeing them and is asserting nothing."
+    );
+}

@@ -539,6 +539,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         }
 
         // Get target user
+        // The user record is read, modified and written back across awaits, so
+        // it needs the same lock every other user writer takes. Two updates
+        // landing together both read the same record, each applies its own
+        // change to its own copy, and the second write discards the first --
+        // silently, while reporting success to both callers.
+        let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+
         let mut user = match self.backend_tx_manager.get_user(target_user_id).await? {
             Some(u) => u,
             None => return Err(NetworkError::msg("User not found")),
@@ -583,6 +590,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         avatar_data: Option<String>,
     ) -> Result<User, NetworkError> {
         // Get the user
+        // The user record is read, modified and written back across awaits, so
+        // it needs the same lock every other user writer takes. Two updates
+        // landing together both read the same record, each applies its own
+        // change to its own copy, and the second write discards the first --
+        // silently, while reporting success to both callers.
+        let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+
         let mut user = match self.backend_tx_manager.get_user(user_id).await? {
             Some(u) => u,
             None => return Err(NetworkError::msg("User not found")),
@@ -791,6 +805,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         }
 
         // Grant creator admin permissions
+        // The user record is read, modified and written back across awaits, so
+        // it needs the same lock every other user writer takes. Two updates
+        // landing together both read the same record, each applies its own
+        // change to its own copy, and the second write discards the first --
+        // silently, while reporting success to both callers.
+        let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+
         let mut user = match self.backend_tx_manager.get_user(user_id).await? {
             Some(u) => u,
             None => User {
