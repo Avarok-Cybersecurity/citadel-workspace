@@ -627,6 +627,14 @@ jobs:
         if: matrix.project == 'citadel-workspaces'
         run: node scripts/check-testids-exist.mjs
         working-directory: citadel-workspaces
+      - name: A clickable element a keyboard can reach
+        # `onClick` on a div is invisible to the keyboard and to assistive
+        # technology: no focus, no Enter, no Space, no announced role. Every
+        # such element today pairs `activateOnKey` with role and tabIndex; this
+        # keeps that true for the next one.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-clickables-are-keyboard-reachable.mjs
+        working-directory: citadel-workspaces
       - name: One answer to which session this is
         # The CID priority chain -- instance manager, tab selection, tab
         # session, and the global connection LAST -- existed three times. One
