@@ -51,10 +51,13 @@ function jobsWithBudgets(source) {
     // A top-level key ends the jobs block.
     if (/^\S/.test(line)) { inJobs = false; continue; }
     const jobKey = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
-    if (jobKey) { current = jobKey[1]; jobs.set(current, undefined); continue; }
+    if (jobKey) { current = jobKey[1]; jobs.set(current, { budget: undefined, calls: false }); continue; }
     if (current === null) continue;
     const budget = line.match(/^ {4}timeout-minutes:\s*(\S+)\s*$/);
-    if (budget) jobs.set(current, Number(budget[1]));
+    if (budget) jobs.get(current).budget = Number(budget[1]);
+    // Job-level `uses:` -- four spaces. A step's `uses:` is indented further
+    // and under a `- `, so it cannot match here.
+    if (/^ {4}uses:\s*\S/.test(line)) jobs.get(current).calls = true;
   }
   return jobs;
 }
@@ -83,8 +86,21 @@ for (const relPath of WORKFLOWS) {
     problems.push([relPath, 'no jobs found — the file moved or its shape changed, so nothing was checked']);
     continue;
   }
-  for (const [name, budget] of jobs) {
+  for (const [name, { budget, calls }] of jobs) {
     checked += 1;
+    if (calls) {
+      // A job that calls a reusable workflow may not carry `timeout-minutes`:
+      // it is not a permitted key there, and GitHub rejects the whole file at
+      // run-creation time -- the run appears with ZERO jobs and a red X, which
+      // reads like a broken build rather than a malformed workflow. That is
+      // how `publish-images.yml` spent four days unable to publish anything.
+      // The called workflow is itself in WORKFLOWS above, so its jobs' budgets
+      // are checked directly; nothing goes unbounded by allowing this.
+      if (budget !== undefined) {
+        problems.push([`${relPath}:${name}`, 'calls a reusable workflow, so timeout-minutes is not a permitted key; GitHub fails the run at creation with zero jobs']);
+      }
+      continue;
+    }
     if (budget === undefined) {
       problems.push([`${relPath}:${name}`, 'no timeout-minutes; a hang here holds a runner for six hours']);
     } else if (!Number.isFinite(budget) || budget <= 0 || budget > CEILING_MINUTES) {
@@ -94,12 +110,15 @@ for (const relPath of WORKFLOWS) {
 }
 
 if (problems.length > 0) {
-  console.error('\n  CI jobs without a usable time budget:\n');
+  console.error('\n  CI jobs whose time budget is wrong:\n');
   for (const [where, why] of problems) console.error(`::error::${where} — ${why}`);
   console.error(
-    '\n  Add `timeout-minutes:` to the job, at roughly twice its observed runtime,\n' +
-    '  with a comment saying what that observation was. It bounds a hang; it is\n' +
-    '  not a performance target.\n',
+    '\n  For an ordinary job: add `timeout-minutes:`, at roughly twice its observed\n' +
+    '  runtime, with a comment saying what that observation was. It bounds a hang;\n' +
+    '  it is not a performance target.\n' +
+    '\n  For a job that `uses:` a reusable workflow: REMOVE the key. GitHub does not\n' +
+    '  permit it there and fails the whole run at creation. The called workflow\n' +
+    '  bounds its own jobs.\n',
   );
   process.exit(1);
 }

@@ -70,9 +70,12 @@ jobs:
   # it proves the container starts, not that the code works.
   validate:
     name: Validate before publishing
-    # Observed under a minute; this bounds a hang, not performance.
-    # Without it a stuck job holds a runner for GitHub's 360-minute default.
-    timeout-minutes: 15
+    # No `timeout-minutes` here, deliberately. It is not a permitted key on a
+    # job that calls a reusable workflow, and GitHub rejects the file at
+    # run-creation time: the run appears with ZERO jobs and a red X, so nothing
+    # was published for four days while the failure read as a broken build.
+    # validate.yml bounds each of its own jobs, which check-ci-job-timeouts.mjs
+    # verifies directly.
     uses: ./.github/workflows/validate.yml
 
   publish:
