@@ -49,7 +49,6 @@ const SKIP = new Map([
   // just did, so in a group call they raced and the service refused the second
   // with "a media open or teardown is already in progress with this peer".
   // One field, and the explanation lives with the code that uses it.
-  ['lib/multi-instance/instance-inbound-router.ts', 251],
   // 798: seventeen forwardRef components each gained a two-line return type,
   // which is what the explicit-type policy asks for. Still three times the cap
   // and still the first file that should be split.
