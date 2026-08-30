@@ -111,22 +111,103 @@ async fn removing_the_last_admin_is_refused_sequentially() {
 
 /// The lock IS the protection, so the lock is what this asserts.
 ///
-/// The docstring at the top of this file states the contract — `lock_workspaces`
-/// held across the check AND the write, "in all three role writers" — and that
-/// was true in only one of them. `update_workspace_member_role` took no lock at
-/// all, and `add_user_to_domain`'s guard is scoped to its root branch and has
-/// dropped by the time the demote check runs.
+/// The previous version listed two of the three role writers and checked each
+/// body for the string `lock_workspaces()`. It omitted `add_user_to_domain` —
+/// whose docstring above says why: that function's guard is scoped to its
+/// workspace-root branch and has dropped by the time the demote check runs.
+/// Adding it to that list would have PASSED WITHOUT FIXING ANYTHING, because
+/// the string is present in the branch above. A guard answering a narrower
+/// question than its name.
 ///
-/// A concurrent test is deliberately not the answer here: this file already
-/// argues that a probabilistic race test which usually passes is worse than
-/// none, because it reads as coverage. Checking the source is weaker than
-/// checking behaviour, and it is what remains once that argument is accepted.
+/// This asserts the invariant instead of a neighbourhood: EVERY site that can
+/// write a non-Admin role must sit in a function that holds `lock_workspaces()`,
+/// so the last-admin count and the write cannot interleave. Writing the literal
+/// `UserRole::Admin` is exempt and only that — a promotion cannot empty the
+/// admin set. Enumerating the sites rather than naming functions is the point:
+/// this found two role writers the previous test did not know existed.
+///
+/// LIMIT, stated because it is the same limit that let the old test pass: this
+/// checks that the ENCLOSING FUNCTION takes the lock somewhere, not that the
+/// lock is still held at the assignment. A writer reintroduced inside
+/// `add_user_to_domain` would satisfy it, because that function locks in its
+/// workspace-root branch. Verified by control — reintroducing exactly that
+/// leaves this test green. What forbids it is
+/// `every_role_writer_calls_the_guarded_writer` below, which requires the role
+/// change to go through the one function where lock, check and write are
+/// adjacent. Neither test is sufficient alone.
 #[test]
-fn every_role_writer_holds_the_workspace_lock() {
+fn every_demoting_role_write_is_under_the_workspace_lock() {
     let source = include_str!("../src/handlers/domain/server_ops/async_domain_server_ops.rs");
 
     // Comments stripped first: this campaign has already produced one source
     // assertion that matched the comment explaining the code's absence.
+    let lines: Vec<&str> = source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect();
+
+    // Where each `fn` begins, so an assignment can be attributed to its owner.
+    let fn_starts: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| {
+            let t = l.trim_start();
+            t.starts_with("fn ")
+                || t.starts_with("async fn ")
+                || t.starts_with("pub fn ")
+                || t.starts_with("pub async fn ")
+        })
+        .map(|(i, _)| i)
+        .collect();
+
+    let mut checked = 0usize;
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        // An assignment, not a comparison.
+        if !trimmed.contains(".role = ") {
+            continue;
+        }
+        // A promotion to Admin cannot empty the admin set.
+        if trimmed.contains(".role = UserRole::Admin;") {
+            continue;
+        }
+        checked += 1;
+
+        let owner_idx = *fn_starts
+            .iter()
+            .rfind(|&&f| f < i)
+            .expect("a role assignment outside any function");
+        let end = fn_starts
+            .iter()
+            .find(|&&f| f > owner_idx)
+            .copied()
+            .unwrap_or(lines.len());
+        let owner = lines[owner_idx].trim();
+        let body = lines[owner_idx..end].join("\n");
+
+        assert!(
+            body.contains("lock_workspaces()"),
+            "`{trimmed}` (line {}) sits in `{owner}`, which does not hold \
+             lock_workspaces(). Its last-admin check and its write can therefore \
+             interleave with another role writer: two admins demoting each other \
+             both pass the guard and the workspace is left with zero admins, \
+             which is unrecoverable because promotion requires an admin.",
+            i + 1
+        );
+    }
+
+    assert!(
+        checked >= 2,
+        "found only {checked} demoting role write(s). The two that exist are in \
+         write_user_role and remove_user_from_domain; finding fewer means this \
+         test's matcher has stopped seeing them and is asserting nothing."
+    );
+}
+
+/// Every caller that changes a role must go through the one guarded writer.
+#[test]
+fn every_role_writer_calls_the_guarded_writer() {
+    let source = include_str!("../src/handlers/domain/server_ops/async_domain_server_ops.rs");
     let code: String = source
         .lines()
         .filter(|line| !line.trim_start().starts_with("//"))
@@ -135,23 +216,34 @@ fn every_role_writer_holds_the_workspace_lock() {
 
     for writer in [
         "async fn update_workspace_member_role",
-        "async fn remove_user_from_domain",
+        "async fn add_user_to_domain",
     ] {
         let start = code
             .find(writer)
             .unwrap_or_else(|| panic!("{writer} no longer exists; update this test"));
-        // Up to the next top-level `async fn`, so a lock taken by a NEIGHBOUR
-        // cannot satisfy this.
         let rest = &code[start + writer.len()..];
         let end = rest.find("\n    async fn ").unwrap_or(rest.len());
         let body = &rest[..end];
 
         assert!(
-            body.contains("lock_workspaces()"),
-            "{writer} does not hold lock_workspaces(), so its last-admin check \
-             and its write can interleave with another role writer — two admins \
-             demoting each other both pass the guard and the workspace is left \
-             with zero admins, which is unrecoverable."
+            body.contains("write_user_role("),
+            "{writer} changes a user's role without going through write_user_role, \
+             so its last-admin check and its write are not under one lock."
         );
     }
+
+    let start = code
+        .find("async fn write_user_role")
+        .expect("write_user_role no longer exists; update this test");
+    let rest = &code[start..];
+    let end = rest[1..]
+        .find("\n    async fn ")
+        .map(|i| i + 1)
+        .unwrap_or(rest.len());
+    let body = &rest[..end];
+    assert!(
+        body.contains("lock_workspaces()") && body.contains("ensure_not_last_admin"),
+        "write_user_role must hold the workspace lock AND run the last-admin \
+         check; it is the single place both happen together."
+    );
 }

@@ -85,6 +85,50 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
         Ok(())
     }
 
+    /// Set a user's role, refusing any write that would empty the admin set.
+    ///
+    /// The lock is taken HERE rather than at the call sites, because it is the
+    /// check and the write TOGETHER that have to be atomic, and leaving that to
+    /// each caller is what produced the bug twice. `update_workspace_member_role`
+    /// took no lock at all; `add_user_to_domain` took one, but scoped to its
+    /// workspace-root branch, so it had already been dropped by the time the
+    /// demote check ran. Two admins demoting each other both counted two, both
+    /// passed, and both wrote — leaving zero admins, which
+    /// `ensure_not_last_admin` documents as unrecoverable, since promotion
+    /// requires an admin.
+    ///
+    /// `create_if_missing` is the only real difference between the two callers:
+    /// adding a member may invent the user record, changing a role may not.
+    async fn write_user_role(
+        &self,
+        user_id: &str,
+        role: UserRole,
+        domain_id: &str,
+        create_if_missing: bool,
+    ) -> Result<(), NetworkError> {
+        let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+
+        if role != UserRole::Admin {
+            self.ensure_not_last_admin(user_id, "demote").await?;
+        }
+
+        let mut user = match self.backend_tx_manager.get_user(user_id).await? {
+            Some(u) => u,
+            None if create_if_missing => {
+                User::new(user_id.to_string(), user_id.to_string(), role.clone())
+            }
+            None => return Err(NetworkError::msg("User not found")),
+        };
+
+        user.role = role;
+        user.set_role_permissions(domain_id);
+
+        self.backend_tx_manager
+            .insert_user(user_id.to_string(), user)
+            .await?;
+        Ok(())
+    }
+
     /// Create a new AsyncDomainServerOperations instance
     pub fn new(
         backend_tx_manager: Arc<BackendTransactionManager<R>>,
@@ -327,37 +371,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             self.backend_tx_manager.save_nodes(&nodes).await?;
         }
 
-        // Update user's role and permissions
-        let mut user = match self.backend_tx_manager.get_user(user_id_to_add).await? {
-            Some(u) => u,
-            None => {
-                // Create new user if doesn't exist
-                User::new(
-                    user_id_to_add.to_string(),
-                    user_id_to_add.to_string(),
-                    role.clone(),
-                )
-            }
-        };
-
-        // The third writer of `user.role`, and the one that was ungated.
-        //
-        // UpdateMemberRole and RemoveMember both call ensure_not_last_admin;
-        // this did not. Adding an EXISTING member with a lower role is a role
-        // change by another name, so the sole administrator adding themselves as
-        // Member left the workspace with no admin at all — and promotion
-        // requires an admin, so there is no way back. It is reachable from the
-        // ordinary "Add member" dialog by typing an existing admin's name.
-        if role != UserRole::Admin {
-            self.ensure_not_last_admin(user_id_to_add, "demote").await?;
-        }
-        user.role = role;
-
-        // Use the set_role_permissions method to properly set permissions for this domain
-        user.set_role_permissions(domain_id);
-
-        self.backend_tx_manager
-            .insert_user(user_id_to_add.to_string(), user)
+        // Role write and last-admin check, both under one lock. See
+        // `write_user_role`: this used to run with no lock held at all, because
+        // the guard above is scoped to the workspace-root branch and has been
+        // dropped by the time execution reaches here.
+        self.write_user_role(user_id_to_add, role, domain_id, true)
             .await?;
 
         Ok(())
@@ -479,38 +497,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             ));
         }
 
-        // Held across the check AND the write below. `last_admin_race_test.rs`
-        // states the contract — "in all three role writers" — and this was the
-        // writer that never took it: two admins demoting each other both counted
-        // two admins, both passed the guard, and both wrote. Zero admins is a
-        // state this file's own documentation calls unrecoverable, because
-        // promotion requires an admin.
-        let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
-
-        if role != UserRole::Admin {
-            self.ensure_not_last_admin(target_user_id, "demote").await?;
-        }
-
-        // Get user and update role
-        let mut user = match self.backend_tx_manager.get_user(target_user_id).await? {
-            Some(u) => u,
-            None => return Err(NetworkError::msg("User not found")),
-        };
-
-        // Update the role
-        user.role = role;
-
-        // Update permissions for the workspace domain based on the new role
-        user.set_role_permissions(crate::WORKSPACE_ROOT_ID);
+        // See `write_user_role` — the lock, the last-admin check and the write
+        // are one unit, and this was the writer that never took the lock.
+        self.write_user_role(target_user_id, role, crate::WORKSPACE_ROOT_ID, false)
+            .await?;
 
         // Handle metadata if provided
         if let Some(_metadata_bytes) = metadata {
             // TODO: Handle metadata updates when needed
         }
 
-        self.backend_tx_manager
-            .insert_user(target_user_id.to_string(), user)
-            .await?;
         Ok(())
     }
 
