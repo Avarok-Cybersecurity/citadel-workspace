@@ -221,6 +221,13 @@ jobs:
         # and says nothing for six hours. The slowest job here is 41 minutes.
         # Budgets are roughly twice the observed maximum, recorded beside each.
         run: node scripts/check-ci-job-timeouts.mjs
+      - name: Every Rust file is actually compiled
+        # `handlers/permissions.rs` sat in the tree behind a commented-out
+        # `// pub mod permissions;`, carrying a role table that granted
+        # SendMessages to no role at all. Nothing compiled it, so no test could
+        # fail on it and clippy could not see it -- and it read as maintained
+        # code contradicting the table enforcement should use.
+        run: node scripts/check-rust-modules-are-compiled.mjs
       - name: Every network fetch in an image build is retried
         # docker/sync installed wasm-pack with one `curl … | sh`. A run died on
         # "curl: (35) Recv failure: Connection reset by peer" and took
