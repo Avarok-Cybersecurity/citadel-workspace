@@ -617,8 +617,8 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             reply_to,
             mentions,
         } => {
-            use crate::kernel::group_access::{authorize_group_access, GROUP_ACCESS_DENIED};
-            if authorize_group_access(kernel, actor_user_id, group_id)
+            use crate::kernel::group_access::{authorize_group_write, GROUP_ACCESS_DENIED};
+            if authorize_group_write(kernel, actor_user_id, group_id)
                 .await
                 .is_none()
             {
@@ -693,8 +693,8 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             message_id,
             new_content,
         } => {
-            use crate::kernel::group_access::{authorize_group_access, GROUP_ACCESS_DENIED};
-            if authorize_group_access(kernel, actor_user_id, group_id)
+            use crate::kernel::group_access::{authorize_group_write, GROUP_ACCESS_DENIED};
+            if authorize_group_write(kernel, actor_user_id, group_id)
                 .await
                 .is_none()
             {
@@ -777,8 +777,8 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             group_id,
             message_id,
         } => {
-            use crate::kernel::group_access::{authorize_group_access, GROUP_ACCESS_DENIED};
-            if authorize_group_access(kernel, actor_user_id, group_id)
+            use crate::kernel::group_access::{authorize_group_write, GROUP_ACCESS_DENIED};
+            if authorize_group_write(kernel, actor_user_id, group_id)
                 .await
                 .is_none()
             {
@@ -852,8 +852,8 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             before_timestamp,
             limit,
         } => {
-            use crate::kernel::group_access::{authorize_group_access, GROUP_ACCESS_DENIED};
-            if authorize_group_access(kernel, actor_user_id, group_id)
+            use crate::kernel::group_access::{authorize_group_read, GROUP_ACCESS_DENIED};
+            if authorize_group_read(kernel, actor_user_id, group_id)
                 .await
                 .is_none()
             {
@@ -886,8 +886,8 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             group_id,
             parent_message_id,
         } => {
-            use crate::kernel::group_access::{authorize_group_access, GROUP_ACCESS_DENIED};
-            if authorize_group_access(kernel, actor_user_id, group_id)
+            use crate::kernel::group_access::{authorize_group_read, GROUP_ACCESS_DENIED};
+            if authorize_group_read(kernel, actor_user_id, group_id)
                 .await
                 .is_none()
             {

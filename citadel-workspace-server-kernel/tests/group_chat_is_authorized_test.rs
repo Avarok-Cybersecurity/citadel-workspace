@@ -30,11 +30,16 @@ mod common {
 const CHANNEL: &str = "chat-channel-under-test";
 const ROOM_ID: &str = "room-under-test";
 const MEMBER: &str = "room_member";
+const GUEST: &str = "room_guest";
 const OUTSIDER: &str = "not_in_this_workspace";
 
 type Kernel = AsyncWorkspaceServerKernel<MonoRatchet>;
 
 async fn add_user(kernel: &Kernel, id: &str) {
+    add_user_with_role(kernel, id, UserRole::Member).await
+}
+
+async fn add_user_with_role(kernel: &Kernel, id: &str, role: UserRole) {
     kernel
         .domain_operations
         .backend_tx_manager
@@ -43,7 +48,7 @@ async fn add_user(kernel: &Kernel, id: &str) {
             User {
                 id: id.to_string(),
                 name: id.to_string(),
-                role: UserRole::Member,
+                role,
                 permissions: HashMap::new(),
                 metadata: Default::default(),
             },
@@ -309,5 +314,96 @@ async fn membership_of_the_parent_still_grants_the_childs_chat() {
         !is_denied(&response),
         "if this ever starts denying, room membership stopped inheriting and the \
          seeded offices' chat just went dark for everyone: got {response:?}"
+    );
+}
+
+/// A role whose own definition says "read-only access" must be read-only.
+///
+/// Every group-messaging handler asked `authorize_group_access`, which checked
+/// `Permission::ViewContent`. `Permission::for_role` grants a Guest
+/// `ViewContent` and nothing else — the comment there says "Guest permissions -
+/// read-only access" — while a Member additionally holds `SendMessages`.
+///
+/// So the three handlers that WRITE asked the read question, and a Guest could
+/// post into, edit and delete chat in every room it was allowed to see. The
+/// permission to write existed and was never consulted.
+///
+/// Authorship is a separate gate, checked at the edit and delete handlers; this
+/// is about whether the account may write at all.
+async fn seed_guest_in_room(kernel: &Kernel) {
+    add_user(kernel, MEMBER).await;
+    add_user_with_role(kernel, GUEST, UserRole::Guest).await;
+    add_room_with_chat(kernel).await;
+
+    // In the room, so this is purely about the role and not about membership.
+    let mut nodes = kernel
+        .domain_operations
+        .backend_tx_manager
+        .get_all_nodes()
+        .await
+        .expect("nodes");
+    if let Some(room) = nodes.get_mut(ROOM_ID) {
+        room.members.push(GUEST.to_string());
+    }
+    kernel
+        .domain_operations
+        .backend_tx_manager
+        .save_nodes(&nodes)
+        .await
+        .expect("save nodes");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_guest_may_read_the_channel_it_belongs_to() {
+    // The control for the two below: if a Guest could not read either, the
+    // denials there would prove nothing about writing.
+    let kernel = create_test_kernel().await;
+    seed_guest_in_room(&kernel).await;
+
+    let response = process_command_with_user(&kernel, &read(CHANNEL), GUEST)
+        .await
+        .expect("read");
+
+    assert!(
+        !is_denied(&response),
+        "a Guest in the room was refused the read its role exists to allow"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_guest_cannot_post_into_a_channel_it_can_read() {
+    let kernel = create_test_kernel().await;
+    seed_guest_in_room(&kernel).await;
+
+    let response = process_command_with_user(&kernel, &post(CHANNEL), GUEST)
+        .await
+        .expect("post");
+
+    assert!(
+        is_denied(&response),
+        "a read-only Guest posted into the room: the write handlers asked \
+         ViewContent, which is the one permission a Guest holds"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_guest_cannot_delete_a_message() {
+    let kernel = create_test_kernel().await;
+    seed_guest_in_room(&kernel).await;
+
+    let response = process_command_with_user(
+        &kernel,
+        &WorkspaceProtocolRequest::DeleteGroupMessage {
+            group_id: CHANNEL.to_string(),
+            message_id: "any".to_string(),
+        },
+        GUEST,
+    )
+    .await
+    .expect("delete");
+
+    assert!(
+        is_denied(&response),
+        "a read-only Guest reached the delete handler"
     );
 }

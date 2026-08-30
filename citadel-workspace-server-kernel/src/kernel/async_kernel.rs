@@ -1532,8 +1532,8 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                         // the socket belongs to, so it is the only
                                         // place the check can be made.
                                         if let BroadcastAudience::Group(ref group_id) = broadcast_msg.audience {
-                                            use crate::kernel::group_access::authorize_group_access;
-                                            if authorize_group_access(&this, &user_id, group_id).await.is_none() {
+                                            use crate::kernel::group_access::authorize_group_read;
+                                            if authorize_group_read(&this, &user_id, group_id).await.is_none() {
                                                 continue;
                                             }
                                         }
