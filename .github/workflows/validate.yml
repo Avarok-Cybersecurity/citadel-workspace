@@ -635,6 +635,15 @@ jobs:
         if: matrix.project == 'citadel-workspaces'
         run: node scripts/check-clickables-are-keyboard-reachable.mjs
         working-directory: citadel-workspaces
+      - name: No new forced clicks in the responsive suite
+        # `force: true` skips the check for "covered by something else", which
+        # is what the responsive suite exists to find — one of its own tests is
+        # "workspace shell has no unhittable controls". It cost a real
+        # diagnosis: the notification bell was clicked through an overlay and
+        # the assertion timed out with nothing to say.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-forced-clicks-are-justified.mjs
+        working-directory: citadel-workspaces
       - name: One answer to which session this is
         # The CID priority chain -- instance manager, tab selection, tab
         # session, and the global connection LAST -- existed three times. One
