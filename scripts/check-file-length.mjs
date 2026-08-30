@@ -57,7 +57,6 @@ const SKIP = new Map([
   // and still the first file that should be split.
   ['components/ui/sidebar.tsx', 487],
   ['components/layout/sidebar/TreeNodesSection.tsx', 356],
-  ['components/p2p/ChatSettingsPanel.tsx', 272],
   ['lib/file-transfer/service.ts', 324],
   // 313: two data-testid attributes, so the integration suite's readiness
   // probe can stop keying on button copy — see ROBUSTNESS round 168.
