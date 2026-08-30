@@ -618,6 +618,15 @@ jobs:
         if: matrix.project == 'citadel-workspaces'
         run: node scripts/check-modules-are-imported.mjs
         working-directory: citadel-workspaces
+      - name: Every test id a spec addresses exists
+        # The other testid check argues you should not press a control by its
+        # copy. Nothing checked the testid then EXISTS: two specs addressed
+        # `workspace-switcher` and `workspace-name`, the app rendered neither,
+        # and the lookup spent three seconds matching nothing before falling
+        # back to a chevron's CSS class.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-testids-exist.mjs
+        working-directory: citadel-workspaces
       - name: One answer to which session this is
         # The CID priority chain -- instance manager, tab selection, tab
         # session, and the global connection LAST -- existed three times. One
