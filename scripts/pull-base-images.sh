@@ -23,6 +23,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ATTEMPTS="${PULL_ATTEMPTS:-5}"
 
+# How long one pull may take before it is treated as stalled.
+PULL_TIMEOUT="${PULL_TIMEOUT:-300}"
+
 # `FROM <ref> [AS <stage>]`, keeping only refs that name a registry image.
 # A bare `FROM builder AS dev` refers to an earlier stage in the same file and
 # has nothing to pull; requiring a tag or a registry path excludes those.
@@ -46,12 +49,20 @@ if [ ${#IMAGES[@]} -eq 0 ]; then
   exit 1
 fi
 
-echo "Pre-pulling ${#IMAGES[@]} base image(s), ${ATTEMPTS} attempts each."
+echo "Pre-pulling ${#IMAGES[@]} base image(s), ${ATTEMPTS} attempts each, ${PULL_TIMEOUT}s each."
 
 failed=()
 for image in "${IMAGES[@]}"; do
   for attempt in $(seq 1 "$ATTEMPTS"); do
-    if docker pull --quiet "$image" >/dev/null 2>&1; then
+    # `timeout`, because a retry loop is no defence against a HANG. Retries
+    # answer a pull that FAILS; a pull that stalls holds the loop on attempt
+    # one until the job budget kills the whole thing. `test:settings-controls`
+    # was cancelled that way in run 33308312708 -- its last step was this
+    # script and its orphan process was `docker`.
+    #
+    # Same lesson as the browser install in round 440, in the script that
+    # already had the retries and not the bound.
+    if timeout "$PULL_TIMEOUT" docker pull --quiet "$image" >/dev/null 2>&1; then
       echo "  ok   $image"
       break
     fi
