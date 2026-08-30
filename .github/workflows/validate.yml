@@ -600,6 +600,16 @@ jobs:
         if: matrix.project == 'citadel-workspaces'
         run: node scripts/check-presence-is-not-invented.mjs
         working-directory: citadel-workspaces
+      - name: A promise is not a boolean
+        # `getOrCreateConversation` put an async `isPeerConnected(cid)` in the
+        # middle of an `||` chain. A pending Promise is truthy, so every new
+        # conversation opened as Online with a fresh lastUpdate -- presence
+        # invented from a value nobody awaited. The gate above did not see it:
+        # it watches the files where presence had been wrong before, not the
+        # mechanism.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-a-promise-is-not-a-boolean.mjs
+        working-directory: citadel-workspaces
       - name: One answer to which session this is
         # The CID priority chain -- instance manager, tab selection, tab
         # session, and the global connection LAST -- existed three times. One
