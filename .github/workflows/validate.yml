@@ -235,6 +235,13 @@ jobs:
         # the submodule's workflow had three more that would have shipped
         # unwrapped.
         run: node scripts/check-browser-installs-are-bounded.mjs
+      - name: Network fetches are bounded, not only retried
+        # Two jobs were killed by their budgets in consecutive runs, both in
+        # steps that already retried: `playwright install` for 55 minutes, and
+        # `pull-base-images.sh` with an orphan `docker`. A retry answers a fetch
+        # that fails; a fetch that stalls holds attempt one until something
+        # outside kills the job, and the log shows no failure at all.
+        run: node scripts/check-network-fetches-are-bounded.mjs
       - name: Every network fetch in an image build is retried
         # docker/sync installed wasm-pack with one `curl … | sh`. A run died on
         # "curl: (35) Recv failure: Connection reset by peer" and took
