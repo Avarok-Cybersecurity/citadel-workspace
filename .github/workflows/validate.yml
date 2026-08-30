@@ -228,6 +228,13 @@ jobs:
         # fail on it and clippy could not see it -- and it read as maintained
         # code contradicting the table enforcement should use.
         run: node scripts/check-rust-modules-are-compiled.mjs
+      - name: Browser installs retry and are bounded
+        # `test:notifications` spent 55 minutes on `playwright install` and was
+        # killed by its job budget without running a test. npm retries its own
+        # fetches; this CDN download does not. Three steps here were wrapped and
+        # the submodule's workflow had three more that would have shipped
+        # unwrapped.
+        run: node scripts/check-browser-installs-are-bounded.mjs
       - name: Every network fetch in an image build is retried
         # docker/sync installed wasm-pack with one `curl … | sh`. A run died on
         # "curl: (35) Recv failure: Connection reset by peer" and took
