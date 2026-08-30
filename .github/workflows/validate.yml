@@ -642,6 +642,15 @@ jobs:
         if: matrix.project == 'citadel-workspaces'
         run: node scripts/check-clickables-are-keyboard-reachable.mjs
         working-directory: citadel-workspaces
+      - name: No error is discarded without a word
+        # CLAUDE.md: never silently swallow errors. Thirty catches already carry
+        # a comment saying why silence is right; three did not, and two of those
+        # hid a stale peer roster and a ringtone that would not stop -- both of
+        # which present as protocol faults with nothing anywhere to say
+        # otherwise.
+        if: matrix.project == 'citadel-workspaces'
+        run: node scripts/check-errors-are-not-swallowed.mjs
+        working-directory: citadel-workspaces
       - name: No new forced clicks in the responsive suite
         # `force: true` skips the check for "covered by something else", which
         # is what the responsive suite exists to find — one of its own tests is
