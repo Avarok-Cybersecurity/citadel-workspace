@@ -225,21 +225,37 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
         }
 
         // Check permission inheritance via DomainNode tree — walk up parent chain
-        if let Some(node) = self.backend_tx_manager.get_node(entity_id).await? {
-            let mut current_parent = node.parent_id.clone();
+        //
+        // Guarded by a visited set. A cycle in `parent_id` is nothing the
+        // mutation validators will create, but it can arrive by corruption or a
+        // manual backend edit — and `is_ancestor_of` in tree_validator grew
+        // exactly this guard for exactly that reason. Unguarded, one bad edge
+        // does not fail one request: this walk runs on EVERY permission check,
+        // so it would hang every request in the workspace forever.
+        //
+        // One snapshot of the node map, not one `get_node` per hop: `get_node`
+        // deserialises the ENTIRE map each call, so the per-hop form cost
+        // O(depth × N) on every permission check on every request. One read is
+        // also one consistent view of the tree.
+        let nodes = self.backend_tx_manager.get_all_nodes().await?;
+        if let Some(node) = nodes.get(entity_id) {
+            let mut visited: std::collections::HashSet<&str> = std::collections::HashSet::new();
+            visited.insert(entity_id);
+            let mut current_parent = node.parent_id.as_deref();
             while let Some(pid) = current_parent {
-                if let Some(parent_perms) = user.permissions.get(&pid) {
+                if let Some(parent_perms) = user.permissions.get(pid) {
                     if parent_perms.contains(&permission) || parent_perms.contains(&Permission::All)
                     {
                         return Ok(true);
                     }
                 }
-                // Continue up the tree
-                if let Some(parent_node) = self.backend_tx_manager.get_node(&pid).await? {
-                    current_parent = parent_node.parent_id.clone();
-                } else {
+                if !visited.insert(pid) {
+                    // Already-walked ancestor: the chain is cyclic. Nothing new
+                    // can grant the permission, so fall through to membership.
                     break;
                 }
+                // Continue up the tree
+                current_parent = nodes.get(pid).and_then(|n| n.parent_id.as_deref());
             }
         }
 
@@ -285,15 +301,39 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
             return Ok(workspace.members.contains(&user_id.to_string()));
         }
 
-        // For all other entities, use DomainNode tree storage
-        if let Some(node) = self.backend_tx_manager.get_node(domain_id).await? {
-            if node.members.contains(&user_id.to_string()) {
+        // For all other entities, use DomainNode tree storage.
+        //
+        // An iterative walk with a visited set, not recursion. The recursive
+        // form had no cycle guard, so a corrupted `parent_id` chain recursed
+        // without bound — and like the walk in `check_entity_permission`, this
+        // runs on permission checks, so one bad edge would take every request
+        // with it. Each level still tries the Workspace record first, exactly
+        // as the recursion did: the top of every office chain is a workspace
+        // id, which exists only as a Workspace record, never as a stored node.
+        //
+        // One snapshot of the node map for the whole walk — the recursion's
+        // per-level `get_node` deserialised the entire map each time,
+        // O(depth × N) per membership check.
+        let user_id_owned = user_id.to_string();
+        let nodes = self.backend_tx_manager.get_all_nodes().await?;
+        let mut visited: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        let mut current = domain_id;
+        while visited.insert(current) {
+            let node = match nodes.get(current) {
+                Some(node) => node,
+                None => break,
+            };
+            if node.members.contains(&user_id_owned) {
                 return Ok(true);
             }
-            // Check parent for inheritance
-            if let Some(parent_id) = &node.parent_id {
-                return self.is_member_of_domain(user_id, parent_id).await;
+            let parent_id = match node.parent_id.as_deref() {
+                Some(parent_id) => parent_id,
+                None => break,
+            };
+            if let Some(workspace) = self.backend_tx_manager.get_workspace(parent_id).await? {
+                return Ok(workspace.members.contains(&user_id_owned));
             }
+            current = parent_id;
         }
 
         Ok(false)
@@ -504,7 +544,22 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             self.backend_tx_manager.save_nodes(&nodes).await?;
         }
 
-        // Remove permissions from user
+        // Remove the user's own `permissions[domain_id]` grant, under the lock
+        // every other user-record writer takes. This read-modify-write ran with
+        // NO lock — both branch guards above are scoped to their branches and
+        // have dropped by the time execution reaches here — which is the third
+        // site of the race `write_user_role` and `delete_workspace`'s cleanup
+        // both document: a concurrent user write lands between `get_user` and
+        // `insert_user` and one side is silently lost. Lost here means either a
+        // concurrent role change is reverted, or this removal is — and
+        // `check_entity_permission` honours `user.permissions[domain_id]`
+        // BEFORE membership, so a surviving grant keeps the removed user's
+        // access enforceable.
+        //
+        // Taken fresh rather than held from the workspace branch: tokio's Mutex
+        // is not reentrant, and the branch guards are gone by now, so this
+        // cannot deadlock with them.
+        let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
         if let Some(mut user) = self.backend_tx_manager.get_user(user_id_to_remove).await? {
             user.permissions.remove(domain_id);
             self.backend_tx_manager

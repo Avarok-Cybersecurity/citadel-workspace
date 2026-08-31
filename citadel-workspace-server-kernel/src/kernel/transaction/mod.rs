@@ -61,6 +61,14 @@ pub struct BackendTransactionManager<R: Ratchet> {
     /// can hold the guard across the whole get → modify → insert sequence.
     /// tokio's Mutex is not reentrant; if that changes, this breaks.
     workspace_mutex: Arc<tokio::sync::Mutex<()>>,
+
+    /// Test-only fault injection: keys whose deletes fail with an injected
+    /// error. The in-memory `test_storage` cannot fail a delete, so failure
+    /// ordering (e.g. "purge failed after the tree was saved") is otherwise
+    /// untestable. `#[cfg(test)]`-gated: absent from every non-test build,
+    /// including the integration-test build of this crate as a dependency.
+    #[cfg(test)]
+    failing_delete_keys: Arc<RwLock<std::collections::HashSet<String>>>,
 }
 
 impl<R: Ratchet + Send + Sync + 'static> Default for BackendTransactionManager<R> {
@@ -126,7 +134,22 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             group_msg_mutex: Arc::new(tokio::sync::Mutex::new(())),
             node_mutex: Arc::new(tokio::sync::Mutex::new(())),
             workspace_mutex: Arc::new(tokio::sync::Mutex::new(())),
+            #[cfg(test)]
+            failing_delete_keys: Arc::new(RwLock::new(std::collections::HashSet::new())),
         }
+    }
+
+    /// Test-only: make every delete of `key` fail until cleared. See
+    /// `failing_delete_keys`.
+    #[cfg(test)]
+    pub(crate) fn fail_deletes_of(&self, key: &str) {
+        self.failing_delete_keys.write().insert(key.to_string());
+    }
+
+    /// Test-only: clear an injected delete fault for `key`.
+    #[cfg(test)]
+    pub(crate) fn clear_delete_fault(&self, key: &str) {
+        self.failing_delete_keys.write().remove(key);
     }
 
     /// Set the NodeRemote instance
@@ -224,6 +247,13 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
 
     /// Generic delete: removes a key from the backend.
     async fn backend_delete(&self, key: &str) -> Result<(), NetworkError> {
+        #[cfg(test)]
+        if self.failing_delete_keys.read().contains(key) {
+            return Err(NetworkError::msg(format!(
+                "injected delete fault for key '{key}'"
+            )));
+        }
+
         if self.node_remote.read().is_none() {
             self.test_storage.write().remove(key);
             return Ok(());

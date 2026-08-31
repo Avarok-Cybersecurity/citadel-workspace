@@ -464,14 +464,6 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             .filter_map(|id| nodes.get(id).and_then(|n| n.chat_channel_id.clone()))
             .collect();
 
-        // Remove all deleted nodes
-        for id in &deleted_ids {
-            nodes.remove(id);
-        }
-
-        // Save updated nodes
-        self.backend_tx_manager.save_nodes(&nodes).await?;
-
         // And the messages those rooms held. Removing the node removed the only
         // reference to `citadel_workspace.group_messages.<key>`; the messages
         // themselves stayed in the backend forever, unreachable and so
@@ -483,15 +475,31 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         // every deleted room's history survived exactly as before. A node with
         // no chat channel has no history and contributes nothing here.
         //
-        // After the nodes are saved, not before: if this fails the tree is
-        // already correct and the leftover keys are recoverable by deleting
-        // again, whereas failing first would leave a room whose history is gone
-        // but which is still listed and still writable.
+        // BEFORE the nodes are saved, not after. An earlier ordering saved the
+        // tree first, reasoning that a failed purge was "recoverable by
+        // deleting again" -- but it was not: the save had already removed the
+        // node, so a retry hit `validate_delete`'s NodeNotFound, and with the
+        // node gone nothing knew the channel key any more. A purge failure
+        // after the save therefore returned Err for a deletion that had
+        // persisted, AND orphaned the remaining channels' history forever.
+        // Failing HERE leaves the tree untouched in the backend (the map above
+        // is only in memory), so deleting again genuinely retries: already
+        // purged channels purge again as no-ops, the rest get their turn, and
+        // the state converges. The worst partial state -- some history gone,
+        // room still listed -- is repaired by the same retry.
         for channel_id in &deleted_channels {
             self.backend_tx_manager
                 .delete_all_group_messages(channel_id)
                 .await?;
         }
+
+        // Remove all deleted nodes
+        for id in &deleted_ids {
+            nodes.remove(id);
+        }
+
+        // Save updated nodes
+        self.backend_tx_manager.save_nodes(&nodes).await?;
 
         Ok(deleted_ids)
     }

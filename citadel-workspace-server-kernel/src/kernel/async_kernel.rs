@@ -693,6 +693,29 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// write would turn a completed seed into a crash loop, and the next boot would short-circuit
     /// on `seeded` anyway. Every site that discharges the obligation goes through here, so they
     /// cannot drift into treating the same write as fatal in one place and optional in another.
+    /// Full-tree integrity check over the persisted node map: single root, no
+    /// dangling parents, no cycles, reachability, schema depth/type limits.
+    ///
+    /// This is the check `tree_validator`'s doc always said to run "on startup
+    /// and after migrations" — and which nothing called, so every full-tree
+    /// invariant was enforced nowhere. Per-mutation validation only vets the
+    /// step being taken; corruption that arrives any other way (a manual
+    /// backend edit, a bug in an older binary, a bad migration) was invisible
+    /// until some walker tripped over it at request time.
+    ///
+    /// A `Result` rather than a log so tests can assert on it; `on_start`
+    /// logs the Err and continues — see the comment there for why a corrupted
+    /// store must not refuse to boot.
+    pub async fn validate_stored_tree(&self) -> Result<(), NetworkError> {
+        let backend = &self.domain_operations.backend_tx_manager;
+        let nodes = backend.get_all_nodes().await?;
+        let schema = backend.get_tree_schema_or_default().await?;
+        crate::handlers::domain::tree_validator::TreeValidator::validate_tree_with_schema(
+            &nodes, &schema,
+        )
+        .map_err(|e| NetworkError::msg(format!("Stored tree failed integrity validation: {e}")))
+    }
+
     async fn discharge_seed_obligation(&self) {
         if let Err(e) = self
             .domain_operations
@@ -1215,6 +1238,21 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     );
                 }
             }
+        }
+
+        // Full-tree integrity check, after seeding and migrations have run.
+        // Logged, not fatal: refusing to boot on a corrupted store would take
+        // down the only tool capable of repairing it (and crash-loop the
+        // container against the same store forever). The runtime is defended
+        // in depth regardless — every mutation is validated before it applies,
+        // and the ancestor walkers are cycle-guarded — so this check's job is
+        // to make corruption VISIBLE at a known moment instead of surfacing as
+        // an inexplicable request-time failure.
+        if let Err(e) = self.validate_stored_tree().await {
+            error!(
+                target: "citadel",
+                "{e} — continuing startup; mutations remain individually validated"
+            );
         }
 
         Ok(())

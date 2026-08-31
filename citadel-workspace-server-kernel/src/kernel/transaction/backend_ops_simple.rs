@@ -135,8 +135,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     }
 
     /// Remove a workspace: delete entity + password, then remove from
-    /// index. On index-write failure, re-saves the entity so it
-    /// remains visible to `get_all_workspaces`.
+    /// index. Every failure after the entity delete rolls the entity
+    /// back, so an Err from this function always means the workspace
+    /// still exists.
     ///
     /// Also deletes the per-workspace password key. Without this, the
     /// password value stored at `citadel_workspace.password.{id}`
@@ -144,24 +145,37 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// removed, leaking secret material indefinitely and risking
     /// re-association if a workspace ID were ever reused.
     ///
-    /// The password is intentionally NOT restored on rollback: a
-    /// failed remove leaves the workspace itself recoverable, but
-    /// callers must re-set the password explicitly. Caching the
-    /// plaintext password just to support a rare rollback path would
-    /// keep secret material live in memory longer than necessary.
+    /// The rollback used to be asymmetric: only the index failure
+    /// restored the entity, so a `delete_password_key` failure
+    /// reported Err with the workspace payload already gone — a
+    /// workspace silently deleted under an error report. And the
+    /// index-failure rollback restored the entity but not the
+    /// password, leaving a workspace whose password-gated operations
+    /// (update, delete) could never authenticate again — nothing
+    /// reachable re-sets a password for an already-created workspace.
+    /// The password is therefore read up front so both rollbacks can
+    /// put back everything they took; it lives in memory only for the
+    /// duration of this call, which the delete path required anyway.
     pub async fn remove_workspace(
         &self,
         workspace_id: &str,
     ) -> Result<Option<Workspace>, NetworkError> {
         let removed = self.get_workspace_by_key(workspace_id).await?;
         if let Some(ref w) = removed {
+            let password = self.get_password_by_key(workspace_id).await?;
             self.delete_workspace_key(workspace_id).await?;
-            self.delete_password_key(workspace_id).await?;
+            if let Err(e) = self.delete_password_key(workspace_id).await {
+                let _ = self.save_workspace_by_key(workspace_id, w).await;
+                return Err(e);
+            }
             if let Err(e) = self
                 .remove_from_index(KEY_INDEX_WORKSPACE_IDS, workspace_id)
                 .await
             {
                 let _ = self.save_workspace_by_key(workspace_id, w).await;
+                if let Some(ref p) = password {
+                    let _ = self.save_password_by_key(workspace_id, p).await;
+                }
                 return Err(e);
             }
         }
@@ -366,7 +380,8 @@ mod rollback_tests {
     use super::*;
     use crate::kernel::transaction::{
         BackendTransactionManager, KEY_INDEX_DOMAIN_IDS, KEY_INDEX_USER_IDS,
-        KEY_INDEX_WORKSPACE_IDS, KEY_PREFIX_DOMAIN, KEY_PREFIX_USER, KEY_PREFIX_WORKSPACE,
+        KEY_INDEX_WORKSPACE_IDS, KEY_PREFIX_DOMAIN, KEY_PREFIX_PASSWORD, KEY_PREFIX_USER,
+        KEY_PREFIX_WORKSPACE,
     };
     use citadel_sdk::prelude::StackedRatchet;
 
@@ -542,5 +557,84 @@ mod rollback_tests {
             mgr.backend_get::<Workspace>(&key).await.unwrap().is_some(),
             "workspace payload must be restored on index-removal failure"
         );
+    }
+
+    /// The index-failure rollback must put back EVERYTHING the deletion took —
+    /// the password included. It used to restore only the entity: the password
+    /// key was already deleted, nothing re-saved it, and no reachable path
+    /// re-sets a password for an already-created workspace — so the "restored"
+    /// workspace could never again pass its password-gated operations
+    /// (update, delete). Locked out permanently, by a rollback.
+    #[tokio::test]
+    async fn remove_workspace_restores_password_when_index_removal_fails() {
+        let mgr = fresh();
+        mgr.insert_workspace("w1".to_string(), ws("w1"))
+            .await
+            .expect("seed");
+        mgr.set_workspace_password("w1", "hunter2")
+            .await
+            .expect("seed password");
+        poison_index(&mgr, KEY_INDEX_WORKSPACE_IDS);
+
+        let _ = mgr
+            .remove_workspace("w1")
+            .await
+            .expect_err("must surface index-removal failure");
+
+        assert_eq!(
+            mgr.get_password_by_key("w1").await.unwrap().as_deref(),
+            Some("hunter2"),
+            "the password must be restored with the workspace, or its \
+             password-gated operations are locked out forever"
+        );
+    }
+
+    /// An Err from remove_workspace must mean the workspace still exists.
+    /// The rollback used to be asymmetric: only the INDEX failure restored the
+    /// entity. A `delete_password_key` failure propagated with the workspace
+    /// payload already deleted and nothing restored — the caller was told the
+    /// deletion failed while the workspace had silently vanished.
+    #[tokio::test]
+    async fn remove_workspace_rolls_back_entity_when_password_delete_fails() {
+        let mgr = fresh();
+        mgr.insert_workspace("w2".to_string(), ws("w2"))
+            .await
+            .expect("seed");
+        mgr.set_workspace_password("w2", "s3cret")
+            .await
+            .expect("seed password");
+        let password_key = format!("{KEY_PREFIX_PASSWORD}w2");
+        mgr.fail_deletes_of(&password_key);
+
+        let _ = mgr
+            .remove_workspace("w2")
+            .await
+            .expect_err("must surface the password-delete failure");
+
+        let entity_key = format!("{KEY_PREFIX_WORKSPACE}w2");
+        assert!(
+            mgr.backend_get::<Workspace>(&entity_key)
+                .await
+                .unwrap()
+                .is_some(),
+            "Err from remove_workspace must mean the workspace still exists — \
+             the entity payload has to be rolled back"
+        );
+        assert_eq!(
+            mgr.get_password_by_key("w2").await.unwrap().as_deref(),
+            Some("s3cret"),
+            "the failed delete left the password untouched"
+        );
+
+        // The failure is transient by construction; once it clears, the SAME
+        // call must succeed. Err-means-still-there is what makes retry sound.
+        mgr.clear_delete_fault(&password_key);
+        mgr.remove_workspace("w2").await.expect("retry succeeds");
+        assert!(mgr
+            .backend_get::<Workspace>(&entity_key)
+            .await
+            .unwrap()
+            .is_none());
+        assert!(mgr.get_password_by_key("w2").await.unwrap().is_none());
     }
 }
