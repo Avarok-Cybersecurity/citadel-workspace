@@ -9,5 +9,4 @@ pub mod domain;
 // can be read as authoritative and wired back in, which would have restored
 // exactly the refusal round 409 removed. Deleted rather than repaired; git
 // remembers it if the sync kernel ever returns.
-// pub mod query;  // Commented out - depends on sync WorkspaceServerKernel
 // pub mod room;  // Commented out - depends on sync WorkspaceServerKernel
