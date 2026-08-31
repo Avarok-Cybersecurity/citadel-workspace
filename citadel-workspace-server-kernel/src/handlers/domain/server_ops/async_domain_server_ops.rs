@@ -311,10 +311,26 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         domain_id: &str,
         role: UserRole,
     ) -> Result<(), NetworkError> {
-        // Check permissions - admins can manage members
-        if !self.is_admin(admin_id).await? {
+        // Asked as the permission, not as the role.
+        //
+        // `GetUserPermissions` reports what `Permission::for_role` grants, and
+        // an Owner is granted everything except `All` and `ConfigureSystem` --
+        // AddUsers included. This gate asked `is_admin`, so the permission editor
+        // displayed a grant that enforcement then refused, and any client that
+        // gated its controls on the reported set (which that endpoint's own doc
+        // invites) would ship dead buttons.
+        //
+        // `check_entity_permission` returns true for admins first, so this is a
+        // widening only to holders of AddUsers: Owner, and Custom roles above the
+        // editor rank. Member, Guest and Banned have it in no role table, and
+        // it is scoped by `is_member_of_domain`, so an Owner of one workspace
+        // gains nothing in another.
+        if !self
+            .check_entity_permission(admin_id, domain_id, Permission::AddUsers)
+            .await?
+        {
             return Err(NetworkError::msg(
-                "Permission denied: Only admins can manage members",
+                "Permission denied: AddUsers is required to manage members",
             ));
         }
 
@@ -387,10 +403,26 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         user_id_to_remove: &str,
         domain_id: &str,
     ) -> Result<(), NetworkError> {
-        // Check permissions - admins can manage members
-        if !self.is_admin(admin_id).await? {
+        // Asked as the permission, not as the role.
+        //
+        // `GetUserPermissions` reports what `Permission::for_role` grants, and
+        // an Owner is granted everything except `All` and `ConfigureSystem` --
+        // RemoveUsers included. This gate asked `is_admin`, so the permission editor
+        // displayed a grant that enforcement then refused, and any client that
+        // gated its controls on the reported set (which that endpoint's own doc
+        // invites) would ship dead buttons.
+        //
+        // `check_entity_permission` returns true for admins first, so this is a
+        // widening only to holders of RemoveUsers: Owner, and Custom roles above the
+        // editor rank. Member, Guest and Banned have it in no role table, and
+        // it is scoped by `is_member_of_domain`, so an Owner of one workspace
+        // gains nothing in another.
+        if !self
+            .check_entity_permission(admin_id, domain_id, Permission::RemoveUsers)
+            .await?
+        {
             return Err(NetworkError::msg(
-                "Permission denied: Only admins can manage members",
+                "Permission denied: RemoveUsers is required to manage members",
             ));
         }
 
