@@ -17,6 +17,13 @@ env:
   RUST_LOG: "citadel=warn"
   # Skip WASM build in CI (no wasm-pack installed)
   SKIP_WASM_BUILD: "1"
+  # The agent refuses to start without an explicit WebSocket origin allowlist
+  # (see citadel-internal-service/.../io_interface/origin_policy.rs). The dev
+  # compose file hardcodes the dev UI's origins; the PRODUCTION compose file
+  # passes this through with no default so an unconfigured deployment fails
+  # loudly. Set at workflow level rather than per-step so a new job that starts
+  # the production stack cannot silently miss it.
+  INTERNAL_SERVICE_ALLOWED_ORIGINS: "http://localhost:5291,http://127.0.0.1:5291"
 
 jobs:
   fmt:

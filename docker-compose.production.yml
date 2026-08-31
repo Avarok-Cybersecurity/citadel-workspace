@@ -199,6 +199,23 @@ services:
       # on the `internal_service_data` volume defined above.
       - INTERNAL_SERVICE_BACKEND=filesystem
       - INTERNAL_SERVICE_DATA_DIR=/data/internal-service
+      # Which pages may open a control connection to the agent. A WebSocket is
+      # exempt from the same-origin policy and from CORS preflight, so without
+      # this any page the user visits could drive this agent. The binary refuses
+      # to start unless it is set, and `*` disables the check entirely.
+      #
+      # This MUST be the origin the UI is actually served from in this
+      # deployment — scheme, host and port, no trailing slash. It is left
+      # unset here on purpose so that a deployment that has not stated its own
+      # origin fails loudly at startup rather than silently accepting every
+      # page on the internet.
+      #
+      # Passed through with NO default and NO `:?` guard. The `:?` form would
+      # make `docker compose config --services` — a pure metadata read used by
+      # scripts/select-deploy-services.sh and by CI's drift guard — fail for
+      # anyone who has not exported it. The fail-fast belongs one layer down:
+      # the binary refuses to start on an empty value and names the variable.
+      - INTERNAL_SERVICE_ALLOWED_ORIGINS=${INTERNAL_SERVICE_ALLOWED_ORIGINS}
     deploy:
       resources:
         limits:

@@ -91,6 +91,13 @@ services:
       # Persist keys and sessions, so you are not re-registering every restart.
       - INTERNAL_SERVICE_BACKEND=filesystem
       - INTERNAL_SERVICE_DATA_DIR=/data/internal-service
+      # Which pages may open a control connection. The agent refuses to start
+      # without this. The `ui` container reverse-proxies /ws to the agent and
+      # forwards the browser's Origin, so this is the UI's published origin
+      # (127.0.0.1:8080 below), both spellings. A proxy that strips Origin
+      # instead arrives header-less, which this control does not police — see
+      # io_interface/origin_policy.rs for why that limit is deliberate.
+      - INTERNAL_SERVICE_ALLOWED_ORIGINS=http://localhost:8080,http://127.0.0.1:8080
     volumes:
       - agent_data:/data/internal-service
     # Deliberately NO `ports:`. Publishing the agent would expose an unauthenticated control plane

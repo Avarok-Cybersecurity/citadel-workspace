@@ -1,4 +1,5 @@
 use citadel_internal_service::kernel::CitadelWorkspaceService;
+use citadel_internal_service::OriginPolicy;
 use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
 use std::error::Error;
 use std::net::SocketAddr;
@@ -15,7 +16,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let opts: Options = Options::from_args();
-    let service = CitadelWorkspaceService::new_websocket(opts.bind).await?;
+
+    // Which pages may open a control connection to this agent.
+    //
+    // A WebSocket is exempt from the same-origin policy and from CORS
+    // preflight, so before this existed ANY page the user visited could open
+    // ws://localhost:12345, enumerate every account with GetSessions and then
+    // act as them. The allowlist is REQUIRED and startup fails without it: a
+    // default would either be wrong for every real deployment (localhost) or be
+    // the hole itself (any). See citadel_internal_service::OriginPolicy for
+    // what this control does and does not reach.
+    let origins = resolve_origin_policy(
+        std::env::var("INTERNAL_SERVICE_ALLOWED_ORIGINS")
+            .ok()
+            .as_deref(),
+        opts.allowed_origins.as_deref(),
+    )?;
+    if origins == OriginPolicy::Any {
+        citadel_logging::warn!(
+            target: "citadel",
+            "⚠️  SECURITY WARNING: the WebSocket origin allowlist is `*`. Any page the \
+             user visits can drive this agent. Never use in production!"
+        );
+    }
+
+    let service = CitadelWorkspaceService::new_websocket(opts.bind, origins).await?;
 
     // Backend selection precedence:
     //   1. INTERNAL_SERVICE_BACKEND / INTERNAL_SERVICE_DATA_DIR env vars
@@ -69,6 +94,39 @@ struct Options {
     /// Data directory for filesystem backend (defaults to "./data")
     #[structopt(long)]
     data_dir: Option<String>,
+    /// Comma-separated list of browser origins allowed to open a control
+    /// connection, e.g. "http://localhost:5291". Pass "*" to accept any origin
+    /// (development only). Required; may also be given as
+    /// INTERNAL_SERVICE_ALLOWED_ORIGINS, which takes precedence.
+    #[structopt(long)]
+    allowed_origins: Option<String>,
+}
+
+/// Resolve the origin allowlist from env + CLI, or explain what is missing.
+///
+/// Env wins over CLI, matching `select_backend_type` above, so a docker
+/// operator can change it without rebuilding. Pure: no I/O, so the precedence
+/// and the fail-fast are testable.
+fn resolve_origin_policy(
+    env_spec: Option<&str>,
+    cli_spec: Option<&str>,
+) -> Result<OriginPolicy, Box<dyn Error>> {
+    // Empty strings are unset, for the same reason as the backend vars: an
+    // unset `.env` entry arrives as Some("").
+    let spec = env_spec
+        .filter(|s| !s.is_empty())
+        .or(cli_spec.filter(|s| !s.is_empty()));
+
+    let Some(spec) = spec else {
+        return Err("no WebSocket origin allowlist configured. Set \
+             INTERNAL_SERVICE_ALLOWED_ORIGINS (or pass --allowed-origins) to the origins \
+             your UI is served from, e.g. \"http://localhost:5291\". Pass \"*\" to accept \
+             any origin — development only, and it lets any page the user visits drive \
+             this agent."
+            .into());
+    };
+
+    OriginPolicy::parse(spec).map_err(|why| format!("invalid origin allowlist: {why}").into())
 }
 
 /// Resolve the backend type from env-var override (preferred), CLI flag
@@ -235,4 +293,70 @@ lazy_static::lazy_static! {
             }
         });
     };
+}
+
+#[cfg(test)]
+mod origin_policy_tests {
+    //! The precedence and the fail-fast. `OriginPolicy::parse` is tested in the
+    //! connector; what is tested here is that this binary REQUIRES a
+    //! configuration rather than inventing one.
+    use super::*;
+
+    #[test]
+    fn nothing_configured_is_a_startup_error() {
+        // The whole point of the flag being required. A default would either be
+        // wrong for every real deployment (localhost) or be the hole (any).
+        let error = resolve_origin_policy(None, None).unwrap_err();
+        let message = format!("{error}");
+        assert!(
+            message.contains("INTERNAL_SERVICE_ALLOWED_ORIGINS"),
+            "the error must name the variable to set: {message}"
+        );
+    }
+
+    #[test]
+    fn empty_strings_count_as_unset() {
+        // `.env` with a blank entry arrives as Some(""), exactly as for the
+        // backend vars above.
+        assert!(resolve_origin_policy(Some(""), Some("")).is_err());
+    }
+
+    #[test]
+    fn the_cli_flag_is_used_when_the_env_var_is_unset() {
+        let policy = resolve_origin_policy(None, Some("http://localhost:5291")).unwrap();
+        assert!(policy.permits(Some("http://localhost:5291")));
+        assert!(!policy.permits(Some("https://evil.example")));
+    }
+
+    #[test]
+    fn the_env_var_wins_over_the_cli_flag() {
+        // Same precedence as select_backend_type, so a docker operator can
+        // change it without rebuilding.
+        let policy =
+            resolve_origin_policy(Some("http://from-env:1"), Some("http://from-cli:2")).unwrap();
+        assert!(policy.permits(Some("http://from-env:1")));
+        assert!(!policy.permits(Some("http://from-cli:2")));
+    }
+
+    #[test]
+    fn an_empty_env_var_falls_through_to_the_cli_flag() {
+        let policy = resolve_origin_policy(Some(""), Some("http://localhost:5291")).unwrap();
+        assert!(policy.permits(Some("http://localhost:5291")));
+    }
+
+    #[test]
+    fn a_malformed_specification_fails_startup_rather_than_degrading() {
+        // A trailing slash never matches any browser Origin. Accepting it would
+        // produce a listener that refuses the real UI and looks like downtime.
+        let error = resolve_origin_policy(None, Some("http://localhost:5291/")).unwrap_err();
+        assert!(format!("{error}").contains("invalid origin allowlist"));
+    }
+
+    #[test]
+    fn the_wildcard_is_accepted_but_only_when_asked_for() {
+        assert_eq!(
+            resolve_origin_policy(None, Some("*")).unwrap(),
+            OriginPolicy::Any
+        );
+    }
 }

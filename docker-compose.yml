@@ -175,6 +175,19 @@ services:
       - SKIP_WASM_BUILD=1
       - INTERNAL_SERVICE_BACKEND=filesystem
       - INTERNAL_SERVICE_DATA_DIR=/var/lib/internal-service
+      # Which pages may open a control connection to the agent.
+      #
+      # A WebSocket is exempt from the same-origin policy and from CORS
+      # preflight, so without this ANY page the user visited could open
+      # ws://localhost:12345, enumerate every account with GetSessions and act
+      # as them. The binary REFUSES TO START without this set — a default would
+      # either be wrong for every real deployment or be the hole itself.
+      #
+      # Both spellings of the dev UI are listed because `network_mode: host`
+      # means the browser reaches it by whichever the user typed, and Origin is
+      # compared byte-for-byte. The integration suite uses 127.0.0.1:5291
+      # (integration-tests/src/lib/config.ts); a human usually types localhost.
+      - INTERNAL_SERVICE_ALLOWED_ORIGINS=http://localhost:5291,http://127.0.0.1:5291
     deploy:
       resources:
         limits:
