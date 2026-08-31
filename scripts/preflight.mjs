@@ -36,6 +36,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const UI = join(ROOT, 'citadel-workspaces');
+const IS = join(ROOT, 'citadel-internal-service');
 
 /**
  * Gates that genuinely cannot run here, with the reason. Anything NOT listed is
@@ -173,6 +174,23 @@ const CHECKS = [
   ['typecheck', 'npx', ['tsc', '-p', 'tsconfig.app.json', '--noEmit'], UI],
   ['eslint', 'npx', ['eslint', '.', '--max-warnings', '0'], UI],
   ['unit tests', 'npx', ['vitest', 'run'], UI],
+  // The wasm target, because nothing else local compiles it.
+  //
+  // `store_value_inner` in ILM's testing.rs lost its
+  // `#[cfg(not(target_arch = "wasm32"))]` when its body was moved out of a
+  // trait impl. On NATIVE that is invisible: the wasm-only block is excluded,
+  // so the unguarded one still lands last and everything type-checks. The
+  // crate built, 71 tests passed, clippy was clean and this very script
+  // reported 75/75 -- while `wasm32-unknown-unknown` could not build at all.
+  // CI found it in the Production Docker Build, which is also what produces
+  // the browser's WASM, so the same slip took the Playwright shard down with
+  // it.
+  //
+  // `cargo check` on the wasm CLIENT crate, not on ILM directly: a bare check
+  // of ILM fails on uuid's randomness feature, which the client crate supplies.
+  // This is a check, not a build -- it emits no pkg/ artifacts, so it cannot
+  // overwrite the committed WASM the way a wasm-pack run would.
+  ['rust wasm target compiles', 'cargo', ['check', '-p', 'citadel-internal-service-wasm-client', '--target', 'wasm32-unknown-unknown'], IS],
   ...cargoChecks,
 ];
 
