@@ -11,6 +11,7 @@ use crate::WorkspaceProtocolResponse;
 use citadel_logging::{debug, error, info, warn};
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, ObjectTransferStatus, Ratchet};
 use parking_lot::RwLock;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -108,6 +109,14 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     /// per-connection - opening multiple connections from the same
     /// account no longer multiplies the budget.
     rate_limiter: RateLimiter,
+    /// Which account each live connection belongs to, keyed by session CID.
+    ///
+    /// Command handling learns the actor from the per-connection task, but
+    /// `NodeResult::ObjectTransferHandle` arrives on a different branch of the
+    /// event loop and carries only a `session_cid`. Without this map a file
+    /// transfer cannot be attributed to a user, and so cannot be authorised.
+    /// Shared across clones, like the rate limiter.
+    connected_users: Arc<RwLock<HashMap<u64, String>>>,
     /// Whether the first account to CONNECT is promoted to Admin.
     ///
     /// False unless the operator asks for it by name. See
@@ -115,6 +124,23 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     /// reachable deployment the promotion handed the workspace to whoever
     /// registered first.
     first_connect_admin: bool,
+}
+
+/// Removes a CID's account attribution when its connection task ends.
+///
+/// A `Drop` guard rather than a line at the end of the loop, because the task
+/// has several exits (stream closed, send error, cancellation) and a stale
+/// attribution is worse than none: CIDs are reused, so the next connection on
+/// that CID would inherit the previous account's authorisation.
+struct CidAttribution {
+    connected_users: Arc<RwLock<HashMap<u64, String>>>,
+    cid: u64,
+}
+
+impl Drop for CidAttribution {
+    fn drop(&mut self) {
+        self.connected_users.write().remove(&self.cid);
+    }
 }
 
 // Placeholder for entities that don't have an owner yet.
@@ -135,6 +161,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
             rate_limiter: self.rate_limiter.clone(),
+            connected_users: self.connected_users.clone(),
         }
     }
 }
@@ -169,6 +196,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             broadcast_tx,
             file_transfer_config: FileTransferConfig::default(),
             rate_limiter: RateLimiter::new(DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL),
+            connected_users: Arc::new(RwLock::new(HashMap::new())),
             first_connect_admin: false,
         }
     }
@@ -203,6 +231,56 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// Check if server file transfer is enabled
     pub fn is_server_file_transfer_enabled(&self) -> bool {
         self.file_transfer_config.allow_server_file_transfer
+    }
+
+    /// Which permission a transfer needs, taken from which way the bytes flow.
+    ///
+    /// No interpretation required: the server receiving is somebody uploading,
+    /// the server sending is somebody downloading.
+    pub fn permission_for_transfer(
+        orientation: &citadel_types::proto::ObjectTransferOrientation,
+    ) -> citadel_workspace_types::structs::Permission {
+        use citadel_types::proto::ObjectTransferOrientation;
+        use citadel_workspace_types::structs::Permission;
+        match orientation {
+            ObjectTransferOrientation::Receiver { .. } => Permission::UploadFiles,
+            ObjectTransferOrientation::Sender => Permission::DownloadFiles,
+        }
+    }
+
+    /// May `actor` move this file?
+    ///
+    /// `allow_server_file_transfer` is one global switch, and it used to be the
+    /// entire gate: every transfer was auto-accepted. Meanwhile `UploadFiles`
+    /// and `DownloadFiles` are granted per role and shown to operators as
+    /// toggles in the permission matrix, so the UI reported an access control
+    /// the server never consulted.
+    ///
+    /// The concrete hole is Guest. `Permission::for_role` gives Guest
+    /// ViewContent and nothing else -- deliberately; the mapping says so in its
+    /// own comment -- yet a Guest could push files into server storage and pull
+    /// them back out. The same "a read-only role must not write" fix was made
+    /// for group messaging; the file path never received it.
+    ///
+    /// `None` is refused. An unattributed transfer is one that cannot be
+    /// authorised, and auto-accepting those is how this started.
+    pub async fn may_transfer(
+        &self,
+        actor: Option<&str>,
+        orientation: &citadel_types::proto::ObjectTransferOrientation,
+    ) -> bool {
+        use crate::handlers::domain::async_ops::AsyncPermissionOperations;
+        let Some(user_id) = actor else {
+            return false;
+        };
+        self.domain_operations
+            .check_entity_permission(
+                user_id,
+                crate::WORKSPACE_ROOT_ID,
+                Self::permission_for_transfer(orientation),
+            )
+            .await
+            .unwrap_or(false)
     }
 
     /// Check if server RE-VFS storage is enabled
@@ -1468,6 +1546,22 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     let (mut tx, mut rx) = connect_success.channel.split();
                     let current_cid = user_cid;
 
+                    // Attribute this CID to its account for the lifetime of the
+                    // connection. `ObjectTransferHandle` events arrive on
+                    // another branch of the event loop with nothing but a
+                    // session CID, and a transfer that cannot be attributed
+                    // cannot be authorised.
+                    this.connected_users
+                        .write()
+                        .insert(current_cid, user_id.clone());
+                    // Cleared however this connection ends -- normally, by
+                    // error, or by the task being dropped -- so a later
+                    // connection reusing the CID cannot inherit the attribution.
+                    let _cid_attribution = CidAttribution {
+                        connected_users: this.connected_users.clone(),
+                        cid: current_cid,
+                    };
+
                     // Subscribe to broadcast channel for this connection
                     let mut broadcast_rx = this.subscribe_broadcast();
 
@@ -1620,6 +1714,41 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                 let ft_config = self.file_transfer_config.clone();
                 if !ft_config.allow_server_file_transfer {
                     warn!(target: "citadel", "[ASYNC_KERNEL] Server file transfers are disabled, declining transfer");
+                    if let Err(e) = object_transfer_handle.handle.decline() {
+                        error!(target: "citadel", "[ASYNC_KERNEL] Failed to decline file transfer: {:?}", e);
+                    }
+                    return Ok(());
+                }
+
+                // WHO is transferring, not just whether transfers are on.
+                //
+                // `allow_server_file_transfer` is one global switch, and it was
+                // the entire gate: every transfer was auto-accepted. Meanwhile
+                // `Permission::UploadFiles` and `DownloadFiles` are granted per
+                // role and shown to operators as toggles in the permission
+                // matrix, so the UI reported an access control the server never
+                // consulted.
+                //
+                // The concrete hole is Guest. `Permission::for_role` gives Guest
+                // ViewContent and nothing else -- deliberately, the mapping says
+                // so -- yet a Guest could push files into server storage and
+                // pull them back out. The same "a read-only role must not
+                // write" fix was already made for group messaging; the file path
+                // never received it.
+                //
+                // Direction is taken from which way the bytes flow, which needs
+                // no interpretation: the server receiving is somebody uploading,
+                // the server sending is somebody downloading.
+                let transfer_cid = object_transfer_handle.session_cid;
+                let actor = self.connected_users.read().get(&transfer_cid).cloned();
+                let orientation = object_transfer_handle.handle.orientation;
+                let required = Self::permission_for_transfer(&orientation);
+                let permitted = self.may_transfer(actor.as_deref(), &orientation).await;
+                if !permitted {
+                    warn!(
+                        target: "citadel",
+                        "[ASYNC_KERNEL] Declining file transfer for cid {transfer_cid} (account {actor:?}): {required:?} required"
+                    );
                     if let Err(e) = object_transfer_handle.handle.decline() {
                         error!(target: "citadel", "[ASYNC_KERNEL] Failed to decline file transfer: {:?}", e);
                     }
