@@ -18,6 +18,14 @@
  * `apt-get` is deliberately out of scope. It retries within itself, reads from
  * mirrors, and wrapping it would mean re-running `apt-get update` on every
  * attempt for no benefit.
+ *
+ * A SECOND question, added after this check passed a loop that could not retry.
+ * `curl … | sh && break` puts the fetch in a pipeline, and a pipeline's exit
+ * status is its LAST command's: `sh` reads empty input from a failed curl and
+ * exits 0, so `break` fires on attempt one. Run 33352898046 shows it exactly --
+ * `curl: (35) Recv failure`, then `wasm-pack: not found` 1ms later, no retry
+ * message in between, and every integration job red behind the broken image.
+ * The loop was present, which is all this check used to ask, so it passed.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -28,6 +36,14 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 /** Commands that reach the network for one artifact from one host. */
 const FETCHES = /\b(?:curl|wget|npm\s+(?:install|ci)|cargo\s+install|rustup\s+(?:component\s+add|target\s+add|toolchain\s+install))\b/;
 const RETRIES = /for\s+attempt\s+in/;
+/**
+ * A fetch piped straight into a shell, whose failure the loop cannot see.
+ *
+ * Download to a file and run it as a separate command, so the `&&` chain tests
+ * curl's own status:
+ *   curl -fsSL -o /tmp/x.sh <url> && sh /tmp/x.sh && break
+ */
+const PIPED_INTO_SHELL = /\b(?:curl|wget)\b[^\n|]*\|\s*(?:sudo\s+)?(?:ba)?sh\b/;
 
 function dockerfiles(dir, out = []) {
   for (const entry of readdirSync(dir)) {
@@ -62,15 +78,36 @@ function runInstructions(source) {
 }
 
 const offenders = [];
+const piped_offenders = [];
 for (const file of dockerfiles(ROOT)) {
   const source = readFileSync(file, 'utf-8');
   for (const run of runInstructions(source)) {
     // apt-get is out of scope; a line that only apt-gets is not a fetch here.
     const withoutApt = run.text.replace(/apt-get[^\n&|]*/g, '');
     if (!FETCHES.test(withoutApt)) continue;
+    const piped = PIPED_INTO_SHELL.exec(run.text);
+    if (piped !== null) {
+      piped_offenders.push([relative(ROOT, file), run.line, piped[0].trim().slice(0, 100)]);
+      continue;
+    }
     if (RETRIES.test(run.text)) continue;
     offenders.push([relative(ROOT, file), run.line, run.text.split('\n')[0].trim().slice(0, 100)]);
   }
+}
+
+if (piped_offenders.length > 0) {
+  console.error('\n  A network fetch piped into a shell, so its failure is invisible:\n');
+  for (const [file, line, text] of piped_offenders) {
+    console.error(`::error file=${file},line=${line}::${text}`);
+  }
+  console.error(
+    '\n  A pipeline exits with its LAST command\'s status. `sh` reads empty input\n' +
+    '  from a failed curl and exits 0, so `curl … | sh && break` leaves any retry\n' +
+    '  loop around it decoration. Download first, then run:\n\n' +
+    '    curl -fsSL --connect-timeout 30 --max-time 300 -o /tmp/x.sh <url> \\\n' +
+    '      && sh /tmp/x.sh && break\n',
+  );
+  process.exit(1);
 }
 
 if (offenders.length > 0) {

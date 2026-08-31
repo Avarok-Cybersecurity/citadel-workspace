@@ -6,7 +6,8 @@ FROM rust:1.92.0
 RUN apt-get update && \
     apt-get install -y curl git && \
     for attempt in 1 2 3 4 5; do \
-      curl -fsSL --connect-timeout 30 --max-time 300 https://deb.nodesource.com/setup_20.x | bash - && break; \
+      curl -fsSL --connect-timeout 30 --max-time 300 -o /tmp/nodesource_setup.sh https://deb.nodesource.com/setup_20.x \
+        && bash /tmp/nodesource_setup.sh && break; \
       echo "nodesource setup failed (attempt $attempt/5); retrying in $((attempt * 10))s"; \
       sleep $((attempt * 10)); \
     done && \
@@ -30,8 +31,17 @@ RUN apt-get update && \
 # not the bound, and a stalled `docker pull` took `test:settings-controls` down
 # with the job budget in run 33308312708 -- see round 456. Curl waits for ever
 # by default.
+# Downloaded to a file, then run -- NOT `curl … | sh`.
+#
+# A pipeline's exit status is its LAST command's. `sh` reads empty input from a
+# failed curl and exits 0, so `curl … | sh && break` broke out on attempt one
+# and the five attempts below were decoration. Run 33352898046 proves it: curl
+# reported `(35) Recv failure: Connection reset by peer` and `wasm-pack: not
+# found` followed 1ms later, with no retry message in between, taking
+# `test:p2p-types` down with the whole image.
 RUN for attempt in 1 2 3 4 5; do \
-      curl -sSf --connect-timeout 30 --max-time 300 https://rustwasm.github.io/wasm-pack/installer/init.sh | sh && break; \
+      curl -sSf --connect-timeout 30 --max-time 300 -o /tmp/wasm-pack-init.sh https://rustwasm.github.io/wasm-pack/installer/init.sh \
+        && sh /tmp/wasm-pack-init.sh && break; \
       echo "wasm-pack install failed (attempt $attempt/5); retrying in $((attempt * 10))s"; \
       sleep $((attempt * 10)); \
     done; \
