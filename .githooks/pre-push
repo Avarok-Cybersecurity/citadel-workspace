@@ -12,5 +12,9 @@
 # succeeded, which means the pointers were pushed. A CI copy could only ever
 # report success.
 #
-# Enable with:  git config core.hooksPath .githooks
+# Installed by the root `prepare` script, which npm runs on install. It used to
+# say "Enable with: git config core.hooksPath .githooks" and rely on someone
+# doing that by hand; nobody had, so this hook -- written for this exact failure,
+# naming this exact cost -- had never run once. Run 33376013146 then lost all 74
+# jobs to precisely it.
 exec node scripts/check-submodule-pointers-pushed.mjs

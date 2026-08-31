@@ -25,6 +25,7 @@
     "preflight": "node scripts/preflight.mjs",
     "check:stack": "node scripts/check-stack-reachable.mjs",
     "check:pointers": "node scripts/check-submodule-pointers-pushed.mjs",
-    "prepush": "node scripts/check-submodule-pointers-pushed.mjs"
+    "prepush": "node scripts/check-submodule-pointers-pushed.mjs",
+    "prepare": "git config core.hooksPath .githooks || true"
   }
 }
