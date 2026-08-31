@@ -44,6 +44,25 @@ done < <(
     sort -u
 )
 
+# BuildKit's frontend image, named by `# syntax=`, is pulled by BuildKit itself
+# and is not a FROM -- so the collector above never saw it and it got none of
+# the retries. Run 33356652733 died on exactly that: `failed to resolve source
+# metadata for docker.io/docker/dockerfile:1.7-labs`, before a single RUN, which
+# takes the whole image down and every job behind it with no test output at all.
+# `workspace-server` needs the labs frontend for `COPY --exclude`, so removing
+# the directive is not an option; pre-pulling it with the same retries is.
+while IFS= read -r image; do
+  [ -n "$image" ] && IMAGES+=("$image")
+done < <(
+  find "$ROOT" \
+    -name node_modules -prune -o -name target -prune -o -name .git -prune -o \
+    -type f \( -name 'Dockerfile' -o -name 'Dockerfile.*' \) -print 2>/dev/null |
+    xargs grep -hE '^[[:space:]]*#[[:space:]]*syntax=' 2>/dev/null |
+    sed -E 's/^[[:space:]]*#[[:space:]]*syntax=([^[:space:]]+).*/\1/' |
+    grep -E ':|/' |
+    sort -u
+)
+
 if [ ${#IMAGES[@]} -eq 0 ]; then
   echo "No base images found -- this script is looking in the wrong place." >&2
   exit 1
