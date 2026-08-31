@@ -41,15 +41,26 @@ export class WorkspaceSessionManager {
   }
 
   /**
-   * Load a workspace (get workspace details)
+   * Ask the server for the workspace by sending a GetWorkspace request.
+   *
+   * RESOLVE-ON-SEND: resolves when the request is queued to the transport,
+   * NOT when the workspace has arrived. The workspace protocol carries no
+   * request id, so completion cannot be awaited at this layer; the result
+   * arrives via the client's messageHandler and is reflected through
+   * onWorkspaceSessionChange().
+   *
+   * This method was named loadWorkspace() and documented as loading — it had
+   * completed nothing at the moment it resolved, so any consumer without its
+   * own correlation read a resolved promise as a loaded workspace. The name
+   * now says what actually happens.
    */
-  async loadWorkspace(): Promise<void> {
+  async requestWorkspaceLoad(): Promise<void> {
     const cid = this.auth.getCurrentCid();
     if (!cid) {
       throw new Error('Not connected. Please connect or register first.');
     }
 
-    // Send get workspace request
+    // Send get workspace request; the response arrives asynchronously.
     await this.client.getWorkspace(cid);
   }
 

@@ -3,6 +3,7 @@ import type { WasmClientConfig, InternalServiceRequest, InternalServiceResponse,
 import { isResponseType } from 'citadel-internal-service-wasm-client';
 import { isVariant } from 'citadel-internal-service-wasm-client';
 import type { WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse } from './types/workspace-types';
+import { decodeWorkspacePayload, encodeWorkspacePayload } from './workspace-json';
 import { WorkspaceAuth } from './auth';
 import { WorkspaceSessionManager, type SessionConfig } from './session';
 
@@ -21,16 +22,17 @@ interface WorkspaceWasmModule extends WasmModule {
   ): void;
 }
 
-// MessageDelivered is not in InternalServiceResponse (type gap in auto-generated bindings).
-// Defined here to avoid `as any` when accessing its fields.
-interface MessageDeliveredPayload {
-  contents: number[];
-  cid?: bigint;
-  peer_cid?: bigint;
-}
-
 // Enriched response types for workspace protocol messages.
 // These extend InternalServiceResponse with parsed workspace payloads.
+//
+// A `WorkspaceDelivered` / `MessageDelivered` pair used to live here too, with
+// a comment claiming MessageDelivered "exists at runtime but not in the
+// generated types". It does not exist at all: no Rust crate in this tree
+// (citadel-internal-service, citadel-workspace-server-kernel,
+// citadel-workspace-types) produces a MessageDelivered response, so the branch
+// that parsed it was dead code — and, unlike its MessageNotification sibling,
+// it JSON-parsed peer-controllable bytes with no fromServer/JSON guard. Both
+// the types and the branch were removed rather than guarded.
 interface WorkspaceNotificationEnriched {
   WorkspaceNotification: {
     cid: bigint;
@@ -40,16 +42,9 @@ interface WorkspaceNotificationEnriched {
   };
 }
 
-interface WorkspaceDeliveredEnriched {
-  WorkspaceDelivered: MessageDeliveredPayload & {
-    payload: WorkspaceProtocolPayload;
-  };
-}
-
 export type WorkspaceEnrichedResponse =
   | InternalServiceResponse
-  | WorkspaceNotificationEnriched
-  | WorkspaceDeliveredEnriched;
+  | WorkspaceNotificationEnriched;
 
 export interface WorkspaceClientConfig extends WasmClientConfig {
   // Additional workspace-specific configuration can be added here
@@ -82,6 +77,12 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   public readonly auth: WorkspaceAuth;
   public readonly session: WorkspaceSessionManager;
 
+  /**
+   * One-shot observers registered by nextResponse(). Notified with every raw
+   * InternalServiceResponse before enrichment; they observe, never consume.
+   */
+  private responseObservers: Set<(message: InternalServiceResponse) => void> = new Set();
+
   constructor(config: WorkspaceClientConfig) {
     // Store reference to self for use in the handler closure below.
     // This is initialized after super() since `this` is unavailable before super().
@@ -95,6 +96,16 @@ export class WorkspaceClient extends InternalServiceWasmClient {
       ((message: WorkspaceEnrichedResponse) => void) | undefined;
 
     config.messageHandler = (message: InternalServiceResponse) => {
+      // Observation point for nextResponse(): every raw response passes here,
+      // whether or not it is later enriched. Observers only look — the message
+      // still flows to the original handler below. This is what lets callers
+      // correlate a request with its response without touching the WASM stream
+      // (calling next_message() while the client's own loop holds the stream
+      // throws in the WASM guard; auth.getSession() used to do exactly that).
+      if (self) {
+        self.notifyResponseObservers(message);
+      }
+
       // Check if this is a MessageNotification that contains workspace protocol
       if (isResponseType(message, 'MessageNotification')) {
         const notification = message.MessageNotification;
@@ -134,10 +145,11 @@ export class WorkspaceClient extends InternalServiceWasmClient {
         }
 
         try {
-          // Decode the message bytes as UTF-8 string
-          const messageText = new TextDecoder().decode(new Uint8Array(notification.message));
-          // Parse as WorkspaceProtocolPayload
-          const workspacePayload: WorkspaceProtocolPayload = JSON.parse(messageText);
+          // Decode via the shared codec: fields the generated types declare as
+          // `bigint` are revived from JSON numbers, so the runtime shape
+          // matches the signature (a bare JSON.parse left them as `number`,
+          // silently failing every strict comparison downstream).
+          const workspacePayload: WorkspaceProtocolPayload = decodeWorkspacePayload(notification.message);
 
           // Handle workspace responses in session manager
           const payloadRecord = workspacePayload as Record<string, unknown>;
@@ -171,54 +183,12 @@ export class WorkspaceClient extends InternalServiceWasmClient {
             originalHandler(message);
           }
         }
-      } else if ('MessageDelivered' in message) {
-        // MessageDelivered is not in InternalServiceResponse types (type gap) —
-        // narrow via Record access to avoid `as any`
-        const delivered = (message as Record<string, unknown>)['MessageDelivered'] as MessageDeliveredPayload | undefined;
-        if (delivered && delivered.contents && Array.isArray(delivered.contents)) {
-          try {
-            // Decode the message bytes as UTF-8 string
-            const messageText = new TextDecoder().decode(new Uint8Array(delivered.contents));
-            // Parse as WorkspaceProtocolPayload
-            const workspacePayload: WorkspaceProtocolPayload = JSON.parse(messageText);
-
-            // Handle workspace responses in session manager
-            const deliveredPayloadRecord = workspacePayload as Record<string, unknown>;
-            if (self && self.session && isVariant(deliveredPayloadRecord, 'Response')) {
-              self.session.handleWorkspaceResponse(
-                (workspacePayload as { Response: WorkspaceProtocolResponse }).Response
-              );
-            }
-
-            // Create enriched message preserving original variant keys.
-            // Downstream handlers check for MessageDelivered — the spread keeps it accessible.
-            const enrichedMessage = {
-              ...message,
-              WorkspaceDelivered: {
-                ...delivered,
-                payload: workspacePayload
-              }
-            };
-
-            // Call the original handler with the enriched message
-            if (originalHandler) {
-              originalHandler(enrichedMessage);
-            }
-          } catch (e) {
-            // Not a workspace protocol message — pass through unchanged
-            console.warn('[WorkspaceClient] Failed to parse MessageDelivered as workspace protocol:', e);
-            if (originalHandler) {
-              originalHandler(message);
-            }
-          }
-        } else {
-          // Pass through if no contents
-          if (originalHandler) {
-            originalHandler(message);
-          }
-        }
       } else {
-        // Pass through other messages unchanged
+        // Pass through other messages unchanged. This includes any message
+        // carrying a `MessageDelivered` key: no Rust crate in this tree emits
+        // that variant, so the branch that used to parse it here was dead —
+        // and it fed the session manager through an unguarded JSON.parse of
+        // its `contents`. See the comment above WorkspaceNotificationEnriched.
         if (originalHandler) {
           originalHandler(message);
         }
@@ -238,7 +208,80 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   }
 
   /**
-   * Send a workspace protocol request
+   * Wait for the next InternalServiceResponse for which `extract` returns a
+   * value, without touching the WASM message stream.
+   *
+   * Register the waiter BEFORE sending the request it correlates with, or the
+   * response can arrive in the gap and be missed. The matched message is
+   * observed, not consumed: it still reaches the configured messageHandler.
+   *
+   * This exists because calling nextMessage() for correlation cannot work:
+   * the client's own processing loop holds the WASM stream, and the WASM
+   * guard throws "next_message is already being called by another process"
+   * on reentrancy — or, if the caller happens to win the race, it steals an
+   * arbitrary message from the loop.
+   *
+   * @param extract Returns the extracted value for a matching message, or
+   *                undefined to keep waiting. A throwing extractor is treated
+   *                as a non-match.
+   * @param timeoutMs Explicit timeout; rejects when it elapses with no match.
+   */
+  async nextResponse<T>(
+    extract: (message: InternalServiceResponse) => T | undefined,
+    timeoutMs: number
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const observer = (message: InternalServiceResponse): void => {
+        let extracted: T | undefined;
+        try {
+          extracted = extract(message);
+        } catch {
+          // A predicate that throws on an unrelated message shape must not
+          // abort the wait, and must never disturb delivery to other observers.
+          return;
+        }
+        if (extracted !== undefined) {
+          cleanup();
+          resolve(extracted);
+        }
+      };
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`Timed out after ${timeoutMs}ms waiting for a matching response`));
+      }, timeoutMs);
+      const cleanup = (): void => {
+        clearTimeout(timer);
+        this.responseObservers.delete(observer);
+      };
+      this.responseObservers.add(observer);
+    });
+  }
+
+  private notifyResponseObservers(message: InternalServiceResponse): void {
+    // Copy first: a matching observer removes itself during iteration.
+    for (const observer of Array.from(this.responseObservers)) {
+      observer(message);
+    }
+  }
+
+  /**
+   * Send a workspace protocol request.
+   *
+   * RESOLVE-ON-SEND: the returned promise resolves when the request has been
+   * handed to the transport — NOT when the server has processed it or
+   * responded. The workspace protocol carries no request id (see the generated
+   * WorkspaceProtocolRequest — no variant has one), so this layer cannot
+   * correlate a response to this call; matching by response variant would
+   * mis-resolve on server-pushed broadcasts of the same variant. Responses
+   * arrive asynchronously through the configured messageHandler as enriched
+   * WorkspaceNotification messages, and workspace/session state changes are
+   * reflected via session.onWorkspaceSessionChange(). Real correlation needs a
+   * request id added to the Rust protocol.
+   *
+   * Fields the generated types declare as `bigint` (e.g. `before_timestamp`)
+   * are accepted as bigint and encoded as JSON numbers; a value that cannot
+   * survive the JSON transport throws instead of being corrupted.
+   *
    * @param cid The client ID
    * @param request The workspace protocol request
    * @param securityLevel The security level (default: 'Standard')
@@ -253,8 +296,10 @@ export class WorkspaceClient extends InternalServiceWasmClient {
       Request: request
     };
 
-    // Serialize to JSON bytes
-    const messageBytes = new TextEncoder().encode(JSON.stringify(payload));
+    // Serialize via the shared codec: a bare JSON.stringify threw
+    // "Do not know how to serialize a BigInt" for exactly the values the
+    // generated signatures ask for (e.g. GetGroupMessages.before_timestamp).
+    const messageBytes = encodeWorkspacePayload(payload);
 
     // Convert cid to BigInt if it's a string
     const cidBigInt = typeof cid === 'string' ? BigInt(cid) : cid;
@@ -276,7 +321,8 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   }
 
   /**
-   * Helper method to create a workspace
+   * Send a CreateWorkspace request. Resolves on send, not on creation —
+   * see sendWorkspaceRequest for why no completion can be awaited here.
    */
   async createWorkspace(
     cid: string | bigint,
@@ -296,7 +342,9 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   }
 
   /**
-   * Helper method to get the workspace
+   * Send a GetWorkspace request. Resolves on send; the workspace itself
+   * arrives later via the messageHandler (enriched WorkspaceNotification)
+   * and session.onWorkspaceSessionChange — see sendWorkspaceRequest.
    */
   async getWorkspace(cid: string | bigint, workspaceId?: string): Promise<void> {
     await this.sendWorkspaceRequest(cid, {
@@ -305,14 +353,16 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   }
 
   /**
-   * Helper method to list all workspaces the user has access to
+   * Send a ListWorkspaces request. Resolves on send; the list arrives later
+   * via the messageHandler — see sendWorkspaceRequest.
    */
   async listWorkspaces(cid: string | bigint): Promise<void> {
     await this.sendWorkspaceRequest(cid, 'ListWorkspaces');
   }
 
   /**
-   * Helper method to send a message
+   * Send a workspace Message request. Resolves on send, not on delivery —
+   * see sendWorkspaceRequest.
    */
   async sendMessage(cid: string | bigint, contents: Uint8Array): Promise<void> {
     await this.sendWorkspaceRequest(cid, {
