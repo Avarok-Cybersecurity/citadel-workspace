@@ -1001,7 +1001,7 @@ jobs:
           # spam, which fills all 120 lines on its own.
           echo "=== internal-service: P2P send/receive chain ==="
           docker compose logs internal-service 2>&1 \
-            | grep -E "\[P2P-MSG\]|\[PeerChannelCreated\]|\[P2P-RECV-CHANNEL\]|Auto-accepted inbound REVFS|Failed to auto-accept" \
+            | grep -E "\[P2P-MSG\]|\[PeerChannelCreated\]|\[P2P-RECV-CHANNEL\]|\[UDP-NEGOTIATION\]|Auto-accepted inbound REVFS|Failed to auto-accept" \
             | tail -80 || true
           echo "=== internal-service: warnings and errors ==="
           docker compose logs internal-service 2>&1 \
@@ -1147,7 +1147,7 @@ jobs:
           # spam, which fills all 120 lines on its own.
           echo "=== internal-service: P2P send/receive chain ==="
           docker compose logs internal-service 2>&1 \
-            | grep -E "\[P2P-MSG\]|\[PeerChannelCreated\]|\[P2P-RECV-CHANNEL\]|Auto-accepted inbound REVFS|Failed to auto-accept" \
+            | grep -E "\[P2P-MSG\]|\[PeerChannelCreated\]|\[P2P-RECV-CHANNEL\]|\[UDP-NEGOTIATION\]|Auto-accepted inbound REVFS|Failed to auto-accept" \
             | tail -80 || true
           echo "=== internal-service: warnings and errors ==="
           docker compose logs internal-service 2>&1 \
