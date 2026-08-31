@@ -16,7 +16,7 @@ use citadel_workspace_server_kernel::kernel::command_processor::async_process_co
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::NodeEntityType;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
-use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
+use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_PASSWORD, TEST_ADMIN_USER_ID};
 use std::time::Duration;
 
 /// Drains the broadcast channel for a short while, collecting what arrives.
@@ -213,5 +213,45 @@ async fn a_pure_content_save_does_not_also_broadcast_a_structural_update() {
             .iter()
             .any(|r| matches!(r, WorkspaceProtocolResponse::Node(_))),
         "a pure content save is not a structural change"
+    );
+}
+
+/// The workspace record itself changes too, and nobody was told.
+///
+/// `UpdateWorkspace` and `UpdateWorkspaceTheme` answered the requester and
+/// stopped — exactly the shape the node mutators above were fixed for. A rename
+/// or a description edit reached only the account that made it, and the THEME is
+/// the one every member sees, so a change reaching only its author is the most
+/// obviously wrong case of it.
+///
+/// The receiving half was already built: `generated-variant-handlers` turns a
+/// `Workspace` response into `workspace:loaded`, which `useWorkspaceEventSetup`
+/// applies. So this was a broadcast nobody sent, not a message nobody could read.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn renaming_the_workspace_is_broadcast_to_everyone_else() {
+    let kernel = create_test_kernel().await;
+    let mut rx = kernel.subscribe_broadcast();
+
+    process_command_with_user(
+        &kernel,
+        &WorkspaceProtocolRequest::UpdateWorkspace {
+            workspace_id: Some(WORKSPACE_ROOT_ID.to_string()),
+            name: Some("Renamed Workspace".to_string()),
+            description: None,
+            metadata: None,
+            workspace_master_password: TEST_ADMIN_PASSWORD.to_string(),
+        },
+        TEST_ADMIN_USER_ID,
+    )
+    .await
+    .expect("UpdateWorkspace dispatch failed");
+
+    let broadcast = drain(&mut rx).await;
+    assert!(
+        broadcast.iter().any(
+            |r| matches!(r, WorkspaceProtocolResponse::Workspace(w) if w.name == "Renamed Workspace")
+        ),
+        "the workspace rename reached only the account that made it; everyone \
+         else went on showing the old name until they reloaded"
     );
 }

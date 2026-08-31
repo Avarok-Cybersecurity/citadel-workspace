@@ -119,7 +119,22 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 )
                 .await
             {
-                Ok(workspace) => Ok(WorkspaceProtocolResponse::Workspace(workspace)),
+                Ok(workspace) => {
+                    // Announced, like every other structural change.
+                    //
+                    // A rename or a description edit reached only the account
+                    // that made it; everyone else went on showing the old name
+                    // until they reloaded. The receiving half was already
+                    // built -- `generated-variant-handlers` turns a `Workspace`
+                    // response into `workspace:loaded`, which
+                    // `useWorkspaceEventSetup` applies -- so this was a
+                    // broadcast nobody sent, not a message nobody could read.
+                    kernel.broadcast(
+                        WorkspaceProtocolResponse::Workspace(workspace.clone()),
+                        requester_cid,
+                    );
+                    Ok(WorkspaceProtocolResponse::Workspace(workspace))
+                }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to update workspace: {}",
                     e
@@ -223,6 +238,15 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                             },
                         )
                         .await?;
+
+                    // The theme is what EVERY member sees; a change reaching
+                    // only its author is the one case where a silent broadcast
+                    // is most obviously wrong. Same receiving half as
+                    // UpdateWorkspace above.
+                    kernel.broadcast(
+                        WorkspaceProtocolResponse::Workspace(workspace.clone()),
+                        requester_cid,
+                    );
 
                     Ok(WorkspaceProtocolResponse::Workspace(workspace))
                 }
