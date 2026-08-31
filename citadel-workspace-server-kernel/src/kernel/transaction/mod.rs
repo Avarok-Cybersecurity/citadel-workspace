@@ -8,7 +8,14 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-pub mod async_transactions;
+// `async_transactions` (AsyncReadTransaction / AsyncWriteTransaction) was
+// deleted here: nothing ever constructed either type, yet the module read as
+// the authoritative transaction layer. It carried two divergences from the
+// live handlers — an unlocked get_all_nodes/insert/save_nodes read-modify-write
+// that violated the `lock_nodes` contract, and list_offices/list_rooms reading
+// `TreeSchema::default()` instead of the stored schema — traps for whoever
+// resurrected it. The live paths are the handlers in `crate::handlers` over
+// `BackendTransactionManager` directly.
 pub mod backend_ops_simple;
 // Note: TransactionManager has been removed. Use BackendTransactionManager instead.
 

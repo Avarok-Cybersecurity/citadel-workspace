@@ -44,18 +44,19 @@ const CRATES = [
  * it carried a role table contradicting `Permission::for_role`.
  */
 const KNOWN_ORPHANS = new Set([
-  'citadel-workspace-server-kernel/src/handlers/query.rs',
-  'citadel-workspace-server-kernel/src/kernel/core.rs',
-  'citadel-workspace-server-kernel/src/kernel/initialization.rs',
-  'citadel-workspace-server-kernel/src/kernel/member_operations.rs',
-  'citadel-workspace-server-kernel/src/kernel/network.rs',
-  'citadel-workspace-server-kernel/src/kernel/user_management.rs',
-  // An undeclared DIRECTORY, found by this check's own directory support the
-  // moment it was added. It holds `role_permissions.rs`, a role table that
-  // round 409 cited as agreeing with the SSOT -- while not being compiled at
-  // all. Files beneath it are reached through its own mod.rs, so they are not
-  // listed separately.
-  'citadel-workspace-server-kernel/src/kernel/transaction/rbac',
+  // Empty, and that is the point: every entry that was here has been DELETED
+  // rather than tolerated.
+  //
+  // The sync kernel (`handlers/query.rs`, `kernel/core.rs`, `initialization.rs`,
+  // `member_operations.rs`, `network.rs`, `user_management.rs`) and the
+  // `transaction/rbac` directory were 1234 lines that nothing compiled --
+  // including `query_members(None, None)`, which returned every user with no
+  // authorization check at all. Commented-out code is not a safe place to keep
+  // a security hole: re-enabling one line ships it, and a reader cannot tell
+  // "disabled on purpose" from "temporarily broken, restore later".
+  //
+  // The list may only SHRINK, and it has now reached zero. A new orphan fails
+  // this check outright, which is the state to keep it in.
 ]);
 
 /** Files that are module roots in their own right and need no declaration. */

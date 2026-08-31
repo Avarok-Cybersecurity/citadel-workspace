@@ -884,11 +884,17 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             .insert_domain(workspace_id.clone(), domain)
             .await?;
 
-        // Save password for this workspace (same master password)
+        // Save password for this workspace (same master password).
+        //
+        // Single-key write, deliberately. This used to snapshot the whole
+        // password map and `save_passwords` it back, which re-wrote every
+        // other workspace's password from a stale read — any password another
+        // caller changed between our snapshot and our save would be silently
+        // reverted. Only this workspace's key is ours to write.
         if !workspace_master_password.is_empty() {
-            let mut passwords = self.backend_tx_manager.get_all_passwords().await?;
-            passwords.insert(workspace_id.clone(), workspace_master_password);
-            self.backend_tx_manager.save_passwords(&passwords).await?;
+            self.backend_tx_manager
+                .set_workspace_password(&workspace_id, &workspace_master_password)
+                .await?;
         }
 
         // Grant creator admin permissions
@@ -959,7 +965,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         }
 
         // Verify master access password
-        let mut passwords = self.backend_tx_manager.get_all_passwords().await?;
+        let passwords = self.backend_tx_manager.get_all_passwords().await?;
         if !passwords
             .get(workspace_id)
             .map(|p| p == &workspace_master_password)
@@ -970,14 +976,22 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             ));
         }
 
-        // Remove workspace, domain, and password
+        // Remove workspace, domain, and password. `remove_workspace` deletes
+        // the password key itself (with rollback if the index removal fails),
+        // so nothing more is written here.
+        //
+        // There used to be a `passwords.remove(workspace_id)` +
+        // `save_passwords(&passwords)` after this, and it deleted nothing:
+        // `save_passwords` is upsert-only — a key omitted from the map is NOT
+        // removed from the backend. All it actually did was re-write every
+        // OTHER workspace's password from the stale snapshot taken for the
+        // verification above, which could resurrect a password a concurrent
+        // caller had deleted (or revert one it had changed) in the window
+        // since that read.
         self.backend_tx_manager
             .remove_workspace(workspace_id)
             .await?;
         self.backend_tx_manager.remove_domain(workspace_id).await?;
-
-        passwords.remove(workspace_id);
-        self.backend_tx_manager.save_passwords(&passwords).await?;
 
         // Every member kept a `permissions[workspace_id]` entry for a workspace
         // that no longer exists. `remove_member` already does this for a single

@@ -123,6 +123,48 @@ async fn an_admin_can_still_delete_a_workspace() {
     );
 }
 
+/// The password key must die with the workspace — and `remove_workspace` is
+/// the ONLY place that deletes it. `delete_workspace` used to follow up with
+/// `passwords.remove(id)` + `save_passwords(..)`, which looked like the
+/// deletion but deleted nothing: `save_passwords` is upsert-only. That
+/// decoy has been removed, so this test guards the one real cleanup path
+/// against being "simplified" away.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn deleting_a_workspace_deletes_its_password_key() {
+    let kernel = create_test_kernel().await;
+    let id = create_workspace(&kernel, "Ephemeral").await;
+
+    // The password was stored at creation.
+    assert!(
+        kernel
+            .domain_operations
+            .backend_tx_manager
+            .get_workspace_password(&id)
+            .await
+            .expect("read password")
+            .is_some(),
+        "creation must store the workspace's password",
+    );
+
+    let response = delete_as(&kernel, &id, TEST_ADMIN_USER_ID).await;
+    assert!(
+        !matches!(response, WorkspaceProtocolResponse::Error(_)),
+        "delete must succeed; got {response:?}"
+    );
+
+    assert!(
+        kernel
+            .domain_operations
+            .backend_tx_manager
+            .get_workspace_password(&id)
+            .await
+            .expect("read password")
+            .is_none(),
+        "the password key must be deleted with the workspace — a leftover key \
+         leaks secret material and would re-associate if the id were reused",
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_root_workspace_is_still_undeletable() {
     let kernel = create_test_kernel().await;
