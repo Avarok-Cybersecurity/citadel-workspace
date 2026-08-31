@@ -49,3 +49,62 @@ Deleted `yjs-merkle-strategy/sync.ts`'s `determineSyncAction` and
 `computeStateVectorHash`: a complete, plausible chunk-level sync strategy with
 zero callers anywhere, tests included. The cost was never the dead bytes, it was
 the false map.
+
+## Rounds 621-634 — the permission model, audited operation by operation
+
+Started as bookkeeping: 11 of 21 `Permission` variants are never referenced in
+the server. Counting variants is the wrong question, though — what matters is
+whether the OPERATION each one names is gated, under whatever name. Checked one
+at a time:
+
+- `DeleteWorkspace`, `UpdateWorkspace` — zero refs repo-wide, but both
+  operations gate on admin-or-owner plus the master password. Redundant
+  vocabulary.
+- `UpdateNode`, `EditNodeConfig`, `UpdateNodeSettings` — covered by
+  `EditTreeStructure` / `EditMdx`, chosen per-field by what the update changes.
+- `ReadMessages` — group reads gate on `ViewContent`, writes on `SendMessages`.
+- `BanUser`, `ManageDomains`, `ConfigureSystem`, `EditWorkspaceConfig`,
+  `ManageNodeTypes` — no such operation exists in the server. The matrix offers
+  toggles for capabilities that are not implemented. LOW, and misleading.
+- Editing permissions (`UpdateMemberPermissions`) is admin-gated. Sound.
+- **`UploadFiles` / `DownloadFiles` — gated by nothing.** See below.
+
+**The one real hole.** `NodeResult::ObjectTransferHandle` auto-accepted every
+transfer behind one global boolean, and neither file permission was consulted
+anywhere in the server, while the matrix showed operators a "Files" category
+with per-user toggles and allowed/total badges. `Permission::for_role` grants
+Guest `ViewContent` and nothing else — its own comment says this makes the role
+"strictly weaker than Member" — so a read-only Guest could push files into
+server storage and pull them back out. Group messaging already carried exactly
+this fix, in a comment describing a Guest posting into every room it could see.
+The file path never received it. Twenty-third guarded/unguarded twin.
+
+Attribution needed new kernel state, because transfer events arrive on a
+different branch of the event loop than the per-connection actor and carry only
+a session CID. Cleared by a `Drop` guard, not a line at the end of the loop:
+that task has several exits and CIDs are reused, so a stale attribution would
+let the next connection inherit the previous account's authorisation.
+
+**A regression I checked for and did not find.** `User::new` builds an EMPTY
+permission map, so a Member created at connect holds nothing at
+`WORKSPACE_ROOT_ID`. Had `check_entity_permission` been a strict per-domain
+lookup, the new gate would have refused every ordinary user and broken all file
+transfer. It is not: the final fallback is
+`Permission::for_role(&user.role) && is_member_of_domain(..)`, so Members keep
+transferring and Guests do not. Worth writing down that this was verified
+against the running code rather than assumed from the test, which had set the
+permissions explicitly and so could not have caught it.
+
+**Still open (LOW).** `get_workspace` is membership-gated, not
+permission-gated, and banning only changes a role — so a banned account still
+reads workspace name, description, metadata and office list. Recorded rather
+than fixed: "ban" is not a wired feature (no operation, no gate), and building
+one is outside this goal.
+
+Also this wave: `update_workspace` gated on the master password alone and then
+set `role = Admin` unconditionally. Correct exactly once — the seeded root
+workspace is claimed that way — but the door never closed, and the password is
+ROOT's, stored on every workspace by `create_workspace`. Any authenticated
+holder could join a workspace they were not in and promote themselves to Admin
+on it. `delete_workspace` had already been given the admin-or-owner check, in
+the same file, with a comment explaining why.
