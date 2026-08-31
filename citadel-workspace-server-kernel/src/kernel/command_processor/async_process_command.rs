@@ -1219,6 +1219,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 ));
             }
 
+            // The same lock CreateNodeType holds. This write is a blind
+            // overwrite of a caller-supplied schema, so it does not race itself
+            // -- but landing between that handler's read and its save would
+            // discard this schema entirely.
+            let _schema_guard = kernel
+                .domain_operations
+                .backend_tx_manager
+                .lock_nodes()
+                .await;
+
             match kernel
                 .domain_operations
                 .backend_tx_manager
@@ -1261,6 +1271,19 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 icon: icon.clone(),
                 allowed_parents: allowed_parents.clone(),
             };
+
+            // Held across the read AND the save, like every other
+            // read-modify-write in this file. Two CreateNodeType calls both read
+            // the same schema, each appended its own nesting rules, and the
+            // second save overwrote the first -- the earlier type's rules gone,
+            // its caller told it succeeded. UpdateTreeSchema below takes the
+            // same lock so a blind overwrite cannot land inside this window
+            // either.
+            let _schema_guard = kernel
+                .domain_operations
+                .backend_tx_manager
+                .lock_nodes()
+                .await;
 
             // For now, custom node types are stored in the tree schema's rules
             // Update the schema to include this new type
