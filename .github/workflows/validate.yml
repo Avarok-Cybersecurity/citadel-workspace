@@ -980,6 +980,18 @@ jobs:
       # failures raise are backend questions. "Was the first account promoted to
       # Admin, or is the workspace awaiting initialization?" is answered by one
       # line in the server log, and that line was never captured.
+      - name: UDP negotiation timings
+        # ALWAYS, not `if: failure()`.
+        #
+        # Backlog #56 asks how long a SUCCESSFUL negotiation takes, because
+        # nobody could tell "the budget is marginal" from "the channel never
+        # arrives". A green run is where that number lives, and dumping only on
+        # failure throws away the exact measurement the question needs. Run
+        # 33356652733 went green on all three shards and told us nothing.
+        if: always()
+        run: |
+          docker compose logs internal-service 2>&1 \
+            | grep -E "\[UDP-NEGOTIATION\]" | tail -40 || true
       - name: Dump Service Logs on Test Failure
         if: failure()
         run: |
@@ -1126,6 +1138,18 @@ jobs:
       # failures raise are backend questions. "Was the first account promoted to
       # Admin, or is the workspace awaiting initialization?" is answered by one
       # line in the server log, and that line was never captured.
+      - name: UDP negotiation timings
+        # ALWAYS, not `if: failure()`.
+        #
+        # Backlog #56 asks how long a SUCCESSFUL negotiation takes, because
+        # nobody could tell "the budget is marginal" from "the channel never
+        # arrives". A green run is where that number lives, and dumping only on
+        # failure throws away the exact measurement the question needs. Run
+        # 33356652733 went green on all three shards and told us nothing.
+        if: always()
+        run: |
+          docker compose logs internal-service 2>&1 \
+            | grep -E "\[UDP-NEGOTIATION\]" | tail -40 || true
       - name: Dump Service Logs on Test Failure
         if: failure()
         run: |
