@@ -108,3 +108,25 @@ ROOT's, stored on every workspace by `create_workspace`. Any authenticated
 holder could join a workspace they were not in and promote themselves to Admin
 on it. `delete_workspace` had already been given the admin-or-owner check, in
 the same file, with a comment explaining why.
+
+## Open finding — a lagged broadcast subscriber loses updates silently
+
+`async_kernel.rs:1688`. The per-connection broadcast receiver has capacity 100.
+On `RecvError::Lagged(n)` it logs a warning and continues, so those n workspace
+updates — node created/deleted/moved, member role changed — are gone, and the
+client is never told it is stale. There is no resync response variant to send
+instead, and the UI's full refetch (`post-auth-setup.ts`) runs on
+authentication, not on demand.
+
+Recorded rather than fixed, deliberately. Reachability is not demonstrated: a
+connection must fall 100 STRUCTURAL broadcasts behind, and those are human-paced
+in normal operation, so a client that far behind is probably disconnecting
+anyway. The candidate fixes are a new protocol variant (regenerates the TS
+bindings) or closing the connection so the client reconnects and refetches — the
+second risks reconnect churn in exactly the overload conditions that produced
+the lag. Neither is worth shipping on a hypothesis while the merge PRs are in
+CI.
+
+To promote this to a real finding, reproduce it: hold a client's socket while
+driving >100 structural changes, then assert the client's tree diverges from the
+server's.
