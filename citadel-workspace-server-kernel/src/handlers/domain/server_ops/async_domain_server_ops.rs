@@ -1077,6 +1077,33 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             None => return Err(NetworkError::msg("Workspace not found")),
         };
 
+        // The bootstrap must not stay open once it has been used.
+        //
+        // An unowned workspace is claimable by whoever presents the master
+        // password: that is the documented way the first admin is established
+        // (see UNASSIGNED_OWNER), and the seeded root workspace starts that way.
+        // Once someone has claimed it, though, the password stops being
+        // sufficient -- because it is not a per-workspace secret. Creating any
+        // non-root workspace requires ROOT's password and then stores that same
+        // value as the new workspace's own, so the one secret is held by
+        // everyone who has ever created a workspace. Without this check any
+        // authenticated holder of it could add themselves to a workspace they
+        // are not in, rewrite its name and metadata, and -- via the role write
+        // at the end of this function -- promote themselves to Admin.
+        //
+        // `delete_workspace` was given exactly this treatment, and says so in
+        // its own comment; this was its unguarded twin.
+        let is_bootstrap = workspace.owner_id.is_empty();
+        if !is_bootstrap {
+            let is_admin = self.is_admin(user_id).await.unwrap_or(false);
+            let is_owner = workspace.owner_id == user_id;
+            if !is_admin && !is_owner {
+                return Err(NetworkError::msg(
+                    "Permission denied: only an admin or the workspace owner may update it",
+                ));
+            }
+        }
+
         // Update fields
         if let Some(new_name) = name {
             workspace.name = new_name.to_string();
@@ -1096,13 +1123,15 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
                     .map_err(NetworkError::msg)?;
         }
 
-        // Add the user as a member if they're not already (since they have the master password)
-        if !workspace.members.contains(&user_id.to_string()) {
+        // Membership follows from the claim, not from the password. Anyone
+        // reaching here who is not bootstrapping is already the owner or an
+        // admin, so this only ever adds the claimant.
+        if is_bootstrap && !workspace.members.contains(&user_id.to_string()) {
             workspace.members.push(user_id.to_string());
         }
 
         // If workspace has no owner, the first user with master password becomes the owner
-        if workspace.owner_id.is_empty() {
+        if is_bootstrap {
             info!(target: "citadel", "No owner set - assigning {} as workspace owner", user_id);
             workspace.owner_id = user_id.to_string();
         }
@@ -1120,7 +1149,18 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             .insert_domain(workspace_id.to_string(), domain)
             .await?;
 
-        // Also ensure the user has admin permissions since they have the master password
+        // Granting Admin is part of claiming an unowned workspace, and only that.
+        //
+        // It has to happen here rather than through add_user_to_domain, because
+        // during initialisation there is no admin yet to authorise it. That is
+        // precisely why it must not run afterwards: once the workspace has an
+        // owner, this write would hand Admin to anyone who presented the shared
+        // master password. Renaming a workspace is not a reason to change
+        // anybody's role, so a later owner/admin edit leaves roles untouched.
+        if !is_bootstrap {
+            return Ok(workspace);
+        }
+
         // We need to directly update the user's role since add_user_to_domain requires admin permissions
         // but there might not be any admins yet during workspace initialization
         let mut user = match self.backend_tx_manager.get_user(user_id).await? {
