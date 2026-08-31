@@ -892,6 +892,44 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         passwords.remove(workspace_id);
         self.backend_tx_manager.save_passwords(&passwords).await?;
 
+        // Every member kept a `permissions[workspace_id]` entry for a workspace
+        // that no longer exists. `remove_member` already does this for a single
+        // domain (see its "Remove permissions from user" block); deleting the
+        // whole workspace did not, so the entries accumulated -- unreachable,
+        // since ids are server-minted UUIDs and can never be reissued, but
+        // unbounded across deletions.
+        //
+        // Done AFTER the workspace is gone, deliberately. If this fails the
+        // leftover is the same unreachable garbage we are cleaning up; doing it
+        // first would mean a failed `remove_workspace` had already stripped
+        // every member's access to a workspace that still exists.
+        //
+        // Per user rather than one `save_users`, matching `remove_member`: a
+        // read-modify-write of the whole map would clobber concurrent user
+        // edits, which is exactly the bug the `lock_nodes` comment above records.
+        //
+        // Under `lock_workspaces` for the same reason `create_workspace` takes
+        // it around its own get_user/insert_user pair: a user record read,
+        // modified and written back across awaits needs the lock every other
+        // user writer takes, or two updates each apply to their own copy and the
+        // second write silently discards the first. Safe to take here -- the
+        // lock is only ever held by this handler layer, never inside
+        // `remove_workspace` or `insert_user`.
+        let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+        let users = self.backend_tx_manager.get_all_users().await?;
+        let holders: Vec<String> = users
+            .iter()
+            .filter(|(_, user)| user.permissions.contains_key(workspace_id))
+            .map(|(id, _)| id.clone())
+            .collect();
+        for holder in holders {
+            if let Some(mut user) = self.backend_tx_manager.get_user(&holder).await? {
+                if user.permissions.remove(workspace_id).is_some() {
+                    self.backend_tx_manager.insert_user(holder, user).await?;
+                }
+            }
+        }
+
         Ok(())
     }
 
