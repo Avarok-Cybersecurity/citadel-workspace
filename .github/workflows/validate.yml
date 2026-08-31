@@ -949,9 +949,9 @@ jobs:
           echo "=== sync-wasm-client logs ==="
           docker compose logs sync-wasm-client 2>&1 | tail -200
           echo "=== server logs ==="
-          docker compose logs server 2>&1 | tail -50
+          docker compose logs -t server 2>&1 | tail -50
           echo "=== internal-service logs ==="
-          docker compose logs internal-service 2>&1 | tail -50
+          docker compose logs -t internal-service 2>&1 | tail -50
       - name: Clean Docker Build Cache
         run: |
           docker builder prune -af
@@ -981,6 +981,12 @@ jobs:
       # Admin, or is the workspace awaiting initialization?" is answered by one
       # line in the server log, and that line was never captured.
       - name: UDP negotiation timings
+        # `-t` on every dump below, because without it `docker compose logs`
+        # prints no origin times and every line carries the timestamp of the
+        # DUMP. Run 33356652733 showed 27 "Peer connection not found" lines that
+        # could have been a mid-test failure or teardown noise, and there was no
+        # way to tell which.
+        #
         # ALWAYS, not `if: failure()`.
         #
         # Backlog #56 asks how long a SUCCESSFUL negotiation takes, because
@@ -990,17 +996,17 @@ jobs:
         # 33356652733 went green on all three shards and told us nothing.
         if: always()
         run: |
-          docker compose logs internal-service 2>&1 \
+          docker compose logs -t internal-service 2>&1 \
             | grep -E "\[UDP-NEGOTIATION\]" | tail -40 || true
       - name: Dump Service Logs on Test Failure
         if: failure()
         run: |
           echo "=== server: membership and refusal decisions ==="
-          docker compose logs server 2>&1 \
+          docker compose logs -t server 2>&1 \
             | grep -E "first workspace member|awaits initialization|promoted to Admin|Refusing" \
             | tail -40 || true
           echo "=== server (tail, ratchet noise dropped) ==="
-          docker compose logs server 2>&1 \
+          docker compose logs -t server 2>&1 \
             | grep -vE "ratchet_manager\.rs|endpoint_crypto_container" | tail -120
           # The P2P causal chain, which a blind tail cannot show.
           #
@@ -1012,14 +1018,14 @@ jobs:
           # message!` -- was pushed out of the tail by ratchet_manager INFO
           # spam, which fills all 120 lines on its own.
           echo "=== internal-service: P2P send/receive chain ==="
-          docker compose logs internal-service 2>&1 \
+          docker compose logs -t internal-service 2>&1 \
             | grep -E "\[P2P-MSG\]|\[PeerChannelCreated\]|\[P2P-RECV-CHANNEL\]|\[UDP-NEGOTIATION\]|Auto-accepted inbound REVFS|Failed to auto-accept" \
             | tail -80 || true
           echo "=== internal-service: warnings and errors ==="
-          docker compose logs internal-service 2>&1 \
+          docker compose logs -t internal-service 2>&1 \
             | grep -E "WARN|ERROR" | grep -vE "ratchet_manager\.rs" | tail -60 || true
           echo "=== internal-service (tail, ratchet noise dropped) ==="
-          docker compose logs internal-service 2>&1 \
+          docker compose logs -t internal-service 2>&1 \
             | grep -vE "ratchet_manager\.rs|endpoint_crypto_container" | tail -120
       - name: Upload Screenshots on Failure
         if: failure()
@@ -1110,8 +1116,8 @@ jobs:
         if: failure()
         run: |
           docker compose logs sync-wasm-client 2>&1 | tail -200
-          docker compose logs server 2>&1 | tail -50
-          docker compose logs internal-service 2>&1 | tail -50
+          docker compose logs -t server 2>&1 | tail -50
+          docker compose logs -t internal-service 2>&1 | tail -50
       - name: Clean Docker Build Cache
         run: |
           docker builder prune -af
@@ -1139,6 +1145,12 @@ jobs:
       # Admin, or is the workspace awaiting initialization?" is answered by one
       # line in the server log, and that line was never captured.
       - name: UDP negotiation timings
+        # `-t` on every dump below, because without it `docker compose logs`
+        # prints no origin times and every line carries the timestamp of the
+        # DUMP. Run 33356652733 showed 27 "Peer connection not found" lines that
+        # could have been a mid-test failure or teardown noise, and there was no
+        # way to tell which.
+        #
         # ALWAYS, not `if: failure()`.
         #
         # Backlog #56 asks how long a SUCCESSFUL negotiation takes, because
@@ -1148,17 +1160,17 @@ jobs:
         # 33356652733 went green on all three shards and told us nothing.
         if: always()
         run: |
-          docker compose logs internal-service 2>&1 \
+          docker compose logs -t internal-service 2>&1 \
             | grep -E "\[UDP-NEGOTIATION\]" | tail -40 || true
       - name: Dump Service Logs on Test Failure
         if: failure()
         run: |
           echo "=== server: membership and refusal decisions ==="
-          docker compose logs server 2>&1 \
+          docker compose logs -t server 2>&1 \
             | grep -E "first workspace member|awaits initialization|promoted to Admin|Refusing" \
             | tail -40 || true
           echo "=== server (tail, ratchet noise dropped) ==="
-          docker compose logs server 2>&1 \
+          docker compose logs -t server 2>&1 \
             | grep -vE "ratchet_manager\.rs|endpoint_crypto_container" | tail -120
           # The P2P causal chain, which a blind tail cannot show.
           #
@@ -1170,14 +1182,14 @@ jobs:
           # message!` -- was pushed out of the tail by ratchet_manager INFO
           # spam, which fills all 120 lines on its own.
           echo "=== internal-service: P2P send/receive chain ==="
-          docker compose logs internal-service 2>&1 \
+          docker compose logs -t internal-service 2>&1 \
             | grep -E "\[P2P-MSG\]|\[PeerChannelCreated\]|\[P2P-RECV-CHANNEL\]|\[UDP-NEGOTIATION\]|Auto-accepted inbound REVFS|Failed to auto-accept" \
             | tail -80 || true
           echo "=== internal-service: warnings and errors ==="
-          docker compose logs internal-service 2>&1 \
+          docker compose logs -t internal-service 2>&1 \
             | grep -E "WARN|ERROR" | grep -vE "ratchet_manager\.rs" | tail -60 || true
           echo "=== internal-service (tail, ratchet noise dropped) ==="
-          docker compose logs internal-service 2>&1 \
+          docker compose logs -t internal-service 2>&1 \
             | grep -vE "ratchet_manager\.rs|endpoint_crypto_container" | tail -120
       - name: Upload Playwright Report
         if: failure()
