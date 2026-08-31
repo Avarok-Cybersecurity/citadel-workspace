@@ -1,3 +1,4 @@
+import { notifyEach } from './notify-listeners';
 import { WorkspaceClient } from './WorkspaceClient';
 import { WorkspaceAuth } from './auth';
 import { isVariant } from 'citadel-internal-service-wasm-client';
@@ -114,9 +115,7 @@ export class WorkspaceSessionManager {
   }
 
   private notifySessionListeners(): void {
-    this.sessionListeners.forEach(listener => {
-      listener(this.workspaceSession);
-    });
+    notifyEach(this.sessionListeners, 'workspace session', this.workspaceSession);
   }
 
   private setupErrorHandling(): void {
