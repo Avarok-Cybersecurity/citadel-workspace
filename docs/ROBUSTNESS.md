@@ -1630,3 +1630,35 @@ ban case alone. Control: removing it fails exactly the ban test.
 true when written and false later — but the first where the stale part was a
 *severity*. A finding's rating depends on what is reachable, and reachability is
 exactly what the last twenty rounds kept changing.
+
+## Round 508 — group access audited clean, and a gate whose first draft was blind
+
+With #292 merged, this round audited an area the campaign had not touched:
+server-side group-chat authorization.
+
+**It is correct, and completely so.** Five group request variants exist on the
+wire, all five are handled, and all five ask the right gate — `SendGroupMessage`,
+`EditGroupMessage` and `DeleteGroupMessage` ask `authorize_group_write`
+(`SendMessages`), `GetGroupMessages` and `GetThreadMessages` ask
+`authorize_group_read` (`ViewContent`). An unknown channel is denied rather than
+treated as public. Nothing to fix.
+
+That correctness was won by hand, in five places, after every one of those
+handlers — including the three that write — once asked the READ question, so a
+Guest could post into, edit and delete chat in every room it could see. Nothing
+held that fix in place.
+
+**The index earned itself.** Checking for an existing guard first turned up
+`check-group-permissions-are-enforced.mjs`, which sounds like the same thing and
+is not: it governs the UI's client-side role editor. Four rounds ago that would
+have been a fifth duplicate; this time it took one grep.
+
+**The gate's first draft did not work, and its own control said so.** Removing a
+handler's gate call left the check green, because the pattern matched the
+`use crate::kernel::group_access::{authorize_group_write, ...}` import on the
+line above. A handler that imported the gate and never called it would have
+passed. It now requires the call — `authorize_group_write(` — and skips `use`
+lines.
+
+That is the eighth control this campaign has run that found the checker rather
+than the code, and the second where the checker was mine and minutes old.
