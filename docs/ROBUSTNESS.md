@@ -1705,3 +1705,36 @@ as a finding.
 replacements on the first attempt because the anchor's indentation was wrong.
 Caught both times only because the script prints what it changed — the habit this
 campaign keeps being saved by.
+
+## Round 510 — opening a document broadcast the whole document
+
+Audited the Yjs live-document path, which the original plan flagged as a possible
+echo loop. **There is no loop**: the provider's update handler already ignores
+`remote`, `merkle-reconstruct` and `creator-resync`, so a received update is
+never re-broadcast.
+
+The defect is one step away. `useDocumentPersistence` applies the stored state to
+the **same Y.Doc the editor uses** — the doc the provider is attached to — and
+that apply carried **no origin**. So the provider saw a local edit and pushed the
+entire document at the peer every time an editor mounted.
+
+Correctness was never at risk; Yjs converges. What it cost is a full-state send
+on every open, competing with the keystrokes the same channel carries — and the
+handler's own comment says that channel is overrun by one message per keystroke.
+Nothing is lost by not sending it: the initial sync exchanges state vectors and
+asks for what the peer actually lacks.
+
+**Two things about the fix are worth more than the fix.**
+
+The first draft of the test carried its **own copy** of the provider's ignore
+list. It passed, and it would have gone on passing while the provider changed
+underneath it — a test asserting against a copy of the rule rather than the rule.
+The predicate is now an exported `isLocalEdit` and the test imports it.
+
+The origin string was then written as a literal in two modules. It now lives once,
+beside `YjsOrigin`, because a literal in each is one rename away from this
+broadcast returning with nothing to notice it.
+
+Control: making the provider stop ignoring the restore fails the tagging test and
+leaves the genuine-local-edit test green — a guard that ignored every origin
+would have satisfied the first assertion while silencing real edits.
