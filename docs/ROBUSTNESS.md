@@ -1805,3 +1805,38 @@ was caught by asking what the fix made reachable or unreachable, and not one by
 the tests I wrote at the time, which passed in both worlds. An efficiency
 argument is especially dangerous here: it is easy to measure what a change
 removes and easy to miss what it was quietly providing.
+
+## Round 513 — a Fable fleet on the whole stack, and a read-only round while it runs
+
+The user asked for Fable 5.1 to run robustness, correctness and performance
+checks across the stack, with ultracode. Launched an eight-dimension audit —
+kernel concurrency, kernel authorization, internal-service lifecycle, UI state
+and effects, UI data integrity, protocol correctness, SDK API hazards, and
+performance hot paths — each piped straight into **adversarial verification**, so
+a finding reaches the record only after another agent has tried to kill it.
+
+Three things went into every prompt because they decide whether the output is
+useful or noise:
+
+- **The constraints, in full, to every agent.** No writing git commands, no
+  tilt/docker, no integration or Playwright suites (they share one backend), and
+  never build `citadel-workspace-internal-service` because its build script
+  regenerates committed WASM. Subagents do not inherit caution.
+- **A high bar with named exclusions.** File:line, a concrete failure scenario,
+  AND why existing guards do not already cover it — with instructions to grep for
+  the guard first, and a list of what was recently fixed, so this campaign's own
+  work does not come back as findings. Each is told an empty list is a good
+  answer.
+- **Verifiers default to refuted.** On a codebase audited this hard, a false
+  finding costs more than a missed one.
+
+**While it runs, a read-only round.** Audited CI for the "check that cannot fail"
+class, which nothing else covers: no `continue-on-error` anywhere, and every
+`|| true` is either a cleanup or the `grep -c` idiom for tolerating zero matches.
+The one that looked wrong — `diff <(...) <(...) || true` — is a print immediately
+followed by `exit 1`, with the real comparison a string test and an explicit
+emptiness check above it whose comment names the exact failure mode: *"a guard
+that passes precisely when it cannot see anything"*. Nothing to fix.
+
+Deliberately did **not** pursue the notification-store growth question: an agent
+is auditing that exact dimension, and racing it duplicates the work.
