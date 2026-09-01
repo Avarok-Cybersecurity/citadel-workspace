@@ -252,5 +252,18 @@ look green while they were red).
     `may_transfer`'s DOC COMMENT names it. Comments are now stripped before
     matching.
 
+  - `check-intent-results-checked` — discarded the result of a `persist-tree`
+    intent. Exit 1, naming the line and stating that the intent can resolve
+    `{ success: false }`. Its docstring lists three user-visible data-loss bugs
+    of that exact shape, each with a green toast on the other side of it.
+  - `check-storage-keys` — added a `localStorage.getItem` of a key nothing
+    writes. Exit 1, naming key and line.
+
+The storage-keys control took two attempts, and the first failure was mine. I
+planted a key that was neither read NOR written and the gate passed — correctly,
+because the defect it guards is a key that IS READ and never written, which is
+what makes a read return its default forever while the feature looks wired. A
+control has to reproduce the defect's shape, not merely touch the same file.
+
 All 43 gate scripts contain `process.exit(1)`, which is presence rather than
-reachability; the five above are the sample that was actually exercised.
+reachability; the seven above are the sample that was actually exercised.
