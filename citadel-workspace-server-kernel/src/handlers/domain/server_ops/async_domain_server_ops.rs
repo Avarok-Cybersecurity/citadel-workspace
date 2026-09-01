@@ -914,6 +914,27 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             ));
         }
 
+        // Membership is not enough on its own: banning changes a ROLE and leaves
+        // the member list untouched, so a banned account went on reading the
+        // workspace name, description, metadata and office list. Setting a role
+        // to Banned is an available operation — `update_workspace_member_role`
+        // takes any UserRole, and containment permits it because Banned's
+        // permission set is empty — so this is reachable, not theoretical.
+        //
+        // Asked as the permission rather than as `role != Banned`, for the reason
+        // `remove_user_from_domain` records: what `GetUserPermissions` reports
+        // must be what enforcement allows. `for_role` gives Banned nothing and
+        // gives Guest `ViewContent`, so this refuses exactly the accounts the
+        // permission editor already shows as unable to view.
+        if !self
+            .check_entity_permission(user_id, workspace_id, Permission::ViewContent)
+            .await?
+        {
+            return Err(NetworkError::msg(
+                "Permission denied: ViewContent is required to read this workspace",
+            ));
+        }
+
         // Get workspace from backend
         match self.backend_tx_manager.get_workspace(workspace_id).await? {
             Some(ws) => Ok(ws),

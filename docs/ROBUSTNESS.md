@@ -101,6 +101,13 @@ reads workspace name, description, metadata and office list. Recorded rather
 than fixed: "ban" is not a wired feature (no operation, no gate), and building
 one is outside this goal.
 
+> **CLOSED in round 507, and the severity was wrong.** "Ban is not a wired
+> feature" stopped being true: `update_workspace_member_role` takes any
+> `UserRole`, and grant-containment permits `Banned` because its permission set
+> is empty — so setting the role is an available operation and the gap was
+> reachable, not theoretical. `get_workspace` now requires `ViewContent`, which
+> `for_role` gives Guest and withholds from Banned.
+
 Also this wave: `update_workspace` gated on the master password alone and then
 set `role = Admin` unconditionally. Correct exactly once — the seeded root
 workspace is claimed that way — but the door never closed, and the password is
@@ -1591,3 +1598,35 @@ The fourth is a scoping decision recorded as LOW and left alone deliberately.
 
 Nothing recorded as open is a critical, high, or medium defect in shipped
 behaviour.
+
+## Round 507 — the last open LOW was reachable after all
+
+The record carried one remaining LOW: `get_workspace` gated on membership alone,
+banning changes only a role, so a banned account went on reading the workspace
+name, description, metadata and office list. It was left alone on the grounds
+that **"ban is not a wired feature (no operation, no gate)"**.
+
+That justification had expired. `update_workspace_member_role` takes any
+`UserRole`, and the grant-containment added in round 490 *permits* `Banned` —
+its permission set is empty, so it is a subset of everything any grantor holds.
+Setting a role to Banned is therefore an ordinary operation, and the gap was
+reachable rather than hypothetical. The severity was wrong because the
+reachability had changed underneath the entry.
+
+`get_workspace` now also requires `ViewContent`. Asked as the permission rather
+than as `role != Banned`, for the reason `remove_user_from_domain` records: what
+`GetUserPermissions` reports must be what enforcement allows. `for_role` gives
+Banned nothing and gives Guest `ViewContent`, so the refusal and the grant are
+the permission editor's own answer rather than a second opinion.
+
+**Three tests, and two of them exist to stop the fix being too broad.** A Guest
+must still read (ViewContent and nothing else), and a non-member must still be
+refused for being a non-member — a gate that refused everyone would satisfy the
+ban case alone. Control: removing it fails exactly the ban test.
+
+307/307 server-kernel tests unchanged; 88 checks green.
+
+**The pattern.** This is the fourth item this campaign has found where prose was
+true when written and false later — but the first where the stale part was a
+*severity*. A finding's rating depends on what is reachable, and reachability is
+exactly what the last twenty rounds kept changing.
