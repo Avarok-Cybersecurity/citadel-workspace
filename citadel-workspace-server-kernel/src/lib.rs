@@ -1,5 +1,5 @@
 use crate::config::{ServerConfig, WorkspaceStructureConfig};
-use citadel_logging::{info, setup_log};
+use citadel_logging::{info, setup_log, warn};
 use citadel_sdk::prelude::{BackendType, NetworkError, NodeBuilder, NodeType, StackedRatchet};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use std::net::SocketAddr;
@@ -633,6 +633,35 @@ pub async fn run_server_with_base_path(
         builder.with_insecure_skip_cert_verification();
     }
 
+    // A planned restart must reach the clients, not just the process.
+    //
+    // `on_stop` broadcasts `ServerShutdown` and holds a short drain window, and
+    // the UI has a handler for it — but nothing was triggering any of it. The
+    // executor only reaches `on_stop` when its own select completes, and
+    // SIGTERM had no handler here, in the SDK, or as a `stop_grace_period` in
+    // compose. So `docker compose restart` killed the process outright: the
+    // broadcast never went out, the drain never happened, and every client saw
+    // a dropped connection instead of the planned-restart notice that variant
+    // exists to give them. The mechanism was built and never connected to
+    // anything that fires it.
+    let shutdown_kernel = kernel.clone();
+    tokio::spawn(async move {
+        if await_termination_signal().await {
+            info!(target: "citadel", "Termination signal received; requesting a clean shutdown");
+            let remote = shutdown_kernel.node_remote.read().clone();
+            match remote {
+                Some(remote) => {
+                    if let Err(err) = remote.shutdown().await {
+                        warn!(target: "citadel", "Clean shutdown request failed: {err:?}");
+                    }
+                }
+                // Before `set_node_remote` runs there is nothing to ask, and no
+                // clients to tell either.
+                None => info!(target: "citadel", "No node remote yet; exiting without a drain"),
+            }
+        }
+    });
+
     // Build and await server execution
     builder
         .build(kernel)
@@ -640,6 +669,37 @@ pub async fn run_server_with_base_path(
         .await?;
 
     Ok(())
+}
+
+/// Resolves when the process is asked to terminate.
+///
+/// SIGTERM is what a container runtime sends; SIGINT is what an operator sends
+/// from a terminal. Returns false only if the handlers cannot be installed, in
+/// which case the default behaviour (immediate termination) stands and saying
+/// so is more useful than pretending a drain will happen.
+#[cfg(unix)]
+pub async fn await_termination_signal() -> bool {
+    use tokio::signal::unix::{signal, SignalKind};
+    let (mut term, mut interrupt) = match (
+        signal(SignalKind::terminate()),
+        signal(SignalKind::interrupt()),
+    ) {
+        (Ok(term), Ok(interrupt)) => (term, interrupt),
+        _ => {
+            warn!(target: "citadel", "Could not install termination handlers; shutdown will not drain");
+            return false;
+        }
+    };
+    tokio::select! {
+        _ = term.recv() => {}
+        _ = interrupt.recv() => {}
+    }
+    true
+}
+
+#[cfg(not(unix))]
+pub async fn await_termination_signal() -> bool {
+    tokio::signal::ctrl_c().await.is_ok()
 }
 
 /// Resolve the backend type from the four possible sources, in

@@ -15,7 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 structopt = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt"] }
+tokio = { workspace = true, features = ["macros", "rt", "signal"] }
 citadel_sdk = { workspace = true, features = ["sql"] }
 citadel_types = { workspace = true }
 citadel-workspace-types = { workspace = true }
@@ -49,3 +49,4 @@ common = { path = "./tests/common", package = "citadel-workspace-server-kernel-t
 
 rstest = { workspace = true }
 bincode = { workspace = true }
+libc = "0.2"
