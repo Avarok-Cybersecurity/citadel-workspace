@@ -48,3 +48,20 @@ node scripts/check-<name>.mjs > /dev/null 2>&1; echo "exit: $?"   # not through 
 
 `docs/ROBUSTNESS.md` — what was found, the evidence, and what each control
 proved. Including the controls that proved nothing, which are the useful half.
+
+## The index
+
+`docs/GATES.md` lists every gate in the repository with the line it fails on,
+generated from the scripts themselves by `scripts/build-gates-index.mjs`.
+
+**Read it before writing a new one.** Ninety gates live across two directories,
+and until the index existed the only way to learn whether a guard was already
+there was to read all ninety. Four times in one campaign a check was written
+that already existed elsewhere and better — a listener guard, an event guard, a
+permission gate and an entire test module — each discovered by accident
+afterwards.
+
+`build-gates-index.mjs --check` runs in preflight and fails when the index is
+stale, so a new gate cannot be added without appearing in it. It also fails when
+its own search matches nothing, because an index that lists nothing would
+otherwise report a completeness it never measured.

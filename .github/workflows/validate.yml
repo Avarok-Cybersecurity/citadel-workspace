@@ -211,6 +211,9 @@ jobs:
 
       - name: Every administrator promotion sits behind a gate
         run: node scripts/check-admin-promotions-are-gated.mjs
+
+      - name: The gate index lists every gate
+        run: node scripts/build-gates-index.mjs --check
       - name: Check every integration spec is named by a test script
         run: node scripts/check-every-integration-spec-has-a-runner.mjs
       - name: Check every value production requires is documented

@@ -78,7 +78,13 @@ for (const rel of SCAN) {
   const full = join(ROOT, rel);
   if (!existsSync(full)) continue;
   readFileSync(full, 'utf8').split('\n').forEach((line, idx) => {
-    const m = line.match(/verify:\s*(.+?)\s*(?:-->)?\s*$/);
+    // An annotation lives in a COMMENT, in the two documented forms:
+    // `# verify: ...` and `<!-- verify: ... -->`. Matching `verify:` anywhere in
+    // a line meant this gate could not coexist with prose describing it — the
+    // generated gate index quotes check-doc-assertions' own first sentence,
+    // which contains `verify:`, and that was parsed as a malformed annotation.
+    // A guard that forbids documenting itself is a guard nobody can explain.
+    const m = line.match(/^\s*(?:#|<!--)\s*verify:\s*(.+?)\s*(?:-->)?\s*$/);
     if (!m) return;
     const where = `${rel}:${idx + 1}`;
     // Quoted patterns hold together; everything else splits on whitespace.

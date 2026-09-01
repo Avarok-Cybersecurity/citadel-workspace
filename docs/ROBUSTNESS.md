@@ -1206,3 +1206,37 @@ before writing either.**
 discarded the uncommitted fix along with it, because the change had never been
 committed. The reversible-edit pattern used everywhere else in this session does
 not have that failure mode; the file-level revert does.
+
+## Round 496 — ninety gates and no index, which is why four were rebuilt
+
+Four times in this campaign I wrote a guard that already existed elsewhere and
+better: a listener check, an event guard, a permission gate, and a whole test
+module. Each surfaced by accident afterwards. This round asked why, instead of
+resolving to be more careful.
+
+**There are ninety gate scripts across two directories, and nothing listed
+them.** `scripts/README.md` named five. The only way to learn whether a guard
+already existed was to read ninety files, so the duplication was not
+carelessness — it was the predictable outcome of an undiscoverable set.
+
+`docs/GATES.md` is now generated from the scripts themselves — each gate's name
+beside the first sentence of its own header, so the index cannot describe a gate
+differently from how the gate describes itself. All ninety extracted a
+meaningful summary; none fell back to a placeholder.
+
+**Two controls, because an index has two ways to lie.** Adding a gate without
+regenerating fails `--check`. And a search pattern that matches nothing fails
+too, rather than reporting that all zero gates are indexed — the failure mode
+that has bitten this campaign repeatedly.
+
+**A gate that forbade documenting itself.** Publishing the index broke
+`check-doc-assertions`: it matched `verify:` anywhere in a line, and the index
+quotes that gate's own first sentence, which contains the word. So the guard
+could not coexist with prose describing it — and the first thing anyone writing
+about it would hit is a failure.
+
+Annotations live in comments, in two documented forms (`# verify: …` and
+`<!-- verify: … -->`); the parser now requires that position. Controlled both
+ways: the loose pattern trips on the index again, and a pattern matching nothing
+fails the gate's own anti-vacuity floor rather than passing silently. Three real
+annotations still hold, which is what proves the tightening did not blind it.
