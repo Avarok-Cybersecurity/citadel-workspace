@@ -1460,3 +1460,31 @@ reached 499 of 500" are different bugs, and neither was distinguishable before.
 **Still open.** What causes the shortfall. The instrumentation is what makes the
 next occurrence answerable, which is exactly how round 494's cause was found —
 by a log that named where it stopped.
+
+## Round 503 — propagating the unbounded-receive fix I had not propagated
+
+Rounds 494 and 502 each fixed an unbounded await on a receive. Two instances a
+round apart is a class, so this round did what should have followed round 494
+immediately: grep the mechanism.
+
+**Three more, in `udp_media_modes`.** The client sends a datagram and awaits its
+echo — twice, unbounded — and the server's echo loop awaits each payload
+unbounded. UDP does not promise delivery, so one dropped datagram parks the test
+until its timeout with nothing said about which exchange stalled.
+
+**Bounding, not resending, and the reason is in the code.** Round 494's remedy
+was to resend until the echo arrives. It is wrong here: this echo is strictly
+counted at two payloads, so a resent datagram draws an extra echo, exhausts that
+count early and strands the second exchange. The same defect class does not
+imply the same fix, and applying 494's remedy mechanically would have introduced
+a new hang while removing an old one.
+
+Control: dropping the client's first datagram yields *"no UDP datagram within
+30s while waiting for first"* in 31.5s — naming the side and the exchange —
+against a silent hang before. 4/4 pass unmodified, 97/97 across the suite.
+
+**The omission is mine.** I fixed this class in `test_common.rs` in round 494 and
+did not grep for siblings, which is exactly the *fixes that were never
+propagated* pattern this campaign has recorded against other people's work three
+times. The remedy differing per site is the reason it is worth doing by hand
+rather than by sed.
