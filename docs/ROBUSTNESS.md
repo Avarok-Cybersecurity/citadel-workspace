@@ -1078,3 +1078,41 @@ before the replace, and the run that followed exercised unmodified code and
 reported two passes. It was caught only because the planting step prints what it
 changed. That is the seventh time this session a control has measured nothing,
 and every catch has come from the same habit.
+
+## Round 493 — completing the enumeration, and a gate so a fourth door cannot open
+
+Three escalation doors were found one round apart, by hand. This round finished
+the enumeration properly and then built the mechanism that was missing.
+
+**Every site that grants authority, audited:**
+
+| Site | Gate | Verdict |
+|---|---|---|
+| `write_user_role` | callers contained (rounds 487, 491) | safe |
+| `remove_user_from_domain` (role reset, grant removal) | de-escalation | safe |
+| `create_workspace` | bootstrap-only since round 492 | safe |
+| `delete_workspace` | de-escalation | safe |
+| `update_workspace` | `if !is_bootstrap { return }` | safe |
+| first-member on connect | needs `WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN` | safe |
+
+No fourth door. That is worth writing down as a result in its own right: the
+audit is complete, not merely "nothing else turned up while I was looking".
+
+**Why a gate.** Three doors existed simultaneously because nothing kept the
+promotion sites consistent with one another. `user.role` is a single global
+field — `is_admin` reads it and never asks which workspace — so one ungated
+assignment is a workspace-wide escalation, and each was found only by somebody
+choosing to look.
+
+`check-admin-promotions-are-gated.mjs` requires every
+`role = UserRole::Admin|Owner` to sit within reach of a bootstrap check, the
+operator-opt-in outcome, or a containment call. Demotions need nothing, since
+Member/Guest/Banned only take authority away.
+
+**Two controls, because this guard has two ways to be useless.** Planting an
+ungated promotion takes it from "all 3 gated" to exit 1 naming the line. And
+making its pattern stale — so it matches nothing — also exits 1, rather than
+reporting that all zero promotions are safe. The second is the failure mode that
+has bitten this campaign seven times.
+
+85 checks now.
