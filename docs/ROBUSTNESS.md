@@ -1559,3 +1559,35 @@ controls in both directions: one that never matches reports a present fix as
 missing, one that always matches reports a missing fix as present. The campaign
 has spent nine rounds on controls that measured nothing; the probes doing the
 measuring were never held to the same standard.
+
+## Round 506 — the open list, reconciled
+
+With #292 at 37 green and about to merge, this reconciles what the record still
+calls open against what is actually true.
+
+| recorded open | status now |
+|---|---|
+| `get_workspace` membership-gated, not permission-gated (LOW) | **still open** — a deliberate scoping choice, not a defect |
+| Round 488: the UDP one-shot flake | **still open** — cause unidentified; diagnostics armed and proven to fire under CI's log level |
+| Round 482: `ensure_messenger_open` returns `false` for two states | **CLOSED this round** — see below |
+| Round 502: what causes the group-broadcast shortfall | **still open** — now bounded and self-describing rather than a silent 90s hang |
+| PSK downgrade (upstream) | **still open** — reproduction and behaviour table recorded, not a lockout |
+
+**Round 482 is closed, and it is worth saying how.** It was recorded as open
+because the ambiguity lives in the WASM binding, and round 497 proved that
+deferral right: the artefact is tracked, CI does not rebuild it, so a source
+change there would not run. The question never asked was what is fixable at the
+layer that *can* be changed and verified. The open completes in milliseconds, so
+one bounded retry in the send path turns a spurious user-visible failure into a
+slightly slower success — without touching the binding at all.
+
+Three of the four remaining are the same shape: **a cause not yet identified,
+with instrumentation in place to identify it.** That is a weaker position than
+"fixed" and a much stronger one than "flaky", and the difference is that the next
+occurrence produces evidence instead of a shrug. Round 494's cause was found
+exactly that way.
+
+The fourth is a scoping decision recorded as LOW and left alone deliberately.
+
+Nothing recorded as open is a critical, high, or medium defect in shipped
+behaviour.
