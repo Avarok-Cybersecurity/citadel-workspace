@@ -418,3 +418,52 @@ count at which the cheap conclusion is "the PR broke something".
 
 Not merged. The standing authorisation to force-merge is conditional on a green
 pipeline, and a pipeline red for reasons outside the diff is still not green.
+
+## Round 477 — the errno was stringified away, and the fix for it was inert
+
+**Correction to Round 476.** I recorded #288's three CI failures as
+"environmental, none from the diff" without the one comparison that could test
+it. Made now: `core_libs (windows-latest)` passed on #285, #289, #290 and #291,
+and #288's diff is a single `citadel_crypt` file. So *"not caused by the diff"*
+is confirmed mechanically — a ratchet change cannot deny a socket bind — but
+*"environmental"* was too strong: the job passes on other runners, so it is
+runner-dependent, not a fixed property of the environment. It also is not
+"unrelated": it blocks the merge either way.
+
+**The failure.** 3 of 49: `test_many_proto_conns::{case_1,case_2}` and
+`test_tcp_or_tls::case_1`, all `os error 10013` (WSAEACCES) binding
+`127.0.0.1:0`. Windows denies an ephemeral bind when the port the OS picked lies
+in a Hyper-V/WinNAT reserved range. Note `case_1` is **IPv4** — my earlier
+"Hyper-V IPv6" note could not have explained it.
+
+**What the control found.** The intended fix was a narrow retry: the denial
+belongs to one port, not to the address, so drawing another port is the correct
+response rather than a suppression. I then planted the defect — retargeted the
+matched errno at one macOS actually produces and bound `192.0.2.1:0`. The retry
+**did not fire**. Returned on attempt 1.
+
+Because `create_listener` converted `citadel_wire`'s `anyhow::Error` with
+`err.to_string()`. That destroys the errno *and* the kind: every bind failure
+arrived as `ConnectionRefused` — a kind a bind cannot produce — or as
+`Custom{kind: Other}`, which is exactly what the CI log shows. `raw_os_error()`
+was always `None`, so the retry could never match, and would have shipped inert
+while looking like a fix.
+
+The same `to_string()` sat on the connect path, flattening a connect *timeout*
+into `ConnectionRefused` — a distinction the SDK's reconnection logic depends
+on. One shared `io_error_from_anyhow` now recovers the `io::Error` from the
+anyhow chain at all four sites.
+
+**Also found:** two drifted copies of the "can this case run here" guard. The
+Windows IPv6/QUIC skip existed in `test_tcp_or_tls` only, so
+`test_many_proto_conns` went on binding `[::1]:0` on Windows. Folded into one.
+
+**Proof.** `bind_failure_preserves_errno_and_kind` — FAIL with the old
+conversion restored, PASS with the fix, restoration re-verified. 49/49
+`citadel_proto`. PR #292.
+
+**The lesson, again.** This is the seventh control this session that measured
+nothing — and the first where the thing it caught was *my own fix being dead*
+rather than the control being misplanted. A retry loop that never executes is
+indistinguishable from a working one unless you make the error it keys on
+actually occur.
