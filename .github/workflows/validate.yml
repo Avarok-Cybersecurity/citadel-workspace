@@ -205,6 +205,8 @@ jobs:
         run: node scripts/check-hover-only-controls.mjs
       - name: Check listener fan-outs isolate their subscribers
         run: node scripts/check-listener-fanouts-are-isolated.mjs
+      - name: Check every integration spec is named by a test script
+        run: node scripts/check-every-integration-spec-has-a-runner.mjs
       - name: Check every service declares a restart policy
         run: node scripts/check-restart-policies.mjs
       - name: Check no control loses its name at narrow widths
