@@ -1482,9 +1482,22 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
     async fn list_workspaces(&self, user_id: &str) -> Result<Vec<Workspace>, NetworkError> {
         let all_workspaces = self.backend_tx_manager.get_all_workspaces().await?;
 
+        // Membership AND ViewContent, matching `get_workspace`.
+        //
+        // This filtered on membership alone, and banning changes a ROLE while
+        // leaving `workspace.members` untouched. So `GetWorkspace` answered
+        // "ViewContent is required to read this workspace" while `ListWorkspaces`
+        // handed the same banned account the same record — name, description,
+        // owner, member count — for every workspace it was still listed in. The
+        // gate was added to one endpoint and not to its sibling, which is the
+        // shape this campaign keeps finding.
         let mut accessible_workspaces = Vec::new();
         for (ws_id, workspace) in all_workspaces {
-            if self.is_member_of_domain(user_id, &ws_id).await? {
+            if self.is_member_of_domain(user_id, &ws_id).await?
+                && self
+                    .check_entity_permission(user_id, &ws_id, Permission::ViewContent)
+                    .await?
+            {
                 accessible_workspaces.push(workspace);
             }
         }

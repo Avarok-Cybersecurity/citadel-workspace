@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Build (or verify) the index of every gate in this repository.
 //
-// There are ninety of them across two directories, and nothing listed them. The
-// only way to learn whether a guard already existed was to read ninety files,
+// They live across two directories and nothing listed them. The only way to
+// learn whether a guard already existed was to read every one of them,
 // so four times in one campaign a guard was written that already existed
 // elsewhere and better — a listener check, an event guard, a permission gate,
 // and a whole test module. Each was found by accident, after the fact.

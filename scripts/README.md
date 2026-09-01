@@ -1,8 +1,16 @@
 # Gates
 
-84 `check-*.mjs` scripts: 44 here, 40 in `citadel-workspaces/scripts/`. Each
-encodes one property that was violated at least once, usually more than once in
-different files — which is why it is a check rather than a fix.
+`check-*.mjs` scripts live in two directories: here, and in
+`citadel-workspaces/scripts/`. Each encodes one property that was violated at
+least once, usually more than once in different files — which is why it is a
+check rather than a fix.
+
+The count is deliberately not written here. It was, three times, and each time it
+went stale as gates were added — most recently claiming 84 in a tree holding 92,
+in the same document whose whole purpose is telling a reader what already exists
+before they write a duplicate. `docs/GATES.md` carries the number and is
+generated, so it cannot drift; `node scripts/build-gates-index.mjs --check`
+fails when it has.
 
 `npm run preflight` runs the set. Its list is **derived** from
 `.github/workflows/validate.yml`, so adding a step there is what makes preflight
@@ -54,9 +62,9 @@ proved. Including the controls that proved nothing, which are the useful half.
 `docs/GATES.md` lists every gate in the repository with the line it fails on,
 generated from the scripts themselves by `scripts/build-gates-index.mjs`.
 
-**Read it before writing a new one.** Ninety gates live across two directories,
-and until the index existed the only way to learn whether a guard was already
-there was to read all ninety. Four times in one campaign a check was written
+**Read it before writing a new one.** The gates live across two directories, and
+until the index existed the only way to learn whether a guard was already there
+was to read every one of them. Four times in one campaign a check was written
 that already existed elsewhere and better — a listener guard, an event guard, a
 permission gate and an entire test module — each discovered by accident
 afterwards.

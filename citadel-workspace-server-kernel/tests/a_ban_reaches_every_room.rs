@@ -17,7 +17,7 @@
 //! worth testing, not either gate alone.
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::{
-    AsyncPermissionOperations, AsyncUserManagementOperations,
+    AsyncPermissionOperations, AsyncUserManagementOperations, AsyncWorkspaceOperations,
 };
 use citadel_workspace_server_kernel::handlers::domain::node_ops::AsyncNodeOperations;
 use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
@@ -163,5 +163,40 @@ async fn a_banned_member_is_refused_the_tree_as_well() {
             .await
             .is_err(),
         "the node readers admitted a banned account",
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_banned_member_is_not_listed_the_workspace_either() {
+    // `get_workspace` learned to ask ViewContent; `list_workspaces` filtered on
+    // membership alone and returned the same record — name, description, owner,
+    // member count — that its sibling had just been taught to withhold.
+    let kernel = create_test_kernel().await;
+    insert_user_with_role(&kernel, "outcast", UserRole::Member).await;
+    join_root(&kernel, "outcast").await;
+    assert!(
+        !kernel
+            .domain_operations
+            .list_workspaces("outcast")
+            .await
+            .expect("a member may list")
+            .is_empty(),
+        "a plain member lists the workspace, or the ban assertion proves nothing",
+    );
+
+    kernel
+        .domain_operations
+        .update_workspace_member_role(TEST_ADMIN_USER_ID, "outcast", UserRole::Banned, None)
+        .await
+        .expect("an admin may set a role to Banned");
+
+    assert!(
+        kernel
+            .domain_operations
+            .list_workspaces("outcast")
+            .await
+            .expect("listing must not error, it must return nothing")
+            .is_empty(),
+        "the listing still handed a banned account the workspace record",
     );
 }
