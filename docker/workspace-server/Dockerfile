@@ -32,7 +32,12 @@ RUN apt-get update && \
     apt-get install -y cmake libclang-dev llvm clang net-tools netcat-openbsd curl && \
     rm -rf /var/lib/apt/lists/*
 
-RUN rustup component add clippy
+RUN for attempt in 1 2 3; do \
+      rustup component add clippy && break; \
+      echo "rustup component add failed (attempt $attempt/3); retrying in $((attempt * 10))s"; \
+      sleep $((attempt * 10)); \
+    done; \
+    cargo clippy --version
 
 COPY ./docker/workspace-server/kernel.toml /usr/src/app/kernel.toml
 COPY ./docker/workspace-server/documents /usr/src/app/documents
@@ -44,6 +49,10 @@ COPY --exclude=tests ./citadel-workspace-server-kernel /usr/src/app/citadel-work
 COPY ./docker/workspace-server/citadel-workspace-server-kernel.Cargo.docker.toml /usr/src/app/citadel-workspace-server-kernel/Cargo.toml
 COPY ./citadel-workspace-internal-service /usr/src/app/citadel-workspace-internal-service
 COPY ./citadel-workspace-types /usr/src/app/citadel-workspace-types
+# A workspace member. Cargo loads EVERY member's manifest before building any
+# of them, so omitting a crate this image never builds still fails the build
+# with "failed to load manifest for workspace member".
+COPY ./citadel-workspace-executor /usr/src/app/citadel-workspace-executor
 COPY ./citadel-internal-service /usr/src/app/citadel-internal-service
 
 # Set environment variables for build - skips WASM build in Docker

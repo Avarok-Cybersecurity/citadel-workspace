@@ -32,3 +32,17 @@ target
 .playwright-mcp/
 .pr-reviews/
 screenshots/*
+# Test artifacts (regenerated on every run)
+test-screenshots/
+reports/
+test-results/
+playwright-report/
+docs.zip
+.memory.jsonl
+*.tsbuildinfo
+
+# Volume backups. scripts/backup-volumes.sh defaults here, and these archives
+# contain internal_service_data -- every user's account keys, which INSTALL.md
+# states are unrecoverable and held nowhere else. commit.sh runs `git add
+# --all`, so an untracked tarball of them is one command from being committed.
+backups/

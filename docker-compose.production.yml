@@ -51,6 +51,14 @@ services:
   # Data persisted to server_data volume
   # ---------------------------------------------------------------------------
   server:
+    # Unbounded by default: the json-file driver keeps every line until the
+    # disk fills, and nothing here rotates. Capped rather than disabled --
+    # the logs are the only post-mortem evidence this stack produces.
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     # Pull a prebuilt image from GHCR rather than compiling on the production
     # host. `IMAGE_TAG` defaults to `latest`; pin it to a `sha-<12-char-sha>` tag
     # to roll back to an exact prior build (see .github/workflows/publish-images.yml).
@@ -72,8 +80,27 @@ services:
     volumes:
       - server_data:/data/server
     environment:
-      - RUST_LOG=citadel=info
+      # citadel=info alone silently deletes the entire ILM subsystem. EnvFilter
+      # adds its ERROR default only when the parsed directive set is EMPTY, so a
+      # non-empty `citadel=info` leaves every non-matching target off at EVERY
+      # level -- including error!. That drops all 85 `target: "ism"` lines, of
+      # which 28 are error! and 23 are warn!, and they are precisely the ones
+      # that answer "my message never arrived": [ILM-SEND] FAILED, "Peer not
+      # connected, skipping N messages", and the three "processing task
+      # prematurely ended" lines that are the only record of a dead background
+      # task. Verified against live logs: 0 matches in 5000 lines.
+      #
+      # citadel_crypt=warn because double-ratchet internals were 76% of the
+      # log (2285 of 3000 lines), which is what made the remaining signal
+      # unreadable rather than merely verbose.
+      - RUST_LOG=citadel=info,ism=info,citadel_crypt=warn
       - WORKSPACE_MASTER_PASSWORD=${WORKSPACE_MASTER_PASSWORD}
+      # Explicitly off, and stated rather than left to the default: the first
+      # account to connect must NOT become the administrator. Registration has
+      # no invite gate, so on a public bind that is a race any stranger can
+      # win. The operator claims ownership through the initialization flow with
+      # WORKSPACE_MASTER_PASSWORD instead. See docs/INSTALL.md.
+      - WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN=0
       # Persistence is opt-in via env vars so the same `kernel.toml`
       # baked into the Docker image stays ephemeral by default for
       # `tilt`-driven dev. Production sets both vars below to mount
@@ -120,6 +147,14 @@ services:
   # same address the user specified.
   # ---------------------------------------------------------------------------
   internal-service:
+    # Unbounded by default: the json-file driver keeps every line until the
+    # disk fills, and nothing here rotates. Capped rather than disabled --
+    # the logs are the only post-mortem evidence this stack produces.
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     # Prebuilt image from GHCR; see the `server` service above for the IMAGE_TAG
     # pinning / rollback contract.
     image: ghcr.io/avarok-cybersecurity/citadel-workspace-internal-service:${IMAGE_TAG:-latest}
@@ -134,7 +169,20 @@ services:
     volumes:
       - internal_service_data:/data/internal-service
     environment:
-      - RUST_LOG=citadel=info
+      # citadel=info alone silently deletes the entire ILM subsystem. EnvFilter
+      # adds its ERROR default only when the parsed directive set is EMPTY, so a
+      # non-empty `citadel=info` leaves every non-matching target off at EVERY
+      # level -- including error!. That drops all 85 `target: "ism"` lines, of
+      # which 28 are error! and 23 are warn!, and they are precisely the ones
+      # that answer "my message never arrived": [ILM-SEND] FAILED, "Peer not
+      # connected, skipping N messages", and the three "processing task
+      # prematurely ended" lines that are the only record of a dead background
+      # task. Verified against live logs: 0 matches in 5000 lines.
+      #
+      # citadel_crypt=warn because double-ratchet internals were 76% of the
+      # log (2285 of 3000 lines), which is what made the remaining signal
+      # unreadable rather than merely verbose.
+      - RUST_LOG=citadel=info,ism=info,citadel_crypt=warn
       - DOCKER_CONTAINER=1
       - SKIP_WASM_BUILD=1
       - INTERNAL_SERVICE_PORT=${INTERNAL_SERVICE_PORT:-12345}
@@ -151,6 +199,23 @@ services:
       # on the `internal_service_data` volume defined above.
       - INTERNAL_SERVICE_BACKEND=filesystem
       - INTERNAL_SERVICE_DATA_DIR=/data/internal-service
+      # Which pages may open a control connection to the agent. A WebSocket is
+      # exempt from the same-origin policy and from CORS preflight, so without
+      # this any page the user visits could drive this agent. The binary refuses
+      # to start unless it is set, and `*` disables the check entirely.
+      #
+      # This MUST be the origin the UI is actually served from in this
+      # deployment — scheme, host and port, no trailing slash. It is left
+      # unset here on purpose so that a deployment that has not stated its own
+      # origin fails loudly at startup rather than silently accepting every
+      # page on the internet.
+      #
+      # Passed through with NO default and NO `:?` guard. The `:?` form would
+      # make `docker compose config --services` — a pure metadata read used by
+      # scripts/select-deploy-services.sh and by CI's drift guard — fail for
+      # anyone who has not exported it. The fail-fast belongs one layer down:
+      # the binary refuses to start on an empty value and names the variable.
+      - INTERNAL_SERVICE_ALLOWED_ORIGINS=${INTERNAL_SERVICE_ALLOWED_ORIGINS}
     deploy:
       resources:
         limits:
@@ -179,6 +244,14 @@ services:
   # Vite build served via nginx
   # ---------------------------------------------------------------------------
   ui:
+    # Unbounded by default: the json-file driver keeps every line until the
+    # disk fills, and nothing here rotates. Capped rather than disabled --
+    # the logs are the only post-mortem evidence this stack produces.
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     # Prebuilt from GHCR, like the other two. There is deliberately NO `build:` block: with both
     # `image:` and `build:` present, Compose builds locally and the published image - the one the
     # release gate verified and the one carrying the nginx config - is silently bypassed. The
@@ -233,9 +306,20 @@ services:
   #
   # Setup:
   #   1. Create a tunnel in Cloudflare Zero Trust dashboard
-  #   2. Add public hostname rules:
+  #   2. Add ONE public hostname rule:
   #      - yourdomain.com      → http://localhost:8080
-  #      - yourdomain.com/ws*  → ws://localhost:12345
+  #
+  #      DO NOT add a `/ws*` rule to the agent on :12345.
+  #
+  #      These steps used to instruct exactly that, which contradicted the
+  #      capitalised warning at the top of this file: the agent's control plane
+  #      is unauthenticated, it holds every connected user's ratchet keys, and
+  #      a tunnel rule reaches it directly — bypassing nginx and the fail-closed
+  #      WS_PROXY_ENABLED switch that exists to stop precisely this. The switch
+  #      was added to close that door; the setup steps quietly reopened it one
+  #      layer down. Each user runs their own agent locally; nothing about this
+  #      deployment needs a public one.
+  #
   #      (Docker service names like `ui:8080` would only resolve on
   #      a bridge network — this compose file uses `network_mode:
   #      host` for every service including cloudflared, so the
@@ -246,6 +330,14 @@ services:
   #   4. Set TUNNEL_TOKEN in .env
   # ---------------------------------------------------------------------------
   cloudflared:
+    # Unbounded by default: the json-file driver keeps every line until the
+    # disk fills, and nothing here rotates. Capped rather than disabled --
+    # the logs are the only post-mortem evidence this stack produces.
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     image: cloudflare/cloudflared:latest
     # `--metrics 127.0.0.1:2000` exposes cloudflared's built-in /ready
     # endpoint so the healthcheck below can verify the tunnel actually
@@ -290,8 +382,8 @@ services:
     depends_on:
       ui:
         condition: service_healthy
-      internal-service:
-        condition: service_healthy
+      # NOT internal-service: the tunnel serves the UI only, and waiting on the
+      # agent implied a route to it that must not exist (see the setup steps).
     network_mode: host
     profiles:
       - tunnel

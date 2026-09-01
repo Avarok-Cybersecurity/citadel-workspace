@@ -8,12 +8,19 @@
 //! - All nodes reachable from root (no orphan subtrees)
 //! - Schema compliance (depth limits, valid child types)
 //!
+//! The persisted tree hangs off an IMPLICIT root: production stores the
+//! workspace root as a `Workspace` record, never as a `DomainNode`, and
+//! top-level nodes carry `parent_id = Some(WORKSPACE_ROOT_ID)`. The full-tree
+//! checks model that root explicitly; a stored `parent_id = None` root (the
+//! shape this module's own unit tests build) is accepted as well.
+//!
 //! ## Usage
 //!
 //! ```rust,ignore
 //! use citadel_workspace_server_kernel::handlers::domain::tree_validator::{TreeValidator, NodeMutation};
 //!
-//! // Validate entire tree on startup
+//! // Validate entire tree on startup — `on_start` does this via the kernel's
+//! // `validate_stored_tree`, logging (not failing) on a corrupted store.
 //! TreeValidator::validate_tree(&nodes)?;
 //!
 //! // Validate a mutation before applying
@@ -263,16 +270,24 @@ impl TreeValidator {
         if !schema.rules.is_empty() {
             for node in nodes.values() {
                 if let Some(parent_id) = &node.parent_id {
-                    if let Some(parent) = nodes.get(parent_id) {
-                        let parent_type = parent.entity_type.type_name();
-                        let child_type = node.entity_type.type_name();
+                    // The implicit workspace root is typed "Workspace", the
+                    // same special case `validate_mutation_with_schema` makes —
+                    // skipping it here would leave every top-level node's type
+                    // unchecked.
+                    let parent_type = if let Some(parent) = nodes.get(parent_id) {
+                        parent.entity_type.type_name()
+                    } else if parent_id == crate::WORKSPACE_ROOT_ID {
+                        "Workspace"
+                    } else {
+                        continue;
+                    };
+                    let child_type = node.entity_type.type_name();
 
-                        if !schema.is_child_allowed(parent_type, child_type) {
-                            return Err(TreeValidationError::InvalidChildType {
-                                parent_type: parent_type.to_string(),
-                                child_type: child_type.to_string(),
-                            });
-                        }
+                    if !schema.is_child_allowed(parent_type, child_type) {
+                        return Err(TreeValidationError::InvalidChildType {
+                            parent_type: parent_type.to_string(),
+                            child_type: child_type.to_string(),
+                        });
                     }
                 }
             }
@@ -405,10 +420,17 @@ impl TreeValidator {
                 // Check depth constraint after move
                 let new_depth = parent_depth + 1;
                 if let Some(max_depth) = schema.max_depth {
-                    // Also need to check subtree depths
+                    // The subtree keeps its shape; only its offset changes, so
+                    // its post-move maximum is the stored maximum shifted by
+                    // (new_depth - node.depth) in EITHER direction. This used
+                    // to add only a saturating increase, so a shallower move
+                    // was judged against the subtree's OLD maximum — falsely
+                    // rejecting exactly the depth-reducing move that could
+                    // rescue an over-deep subtree. (saturating_sub on the
+                    // stored side guards against a corrupt store where a
+                    // descendant records a smaller depth than its ancestor.)
                     let subtree_max_depth = Self::get_subtree_max_depth(nodes, node_id);
-                    let depth_increase = new_depth.saturating_sub(node.depth);
-                    let new_subtree_max = subtree_max_depth + depth_increase;
+                    let new_subtree_max = new_depth + subtree_max_depth.saturating_sub(node.depth);
 
                     if new_subtree_max > max_depth {
                         return Err(TreeValidationError::DepthExceedsSchema {
@@ -430,13 +452,31 @@ impl TreeValidator {
     // INDIVIDUAL VALIDATION CHECKS
     // ═══════════════════════════════════════════════════════════════════════════════
 
-    /// Check that exactly one root node exists (parent_id = None)
+    /// True when the tree hangs off the IMPLICIT workspace root: nodes parent
+    /// to `WORKSPACE_ROOT_ID`, but no such node is stored. This is the shape
+    /// production actually persists — the workspace root lives as a `Workspace`
+    /// record, and `get_node`/`list_nodes` synthesize its `DomainNode` on the
+    /// fly. A validator that ignored it declared every real store rootless,
+    /// which is why nothing could ever call it.
+    fn uses_implicit_root(nodes: &HashMap<String, DomainNode>) -> bool {
+        !nodes.contains_key(crate::WORKSPACE_ROOT_ID)
+            && nodes
+                .values()
+                .any(|n| n.parent_id.as_deref() == Some(crate::WORKSPACE_ROOT_ID))
+    }
+
+    /// Check that exactly one root exists — either one stored node with
+    /// `parent_id = None`, or the implicit workspace root (see
+    /// `uses_implicit_root`), but not both.
     fn check_single_root(nodes: &HashMap<String, DomainNode>) -> Result<(), TreeValidationError> {
-        let roots: Vec<String> = nodes
+        let mut roots: Vec<String> = nodes
             .values()
             .filter(|n| n.parent_id.is_none())
             .map(|n| n.id.clone())
             .collect();
+        if Self::uses_implicit_root(nodes) {
+            roots.push(String::from(crate::WORKSPACE_ROOT_ID));
+        }
 
         match roots.len() {
             0 => Err(TreeValidationError::NoRoot),
@@ -445,13 +485,15 @@ impl TreeValidator {
         }
     }
 
-    /// Check that all parent_ids reference existing nodes
+    /// Check that all parent_ids reference existing nodes. The implicit
+    /// workspace root is a valid parent despite not being stored — every
+    /// production top-level node references it.
     fn check_no_dangling_parents(
         nodes: &HashMap<String, DomainNode>,
     ) -> Result<(), TreeValidationError> {
         for node in nodes.values() {
             if let Some(parent_id) = &node.parent_id {
-                if !nodes.contains_key(parent_id) {
+                if !nodes.contains_key(parent_id) && parent_id != crate::WORKSPACE_ROOT_ID {
                     return Err(TreeValidationError::DanglingNode {
                         node_id: node.id.clone(),
                         invalid_parent_id: parent_id.clone(),
@@ -492,16 +534,27 @@ impl TreeValidator {
             return Ok(());
         }
 
-        // Find root
-        let root = nodes
-            .values()
-            .find(|n| n.parent_id.is_none())
-            .ok_or(TreeValidationError::NoRoot)?;
-
-        // BFS from root using &str to avoid allocations
-        let mut visited: HashSet<&str> = HashSet::new();
+        // BFS seeds: a stored root's id, plus — when the tree hangs off the
+        // implicit workspace root — every node that parents to it. The
+        // implicit root has no stored `children` list to follow (get_node
+        // computes it by scanning parent links), so its children ARE the seeds.
         let mut queue: VecDeque<&str> = VecDeque::new();
-        queue.push_back(root.id.as_str());
+        if let Some(root) = nodes.values().find(|n| n.parent_id.is_none()) {
+            queue.push_back(root.id.as_str());
+        }
+        if Self::uses_implicit_root(nodes) {
+            for node in nodes.values() {
+                if node.parent_id.as_deref() == Some(crate::WORKSPACE_ROOT_ID) {
+                    queue.push_back(node.id.as_str());
+                }
+            }
+        }
+        if queue.is_empty() {
+            return Err(TreeValidationError::NoRoot);
+        }
+
+        // BFS from the seeds using &str to avoid allocations
+        let mut visited: HashSet<&str> = HashSet::new();
 
         while let Some(current_id) = queue.pop_front() {
             if visited.contains(current_id) {
@@ -577,10 +630,16 @@ impl TreeValidator {
         Ok(())
     }
 
-    /// Check if a string is a valid UUID v4 format
+    /// Check if a string is UUID-SHAPED: five hyphenated hex groups of
+    /// lengths 8-4-4-4-12.
+    ///
+    /// This is a shape check only — it does NOT verify the RFC 4122 version
+    /// digit or variant bits. (An earlier comment here claimed the v4
+    /// `4xxx`/`yxxx` positions were checked; the code never did, and callers
+    /// only need "looks like a workspace id, existence validated by the
+    /// caller", so the shape check is the intended behaviour and the comment
+    /// was the defect.)
     fn is_valid_uuid(s: &str) -> bool {
-        // UUID v4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-        // where x is any hex digit and y is 8, 9, a, or b
         if s.len() != 36 {
             return false;
         }
@@ -616,9 +675,17 @@ impl TreeValidator {
             });
         }
 
-        // New parent must exist (or be workspace-root sentinel)
+        // New parent must exist (or be workspace-root sentinel, or be
+        // UUID-shaped — a workspace id in multi-workspace mode, which is never
+        // stored as a DomainNode; the caller validates it against workspace
+        // storage). The UUID case mirrors `validate_create`: rejecting it here
+        // while allowing a CREATE under the very same parent made move the one
+        // mutation that could not target another workspace's root.
         let is_workspace_root = new_parent_id == crate::WORKSPACE_ROOT_ID;
-        if !is_workspace_root && !nodes.contains_key(new_parent_id) {
+        if !is_workspace_root
+            && !Self::is_valid_uuid(new_parent_id)
+            && !nodes.contains_key(new_parent_id)
+        {
             return Err(TreeValidationError::ParentNotFound {
                 parent_id: new_parent_id.to_string(),
             });
@@ -675,10 +742,22 @@ impl TreeValidator {
         potential_ancestor: &str,
         node_id: &str,
     ) -> bool {
+        // A cycle in parent_id makes this walk run forever. `get_descendants`
+        // below already guards its walk with a visited set; this one and
+        // `get_path_to_root` never got the same treatment. It matters most here:
+        // this is the check that REFUSES to create a cycle, and every caller runs
+        // it while holding `lock_nodes`, so one pre-existing cycle would wedge
+        // every node operation in the workspace forever rather than reporting it.
+        let mut visited: HashSet<&str> = HashSet::new();
         let mut current_id: Option<&str> = Some(node_id);
 
         while let Some(id) = current_id {
             if id == potential_ancestor {
+                return true;
+            }
+            if !visited.insert(id) {
+                // Already-cyclic tree: the ancestor is not reachable, and
+                // continuing would loop. Refuse the move rather than hang.
                 return true;
             }
             current_id = nodes.get(id).and_then(|n| n.parent_id.as_deref());
@@ -696,13 +775,19 @@ impl TreeValidator {
 
         let mut max_depth = node.depth;
         let mut queue: VecDeque<&str> = VecDeque::new();
+        // Without this, a cycle among `children` both loops forever and grows the
+        // queue without bound — a hang that takes the process's memory with it.
+        let mut visited: HashSet<&str> = HashSet::new();
         queue.push_back(node_id);
+        visited.insert(node_id);
 
         while let Some(current_id) = queue.pop_front() {
             if let Some(current) = nodes.get(current_id) {
                 max_depth = max_depth.max(current.depth);
                 for child_id in &current.children {
-                    queue.push_back(child_id.as_str());
+                    if visited.insert(child_id.as_str()) {
+                        queue.push_back(child_id.as_str());
+                    }
                 }
             }
         }
@@ -713,9 +798,15 @@ impl TreeValidator {
     /// Get the path from root to a node (for debugging/display)
     pub fn get_path_to_root(nodes: &HashMap<String, DomainNode>, node_id: &str) -> Vec<String> {
         let mut path: Vec<&str> = Vec::new();
+        let mut visited: HashSet<&str> = HashSet::new();
         let mut current_id: Option<&str> = Some(node_id);
 
         while let Some(id) = current_id {
+            // Same cycle guard as `is_ancestor_of`: stop at the repeat rather
+            // than build an infinite path.
+            if !visited.insert(id) {
+                break;
+            }
             path.push(id);
             current_id = nodes.get(id).and_then(|n| n.parent_id.as_deref());
         }
@@ -777,6 +868,7 @@ mod tests {
             members: vec![],
             children: vec![],
             mdx_content: String::new(),
+            mdx_content_hash: None,
             rules: None,
             chat_enabled: false,
             chat_channel_id: None,
@@ -867,6 +959,124 @@ mod tests {
         );
 
         assert!(TreeValidator::validate_tree(&nodes).is_ok());
+    }
+
+    /// The shape production actually persists: the workspace root exists only
+    /// as a `Workspace` record, and stored nodes hang off its id. The
+    /// validator used to demand a STORED `parent_id = None` root, so it
+    /// returned NoRoot (then DanglingNode) for every real store — which is why
+    /// nothing could ever call it.
+    #[test]
+    fn production_shape_with_implicit_root_is_valid() {
+        let mut nodes = HashMap::new();
+        let mut office = create_test_node(
+            "office1",
+            Some(crate::WORKSPACE_ROOT_ID),
+            NodeEntityType::Child("Office".to_string()),
+            1,
+        );
+        office.children = vec!["room1".to_string()];
+        nodes.insert("office1".to_string(), office);
+        nodes.insert(
+            "room1".to_string(),
+            create_test_node(
+                "room1",
+                Some("office1"),
+                NodeEntityType::Child("Room".to_string()),
+                2,
+            ),
+        );
+
+        assert!(
+            TreeValidator::validate_tree(&nodes).is_ok(),
+            "the persisted production shape (implicit workspace root) must validate"
+        );
+    }
+
+    /// The implicit root is only implicit while nothing else claims rootship:
+    /// a stored `parent_id = None` node beside it means two roots.
+    #[test]
+    fn implicit_root_beside_stored_root_is_two_roots() {
+        let mut nodes = HashMap::new();
+        nodes.insert(
+            "office1".to_string(),
+            create_test_node(
+                "office1",
+                Some(crate::WORKSPACE_ROOT_ID),
+                NodeEntityType::Child("Office".to_string()),
+                1,
+            ),
+        );
+        nodes.insert(
+            "ws1".to_string(),
+            create_test_node("ws1", None, NodeEntityType::Workspace, 0),
+        );
+
+        assert!(matches!(
+            TreeValidator::validate_tree(&nodes),
+            Err(TreeValidationError::MultipleRoots { .. })
+        ));
+    }
+
+    /// Modelling the implicit root must not weaken the dangling check: a
+    /// parent id that is neither stored nor the workspace root still dangles.
+    #[test]
+    fn implicit_root_does_not_excuse_other_dangling_parents() {
+        let mut nodes = HashMap::new();
+        nodes.insert(
+            "office1".to_string(),
+            create_test_node(
+                "office1",
+                Some(crate::WORKSPACE_ROOT_ID),
+                NodeEntityType::Child("Office".to_string()),
+                1,
+            ),
+        );
+        nodes.insert(
+            "stray".to_string(),
+            create_test_node(
+                "stray",
+                Some("no-such-node"),
+                NodeEntityType::Child("Office".to_string()),
+                1,
+            ),
+        );
+
+        assert!(matches!(
+            TreeValidator::validate_tree(&nodes),
+            Err(TreeValidationError::DanglingNode { .. })
+        ));
+    }
+
+    /// Reachability under the implicit root: a node whose parent link is fine
+    /// but which no `children` list mentions is still an orphan.
+    #[test]
+    fn orphan_under_implicit_root_is_detected() {
+        let mut nodes = HashMap::new();
+        nodes.insert(
+            "office1".to_string(),
+            create_test_node(
+                "office1",
+                Some(crate::WORKSPACE_ROOT_ID),
+                NodeEntityType::Child("Office".to_string()),
+                1,
+            ),
+        );
+        // parent exists, but office1.children does not list it
+        nodes.insert(
+            "lost".to_string(),
+            create_test_node(
+                "lost",
+                Some("office1"),
+                NodeEntityType::Child("Room".to_string()),
+                2,
+            ),
+        );
+
+        assert!(matches!(
+            TreeValidator::validate_tree(&nodes),
+            Err(TreeValidationError::OrphanSubtree { .. })
+        ));
     }
 
     #[test]
@@ -1099,5 +1309,133 @@ mod tests {
 
         let path = TreeValidator::get_path_to_root(&nodes, "room1");
         assert_eq!(path, vec!["ws1", "office1", "room1"]);
+    }
+
+    /// A depth-REDUCING move must be judged by the subtree's post-move
+    /// maximum, not its stored one. The check used to add only a saturating
+    /// depth INCREASE, so moving shallower compared the old maximum against
+    /// the limit — rejecting precisely the rescue move that would bring an
+    /// over-deep subtree back within the schema.
+    #[test]
+    fn depth_reducing_move_can_rescue_an_over_deep_subtree() {
+        // Stored shape: p(1) → a(2) → b(3) → c(4), max_depth = 3, so c is a
+        // pre-existing violation. Moving `a` directly under the workspace
+        // root re-offsets its subtree to a(1) → b(2) → c(3): within limits.
+        let mut nodes = HashMap::new();
+        let mut p = create_test_node(
+            "p",
+            Some(crate::WORKSPACE_ROOT_ID),
+            NodeEntityType::Child("Office".to_string()),
+            1,
+        );
+        p.children = vec!["a".to_string()];
+        nodes.insert("p".to_string(), p);
+        let mut a = create_test_node(
+            "a",
+            Some("p"),
+            NodeEntityType::Child("Office".to_string()),
+            2,
+        );
+        a.children = vec!["b".to_string()];
+        nodes.insert("a".to_string(), a);
+        let mut b = create_test_node(
+            "b",
+            Some("a"),
+            NodeEntityType::Child("Office".to_string()),
+            3,
+        );
+        b.children = vec!["c".to_string()];
+        nodes.insert("b".to_string(), b);
+        nodes.insert(
+            "c".to_string(),
+            create_test_node(
+                "c",
+                Some("b"),
+                NodeEntityType::Child("Office".to_string()),
+                4,
+            ),
+        );
+        // A sibling used below to prove deepening is still refused.
+        nodes.insert(
+            "d".to_string(),
+            create_test_node(
+                "d",
+                Some(crate::WORKSPACE_ROOT_ID),
+                NodeEntityType::Child("Office".to_string()),
+                1,
+            ),
+        );
+
+        // Empty rules = every parent/child type pairing allowed; only the
+        // depth limit is under test.
+        let schema = TreeSchema {
+            rules: vec![],
+            max_depth: Some(3),
+            ..TreeSchema::default()
+        };
+
+        let rescue = NodeMutation::Move {
+            node_id: "a".to_string(),
+            new_parent_id: crate::WORKSPACE_ROOT_ID.to_string(),
+        };
+        assert!(
+            TreeValidator::validate_mutation_with_schema(&nodes, &rescue, &schema).is_ok(),
+            "a move that brings the whole subtree within max_depth must be allowed"
+        );
+
+        // Control: the rewritten formula must still refuse a deepening move.
+        // d(1) moved under b(3) would sit at depth 4 > 3.
+        let deepen = NodeMutation::Move {
+            node_id: "d".to_string(),
+            new_parent_id: "b".to_string(),
+        };
+        assert!(
+            matches!(
+                TreeValidator::validate_mutation_with_schema(&nodes, &deepen, &schema),
+                Err(TreeValidationError::DepthExceedsSchema { .. })
+            ),
+            "a move that pushes the subtree past max_depth must still be refused"
+        );
+    }
+
+    /// `validate_create` accepts a UUID-shaped parent (a workspace id in
+    /// multi-workspace mode — never stored as a DomainNode; the caller
+    /// validates it against workspace storage). `validate_move` used to
+    /// reject the very same parent, making move the one mutation that could
+    /// not target another workspace's root.
+    #[test]
+    fn move_to_a_workspace_uuid_parent_is_allowed_like_create() {
+        let mut nodes = HashMap::new();
+        nodes.insert(
+            "office1".to_string(),
+            create_test_node(
+                "office1",
+                Some(crate::WORKSPACE_ROOT_ID),
+                NodeEntityType::Child("Office".to_string()),
+                1,
+            ),
+        );
+
+        let workspace_uuid = "01234567-89ab-4cde-8f01-23456789abcd";
+        let to_workspace = NodeMutation::Move {
+            node_id: "office1".to_string(),
+            new_parent_id: workspace_uuid.to_string(),
+        };
+        assert!(
+            TreeValidator::validate_mutation(&nodes, &to_workspace).is_ok(),
+            "a UUID-shaped parent must pass the validator for move exactly as it does for create; \
+             its existence is the caller's check"
+        );
+
+        // Control: an absent parent that is NOT workspace-id-shaped is still
+        // structurally impossible and stays rejected here.
+        let to_nowhere = NodeMutation::Move {
+            node_id: "office1".to_string(),
+            new_parent_id: "no-such-parent".to_string(),
+        };
+        assert!(matches!(
+            TreeValidator::validate_mutation(&nodes, &to_nowhere),
+            Err(TreeValidationError::ParentNotFound { .. })
+        ));
     }
 }

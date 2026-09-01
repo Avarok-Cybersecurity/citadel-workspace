@@ -4,24 +4,38 @@
 # =============================================================================
 #
 # This script safely updates the running production stack:
-#   1. Pulls latest code
-#   2. Rebuilds only changed images
-#   3. Restarts services sequentially (data-safe, minimal downtime)
+#   1. Pulls latest code (skippable with --no-pull)
+#   2. Pulls prebuilt images from GHCR at ${IMAGE_TAG:-latest}
+#   3. Verifies every image was built from the SAME commit, and refuses
+#      the deploy if they disagree (scripts/verify-image-revisions.sh)
+#   4. Restarts services sequentially (data-safe, minimal downtime)
 #
 # Data volumes (server_data, internal_service_data) are NEVER touched.
-# Only container images are rebuilt and replaced.
+# Only container images are replaced.
+#
+# verify: absent 'docker compose build' in-body deploy.sh
+#
+# NOTE: this header used to say "rebuilds only changed images". It no longer
+# builds anything -- compiling Rust on the production host was removed
+# deliberately (see the comment above the pull step). An operator trusting the
+# old wording would provision a build toolchain this script never uses and
+# expect a deploy far slower than it is.
 #
 # Usage:
-#   ./deploy.sh              # Update all services
-#   ./deploy.sh --no-pull    # Skip git pull (rebuild from current code)
+#   ./deploy.sh              # Update all services to ${IMAGE_TAG:-latest}
+#   ./deploy.sh --no-pull    # Skip the git pull; deploy the checked-out tree's compose file
 #   ./deploy.sh --tunnel     # Include Cloudflare tunnel profile
+#
+#   IMAGE_TAG=sha-abc123456789 ./deploy.sh --no-pull   # pin / roll back to an exact build
+#
+# See docs/UPGRADING.md for the upgrade and rollback runbook.
 #
 # =============================================================================
 
 set -euo pipefail
 
 COMPOSE_FILE="docker-compose.production.yml"
-# Bash array (not a string) so `"${PROFILE_ARGS[@]}"` expands to nothing
+# Bash array (not a string) so `${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"}` expands to nothing
 # when no profile is selected and to a properly quoted multi-token list
 # when one is. Storing "--profile tunnel" as a single string and relying
 # on word-splitting (`$PROFILE_ARGS` unquoted) is the classic shell
@@ -30,6 +44,28 @@ COMPOSE_FILE="docker-compose.production.yml"
 PROFILE_ARGS=()
 TUNNEL_PROFILE_ACTIVE=false
 SKIP_PULL=false
+
+# One description of the interface, printed both on request and on a mistake, so
+# the two can never drift apart.
+usage() {
+    cat <<USAGE
+Citadel Workspace - deploy / update the running production stack.
+
+Usage: $0 [--no-pull] [--tunnel] [--help]
+
+  --no-pull   Skip the git pull; deploy using the compose file already checked out.
+  --tunnel    Include the Cloudflare tunnel profile. Requires TUNNEL_TOKEN in .env.
+  --help, -h  Print this and exit.
+
+Images are PULLED from GHCR at \${IMAGE_TAG:-latest}; nothing is built here.
+Pin IMAGE_TAG to a sha-<12-char> tag to deploy or roll back to an exact build:
+
+  IMAGE_TAG=sha-abc123456789 $0 --no-pull
+
+Data volumes (server_data, internal_service_data) are never touched; only
+container images are replaced. See docs/UPGRADING.md.
+USAGE
+}
 
 # Parse arguments
 for arg in "$@"; do
@@ -41,9 +77,16 @@ for arg in "$@"; do
             PROFILE_ARGS=(--profile tunnel)
             TUNNEL_PROFILE_ACTIVE=true
             ;;
+        --help|-h)
+            # Asking what a deploy script does should not be an error, and should
+            # not exit non-zero — a wrapper checking the status would read that as
+            # a failed deploy.
+            usage
+            exit 0
+            ;;
         *)
-            echo "Unknown argument: $arg"
-            echo "Usage: $0 [--no-pull] [--tunnel]"
+            echo "Unknown argument: $arg" >&2
+            usage >&2
             exit 1
             ;;
     esac
@@ -254,7 +297,16 @@ echo "[2/4] Pulling images (tag: ${IMAGE_TAG:-latest})..."
 if ! selection=$(./scripts/select-deploy-services.sh "$COMPOSE_FILE"); then
     exit 1
 fi
-mapfile -t DEPLOY_SERVICES <<<"$selection"
+# Read into the array with a while-read loop rather than `mapfile -t`. mapfile is a
+# bash 4 builtin and macOS still ships bash 3.2, so `#!/usr/bin/env bash` there
+# resolves to a shell without it and the deploy aborted at this line with
+# "mapfile: command not found" (exit 127) — before touching anything, but also
+# before doing anything. CI runs Ubuntu, so this only ever failed for a developer
+# deploying from a Mac. The loop below is equivalent and works on both.
+DEPLOY_SERVICES=()
+while IFS= read -r _svc; do
+    [ -n "$_svc" ] && DEPLOY_SERVICES+=("$_svc")
+done <<<"$selection"
 # Belt and braces: the selector already errors on an empty result, and the check above now
 # actually observes that, but a silent empty selection must never fall through to a restart.
 if [ "${#DEPLOY_SERVICES[@]}" -eq 0 ] || [ -z "${DEPLOY_SERVICES[0]}" ]; then
@@ -447,7 +499,7 @@ in_deployment() {
     printf '%s\n' "${DEPLOY_SERVICES[@]}" | grep -qx "$1"
 }
 
-if ! docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" pull "${DEPLOY_SERVICES[@]}"; then
+if ! docker compose -f "$COMPOSE_FILE" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} pull "${DEPLOY_SERVICES[@]}"; then
     echo "" >&2
     echo "ERROR: failed to pull images (tag: ${IMAGE_TAG:-latest})." >&2
     echo "  Common causes:" >&2
@@ -500,7 +552,25 @@ for svc in "${DEPLOY_SERVICES[@]}"; do
     VERIFY_IMAGES+=("$img")
 done
 
-if ! ./scripts/verify-image-revisions.sh "${VERIFY_IMAGES[@]}"; then
+# Also require the images to be built from the commit we just pulled.
+#
+# Cross-checking the images against each other proves they were promoted
+# together, not WHICH commit they are: `git pull` and `docker compose pull` are
+# independent. On the ordinary merge-then-deploy workflow, CI is often still
+# building the Rust images, so `latest` still points at the previous commit —
+# all three images agree, the gate passes, every service restarts, and "Deploy
+# complete!" prints over the old binaries with the new source beside them.
+#
+# Only when we pulled: with --no-pull the checked-out tree is whatever the
+# operator chose, and an explicit IMAGE_TAG rollback deliberately deploys an
+# older commit than HEAD.
+EXPECT_ARGS=()
+if [ "$SKIP_PULL" != "true" ] && [ -z "${IMAGE_TAG:-}" ]; then
+    head_rev=$(git rev-parse HEAD 2>/dev/null || true)
+    [ -n "$head_rev" ] && EXPECT_ARGS=(--expect "$head_rev")
+fi
+
+if ! ./scripts/verify-image-revisions.sh "${EXPECT_ARGS[@]+"${EXPECT_ARGS[@]}"}" "${VERIFY_IMAGES[@]}"; then
     echo "" >&2
     echo "  Nothing was restarted; the running stack is untouched." >&2
     exit 1
@@ -581,7 +651,62 @@ wait_for_port() {
     done
     echo "ERROR: ${svc} did not become healthy on port ${port} within ${deadline}s (last health=${health:-<none>})"
     docker compose -f "$COMPOSE_FILE" logs "$svc" --tail 80
+    echo
+    # Services are swapped one at a time, gated on health. A failure here means
+    # THIS service is on the new image and the ones after it are still on the
+    # old one — the mixed-version state the ordering exists to avoid on a
+    # build/pull failure, but which a STARTUP failure lands in anyway. Say so,
+    # rather than leaving an exit 1 that reads like "nothing happened".
+    echo "The stack is now MIXED-VERSION: ${svc} is on the new image, later services are not."
+    rollback_hint "${PREVIOUS_TAGS:-}"
     exit 1
+}
+
+# Record what is running BEFORE anything is swapped.
+#
+# Rolling back needs the tag you were on, and nothing recorded it. The docs said
+# to "list the published versions under the org's GHCR packages" — no URL, no
+# command, in a runbook where every other step is copy-pasteable — and the tag
+# is otherwise printed once into an Actions log subject to 90-day retention.
+# An operator mid-incident should not be archaeologising a registry.
+DEPLOY_HISTORY="${DEPLOY_HISTORY:-$HOME/.cache/citadel-deploy/history}"
+mkdir -p "$(dirname "$DEPLOY_HISTORY")"
+
+previous_images() {
+    # `|| true` because finding nothing is the NORMAL first-deploy answer, and
+    # `set -o pipefail` makes grep's exit 1 the whole pipeline's — which under
+    # `set -e` aborted the script at the assignment below. A machine with
+    # nothing deployed yet printed "[3/4] Updating services", exited 1, and
+    # restarted nothing, AFTER pulling every image: the one path with no
+    # previous version to roll back to was the one path that could not run.
+    docker compose -f "$COMPOSE_FILE" images --format json 2>/dev/null \
+        | tr ',' '\n' | grep -o '"Tag":"[^"]*"' | cut -d'"' -f4 | sort -u | tr '\n' ' ' \
+        || true
+}
+PREVIOUS_TAGS="$(previous_images)"
+# An `if`, not `[ -n … ] && echo`.
+#
+# Under `set -e` that form aborts the script whenever the test is false, because
+# the && chain's exit status becomes the statement's. So a deploy with nothing
+# currently running -- the FIRST deploy on a machine, and every deploy in the
+# integration test's stub environment -- printed "[3/4] Updating services" and
+# exited 1, after the images had already been pulled. A failure on the one path
+# that has no previous version to roll back to.
+if [ -n "$PREVIOUS_TAGS" ]; then
+    echo "  Currently deployed tag(s): ${PREVIOUS_TAGS}"
+fi
+
+# Named so the failure path can tell the operator exactly what to type.
+rollback_hint() {
+    local tags="$1"
+    local first
+    first="$(echo "$tags" | awk '{print $1}')"
+    if [ -n "$first" ] && [ "$first" != "latest" ]; then
+        echo "  Roll back with:  IMAGE_TAG=${first} $0"
+    else
+        echo "  Roll back with:  IMAGE_TAG=sha-<previous-commit> $0"
+        echo "  Previous tags seen on this host: ${DEPLOY_HISTORY}"
+    fi
 }
 
 # Server first (other services depend on it).
@@ -589,7 +714,7 @@ wait_for_port() {
 # No `--build`: the image was pulled in step 2. Leaving `--build` here would
 # silently re-compile on the host and defeat the whole point of the registry.
 echo "  Restarting server..."
-docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps server
+docker compose -f "$COMPOSE_FILE" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} up -d --no-deps server
 echo "  Waiting for server to be healthy..."
 wait_for_port server 12349
 echo "  Server is up."
@@ -597,7 +722,7 @@ echo "  Server is up."
 # Internal service next, when this deployment includes one.
 if in_deployment internal-service; then
     echo "  Restarting internal-service..."
-    docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps internal-service
+    docker compose -f "$COMPOSE_FILE" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} up -d --no-deps internal-service
     echo "  Waiting for internal-service to be healthy..."
     wait_for_port internal-service "${INTERNAL_SERVICE_PORT:-12345}"
     echo "  Internal service is up."
@@ -613,7 +738,7 @@ if in_deployment ui; then
     # this point (cache invalidation, disk pressure, a transient npm error) would land AFTER the
     # server and internal-service have already been swapped to their new images, leaving production
     # on a new backend with the old UI. Build everything first, restart afterwards.
-    docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps ui
+    docker compose -f "$COMPOSE_FILE" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} up -d --no-deps ui
     # Wait for nginx to actually serve (the ui healthcheck does a wget --spider
     # on :8080). Without this the deploy reports success even if nginx failed to
     # start (bad config, missing dist/) — the cloudflared step would then start
@@ -627,7 +752,7 @@ fi
 # Cloudflared if tunnel profile is active
 if [[ "$TUNNEL_PROFILE_ACTIVE" == "true" ]]; then
     echo "  Restarting cloudflared..."
-    docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" up -d --no-deps cloudflared
+    docker compose -f "$COMPOSE_FILE" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} up -d --no-deps cloudflared
     echo "  Cloudflared is up."
 fi
 
@@ -635,7 +760,7 @@ echo ""
 
 # Step 4: Verify
 echo "[4/4] Verifying deployment..."
-docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" ps
+docker compose -f "$COMPOSE_FILE" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} ps
 echo ""
 
 # Show data volume status. Two `--filter name=` flags AND-combine on
@@ -657,6 +782,18 @@ echo ""
 echo "============================================"
 echo "  Deploy complete!"
 echo "============================================"
+echo ""
+
+# Append what we just deployed, so the NEXT deploy has a previous tag to name
+# and an operator has a local record that does not depend on registry retention
+# or a 90-day Actions log.
+{
+    printf '%s\t%s\t%s\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        "${IMAGE_TAG:-latest}" \
+        "$(previous_images)"
+} >> "$DEPLOY_HISTORY" 2>/dev/null || true
+echo "Recorded in ${DEPLOY_HISTORY}"
 echo ""
 # Advertise only endpoints this deployment actually serves. A server-only stack that
 # printed "Local access: http://localhost:8080" would send the operator to a port nothing

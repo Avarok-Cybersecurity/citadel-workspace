@@ -10,7 +10,23 @@ import type { UserRole } from "./UserRole";
 import type { Workspace } from "./Workspace";
 import type { WorkspaceMetadata } from "./WorkspaceMetadata";
 
-export type WorkspaceProtocolResponse = { "Workspace": Workspace } | { "Workspaces": Array<WorkspaceMetadata> } | { "Success": string } | { "Error": string } | "WorkspaceNotInitialized" | { "Members": Array<User> } | { "Member": User } | { "UserPermissions": { domain_id: string, user_id: string, role: UserRole, permissions: Array<Permission>, } } | { "MemberRoleUpdated": { user_id: string, new_role: UserRole, } } | { "UserProfileUpdated": User } | { "NodeContentUpdated": { node_id: string, mdx_content: string, updated_by: string, timestamp: bigint, } } | { "GroupMessageNotification": { group_id: string, message: GroupMessage, } } | { "GroupMessages": { group_id: string, messages: Array<GroupMessage>, has_more: boolean, } } | { "GroupMessageEdited": { group_id: string, message_id: string, new_content: string, edited_at: bigint, } } | { "GroupMessageDeleted": { group_id: string, message_id: string, deleted_by: string, } } | { "GroupMessage": GroupMessage } | { "ServerCapabilities": { 
+export type WorkspaceProtocolResponse = { "Workspace": Workspace } | { "Workspaces": Array<WorkspaceMetadata> } | { "Success": string } | { "Error": string } | "WorkspaceNotInitialized" | { "Members": { domain_id: string | null, members: Array<User>, } } | { "Member": User } | { "UserPermissions": { domain_id: string, user_id: string, role: UserRole, permissions: Array<Permission>, } } | { "MemberRoleUpdated": { user_id: string, new_role: UserRole, } } | { "UserProfileUpdated": User } | { "NodeContentUpdated": { node_id: string, mdx_content: string, 
+/**
+ * The content's SHA-256, so a watcher can verify what it just received.
+ *
+ * Without it, a watcher merged the new content over its cached node
+ * and kept the OLD hash — so the integrity check refused to render a
+ * document that had merely been edited by a colleague, and went on
+ * refusing until the reader navigated away and back. The verifier and
+ * this broadcast were built two rounds apart and their intersection
+ * was never exercised: ordinary collaborative editing was the trigger.
+ *
+ * Optional so an older server, which does not send it, degrades to
+ * "unhashed" rather than "mismatch" — refusing content because the
+ * server predates the field would be the same defect wearing the fix's
+ * clothes.
+ */
+mdx_content_hash: string | null, updated_by: string, timestamp: bigint, } } | { "GroupMessageNotification": { group_id: string, message: GroupMessage, } } | { "GroupMessages": { group_id: string, messages: Array<GroupMessage>, has_more: boolean, } } | { "GroupMessageEdited": { group_id: string, message_id: string, new_content: string, edited_at: bigint, } } | { "GroupMessageDeleted": { group_id: string, message_id: string, deleted_by: string, } } | { "GroupMessage": GroupMessage } | { "ServerCapabilities": { 
 /**
  * Whether server-mediated file transfers are enabled
  */

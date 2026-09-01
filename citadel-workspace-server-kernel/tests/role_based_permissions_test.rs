@@ -159,6 +159,42 @@ async fn test_role_based_permissions() {
         "Member should not have EditNodeConfig permission"
     );
 
+    // A member of an office may talk in it.
+    //
+    // Nothing here ever asked. Enforcement grants exactly one permission on
+    // the strength of membership -- ViewContent -- and consults the user's
+    // ROLE for none of the others, so a plain member of a workspace could read
+    // an office and never post to it. Three integration specs failed on that:
+    // office chat, room chat and touch-controls all had the composer replaced
+    // by "You do not have permission to send messages here."
+    //
+    // `Permission::for_role` is the single source of truth for what a role may
+    // do, and it grants Member SendMessages and ReadMessages.
+    for permission in [Permission::SendMessages, Permission::ReadMessages] {
+        let granted = domain_ops
+            .check_entity_permission(member_user.id.as_str(), office_id.as_str(), permission)
+            .await
+            .unwrap();
+        assert!(
+            granted,
+            "Member should have {permission:?} in an office they belong to"
+        );
+    }
+
+    // ...and the role still bounds them: Member is not granted EditContent.
+    let has_edit_content = domain_ops
+        .check_entity_permission(
+            member_user.id.as_str(),
+            office_id.as_str(),
+            Permission::EditContent,
+        )
+        .await
+        .unwrap();
+    assert!(
+        !has_edit_content,
+        "Member should not have EditContent; role-derived grants must not widen to everything"
+    );
+
     // Guest should not have any permissions
     let has_guest_permission = domain_ops
         .check_entity_permission(

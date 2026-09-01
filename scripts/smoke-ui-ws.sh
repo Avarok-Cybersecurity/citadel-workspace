@@ -140,7 +140,68 @@ docker exec "$CTR" grep -q 'proxy_set_header Upgrade \$http_upgrade' /etc/nginx/
 curl -s -D - -o /dev/null -H "Origin: http://evil.example" "$BASE/ws" | grep -qi '^content-security-policy' \
   || fail "/ws error responses lost the Content-Security-Policy header."
 
-echo "  enabled: SPA served; envsubst intact; same-origin enforced (403 cross-origin, 403 no-Origin, 403 rebinding, 403 LAN, 403 both-fail); same-origin proxied; no prefix match; CSP preserved."
+# Media capture must be PERMITTED for this origin.
+#
+# `microphone=()` is an EMPTY allowlist: it denies every origin including this
+# one, so getUserMedia fails and audio/video calling is dead. The header shipped
+# that way, written before the app had calling, and nothing noticed because the
+# dev server sends no Permissions-Policy at all — every test passed against a
+# policy production does not use.
+#
+# Asserted here rather than trusted, because the failure is silent: the app
+# loads, the call UI opens, and only the camera never starts.
+# The service worker must NOT be cacheable.
+#
+# This is the upgrade path: a browser that keeps serving an old sw.js never
+# learns a new version exists, so the app silently stops updating for everyone
+# who already installed it. nginx applies heuristic caching without an explicit
+# policy, and the failure produces no error anywhere — the deploy succeeds and
+# users simply stay on yesterday's build.
+SWHDR="$(curl -s -D - -o /dev/null "$BASE/sw.js" || true)"
+echo "$SWHDR" | grep -qi '^cache-control:.*no-store' \
+  || fail "sw.js is cacheable - installed apps will never see an update. Got: $(echo "$SWHDR" | grep -i '^cache-control' || echo 'no Cache-Control at all')"
+
+# And the manifest needs its own media type, or Chrome refuses it and the app
+# stops being installable.
+MANHDR="$(curl -s -D - -o /dev/null "$BASE/manifest.webmanifest" || true)"
+echo "$MANHDR" | grep -qi '^content-type:.*application/manifest+json' \
+  || fail "manifest.webmanifest is not served as application/manifest+json - Chrome will reject it and the app stops being installable. Got: $(echo "$MANHDR" | grep -i '^content-type' || echo 'no Content-Type')"
+
+# The WASM binary must revalidate, because its URL is NOT content-hashed.
+#
+# /wasm/citadel_internal_service_wasm_client_bg.wasm keeps the same name across
+# builds, so `immutable` would be a lie: browsers would hold the old binary for
+# the full max-age while the JS bindings that call into it — which ARE hashed —
+# updated underneath. That mismatch surfaces as undefined-function errors in the
+# console, nowhere near anything that looks like a caching problem.
+WASMHDR="$(curl -s -D - -o /dev/null "$BASE/wasm/citadel_internal_service_wasm_client_bg.wasm" || true)"
+echo "$WASMHDR" | grep -qi '^cache-control:' \
+  || fail "The WASM binary carries no Cache-Control at all - nginx will apply heuristic caching to a file whose name never changes."
+echo "$WASMHDR" | grep -i '^cache-control:' | grep -qi 'immutable' \
+  && fail "The WASM binary is marked immutable, but its filename is not content-hashed - an updated app will keep loading the old binary. Got: $(echo "$WASMHDR" | grep -i '^cache-control')"
+
+# The SPA shell must revalidate too. index.html is the file that NAMES the
+# content-hashed /assets/ bundles, and those are served `immutable` - so a stale
+# index.html keeps requesting the OLD bundle names, which still exist and still
+# load. The user runs yesterday's build with no error anywhere. This is the same
+# defect as the two above, on the one URL that decides which app version loads.
+IDXHDR="$(curl -s -D - -o /dev/null "$BASE/" || true)"
+echo "$IDXHDR" | grep -qi '^cache-control:' \
+  || fail "index.html carries no Cache-Control - nginx applies heuristic caching to the SPA shell, so browsers can keep loading a stale app version."
+echo "$IDXHDR" | grep -i '^cache-control:' | grep -qi 'immutable' \
+  && fail "index.html is marked immutable, but it changes on every deploy. Got: $(echo "$IDXHDR" | grep -i '^cache-control')"
+
+PERMPOL="$(curl -s -D - -o /dev/null "$BASE/" | grep -i '^permissions-policy' || true)"
+[ -n "$PERMPOL" ] \
+  || fail "The SPA response carries no Permissions-Policy header at all."
+echo "$PERMPOL" | grep -qi 'microphone=(self)' \
+  || fail "Permissions-Policy does not allow microphone for this origin - calling will not work. Got: $PERMPOL"
+echo "$PERMPOL" | grep -qi 'camera=(self)' \
+  || fail "Permissions-Policy does not allow camera for this origin - video calling will not work. Got: $PERMPOL"
+echo "$PERMPOL" | grep -qi 'display-capture=(self)' \
+  || fail "Permissions-Policy does not allow display-capture - screen sharing will not work. Got: $PERMPOL"
+
+echo "  enabled: SPA served; envsubst intact; same-origin enforced (403 cross-origin, 403 no-Origin, 403 rebinding, 403 LAN, 403 both-fail); same-origin proxied; no prefix match; CSP preserved; media capture permitted; sw.js uncacheable; manifest typed."
 
 # ---------------------------------------------------------------------------
 # 2. The switch is OPT-IN. Only the literal "1" may enable the proxy.

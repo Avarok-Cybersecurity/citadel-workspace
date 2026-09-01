@@ -8,9 +8,10 @@ use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainSer
 use crate::kernel::rate_limiter::{RateLimiter, DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL};
 use crate::kernel::transaction::BackendTransactionManager;
 use crate::WorkspaceProtocolResponse;
-use citadel_logging::{error, info, warn};
+use citadel_logging::{debug, error, info, warn};
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, ObjectTransferStatus, Ratchet};
 use parking_lot::RwLock;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -63,6 +64,21 @@ pub(crate) fn validate_content_segment(segment: &str) -> Result<(), NetworkError
     Ok(())
 }
 
+/// Who a broadcast is for.
+///
+/// Group chat used to go to `Everyone`: a message posted in a private room was
+/// pushed to every connected session, whatever rooms they belonged to. The
+/// audience is carried on the message so the per-connection forwarding loop —
+/// the only place that knows which user it is writing to — can drop what that
+/// user is not entitled to see.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BroadcastAudience {
+    /// Every connected session (workspace-wide structure and status changes).
+    Everyone,
+    /// Only sessions whose user may view the node owning this chat channel.
+    Group(String),
+}
+
 /// Message for broadcasting workspace updates to connected clients
 #[derive(Clone, Debug)]
 pub struct BroadcastMessage {
@@ -70,6 +86,8 @@ pub struct BroadcastMessage {
     pub response: WorkspaceProtocolResponse,
     /// The CID to exclude from the broadcast (the originator)
     pub exclude_cid: Option<u64>,
+    /// Which connections may receive it
+    pub audience: BroadcastAudience,
 }
 
 /// Async version of WorkspaceServerKernel that uses backend persistence
@@ -91,6 +109,38 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     /// per-connection - opening multiple connections from the same
     /// account no longer multiplies the budget.
     rate_limiter: RateLimiter,
+    /// Which account each live connection belongs to, keyed by session CID.
+    ///
+    /// Command handling learns the actor from the per-connection task, but
+    /// `NodeResult::ObjectTransferHandle` arrives on a different branch of the
+    /// event loop and carries only a `session_cid`. Without this map a file
+    /// transfer cannot be attributed to a user, and so cannot be authorised.
+    /// Shared across clones, like the rate limiter.
+    connected_users: Arc<RwLock<HashMap<u64, String>>>,
+    /// Whether the first account to CONNECT is promoted to Admin.
+    ///
+    /// False unless the operator asks for it by name. See
+    /// `crate::resolve_first_connect_admin` for the reasoning; in short, on a
+    /// reachable deployment the promotion handed the workspace to whoever
+    /// registered first.
+    first_connect_admin: bool,
+}
+
+/// Removes a CID's account attribution when its connection task ends.
+///
+/// A `Drop` guard rather than a line at the end of the loop, because the task
+/// has several exits (stream closed, send error, cancellation) and a stale
+/// attribution is worse than none: CIDs are reused, so the next connection on
+/// that CID would inherit the previous account's authorisation.
+struct CidAttribution {
+    connected_users: Arc<RwLock<HashMap<u64, String>>>,
+    cid: u64,
+}
+
+impl Drop for CidAttribution {
+    fn drop(&mut self) {
+        self.connected_users.write().remove(&self.cid);
+    }
 }
 
 // Placeholder for entities that don't have an owner yet.
@@ -106,10 +156,12 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             workspace_structure: self.workspace_structure.clone(),
             broadcast_tx: self.broadcast_tx.clone(),
             file_transfer_config: self.file_transfer_config.clone(),
+            first_connect_admin: self.first_connect_admin,
             // RateLimiter::Clone shares the same Arc<Mutex<HashMap>>,
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
             rate_limiter: self.rate_limiter.clone(),
+            connected_users: self.connected_users.clone(),
         }
     }
 }
@@ -144,7 +196,19 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             broadcast_tx,
             file_transfer_config: FileTransferConfig::default(),
             rate_limiter: RateLimiter::new(DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL),
+            connected_users: Arc::new(RwLock::new(HashMap::new())),
+            first_connect_admin: false,
         }
+    }
+
+    /// Set by the server bootstrap from configuration. Off unless asked for.
+    pub fn set_first_connect_admin(&mut self, allowed: bool) {
+        self.first_connect_admin = allowed;
+    }
+
+    /// Whether the first account to connect is promoted to Admin.
+    pub fn first_connect_admin(&self) -> bool {
+        self.first_connect_admin
     }
 
     /// Create a new kernel with file transfer configuration
@@ -169,6 +233,56 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         self.file_transfer_config.allow_server_file_transfer
     }
 
+    /// Which permission a transfer needs, taken from which way the bytes flow.
+    ///
+    /// No interpretation required: the server receiving is somebody uploading,
+    /// the server sending is somebody downloading.
+    pub fn permission_for_transfer(
+        orientation: &citadel_types::proto::ObjectTransferOrientation,
+    ) -> citadel_workspace_types::structs::Permission {
+        use citadel_types::proto::ObjectTransferOrientation;
+        use citadel_workspace_types::structs::Permission;
+        match orientation {
+            ObjectTransferOrientation::Receiver { .. } => Permission::UploadFiles,
+            ObjectTransferOrientation::Sender => Permission::DownloadFiles,
+        }
+    }
+
+    /// May `actor` move this file?
+    ///
+    /// `allow_server_file_transfer` is one global switch, and it used to be the
+    /// entire gate: every transfer was auto-accepted. Meanwhile `UploadFiles`
+    /// and `DownloadFiles` are granted per role and shown to operators as
+    /// toggles in the permission matrix, so the UI reported an access control
+    /// the server never consulted.
+    ///
+    /// The concrete hole is Guest. `Permission::for_role` gives Guest
+    /// ViewContent and nothing else -- deliberately; the mapping says so in its
+    /// own comment -- yet a Guest could push files into server storage and pull
+    /// them back out. The same "a read-only role must not write" fix was made
+    /// for group messaging; the file path never received it.
+    ///
+    /// `None` is refused. An unattributed transfer is one that cannot be
+    /// authorised, and auto-accepting those is how this started.
+    pub async fn may_transfer(
+        &self,
+        actor: Option<&str>,
+        orientation: &citadel_types::proto::ObjectTransferOrientation,
+    ) -> bool {
+        use crate::handlers::domain::async_ops::AsyncPermissionOperations;
+        let Some(user_id) = actor else {
+            return false;
+        };
+        self.domain_operations
+            .check_entity_permission(
+                user_id,
+                crate::WORKSPACE_ROOT_ID,
+                Self::permission_for_transfer(orientation),
+            )
+            .await
+            .unwrap_or(false)
+    }
+
     /// Check if server RE-VFS storage is enabled
     pub fn is_server_revfs_enabled(&self) -> bool {
         self.file_transfer_config.allow_server_revfs_storage
@@ -187,9 +301,29 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     /// Broadcast a response to all connected clients (except the excluded CID)
     pub fn broadcast(&self, response: WorkspaceProtocolResponse, exclude_cid: Option<u64>) {
+        self.broadcast_to(response, exclude_cid, BroadcastAudience::Everyone)
+    }
+
+    /// Broadcast a response only to sessions entitled to see `group_id`'s chat.
+    pub fn broadcast_to_group(
+        &self,
+        response: WorkspaceProtocolResponse,
+        exclude_cid: Option<u64>,
+        group_id: String,
+    ) {
+        self.broadcast_to(response, exclude_cid, BroadcastAudience::Group(group_id))
+    }
+
+    fn broadcast_to(
+        &self,
+        response: WorkspaceProtocolResponse,
+        exclude_cid: Option<u64>,
+        audience: BroadcastAudience,
+    ) {
         let msg = BroadcastMessage {
             response,
             exclude_cid,
+            audience,
         };
         if let Err(e) = self.broadcast_tx.send(msg) {
             // Only log when there are active receivers (0 receivers at startup is expected)
@@ -281,18 +415,52 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     ) -> Result<(), NetworkError> {
         info!(target: "citadel", "Initializing root workspace (no pre-created admin user)");
 
-        // Pre-populate the master password BEFORE any workspace checks
-        // This ensures first-time initialization via CreateWorkspace can validate the password
-        if !workspace_master_password.is_empty() {
-            info!(target: "citadel", "Pre-populating master password for root workspace");
-            self.domain_operations
-                .backend_tx_manager
-                .set_workspace_password(crate::WORKSPACE_ROOT_ID, workspace_master_password)
-                .await?;
-        }
-
         // Check if root workspace exists
         let workspace_exists = self.get_domain(crate::WORKSPACE_ROOT_ID).await?.is_some();
+
+        // Seed the master password only on FIRST boot. This used to run
+        // unconditionally, before the existence check above, so every start
+        // overwrote the stored root credential with whatever the environment
+        // currently said. Any drift in `.env` — a lost file, a second checkout,
+        // a host restored from an image — silently rotated the root password
+        // with no warning and no audit line, locking out whoever held the old
+        // one. It also meant restoring a backed-up `server_data` did not
+        // restore its password: the next boot overwrote it again.
+        //
+        // A rotation is a legitimate thing to want, so this warns rather than
+        // refusing — but it says so, once, in a line an operator can grep for.
+        if !workspace_master_password.is_empty() {
+            let stored = self
+                .domain_operations
+                .backend_tx_manager
+                .get_workspace_password(crate::WORKSPACE_ROOT_ID)
+                .await?;
+            match stored.as_deref() {
+                None => {
+                    info!(target: "citadel", "Seeding master password for the root workspace (first boot)");
+                    self.domain_operations
+                        .backend_tx_manager
+                        .set_workspace_password(crate::WORKSPACE_ROOT_ID, workspace_master_password)
+                        .await?;
+                }
+                Some(existing) if existing == workspace_master_password => {
+                    debug!(target: "citadel", "Master password unchanged");
+                }
+                Some(_) => {
+                    warn!(
+                        target: "citadel",
+                        "WORKSPACE_MASTER_PASSWORD differs from the password stored for the root \
+                         workspace. ROTATING it: anyone holding the previous password loses \
+                         access. If this was not intended, stop the server and restore the \
+                         previous value before anyone reconnects."
+                    );
+                    self.domain_operations
+                        .backend_tx_manager
+                        .set_workspace_password(crate::WORKSPACE_ROOT_ID, workspace_master_password)
+                        .await?;
+                }
+            }
+        }
 
         if !workspace_exists {
             info!(target: "citadel", "Creating root workspace with no owner (first user with master password becomes admin)");
@@ -415,6 +583,95 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// Writes the content to `{content_base_path}/{node_name}/CONTENT.md`.
     /// `node_name` is rejected if it would escape the content base
     /// directory — see `validate_content_segment`.
+    /// Where a node's CONTENT.md belongs on disk: its ancestor names, root first.
+    ///
+    /// The boot loader reads offices from `{base}/{office}/CONTENT.md` and rooms
+    /// from `{base}/{office}/{room}/CONTENT.md`, so a room's file needs both
+    /// segments. `persist_node_content` used to take a single name, so every
+    /// room was written to `{base}/{room}/CONTENT.md` — a path the loader
+    /// interprets as an OFFICE. The user's edit went somewhere the room would
+    /// never be read from, the room resurrected with its seed content at the
+    /// next restart, and a phantom office appeared holding the orphaned text.
+    ///
+    /// Returns an empty vec when the chain cannot be resolved, which the caller
+    /// treats as "do not write" rather than guessing at a path.
+    pub async fn content_path_segments(&self, node_id: &str) -> Vec<String> {
+        let Ok(nodes) = self
+            .domain_operations
+            .backend_tx_manager
+            .get_all_nodes()
+            .await
+        else {
+            return Vec::new();
+        };
+
+        let mut segments: Vec<String> = Vec::new();
+        let mut current = Some(node_id.to_string());
+        let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        while let Some(id) = current {
+            // A cyclic parent chain must not spin here; the tree validator
+            // guards mutations, but this reads whatever is on disk.
+            if !visited.insert(id.clone()) {
+                return Vec::new();
+            }
+            let Some(node) = nodes.get(&id) else { break };
+            segments.push(node.name.clone());
+            current = node
+                .parent_id
+                .clone()
+                .filter(|p| p != crate::WORKSPACE_ROOT_ID);
+        }
+
+        segments.reverse();
+        segments
+    }
+
+    /// Persist a node's content at its full ancestor path.
+    pub async fn persist_node_content_at(
+        &self,
+        segments: &[String],
+        mdx_content: &str,
+    ) -> Result<(), NetworkError> {
+        // Checked BEFORE the base-path lookup on purpose. An empty chain means
+        // the node could not be resolved at all, which is a data problem worth
+        // surfacing whether or not file persistence happens to be configured —
+        // and it must never fall through to a guessed path. `content_path_segments`
+        // reads the nodes map, not the filesystem, so this is not noisy on a
+        // deployment with persistence off.
+        if segments.is_empty() {
+            return Err(NetworkError::msg(
+                "Refusing to persist content: could not resolve the node's path",
+            ));
+        }
+        let Some(base_path) = self.get_content_base_path() else {
+            return Ok(());
+        };
+
+        let mut content_path = base_path;
+        for segment in segments {
+            validate_content_segment(segment)?;
+            content_path = content_path.join(segment);
+        }
+        let content_path = content_path.join("CONTENT.md");
+        info!(target: "citadel", "[ASYNC_KERNEL] Persisting node content to {:?}", content_path);
+
+        if let Some(parent) = content_path.parent() {
+            tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                NetworkError::msg(format!("Failed to create directory {:?}: {}", parent, e))
+            })?;
+        }
+
+        tokio::fs::write(&content_path, mdx_content)
+            .await
+            .map_err(|e| {
+                NetworkError::msg(format!(
+                    "Failed to persist node content to {:?}: {}",
+                    content_path, e
+                ))
+            })
+    }
+
     pub async fn persist_node_content(
         &self,
         node_name: &str,
@@ -514,6 +771,29 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// write would turn a completed seed into a crash loop, and the next boot would short-circuit
     /// on `seeded` anyway. Every site that discharges the obligation goes through here, so they
     /// cannot drift into treating the same write as fatal in one place and optional in another.
+    /// Full-tree integrity check over the persisted node map: single root, no
+    /// dangling parents, no cycles, reachability, schema depth/type limits.
+    ///
+    /// This is the check `tree_validator`'s doc always said to run "on startup
+    /// and after migrations" — and which nothing called, so every full-tree
+    /// invariant was enforced nowhere. Per-mutation validation only vets the
+    /// step being taken; corruption that arrives any other way (a manual
+    /// backend edit, a bug in an older binary, a bad migration) was invisible
+    /// until some walker tripped over it at request time.
+    ///
+    /// A `Result` rather than a log so tests can assert on it; `on_start`
+    /// logs the Err and continues — see the comment there for why a corrupted
+    /// store must not refuse to boot.
+    pub async fn validate_stored_tree(&self) -> Result<(), NetworkError> {
+        let backend = &self.domain_operations.backend_tx_manager;
+        let nodes = backend.get_all_nodes().await?;
+        let schema = backend.get_tree_schema_or_default().await?;
+        crate::handlers::domain::tree_validator::TreeValidator::validate_tree_with_schema(
+            &nodes, &schema,
+        )
+        .map_err(|e| NetworkError::msg(format!("Stored tree failed integrity validation: {e}")))
+    }
+
     async fn discharge_seed_obligation(&self) {
         if let Err(e) = self
             .domain_operations
@@ -778,6 +1058,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 owner_id: UNASSIGNED_OWNER.to_string(),
                 members: vec![],
                 children: Vec::new(),
+                // Seeded content is hashed like any other, so a document that
+                // shipped with the workspace is verified on the same terms as
+                // one a member wrote.
+                mdx_content_hash: Some(citadel_workspace_types::structs::mdx_content_hash(
+                    &mdx_content,
+                )),
                 mdx_content,
                 rules: office_config.rules.clone(),
                 chat_enabled: office_config.chat_enabled,
@@ -854,6 +1140,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                     owner_id: UNASSIGNED_OWNER.to_string(),
                     members: vec![],
                     children: Vec::new(),
+                    mdx_content_hash: Some(citadel_workspace_types::structs::mdx_content_hash(
+                        &room_mdx_content,
+                    )),
                     mdx_content: room_mdx_content,
                     rules: room_config.rules.clone(),
                     chat_enabled: room_config.chat_enabled,
@@ -1029,6 +1318,21 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
             }
         }
 
+        // Full-tree integrity check, after seeding and migrations have run.
+        // Logged, not fatal: refusing to boot on a corrupted store would take
+        // down the only tool capable of repairing it (and crash-loop the
+        // container against the same store forever). The runtime is defended
+        // in depth regardless — every mutation is validated before it applies,
+        // and the ancestor walkers are cycle-guarded — so this check's job is
+        // to make corruption VISIBLE at a known moment instead of surfacing as
+        // an inexplicable request-time failure.
+        if let Err(e) = self.validate_stored_tree().await {
+            error!(
+                target: "citadel",
+                "{e} — continuing startup; mutations remain individually validated"
+            );
+        }
+
         Ok(())
     }
 
@@ -1134,6 +1438,27 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                         }
 
                         // Add user directly to workspace members (no admin required for initial connection)
+                        // Held across the whole read-decide-write cycle.
+                        //
+                        // A workspace is stored WHOLE, so this reads the record,
+                        // decides `is_first_member` from it, and writes it back —
+                        // across two awaits. Two accounts connecting to a fresh
+                        // workspace both observed `members == []`, so BOTH were
+                        // promoted to Admin, and the second write erased the first's
+                        // membership. The promoted-but-unlisted admin still passes
+                        // every gate (`is_admin` reads the global role and never
+                        // consults membership) while `ensure_not_last_admin`, which
+                        // counts admins among `workspace.members`, cannot see them.
+                        //
+                        // `lock_workspaces` was built for exactly this and its only
+                        // caller was the theme handler. First-run is precisely when
+                        // two people are most likely to connect at once.
+                        let _workspace_guard = this
+                            .domain_operations
+                            .backend_tx_manager
+                            .lock_workspaces()
+                            .await;
+
                         // This bypasses the permission check since authenticated users should be allowed
                         let mut ws = this
                             .domain_operations
@@ -1141,6 +1466,49 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             .get_workspace(crate::WORKSPACE_ROOT_ID)
                             .await?
                             .ok_or_else(|| NetworkError::msg("Root workspace not found"))?;
+
+                        // The root workspace is seeded at boot from the master password, so
+                        // no user ever runs the "initialize workspace" flow that would grant
+                        // Admin. Without this, every account stays a Member with no editing
+                        // rights and the workspace has no administrator at all.
+                        // Gated. Unconditional promotion meant that on a
+                        // deployment reachable from anywhere, whoever found the
+                        // port and registered first became the administrator of
+                        // the workspace -- registration has no invite gate, so
+                        // the race is open to any stranger. A local dev stack
+                        // still needs it, which is why it survives at all, but
+                        // it now has to be asked for by name.
+                        let ws_was_empty = ws.members.is_empty();
+                        let outcome =
+                            crate::first_member_outcome(this.first_connect_admin, ws_was_empty);
+
+                        // A promoted first member also INITIALISES the workspace.
+                        //
+                        // The frontend shows its "Initialize & Become Admin"
+                        // modal whenever the metadata lacks `initialized: true`,
+                        // and promotion did not write it -- so the one account
+                        // that IS the administrator was asked to become one, and
+                        // declining that modal navigates back to the index
+                        // rather than into the workspace. The flag exists so
+                        // that `tilt up` -> create an account -> have editing
+                        // rights works without anyone typing the master
+                        // password, and it only half did.
+                        //
+                        // Written here, before the workspace is persisted below,
+                        // so it costs no extra write. Merged, never assigned:
+                        // this document is shared with theming and with whatever
+                        // is added next. See metadata_merge.
+                        if outcome == crate::FirstMemberOutcome::Promote {
+                            match crate::handlers::domain::server_ops::metadata_merge::merge_metadata_document(
+                                &ws.metadata,
+                                br#"{"initialized":true}"#,
+                            ) {
+                                Ok(merged) => ws.metadata = merged,
+                                Err(err) => {
+                                    warn!(target: "citadel", "[ASYNC_KERNEL] Could not mark the workspace initialised: {err}");
+                                }
+                            }
+                        }
 
                         if !ws.members.contains(&user_id) {
                             ws.members.push(user_id.clone());
@@ -1159,11 +1527,40 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                 .await?;
                         }
 
+                        if outcome == crate::FirstMemberOutcome::Promote {
+                            use citadel_workspace_types::structs::UserRole;
+                            if let Some(mut user) = this.get_user(&user_id).await? {
+                                user.role = UserRole::Admin;
+                                user.set_role_permissions(crate::WORKSPACE_ROOT_ID);
+                                this.domain_operations
+                                    .backend_tx_manager
+                                    .insert_user(user_id.clone(), user)
+                                    .await?;
+                                info!(target: "citadel", "[ASYNC_KERNEL] User {} is the first workspace member; promoted to Admin", user_id);
+                            }
+                        }
+
                         info!(target: "citadel", "[ASYNC_KERNEL] User {} added to workspace domain", user_id);
                     }
 
                     let (mut tx, mut rx) = connect_success.channel.split();
                     let current_cid = user_cid;
+
+                    // Attribute this CID to its account for the lifetime of the
+                    // connection. `ObjectTransferHandle` events arrive on
+                    // another branch of the event loop with nothing but a
+                    // session CID, and a transfer that cannot be attributed
+                    // cannot be authorised.
+                    this.connected_users
+                        .write()
+                        .insert(current_cid, user_id.clone());
+                    // Cleared however this connection ends -- normally, by
+                    // error, or by the task being dropped -- so a later
+                    // connection reusing the CID cannot inherit the attribution.
+                    let _cid_attribution = CidAttribution {
+                        connected_users: this.connected_users.clone(),
+                        cid: current_cid,
+                    };
 
                     // Subscribe to broadcast channel for this connection
                     let mut broadcast_rx = this.subscribe_broadcast();
@@ -1261,6 +1658,18 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                             continue;
                                         }
 
+                                        // A group-scoped broadcast reaches only
+                                        // sessions entitled to that channel. This
+                                        // is the one place that knows which user
+                                        // the socket belongs to, so it is the only
+                                        // place the check can be made.
+                                        if let BroadcastAudience::Group(ref group_id) = broadcast_msg.audience {
+                                            use crate::kernel::group_access::authorize_group_read;
+                                            if authorize_group_read(&this, &user_id, group_id).await.is_none() {
+                                                continue;
+                                            }
+                                        }
+
                                         // Forward the broadcast to this client
                                         let response_wrapped =
                                             WorkspaceProtocolPayload::Response(Box::new(broadcast_msg.response));
@@ -1305,6 +1714,41 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                 let ft_config = self.file_transfer_config.clone();
                 if !ft_config.allow_server_file_transfer {
                     warn!(target: "citadel", "[ASYNC_KERNEL] Server file transfers are disabled, declining transfer");
+                    if let Err(e) = object_transfer_handle.handle.decline() {
+                        error!(target: "citadel", "[ASYNC_KERNEL] Failed to decline file transfer: {:?}", e);
+                    }
+                    return Ok(());
+                }
+
+                // WHO is transferring, not just whether transfers are on.
+                //
+                // `allow_server_file_transfer` is one global switch, and it was
+                // the entire gate: every transfer was auto-accepted. Meanwhile
+                // `Permission::UploadFiles` and `DownloadFiles` are granted per
+                // role and shown to operators as toggles in the permission
+                // matrix, so the UI reported an access control the server never
+                // consulted.
+                //
+                // The concrete hole is Guest. `Permission::for_role` gives Guest
+                // ViewContent and nothing else -- deliberately, the mapping says
+                // so -- yet a Guest could push files into server storage and
+                // pull them back out. The same "a read-only role must not
+                // write" fix was already made for group messaging; the file path
+                // never received it.
+                //
+                // Direction is taken from which way the bytes flow, which needs
+                // no interpretation: the server receiving is somebody uploading,
+                // the server sending is somebody downloading.
+                let transfer_cid = object_transfer_handle.session_cid;
+                let actor = self.connected_users.read().get(&transfer_cid).cloned();
+                let orientation = object_transfer_handle.handle.orientation;
+                let required = Self::permission_for_transfer(&orientation);
+                let permitted = self.may_transfer(actor.as_deref(), &orientation).await;
+                if !permitted {
+                    warn!(
+                        target: "citadel",
+                        "[ASYNC_KERNEL] Declining file transfer for cid {transfer_cid} (account {actor:?}): {required:?} required"
+                    );
                     if let Err(e) = object_transfer_handle.handle.decline() {
                         error!(target: "citadel", "[ASYNC_KERNEL] Failed to decline file transfer: {:?}", e);
                     }
@@ -1659,6 +2103,7 @@ mod structure_seed_idempotency_tests {
             members: vec![],
             children: Vec::new(),
             mdx_content: String::new(),
+            mdx_content_hash: None,
             rules: None,
             chat_enabled: true,
             chat_channel_id: None,

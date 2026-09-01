@@ -9,6 +9,15 @@ serde_json = "1.0"
 uuid = { workspace = true } # Added back with workspace inheritance
 ts-rs = { version = "11", features = ["serde-compat", "uuid"] }
 custom_debug = { version = "0.6.2" }
+# Document integrity: the server hashes mdx_content on write and the client
+# re-hashes before executing it. See DomainNode::mdx_content_hash.
+sha2 = "0.10"
+hex = "0.4"
 citadel-internal-service-types = { path = "../citadel-internal-service/citadel-internal-service-types" }
+
+[dev-dependencies]
+# Only the credential-mirror test needs this; it reads the SDK's own constants
+# rather than restating them, so the assertion cannot drift with the mirror.
+citadel_user = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

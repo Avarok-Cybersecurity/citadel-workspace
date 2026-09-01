@@ -303,6 +303,112 @@ const username = message.PeerRegisterNotification.username;  // undefined!
 const peerUsername = message.PeerRegisterNotification.peer_username;
 ```
 
+## Audio and Video Calling
+
+Calls deliberately split across two transports, because signalling and media
+want opposite things.
+
+```
+CALL CONTROL (reliable, ordered)          MEDIA (unreliable datagrams)
+invite / accept / decline / end           encoded audio and video frames
+mute state / keyframe requests            30-60 per second per track
+heartbeats
+        │                                          │
+        ▼                                          ▼
+P2PCommandType.CallSignal                 InternalServiceRequest::MediaSend
+  over the ILM reliable path                over the peer's UDP channel
+```
+
+**Why media takes the lossy path.** On a reliable ordered channel there is no
+such thing as a lost packet — congestion turns into unbounded latency instead.
+A call running three seconds behind is worse than one that dropped a frame, so
+media wants the channel where loss is possible, because loss is the cheaper
+failure. Call control takes the opposite view: losing a video frame costs a
+sixtieth of a second, losing a "call ended" leaves both sides staring at a call
+that is over.
+
+This is why peer connections are established with `UdpMode::Enabled`. Without a
+datagram path there is no call — the media layer reports that explicitly rather
+than silently degrading onto the reliable channel.
+
+### Where encoding happens
+
+In the **browser**, via WebCodecs — never in Rust. Two reasons: WebCodecs is the
+only route to the platform's hardware encoders, and this app's WASM build has
+neither threads nor SIMD, so a software codec compiled into it could not hold
+realtime 720p while sharing a thread with the transport. The protocol carries
+opaque encrypted bytes and never inspects them.
+
+Codecs are negotiated against the peer's **decode** list rather than their
+encode list, because decode support is consistently broader — that lets each
+sender use its best available encoder instead of the call collapsing to a common
+denominator. In a group, one codec is chosen for the whole room: a mesh sender
+encodes once and fans the same bitstream to everyone, and picking per-peer would
+mean an encoder instance per participant.
+
+### Frame path
+
+```
+capture (getUserMedia)
+   → CapturePump            MediaStreamTrackProcessor, or a canvas fallback
+   → VideoEncoder/AudioEncoder   WebCodecs, latencyMode 'realtime'
+   → send_media_frame        WASM binding, synchronous and unawaited
+   → MediaSend               internal service
+   → Packetizer              citadel_media: fragments to fit the MTU
+   → UDP datagrams           post-quantum encrypted, peer to peer
+   ─────────────────────────────────────────────────────────────────
+   → Reassembler + JitterBuffer   reorders, reports gaps
+   → MediaFrameNotification       routed by CID, never by request_id
+   → VideoDecoder/AudioDecoder
+   → MediaStreamTrackGenerator, or a canvas fallback
+   → the participant's tile
+```
+
+The UDP channel is offered **once** per peer connection. Sessions borrow and
+return it rather than consuming it — a session that took it made every later
+call between those two peers impossible.
+
+### Group calls
+
+Full mesh, capped at 8 with video and 12 audio-only. There is no SFU: a relay
+would have to decrypt and re-encrypt per recipient, because Citadel's
+encryption is per-pair. Above those caps a sender's uplink and encoder count
+stop being survivable, so the UI refuses rather than starting a call that will
+collapse.
+
+**The invite carries the caller's whole roster, and every invitee keeps it.**
+That is what makes the mesh a mesh. An invitee seeds its participant map with
+the caller *and* every co-invitee, then announces its acceptance to all of them,
+so B and C open a session with each other directly and neither waits on A. Drop
+the roster on the receiving side and the call still looks correct from the
+caller's seat — A sees and hears everyone — while the invitees never exchange a
+signal, let alone a frame. The result is hub-and-spoke wearing a mesh's clothes,
+and only a third participant can tell the difference.
+
+A test that asserts "a remote tile is decoding" cannot catch that either: on
+each invitee, the assertion has to find **two** distinct remote tiles with
+`videoWidth > 0`, because one of those senders is the other invitee.
+
+Signal ordering matters as much as delivery. Call control travels the reliable
+path, but a group invite fans out to several peers in one tick, and concurrent
+sends through the messenger could interleave badly enough to lose one — one peer
+simply never rings while the caller's logs show both sends. Signal sends are
+therefore serialised per transport.
+
+The queue is bounded, because nothing below it is: the path down to the WASM
+messenger carries no timeout, so an unbounded queue would let one stalled send
+hold every later signal behind it — including the hang-up, which is precisely
+what the ordering was protecting. The bound applies only to how long the NEXT
+send waits; each caller still awaits its own result. Ordering holds in the
+normal case and gives way to concurrency exactly when waiting has become the
+worse failure.
+
+### Liveness
+
+A participant announces presence on the reliable path, and silence means gone.
+Absence of media frames cannot stand in for this: someone who muted and turned
+their camera off sends nothing at all and is still present.
+
 ## Authentication Flow
 
 ```
@@ -1030,17 +1136,17 @@ session_security_settings: {
 ### Frontend (TypeScript)
 
 **Services**:
-- WebSocket service: `citadel-workspaces/src/lib/websocket-service.ts`
-- Connection manager: `citadel-workspaces/src/lib/connection-manager.ts`
-- P2P registration: `citadel-workspaces/src/lib/p2p-registration-service.ts`
-- P2P messenger: `citadel-workspaces/src/lib/p2p-messenger-manager.ts`
-- Workspace service: `citadel-workspaces/src/lib/workspace-service.ts`
+- WebSocket service: `citadel-workspaces/src/lib/websocket-service/`
+- Connection manager: `citadel-workspaces/src/lib/connection/`
+- P2P registration: `citadel-workspaces/src/lib/p2p-registration-service/`
+- P2P messenger: `citadel-workspaces/src/lib/p2p/p2p-messenger-manager.ts`
+- Workspace service: `citadel-workspaces/src/lib/workspace-service/`
 
 **UI Components**:
 - App layout: `citadel-workspaces/src/components/layout/AppLayout.tsx`
 - Sidebar: `citadel-workspaces/src/components/layout/sidebar/`
 - P2P Chat: `citadel-workspaces/src/components/p2p/P2PChat.tsx`
-- Messages section: `citadel-workspaces/src/components/layout/sidebar/MessagesSection.tsx`
+- Conversation list: `citadel-workspaces/src/components/layout/sidebar/GroupConversationRow.tsx`
 
 ### WASM Client
 

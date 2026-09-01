@@ -114,12 +114,16 @@ Cloudflare TLS/Access boundary entirely (an attacker can hit
 - **nginx UI (:8080)** — intentionally reachable by cloudflared over
   loopback; serves only the static SPA with a restrictive CSP. Low risk, but
   a host firewall blocking :8080 publicly is still recommended.
-- **workspace-server (Citadel C2S, :12349)** — still binds `0.0.0.0` (its
-  `bind_addr` lives in `docker/workspace-server/kernel.toml`, shared with
-  dev). The Citadel protocol is end-to-end encrypted, so this is lower risk
-  than the plaintext WS, but it remains an unguarded attack surface.
-  **Remaining work:** make the server bind host configurable (env or a
-  prod-specific `kernel.toml`) and bind it to `127.0.0.1` in production.
+- **workspace-server (Citadel C2S, :12349)** — binds `127.0.0.1` in
+  production via `WORKSPACE_BIND_ADDR` (`docker-compose.production.yml`, and
+  the same value in `publish-images.yml`). The kernel reads that env var and
+  falls back to `kernel.toml`'s `bind_addr` — still `0.0.0.0:12349`, which is
+  what dev wants and why the file is shared.
+
+  Set `WORKSPACE_BIND_ADDR=0.0.0.0:12349` only for a deployment where remote
+  clients reach this server directly rather than through the co-located
+  ingress; the Citadel protocol is end-to-end encrypted, so a public bind is
+  by design in that mode, but pair it with a host firewall.
 - **Mandatory regardless:** run a host firewall (ufw / cloud security group)
   that allows only Cloudflare ingress and blocks `8080`/`12345`/`12349` from
   the public internet. Host networking means Docker's own port mapping does
@@ -170,6 +174,45 @@ Cloudflare TLS/Access boundary entirely (an attacker can hit
                     │  └────────┘ │
                     └─────────────┘
 ```
+
+## Audio and video calls
+
+Calls are peer to peer. There is no SFU, no TURN server and no media relay — the
+workspace server never sees a frame — so what they need from a deployment is
+different from what messaging needs.
+
+**A datagram path between peers.** Peer connections are established with
+`UdpMode::Enabled`, and media rides that channel. Media deliberately does not
+fall back to the reliable channel: on a reliable ordered transport there is no
+such thing as a lost packet, so congestion becomes unbounded latency instead,
+and a call running seconds behind is worse than one that dropped a frame.
+
+If UDP cannot be negotiated between two peers, messaging still works and only
+calling is lost. The client says so explicitly rather than appearing to connect
+and carrying nothing.
+
+Practical consequences:
+
+- Peers behind symmetric NAT or a UDP-blocking firewall may fail to establish
+  the datagram path. Nothing needs to be opened on the SERVER for this; it is a
+  property of the two clients' networks.
+- No media ports need to be exposed on the workspace server. It carries call
+  SIGNALLING inside ordinary messages, and nothing else.
+
+**Browser requirements.** Encoding and decoding happen in the browser via
+WebCodecs, which is the only route to hardware encoders. The client probes
+support at runtime and disables the call buttons with the reason when it is
+missing, so an unsupported browser degrades to a working messaging client rather
+than a broken call.
+
+**Group calls are a full mesh**, capped at 8 participants with video and 12
+audio-only. Each participant uploads one stream per peer, so the practical limit
+is uplink bandwidth rather than server capacity. Above the cap the UI refuses
+with an explanation instead of starting a call that would collapse.
+
+**Membership matters.** A room's callable roster comes from its members.
+Registering an account does not make someone a member of any domain, so a
+brand-new room has nobody to call until members are added.
 
 ## Existing Remote Deployment
 

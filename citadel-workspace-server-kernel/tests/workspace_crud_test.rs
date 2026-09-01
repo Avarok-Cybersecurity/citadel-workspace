@@ -226,3 +226,61 @@ async fn test_list_workspaces() {
         Err(e) => panic!("Command failed: {:?}", e),
     }
 }
+
+/// `metadata` is one JSON object shared by several features: initialisation
+/// writes `{"initialized": true}` and theming writes a `theme` key. This path
+/// assigned the incoming bytes over the whole document, so a theme configured
+/// before the workspace was initialised was erased by the initialisation write.
+///
+/// The theme handler was fixed for the mirror-image case in an earlier round;
+/// this call site never received it. The test drives the real command rather
+/// than the merge helper, because the helper was never the broken part.
+#[tokio::test]
+async fn update_workspace_metadata_keeps_keys_it_does_not_mention() {
+    let kernel = create_test_kernel().await;
+
+    // A theme is saved first — the state that used to be destroyed.
+    let seeded = serde_json::json!({ "theme": { "v": 1, "theme": { "primary": "blue" } } });
+    execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::UpdateWorkspace {
+            workspace_id: None,
+            name: None,
+            description: None,
+            workspace_master_password: "admin-password".to_string(),
+            metadata: Some(serde_json::to_vec(&seeded).unwrap()),
+        },
+    )
+    .await
+    .expect("seeding metadata should succeed");
+
+    // Then the initialisation modal's write, which mentions only `initialized`.
+    execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::UpdateWorkspace {
+            workspace_id: None,
+            name: None,
+            description: None,
+            workspace_master_password: "admin-password".to_string(),
+            metadata: Some(br#"{"initialized":true}"#.to_vec()),
+        },
+    )
+    .await
+    .expect("initialisation write should succeed");
+
+    let workspace = kernel
+        .domain_operations
+        .backend_tx_manager
+        .get_workspace(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID)
+        .await
+        .unwrap()
+        .expect("Workspace should exist");
+    let stored: serde_json::Value = serde_json::from_slice(&workspace.metadata)
+        .expect("metadata should still be a JSON object");
+
+    assert_eq!(stored["initialized"], serde_json::Value::Bool(true));
+    assert_eq!(
+        stored["theme"]["theme"]["primary"], "blue",
+        "the initialisation write erased a theme it never mentioned"
+    );
+}

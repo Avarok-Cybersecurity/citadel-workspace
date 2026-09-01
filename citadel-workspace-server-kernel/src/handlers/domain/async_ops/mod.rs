@@ -13,6 +13,8 @@ pub mod async_permission_ops;
 pub mod async_transaction_ops;
 pub mod async_user_ops;
 pub mod async_workspace_ops;
+#[cfg(test)]
+mod delete_node_recovery_tests;
 
 // Re-export all async traits
 pub use async_domain_ops::AsyncDomainOperations;

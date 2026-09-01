@@ -32,8 +32,12 @@ fn test_backend_is_being_used() {
 
     // 5. ReadTransaction and WriteTransaction no longer store data
     println!("\n5. ✓ ReadTransaction and WriteTransaction are being phased out");
-    println!("   - New AsyncReadTransaction and AsyncWriteTransaction use backend directly");
-    println!("   - No more in-memory HashMaps in transaction structs");
+    println!(
+        "   - AsyncReadTransaction/AsyncWriteTransaction were never constructed and were deleted"
+    );
+    println!(
+        "   - Handlers use BackendTransactionManager directly; no in-memory transaction structs"
+    );
 
     println!("\n=== PROOF COMPLETE ===");
     println!("\nThe entire codebase now uses BackendTransactionManager for persistence!");

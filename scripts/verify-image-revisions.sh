@@ -33,8 +33,27 @@
 
 set -euo pipefail
 
+# --expect <sha>: also require the images to be built from THIS commit.
+#
+# Cross-checking the images against each other proves they were promoted
+# together; it says nothing about WHICH commit they are. `git pull` and
+# `docker compose pull` are independent, so on the ordinary merge-then-deploy
+# workflow -- where CI is still building the Rust images -- `latest` still
+# points at the previous commit. All three images agree, the gate passes, the
+# rolling restart runs, and "Deploy complete!" prints over the old binaries
+# with the new source checked out beside them.
+EXPECTED_REV=""
+if [ "${1:-}" = "--expect" ]; then
+    EXPECTED_REV="${2:-}"
+    shift 2
+    if [ -z "$EXPECTED_REV" ]; then
+        echo "usage: $0 [--expect <sha>] <image> [<image> ...]" >&2
+        exit 2
+    fi
+fi
+
 if [ "$#" -lt 1 ]; then
-    echo "usage: $0 <image> [<image> ...]" >&2
+    echo "usage: $0 [--expect <sha>] <image> [<image> ...]" >&2
     exit 2
 fi
 
@@ -137,4 +156,31 @@ if [ "$#" -eq 1 ]; then
     echo "Single-image deployment: ${reference_img} is from commit ${reference_rev} (nothing to cross-check)."
 else
     echo "All images are from commit ${reference_rev}."
+fi
+
+# Compare against the commit the caller expects, if it named one. Prefix match,
+# because the label carries the full sha while tags and humans use the short
+# form; either may be the longer of the two.
+if [ -n "$EXPECTED_REV" ]; then
+    case "$reference_rev" in
+        "$EXPECTED_REV"*) ;;
+        *)
+            case "$EXPECTED_REV" in
+                "$reference_rev"*) ;;
+                *)
+                    echo >&2
+                    echo "ERROR: the images are not built from the commit being deployed." >&2
+                    echo "  images are from: ${reference_rev}" >&2
+                    echo "  expected:        ${EXPECTED_REV}" >&2
+                    echo >&2
+                    echo "The usual cause is deploying before CI finished publishing: the source" >&2
+                    echo "was pulled but the tag still points at the previous commit. Wait for the" >&2
+                    echo "publish workflow, or deploy that exact build explicitly:" >&2
+                    echo "  IMAGE_TAG=sha-\$(git rev-parse --short=12 HEAD) ./deploy.sh" >&2
+                    exit 1
+                    ;;
+            esac
+            ;;
+    esac
+    echo "Images match the commit being deployed (${EXPECTED_REV})."
 fi

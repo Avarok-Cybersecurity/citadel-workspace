@@ -8,7 +8,14 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-pub mod async_transactions;
+// `async_transactions` (AsyncReadTransaction / AsyncWriteTransaction) was
+// deleted here: nothing ever constructed either type, yet the module read as
+// the authoritative transaction layer. It carried two divergences from the
+// live handlers — an unlocked get_all_nodes/insert/save_nodes read-modify-write
+// that violated the `lock_nodes` contract, and list_offices/list_rooms reading
+// `TreeSchema::default()` instead of the stored schema — traps for whoever
+// resurrected it. The live paths are the handlers in `crate::handlers` over
+// `BackendTransactionManager` directly.
 pub mod backend_ops_simple;
 // Note: TransactionManager has been removed. Use BackendTransactionManager instead.
 
@@ -48,6 +55,27 @@ pub struct BackendTransactionManager<R: Ratchet> {
     /// first's change — losing a node insert/delete/update silently.
     /// Same data-loss-vs-cost trade-off as `group_msg_mutex` above.
     node_mutex: Arc<tokio::sync::Mutex<()>>,
+
+    /// Serializes read-modify-write sequences over a single `Workspace` record.
+    ///
+    /// A workspace is stored whole, so any handler that reads one, changes a
+    /// field and writes it back can lose a concurrent change to a different
+    /// field — the theme handler and a member update both load the same record
+    /// and the second write discards the first. Same reasoning as `node_mutex`,
+    /// applied to workspaces.
+    ///
+    /// `insert_workspace` deliberately does NOT take this itself, so a caller
+    /// can hold the guard across the whole get → modify → insert sequence.
+    /// tokio's Mutex is not reentrant; if that changes, this breaks.
+    workspace_mutex: Arc<tokio::sync::Mutex<()>>,
+
+    /// Test-only fault injection: keys whose deletes fail with an injected
+    /// error. The in-memory `test_storage` cannot fail a delete, so failure
+    /// ordering (e.g. "purge failed after the tree was saved") is otherwise
+    /// untestable. `#[cfg(test)]`-gated: absent from every non-test build,
+    /// including the integration-test build of this crate as a dependency.
+    #[cfg(test)]
+    failing_delete_keys: Arc<RwLock<std::collections::HashSet<String>>>,
 }
 
 impl<R: Ratchet + Send + Sync + 'static> Default for BackendTransactionManager<R> {
@@ -112,7 +140,23 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             index_write_mutex: Arc::new(tokio::sync::Mutex::new(())),
             group_msg_mutex: Arc::new(tokio::sync::Mutex::new(())),
             node_mutex: Arc::new(tokio::sync::Mutex::new(())),
+            workspace_mutex: Arc::new(tokio::sync::Mutex::new(())),
+            #[cfg(test)]
+            failing_delete_keys: Arc::new(RwLock::new(std::collections::HashSet::new())),
         }
+    }
+
+    /// Test-only: make every delete of `key` fail until cleared. See
+    /// `failing_delete_keys`.
+    #[cfg(test)]
+    pub(crate) fn fail_deletes_of(&self, key: &str) {
+        self.failing_delete_keys.write().insert(key.to_string());
+    }
+
+    /// Test-only: clear an injected delete fault for `key`.
+    #[cfg(test)]
+    pub(crate) fn clear_delete_fault(&self, key: &str) {
+        self.failing_delete_keys.write().remove(key);
     }
 
     /// Set the NodeRemote instance
@@ -210,6 +254,13 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
 
     /// Generic delete: removes a key from the backend.
     async fn backend_delete(&self, key: &str) -> Result<(), NetworkError> {
+        #[cfg(test)]
+        if self.failing_delete_keys.read().contains(key) {
+            return Err(NetworkError::msg(format!(
+                "injected delete fault for key '{key}'"
+            )));
+        }
+
         if self.node_remote.read().is_none() {
             self.test_storage.write().remove(key);
             return Ok(());
@@ -751,6 +802,23 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(deleted_message)
     }
 
+    /// Drop every message a room ever held.
+    ///
+    /// Deleting a node removed it from the node map and nothing else, so the
+    /// room's entire message history stayed in the backend under
+    /// `citadel_workspace.group_messages.<id>` -- unreachable, because the node
+    /// that named it was gone, and therefore unlistable and unpurgeable. Every
+    /// message anyone ever sent in a deleted room was retained indefinitely,
+    /// which is not what deleting a room means to the person who pressed it.
+    ///
+    /// Serialized through `group_msg_mutex` like every other writer of this key,
+    /// so a send racing the delete cannot re-create the entry after it is gone.
+    pub async fn delete_all_group_messages(&self, group_id: &str) -> Result<(), NetworkError> {
+        let _guard = self.group_msg_mutex.lock().await;
+        self.backend_delete(&Self::group_messages_key(group_id))
+            .await
+    }
+
     /// Get a single message by ID
     pub async fn get_group_message(
         &self,
@@ -967,6 +1035,36 @@ mod group_message_tests {
         }
     }
 
+    /// Deleting a room's history must remove the key, not empty the list.
+    ///
+    /// Nothing deleted it at all before: `delete_node` removed the node and
+    /// left `citadel_workspace.group_messages.<id>` behind, unreachable because
+    /// the node that named it was gone. Every message in every deleted room was
+    /// retained for the life of the backend.
+    #[tokio::test]
+    async fn deleting_a_group_takes_its_messages_with_it() {
+        let mgr = fresh();
+        mgr.store_group_message(msg("m1", "doomed")).await.unwrap();
+        mgr.store_group_message(msg("m2", "doomed")).await.unwrap();
+        mgr.store_group_message(msg("m3", "kept")).await.unwrap();
+
+        // Precondition, so a later refactor that stops storing cannot make this
+        // pass by finding nothing to delete.
+        assert_eq!(mgr.get_group_messages("doomed").await.unwrap().len(), 2);
+
+        mgr.delete_all_group_messages("doomed").await.unwrap();
+
+        assert!(
+            mgr.get_group_messages("doomed").await.unwrap().is_empty(),
+            "a deleted room's messages must not survive it"
+        );
+        assert_eq!(
+            mgr.get_group_messages("kept").await.unwrap().len(),
+            1,
+            "and only that room's -- deletion must not reach a sibling"
+        );
+    }
+
     /// 50 concurrent `store_group_message` calls into the same group
     /// must all land — the pre-mutex implementation lost messages
     /// because the load-modify-save sequences interleaved and the
@@ -1037,6 +1135,83 @@ mod group_message_tests {
 }
 
 #[cfg(test)]
+mod workspace_concurrency_tests {
+    //! Regression tests for `workspace_mutex`.
+    //!
+    //! A `Workspace` is stored and written whole, so a handler that reads one,
+    //! changes a single field and writes it back races every other handler
+    //! doing the same to a different field. The theme handler does exactly that
+    //! with `metadata`; a concurrent member update reads the same record and
+    //! whichever writes second discards the other's change.
+    //!
+    //! These drive the read-modify-write directly rather than through the
+    //! handler, because the property under test belongs to the storage layer.
+    use super::*;
+    use citadel_sdk::prelude::StackedRatchet;
+    use citadel_workspace_types::structs::Workspace;
+
+    fn fresh() -> Arc<BackendTransactionManager<StackedRatchet>> {
+        Arc::new(BackendTransactionManager::new())
+    }
+
+    fn workspace(id: &str) -> Workspace {
+        Workspace {
+            id: id.to_string(),
+            name: format!("ws-{id}"),
+            description: String::new(),
+            owner_id: "owner".to_string(),
+            members: vec![],
+            offices: vec![],
+            metadata: b"{}".to_vec(),
+        }
+    }
+
+    /// Concurrent members-appends to ONE workspace must all survive.
+    ///
+    /// Each task holds `lock_workspaces` across get → modify → insert, which is
+    /// the sequence the theme handler now uses. Without the lock the tasks
+    /// interleave and most of the appends are overwritten.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_updates_to_one_workspace_all_persist() {
+        let mgr = fresh();
+        mgr.insert_workspace("ws".into(), workspace("ws"))
+            .await
+            .expect("seed");
+
+        let n = 25;
+        let handles: Vec<_> = (0..n)
+            .map(|i| {
+                let mgr = Arc::clone(&mgr);
+                tokio::spawn(async move {
+                    let _guard = mgr.lock_workspaces().await;
+                    let mut ws = mgr
+                        .get_workspace("ws")
+                        .await
+                        .expect("get")
+                        .expect("seeded workspace exists");
+                    ws.members.push(format!("member-{i}"));
+                    mgr.insert_workspace("ws".into(), ws).await.expect("insert");
+                })
+            })
+            .collect();
+        for h in handles {
+            h.await.expect("task ok");
+        }
+
+        let stored = mgr
+            .get_workspace("ws")
+            .await
+            .expect("get")
+            .expect("workspace still exists");
+        assert_eq!(
+            stored.members.len(),
+            n,
+            "every concurrent update must land — workspace_mutex regression if not"
+        );
+    }
+}
+
+#[cfg(test)]
 mod node_concurrency_tests {
     //! Regression tests for `node_mutex`. The three DomainNode mutators
     //! (`insert_node`, `remove_node`, `update_node`) all share a single
@@ -1065,6 +1240,7 @@ mod node_concurrency_tests {
             members: vec![],
             children: vec![],
             mdx_content: String::new(),
+            mdx_content_hash: None,
             rules: None,
             chat_enabled: false,
             chat_channel_id: None,

@@ -1,3 +1,4 @@
+import { notifyEach } from './notify-listeners';
 import { WorkspaceClient } from './WorkspaceClient';
 import { isResponseType } from 'citadel-internal-service-wasm-client';
 import type { WasmConnectOptions as ConnectOptions, WasmRegisterOptions as RegisterOptions } from 'citadel-internal-service-wasm-client';
@@ -54,33 +55,58 @@ export class WorkspaceAuth {
   }
 
   /**
-   * Get current session information
+   * Get current session information from the internal service.
+   *
+   * Returns null ONLY when there is no local session to query. Transport
+   * errors and timeouts now throw — they used to be swallowed into the same
+   * null, making "no session" indistinguishable from "the query failed".
+   *
+   * Correlation runs through client.nextResponse(), matched on the request_id
+   * the internal service echoes back (get_sessions.rs sets
+   * `request_id: Some(request_id)`). The previous implementation called
+   * client.nextMessage(), which contends for the WASM stream with the
+   * client's own processing loop: the WASM guard throws "next_message is
+   * already being called by another process" on reentrancy, so this method
+   * could never succeed — or, on winning the race, stole an arbitrary
+   * message from the loop.
+   *
+   * @param timeoutMs How long to wait for the response. The default matches
+   *                  the base client's waitForResponse timeout so both
+   *                  correlation paths behave alike.
    */
-  async getSession(): Promise<GetSessionsResponse | null> {
+  async getSession(timeoutMs: number = 30000): Promise<GetSessionsResponse | null> {
     if (!this.session) {
       return null;
     }
+
+    const requestId = crypto.randomUUID();
+
+    // Register the waiter BEFORE sending, so the response cannot arrive in
+    // the gap between send and listen.
+    const pending = this.client.nextResponse(
+      (message) =>
+        isResponseType(message, 'GetSessionsResponse') &&
+        message.GetSessionsResponse.request_id === requestId
+          ? message.GetSessionsResponse
+          : undefined,
+      timeoutMs
+    );
 
     try {
       // Send GetSessions request (note: plural — GetSession singular does not exist in InternalServiceRequest)
       await this.client.sendDirectToInternalService({
         GetSessions: {
-          request_id: crypto.randomUUID()
+          request_id: requestId
         }
       });
-
-      // Wait for response
-      const response = await this.client.nextMessage();
-
-      if (isResponseType(response, 'GetSessionsResponse')) {
-        return response.GetSessionsResponse;
-      }
-      
-      return null;
     } catch (error) {
-      console.error('Failed to get session:', error);
-      return null;
+      // The request never left; the waiter's eventual timeout rejection is
+      // expected noise, not a separate failure to surface.
+      void pending.catch(() => undefined);
+      throw error;
     }
+
+    return await pending;
   }
 
   /**
@@ -138,9 +164,7 @@ export class WorkspaceAuth {
   }
 
   private notifySessionListeners(): void {
-    this.sessionListeners.forEach(listener => {
-      listener(this.session);
-    });
+    notifyEach(this.sessionListeners, 'auth session', this.session);
   }
 
   /**
