@@ -8,7 +8,7 @@ import {
   decodeWorkspacePayload,
   encodeWorkspacePayload,
 } from '../workspace-json.js';
-import type { WorkspaceProtocolPayload } from '../types/workspace-types';
+import type { WorkspaceProtocolPayload } from '../types/workspace-types.js';
 
 // A request exactly as the generated signature demands it: GetGroupMessages
 // declares `before_timestamp: bigint | null`.

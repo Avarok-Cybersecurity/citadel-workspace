@@ -1,8 +1,8 @@
-import { notifyEach } from './notify-listeners';
-import { WorkspaceClient } from './WorkspaceClient';
-import { WorkspaceAuth } from './auth';
+import { notifyEach } from './notify-listeners.js';
+import { WorkspaceClient } from './WorkspaceClient.js';
+import { WorkspaceAuth } from './auth.js';
 import { isVariant } from 'citadel-internal-service-wasm-client';
-import type { WorkspaceProtocolResponse } from './types/workspace-types';
+import type { WorkspaceProtocolResponse } from './types/workspace-types.js';
 
 export interface SessionConfig {
   autoReconnect?: boolean;

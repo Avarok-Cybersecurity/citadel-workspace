@@ -19,7 +19,8 @@
     "dev": "tsc --watch",
     "clean": "rm -rf dist/",
     "typecheck": "tsc --noEmit",
-    "lint": "npx eslint ."
+    "lint": "npx eslint .",
+    "test": "npm run build && node scripts/assert-tests-exist.mjs && node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
     "@avarok/citadel-protocol-types": "^0.14.0",

@@ -496,6 +496,13 @@ jobs:
         # Build client-ts to generate dist/ with TypeScript declarations
         run: npm run build
         working-directory: citadel-workspace-client-ts
+      - name: Test citadel-workspace-client-ts
+        # These 13 tests existed and had never run: the package had no `test`
+        # script, no vitest/jest config, and its directory is outside the UI
+        # vitest include. The first run failed — the emitted ESM omitted `.js`
+        # on relative imports, so Node could not load the package at all.
+        run: npm test
+        working-directory: citadel-workspace-client-ts
       - name: Install ESLint at root (workspaces hoisting issue)
         # Workspaces may hoist eslint to workspace dirs instead of root
         run: npm install eslint@9.39.2 --save-dev
