@@ -1425,3 +1425,38 @@ by a later commit on the same branch: a comment describing a reverted install, a
 title stating a replaced rule, and now a justification retired by its own
 follow-up. None is visible per commit. The net diff is the reviewable artefact,
 and reasons rot as readily as descriptions.
+
+## Round 502 — a second unbounded receive, and a hypothesis the data killed
+
+`stress_test_group_broadcast::case_1` timed out at 90s on #292, having passed in
+**8.4s on the run immediately before, in the same job**.
+
+**The obvious explanation was wrong, and the log says so.** The test before it
+took 88s, which reads like a machine under load. But comparing the two runs, that
+same test took **97.7s on the passing run and 88.0s on the failing one** — the
+machine was *faster* when the hang happened. Loaded-runner is refuted, not
+merely doubted; this is a real intermittent hang.
+
+**Why it produced no output.** The receive loop was
+`while let Some(msg) = rx.next().await`, unbounded, and its break requires every
+one of the n-1 senders to reach `count` exactly. One message short and it waits
+for the rest of the test. The per-message log is trace-level and CI runs at
+`citadel=warn`, so the failure was ninety seconds of silence saying only that
+ninety seconds had passed.
+
+Same class as the UDP assertion in round 494: **an unbounded await on a receive,
+where any shortfall is indistinguishable from a hang.** Two instances now, in the
+same suite, found a round apart.
+
+The budget does not repair a shortfall — it makes the next one legible. Control:
+sending one message fewer per peer yields
+
+> group broadcast stalled after 30s: saw 2 of 2 expected sender(s), per-sender
+> counts {…: 499, …: 499}, each needing 500
+
+in 36s instead of a silent 90s timeout. "One sender seen" and "both senders
+reached 499 of 500" are different bugs, and neither was distinguishable before.
+
+**Still open.** What causes the shortfall. The instrumentation is what makes the
+next occurrence answerable, which is exactly how round 494's cause was found —
+by a log that named where it stopped.
