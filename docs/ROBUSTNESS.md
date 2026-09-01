@@ -927,3 +927,35 @@ Without that control I would have shipped a confident, wrong fix.
 
 **Open.** Cause unidentified. Two named suspects eliminated, one invariant
 strengthened, and the next occurrence will say which side it was.
+
+## Round 489 — auditing the other accept/decline flows
+
+Round 481's defect was a protocol response that means two opposite things.
+This round asked the obvious follow-up: where else does the system have an
+accept/decline, and does it make the same mistake?
+
+**File transfer — correct, end to end.** `FileTransferStatusNotification`
+carries `success` (did the operation work) AND `response` (accept or decline),
+so the outcomes are distinguishable on the wire. The UI reads both:
+`accepted: notification.response && notification.success`. This is the shape the
+registration path should have had, and it is worth naming as the positive
+example rather than only recording defects.
+
+**Peer connect — same conflation, currently unreachable.**
+`PeerConnectAccept` answers both outcomes with `PeerConnectAcceptSuccess`. The
+log line immediately above it branches on `if accept { "accept" } else
+{ "decline" }`, so the code knows which it was and still returns one type with
+no outcome field.
+
+It is not reachable today: the UI's only caller hardcodes `accept: true`, and
+incoming connections are auto-accepted because consent was given at
+registration — the gate round 481 fixed. The protocol also requires
+registration before connect, so auto-accepting does not admit strangers.
+
+So: a real latent defect, not a live one. Recorded as a note at the branch a
+decline path would have to touch, because the next person to add "reject this
+connection" would otherwise rebuild round 481 exactly.
+
+**What this round did not find.** No new critical/high/medium. Two flows audited,
+one correct, one latent. That is a thinner result than the last several rounds
+and is reported as such.
