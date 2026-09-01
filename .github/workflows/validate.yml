@@ -209,6 +209,8 @@ jobs:
         run: node scripts/check-every-integration-spec-has-a-runner.mjs
       - name: Check every value production requires is documented
         run: node scripts/check-required-env-is-documented.mjs
+      - name: Check ESM packages' relative imports carry an extension
+        run: node scripts/check-esm-imports-have-extensions.mjs
       - name: Check every service declares a restart policy
         run: node scripts/check-restart-policies.mjs
       - name: Check no control loses its name at narrow widths
