@@ -508,3 +508,37 @@ have gone stale reports safety it never measured. Control: removing the
 deregister prune took it from "all 5 sites" to exit 1 naming that line.
 
 84 checks now, all green.
+
+## Round 479 — the rate limiter's cap is a trigger, not a bound (open decision)
+
+`RateLimiter.max_tracked_cids` reads as a maximum. It is not one. The sweep at
+`rate_limiter.rs:160` runs only when a **new** CID arrives at the cap, and only
+reaps buckets older than `60 × refill_interval`. When every tracked bucket is
+recent it frees nothing, and the insert proceeds regardless.
+
+**Measured**, not inferred: with `max_tracked_cids = 3`, driving 10,000 distinct
+fresh CIDs left `tracked_cids() == 10_000`. The cap constrained nothing.
+
+**This is deliberate.** A test — `sweep_does_not_reap_recent_buckets_at_capacity`
+— pins it, and says why: *"we'd rather over-track briefly than refuse a
+legitimate caller a token. The bound is a soft watermark, not a hard cap."* So
+this is a documented fail-open decision, not an oversight, and I reverted the
+change I had written rather than reverse it unilaterally.
+
+**Two things the author's rationale does not cover.** "Over-track briefly"
+assumes the excess is transient; nothing bounds it. And production runs
+`DEFAULT_MAX_TRACKED_CIDS = 100_000`, so the memory path is real, if gated by how
+many distinct CIDs an attacker can obtain.
+
+**A correction to my own first fix.** I proposed also reaping buckets at a FULL
+budget, reasoning they are observationally identical to absent at any age — true,
+and it would have been free. But `try_consume` refills to `max_tokens` and
+decrements in the same call, so a bucket is *never* left full. The sweep would
+have been dead code that read as a safeguard. Caught before committing.
+
+**Why this is not mine to decide.** The only bound that does not leak requires
+either evicting a partially-spent bucket — which hands its owner a fresh budget,
+turning memory pressure into a rate-limit bypass where flooding new CIDs resets
+a throttled one — or refusing new CIDs under pressure, which is fail-closed and
+denies service to legitimate first-time callers. That is an availability
+decision on a security control. Open, and put to the user.
