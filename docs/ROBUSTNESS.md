@@ -1488,3 +1488,39 @@ did not grep for siblings, which is exactly the *fixes that were never
 propagated* pattern this campaign has recorded against other people's work three
 times. The remedy differing per site is the reason it is worth doing by hand
 rather than by sed.
+
+## Round 504 — 119 unbounded receives, fixed by one line that is not in any of them
+
+Round 503 propagated the unbounded-receive fix through the SDK. This round took
+it to the other repositories: **zero** in the server kernel, **119** in the
+internal-service tests.
+
+Fixing 119 sites by hand would mean 119 guesses at a per-site budget, each a
+chance to bound something legitimately slow. The better question was what makes
+a hang unreadable there at all.
+
+**No safety net existed.** nextest's default `slow-timeout` only WARNS at 60s and
+never terminates, and not one of those 280 tests carries an rstest `#[timeout]`.
+Citadel-Protocol's suite is saved by those attributes; this one has none. A
+single hung test therefore ran until the CI job's own timeout, and the failure
+named the job rather than the test.
+
+One config line — `slow-timeout = { period = "60s", terminate-after = 3 }` —
+bounds all 280. The margin is deliberate: the slowest test here is ~6s locally,
+so 180s is thirty times the real workload, and a test approaching it is a test
+worth looking at.
+
+Control: a planted `futures::future::pending()` test is TERMINATED and named,
+where before it would have consumed the job.
+
+**Where it was deliberately NOT applied.** Citadel-Protocol already has rstest
+timeouts on 32 of ~38 tests, and its slowest legitimate test runs **97.7s** in
+CI. Any global bound there would sit close enough to real work that a degraded
+runner could turn a slow pass into a failure — manufacturing flakiness while
+claiming to remove it. Coverage is good and the margin is thin, so the gap is
+not worth closing that way.
+
+**The generalisable bit.** Three rounds of this class produced three different
+remedies: resend (mutual exchange), bound-and-report (counted echo), and
+terminate-at-the-runner (no per-test net at all). The class identifies where to
+look; it does not tell you what to do when you get there.
