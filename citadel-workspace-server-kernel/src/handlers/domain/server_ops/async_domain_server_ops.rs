@@ -57,16 +57,25 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
         }
     }
 
-    /// Refuse anything that would leave the workspace with no administrator.
+    /// Refuse anything that would leave the workspace with nobody who can
+    /// administer it.
     ///
-    /// Demoting or removing the last Admin is unrecoverable: promotion requires
-    /// an admin, so there is no way back from a workspace that has none. The
-    /// admin UI offers both actions on the acting user's own row, which puts
-    /// that state one click away — and it is exactly the state that made the
-    /// product read-only for everyone before joining users were promoted.
+    /// Unrecoverable, because promotion itself requires that authority: there is
+    /// no way back from a workspace with none. The admin UI offers demote and
+    /// remove on the acting user's own row, which puts that state one click
+    /// away — and it is exactly the state that made the product read-only for
+    /// everyone before joining users were promoted.
     ///
-    /// A no-op when the target is not an Admin, so ordinary member management is
-    /// unaffected.
+    /// Counts Admin AND Owner, and fires for either as the target. It counted
+    /// only Admin, which was right while `update_workspace_member_role` was
+    /// gated on `is_admin`: an Owner could not promote, so an Owner was not an
+    /// escape from an empty admin set, and could not reach the demote path
+    /// either. Once the Owner gained that gate, the guard had to follow — an
+    /// Owner alone in a workspace with no Admin could demote themselves to
+    /// Member, and the guard would no-op because the target was not an Admin.
+    ///
+    /// A no-op when the target can administer nothing, so ordinary member
+    /// management is unaffected.
     async fn ensure_not_last_admin(
         &self,
         target_user_id: &str,
@@ -76,7 +85,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
             Some(user) => user,
             None => return Ok(()),
         };
-        if target.role != UserRole::Admin {
+        if !matches!(target.role, UserRole::Admin | UserRole::Owner) {
             return Ok(());
         }
 
@@ -89,18 +98,20 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
             None => return Ok(()),
         };
 
-        let mut admins = 0usize;
+        let mut administrators = 0usize;
         for member_id in &workspace.members {
             if let Some(member) = self.backend_tx_manager.get_user(member_id).await? {
-                if member.role == UserRole::Admin {
-                    admins += 1;
+                if matches!(member.role, UserRole::Admin | UserRole::Owner) {
+                    administrators += 1;
                 }
             }
         }
 
-        if admins <= 1 {
+        if administrators <= 1 {
             return Err(NetworkError::msg(format!(
-                "Cannot {action} the only administrator. Promote another member to Admin first —                  otherwise nobody could manage the workspace, and the change cannot be undone."
+                "Cannot {action} the only administrator. Promote another member to Admin or Owner \
+                 first — otherwise nobody could manage the workspace, and the change cannot be \
+                 undone."
             )));
         }
         Ok(())

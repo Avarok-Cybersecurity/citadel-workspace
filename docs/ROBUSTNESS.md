@@ -797,6 +797,40 @@ tests; the Admin tests and every ordinary-role refusal stay green — so the
 change enables the Owner without widening to anyone else.
 
 Split into `owner_gates_admit_the_owner_test.rs` at 162 lines with the fixture
-helpers moved to `common/member_test_utils.rs`, shared rather than copied: two
+helpers moved to `citadel-workspace-server-kernel/tests/common/src/member_test_utils.rs`, shared rather than copied: two
 gate-test files asserting against a drifting fixture would let one pass while
 the other tested something subtly different.
+
+## Round 486 — round 485 opened a lockout, and the guard could not see it
+
+`ensure_not_last_admin` refuses anything that would leave the workspace with no
+administrator, because promotion needs one and there is no way back. It counted
+`role == Admin` and fired only for an Admin target.
+
+That was correct **while** `update_workspace_member_role` was gated on
+`is_admin`. An Owner could not promote, so an Owner was no escape from an empty
+admin set — and could not reach the demote path at all.
+
+Round 485 let the Owner through that gate. The guard's premise changed and the
+guard did not:
+
+> an Owner alone in a workspace with no Admin demotes themselves to Member.
+> The guard no-ops, because the target is not an Admin. Nobody who remains can
+> promote anyone. The doc comment's own word for this state is *unrecoverable*.
+
+So last round's fix opened a permanent workspace lockout. It never reached
+master — #79 is unmerged, and `git branch -r --contains` confirms the commit
+exists only on `followup/dx-and-gates` — but it was real, and I introduced it.
+
+The guard now counts Admin **and** Owner and fires for either as the target.
+
+**What this says about the earlier change.** Widening who may perform an action
+is not only an authorization question. It changes which states are *reachable*,
+and every invariant guarding those states has to be re-read against the new
+reach. I checked the seven other `is_admin` gates for authorization and did not
+ask what the widening made possible.
+
+**Control.** Reverting to the Admin-only count fails three of the four tests and
+leaves `an_owner_may_step_down_while_an_admin_remains` green — the fix refuses
+the lockout without refusing legitimate step-downs, which a blanket refusal
+would also have "passed".
