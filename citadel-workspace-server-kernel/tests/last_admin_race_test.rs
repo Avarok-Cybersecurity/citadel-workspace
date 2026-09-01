@@ -186,7 +186,7 @@ fn every_demoting_role_write_is_under_the_workspace_lock() {
         let body = lines[owner_idx..end].join("\n");
 
         assert!(
-            body.contains("lock_workspaces()"),
+            holds_or_requires_the_lock(owner, &body),
             "`{trimmed}` (line {}) sits in `{owner}`, which does not hold \
              lock_workspaces(). Its last-admin check and its write can therefore \
              interleave with another role writer: two admins demoting each other \
@@ -226,9 +226,10 @@ fn every_role_writer_calls_the_guarded_writer() {
         let body = &rest[..end];
 
         assert!(
-            body.contains("write_user_role("),
-            "{writer} changes a user's role without going through write_user_role, \
-             so its last-admin check and its write are not under one lock."
+            body.contains("write_user_role(") || body.contains("write_user_role_locked("),
+            "{writer} changes a user's role without going through write_user_role \
+             (or its _locked form under a guard the caller holds), so its \
+             last-admin check and its write are not under one lock."
         );
     }
 
@@ -242,9 +243,24 @@ fn every_role_writer_calls_the_guarded_writer() {
         .unwrap_or(rest.len());
     let body = &rest[..end];
     assert!(
-        body.contains("lock_workspaces()") && body.contains("ensure_not_last_admin"),
-        "write_user_role must hold the workspace lock AND run the last-admin \
-         check; it is the single place both happen together."
+        body.contains("lock_workspaces()") && body.contains("write_user_role_locked("),
+        "write_user_role must take the workspace lock and delegate to the locked \
+         form; it is the wrapper that makes the lock and the last-admin check one \
+         step for callers that do not already hold the guard."
+    );
+
+    let start = code
+        .find("async fn write_user_role_locked")
+        .expect("write_user_role_locked no longer exists; update this test");
+    let rest = &code[start..];
+    let end = rest[1..]
+        .find("\n    async fn ")
+        .map(|i| i + 1)
+        .unwrap_or(rest.len());
+    assert!(
+        rest[..end].contains("ensure_not_last_admin"),
+        "write_user_role_locked must run the last-admin check; it is where the \
+         check and the write happen together under one guard."
     );
 }
 
@@ -301,9 +317,7 @@ fn every_user_write_is_under_the_workspace_lock() {
         let owner = lines[owner_idx].trim();
 
         assert!(
-            lines[owner_idx..end]
-                .join("\n")
-                .contains("lock_workspaces()"),
+            holds_or_requires_the_lock(owner, &lines[owner_idx..end].join("\n")),
             "insert_user at line {} sits in `{owner}`, which holds no workspace \
              lock. Its read-modify-write can interleave with another user writer, \
              and the later insert silently discards the earlier change while both \
@@ -317,4 +331,128 @@ fn every_user_write_is_under_the_workspace_lock() {
         "found only {checked} insert_user site(s); there are seven. Fewer means \
          this test's matcher has stopped seeing them and is asserting nothing."
     );
+}
+
+/// A function satisfies the lock requirement if it takes the lock itself, or if
+/// it is a `_locked` helper whose contract is that the CALLER holds it.
+///
+/// The exemption is only sound because `every_locked_helper_is_called_under_the_lock`
+/// below checks the other half: that every call site of such a helper is itself
+/// under the lock. Without that pair, the suffix would be a way to opt out of
+/// the very guarantee these tests exist to enforce.
+fn holds_or_requires_the_lock(owner: &str, body: &str) -> bool {
+    body.contains("lock_workspaces()") || owner.contains("_locked(")
+}
+
+/// The other half of the `_locked` exemption: every caller must hold the lock.
+///
+/// `write_user_role` was split so `add_user_to_domain` could hold ONE guard
+/// across the membership write and the role write. Before that split it took the
+/// lock, dropped it, and let `write_user_role` take it again — and a removal
+/// landing in the gap left a non-member holding an administrative role, which
+/// `is_admin` honours and `ensure_not_last_admin` cannot see.
+///
+/// A split like that is exactly how a lock quietly stops being held, so the
+/// exemption is paid for here.
+#[test]
+fn every_locked_helper_is_called_under_the_lock() {
+    let source = include_str!("../src/handlers/domain/server_ops/async_domain_server_ops.rs");
+    let lines: Vec<&str> = source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect();
+
+    let fn_starts: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| {
+            let t = l.trim_start();
+            t.starts_with("fn ")
+                || t.starts_with("async fn ")
+                || t.starts_with("pub fn ")
+                || t.starts_with("pub async fn ")
+        })
+        .map(|(i, _)| i)
+        .collect();
+
+    let mut checked = 0usize;
+    for (i, line) in lines.iter().enumerate() {
+        // A CALL, not the definition.
+        if !line.contains("_locked(") || line.trim_start().starts_with("async fn ") {
+            continue;
+        }
+        let owner_idx = *fn_starts
+            .iter()
+            .rfind(|&&f| f < i)
+            .expect("a _locked call outside any function");
+        let end = fn_starts
+            .iter()
+            .find(|&&f| f > owner_idx)
+            .copied()
+            .unwrap_or(lines.len());
+        let owner = lines[owner_idx].trim();
+        // The definition line of the helper itself is not a call site.
+        if owner.contains("_locked(") {
+            continue;
+        }
+        checked += 1;
+
+        assert!(
+            lines[owner_idx..end]
+                .join("\n")
+                .contains("lock_workspaces()"),
+            "a `_locked` helper is called at line {} inside `{owner}`, which holds \
+             no workspace lock. The `_locked` suffix promises the caller holds it; \
+             here nobody does, so the guarantee is gone and the suffix is a lie.",
+            i + 1
+        );
+    }
+
+    assert!(
+        checked >= 1,
+        "found no `_locked` call sites. If the helper was renamed or inlined, this \
+         test is asserting nothing and the exemption in holds_or_requires_the_lock \
+         must go with it."
+    );
+}
+
+/// A guard that is taken and then dropped early holds nothing.
+///
+/// The three tests above look for `lock_workspaces()` ANYWHERE in the enclosing
+/// function, which cannot see whether the guard is still live at the write. That
+/// was tolerable while the only way to hold the lock was to keep the guard to
+/// the end of the scope. Splitting `write_user_role` created a second way — take
+/// the guard, drop it, call the unlocked form — and a control confirmed the
+/// existing tests stay green through exactly that edit.
+///
+/// So the shape is banned outright. If a future caller genuinely needs to
+/// release early, this test is the place to record why, with the interleaving it
+/// is claiming to be safe.
+#[test]
+fn no_workspace_guard_is_released_early() {
+    for (name, source) in [
+        (
+            "async_domain_server_ops.rs",
+            include_str!("../src/handlers/domain/server_ops/async_domain_server_ops.rs"),
+        ),
+        (
+            "async_kernel.rs",
+            include_str!("../src/kernel/async_kernel.rs"),
+        ),
+    ] {
+        for (i, line) in source.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            assert!(
+                !trimmed.contains("drop(_workspace_guard"),
+                "{name} line {} drops the workspace guard early. Everything after \
+                 it runs unlocked while the enclosing function still mentions \
+                 lock_workspaces(), so the other tests in this file read it as \
+                 guarded and it is not.",
+                i + 1
+            );
+        }
+    }
 }

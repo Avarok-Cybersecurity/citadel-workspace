@@ -2045,3 +2045,44 @@ record, so a send appends to the last page. That is an on-disk format change wit
 a migration, not a patch, and it is recorded here rather than attempted
 mid-campaign. The per-group lock above bounds the *blast radius* of the cost to
 the room paying it; it does not reduce the cost.
+
+## Round 518 — three read-modify-writes outside the lock every other writer takes
+
+The same mechanism in three places, all LOW, all the shape
+`fixes-that-were-never-propagated` describes.
+
+| site | the window |
+|---|---|
+| `async_kernel.rs` connect path | `get_user` → `insert_user` ran BEFORE `lock_workspaces()` was taken. An admin granting U the Admin role at the moment U first connects could be silently reverted to Member, both callers reporting success. |
+| `delete_workspace` | `remove_workspace` ran outside every lock. A concurrent writer that had already read the workspace under the lock wrote its copy back afterwards and **resurrected** it — with the password key genuinely gone, so it can never be deleted again. |
+| `add_user_to_domain` | membership under one acquisition, role under another. A removal landing in the gap left a non-member holding an administrative role: `is_admin` honours it (global role, never consults membership), `ensure_not_last_admin` cannot see it (counts admins among `workspace.members`). |
+
+The third needed `write_user_role` split into a locking wrapper and a
+`write_user_role_locked` body, because `tokio::sync::Mutex` is not reentrant —
+calling the guarded writer while holding the guard would deadlock, which is
+exactly the trap a caller reaching for atomicity falls into.
+
+### The split broke the gates, and the control found what the fix opened
+
+`last_admin_race_test.rs` scans the source and asserts every role write and every
+`insert_user` sits in a function that mentions `lock_workspaces()`. A `_locked`
+helper does not, by design — so three gates went red.
+
+Widening them is where this could have gone quietly wrong. The exemption is
+paid for: `every_locked_helper_is_called_under_the_lock` checks the other half,
+that every call site of a `_locked` helper is itself under the lock. Without that
+pair the suffix would be a way to opt out of the guarantee the file exists to
+enforce.
+
+Then the control on the widened gate said something worse. Reintroducing the
+defect as `drop(_workspace_guard); write_user_role(...)` left **all five tests
+green** — because they look for `lock_workspaces()` anywhere in the enclosing
+function and cannot see whether the guard is still live at the write. That hole
+predates this round, but the split created a natural way to fall into it. So
+`no_workspace_guard_is_released_early` bans the shape outright, and it now fails
+that control by name and line.
+
+Two controls, disjoint: the early-drop fails only the new test; removing the
+guard entirely fails only `every_locked_helper_is_called_under_the_lock`.
+
+100 lib tests and every integration binary green, clippy clean.

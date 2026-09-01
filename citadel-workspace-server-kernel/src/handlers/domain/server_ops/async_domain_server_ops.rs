@@ -220,7 +220,32 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
         create_if_missing: bool,
     ) -> Result<(), NetworkError> {
         let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+        self.write_user_role_locked(user_id, role, domain_id, create_if_missing)
+            .await
+    }
 
+    /// The body of `write_user_role`, for a caller that ALREADY holds
+    /// `lock_workspaces`.
+    ///
+    /// `add_user_to_domain` needs the membership write and the role write to be
+    /// one atomic step. It used to take the lock for the first, drop it, and let
+    /// `write_user_role` take it again for the second — so a removal landing in
+    /// the gap produced a non-member holding an administrative role, which
+    /// `is_admin` honours (it reads the global role and never consults
+    /// membership) while `ensure_not_last_admin` cannot see (it counts admins
+    /// among `workspace.members`). A ghost admin, from two correct operations
+    /// interleaving.
+    ///
+    /// Split rather than made reentrant because `tokio::sync::Mutex` is not:
+    /// calling `write_user_role` while holding the guard would deadlock, which
+    /// is exactly the trap a caller reaching for atomicity would fall into.
+    async fn write_user_role_locked(
+        &self,
+        user_id: &str,
+        role: UserRole,
+        domain_id: &str,
+        create_if_missing: bool,
+    ) -> Result<(), NetworkError> {
         if role != UserRole::Admin {
             self.ensure_not_last_admin(user_id, "demote").await?;
         }
@@ -492,12 +517,23 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         self.ensure_may_grant_role(admin_id, &role).await?;
 
         // If this is the workspace root, use the workspace storage
-        if domain_id == crate::WORKSPACE_ROOT_ID {
-            // Same lock as the connect path and update_workspace — this branch
-            // reads the workspace whole and writes it back, so without it those
-            // fixes only exclude each other.
-            let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+        // Held across BOTH writes: the membership below and the role at the end.
+        //
+        // Same lock as the connect path and update_workspace — the root branch
+        // reads the workspace whole and writes it back, so without it those
+        // fixes only exclude each other. But it was scoped to that branch, and
+        // `write_user_role` then took the lock again for the role. A removal
+        // landing between the two left a non-member holding an administrative
+        // role: `is_admin` honours it (it reads the global role and never
+        // consults membership) while `ensure_not_last_admin` cannot see it (it
+        // counts admins among `workspace.members`). A ghost admin, produced by
+        // two correct operations interleaving.
+        //
+        // Taken here rather than in the branch so the non-root path gets the
+        // same atomicity — it writes a role too.
+        let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
 
+        if domain_id == crate::WORKSPACE_ROOT_ID {
             let mut workspace = match self.backend_tx_manager.get_workspace(domain_id).await? {
                 Some(ws) => ws,
                 None => return Err(NetworkError::msg("Workspace not found")),
@@ -544,11 +580,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             self.backend_tx_manager.save_nodes(&nodes).await?;
         }
 
-        // Role write and last-admin check, both under one lock. See
-        // `write_user_role`: this used to run with no lock held at all, because
-        // the guard above is scoped to the workspace-root branch and has been
-        // dropped by the time execution reaches here.
-        self.write_user_role(user_id_to_add, role, domain_id, true)
+        // Role write and last-admin check, under the SAME guard as the
+        // membership write above — `_locked`, because `tokio::sync::Mutex` is
+        // not reentrant and `write_user_role` would deadlock on the guard we are
+        // still holding.
+        self.write_user_role_locked(user_id_to_add, role, domain_id, true)
             .await?;
 
         Ok(())
@@ -1145,6 +1181,26 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             ));
         }
 
+        // Taken here, before the password is verified and the workspace is
+        // removed — not further down where the user-permission sweep needed it.
+        //
+        // `remove_workspace` ran outside every lock, so a concurrent WRITER that
+        // had already read this workspace under `lock_workspaces` — a theme
+        // update, a member add — wrote its copy back afterwards and RESURRECTED
+        // the record. The password key is genuinely gone by then, so the
+        // resurrected workspace can never be deleted again: `delete_workspace`
+        // refuses without a matching password and there is none to match. A
+        // permanently undeletable workspace, from an ordinary edit landing in
+        // the wrong microsecond.
+        //
+        // Holding it from here also makes the password check and the delete one
+        // decision rather than two, so a password changed between them cannot
+        // authorise a deletion it no longer permits.
+        //
+        // Safe to hold across all of it: the lock is only ever taken by this
+        // handler layer, never inside `remove_workspace` or `insert_user`.
+        let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+
         // Verify master access password
         let passwords = self.backend_tx_manager.get_all_passwords().await?;
         if !passwords
@@ -1190,14 +1246,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         // read-modify-write of the whole map would clobber concurrent user
         // edits, which is exactly the bug the `lock_nodes` comment above records.
         //
-        // Under `lock_workspaces` for the same reason `create_workspace` takes
-        // it around its own get_user/insert_user pair: a user record read,
+        // Still under `_workspace_guard`, for the same reason `create_workspace`
+        // takes it around its own get_user/insert_user pair: a user record read,
         // modified and written back across awaits needs the lock every other
         // user writer takes, or two updates each apply to their own copy and the
-        // second write silently discards the first. Safe to take here -- the
-        // lock is only ever held by this handler layer, never inside
-        // `remove_workspace` or `insert_user`.
-        let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+        // second write silently discards the first.
         let users = self.backend_tx_manager.get_all_users().await?;
         let holders: Vec<String> = users
             .iter()
