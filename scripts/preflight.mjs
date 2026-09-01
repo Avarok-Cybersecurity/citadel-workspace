@@ -169,6 +169,10 @@ const CHECKS = [
   ...derived,
   // Not in validate.yml, because by the time CI runs it is already too late:
   // checkout is what fails.
+  // Ordered first among the local-only checks: an uninitialised clone makes
+  // every check after it meaningless, and npm's own error names a workspace
+  // rather than the missing checkout.
+  ['submodules are populated', 'node', ['scripts/check-submodules-are-populated.mjs'], ROOT],
   ['submodule pointers pushed', 'node', ['scripts/check-submodule-pointers-pushed.mjs'], ROOT],
   ['event listeners have emitters', 'node', ['scripts/check-event-listeners-have-emitters.mjs'], UI],
   ['generated artefacts present', 'node', ['scripts/check-generated-artefacts-present.mjs'], ROOT],
