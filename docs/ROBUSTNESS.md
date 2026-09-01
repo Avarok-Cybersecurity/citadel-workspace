@@ -224,3 +224,33 @@ demand. What is controlled is that the new branch is live — setting the bound 
 
 If the wedge survives #291, the next log names a phase rather than a silence,
 which is the point of having done #290 first.
+
+## Gate verification — the guards were themselves controlled
+
+A gate that cannot fail reports safety it never checked, which is the defect
+this record is mostly about. So the gates were spot-controlled by planting the
+violation each one exists to catch, and checking the exit code WITHOUT a pipe
+(`| head` reports head's status, and that made three controls in this session
+look green while they were red).
+
+  - `check-handlers-cannot-panic` — planted `Some(1u8).unwrap()` in
+    `requests/peer/connect.rs`. Exit 1, naming `connect.rs:36`.
+  - `check-sender-identity` — rewrote `senderCid: peerCid.toString()` to
+    `senderCid: payload.sender_cid` in `message-handler-routing.ts`. Exit 1,
+    naming the line and explaining that `sender_cid` is chosen by the sender.
+  - `no-new-unreferenced-exports` — planted an exported function nobody calls.
+    Fails, naming it by path. It also carries its own guards: "scans a real
+    corpus" and "has no stale entries".
+  - `check-stack-reachable` — exit 1 with the UI unreachable. Its docstring
+    records an earlier version that could NOT fail, because it read `fetch`
+    error text and undici puts ECONNREFUSED in `error.cause` while `message` is
+    the constant "fetch failed".
+  - The four gates added this session (permission enforcement, listener
+    fan-outs, generated artefacts, submodules populated) each shipped with their
+    own control, one of which found a hole in the gate itself: reverting the
+    file-transfer enforcement left `Permission::UploadFiles` matching, because
+    `may_transfer`'s DOC COMMENT names it. Comments are now stripped before
+    matching.
+
+All 43 gate scripts contain `process.exit(1)`, which is presence rather than
+reachability; the five above are the sample that was actually exercised.
