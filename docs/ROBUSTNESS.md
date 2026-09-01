@@ -1524,3 +1524,38 @@ not worth closing that way.
 remedies: resend (mutual exchange), bound-and-report (counted echo), and
 terminate-at-the-runner (no per-test net at all). The class identifies where to
 look; it does not tell you what to do when you get there.
+
+## Round 505 — do the campaign's fixes still exist?
+
+Two incidents this session destroyed or nearly destroyed committed work: a
+`git checkout --` that discarded an uncommitted fix along with the control it was
+meant to revert, and a machine restart that landed mid-control with a
+deliberately-broken edit in production code. Both were caught, but neither was
+caught by design. So this round asked the question directly: **is every fix this
+campaign recorded as done still in the tree?**
+
+Twenty-four fixes probed across four repositories — the decline correlation, the
+CID-scoped pruning, the rate-limiter ceiling and its raised cap, the three
+authorization gates, both containment primitives, the scoped workspace creation,
+the last-administrator guard, the path-component check, the `accept` field, the
+UDP resend and grace, the group-broadcast bound, the `udp_media_modes` bounds,
+the errno preservation, the one-shot diagnostics and its non-destructive init,
+and the six gates.
+
+**24 of 24 present.** Nothing was lost.
+
+**One reported missing, and it was the probe that was wrong.** The rate-limiter
+ceiling came back GONE because the needle I wrote for it — `administrators <= 1`
+— is the LAST-ADMIN guard's string, pasted from the row above. The ceiling is
+`if map.len() >= self.max_tracked_cids { return false; }` and sits at line 184,
+with 13/13 of its tests passing.
+
+That is the second false negative from a bad probe this session; the first was a
+grep that missed a fix because `cargo fmt` had split the line across the pattern.
+Both would have had me "correct" something already correct.
+
+**The rule that follows.** A verification probe is a check, and checks need
+controls in both directions: one that never matches reports a present fix as
+missing, one that always matches reports a missing fix as present. The campaign
+has spent nine rounds on controls that measured nothing; the probes doing the
+measuring were never held to the same standard.
