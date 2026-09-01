@@ -350,7 +350,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
         // deserialises the ENTIRE map each call, so the per-hop form cost
         // O(depth × N) on every permission check on every request. One read is
         // also one consistent view of the tree.
-        let nodes = self.backend_tx_manager.get_all_nodes().await?;
+        let nodes = self.backend_tx_manager.get_all_nodes_shared().await?;
         if let Some(node) = nodes.get(entity_id) {
             let mut visited: std::collections::HashSet<&str> = std::collections::HashSet::new();
             visited.insert(entity_id);
@@ -428,7 +428,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
         // per-level `get_node` deserialised the entire map each time,
         // O(depth × N) per membership check.
         let user_id_owned = user_id.to_string();
-        let nodes = self.backend_tx_manager.get_all_nodes().await?;
+        let nodes = self.backend_tx_manager.get_all_nodes_shared().await?;
         let mut visited: std::collections::HashSet<&str> = std::collections::HashSet::new();
         let mut current = domain_id;
         while visited.insert(current) {

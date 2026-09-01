@@ -19,6 +19,11 @@ use std::sync::Arc;
 pub mod backend_ops_simple;
 // Note: TransactionManager has been removed. Use BackendTransactionManager instead.
 
+/// A parsed node map and the exact bytes it came from.
+///
+/// The bytes are the validity check — see `BackendTransactionManager::nodes_cache`.
+type CachedNodes = (Vec<u8>, Arc<HashMap<String, DomainNode>>);
+
 /// Transaction manager that uses NodeRemote backend for persistence
 pub struct BackendTransactionManager<R: Ratchet> {
     /// NodeRemote for backend operations
@@ -55,6 +60,26 @@ pub struct BackendTransactionManager<R: Ratchet> {
     /// first's change — losing a node insert/delete/update silently.
     /// Same data-loss-vs-cost trade-off as `group_msg_mutex` above.
     node_mutex: Arc<tokio::sync::Mutex<()>>,
+
+    /// The parsed node map, kept beside the exact bytes it was parsed from.
+    ///
+    /// Every group broadcast re-authorises every connected client, and each
+    /// authorization walks `resolve_group_node` -> `check_entity_permission` ->
+    /// `is_member_of_domain`, each of which calls `get_all_nodes`. So one message
+    /// to a room of C clients cost 3*C `serde_json` parses of the single
+    /// `citadel_workspace.nodes` blob — which carries every node's
+    /// `mdx_content`, i.e. every document in the workspace. At 1 MB of nodes and
+    /// 50 clients that is on the order of a CPU-second per message, paid inside
+    /// each connection's own receive loop, so a client's requests stall behind
+    /// other people's chat and its broadcast receiver falls behind the channel.
+    ///
+    /// Validated by comparing the raw bytes, not a hash or a TTL. This gates
+    /// authorization, so an entry that is stale for even a moment is a removed
+    /// member still reading; a memcmp is exact, has no collision to reason
+    /// about, and is still an order of magnitude cheaper than the parse it
+    /// replaces. The blob is fetched every time either way — only the parse and
+    /// the map allocation are skipped.
+    nodes_cache: Arc<RwLock<Option<CachedNodes>>>,
 
     /// Serializes read-modify-write sequences over a single `Workspace` record.
     ///
@@ -140,6 +165,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             index_write_mutex: Arc::new(tokio::sync::Mutex::new(())),
             group_msg_mutex: Arc::new(tokio::sync::Mutex::new(())),
             node_mutex: Arc::new(tokio::sync::Mutex::new(())),
+            nodes_cache: Arc::new(RwLock::new(None)),
             workspace_mutex: Arc::new(tokio::sync::Mutex::new(())),
             #[cfg(test)]
             failing_delete_keys: Arc::new(RwLock::new(std::collections::HashSet::new())),
@@ -182,15 +208,13 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
 
     /// Generic get: deserializes a value from the backend by key.
     /// Returns `None` if the key doesn't exist.
-    async fn backend_get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, NetworkError> {
+    /// The stored bytes for a key, before any deserialization.
+    ///
+    /// Split out so `get_all_nodes_shared` can compare what it just fetched
+    /// against what it last parsed.
+    async fn backend_get_raw(&self, key: &str) -> Result<Option<Vec<u8>>, NetworkError> {
         if self.node_remote.read().is_none() {
-            return if let Some(data) = self.test_storage.read().get(key) {
-                serde_json::from_slice(data)
-                    .map(Some)
-                    .map_err(|e| NetworkError::msg(format!("Failed to deserialize {key}: {e}")))
-            } else {
-                Ok(None)
-            };
+            return Ok(self.test_storage.read().get(key).cloned());
         }
 
         let node_remote = self.get_node_remote()?;
@@ -199,12 +223,15 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             .await
             .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {e}")))?;
 
-        if let Some(data) = backend.get(key).await? {
-            serde_json::from_slice(&data)
+        backend.get(key).await
+    }
+
+    async fn backend_get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, NetworkError> {
+        match self.backend_get_raw(key).await? {
+            Some(data) => serde_json::from_slice(&data)
                 .map(Some)
-                .map_err(|e| NetworkError::msg(format!("Failed to deserialize {key}: {e}")))
-        } else {
-            Ok(None)
+                .map_err(|e| NetworkError::msg(format!("Failed to deserialize {key}: {e}"))),
+            None => Ok(None),
         }
     }
 
@@ -831,11 +858,38 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
 
     // ========== DomainNode (Generalized Tree Hierarchy) Storage ==========
 
+    /// The node map for READERS, shared rather than cloned.
+    ///
+    /// The authorization walk that runs per broadcast recipient only reads, and
+    /// it reads three times. Handing back an `Arc` lets those three calls share
+    /// one parse and one allocation instead of making three of each — see
+    /// `nodes_cache`.
+    pub async fn get_all_nodes_shared(
+        &self,
+    ) -> Result<Arc<HashMap<String, DomainNode>>, NetworkError> {
+        let Some(raw) = self.backend_get_raw("citadel_workspace.nodes").await? else {
+            return Ok(Arc::new(HashMap::new()));
+        };
+
+        if let Some((cached_raw, cached)) = self.nodes_cache.read().as_ref() {
+            if cached_raw == &raw {
+                return Ok(cached.clone());
+            }
+        }
+
+        let parsed: Arc<HashMap<String, DomainNode>> =
+            Arc::new(serde_json::from_slice(&raw).map_err(|e| {
+                NetworkError::msg(format!(
+                    "Failed to deserialize citadel_workspace.nodes: {e}"
+                ))
+            })?);
+        *self.nodes_cache.write() = Some((raw, parsed.clone()));
+        Ok(parsed)
+    }
+
+    /// The node map for MUTATORS, owned so it can be modified and saved back.
     pub async fn get_all_nodes(&self) -> Result<HashMap<String, DomainNode>, NetworkError> {
-        Ok(self
-            .backend_get("citadel_workspace.nodes")
-            .await?
-            .unwrap_or_default())
+        Ok((*self.get_all_nodes_shared().await?).clone())
     }
 
     pub async fn save_nodes(
@@ -1311,5 +1365,163 @@ mod node_concurrency_tests {
             "concurrent insert must not be lost"
         );
         assert_eq!(stored.get("a").unwrap().name, "renamed");
+    }
+}
+
+#[cfg(test)]
+mod node_cache_tests {
+    //! The node map is parsed once per distinct blob, and never once too few.
+    //!
+    //! Every group broadcast re-authorises every recipient, and each
+    //! authorization calls `get_all_nodes` three times — `resolve_group_node`,
+    //! `check_entity_permission`, `is_member_of_domain`. The blob they parse
+    //! carries every node's `mdx_content`, so the parse is proportional to every
+    //! document in the workspace, and it was paid 3*C times per message.
+    //!
+    //! The risk in fixing that with a cache is the opposite failure: serving a
+    //! map that no longer reflects the tree, in a path that decides who may read
+    //! a room. So both directions are asserted here, and the staleness direction
+    //! is asserted on the value, not just on the pointer.
+    use super::*;
+    use citadel_sdk::prelude::StackedRatchet;
+    use citadel_workspace_types::structs::NodeEntityType;
+
+    fn fresh() -> BackendTransactionManager<StackedRatchet> {
+        BackendTransactionManager::new()
+    }
+
+    fn node(id: &str, chat: Option<&str>) -> DomainNode {
+        DomainNode {
+            id: id.to_string(),
+            parent_id: None,
+            entity_type: NodeEntityType::Child("Office".to_string()),
+            depth: 1,
+            name: id.to_string(),
+            description: String::new(),
+            owner_id: "owner".to_string(),
+            members: vec![],
+            children: vec![],
+            mdx_content: String::new(),
+            mdx_content_hash: None,
+            rules: None,
+            chat_enabled: chat.is_some(),
+            chat_channel_id: chat.map(str::to_string),
+            default_permissions: citadel_workspace_types::structs::DomainPermissions::default(),
+            metadata: vec![],
+            allowed_child_types: None,
+            is_default: false,
+            created_at: 0,
+            updated_at: 0,
+        }
+    }
+
+    fn map(nodes: Vec<DomainNode>) -> HashMap<String, DomainNode> {
+        nodes.into_iter().map(|n| (n.id.clone(), n)).collect()
+    }
+
+    #[tokio::test]
+    async fn unchanged_nodes_are_parsed_once_and_shared() {
+        let mgr = fresh();
+        mgr.save_nodes(&map(vec![node("a", Some("chan-a"))]))
+            .await
+            .unwrap();
+
+        let first = mgr.get_all_nodes_shared().await.unwrap();
+        let second = mgr.get_all_nodes_shared().await.unwrap();
+        let third = mgr.get_all_nodes_shared().await.unwrap();
+
+        // Pointer equality is the assertion: the same allocation, so the same
+        // single parse, which is exactly what the three authorization calls per
+        // recipient were each doing for themselves.
+        assert!(Arc::ptr_eq(&first, &second));
+        assert!(Arc::ptr_eq(&first, &third));
+    }
+
+    #[tokio::test]
+    async fn a_changed_tree_is_reparsed_not_served_from_cache() {
+        let mgr = fresh();
+        mgr.save_nodes(&map(vec![node("a", Some("chan-a"))]))
+            .await
+            .unwrap();
+        let before = mgr.get_all_nodes_shared().await.unwrap();
+        assert_eq!(before.len(), 1);
+
+        mgr.save_nodes(&map(vec![
+            node("a", Some("chan-a")),
+            node("b", Some("chan-b")),
+        ]))
+        .await
+        .unwrap();
+
+        let after = mgr.get_all_nodes_shared().await.unwrap();
+        assert!(
+            !Arc::ptr_eq(&before, &after),
+            "the cache was served after a write"
+        );
+        assert_eq!(
+            after.len(),
+            2,
+            "the second node is missing from the reparse"
+        );
+        assert!(after.contains_key("b"));
+    }
+
+    #[tokio::test]
+    async fn a_removed_node_does_not_survive_in_the_cache() {
+        // The direction that matters for authorization: `resolve_group_node`
+        // denies an unknown channel, and a deleted node's chat must not stay
+        // resolvable. A TTL cache would fail this for the length of the TTL.
+        let mgr = fresh();
+        mgr.save_nodes(&map(vec![
+            node("a", Some("chan-a")),
+            node("b", Some("chan-b")),
+        ]))
+        .await
+        .unwrap();
+        let _warm = mgr.get_all_nodes_shared().await.unwrap();
+
+        mgr.save_nodes(&map(vec![node("a", Some("chan-a"))]))
+            .await
+            .unwrap();
+
+        let after = mgr.get_all_nodes_shared().await.unwrap();
+        assert!(
+            !after.contains_key("b"),
+            "a deleted node was still served, so its chat channel still resolves",
+        );
+    }
+
+    #[tokio::test]
+    async fn a_shrinking_edit_is_still_seen() {
+        // A same-length blob would defeat a length check; a different-length one
+        // would defeat nothing. This covers the case a cheaper validity test
+        // (length, or a count) would get wrong, since only the bytes differ in
+        // content while the shape stays the same.
+        let mgr = fresh();
+        let mut before = node("a", Some("chan-a"));
+        before.name = "xxxx".to_string();
+        mgr.save_nodes(&map(vec![before])).await.unwrap();
+        let _warm = mgr.get_all_nodes_shared().await.unwrap();
+
+        let mut after = node("a", Some("chan-a"));
+        after.name = "yyyy".to_string();
+        mgr.save_nodes(&map(vec![after])).await.unwrap();
+
+        let seen = mgr.get_all_nodes_shared().await.unwrap();
+        assert_eq!(seen.get("a").unwrap().name, "yyyy");
+    }
+
+    #[tokio::test]
+    async fn mutators_still_get_an_owned_map() {
+        // `get_all_nodes` is the mutators' entry point and must keep handing back
+        // something they can modify without touching what readers are sharing.
+        let mgr = fresh();
+        mgr.save_nodes(&map(vec![node("a", None)])).await.unwrap();
+        let shared = mgr.get_all_nodes_shared().await.unwrap();
+
+        let mut owned = mgr.get_all_nodes().await.unwrap();
+        owned.insert("scratch".to_string(), node("scratch", None));
+
+        assert_eq!(shared.len(), 1, "a mutator's edit reached the shared map");
     }
 }

@@ -1940,3 +1940,47 @@ which is what distinguishes a widening from a rewrite. The third test holds the
 scope: removing a Guest leaves them a Guest, not silently a Member.
 
 95 unit + all integration tests pass, clippy clean.
+
+## Round 516 — a group message cost every recipient three parses of every document
+
+`authorize_group_read` runs inside every connection's own receive loop, once per
+`BroadcastAudience::Group` message, for every connected client. Each run walks:
+
+| step | calls |
+|---|---|
+| `resolve_group_node` | `get_all_nodes` |
+| `check_entity_permission` | `get_user` ×2, then `get_all_nodes` |
+| `is_member_of_domain` | `get_workspace`, `get_all_nodes` |
+
+`get_all_nodes` `serde_json`-parses the single `citadel_workspace.nodes` blob,
+and a `DomainNode` carries its `mdx_content` inline — so that blob is *every
+document in the workspace*. One message to a room of C clients cost 3·C full
+parses of it. At 1 MB of nodes and 50 clients that is on the order of a
+CPU-second per message, paid inside each connection's receive loop, so a client's
+own requests stall behind other people's chat and its broadcast receiver falls
+behind a channel with a capacity of 100. `RecvError::Lagged` only warns, and
+there is no resync — so the lagged client silently loses notifications.
+
+Round 508's open finding rated broadcast lag unreachable because structural
+broadcasts are "human-paced". Group chat now shares that channel and does not
+satisfy the assumption.
+
+Fixed with `get_all_nodes_shared`, returning an `Arc` from a cache validated by
+comparing the raw bytes. Three properties, deliberately:
+
+- **`Arc`, not a clone.** The three calls per recipient now share one allocation
+  as well as one parse. Mutators keep `get_all_nodes`, which clones.
+- **Bytes, not a hash or a TTL.** This gates authorization. An entry that is
+  stale for even a moment is a removed member still reading a room. A memcmp is
+  exact, has no collision to reason about, and is still an order of magnitude
+  cheaper than the parse it replaces.
+- **The blob is still fetched every time.** Only the parse and the allocation are
+  skipped. Nothing here assumes this process is the only writer.
+
+Five tests, and the two controls fail on disjoint sets, which is the point:
+disabling the cache fails only `unchanged_nodes_are_parsed_once_and_shared`;
+never revalidating it fails only the three freshness tests — a changed tree, a
+removed node, and a same-shape edit that a length or count check would miss.
+`mutators_still_get_an_owned_map` stays green under both, holding the scope.
+
+75 test binaries green, clippy clean.
