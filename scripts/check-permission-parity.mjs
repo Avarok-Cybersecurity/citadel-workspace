@@ -12,8 +12,24 @@
  *   2. every TS member has a human label;
  *   3. every permission appears in exactly one PERMISSION_CATEGORIES group, so
  *      the editor renders all of them.
+ *   4. every permission the editor renders is ACTUALLY ENFORCED somewhere in the
+ *      server, or is explicitly declared as gated by something else.
+ *
+ * Check 4 exists because matching names are not the same as a working control.
+ * `UploadFiles` and `DownloadFiles` passed checks 1-3 for their whole life --
+ * both enums, both labelled, both in the "Files" category with allowed/total
+ * badges -- while the server consulted neither: every file transfer was
+ * auto-accepted behind one global boolean. A read-only Guest could push files
+ * into server storage and pull them back out, and the matrix showed an operator
+ * a control that did nothing.
+ *
+ * A permission with no server reference is not automatically a bug: several are
+ * genuinely enforced under a different variant's name. But that has to be
+ * DECLARED, in GATED_BY below, with what actually gates it -- so the next
+ * unenforced permission has to be justified rather than merely named.
  */
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 const rust = readFileSync('citadel-workspace-types/src/structs.rs', 'utf8');
 const ts = readFileSync(
@@ -139,6 +155,75 @@ for (const [role, rustPerms] of Object.entries(rustRoles)) {
 
 for (const role of Object.keys(tsRoles)) {
   if (!rustRoles[role]) problems.push(`role ${role}: in ROLE_DEFAULT_PERMISSIONS but not a Rust UserRole arm`);
+}
+
+// --- 4. enforcement ---------------------------------------------------------
+//
+// Each entry says what actually gates the operation this permission names. An
+// entry is required for every rendered permission the server never mentions.
+const GATED_BY = {
+  // Enforced under a broader variant chosen by what the update changes.
+  UpdateNode: 'EditTreeStructure / EditMdx in async_node_ops::update_node',
+  EditNodeConfig: 'EditTreeStructure / EditMdx in async_node_ops::update_node',
+  UpdateNodeSettings: 'EditTreeStructure / EditMdx in async_node_ops::update_node',
+  AddNode: 'CreateNode in async_domain_server_ops',
+  EditContent: 'EditMdx / EditTreeStructure on the node being edited',
+  // Reads are gated on ViewContent; group_access::authorize_group_read.
+  ReadMessages: 'ViewContent in kernel::group_access',
+  // Workspace-level operations take admin-or-owner plus the master password.
+  UpdateWorkspace: 'is_admin or workspace owner, plus the master password',
+  DeleteWorkspace: 'is_admin or workspace owner, plus the master password',
+  ManageNodeMembers: 'AddUsers / RemoveUsers in async_domain_server_ops',
+  ManageNodeTypes: 'is_admin on CreateNodeType and UpdateTreeSchema',
+  // No such operation exists in the server yet. Listed so the matrix showing a
+  // toggle for it is a known, deliberate gap rather than an unnoticed one.
+  BanUser: 'NOT IMPLEMENTED - no ban operation exists',
+  ManageDomains: 'NOT IMPLEMENTED - no domain-management operation exists',
+  ConfigureSystem: 'NOT IMPLEMENTED - no system-configuration operation exists',
+  EditWorkspaceConfig: 'NOT IMPLEMENTED - no workspace-config operation exists',
+};
+
+// Comments are stripped first, and that is not a detail. This check's own
+// negative control caught it: reverting the file-transfer enforcement still
+// left `Permission::UploadFiles` matching, because `may_transfer`'s doc comment
+// names it. A permission "enforced" by prose is exactly the failure this gate
+// exists to catch, so prose must not count.
+const rustFiles = execFileSync(
+  'find',
+  ['citadel-workspace-server-kernel/src', '-name', '*.rs', '-not', '-path', '*/target/*'],
+  { encoding: 'utf8' },
+)
+  .split('\n')
+  .filter(Boolean);
+
+const stripComments = (src) =>
+  src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .split('\n')
+    .map((line) => line.replace(/\/\/.*$/, ''))
+    .join('\n');
+
+const enforced = new Set();
+for (const file of rustFiles) {
+  const code = stripComments(readFileSync(file, 'utf8'));
+  for (const m of code.matchAll(/Permission::([A-Za-z0-9]+)/g)) enforced.add(m[1]);
+}
+
+for (const perm of new Set(categorised)) {
+  if (enforced.has(perm)) {
+    if (GATED_BY[perm]) {
+      problems.push(
+        `${perm}: the server enforces it directly, so its GATED_BY entry is stale — remove it`,
+      );
+    }
+    continue;
+  }
+  if (!GATED_BY[perm]) {
+    problems.push(
+      `${perm}: rendered as a grantable toggle but never referenced in the server. ` +
+        `Either enforce it, or add a GATED_BY entry naming what does.`,
+    );
+  }
 }
 
 if (problems.length > 0) {
