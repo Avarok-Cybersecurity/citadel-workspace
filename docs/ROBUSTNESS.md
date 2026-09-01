@@ -1278,3 +1278,43 @@ source change that CI cannot make effective, so shipping it without a rebuild
 would have produced precisely the inert fix this gate now catches.
 
 87 checks.
+
+## Round 498 — regenerating the bindings breaks them, and only CI said so
+
+Propagating round 497's mechanism — tracked generated artefacts CI never
+rebuilds — to the other one: 102 ts-rs binding files under
+`typescript-client/src/types`.
+
+**Regenerating them is destructive.** ts-rs cannot see the types named inside a
+`#[ts(type = "...")]` override, and `Accounts.accounts` carries one
+(`Record<string, AccountInformation>`, because a JS object has string keys and
+the Rust map does not). The generated file therefore USES `AccountInformation`
+and never imports it. The committed files carry those imports, so they are ts-rs
+output plus a hand patch — and running the export tests rewrites 36 files, each
+dropping an import while still referencing the type.
+
+That is the documented way to add a field to a wire type. I hit it in round 490
+adding `accept` to `PeerConnectAcceptSuccess`, reverted the 36 by hand, and
+recorded it as "the local ts-rs disagrees with whatever produced the committed
+files". **That was right**: a full regeneration, all 106 export tests, does the
+same thing. Verified this round rather than assumed.
+
+**What was already covered, and what was not.** CI builds `typescript-client`
+with `tsc` in three jobs and would fail on the corruption — so nothing ships
+broken. Preflight type-checks the UI, not the bindings, so locally the corruption
+was invisible: you would learn about it a full CI cycle later, in a job whose
+name says nothing about ts-rs.
+
+**The fix is the check that already existed, run earlier.** Preflight now runs
+`typescript-client`'s own `tsc`. No new gate logic, nothing to rot, and the
+control confirms it: dropping one import takes preflight from 88/88 to
+`generated bindings typecheck … FAILED`.
+
+**What I did not build.** A script to re-add the imports after regeneration. It
+got as far as handling local `./Type` imports and then needed to know the
+external type universe — 31 of the imports come from
+`@avarok/citadel-protocol-types` — which is machinery that rots. Abandoned in
+favour of failing fast and locally. The regeneration hazard is documented in
+preflight beside the check that catches it.
+
+88 checks.

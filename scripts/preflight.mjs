@@ -186,6 +186,13 @@ const CHECKS = [
   // an unbuilt tree and neither says so. CLAUDE.md documents the order --
   // typescript-client (WASM types), then citadel-workspace-client-ts, then
   // typecheck -- and this makes skipping it say its own name.
+  // The generated bindings type-check on their own, which CI does and this did
+  // not. ts-rs cannot see the types named inside a `#[ts(type = "...")]`
+  // override, so regenerating the bindings — the documented way to add a field —
+  // DROPS those imports while the files keep referencing the types. 36 files at
+  // once, and the only thing that said so was `tsc` in CI, a full cycle later.
+  ['generated bindings typecheck', 'npx', ['tsc', '--noEmit', '-p', 'tsconfig.json'],
+    'citadel-internal-service/typescript-client'],
   ['typecheck', 'npx', ['tsc', '-p', 'tsconfig.app.json', '--noEmit'], UI],
   ['eslint', 'npx', ['eslint', '.', '--max-warnings', '0'], UI],
   ['unit tests', 'npx', ['vitest', 'run'], UI],
