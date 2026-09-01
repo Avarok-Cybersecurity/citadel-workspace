@@ -733,7 +733,7 @@ ReferenceError at the first request id.
 `socket_helpers`, `native_config`, `native_io`, `net`, and `io_error_from_anyhow`
 missing from `super`. Six distinct-looking errors, one cause, all mine.
 
-`misc/mod.rs` had:
+Citadel-Protocol's `citadel_proto` misc module had:
 
     #[cfg(not(target_family = "wasm"))]
     pub mod native_bind;
@@ -759,3 +759,44 @@ is what caught it. Verified this time the way CI verifies: both wasm checks exit
 Recurring: this is the same family as the six controls that silently measured
 nothing — the difference between what I intended a change to do and what it
 actually did, closed only by running the thing that would notice.
+
+## Round 485 — the Owner could not run their own workspace
+
+`is_admin` is `user.role == UserRole::Admin`, exactly. `Owner` is a separate
+variant, and `Permission::for_role` grants it everything except `All` and
+`ConfigureSystem`. So every gate written on `is_admin` refuses the workspace
+Owner while the permission editor shows them holding the grant.
+
+An earlier round found this, fixed `add_member` and `remove_member`, and wrote
+`member_gates_match_reported_permissions_test.rs` to pin it — a test that covers
+exactly the two sites that were fixed. **Three more gates were left behind**, so
+an Owner could add and remove members and still not:
+
+- change any member's role (`update_workspace_member_role`)
+- change any member's permissions (`update_member_permissions`)
+- edit the tree schema (`UpdateTreeSchema`, in the dispatch layer)
+
+This is the *fixes that were never propagated* pattern in its purest form: the
+right fix, the right reasoning written down beside it, applied in one of the
+places it belonged. Found by grepping the mechanism — `is_admin(` — rather than
+the symptom.
+
+**Deliberately narrower than the earlier fix.** `add_member`/`remove_member` now
+ask for the permission. These three admit Admin and Owner only. Assigning a role
+is a path to Admin, so widening to every holder of a member-management
+permission would let a Custom role above editor rank mint an administrator.
+That is an authorization-policy change; it is recorded here and not made.
+
+**The other seven `is_admin` uses are fine.** They are `is_admin || is_member`
+read-scoping checks, which an Owner passes as a member. `UpdateTreeSchema` was
+the only one with no membership fallback, which is why it was the only dispatch
+gate that needed changing. Checked individually, not assumed.
+
+**Control.** All three reverted to `is_admin` fails exactly the three Owner
+tests; the Admin tests and every ordinary-role refusal stay green — so the
+change enables the Owner without widening to anyone else.
+
+Split into `owner_gates_admit_the_owner_test.rs` at 162 lines with the fixture
+helpers moved to `common/member_test_utils.rs`, shared rather than copied: two
+gate-test files asserting against a drifting fixture would let one pass while
+the other tested something subtly different.

@@ -36,6 +36,27 @@ impl<R: Ratchet> Clone for AsyncDomainServerOperations<R> {
 }
 
 impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
+    /// Admin or Owner.
+    ///
+    /// `is_admin` is `role == Admin` exactly, so every gate written on it
+    /// refuses the workspace Owner — a role that `Permission::for_role` grants
+    /// everything except `All` and `ConfigureSystem`. `remove_user_from_domain`
+    /// already records this class of mistake ("the permission editor displayed
+    /// a grant that enforcement then refused"); it was fixed there and nowhere
+    /// else.
+    ///
+    /// Deliberately narrower than asking the permission. Assigning roles can
+    /// promote someone to Admin, so widening it to every holder of a
+    /// member-management permission would let a Custom role above editor rank
+    /// mint an administrator. That is an authorization-policy change and is
+    /// recorded as an open question rather than made here.
+    pub async fn is_admin_or_owner(&self, user_id: &str) -> Result<bool, NetworkError> {
+        match self.backend_tx_manager.get_user(user_id).await? {
+            Some(user) => Ok(matches!(user.role, UserRole::Admin | UserRole::Owner)),
+            None => Ok(false),
+        }
+    }
+
     /// Refuse anything that would leave the workspace with no administrator.
     ///
     /// Demoting or removing the last Admin is unrecoverable: promotion requires
@@ -577,10 +598,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         role: UserRole,
         metadata: Option<Vec<u8>>,
     ) -> Result<(), NetworkError> {
-        // Check if actor has admin permission
-        if !self.is_admin(actor_user_id).await? {
+        // Owner too: see `is_admin_or_owner`. Gated on `is_admin` alone, the
+        // workspace Owner could not change any member's role in their own
+        // workspace, while the permission editor showed them holding the grant.
+        if !self.is_admin_or_owner(actor_user_id).await? {
             return Err(NetworkError::msg(
-                "Permission denied: Only admins can update member roles",
+                "Permission denied: only an admin or the owner can update member roles",
             ));
         }
 
@@ -605,10 +628,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         permissions: Vec<Permission>,
         operation: UpdateOperation,
     ) -> Result<(), NetworkError> {
-        // Check if actor has permission to manage members - only admins
-        if !self.is_admin(actor_user_id).await? {
+        // Owner too, as for `update_workspace_member_role`.
+        if !self.is_admin_or_owner(actor_user_id).await? {
             return Err(NetworkError::msg(
-                "Permission denied: Only admins can manage permissions",
+                "Permission denied: only an admin or the owner can manage permissions",
             ));
         }
 

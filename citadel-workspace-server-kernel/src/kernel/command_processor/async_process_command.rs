@@ -1206,16 +1206,17 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         }
 
         WorkspaceProtocolRequest::UpdateTreeSchema { schema } => {
-            use crate::handlers::domain::async_ops::AsyncDomainOperations;
-            // Check if user is admin
-            let is_admin = kernel
+            // Admin or Owner. The trait import that was here went with the
+            // `is_admin` call: `is_admin_or_owner` is an inherent method.
+            let may_edit_schema = kernel
                 .domain_ops()
-                .is_admin(actor_user_id)
+                .is_admin_or_owner(actor_user_id)
                 .await
                 .unwrap_or(false);
-            if !is_admin {
+            if !may_edit_schema {
                 return Ok(WorkspaceProtocolResponse::Error(
-                    "Permission denied: Only admins can update tree schema".to_string(),
+                    "Permission denied: only an admin or the owner can update tree schema"
+                        .to_string(),
                 ));
             }
 
