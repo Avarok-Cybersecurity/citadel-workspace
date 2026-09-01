@@ -28,7 +28,29 @@ function countTestFiles(dir) {
   return found;
 }
 
-const count = countTestFiles(DIST);
+// `--print` emits the discovered paths on stdout so the test script can run
+// exactly these files. One walk, two consumers: the check and the runner cannot
+// disagree about what exists, which is precisely how this failed in CI — the
+// check reported 2 compiled files and `node --test` then said it could not find
+// them, because glob support in `--test` varies by Node version and CI pins 20,
+// which has none.
+const PRINT = process.argv.includes('--print');
+
+const files = [];
+function collect(dir) {
+  if (!existsSync(dir)) return;
+  for (const entry of readdirSync(dir)) {
+    const path = join(dir, entry);
+    if (statSync(path).isDirectory()) collect(path);
+    else if (entry.endsWith('.test.js')) files.push(path);
+  }
+}
+collect(DIST);
+
+const count = files.length;
+if (PRINT && count > 0) {
+  process.stdout.write(files.join(' '));
+}
 if (count === 0) {
   console.error(
     '\n  No compiled *.test.js under dist/.\n' +
@@ -37,4 +59,9 @@ if (count === 0) {
   );
   process.exit(1);
 }
-console.log(`  ${count} compiled test file(s) found under dist/`);
+if (!PRINT) console.log(`  ${count} compiled test file(s) found under dist/`);
+
+// The package calls globalThis.crypto.randomUUID() with no import — fine in
+// browsers and Node >= 19, a ReferenceError on 18. That requirement was
+// implicit until it surfaced here as two failing tests, so package.json now
+// declares engines: node >= 20, matching CI.

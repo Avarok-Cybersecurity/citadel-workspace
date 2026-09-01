@@ -685,3 +685,44 @@ had already been reasoned about and correctly left alone. That is the healthy
 outcome for a debt list, and it is evidence the earlier rounds' judgement calls
 held up — but it also means the allowlists are close to exhausted as a source of
 new findings.
+
+## Round 483 — the tests I added to #79 had never run in CI
+
+CI turned #79 red on a job labelled "ESLint - citadel-workspaces", which was in
+fact `citadel-workspace-client-ts`'s `test` script:
+
+    node --test "dist/**/*.test.js"
+    Could not find '.../dist/**/*.test.js'
+
+Immediately above it, my own `assert-tests-exist.mjs` had printed
+`2 compiled test file(s) found under dist/`. **The check and the runner
+disagreed about whether the same files existed.**
+
+Glob support in `node --test` varies by version, and CI pins Node 20, which has
+none. Measured across the two versions available locally:
+
+| Node | `dist/**/*.test.js` | `dist` (directory) |
+|---|---|---|
+| 18 | "Could not find" — the CI error exactly | 13 tests, 11 pass / 2 fail |
+| 22 | 13 pass | only 1 test discovered |
+
+Three behaviours from two versions, so neither form is safe to depend on. The
+fix removes the dependency: `assert-tests-exist.mjs --print` emits the paths it
+walked and the runner is given exactly those. One walk, two consumers, and they
+can no longer disagree — which was the actual defect, not the glob.
+
+**The uncomfortable part.** These 13 tests were added in #79 precisely because
+they had never run. The glob matched nothing, `node --test` exits 0 on an empty
+match, and the job was green. So they still had never run — the guard I wrote to
+stop exactly this passed while the runner ran nothing, because it answered a
+different question than the runner asked. A check must be wired to the thing it
+guards, not to a re-implementation of it.
+
+**Found on the way.** The 2 failures on Node 18 share one cause:
+`ReferenceError: crypto is not defined`. The package calls
+`globalThis.crypto.randomUUID()` with no import — fine in browsers and Node
+>= 19, broken on 18. The requirement was implicit; `engines: { node: ">=20" }`
+now states it, so a Node 18 consumer gets an install warning rather than a
+ReferenceError at the first request id.
+
+13/13 on Node 22, 13 discovered and run on Node 18. 84 checks green.

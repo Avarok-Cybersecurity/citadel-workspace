@@ -1,6 +1,9 @@
 {
   "name": "citadel-workspace-client-ts",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=20"
+  },
   "description": "TypeScript client wrapper for Citadel Workspace with auto-generated types",
   "type": "module",
   "main": "dist/index.js",
@@ -20,7 +23,7 @@
     "clean": "rm -rf dist/",
     "typecheck": "tsc --noEmit",
     "lint": "npx eslint .",
-    "test": "npm run build && node scripts/assert-tests-exist.mjs && node --test \"dist/**/*.test.js\""
+    "test": "npm run build && node scripts/assert-tests-exist.mjs && node --test $(node scripts/assert-tests-exist.mjs --print)"
   },
   "dependencies": {
     "@avarok/citadel-protocol-types": "^0.14.0",
