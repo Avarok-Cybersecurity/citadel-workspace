@@ -2153,3 +2153,55 @@ Open, recorded rather than fixed:
 - **Byte-map write amplification.** #294 removed the avoidable multiple (a read
   that wrote, three mutations that mutated nothing); persisting one key still
   serialises every key for that CID. Same reason: the format.
+
+## Round 520 — a second Fable fleet, pointed at this campaign's own diff
+
+78 agents over the net diff of #79 and #295, six dimensions, each finding then
+attacked by three adversarial lenses. **24 raised, 12 survived, 12 refuted.**
+
+The single most useful finding was against round 517, written four rounds
+earlier in this same campaign.
+
+### The bound I added had a saturation case, and the saturation case was the bug
+
+Round 517 replaced one global group-message mutex with a map keyed by group id,
+pruned by `Arc::strong_count`, capped at 4096, with a fallback that shared an
+existing lock when full. The fallback **did not record which group it had been
+handed to.** So the next caller for that group missed the map, found room freed
+by the prune, and minted a *fresh* mutex — while the first writer still held the
+shared one. Two concurrent read-modify-writes on one room's history, and the
+second save silently drops a message: exactly the lost update the mutex exists to
+prevent, restored by the code written to bound it.
+
+`HashMap::values().next()` is also not stable across mutation, so two callers
+both taking the fallback could get different locks.
+
+Reachability is poor — 4096 distinct groups mid-write at one instant, against a
+100 req/s per-CID cap — and two of three verifiers said so. That is not the
+reason to fix it. The reason is that the fallback was written as the *safe*
+degradation and was not one.
+
+### Striping, not a patched map
+
+The fix is not an `is_nil` check or a "also insert the shared lock" line. It is
+to delete the map. A group's stripe is now a pure function of its id —
+`hash(group_id) % 256` — so:
+
+| property | map + prune + cap | striped |
+|---|---|---|
+| same group, same lock | until saturation | always, by construction |
+| memory | bounded by active groups | fixed, 256 mutexes |
+| saturation case | shares a lock it does not record | none exists |
+| two groups collide | never | 1/256, costs throughput only |
+
+There is no state to get wrong, which is a stronger claim than "the state is
+handled correctly". The `MAX_TRACKED_GROUP_LOCKS` constant, the pruning rule, and
+the three tests that guarded it are all gone with it.
+
+Two controls, disjoint: a constant stripe (the single global lock, reinstated)
+fails the three distribution and concurrency tests; a stripe that drifts under
+load — the map version's actual failure — fails only
+`one_group_always_gets_the_same_lock`, by name.
+
+`the_stripe_function_distributes` exists because every other test in that module
+passes with a constant stripe.
