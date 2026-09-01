@@ -368,7 +368,26 @@ completes in 1.7s.
 That is the same shape as the reconnection wedge: a P2P operation that normally
 takes seconds taking its whole timeout budget. It is intermittent (master
 passes) and it is upstream, in `citadel_sdk`, with nothing in this repository
-able to reach it. Recorded as an observation with its exact parameters rather
-than pursued, because four fixes in the neighbouring hang were implemented and
-refuted this session, and a fifth guess is worth less than a precise
-characterisation.
+able to reach it. **It does not reproduce locally.** Four attempts, each closing one variable:
+
+  1. `cargo test` x3 — INVALID. Every run died on "TestBarrier already set up",
+     which the test says outright: run with `cargo nextest run` instead. The
+     grep for `test result` matched nothing, so three blank lines and exit 0
+     looked like three clean runs of something that never executed.
+  2. `cargo nextest` x3, uninstrumented — 3/3 pass, ~2.2s.
+  3. `cargo llvm-cov nextest` x2, CI's exact command down to
+     `SKIP_EXT_BACKENDS=true` — 2/2 pass, ~1.4s. Instrumentation is not the
+     variable. (Those runs were FASTER than (2) purely from a warm build cache;
+     timings across differently-warmed runs are not comparable.)
+  4. The whole `citadel_sdk` suite under coverage, 97 tests concurrent —
+     158s, all pass, this test included.
+
+What remains between here and CI: it runs ten crates together (476 tests, not
+97) on a runner with fewer cores. So the hang needs broader concurrency or that
+environment specifically — not instrumentation, not the test in isolation, and
+not single-crate parallelism.
+
+Recorded with its exact parameters and this elimination sequence rather than
+pursued further. Four fixes in the neighbouring hang were implemented and
+refuted this session; a fifth guess is worth less than telling the next person
+which four variables are already closed.
