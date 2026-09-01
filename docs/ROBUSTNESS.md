@@ -265,5 +265,15 @@ because the defect it guards is a key that IS READ and never written, which is
 what makes a read return its default forever while the feature looks wired. A
 control has to reproduce the defect's shape, not merely touch the same file.
 
-All 43 gate scripts contain `process.exit(1)`, which is presence rather than
-reachability; the seven above are the sample that was actually exercised.
+**Correction to a count stated here earlier.** "All 43 gate scripts" counted only
+`scripts/`. There are 44 there and 40 more in `citadel-workspaces/scripts/` —
+**84** in total. Every one of them can fail, though a literal grep for
+`process.exit(1)` misses `check-toast-clears-header`, which ends
+`process.exit(failed ? 1 : 0)`; that is presence rather than reachability, and
+the seven above are the sample that was actually exercised.
+
+**Refuted while checking that.** Three npm aliases in the UI package.json —
+`check:event-pairs`, `check:types`, `check:spec-copy` — appear in no workflow,
+which looked like three gates written and never run. All three underlying
+scripts ARE invoked by filename; only the aliases are redundant.
+`check-every-gate-is-invoked` covers both script directories and was right.
