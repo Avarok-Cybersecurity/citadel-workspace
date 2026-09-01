@@ -395,3 +395,26 @@ Recorded with its exact parameters and this elimination sequence rather than
 pursued further. Four fixes in the neighbouring hang were implemented and
 refuted this session; a fifth guess is worth less than telling the next person
 which four variables are already closed.
+
+## PR #288's three failures, characterised
+
+A test-only PR — its entire diff is inside `#[cfg(test)]` in `citadel_crypt` —
+collected three red jobs in one run. Each was read rather than assumed:
+
+| Job | Cause | Reached the tests? |
+|---|---|---|
+| `core_libs (windows-latest)` | `os error 10013` (WSAEACCES) binding `127.0.0.1:0` in `citadel_proto/tests/connections.rs`. Windows returns that when the OS-chosen ephemeral port lands in a Hyper-V reserved range. | yes, then failed on bind |
+| `coverage` | The upstream 3-peer P2P hang, characterised above. Intermittent; master passes; does not reproduce locally through four levels of fidelity. | yes |
+| `docker_nat_p2p (address_restricted)` | `target peer_b: failed to receive status: rpc error: code = Unavailable … EOF` while buildkit was loading Dockerfiles. | **no** — died during the image build |
+
+None is attributable to the diff. Notably the third never ran a line of the
+project's code: the log shows `#3 [peer_b internal] load build definition from
+Dockerfile` immediately before the EOF.
+
+Three independent infrastructure failures in one run says something about the
+window rather than the change — and it is worth writing down that this was
+established by reading three logs, because "three failures" is exactly the
+count at which the cheap conclusion is "the PR broke something".
+
+Not merged. The standing authorisation to force-merge is conditional on a green
+pipeline, and a pipeline red for reasons outside the diff is still not green.
