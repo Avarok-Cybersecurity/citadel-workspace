@@ -349,9 +349,26 @@ output only for FAILING tests.
 **A different failure in the same job.** `prefabs::client::peer_connection::
 tests::test_peer_to_peer_file_transfer::case_2` hit its 180s rstest timeout.
 Unrelated to #288's diff, which is `#[cfg(test)]` in citadel_crypt, and passing
-on master's recent runs. Under `cargo llvm-cov` instrumentation everything runs
-2-5x slower — the reason `ratchet_manager` already carries
-`#[cfg(coverage)] const ROUNDS: usize = 20;` against 100 otherwise — so a fixed
-180s budget under coverage is a plausible cause, and an intermittent hang is
-another. Recorded without choosing between them, because nothing here
-distinguishes them yet.
+on master's recent runs.
+
+**The coverage-slowness explanation is refuted.** The two cases sit side by side
+in the same instrumented job:
+
+    PASS [  1.721s] test_peer_to_peer_file_transfer::case_1
+    FAIL [180.130s] test_peer_to_peer_file_transfer::case_2
+
+Same binary, same instrumentation, 100x apart. Instrumentation does not slow one
+case of a test by two orders of magnitude and leave its neighbour at under two
+seconds. This is a hang.
+
+The cases are `#[case(2)]` and `#[case(3)]` — peer counts — and nextest numbers
+them by position, so the one that hangs is **three peers**, while two peers
+completes in 1.7s.
+
+That is the same shape as the reconnection wedge: a P2P operation that normally
+takes seconds taking its whole timeout budget. It is intermittent (master
+passes) and it is upstream, in `citadel_sdk`, with nothing in this repository
+able to reach it. Recorded as an observation with its exact parameters rather
+than pursued, because four fixes in the neighbouring hang were implemented and
+refuted this session, and a fifth guess is worth less than a precise
+characterisation.
