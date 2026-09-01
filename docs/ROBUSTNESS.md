@@ -2329,3 +2329,64 @@ for the paging branch. On this branch its subject does not exist, and its vacuit
 guard failed the run rather than reporting "OK: 0 shapes checked". That is the
 guard earning its place — every gate in this suite has one, and this is the first
 time one has fired for real.
+## Round 523 — the last open MEDIUM: a send stops rewriting the room
+
+Every message in a room lived under one key as a single `Vec<GroupMessage>`, so
+sending one parsed and re-serialised the whole history — a 10k-message room at
+~300B each is ~3MB in and ~3MB out per send, amplified again on the filesystem
+backend by the account-file rewrite. Round 517 gave each room its own lock, which
+bounded the blast radius of that cost to the room paying it; it did not reduce
+it, and the record said so.
+
+Now paged. `…group_messages.{gid}.page.{n}` holds up to 256 messages,
+`…group_messages.{gid}.pages` holds the count, and the pre-paging key is the
+migration source.
+
+| operation | before | after |
+|---|---|---|
+| send | whole history in and out | one page (+ the index when it rolls over) |
+| send that is a reply | whole history | one page, plus the parent's page |
+| edit / delete | whole history | the page holding it |
+| full read | whole history | unchanged — callers ask for all of it |
+
+Split SBIO: which page a message belongs to, how a legacy blob splits, and where
+an id lives are pure functions in `group_message_pages`, testable with no
+backend. The reads and writes stay in the manager. That split is what made the
+migration testable at all.
+
+**Reads never migrate.** A reader that migrated would race every other reader,
+and `get_group_messages` runs on every history fetch. Migration happens on the
+next write, under the group lock, and is idempotent — the index's presence is the
+flag. The legacy blob is deleted only after every page and the index are written,
+so a failure part-way leaves the room readable in its old form rather than half
+in each.
+
+### The headline test measured nothing, and a control said so
+
+`a_send_writes_one_page_not_the_history` first asserted page 0's *contents* —
+that it still held the first 256 messages, oldest first. It passed against a
+build where every send rewrote the entire history, because splitting the whole
+history back into pages produces an identical page 0. The result is the same; only
+the cost differs, and a result assertion cannot see cost.
+
+Rewritten to record which KEYS `backend_save` writes, via a `#[cfg(test)]`
+counter. Then it caught my own expectation as well: page 2 is exactly full after
+768 sends, so the next send correctly rolls over and writes the new page *and*
+the index. It now asserts both cases — a rollover writes two keys, an ordinary
+send writes one, and neither touches an older page.
+
+### An existing test's fault target moved, and the property survived
+
+`a_failed_history_purge_leaves_the_delete_retryable` faulted deletes of
+`citadel_workspace.group_messages.chan-1` — the pre-paging blob, which the first
+write now migrates away. Faulting it would fault a key holding nothing, and the
+purge would succeed at removing every message before failing on an empty delete;
+the assertion would have been measuring a purge that HAD happened.
+
+Pointed at the page key instead. That is also what keeps the original property
+true: `delete_all_group_messages` removes the pages first and the index last, so a
+failure among the pages leaves the index pointing at everything still there —
+nothing orphaned, history still readable, retry completes it. The test asserts the
+same thing it always did.
+
+Nothing above LOW is now open in either audit.
