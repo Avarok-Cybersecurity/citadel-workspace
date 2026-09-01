@@ -1840,3 +1840,35 @@ that passes precisely when it cannot see anything"*. Nothing to fix.
 
 Deliberately did **not** pursue the notification-store growth question: an agent
 is auditing that exact dimension, and racing it duplicates the work.
+
+## Round 514 — production deployment configuration, audited clean
+
+Another dimension the Fable fleet does not cover: it is auditing product code, so
+nothing in it looks at how the thing is actually deployed.
+
+`docker-compose.production.yml`, all four services:
+
+| property | server | internal-service | ui | cloudflared |
+|---|---|---|---|---|
+| `restart: unless-stopped` | yes | yes | yes | yes |
+| healthcheck | yes | yes | yes | yes |
+| CPU limit | 2.0 | 2.0 | 0.5 | 0.5 |
+| **memory limit** | 2G | 2G | 256M | 256M |
+| logging | yes | yes | yes | yes |
+
+The memory limits matter more than usual here: this campaign found three
+unbounded collections (kernel maps keyed by CID, the rate limiter's bucket map,
+pending peer signals). An unbounded map inside a container with a hard memory
+cap fails loudly and restarts; the same map with no cap takes the host down. The
+caps are the reason those defects were survivable in production rather than
+fatal.
+
+The healthchecks are weak but not vacuous. `nc -z 127.0.0.1 12349` proves a port
+is listening, not that the protocol behind it is answering — but it cannot pass
+while the process is dead, which is the property that matters for `restart:
+unless-stopped`. Worth noting it is also the source of the periodic "Handshake
+not finished" lines in the internal-service log: the probe opens a TCP connection
+and drops it. Noise, not a defect, and the log is easier to read once you know
+that.
+
+Nothing to fix.
