@@ -61,7 +61,30 @@ pub(crate) fn validate_content_segment(segment: &str) -> Result<(), NetworkError
             "Content segment '{segment}' contains a forbidden character"
         )));
     }
-    Ok(())
+    // Defence in depth, and WINDOWS-ONLY in effect: ask the platform's parser
+    // whether this is one ordinary component rather than trusting a character
+    // list to be complete.
+    //
+    // `Path::join` REPLACES the base when handed something carrying a prefix or
+    // a root, so a segment does not need a separator to escape. On Windows `C:`
+    // has no separator, no NUL and no leading dot, so it passes every check
+    // above and then discards the content root.
+    //
+    // No test on a Unix host can discriminate this line: there, any string
+    // without a separator already parses as a single Normal component, which a
+    // control confirmed — removing this check failed nothing locally. It is kept
+    // because it is correct and free, not because it is covered here.
+    let mut components = std::path::Path::new(segment).components();
+    match (components.next(), components.next()) {
+        (Some(std::path::Component::Normal(only)), None)
+            if only == std::ffi::OsStr::new(segment) =>
+        {
+            Ok(())
+        }
+        _ => Err(NetworkError::msg(format!(
+            "Content segment '{segment}' is not a single ordinary path component"
+        ))),
+    }
 }
 
 /// Who a broadcast is for.

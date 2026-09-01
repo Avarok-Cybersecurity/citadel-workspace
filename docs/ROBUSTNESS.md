@@ -1163,3 +1163,46 @@ happen — which is what made this diagnosable at all.
 this suite and did not find it; that one is still open, and its diagnostics
 remain armed. This is a second, distinct flake in the same file, and the two
 should not be conflated.
+
+## Round 495 — a Windows-only gap, and the fourth guard I duplicated
+
+Audited user-controlled input reaching the filesystem. `persist_node_content`
+joins a node name onto the content root and writes `CONTENT.md` beneath it, so
+anything escaping that base writes wherever it likes.
+
+`validate_content_segment` already refuses empty, `.`, `..`, any leading `.`,
+and `/ \ \0`. Thorough — with one gap a character list cannot close.
+
+**`Path::join` REPLACES the base** when handed something carrying a prefix or a
+root, so a segment does not need a separator to escape. On Windows `C:` has no
+separator, no NUL and no leading dot: it passes every check and then discards
+the content root. The fix asks the platform's own parser for a single `Normal`
+component, which is correct by construction — a Prefix on Windows, an ordinary
+filename on Unix.
+
+**What the controls actually showed, which is less flattering than the finding.**
+
+- Removing the new check failed nothing locally. On a Unix host any string
+  without a separator already parses as one `Normal` component, so **no test
+  here can discriminate that line**. It is kept because it is correct and free,
+  and the comment says exactly that rather than implying coverage.
+- Disabling the `.`/`..` sentinel check also failed nothing — `starts_with('.')`
+  already covers both. Two checks, one property.
+- Making the validator accept everything failed five tests, so the suite does
+  discriminate against a broken validator. That is the control that mattered,
+  and it is the one that revealed the next item.
+
+**The fourth duplication.** `async_kernel.rs` already contained a
+`content_segment_tests` module with seven tests covering exactly this. I wrote a
+second module with the same name. It only surfaced because the accept-everything
+control printed test paths and two module prefixes appeared. Deleted.
+
+That is four times this session — a listener gate, an event guard, and now a
+test module — that I have rebuilt something already present. The rule I keep
+failing to apply: **grep for the existing guard, and for the existing tests,
+before writing either.**
+
+**A restore that destroyed work.** Reverting one control with `git checkout --`
+discarded the uncommitted fix along with it, because the change had never been
+committed. The reversible-edit pattern used everywhere else in this session does
+not have that failure mode; the file-level revert does.
