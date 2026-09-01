@@ -19,6 +19,12 @@ use std::sync::Arc;
 pub mod backend_ops_simple;
 // Note: TransactionManager has been removed. Use BackendTransactionManager instead.
 
+/// How many per-group message locks to track before falling back to sharing.
+///
+/// Reached only if that many groups are being written to at the same instant,
+/// since the map prunes locks nobody holds. See `group_msg_mutex`.
+const MAX_TRACKED_GROUP_LOCKS: usize = 4096;
+
 /// A parsed node map and the exact bytes it came from.
 ///
 /// The bytes are the validity check — see `BackendTransactionManager::nodes_cache`.
@@ -45,12 +51,25 @@ pub struct BackendTransactionManager<R: Ratchet> {
     /// save — the second save silently overwrites the first, dropping
     /// a message edit or insert on the floor.
     ///
-    /// A single mutex serializes across *all* groups (rather than
-    /// per-group-id) because the cost is small (group message ops are
-    /// infrequent compared to index ops) and the data-loss
-    /// consequence of a missed lock is severe. Refactor to a per-id
-    /// mutex if profiling shows contention.
-    group_msg_mutex: Arc<tokio::sync::Mutex<()>>,
+    /// Keyed by group id, which is the granularity the invariant actually
+    /// needs: the lock protects a read-modify-write of
+    /// `group_messages:{group_id}`, and two different groups share nothing.
+    ///
+    /// It was one mutex across ALL groups, with a note to "refactor to a per-id
+    /// mutex if profiling shows contention" on the grounds that group message
+    /// ops are infrequent. They are not: this is chat. And the cost held under
+    /// the lock is not small — the whole of a room's history is parsed and
+    /// re-serialised per message, and `backend_save`'s 100/200/400ms retry
+    /// sleeps happen inside the guard. So one busy room throttled sending for
+    /// every room on the server.
+    ///
+    /// Entries are pruned when nobody holds or awaits them, so the map is
+    /// bounded by the number of CONCURRENTLY active groups rather than by the
+    /// number of groups that have ever existed — the difference between a bound
+    /// and a leak. `MAX_TRACKED_GROUP_LOCKS` is the ceiling if even that grows,
+    /// and falling back to a shared lock there degrades throughput rather than
+    /// memory, which is the right way round.
+    group_msg_mutex: Arc<RwLock<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
     /// Serializes DomainNode-collection read-modify-write operations.
     /// All nodes share a single `citadel_workspace.nodes` HashMap key,
     /// so `insert_node` / `remove_node` / `update_node` all do a
@@ -163,7 +182,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             test_storage: Arc::new(RwLock::new(HashMap::new())),
             migrated: Arc::new(RwLock::new(false)),
             index_write_mutex: Arc::new(tokio::sync::Mutex::new(())),
-            group_msg_mutex: Arc::new(tokio::sync::Mutex::new(())),
+            group_msg_mutex: Arc::new(RwLock::new(HashMap::new())),
             node_mutex: Arc::new(tokio::sync::Mutex::new(())),
             nodes_cache: Arc::new(RwLock::new(None)),
             workspace_mutex: Arc::new(tokio::sync::Mutex::new(())),
@@ -725,6 +744,42 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(thread_messages)
     }
 
+    /// The lock guarding one group's message list.
+    ///
+    /// Prunes on the way in: an `Arc` with a strong count of 1 is held by the
+    /// map alone, so nobody is inside or waiting on it and dropping it cannot
+    /// break mutual exclusion for anyone. That keeps the map sized to active
+    /// groups instead of to every group that has ever received a message.
+    fn group_lock(&self, group_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+        if let Some(existing) = self.group_msg_mutex.read().get(group_id) {
+            return existing.clone();
+        }
+
+        let mut locks = self.group_msg_mutex.write();
+        // Re-check: another task may have inserted between the read and write.
+        if let Some(existing) = locks.get(group_id) {
+            return existing.clone();
+        }
+
+        if locks.len() >= MAX_TRACKED_GROUP_LOCKS {
+            locks.retain(|_, lock| Arc::strong_count(lock) > 1);
+        }
+
+        if locks.len() >= MAX_TRACKED_GROUP_LOCKS {
+            // Every tracked group is genuinely in use. Sharing one of the
+            // existing locks costs throughput and keeps the map bounded; growing
+            // it without limit would be the third unbounded map this campaign
+            // has had to close.
+            if let Some(shared) = locks.values().next() {
+                return shared.clone();
+            }
+        }
+
+        let lock = Arc::new(tokio::sync::Mutex::new(()));
+        locks.insert(group_id.to_string(), lock.clone());
+        lock
+    }
+
     async fn save_group_messages(
         &self,
         group_id: &str,
@@ -741,8 +796,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// (both read the same prior list, both push, second save
     /// overwrites the first — silently dropping the earlier message).
     pub async fn store_group_message(&self, message: GroupMessage) -> Result<(), NetworkError> {
-        let _guard = self.group_msg_mutex.lock().await;
         let group_id = message.group_id.clone();
+        let lock = self.group_lock(&group_id);
+        let _guard = lock.lock().await;
         let mut messages = self.get_group_messages(&group_id).await?;
 
         // If this is a reply, increment the parent's reply_count
@@ -768,7 +824,8 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         new_content: String,
         edited_at: u64,
     ) -> Result<Option<GroupMessage>, NetworkError> {
-        let _guard = self.group_msg_mutex.lock().await;
+        let lock = self.group_lock(group_id);
+        let _guard = lock.lock().await;
         let mut messages = self.get_group_messages(group_id).await?;
 
         let mut updated_message = None;
@@ -795,7 +852,8 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         group_id: &str,
         message_id: &str,
     ) -> Result<Option<GroupMessage>, NetworkError> {
-        let _guard = self.group_msg_mutex.lock().await;
+        let lock = self.group_lock(group_id);
+        let _guard = lock.lock().await;
         let mut messages = self.get_group_messages(group_id).await?;
 
         // Find and remove the message
@@ -841,7 +899,8 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// Serialized through `group_msg_mutex` like every other writer of this key,
     /// so a send racing the delete cannot re-create the entry after it is gone.
     pub async fn delete_all_group_messages(&self, group_id: &str) -> Result<(), NetworkError> {
-        let _guard = self.group_msg_mutex.lock().await;
+        let lock = self.group_lock(group_id);
+        let _guard = lock.lock().await;
         self.backend_delete(&Self::group_messages_key(group_id))
             .await
     }
@@ -1523,5 +1582,113 @@ mod node_cache_tests {
         owned.insert("scratch".to_string(), node("scratch", None));
 
         assert_eq!(shared.len(), 1, "a mutator's edit reached the shared map");
+    }
+}
+
+#[cfg(test)]
+mod group_lock_tests {
+    //! The message lock is per group, and the map that holds them is bounded.
+    //!
+    //! It used to be one mutex across ALL groups, on the recorded grounds that
+    //! "group message ops are infrequent compared to index ops". They are chat.
+    //! And the work held under the lock is a full parse and re-serialise of the
+    //! room's whole history, plus `backend_save`'s 100/200/400ms retry sleeps —
+    //! so one busy room throttled sending for every room on the server.
+    //!
+    //! Splitting a lock is the easy half. The half that goes wrong is the map:
+    //! a lock per group id, kept forever, is an unbounded collection keyed by
+    //! user-supplied data — the same shape this campaign has already had to
+    //! close three times elsewhere.
+    use super::*;
+    use citadel_sdk::prelude::StackedRatchet;
+
+    fn fresh() -> BackendTransactionManager<StackedRatchet> {
+        BackendTransactionManager::new()
+    }
+
+    #[tokio::test]
+    async fn two_groups_do_not_share_a_lock() {
+        let mgr = fresh();
+        let a = mgr.group_lock("room-a");
+        let b = mgr.group_lock("room-b");
+        assert!(
+            !Arc::ptr_eq(&a, &b),
+            "two rooms share a lock, so one busy room still blocks the other",
+        );
+    }
+
+    #[tokio::test]
+    async fn one_group_always_gets_the_same_lock() {
+        // The whole point of the lock. If this ever returns distinct mutexes,
+        // two concurrent sends to one room both load the prior list, both push,
+        // and the second save drops the first message on the floor.
+        let mgr = fresh();
+        let first = mgr.group_lock("room-a");
+        let second = mgr.group_lock("room-a");
+        assert!(Arc::ptr_eq(&first, &second));
+
+        // Including while one is held.
+        let held = first.lock().await;
+        let third = mgr.group_lock("room-a");
+        assert!(Arc::ptr_eq(&first, &third));
+        drop(held);
+    }
+
+    #[tokio::test]
+    async fn idle_groups_do_not_accumulate_locks() {
+        let mgr = fresh();
+        for i in 0..(MAX_TRACKED_GROUP_LOCKS + 500) {
+            // Each Arc is dropped immediately, which is what an op that has
+            // finished looks like.
+            let _ = mgr.group_lock(&format!("room-{i}"));
+        }
+        assert!(
+            mgr.group_msg_mutex.read().len() <= MAX_TRACKED_GROUP_LOCKS,
+            "the lock map grew past its ceiling: {} entries",
+            mgr.group_msg_mutex.read().len(),
+        );
+    }
+
+    #[tokio::test]
+    async fn a_lock_in_use_is_never_pruned() {
+        // The pruning rule is "strong_count == 1, so the map holds it alone".
+        // If it ever drops a lock somebody is inside, mutual exclusion is gone
+        // for that room and the data loss the lock exists to prevent comes back.
+        let mgr = fresh();
+        let held = mgr.group_lock("room-busy");
+        let _guard = held.lock().await;
+
+        for i in 0..(MAX_TRACKED_GROUP_LOCKS + 500) {
+            let _ = mgr.group_lock(&format!("room-{i}"));
+        }
+
+        let again = mgr.group_lock("room-busy");
+        assert!(
+            Arc::ptr_eq(&held, &again),
+            "a lock that was being held was pruned and replaced",
+        );
+    }
+
+    #[tokio::test]
+    async fn concurrent_sends_to_different_rooms_do_not_serialise() {
+        // Holding room A's lock must not delay a send to room B. Asserted by
+        // completing B's op while A's guard is still held: with one global
+        // mutex this deadlocks the test rather than failing it, so the outer
+        // timeout is the discriminator.
+        let mgr = Arc::new(fresh());
+        let a = mgr.group_lock("room-a");
+        let _held = a.lock().await;
+
+        let mgr2 = mgr.clone();
+        let b = tokio::time::timeout(std::time::Duration::from_secs(5), async move {
+            let lock = mgr2.group_lock("room-b");
+            let _guard = lock.lock().await;
+        })
+        .await;
+
+        assert!(
+            b.is_ok(),
+            "a send to another room waited on a lock held for room-a",
+        );
     }
 }

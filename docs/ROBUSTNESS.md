@@ -1984,3 +1984,64 @@ removed node, and a same-shape edit that a length or count check would miss.
 `mutators_still_get_an_owned_map` stays green under both, holding the scope.
 
 75 test binaries green, clippy clean.
+
+## Round 517 — one busy room throttled chat for the whole server
+
+`store_group_message`, `update_group_message`, `delete_group_message` and
+`delete_all_group_messages` all took **one** mutex, shared across every group.
+The field's own comment invited the change:
+
+> A single mutex serializes across *all* groups (rather than per-group-id)
+> because the cost is small (group message ops are infrequent compared to index
+> ops) ... Refactor to a per-id mutex if profiling shows contention.
+
+Both premises had expired. Group message ops are chat, not an occasional
+administrative write. And the cost held under the guard is not small: a full
+parse and re-serialise of the room's entire history, plus `backend_save`'s
+100/200/400 ms retry sleeps, which happen *inside* the lock.
+
+Now keyed by group id, which is the granularity the invariant needed all along —
+the lock protects a read-modify-write of `group_messages:{group_id}`, and two
+groups share nothing.
+
+### The half that goes wrong
+
+Splitting a lock is easy. The map that holds the locks is an unbounded
+collection keyed by user-supplied data, which is the same shape this campaign
+has already had to close three times (kernel CID maps, the rate limiter's
+buckets, pending peer signals).
+
+Pruned on acquire, by the only rule that is safe: an `Arc` with a strong count of
+1 is held by the map alone, so nobody is inside it or waiting on it and dropping
+it cannot break mutual exclusion for anyone. That bounds the map by
+*concurrently active* groups rather than by every group that has ever received a
+message. `MAX_TRACKED_GROUP_LOCKS` is the ceiling if even that grows, and the
+fallback there shares a lock — degrading throughput rather than memory, which is
+the right way round.
+
+Five tests, three controls, and each control fails a disjoint set:
+
+| control | fails |
+|---|---|
+| one lock for all groups | `two_groups_do_not_share_a_lock`, `concurrent_sends_to_different_rooms_do_not_serialise` |
+| prune everything, in-use included | `a_lock_in_use_is_never_pruned` |
+| never prune | `idle_groups_do_not_accumulate_locks` |
+
+`one_group_always_gets_the_same_lock` stays green under all three — it holds the
+original invariant, and would go red only if the split broke the thing the lock
+was for.
+
+### Still open: the O(history) rewrite
+
+Not fixed. Every send still parses and re-serialises the room's whole message
+list, because all of a room's messages live under one key. A 10k-message room at
+~300 B each is ~3 MB parsed and ~3 MB written per message — and on the filesystem
+backend that write is amplified again by the account-file rewrite that PR #294
+addresses only the avoidable part of.
+
+The fix is paging — the shape the UI already uses for P2P
+(`message-page-operations.ts`): messages in fixed-size pages plus a metadata
+record, so a send appends to the last page. That is an on-disk format change with
+a migration, not a patch, and it is recorded here rather than attempted
+mid-campaign. The per-group lock above bounds the *blast radius* of the cost to
+the room paying it; it does not reduce the cost.
