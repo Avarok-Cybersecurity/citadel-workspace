@@ -2390,3 +2390,58 @@ nothing orphaned, history still readable, retry completes it. The test asserts t
 same thing it always did.
 
 Nothing above LOW is now open in either audit.
+
+## Round 524 — two CI failures, and the difference between them
+
+Both PRs went red on the same job name. They were nothing alike.
+
+### One was mine, and the assertion was the bug
+
+`rejections_reach_the_caller` asserted the caller receives *the server's* reason
+for a refused registration. On ubuntu it received the backstop's generic one
+instead — an error either way, and never a hang, but not the string the test
+named.
+
+Two answers are possible **by design**, and the commit that built the second one
+said so: the final-reply flush is best-effort because the writer's channel has no
+drain signal to await, and a peer that has hung up will never let the write
+finish. I then wrote an assertion that pinned the race anyway.
+
+The tempting repair was a longer grace. That hides it. It now asserts that one of
+the two arrived — which the control shows is not toothless: with both layers
+disabled the test still fails with *"the refused registration never returned"*.
+
+Making the server's reason deterministic needs a drain signal on the outbound
+sender's item type. Open, and named as open, rather than papered over with a
+sleep.
+
+### The other was not mine, and the discipline was not to fix it
+
+`test_single_connection_transient::case_4` is the intermittent UDP one-shot
+failure carried since round 488. Twelve local runs of the failing test passed, so
+there is no reproduction here.
+
+But the instrumentation added in #292 did its job. The failing run shows, in
+order: the server's `[udp-oneshot] receiver: …no channel receiver at connect
+STAGE0`, then two `udp_mode_assertions` — the first completing through AB2, the
+second panicking at AB1. That pins the side: the SERVER had no receiver.
+
+From a fresh `UdpChannelSender::default()` that is impossible. The only route
+there is a re-entry of `handle_success_as_receiver` after `rx` was taken while
+`tx` had not been: the guard `tx.is_none() && rx.is_none()` sees a half-consumed
+pair, declines to reinstall, and every later connect on that session finds no
+receiver.
+
+The fix writes itself — key the guard on `rx` alone. **It was not made.** The
+comment directly above that guard records a previous change in exactly this area
+that made the receiver present when the hole punch had failed, turning a 1.4s
+failure into a 90s hang. A speculative fix there, with no reproduction, trades a
+visible flake for an invisible one.
+
+So the hypothesised state is logged instead (PR #297). If the next occurrence
+prints `[udp-oneshot] install: receiver already taken while the sender was not`,
+the one-line fix has evidence behind it. If it does not, the hypothesis was
+wrong and that is worth knowing too.
+
+The pattern is the same one that got this far: #292's line is the only reason
+today's failure was localisable at all.
