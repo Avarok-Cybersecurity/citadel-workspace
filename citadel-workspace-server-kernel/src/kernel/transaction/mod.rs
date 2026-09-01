@@ -1063,6 +1063,15 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         // key would leave a paged room's history intact under keys nothing
         // reaches — which is the same "retained indefinitely" the paragraph
         // above is about, one storage format later.
+        //
+        // This is the one path paging makes MORE expensive, and it is a
+        // deliberate trade. On the filesystem backend each backend_delete that
+        // actually removes something rewrites the whole account file, so a
+        // 40-page room costs 40 of those where the single blob cost one. A room
+        // is deleted once in its life and written to on every message, so the
+        // send path is the one worth optimising; stated here so the cost is
+        // found by reading rather than by measuring. A batch delete in the
+        // backend would remove it, and there is no such primitive today.
         let count: usize = self
             .backend_get(&group_message_pages::index_key(group_id))
             .await?

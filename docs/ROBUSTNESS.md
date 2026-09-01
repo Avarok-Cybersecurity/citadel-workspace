@@ -2445,3 +2445,20 @@ wrong and that is worth knowing too.
 
 The pattern is the same one that got this far: #292's line is the only reason
 today's failure was localisable at all.
+
+### Round 523, postscript: the cost paging moves rather than removes
+
+Checking whether `backend_delete` errors on a missing key (it does not — the
+byte-map remove answers `Ok(None)`) surfaced something the round-523 entry did
+not say: on the filesystem backend, every delete that actually removes something
+rewrites the whole account file. So purging a 40-page room now costs 40 of those
+where the single blob cost one.
+
+That is the right trade — a room is deleted once in its life and written to on
+every message — but it is a trade, and an entry that only listed the wins would
+have been the kind of half-report this campaign keeps finding in other people's
+work. It is now written at the call site too, so it is found by reading rather
+than by measuring.
+
+A batch delete in the backend would remove the cost entirely. There is no such
+primitive today.
