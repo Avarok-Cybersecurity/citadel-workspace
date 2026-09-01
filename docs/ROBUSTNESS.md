@@ -1240,3 +1240,41 @@ Annotations live in comments, in two documented forms (`# verify: …` and
 ways: the loose pattern trips on the index again, and a pattern matching nothing
 fails the gate's own anti-vacuity floor rather than passing silently. Three real
 annotations still hold, which is what proves the tightening did not blind it.
+
+## Round 497 — the shipped WASM and its source could diverge silently
+
+Round 482 deferred a fix to `ensure_messenger_open` because it lives in the WASM
+client. This round asked what that deferral actually rested on, and found
+something larger than the fix.
+
+`citadel-workspace-client-ts/pkg/*.wasm` is a **tracked binary**, and CI sets
+`SKIP_WASM_BUILD=1` because no wasm-pack is installed there. So **CI never
+rebuilds it**. Whatever binary is committed is what the browser loads, and a
+change to the wasm-client Rust source does nothing at all until somebody
+rebuilds and commits the artefact by hand.
+
+That makes every wasm-client source change a candidate for this campaign's most
+productive defect: a fix present in the source, reviewed, merged — and never
+running. A security fix there would be indistinguishable from a working one.
+Nothing detected it: no gate mentioned wasm.
+
+The stamp records the source tree the binary was built from, content-addressed
+rather than by date — git author dates move without the code changing, and stay
+put when it does. `sync-wasm-clients.sh` writes it as part of the copy step, so
+the ordinary workflow maintains it.
+
+**Two controls.** A stamp that no longer matches the source tree fails, naming
+both hashes. A missing stamp fails rather than passing for want of evidence —
+which matters, because "no stamp" is exactly the state a fresh clone or a
+sloppy rebuild produces.
+
+**Honest limit, and it is in the script's own header.** This pins the
+relationship from now on. It cannot retroactively prove that the binary
+committed on 2026-08-31 was built from the source beside it; the dates are
+consistent with that and dates are not proof.
+
+**Round 482 stays open, and correctly.** The `ensure_messenger_open` fix is a
+source change that CI cannot make effective, so shipping it without a rebuild
+would have produced precisely the inert fix this gate now catches.
+
+87 checks.

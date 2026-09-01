@@ -172,6 +172,16 @@ if [ -d "$DEST1" ]; then
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.wasm "$DEST1/"
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.js "$DEST1/"
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.d.ts "$DEST1/"
+
+    # Record WHICH source this binary came from. The artefact is tracked and CI
+    # never rebuilds it (SKIP_WASM_BUILD=1), so without this a source change can
+    # be committed, reviewed and merged while the browser keeps loading the old
+    # binary — the fix present in the diff and absent at runtime.
+    if git -C "$INTERNAL_SERVICE_ROOT" rev-parse "HEAD:citadel-internal-service-wasm-client/src" > "$DEST1/.wasm-source-tree" 2>/dev/null; then
+        echo "  Stamped $DEST1/.wasm-source-tree"
+    else
+        echo "  WARNING: could not stamp the wasm source tree; check-wasm-matches-its-source will fail"
+    fi
     # package.json is validated up front, before the clean step - the copy above only
     # takes *.wasm/*.js/*.d.ts, so nothing in this script can clobber it anymore.
 

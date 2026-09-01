@@ -214,6 +214,9 @@ jobs:
 
       - name: The gate index lists every gate
         run: node scripts/build-gates-index.mjs --check
+
+      - name: The committed WASM matches its source
+        run: node scripts/check-wasm-matches-its-source.mjs
       - name: Check every integration spec is named by a test script
         run: node scripts/check-every-integration-spec-has-a-runner.mjs
       - name: Check every value production requires is documented
