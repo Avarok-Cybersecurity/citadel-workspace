@@ -85,15 +85,47 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
             Some(user) => user,
             None => return Err(NetworkError::msg("Permission denied: unknown actor")),
         };
+        let granting: Vec<Permission> = Permission::for_role(role).into_iter().collect();
+        self.ensure_may_grant_permissions(actor_user_id, &granting)
+            .await
+            .map_err(|_| {
+                NetworkError::msg(format!(
+                    "Permission denied: {} cannot grant {}, which carries authority it does not hold",
+                    actor.role, role
+                ))
+            })
+    }
+
+    /// Refuse handing out a permission the actor does not itself hold.
+    ///
+    /// The role path was closed first, and `update_member_permissions` is the
+    /// same escalation through the other door: it was gated on
+    /// `is_admin_or_owner` and then wrote CALLER-SUPPLIED permissions straight
+    /// into the target's per-domain map, target possibly being the caller. So an
+    /// Owner could grant `Permission::All` — the Admin wildcard that
+    /// `check_entity_permission` honours before anything else — and with it the
+    /// `ConfigureSystem` that `for_role` deliberately withholds from Owner.
+    ///
+    /// Same rule as roles, since a role is only a bundle of these: grant what
+    /// you hold, never more. Admin holds `All` and `has_permission` honours it,
+    /// so an Admin may still grant anything.
+    async fn ensure_may_grant_permissions(
+        &self,
+        actor_user_id: &str,
+        granting: &[Permission],
+    ) -> Result<(), NetworkError> {
+        let actor = match self.backend_tx_manager.get_user(actor_user_id).await? {
+            Some(user) => user,
+            None => return Err(NetworkError::msg("Permission denied: unknown actor")),
+        };
         let held = Permission::for_role(&actor.role);
-        let granting = Permission::for_role(role);
         if let Some(missing) = granting
             .iter()
             .find(|p| !Permission::has_permission(&held, p))
         {
             return Err(NetworkError::msg(format!(
-                "Permission denied: {} cannot grant {}, which carries {missing:?} it does not hold",
-                actor.role, role
+                "Permission denied: {} does not hold {missing:?} and cannot grant it",
+                actor.role
             )));
         }
         Ok(())
@@ -695,6 +727,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             return Err(NetworkError::msg(
                 "Permission denied: only an admin or the owner can manage permissions",
             ));
+        }
+
+        // Add and Set hand out authority; Remove only takes it away, so only
+        // the granting operations are contained.
+        if matches!(operation, UpdateOperation::Add | UpdateOperation::Set) {
+            self.ensure_may_grant_permissions(actor_user_id, &permissions)
+                .await?;
         }
 
         // Check if domain exists (workspace or DomainNode tree storage)

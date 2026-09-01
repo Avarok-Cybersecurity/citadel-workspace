@@ -1008,3 +1008,38 @@ Regenerating the ts-rs binding rewrote **37** files. The 36 unintended ones
 `Accounts.ts` lost `import type { AccountInformation }` and kept using it. The
 local ts-rs disagrees with whatever produced the committed files. Reverted;
 committing them would have broken the TypeScript build for a one-field change.
+
+## Round 491 — the same escalation through the other door
+
+Round 487 closed the ROLE path: you cannot grant a role carrying authority you
+lack. Asking what that left reachable found the permission path, untouched.
+
+`update_member_permissions` was gated on `is_admin_or_owner` and then wrote
+**caller-supplied** `Permission` values straight into the target's per-domain
+map — the target possibly being the caller. `check_entity_permission` honours a
+per-domain `Permission::All` before anything else.
+
+So an **Owner could grant `Permission::All`** — to anyone, including
+themselves — and with it the `ConfigureSystem` that `Permission::for_role`
+deliberately withholds from Owner. A role is only a bundle of permissions, so
+closing one door and not the other closed nothing.
+
+Both now share one primitive: **grant what you hold, never more.**
+`ensure_may_grant_role` delegates to `ensure_may_grant_permissions` with the
+role's own set, so the two doors cannot drift apart — which is exactly how they
+came to differ in the first place.
+
+`Remove` is deliberately uncontained: it only takes authority away, and gating
+it would refuse an Owner tidying up a permission they never held. That decision
+is pinned by a test rather than left implicit.
+
+**Control.** Removing the containment fails exactly the three escalation tests —
+`All` to another, `All` to self, `ConfigureSystem` — and leaves all three
+permitted-grant tests green, including an Admin still granting `All` and a
+removal still succeeding.
+
+**The pattern, four rounds running.** Every one of these was found by asking what
+the previous fix made reachable, not by reading new code. Two were flaws in my
+own fixes. Authorization review answers "may this actor call this?"; reachability
+review answers "what states can they now reach?" — and every finding in this
+sequence lived in the second.
