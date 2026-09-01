@@ -1318,3 +1318,33 @@ favour of failing fast and locally. The regeneration hazard is documented in
 preflight beside the check that catches it.
 
 88 checks.
+
+## Round 499 — a pre-merge review of the NET diff, and what only that shows
+
+#292 reached 30 green with no failures, so this round reviewed what it actually
+contains before merging rather than trusting the running total.
+
+Five commits, seven files — and two of the commits are corrections of the other
+three: a wasm `cfg` regression I introduced, and a revert of my own hardening
+that turned a 1.4s failure into a 90s hang. The net diff is coherent: one shared
+error-conversion helper, its three call sites, the diagnostics, the
+non-destructive one-shot init, and the two test changes.
+
+**What the net diff showed that no commit did.** The surviving comment read:
+
+> The sender is now installed in the SYN handler above, so this is a fallback for
+> paths that reach here without one.
+
+That install was added, then reverted two commits later. The sentence was **true
+when written** and made false by a later commit on the same branch — so
+reviewing each commit in turn shows nothing wrong, and only the net diff does.
+It sat in the one place a reader goes to understand why the condition is written
+as it is, describing a mechanism that does not exist.
+
+This is the third stale-doc-asserting-current-behaviour instance of the campaign
+and the first I have caught in my own work before it shipped. The mechanism that
+caught it is worth naming: **review the net diff, not the commits.** A branch
+that corrects itself will leave prose from the version it corrected.
+
+Corrected, and a grep confirms no other reference to the withdrawn install
+survives. 50/50 `citadel_proto`.
