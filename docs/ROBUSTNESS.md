@@ -1738,3 +1738,33 @@ broadcast returning with nothing to notice it.
 Control: making the provider stop ignoring the restore fails the tagging test and
 leaves the genuine-local-edit test green — a guard that ignored every origin
 would have satisfied the first assertion while silencing real edits.
+
+## Round 511 — are the gates themselves still measuring anything?
+
+Ninety-two gates now run. This campaign has caught nine checks that measured
+nothing — including two of its own, one minutes old — so the suite deserved the
+question it keeps asking of everything else.
+
+**Executed all 92 and read what each reported.** Two say "0" and both are
+honest: `check-wire-fields-exist` reports `0 in the baseline`, which is its debt
+count and not its subject count, and `check-ci-matrices-agree` reports
+`47 integration legs (0 additional)`. **No gate is currently vacuous.**
+
+**What that does and does not establish.** It shows every gate has live subjects
+today. It does not show each gate's predicate is right — `check-group-handlers-
+are-authorized` had subjects and a wrong predicate an hour ago, matching the
+`use` import rather than the call, and would have passed this audit. Having
+something to measure and measuring the right thing are different properties, and
+only the second needs a control.
+
+**A latent risk, recorded not fixed.** Roughly half the gates have no explicit
+"found nothing → fail" guard. Today that costs nothing because every one has
+subjects; it matters the day a directory moves or a pattern goes stale, when a
+guard would report safety it never measured. Mass-adding guards on a crude regex
+would be speculative — several of the 49 scan a single fixed file where "nothing
+found" cannot arise — so this is a note about where to look, not a work item.
+
+**Also this round.** The call path was audited for the campaign's top defect
+class and is clean: no unbounded awaits, deadlines and liveness already modelled,
+and the annotation rate limiter genuinely wired into both `annotation-signal` and
+`call-manager`. Nothing to fix, said plainly.
