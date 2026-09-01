@@ -57,6 +57,41 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
         }
     }
 
+    /// Refuse granting a role that outranks the grantor.
+    ///
+    /// `add_user_to_domain` writes a caller-supplied `UserRole` and was gated
+    /// only on `AddUsers`, which `Permission::for_role` gives every Custom role
+    /// above the editor threshold. Nothing looked at WHICH role was being
+    /// granted, and the target may be the caller — so a rank-16 Custom role
+    /// could call it on itself with `UserRole::Admin` and land on
+    /// `Permission::All`. `update_workspace_member_role` is the same shape and
+    /// gained the same reach when it started admitting the Owner, who could
+    /// then mint an Admin and with it the `ConfigureSystem` an Owner is
+    /// deliberately not granted.
+    ///
+    /// The rule is containment, expressed with the ranks the type already
+    /// carries: you may grant any role you outrank or match, never one above
+    /// you. Admin is `u8::MAX`, so an Admin may still grant Admin; an Owner (20)
+    /// may grant Owner and below but not Admin; a Custom role may grant beneath
+    /// itself. Equal ranks are allowed because they escalate nothing.
+    async fn ensure_may_grant_role(
+        &self,
+        actor_user_id: &str,
+        role: &UserRole,
+    ) -> Result<(), NetworkError> {
+        let actor = match self.backend_tx_manager.get_user(actor_user_id).await? {
+            Some(user) => user,
+            None => return Err(NetworkError::msg("Permission denied: unknown actor")),
+        };
+        if actor.role.get_rank() < role.get_rank() {
+            return Err(NetworkError::msg(format!(
+                "Permission denied: {} cannot grant {}, which outranks it",
+                actor.role, role
+            )));
+        }
+        Ok(())
+    }
+
     /// Refuse anything that would leave the workspace with nobody who can
     /// administer it.
     ///
@@ -406,6 +441,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             ));
         }
 
+        // AddUsers says they may add somebody; it says nothing about the role
+        // they may hand out, and `user_id_to_add` may be the caller.
+        self.ensure_may_grant_role(admin_id, &role).await?;
+
         // If this is the workspace root, use the workspace storage
         if domain_id == crate::WORKSPACE_ROOT_ID {
             // Same lock as the connect path and update_workspace — this branch
@@ -617,6 +656,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
                 "Permission denied: only an admin or the owner can update member roles",
             ));
         }
+
+        // Same reach as `add_user_to_domain`: an Owner admitted by the gate
+        // above could otherwise grant Admin, which carries the ConfigureSystem
+        // an Owner is deliberately not granted.
+        self.ensure_may_grant_role(actor_user_id, &role).await?;
 
         // See `write_user_role` — the lock, the last-admin check and the write
         // are one unit, and this was the writer that never took the lock.

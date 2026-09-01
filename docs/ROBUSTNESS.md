@@ -834,3 +834,46 @@ ask what the widening made possible.
 leaves `an_owner_may_step_down_while_an_admin_remains` green — the fix refuses
 the lockout without refusing legitimate step-downs, which a blanket refusal
 would also have "passed".
+
+## Round 487 — AddUsers was a route to Permission::All
+
+Applying round 486's lens — *widening who may act changes which states are
+reachable* — to the **earlier** widening, the one that moved `add_user_to_domain`
+off `is_admin` and onto `Permission::AddUsers`.
+
+`add_user_to_domain` writes a **caller-supplied** `UserRole`, and nothing looked
+at which role was being handed out. `Permission::for_role` grants `AddUsers` to
+every Custom role above the editor threshold (rank > 15), and
+`create_custom_role` allows ranks 16–19 and 21–254. `user_id_to_add` may be the
+caller. So:
+
+    add_user_to_domain(me, me, WORKSPACE_ROOT_ID, UserRole::Admin)
+
+passed the gate on `AddUsers`, reached `write_user_role` — which guards only the
+last-admin invariant, never who is granting what — and set the caller's own role
+to Admin. **A rank-16 Custom role could make itself an administrator, holding
+`Permission::All`.**
+
+Before that widening the gate was `is_admin`, so only an Admin could reach it,
+and an Admin granting Admin is not an escalation. The widening created this.
+
+**And round 485 opened the same door one step lower.** Letting the Owner into
+`update_workspace_member_role` let an Owner grant Admin — and Admin carries the
+`ConfigureSystem` that `for_role` deliberately withholds from Owner. Two rounds
+running, my own change is the one that made a state reachable.
+
+**The rule is containment, in the ranks the type already carries:** grant what
+you outrank or match, never what is above you. Admin is `u8::MAX` so an Admin
+still grants Admin; an Owner (20) grants Owner and below but not Admin; a Custom
+role grants beneath itself. Equal ranks are permitted because they escalate
+nothing.
+
+**Control.** Removing the two checks fails exactly the three escalation tests —
+so the exploit was real, not theoretical — while all three permitted-grant tests
+stay green. A rule that refused everything would have satisfied the refusals
+alone, which is why the permitted grants are asserted beside them.
+
+**What to take from three rounds of this.** Each was found by asking what the
+*previous* fix made reachable, not by reading new code. The authorization review
+and the reachability review are different reviews, and the second one is where
+these lived.
