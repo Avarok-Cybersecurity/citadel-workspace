@@ -13,10 +13,20 @@ import { execSync } from 'node:child_process';
 const ROOT = 'citadel-internal-service/citadel-internal-service/src';
 const PRUNE = 'prune_cid_scoped_state';
 // A teardown is one of these; each must have a prune within WINDOW lines.
+//
+// The first pattern used to require the CHAINED form,
+// `server_connection_map.write().remove(&cid)`, and to name the binding `cid`.
+// Three real removals bind the write guard to a shadowing local first —
+// `let mut server_connection_map = this.server_connection_map.write();` and then
+// `server_connection_map.remove(&session_cid)` — so the gate could not see them
+// and reported "all 5 teardown sites prune" while three did not. It was matching
+// a spelling, not a removal.
 const TEARDOWN = [
-  /server_connection_map\s*\.write\(\)\s*\.remove\(&cid\)/,
+  /\bserver_connection_map\b[\s\S]*?\.remove\s*\(/,
   /\bcleanup_state\s*\(/,
 ];
+// Counted in CODE lines, not raw ones. A comment explaining why the prune is
+// there must not push it out of range — that would make the gate reward silence.
 const WINDOW = 6;
 
 let files;
@@ -30,18 +40,26 @@ try {
 const problems = [];
 let checked = 0;
 for (const file of files) {
-  const lines = readFileSync(file, 'utf8').split('\n');
-  lines.forEach((line, i) => {
-    // Comments and doc-comments describe teardown; they do not perform it.
-    const code = line.replace(/\/\/.*$/, '').trim();
-    if (!code || code.startsWith('*')) return;
-    if (/^(pub\s+)?fn\s+cleanup_state/.test(code)) return; // the definition
-    if (!TEARDOWN.some((re) => re.test(code))) return;
+  const raw = readFileSync(file, 'utf8').split('\n');
+  // Comments and doc-comments describe teardown; they do not perform it — and
+  // they do not count toward the distance between a removal and its prune.
+  const code = [];
+  raw.forEach((line, i) => {
+    const stripped = line.replace(/\/\/.*$/, '').trim();
+    if (!stripped || stripped.startsWith('*')) return;
+    code.push({ line: i + 1, text: stripped });
+  });
+
+  code.forEach(({ line, text }, k) => {
+    if (/^(pub\s+)?fn\s+cleanup_state/.test(text)) return; // the definition
+    if (!TEARDOWN.some((re) => re.test(text))) return;
     checked++;
-    const from = Math.max(0, i - WINDOW);
-    const near = lines.slice(from, i + WINDOW + 1).join('\n');
+    const near = code
+      .slice(Math.max(0, k - WINDOW), k + WINDOW + 1)
+      .map((c) => c.text)
+      .join('\n');
     if (!near.includes(PRUNE)) {
-      problems.push({ file, line: i + 1, code: code.slice(0, 90) });
+      problems.push({ file, line, code: text.slice(0, 90) });
     }
   });
 }

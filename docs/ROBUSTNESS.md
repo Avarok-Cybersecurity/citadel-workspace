@@ -2205,3 +2205,42 @@ load — the map version's actual failure — fails only
 
 `the_stripe_function_distributes` exists because every other test in that module
 passes with a constant stripe.
+
+## Round 521 — four gates of mine that could not fail
+
+The fleet's `tests-that-cannot-fail` dimension asked one question of every gate:
+*name the one-line change that turns this red.* Four could not answer.
+
+| gate | what it was actually measuring |
+|---|---|
+| `check-session-teardown-prunes-cid-state` | a spelling. It matched only the chained `map.write().remove(&cid)`; three real removals bind the guard to a local first, so it reported "all 5 sites prune" while three did not |
+| `check-group-handlers-are-authorized` | *some* handler nearby asks. Its 40-line window ran past the end of the arm, so deleting one handler's gate could leave it green on its neighbour's |
+| `check-admin-promotions-are-gated` | that the function *knows about* the gate. Any mention of a gate token in 60 raw lines counted, so `if outcome == Promote` could become `if true` and stay green on an earlier, unrelated test of the same condition |
+| `check-wasm-matches-its-source` | whether somebody typed a hash. `sync-wasm-clients.sh` stamped `$DEST1` — untracked, inside the submodule — and never the tracked copy the gate reads |
+
+Each is now measured, and each control is the exact mutation the fleet used:
+
+- **Teardown**: the window counts CODE lines, so a comment explaining a prune no
+  longer pushes it out of range — a gate that rewards silence is the wrong
+  incentive. It now sees 8 sites, up from 5, and removing a prune at one of the
+  three newly visible sites fails it.
+- **Group handlers**: the window is cut at the next arm head. Deleting
+  `GetGroupMessages`' gate block — green before — now fails.
+- **Admin promotions**: the gate must CONTROL the assignment, established by
+  brace depth: an enclosing conditional whose block is still open, or an
+  `if <gate> { return }` guard clause. Neutering the guard *at* each promotion,
+  leaving the decoy mentions intact, now fails both sites.
+- **WASM**: the sync script stamps the tracked copy. Before, a genuine rebuild
+  left the stamp unchanged and the gate failed telling you to run the script you
+  had just run; the only way out was `echo <hash> >`, which is also how you would
+  turn it green over a stale binary.
+
+The WASM one is the sharpest. Its own header already claimed an honest limit
+("cannot retroactively prove…") — and the limit it *had* was that the only way
+to satisfy it was the same action that defeats it. A gate whose green state is
+produced by hand is a gate that measures a hand.
+
+Three of these four were written this campaign, by me, with controls that passed.
+The controls were on the FIX; the gate itself was never mutated. That is the
+habit this round adds: run the control against the gate, not only against the
+code it guards.

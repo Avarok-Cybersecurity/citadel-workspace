@@ -26,7 +26,16 @@ const GROUP_REQUEST = /WorkspaceProtocolRequest::((?:Send|Edit|Delete|Get)(?:Gro
 const GATE = /\bauthorize_group_(?:read|write)\s*\(/;
 // How far into an arm the gate may sit. The gates run first in every current
 // handler; this is slack, not licence.
+//
+// The window is also cut at the NEXT arm, which it was not. A 40-line slice from
+// one arm spilled into the following one, so deleting a handler's gate could
+// leave it green on its neighbour's — a control confirmed exactly that for
+// GetGroupMessages, whose gate deletion shifted GetThreadMessages' own call from
+// line 930 to 921, i.e. into the window. The gate was reading "some group
+// handler nearby asks", which is not the property.
 const WINDOW = 40;
+// Any arm head, not just a group one: the boundary is where THIS arm ends.
+const ANY_ARM = /WorkspaceProtocolRequest::[A-Za-z]+\s*[{(]/;
 
 let lines;
 try {
@@ -44,7 +53,12 @@ lines.forEach((line, i) => {
   const m = code.match(GROUP_REQUEST);
   if (!m) return;
   checked++;
-  const arm = lines.slice(i, i + WINDOW).filter((l) => !/^\s*use\s/.test(l)).join('\n');
+  const slice = lines.slice(i + 1, i + WINDOW);
+  const nextArm = slice.findIndex((l) => ANY_ARM.test(l.replace(/\/\/.*$/, '')));
+  const arm = slice
+    .slice(0, nextArm === -1 ? slice.length : nextArm)
+    .filter((l) => !/^\s*use\s/.test(l))
+    .join('\n');
   if (!GATE.test(arm)) problems.push({ request: m[1], line: i + 1 });
 });
 

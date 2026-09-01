@@ -33,6 +33,55 @@ const GATES = [
 // How far above the assignment the gate may sit. Generous, because the gate is
 // often an early `return` at the top of the function.
 const WINDOW = 60;
+// The gate must CONTROL the assignment, not merely appear near it.
+//
+// This used to ask whether a gate name appeared anywhere in the 60 lines above,
+// over raw lines including comments. Two of the three promotion sites mention
+// their own gate token more than once — `async_kernel.rs` tests
+// `outcome == FirstMemberOutcome::Promote` twice, and the FIRST block closes
+// twenty lines before the promotion. So `if outcome == ...Promote {` at the
+// promotion could be changed to `if true {`, leaving every first-connecting
+// account a global Admin, and this gate stayed green on the earlier, unrelated
+// test. It was reading "this function knows about the gate", which is not the
+// property.
+//
+// Two shapes count, and only these:
+//   - an ENCLOSING conditional: its block is still open where the assignment is
+//   - a guard CLAUSE: `if <gate> { return ... }` above it
+// Both are established by brace depth, not proximity.
+const BRANCHES = /\b(if|match|while)\b/;
+
+/// The conditionals whose blocks are open at `target`, outermost last.
+///
+/// Walks up from the assignment tracking brace depth: a line that leaves the
+/// depth below where we started is a block we are inside.
+function enclosingConditionals(lines, target) {
+  const out = [];
+  let depth = 0;
+  for (let i = target - 1; i >= 0; i--) {
+    const code = lines[i].replace(/\/\/.*$/, '');
+    depth += (code.match(/\}/g) || []).length - (code.match(/\{/g) || []).length;
+    if (depth < 0) {
+      out.push(code);
+      depth = 0;
+    }
+  }
+  return out;
+}
+
+/// `if <gate> { return ... }` — a refusal above the assignment rather than a
+/// block around it. Kept to the window, since a guard clause far enough away is
+/// no longer obviously about this write.
+function guardClauses(lines, target, window) {
+  const out = [];
+  for (let i = Math.max(0, target - window); i < target; i++) {
+    const code = lines[i].replace(/\/\/.*$/, '');
+    if (!BRANCHES.test(code)) continue;
+    const body = lines.slice(i, Math.min(i + 4, target)).join('\n');
+    if (/\breturn\b/.test(body)) out.push(code);
+  }
+  return out;
+}
 
 let files;
 try {
@@ -53,9 +102,11 @@ for (const file of files) {
     // one; those are covered by the gate on whatever writes the record.
     if (/^\s*role:/.test(code)) return;
     checked++;
-    const from = Math.max(0, i - WINDOW);
-    const near = lines.slice(from, i + 1).join('\n');
-    if (!GATES.some((g) => near.includes(g))) {
+    const controlling = [
+      ...enclosingConditionals(lines, i),
+      ...guardClauses(lines, i, WINDOW),
+    ].filter((l) => BRANCHES.test(l));
+    if (!GATES.some((g) => controlling.some((l) => l.includes(g)))) {
       problems.push({ file, line: i + 1, code: code.trim().slice(0, 80) });
     }
   });

@@ -18,6 +18,16 @@
 //
 // Honest limit: this pins the relationship FROM NOW ON. It cannot retroactively
 // prove the binary committed before it was built from the source beside it.
+//
+// Second honest limit, and the reason this stamp is written by
+// sync-wasm-clients.sh rather than by hand: the script used to stamp only
+// $DEST1 (an UNTRACKED path inside the submodule) and never this tracked copy.
+// So a genuine rebuild left the stamp unchanged, the gate failed telling you to
+// run the script you had just run, and the only way out was to echo the hash in
+// yourself — which is also precisely how you would turn this green over a stale
+// binary. The check measured whether somebody typed a hash. It now measures a
+// rebuild, because the only thing that writes the stamp is the thing that
+// produces the binary beside it.
 import { readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 

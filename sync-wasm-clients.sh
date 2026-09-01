@@ -254,6 +254,20 @@ if [ -d "$DEST3/pkg" ] || mkdir -p "$DEST3/pkg"; then
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.wasm "$DEST3/pkg/"
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.js "$DEST3/pkg/"
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.d.ts "$DEST3/pkg/"
+
+    # Stamp the TRACKED copy. This is the one check-wasm-matches-its-source
+    # reads, and it was the one copy this script never stamped — the stamp went
+    # to $DEST1, an untracked path inside the submodule. So a rebuild left the
+    # tracked stamp unchanged and the gate failed telling you to run the script
+    # you had just run; the only way out was to echo the hash in by hand, which
+    # is also exactly how you would make the gate green over a STALE binary.
+    # The check measured whether somebody typed a hash, not whether the binary
+    # was rebuilt.
+    if git -C "$INTERNAL_SERVICE_ROOT" rev-parse "HEAD:citadel-internal-service-wasm-client/src" > "$DEST3/pkg/.wasm-source-tree" 2>/dev/null; then
+        echo "  Stamped $DEST3/pkg/.wasm-source-tree"
+    else
+        echo "  WARNING: could not stamp $DEST3/pkg; check-wasm-matches-its-source will fail"
+    fi
 fi
 
 # Step 5: Copy TypeScript types if they were generated
