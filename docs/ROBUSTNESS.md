@@ -1116,3 +1116,50 @@ reporting that all zero promotions are safe. The second is the failure mode that
 has bitten this campaign seven times.
 
 85 checks now.
+
+## Round 494 — the 3-peer hang, finally explained
+
+`test_peer_to_peer_file_transfer::case_2` has timed out at 180s intermittently
+for the whole campaign. Four escalating local reproductions failed to trigger it,
+and it was recorded as characterised-but-unexplained. A fresh CI failure gave up
+the answer, because the log localises it exactly: the last line before the
+timeout is `test_common.rs` **AB2.5**, and the hang is the receive that follows.
+
+```rust
+tx.unbounded_send(b"Hello, world!").unwrap();
+assert_eq!(rx.next().await.unwrap().as_ref(), b"Hello, world!");  // blocks forever
+```
+
+**The assertion required delivery UDP does not promise.** Two datagrams sent,
+two receives awaited, all unbounded. One lost datagram blocks `rx.next()` for the
+rest of the test.
+
+And the ratio explains the pattern that had looked arbitrary: every connected
+PAIR runs this assertion, so exposure scales with peer count. Three peers is
+three pairs against one — which is exactly why case_2 fails and case_1 passes in
+seconds.
+
+**Two changes, each with its own control**, a dropped datagram simulated by
+skipping the first send of each exchange:
+
+| resend | active grace | drop | case_2 |
+|---|---|---|---|
+| no | yes | yes | FAIL — "no UDP datagram came back" |
+| yes | no | yes | FAIL at 32s |
+| yes | yes | yes | **PASS at 5.8s** |
+| yes | yes | no | PASS |
+
+The second change is the one I would not have found by reasoning. Resending
+alone fixed the 2-peer case and **not** the 3-peer one, because the exchange is
+mutual: a peer that finishes first stopped sending and slept, stranding a peer
+whose datagram was lost. A peer holding two connections finishes one before the
+other, which is why three peers exposed it. The grace period now keeps sending
+rather than sleeping through.
+
+The bound also converts a silent 180s hang into a failure that names what did not
+happen — which is what made this diagnosable at all.
+
+**On the earlier rounds.** Round 488 hunted a *different* intermittent failure in
+this suite and did not find it; that one is still open, and its diagnostics
+remain armed. This is a second, distinct flake in the same file, and the two
+should not be conflated.
