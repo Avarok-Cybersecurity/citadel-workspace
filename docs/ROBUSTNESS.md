@@ -317,3 +317,41 @@ rather than a correctness defect — a `sleep()` followed by a real assertion is
 slow, not false-passing — and the distinct footgun the record warns about
 (`isVisible()` never waiting) is a separate thing, now guarded where it gated a
 whole test. Recorded as outstanding rather than quietly dropped.
+
+## The reconnection wedge did not recur on a fully-fixed base
+
+PR #288 sits on a master containing all three pieces: #289 (waking rekey waiters
+when the process ends), #291 (bounding `disconnect()`'s unbounded
+`subscription.next()`), and #290 (making the 134 phase markers survive CI's
+`RUST_LOG=citadel=info`). Its `coverage` job — the one that wedged before — now
+reports:
+
+    PASS [0.616s] citadel_sdk::reconnection_c2s
+    PASS [1.146s] citadel_sdk::reconnection_both_c2s
+    PASS [1.144s] citadel_sdk::reconnection_one_c2s
+    PASS [0.928s] citadel_sdk::reconnection_p2p_only
+    PASS [1.115s] citadel_sdk::reconnection_p2p_one_c2s
+    PASS [0.029s] citadel_sdk::reconnection_markers_reach_ci
+
+All five at normal durations, against 240.1s timeouts in six prior observations.
+
+**This is a signal, not proof.** The flake is intermittent, and one clean run is
+exactly the evidence that misled this record earlier — the entry asserting #289
+had fixed it rested on a single passing `coverage` job and was wrong. What has
+changed since is that the cause is now localised (the markers placed the hang
+inside `disconnect()`), the unbounded wait there is bounded, and a recurrence
+would name its phase rather than leaving four minutes of silence. The claim here
+is "did not recur", not "is fixed".
+
+Zero phase markers appear in that log, which is expected: nextest dumps captured
+output only for FAILING tests.
+
+**A different failure in the same job.** `prefabs::client::peer_connection::
+tests::test_peer_to_peer_file_transfer::case_2` hit its 180s rstest timeout.
+Unrelated to #288's diff, which is `#[cfg(test)]` in citadel_crypt, and passing
+on master's recent runs. Under `cargo llvm-cov` instrumentation everything runs
+2-5x slower — the reason `ratchet_manager` already carries
+`#[cfg(coverage)] const ROUNDS: usize = 20;` against 100 otherwise — so a fixed
+180s budget under coverage is a plausible cause, and an intermittent hang is
+another. Recorded without choosing between them, because nothing here
+distinguishes them yet.
