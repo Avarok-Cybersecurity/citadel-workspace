@@ -171,6 +171,17 @@ const CHECKS = [
   // checkout is what fails.
   ['submodule pointers pushed', 'node', ['scripts/check-submodule-pointers-pushed.mjs'], ROOT],
   ['event listeners have emitters', 'node', ['scripts/check-event-listeners-have-emitters.mjs'], UI],
+  ['generated artefacts present', 'node', ['scripts/check-generated-artefacts-present.mjs'], ROOT],
+  // Ordered before typecheck deliberately: the three checks below all consume
+  // generated artefacts, and without them they fail in a way that reads as a
+  // defect in the source rather than a missing build step.
+  //
+  // A fresh clone running `npm run preflight` used to get eight errors of the
+  // form "Property 'id' does not exist on type 'GroupMessage'" plus "Cannot
+  // find module 'citadel-workspace-client-ts'". Both are true statements about
+  // an unbuilt tree and neither says so. CLAUDE.md documents the order --
+  // typescript-client (WASM types), then citadel-workspace-client-ts, then
+  // typecheck -- and this makes skipping it say its own name.
   ['typecheck', 'npx', ['tsc', '-p', 'tsconfig.app.json', '--noEmit'], UI],
   ['eslint', 'npx', ['eslint', '.', '--max-warnings', '0'], UI],
   ['unit tests', 'npx', ['vitest', 'run'], UI],
