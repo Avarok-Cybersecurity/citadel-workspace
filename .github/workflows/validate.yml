@@ -205,6 +205,9 @@ jobs:
         run: node scripts/check-hover-only-controls.mjs
       - name: Check listener fan-outs isolate their subscribers
         run: node scripts/check-listener-fanouts-are-isolated.mjs
+
+      - name: Session teardown prunes CID-keyed kernel state
+        run: node scripts/check-session-teardown-prunes-cid-state.mjs
       - name: Check every integration spec is named by a test script
         run: node scripts/check-every-integration-spec-has-a-runner.mjs
       - name: Check every value production requires is documented

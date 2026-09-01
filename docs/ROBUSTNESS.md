@@ -467,3 +467,44 @@ nothing — and the first where the thing it caught was *my own fix being dead*
 rather than the control being misplanted. A retry loop that never executes is
 indistinguishable from a working one unless you make the error it keys on
 actually occur.
+
+## Round 478 — three kernel maps that nothing ever pruned
+
+Keyed by a CID pair and living for the life of the process:
+`pending_peer_connect_signals`, `pending_peer_registrations`,
+`peer_username_cache`. Entries go in when a peer request arrives and come out
+only when the local user explicitly answers it. Nothing removed them at
+teardown — not logout, not the stale-session path in `connect.rs`, not
+deregistration.
+
+So an **ignored** peer request — the ordinary case — stayed forever.
+
+The leak is the lesser half. A CID is permanent per account, so an entry
+survives logout and reconnection, and can later be matched against a request
+the sender abandoned long ago. It survived deregistration too: the account is
+deleted, its pending signals are still in memory.
+
+`prune_cid_scoped_state(cid, peer_cid)` separates the two teardowns, which are
+genuinely different. A session teardown kills every entry mentioning the CID on
+**either** side of the key — as the local session, and as the peer some other
+session holds a request from. A P2P-only disconnect leaves the session alive,
+so only that pair goes; pruning by CID there would discard live requests from
+unrelated peers. Wired at all five teardown sites.
+
+**Controls.** Dropping the `|| key.1 == cid` side failed only the session test;
+replacing pair scoping with CID scoping failed only the P2P test. Each control
+broke exactly one test, which is what shows the three are testing different
+properties rather than one property three times. Honest limit:
+`nothing_survives_a_deregistration` does **not** discriminate the both-sides
+property — it passed under the first control — so it is the weakest of the
+three.
+
+**The wiring, not the helper, is what rots.** Unit tests prove
+`prune_cid_scoped_state`; they say nothing about whether the five call sites
+still call it. `check-session-teardown-prunes-cid-state.mjs` requires every
+site that removes a session (or calls `cleanup_state`) to prune within six
+lines, and fails loudly if it matches *no* sites at all — a gate whose patterns
+have gone stale reports safety it never measured. Control: removing the
+deregister prune took it from "all 5 sites" to exit 1 naming that line.
+
+84 checks now, all green.
