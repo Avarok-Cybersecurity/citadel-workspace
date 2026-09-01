@@ -643,3 +643,45 @@ the registration path wholesale, only for responses to declines.
 **The protocol smell stands and is not fixed here.** `PeerRegisterSuccess`
 meaning both "they accepted" and "your refusal was delivered" is the root cause;
 this closes the consequence. Recorded as open.
+
+## Round 482 — auditing the debt lists themselves; one real finding, four correctly tolerated
+
+Round 481 came out of the guards' own debt lists rather than a fresh sweep, so
+this round audited them properly. Sixteen gates carry an allowlist or baseline.
+
+**The one real finding, and it is open.** `ensure_messenger_open` documents its
+own ambiguity: *"Returns true if the messenger was just opened, false if already
+open **or being opened by another task**."* One `false` means two states, and
+only one of them is ready. `message-send-operations.ts` awaits it at two sites,
+discards the result, and sends immediately — so a send racing a concurrent open
+goes out against a handle that is not there yet.
+
+Bounded, though: `send_p2p_message_reliable` returns
+`"No messaging handle found for local CID"`. It is a spurious, loud send failure
+under a narrow race, not silent message loss. The fix belongs in the WASM
+client — `ensure_messenger_open` should await an in-flight open rather than
+report `false` — and that requires rebuilding committed WASM artefacts, which
+this session must not do. Recorded rather than half-fixed. **Open.**
+
+**Four entries checked and correctly tolerated.** Worth writing down, because
+"the allowlist is accurate" is a finding and the next reader should not re-walk
+them:
+
+- `ConnectLoadingModal.errorMessage` — inert because `setConnectStatus("error")`
+  is never called. On failure the catch closes the modal and raises a
+  destructive toast with a friendly message. The dead prop is the remnant of a
+  deliberate removal: "the third copy of a message two better channels were
+  carrying".
+- `LiveDocumentView.onSave` — already guarded, with the reasoning in place. The
+  durable write lives in `useDocumentPersistence`; the callback must not stamp
+  "Last saved" when no caller wants the content.
+- `p2p:registration-declined` — fires on the DECLINER's side; the pending list
+  re-reads from the store, so nothing is missed.
+- The `ensureMessengerOpen` baseline entries are the finding above, not a
+  false positive.
+
+**What this round says about the campaign.** Four of five leads were debt that
+had already been reasoned about and correctly left alone. That is the healthy
+outcome for a debt list, and it is evidence the earlier rounds' judgement calls
+held up — but it also means the allowlists are close to exhausted as a source of
+new findings.
