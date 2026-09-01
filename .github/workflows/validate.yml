@@ -947,7 +947,31 @@ jobs:
         # way. Ten minutes is generous for a chromium download and short
         # enough that two retries still fit inside the job.
         run: |
+          # Wait for apt before asking playwright to use it.
+          #
+          # `--with-deps` shells out to apt-get, and the runner image's
+          # unattended-upgrades holds /var/lib/dpkg/lock-frontend for minutes
+          # after boot. Every attempt then dies on
+          #   E: Could not get lock /var/lib/dpkg/lock-frontend.
+          #      It is held by process NNNN (apt-get)
+          # with exit code 100 — which is not a download failure, so retrying
+          # into it does not help. The existing 30s/45s backoff was not the right
+          # shape: the wait needed is "until the lock is free", not a guess.
+          wait_for_apt_lock() {
+            command -v fuser >/dev/null 2>&1 || { sleep 30; return 0; }
+            waited=0
+            while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+              if [ "$waited" -ge 300 ]; then
+                echo "dpkg lock still held after 5m; attempting anyway"
+                return 0
+              fi
+              echo "waiting for the dpkg lock (${waited}s elapsed)"
+              sleep 10
+              waited=$((waited + 10))
+            done
+          }
           attempt=1
+          wait_for_apt_lock
           until timeout 600 npx playwright install chromium --with-deps; do
             if [ "$attempt" -ge 3 ]; then
               echo "playwright install still failing after 3 attempts"
@@ -956,6 +980,7 @@ jobs:
             echo "playwright install failed or stalled (attempt $attempt/3); retrying"
             attempt=$((attempt + 1))
             sleep $((attempt * 15))
+            wait_for_apt_lock
           done
       - name: Symlink workspace deps for integration-tests build
         # `tsc` in integration-tests resolves modules with NodeNext
@@ -1122,7 +1147,31 @@ jobs:
         # way. Ten minutes is generous for a chromium download and short
         # enough that two retries still fit inside the job.
         run: |
+          # Wait for apt before asking playwright to use it.
+          #
+          # `--with-deps` shells out to apt-get, and the runner image's
+          # unattended-upgrades holds /var/lib/dpkg/lock-frontend for minutes
+          # after boot. Every attempt then dies on
+          #   E: Could not get lock /var/lib/dpkg/lock-frontend.
+          #      It is held by process NNNN (apt-get)
+          # with exit code 100 — which is not a download failure, so retrying
+          # into it does not help. The existing 30s/45s backoff was not the right
+          # shape: the wait needed is "until the lock is free", not a guess.
+          wait_for_apt_lock() {
+            command -v fuser >/dev/null 2>&1 || { sleep 30; return 0; }
+            waited=0
+            while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+              if [ "$waited" -ge 300 ]; then
+                echo "dpkg lock still held after 5m; attempting anyway"
+                return 0
+              fi
+              echo "waiting for the dpkg lock (${waited}s elapsed)"
+              sleep 10
+              waited=$((waited + 10))
+            done
+          }
           attempt=1
+          wait_for_apt_lock
           until timeout 600 npx playwright install chromium --with-deps; do
             if [ "$attempt" -ge 3 ]; then
               echo "playwright install still failing after 3 attempts"
@@ -1131,6 +1180,7 @@ jobs:
             echo "playwright install failed or stalled (attempt $attempt/3); retrying"
             attempt=$((attempt + 1))
             sleep $((attempt * 15))
+            wait_for_apt_lock
           done
       - name: Symlink workspace deps for integration-tests
         run: |
@@ -1641,7 +1691,26 @@ jobs:
         # way. Ten minutes is generous for a chromium download and short
         # enough that two retries still fit inside the job.
         run: |
+          # `--with-deps` shells out to apt-get, and unattended-upgrades holds
+          # /var/lib/dpkg/lock-frontend for minutes after boot, so every attempt
+          # dies with exit 100. Retrying into a held lock does not help; waiting
+          # for the lock does.
+          wait_for_apt_lock() {
+            command -v fuser >/dev/null 2>&1 || { sleep 30; return 0; }
+            waited=0
+            while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+              if [ "$waited" -ge 300 ]; then
+                echo "dpkg lock still held after 5m; attempting anyway"
+                return 0
+              fi
+              echo "waiting for the dpkg lock (${waited}s elapsed)"
+              sleep 10
+              waited=$((waited + 10))
+            done
+          }
+          wait_for_apt_lock
           attempt=1
+          wait_for_apt_lock
           until timeout 600 npx playwright install --with-deps chromium; do
             if [ "$attempt" -ge 3 ]; then
               echo "playwright install still failing after 3 attempts"
@@ -1650,6 +1719,7 @@ jobs:
             echo "playwright install failed or stalled (attempt $attempt/3); retrying"
             attempt=$((attempt + 1))
             sleep $((attempt * 15))
+            wait_for_apt_lock
           done
         working-directory: citadel-workspaces
 
