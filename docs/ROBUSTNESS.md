@@ -561,3 +561,43 @@ CID a fresh budget.
 **Stale prose swept too.** Three comments restated the cap's value ("100k") and
 one still called it a high-water mark. The values are gone from prose entirely
 rather than updated — a duplicated constant is a stale constant eventually.
+
+## Round 480 — two dead listeners closed, and a guard I duplicated
+
+Swept for the campaign's most productive shape — one end of a mechanism built,
+the other never connected — across the UI's event bus. `eventEmitter.on` takes
+`event: string`, so nothing in the type system can tell a listener from a
+listener that will never run.
+
+Two genuine orphans of 46 subscribed names:
+
+- `group:member-kicked` — could never fire. `MemberState` carries only
+  `EnteredGroup` and `LeftGroup`, so a kick arrives as `LeftGroup` like any
+  other departure. Kicks were always handled, by the member-left path; the extra
+  subscription only made it look as though they needed their own.
+- `instance:registry-update` — a second, dead way to write `knownInstances`,
+  which is really maintained through `registerInstance()` from
+  `channel-messaging` and `route-by-request-id`.
+
+Neither is a broken feature. Both are removed, along with the doc comments that
+described them as live handlers.
+
+**I wrote a gate that already existed.** `check-event-listeners-have-emitters.mjs`
+does exactly this, better — it understands the `workspaceEvents.on*Event` and
+`this.listen` facades that mine did not, and both orphans were already on its
+`RECORDED_DEAD` list from rounds #206 and #230. So this was a rediscovery of
+tolerated debt, not a find. My duplicate is deleted. Third time this session I
+have written a guard that existed elsewhere; the check is to grep for the
+*mechanism* before building, not the symptom.
+
+What caught me was the existing guard's best feature: it fails on a **vanished**
+allowlist entry — a name recorded as dead that nothing subscribes to any more.
+That is what stops an allowlist outliving the thing it excused and silently
+covering the next dead listener. It is the same idea as a gate that fails when
+it matches nothing.
+
+**Correction to round #230.** Its entry said `knownInstances` "is always empty".
+It is not: `registerInstance` populates it from three live call sites and
+`findInstanceByCid` drives CID routing off it. The listener was redundant, not
+load-bearing — a different finding with a different risk, and the note would
+have sent the next reader down the wrong path.
