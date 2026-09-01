@@ -9,11 +9,12 @@
 //! `is_admin` is `role == Admin` exactly, and `Permission::for_role` gives an
 //! Owner everything except `All` and `ConfigureSystem`.
 //!
-//! These gates admit Admin and Owner and nobody else. Assigning a role is a
-//! path to Admin, so widening them to every holder of a member-management
-//! permission would let a Custom role above editor rank mint an administrator;
-//! that is an authorization-policy change and is deliberately not made here.
-//! The refusals below pin the narrower behaviour actually implemented.
+//! These gates admit Admin and Owner and no one else — a policy choice, not the
+//! only barrier. When this was written it WAS the only barrier: widening them
+//! would then have let a holder of a member-management permission mint an Admin.
+//! `no_one_grants_a_role_above_their_own` and `no_one_grants_a_permission_they_lack`
+//! closed that independently, so the refusals below pin the narrower behaviour
+//! actually implemented, not a defence the escalation still depends on.
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
 use citadel_workspace_types::structs::UserRole;

@@ -45,11 +45,18 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
     /// a grant that enforcement then refused"); it was fixed there and nowhere
     /// else.
     ///
-    /// Deliberately narrower than asking the permission. Assigning roles can
-    /// promote someone to Admin, so widening it to every holder of a
-    /// member-management permission would let a Custom role above editor rank
-    /// mint an administrator. That is an authorization-policy change and is
-    /// recorded as an open question rather than made here.
+    /// Deliberately narrower than asking the permission — as a policy choice,
+    /// not as the only thing standing between a Custom role and an
+    /// administrator. It was written when that WAS the only thing: widening the
+    /// gate would then have let a holder of a member-management permission mint
+    /// an Admin.
+    ///
+    /// `ensure_may_grant_role` and `ensure_may_grant_permissions` closed that
+    /// independently — nobody grants authority they do not hold, whichever gate
+    /// admitted them — so the argument for keeping this narrow is now the
+    /// smaller one: role assignment is an administrative act, and Admin and
+    /// Owner are who the product means by administrator. Whether to widen it
+    /// remains open, and is no longer blocked on the escalation.
     pub async fn is_admin_or_owner(&self, user_id: &str) -> Result<bool, NetworkError> {
         match self.backend_tx_manager.get_user(user_id).await? {
             Some(user) => Ok(matches!(user.role, UserRole::Admin | UserRole::Owner)),

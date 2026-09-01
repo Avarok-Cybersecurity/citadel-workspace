@@ -1389,3 +1389,39 @@ says why it is left standing.
 **Two rounds, two PRs, the same finding.** Per-commit review cannot see this
 class: every commit is internally consistent, and the falsifying edit is
 somewhere else in the same branch. The reviewable artefact is the net diff.
+
+## Round 501 — a justification that its own later fix had retired
+
+Third application of the net-diff review, and the third finding of the same
+class — this time not a wrong description of behaviour, but a **stale reason**.
+
+`is_admin_or_owner` explained why it stays narrow:
+
+> widening it to every holder of a member-management permission would let a
+> Custom role above editor rank mint an administrator. That is an
+> authorization-policy change and is recorded as an open question rather than
+> made here.
+
+True when written. Rounds 490 and 491 then added `ensure_may_grant_role` and
+`ensure_may_grant_permissions`: **nobody grants authority they do not hold,
+whichever gate admitted them.** So widening this gate no longer lets anyone mint
+an administrator, and the stated reason for keeping it narrow had been retired
+by my own later commits, in the same branch.
+
+This is the more dangerous variant. A wrong description of behaviour is caught
+the moment someone tests it. A stale *reason* is only ever read — and it points
+in two wrong directions at once: someone might refuse a reasonable widening on a
+risk that no longer exists, or widen it and conclude the escalation was never
+real.
+
+Corrected in both places that carried it, the function's doc and
+`owner_gates_admit_the_owner_test`'s header. The gate stays Admin-and-Owner; the
+argument is now the smaller true one — role assignment is an administrative act
+— and the question of widening is explicitly no longer blocked on the
+escalation.
+
+**Three rounds, three findings, one mechanism.** All three were prose made false
+by a later commit on the same branch: a comment describing a reverted install, a
+title stating a replaced rule, and now a justification retired by its own
+follow-up. None is visible per commit. The net diff is the reviewable artefact,
+and reasons rot as readily as descriptions.
