@@ -541,4 +541,23 @@ either evicting a partially-spent bucket — which hands its owner a fresh budge
 turning memory pressure into a rate-limit bypass where flooding new CIDs resets
 a throttled one — or refusing new CIDs under pressure, which is fail-closed and
 denies service to legitimate first-time callers. That is an availability
-decision on a security control. Open, and put to the user.
+decision on a security control. Put to the user, who chose the hard ceiling and
+asked for the cap to be raised alongside it.
+
+**Resolved.** New CIDs are refused once the sweep frees nothing; established
+buckets keep their exact budgets. The same measurement now returns **3** against
+a cap of 3, where it returned 10_000. The cap moved 100_000 -> 1_000_000, sized
+from the measured 32-byte entry: with hashbrown's control byte and ~87.5% load
+factor that is ~40 bytes live, so 1M is ~40 MB against the old ~4 MB. Now that
+the number can refuse a real caller it is an availability budget, so it is
+computed rather than picked.
+
+**Controls.** Deleting the refusal fails both new tests. Replacing it with LRU
+eviction — the alternative I advised against — *also* fails both, which is the
+point: `pressure_from_new_cids_cannot_reset_a_throttled_bucket` proves the bypass
+is real, not theoretical. A flood of unseen CIDs would have handed a throttled
+CID a fresh budget.
+
+**Stale prose swept too.** Three comments restated the cap's value ("100k") and
+one still called it a high-water mark. The values are gone from prose entirely
+rather than updated — a duplicated constant is a stale constant eventually.
