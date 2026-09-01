@@ -1662,3 +1662,46 @@ lines.
 
 That is the eighth control this campaign has run that found the checker rather
 than the code, and the second where the checker was mine and minutes old.
+
+## Round 509 — the dpkg lock, and two blocks that hid behind argument order
+
+#79's `test:crud` failed all three `playwright install` attempts. Not a download
+failure, and the log says so exactly:
+
+    E: Could not get lock /var/lib/dpkg/lock-frontend.
+       It is held by process 2923 (apt-get)
+    Error: Installation process exited with code: 100
+
+`--with-deps` shells out to apt-get, and the runner image's unattended-upgrades
+holds that lock for minutes after boot.
+
+**The retry was the right instinct with the wrong shape.** It backs off 30s then
+45s and re-attempts into a lock that is still held, so all three attempts die
+identically. Seventy-five seconds of guessing never covers a multi-minute hold.
+The wait needed is *until the lock is free*, not an estimate of how long that
+takes.
+
+**Two of six blocks hid from the first pass.** They spell the arguments
+`--with-deps chromium` rather than `chromium --with-deps`, so a text anchor
+matched four of six and reported success — a partial fix that would have left a
+different job red and read as a new flake. There is a gate requiring these be
+bounded *precisely because this class of fix failed to propagate once before*,
+and argument order is how it nearly escaped again.
+
+What caught it was checking the **property at every site** rather than
+pattern-matching the shape I happened to write first: for each
+`until timeout 600 npx playwright install`, is there a wait in the lines above?
+That is a different question from "does my anchor match", and only the first one
+is the thing I actually care about.
+
+**Propagated, and labelled as preventive.** Six `sudo apt-get clean` steps run
+under `bash -e`, so a lock failure there kills a disk-cleanup step and with it
+the job, reporting nothing about locks. No run has failed that way; the mechanism
+is simply the one just proven live one step above, and a best-effort cleanup
+should not be able to fail a build. Recorded as preventive rather than dressed up
+as a finding.
+
+**And my own patch measured nothing, twice.** Both edits reported zero
+replacements on the first attempt because the anchor's indentation was wrong.
+Caught both times only because the script prints what it changed — the habit this
+campaign keeps being saved by.
