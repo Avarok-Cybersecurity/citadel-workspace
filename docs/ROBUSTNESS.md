@@ -265,6 +265,24 @@ because the defect it guards is a key that IS READ and never written, which is
 what makes a read return its default forever while the feature looks wired. A
 control has to reproduce the defect's shape, not merely touch the same file.
 
+  - `check-controls-are-wired` (UI) — planted an `<input defaultValue>` with no
+    handler. Exit 1, naming file and line: "accepts input and discards it".
+  - `check-presence-is-not-invented` (UI) — narrowed `isMemberOnline`'s return
+    from `boolean | null` to `boolean`. Exit 1: "offline is an assertion about
+    somebody who may be sitting right there."
+
+Two of these controls were mis-aimed before they landed, and both mis-aims
+looked like passes. One planted `isOnline: true` into `date-utils.ts`, which
+that gate does not scan — it checks three named files. The other never planted
+at all: zsh expanded an unquoted `--include=*.ts`, the file variable came back
+empty, and the gate then "passed" against an unmodified tree. Neither produced
+an error; both produced exit 0, which is exactly what success looks like.
+
+That is now the fifth and sixth time in this session that a control silently
+measured nothing. The reliable defence is to confirm the mutation applied before
+reading the result — the two that were caught were caught because the planting
+step printed what it did and the printout was wrong or absent.
+
 **Correction to a count stated here earlier.** "All 43 gate scripts" counted only
 `scripts/`. There are 44 there and 40 more in `citadel-workspaces/scripts/` —
 **84** in total. Every one of them can fail, though a literal grep for
