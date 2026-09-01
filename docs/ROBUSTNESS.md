@@ -2244,3 +2244,41 @@ Three of these four were written this campaign, by me, with controls that passed
 The controls were on the FIX; the gate itself was never mutated. That is the
 habit this round adds: run the control against the gate, not only against the
 code it guards.
+
+## Round 522 — the ban stopped at the workspace root
+
+Round 515 taught four readers to ask `ViewContent`. Round 518's `ListMembers`
+gate asks it at the REQUESTED domain; `ensure_may_view_workspace` asks it at the
+root. For an ordinary member those agree. For a banned one they did not.
+
+`set_role_permissions` writes exactly one key. Banning a member rewrote
+`permissions[WORKSPACE_ROOT_ID]` and left every per-node grant standing — and
+`add_user_to_domain` writes one of those for each office or room the member is
+added to, while `check_entity_permission` honours a direct grant BEFORE it
+consults role or membership.
+
+So a banned account kept `ViewContent` and `SendMessages` in every room it had
+been added to: it could still read that room's roster, and still read **and post
+in** its chat. The node readers refused the same account, because they ask at the
+root. Two gates added one round apart, disagreeing about one user.
+
+Revocation is scoped to roles whose permission set is empty — Banned, today —
+rather than recomputing every domain on every role change. A per-domain grant can
+also be set deliberately through `update_member_permissions`, and a promotion
+must not silently redistribute authority. Revoking everything is what a ban
+means; redistributing everything is not what a promotion means.
+
+### The scope test did not measure its own scope
+
+The first version demoted a member to Guest and asserted their office
+`ViewContent` survived. It passed against a build that cleared every grant —
+because Guest holds `ViewContent` by role, so `check_entity_permission`'s role
+fallback answered true whether the direct grant survived or not.
+
+A grant that merely matches the role's own table proves nothing about whether the
+grant is still there. Rewritten to use `EditTreeStructure`, which no role below
+Admin holds, so only the direct grant can answer for it. The too-wide control now
+fails it by name.
+
+That is the same mistake as round 520's, one level down: a control that passes
+because something *else* covers for the thing being measured.

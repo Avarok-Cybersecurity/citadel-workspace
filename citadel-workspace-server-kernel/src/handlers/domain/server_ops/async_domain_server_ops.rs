@@ -261,6 +261,29 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
         user.role = role;
         user.set_role_permissions(domain_id);
 
+        // A role that grants nothing must grant nothing ANYWHERE.
+        //
+        // `set_role_permissions` writes exactly one key, so banning a member
+        // rewrote `permissions[WORKSPACE_ROOT_ID]` and left every per-node grant
+        // standing. `add_user_to_domain` writes one of those for each office or
+        // room the member is added to, and `check_entity_permission` honours a
+        // direct grant BEFORE it consults role or membership — so a banned
+        // account kept `ViewContent` and `SendMessages` in every room it had
+        // been added to, and could still read the roster and post in the chat.
+        //
+        // The node readers refused the same account, because
+        // `ensure_may_view_workspace` asks at the root. Two gates added in one
+        // round, disagreeing about one user.
+        //
+        // Scoped to roles whose permission set is empty — Banned, today — rather
+        // than recomputing every domain on every role change: a per-domain grant
+        // can also be set deliberately by `update_member_permissions`, and a
+        // promotion must not silently overwrite one. Revoking everything is what
+        // a ban means; redistributing everything is not what a promotion means.
+        if Permission::for_role(&user.role).is_empty() {
+            user.permissions.clear();
+        }
+
         self.backend_tx_manager
             .insert_user(user_id.to_string(), user)
             .await?;
