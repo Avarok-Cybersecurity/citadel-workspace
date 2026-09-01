@@ -207,6 +207,8 @@ jobs:
         run: node scripts/check-listener-fanouts-are-isolated.mjs
       - name: Check every integration spec is named by a test script
         run: node scripts/check-every-integration-spec-has-a-runner.mjs
+      - name: Check every value production requires is documented
+        run: node scripts/check-required-env-is-documented.mjs
       - name: Check every service declares a restart policy
         run: node scripts/check-restart-policies.mjs
       - name: Check no control loses its name at narrow widths
