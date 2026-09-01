@@ -57,23 +57,25 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
         }
     }
 
-    /// Refuse granting a role that outranks the grantor.
+    /// Refuse granting a role that holds a permission the grantor does not.
     ///
     /// `add_user_to_domain` writes a caller-supplied `UserRole` and was gated
     /// only on `AddUsers`, which `Permission::for_role` gives every Custom role
-    /// above the editor threshold. Nothing looked at WHICH role was being
-    /// granted, and the target may be the caller — so a rank-16 Custom role
-    /// could call it on itself with `UserRole::Admin` and land on
-    /// `Permission::All`. `update_workspace_member_role` is the same shape and
-    /// gained the same reach when it started admitting the Owner, who could
-    /// then mint an Admin and with it the `ConfigureSystem` an Owner is
-    /// deliberately not granted.
+    /// above the editor threshold. Nothing looked at WHICH role was granted, and
+    /// the target may be the caller — so a Custom role could call it on itself
+    /// and climb. `update_workspace_member_role` is the same shape.
     ///
-    /// The rule is containment, expressed with the ranks the type already
-    /// carries: you may grant any role you outrank or match, never one above
-    /// you. Admin is `u8::MAX`, so an Admin may still grant Admin; an Owner (20)
-    /// may grant Owner and below but not Admin; a Custom role may grant beneath
-    /// itself. Equal ranks are allowed because they escalate nothing.
+    /// This was first written as a rank comparison: grant what you outrank or
+    /// match. That was wrong, because rank does not track power. `Owner` is rank
+    /// 20 and holds 25 of the 27 permissions; `create_custom_role` permits ranks
+    /// 21-254, and a Custom role above the editor threshold holds 9. So a
+    /// rank-21 Custom outranked Owner while holding a third of its authority,
+    /// and the rank rule let it grant Owner — to itself.
+    ///
+    /// Comparing the permission sets is the property actually wanted. `All` is
+    /// the Admin wildcard and `has_permission` honours it, so an Admin still
+    /// grants anything; an Owner grants everything except Admin, whose `All`
+    /// they lack; and no role can hand out authority it does not itself hold.
     async fn ensure_may_grant_role(
         &self,
         actor_user_id: &str,
@@ -83,9 +85,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
             Some(user) => user,
             None => return Err(NetworkError::msg("Permission denied: unknown actor")),
         };
-        if actor.role.get_rank() < role.get_rank() {
+        let held = Permission::for_role(&actor.role);
+        let granting = Permission::for_role(role);
+        if let Some(missing) = granting
+            .iter()
+            .find(|p| !Permission::has_permission(&held, p))
+        {
             return Err(NetworkError::msg(format!(
-                "Permission denied: {} cannot grant {}, which outranks it",
+                "Permission denied: {} cannot grant {}, which carries {missing:?} it does not hold",
                 actor.role, role
             )));
         }

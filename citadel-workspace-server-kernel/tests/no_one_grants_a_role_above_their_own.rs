@@ -158,3 +158,61 @@ async fn a_custom_role_may_still_add_ordinary_members() {
         "AddUsers still means what it says for roles beneath the grantor: {outcome:?}",
     );
 }
+
+// ---------------------------------------------------------------------------
+// Rank is not power.
+//
+// The first version of this rule compared ranks: grant what you outrank or
+// match. `Owner` is rank 20 and holds 25 of the 27 permissions;
+// `create_custom_role` permits ranks 21-254, and a Custom role above the editor
+// threshold holds 9. So a rank-21 Custom outranked Owner on nine permissions'
+// worth of authority, and the rank rule let it grant Owner — to itself.
+//
+// The rule now compares the permission sets, which is the property that was
+// wanted all along.
+// ---------------------------------------------------------------------------
+
+/// Rank 21: outranks Owner (20) while holding a fraction of its permissions.
+fn outranks_owner_custom() -> UserRole {
+    UserRole::create_custom_role("overranked".to_string(), 21).expect("21 is not reserved")
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_custom_role_that_outranks_owner_still_cannot_grant_owner() {
+    let kernel = create_test_kernel().await;
+    insert_user_with_role(&kernel, "overranked", outranks_owner_custom()).await;
+    join_root(&kernel, "overranked").await;
+
+    let outcome = try_add_as(&kernel, "overranked", "overranked", UserRole::Owner).await;
+    assert!(
+        outcome.is_err(),
+        "rank 21 beats Owner's 20, but Owner carries 25 permissions to its 9: {outcome:?}",
+    );
+
+    let after = kernel
+        .domain_operations
+        .backend_tx_manager
+        .get_user("overranked")
+        .await
+        .expect("read user")
+        .expect("user exists");
+    assert_ne!(
+        after.role,
+        UserRole::Owner,
+        "and the role must be unwritten"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_custom_role_may_still_grant_a_role_it_fully_covers() {
+    let kernel = create_test_kernel().await;
+    insert_user_with_role(&kernel, "overranked", outranks_owner_custom()).await;
+    join_root(&kernel, "overranked").await;
+
+    // Guest holds ViewContent alone, which this role has.
+    let outcome = try_add_as(&kernel, "overranked", "newcomer", UserRole::Guest).await;
+    assert!(
+        outcome.is_ok(),
+        "containment refuses only what the grantor lacks: {outcome:?}",
+    );
+}

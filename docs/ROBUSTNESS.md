@@ -959,3 +959,52 @@ connection" would otherwise rebuild round 481 exactly.
 **What this round did not find.** No new critical/high/medium. Two flows audited,
 one correct, one latent. That is a thinner result than the last several rounds
 and is reported as such.
+
+## Round 490 — rank is not power, and the peer-connect ambiguity closed
+
+Two things, both continuations of round 487's lens: *what did the previous fix
+make reachable?*
+
+### The containment rule I wrote in 487 was the wrong invariant
+
+It compared ranks: grant what you outrank or match. That reads as containment
+and is not.
+
+`Owner` is rank **20** and holds **25** of the 27 permissions.
+`create_custom_role` permits ranks 21–254, and a Custom role above the editor
+threshold holds **9**. So a rank-21 Custom outranked Owner while holding roughly
+a third of its authority — and the rank rule let it grant Owner, to itself.
+Nine permissions minting twenty-five.
+
+The rule now compares the permission sets: **you may not grant a role holding a
+permission you do not hold.** `All` is the Admin wildcard and `has_permission`
+honours it, so an Admin still grants anything; an Owner grants everything except
+Admin, whose `All` they lack; and no role hands out authority it lacks.
+
+Control: restoring the rank comparison fails exactly
+`a_custom_role_that_outranks_owner_still_cannot_grant_owner` and leaves the other
+seven green — including `a_custom_role_may_still_grant_a_role_it_fully_covers`,
+which is what shows the rule refuses only what the grantor lacks.
+
+### PeerConnectAcceptSuccess now says which answer was delivered
+
+Round 489 recorded this conflation as latent and left a note. The user asked for
+it fixed rather than annotated, which is right — a latent defect with a comment
+is still a defect.
+
+`accept: bool` added to the response and set at both construction sites, the
+shape `FileTransferStatusNotification` already uses. The UI reads it, with both
+directions pinned and controlled.
+
+Also found while wiring it: the "already connected" idempotent shortcut returned
+success **without consulting the answer**, so a refusal against a live connection
+was reported as delivered while the peer stayed connected and nothing was
+declined. Gated on `accept`.
+
+### A generated-file hazard, caught before it shipped
+
+Regenerating the ts-rs binding rewrote **37** files. The 36 unintended ones
+**stripped their import statements while still referencing the imported types** —
+`Accounts.ts` lost `import type { AccountInformation }` and kept using it. The
+local ts-rs disagrees with whatever produced the committed files. Reverted;
+committing them would have broken the TypeScript build for a one-field change.
