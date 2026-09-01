@@ -1768,3 +1768,40 @@ found" cannot arise — so this is a note about where to look, not a work item.
 class and is clean: no unbounded awaits, deadlines and liveness already modelled,
 and the annotation rate limiter genuinely wired into both `annotation-signal` and
 `call-manager`. Nothing to fix, said plainly.
+
+## Round 512 — round 510's fix was wrong, and the accidental broadcast was load-bearing
+
+Applied this campaign's most productive lens — *what did the last change make
+unreachable?* — to my own round 510, and it does not survive it.
+
+Round 510 stopped a restore-from-storage being broadcast to the peer. The
+reasoning was sound as far as it went: the apply was untagged, the provider read
+it as a local edit, and every editor mount pushed a full document over a channel
+the provider's own comment says one message per keystroke overruns.
+
+**What it did not ask is what else carried that content.** Nothing does:
+
+- `handleSyncStep1` sends the peer what THEY lack only when THEY send step1,
+  and that happens at their construction — before our asynchronous load from
+  storage lands.
+- The step1 retry in the ack sweep runs only while `!initialSyncComplete`.
+- The periodic `hash_check` was removed as a never-initiated protocol, so
+  divergence is noticed when a message is exchanged and not otherwise.
+
+So with the restore suppressed, an edit made offline reaches the peer **on the
+next keystroke and not before** — and never at all for someone who reads a
+document without typing in it. The accidental broadcast was load-bearing, and
+one message per mount against losing an offline edit is not a close call.
+
+Reversed. **Kept** from round 510, because those parts were right: the origin is
+tagged, so the decision is now explicit rather than incidental; the ignore rule
+is an exported `isLocalEdit` the tests assert against rather than copy; and the
+origin string has one definition instead of two literals.
+
+**The pattern this makes, and it is not a happy one.** Rounds 485, 494, 497 and
+510 were all my fixes that a later round found wrong or incomplete — a lockout,
+a 90-second hang, an inert source change, and now a lost offline edit. Every one
+was caught by asking what the fix made reachable or unreachable, and not one by
+the tests I wrote at the time, which passed in both worlds. An efficiency
+argument is especially dangerous here: it is easy to measure what a change
+removes and easy to miss what it was quietly providing.
