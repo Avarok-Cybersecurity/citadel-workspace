@@ -295,3 +295,25 @@ the seven above are the sample that was actually exercised.
 which looked like three gates written and never run. All three underlying
 scripts ARE invoked by filename; only the aliases are redundant.
 `check-every-gate-is-invoked` covers both script directories and was right.
+
+## Audit against the original plan
+
+The plan this work started from named specific defects. Checked one by one
+rather than assumed closed:
+
+| Plan item | State |
+|---|---|
+| `file-transfer/io.ts` fabricates a `/transfers/{id}/{name}` path and reports success without uploading | fixed — no such path, no `setTimeout` stub |
+| `tree-deep-hierarchy.test.ts:409` `maxDepthSchemaSet = true; // Skip this test` | fixed — gone |
+| Two `describe.skip`ped vitest files "needs rewrite for refactored API" | fixed — no `describe.skip` anywhere in `src/` |
+| Seven orphaned specs with no npm script: chat-settings, native-file-picker, five reconnection/* | **all seven now in validate.yml** |
+| Two toast systems mounted simultaneously | fixed — only `<Sonner />`, with the reasoning in App.tsx |
+| Raw CIDs rendered as user identity in P2PPeerList | the flagged line is a React key and a handler argument, not display text |
+| `typescript-client`'s `"test": "echo … && exit 0"` making a CI job unconditionally green | fixed — real `node --test`, plus an `assert-tests-exist` guard |
+| ~697 hardcoded sleeps in the integration suite | **517 remain.** Reduced, not eliminated. |
+
+The sleeps are the one item not closed. They are a runtime and flakiness cost
+rather than a correctness defect — a `sleep()` followed by a real assertion is
+slow, not false-passing — and the distinct footgun the record warns about
+(`isVisible()` never waiting) is a separate thing, now guarded where it gated a
+whole test. Recorded as outstanding rather than quietly dropped.
