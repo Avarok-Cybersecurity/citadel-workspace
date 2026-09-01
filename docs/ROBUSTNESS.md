@@ -726,3 +726,36 @@ now states it, so a Node 18 consumer gets an install warning rather than a
 ReferenceError at the first request id.
 
 13/13 on Node 22, 13 discovered and run on Node 18. 84 checks green.
+
+## Round 484 — an inserted line split an attribute from its item
+
+#292's WASM Build Check went red with a cascade: unresolved `citadel_wire::quic`,
+`socket_helpers`, `native_config`, `native_io`, `net`, and `io_error_from_anyhow`
+missing from `super`. Six distinct-looking errors, one cause, all mine.
+
+`misc/mod.rs` had:
+
+    #[cfg(not(target_family = "wasm"))]
+    pub mod native_bind;
+
+I inserted the shared helper using `\npub mod native_bind;` as the anchor. The
+anchor matched exactly what I asked for — and landed **between the attribute and
+the module it guarded**. The attribute bound to my new function instead.
+`native_bind` lost its gate and began compiling for wasm32, where nothing it
+imports exists, while the helper carried the stolen attribute plus its own.
+
+**The lesson is about anchors, not about cfg.** An anchor that matches where I
+asked is not the same as an anchor that matches somewhere *safe*. Inserting
+before an item is unsafe whenever that item may be preceded by an attribute,
+a doc comment or a decorator — the diff reads perfectly and the meaning moves.
+Anchor on the attribute-plus-item together, or insert after a blank line.
+
+**And it reached CI because I verified the wrong target.** I ran
+`cargo check -p citadel_proto` and the native test suite, and stopped. CI checks
+`citadel_sdk` and `citadel_pqcrypto` against `wasm32-unknown-unknown`, and that
+is what caught it. Verified this time the way CI verifies: both wasm checks exit
+0, native exits 0, 50/50 tests pass.
+
+Recurring: this is the same family as the six controls that silently measured
+nothing — the difference between what I intended a change to do and what it
+actually did, closed only by running the thing that would notice.
