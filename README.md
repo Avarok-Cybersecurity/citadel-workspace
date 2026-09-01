@@ -183,6 +183,17 @@ The suite also gates accessibility (axe, zero serious violations), Lighthouse
 baselines, PWA installability and offline behaviour, and a landing-page bundle
 budget. See [docs/TESTING.md](docs/TESTING.md).
 
+## Committing across the submodules
+
+Changes have to land innermost-first — `intersession-layer-messaging`, then
+`citadel-internal-service`, then `citadel-workspaces`, then this repo's
+pointers — or a pointer references a commit nobody else can fetch.
+`npm run check:pointers` catches that before a push, and it runs as a git hook.
+
+[docs/COMMIT_PUSH_SCRIPTS.md](docs/COMMIT_PUSH_SCRIPTS.md) covers the helper
+scripts that automate the order, including what `commit.sh` stages and why that
+matters if anything else is working in the same tree.
+
 ## Documentation
 
 - [docs/INSTALL.md](docs/INSTALL.md) — **start here to USE or HOST a workspace.** The

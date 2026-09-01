@@ -355,7 +355,19 @@ All scripts use `set -e` to exit on first error:
 - Timestamps in commits use local timezone (EST, PST, etc.)
 - Scripts are safe to run multiple times (idempotent)
 - No changes are lost if scripts fail midway
-- **commit.sh** respects `.gitignore` settings via `git add .`
+- **commit.sh** stages with `git add .`, which is worth understanding before
+  you run it:
+  - `.gitignore` only protects files that are **not already tracked**. Adding a
+    path to `.gitignore` does not untrack it, so an already-tracked file keeps
+    being staged no matter what the ignore file says. Two sets in this repo were
+    exactly that — `citadel-internal-service/filesystem/` (six `.hca` account
+    records rewritten by every test run) and `.memory.jsonl` (listed in
+    `.gitignore` *and* tracked). Both are untracked now, but the general point
+    stands: read the ignore rule as "not added in future", not "never staged".
+  - It stages *everything* dirty, not just your change. If anything else is
+    working in this tree — another agent, another terminal, a half-finished
+    edit — its files land in your commit. Check `git status` first, or stage
+    explicit paths and commit by hand.
 - **pull.sh** requires clean working directory (no uncommitted changes)
 
 ## Troubleshooting
