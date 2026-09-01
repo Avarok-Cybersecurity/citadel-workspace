@@ -877,3 +877,53 @@ alone, which is why the permitted grants are asserted beside them.
 *previous* fix made reachable, not by reading new code. The authorization review
 and the reachability review are different reviews, and the second one is where
 these lived.
+
+## Round 488 — a deep dive that did not find its target
+
+`test_single_connection_transient::case_3` failed CI on
+`assert!(udp_channel_rx_opt.is_some())`. The user's instruction was to fix the
+flakiness permanently. **I did not find the cause.** What follows is what was
+ruled in and out, so the next attempt starts further along.
+
+**What the log establishes.** Both sides hole-punched `Ok`. **Zero** "fallback to
+TCP only mode" warnings and **zero** driver retries in the entire run. The
+failing case took 0.198s against ~0.7s for its siblings. So one side reached
+connect with no UDP channel receiver while the other had one, and nothing had
+failed.
+
+**Reproduction attempts, all negative.** 97/97 locally; 180 runs of the four
+transient cases; 12 more runs under deliberate CPU saturation (load average
+15.9, confirmed). No failure, and the new diagnostics never fired.
+
+**Hypothesis 1 — receiver falls back to TCP and tells nobody. Reproduces the
+symptom exactly, but is not this failure.** Forcing that branch gives the same
+assertion at the same line. The branch sets `udp_mode = Disabled` locally,
+leaves the one-shot empty, returns `Void`, and never informs the initiator —
+which installs its own receiver in `begin_connect` and still reports `Some`.
+The downgrade propagates initiator→receiver (`send_success_as_initiator`
+computes `tcp_only`) and not the reverse. **That asymmetry is real and worth
+fixing on its own.** But the log shows the branch was never taken.
+
+**Hypothesis 2 — the initiator's CONNECT overtakes the receiver's in-flight
+punch. DISPROVEN.** A 1500ms delay on the receiver's punch, with the early
+install removed, still passes: the ordering is serialised by the protocol.
+Without that control I would have shipped a confident, wrong fix.
+
+**What was changed, on its own merits, not as a claimed cure:**
+
+- The receiver's one-shot is installed in the SYN handler, where it first learns
+  `udp_mode`, rather than after the punch. SYN precedes every later stage, so
+  the receiver now has a channel receiver from the moment UDP is known to be on
+  — the invariant the existing `// TODO ensure this exists BEFORE udp socket
+  loading` asks for.
+- The later initialisation tested `tx.is_none()`, which is *also* true once the
+  UDP loader has TAKEN the sender; the assignment then replaced the receiver
+  holding the delivered channel with a fresh one nothing would ever send on,
+  turning a working channel into a permanent await. It now initialises only when
+  the pair has never been created.
+- Both take sites now warn when `udp_mode` is Enabled and the receiver is
+  absent, naming the side. The failure has to identify itself before it can be
+  fixed, which is what #290's markers did for the reconnection wedge.
+
+**Open.** Cause unidentified. Two named suspects eliminated, one invariant
+strengthened, and the next occurrence will say which side it was.
