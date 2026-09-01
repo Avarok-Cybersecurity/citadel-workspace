@@ -203,6 +203,8 @@ jobs:
         run: node scripts/check-permission-parity.mjs
       - name: Check no control is revealed by hover alone
         run: node scripts/check-hover-only-controls.mjs
+      - name: Check listener fan-outs isolate their subscribers
+        run: node scripts/check-listener-fanouts-are-isolated.mjs
       - name: Check every service declares a restart policy
         run: node scripts/check-restart-policies.mjs
       - name: Check no control loses its name at narrow widths
