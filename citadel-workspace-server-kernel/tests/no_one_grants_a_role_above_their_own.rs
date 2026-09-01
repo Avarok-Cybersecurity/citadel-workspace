@@ -1,4 +1,4 @@
-//! You cannot hand out a role that outranks you.
+//! You cannot hand out a role carrying authority you do not hold.
 //!
 //! `add_user_to_domain` writes a caller-supplied `UserRole` and was gated only
 //! on `AddUsers` — which `Permission::for_role` grants to every Custom role
@@ -15,10 +15,16 @@
 //! when it began admitting the Owner: an Owner could grant Admin, and with it
 //! the `ConfigureSystem` that `for_role` deliberately withholds from Owner.
 //!
-//! The rule is containment, using the ranks `UserRole` already carries: grant
-//! what you outrank or match, never what is above you. The permitted grants are
-//! asserted alongside the refusals — a rule that refused everything would
-//! satisfy the refusals alone.
+//! The rule is containment on the PERMISSION SETS: grant a role only if you
+//! hold every permission it carries. `All` is the Admin wildcard and
+//! `has_permission` honours it, so an Admin still grants anything.
+//!
+//! It was first written as a rank comparison — grant what you outrank or match —
+//! and the section at the foot of this file records why that was the wrong
+//! invariant. Rank does not track power.
+//!
+//! The permitted grants are asserted alongside the refusals; a rule that refused
+//! everything would satisfy the refusals alone.
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
 use citadel_workspace_types::structs::UserRole;

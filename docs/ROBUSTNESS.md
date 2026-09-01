@@ -868,6 +868,13 @@ still grants Admin; an Owner (20) grants Owner and below but not Admin; a Custom
 role grants beneath itself. Equal ranks are permitted because they escalate
 nothing.
 
+> **SUPERSEDED by round 490.** Rank does not track power. `Owner` is rank 20 and
+> holds 25 of the 27 permissions, while a Custom role may be created at rank
+> 21-254 holding 9 — so the rank rule let a rank-21 Custom grant Owner, to
+> itself. The rule now compares the permission SETS. This paragraph is left as
+> written because the record is append-only; it describes what was implemented
+> that round, not what is implemented now.
+
 **Control.** Removing the two checks fails exactly the three escalation tests —
 so the exploit was real, not theoretical — while all three permitted-grant tests
 stay green. A rule that refused everything would have satisfied the refusals
@@ -1348,3 +1355,37 @@ that corrects itself will leave prose from the version it corrected.
 
 Corrected, and a grep confirms no other reference to the withdrawn install
 survives. 50/50 `citadel_proto`.
+
+## Round 500 — the same review, applied to the bigger PR
+
+Round 499's mechanism — review the NET diff, because a branch that corrects
+itself leaves prose from the version it corrected — applied to #79: 53 commits,
+45 files, +3389/-109, and an authorization rule rewritten three times.
+
+It found the same defect, in the file whose whole purpose is to explain the rule.
+
+`no_one_grants_a_role_above_their_own.rs` opened with:
+
+> You cannot hand out a role that outranks you.
+> …
+> The rule is containment, using the ranks `UserRole` already carries: grant what
+> you outrank or match, never what is above you.
+
+That is the **withdrawn** rule. Round 490 replaced it, because rank does not
+track power: `Owner` is rank 20 holding 25 of 27 permissions, and a Custom role
+may be created at rank 21-254 holding 9 — so the rank rule let a rank-21 Custom
+grant Owner, to itself. The header stated the old rule as current while the
+section appended to the same file's foot explained why it was wrong. A reader
+would have taken the title, which is what titles are for.
+
+Header corrected to state the implemented rule — containment on the permission
+sets — with the rank version kept explicitly as history.
+
+**And the record itself.** Round 487's entry states the rank rule in the present
+tense. It is append-only, so it stays; but a reader landing there had nothing
+telling them it had been superseded. It now carries a pointer to round 490, and
+says why it is left standing.
+
+**Two rounds, two PRs, the same finding.** Per-commit review cannot see this
+class: every commit is internally consistent, and the falsifying edit is
+somewhere else in the same branch. The reviewable artefact is the net diff.
