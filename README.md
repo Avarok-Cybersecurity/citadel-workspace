@@ -133,7 +133,29 @@ docker compose build internal-service server sync-wasm-client
 docker compose up -d
 ```
 
+## Before you push
+
+```bash
+npm run preflight
+```
+
+One command, and it is the same set CI runs: the gate list is DERIVED from
+`.github/workflows/validate.yml`, so a check added to CI appears here with no
+second edit and the two cannot drift.
+
+It needs the generated artefacts to exist first — the WASM bindings and the
+built client package — because the typecheck, lint and unit tests all consume
+them. `docker compose up -d --build --wait` produces them as a side effect, and
+`./sync-wasm-clients.sh` produces them on their own. Skip that and preflight now
+says which artefact is missing and what builds it, rather than reporting eight
+type errors about `GroupMessage` that look like broken source and are really an
+unbuilt tree.
+
 ## Tests
+
+The TypeScript commands below have the same prerequisite as `npm run preflight`
+above: build the WASM bindings first, or the types they depend on resolve to
+nothing.
 
 ```bash
 # Rust
