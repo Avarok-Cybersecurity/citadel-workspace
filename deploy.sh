@@ -134,7 +134,14 @@ fi
 # start without it — correctly, since any default is either wrong for every real
 # deployment or is the hole itself — but that refusal arrives after the images
 # are built. Catch it here instead.
-origins=$(grep -E '^[[:space:]]*INTERNAL_SERVICE_ALLOWED_ORIGINS=' .env | tail -n1 | cut -d= -f2-)
+# Either source, because that is how compose resolves `${VAR}`: the environment
+# first, then .env. Reading only the file rejected a correctly-configured deploy
+# that exports the value in the shell — which is exactly what
+# scripts/test-deploy-services.sh does, and how this check first failed.
+origins="${INTERNAL_SERVICE_ALLOWED_ORIGINS:-}"
+if [[ -z "$origins" ]]; then
+    origins=$(grep -E '^[[:space:]]*INTERNAL_SERVICE_ALLOWED_ORIGINS=' .env | tail -n1 | cut -d= -f2-)
+fi
 origins="${origins%$'\r'}"
 origins="${origins#"${origins%%[![:space:]]*}"}"
 origins="${origins%"${origins##*[![:space:]]}"}"
