@@ -1034,14 +1034,35 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             None => User {
                 id: String::from(user_id),
                 name: String::from(user_id),
-                role: UserRole::Admin,
+                // Only the bootstrap branch below promotes; an unknown account
+                // cannot reach the other one, because `check_entity_permission`
+                // returns false for a user that does not exist.
+                role: UserRole::Member,
                 permissions: Default::default(),
                 metadata: Default::default(),
             },
         };
 
-        user.role = UserRole::Admin;
-        user.set_role_permissions(&workspace_id);
+        if root_exists {
+            // An ADDITIONAL workspace: full authority over the thing just
+            // created, and nothing anywhere else.
+            //
+            // `user.role` is a single global field — `is_admin` reads it and
+            // never asks which workspace — so setting it to Admin here made the
+            // creator an administrator of the ROOT workspace too. An Owner holds
+            // `CreateWorkspace`, so an Owner with the master password could
+            // create a throwaway workspace and come back a global Admin,
+            // carrying the `ConfigureSystem` that `for_role` withholds from
+            // Owner. That is the escalation the role and permission doors were
+            // closed against, arriving through a third one.
+            user.permissions
+                .insert(workspace_id.clone(), Permission::for_role(&UserRole::Admin));
+        } else {
+            // Bootstrap: there was no workspace until now, so this account IS
+            // the administrator, globally and by definition.
+            user.role = UserRole::Admin;
+            user.set_role_permissions(&workspace_id);
+        }
 
         self.backend_tx_manager
             .insert_user(String::from(user_id), user)

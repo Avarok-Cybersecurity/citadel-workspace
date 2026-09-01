@@ -1043,3 +1043,38 @@ the previous fix made reachable, not by reading new code. Two were flaws in my
 own fixes. Authorization review answers "may this actor call this?"; reachability
 review answers "what states can they now reach?" — and every finding in this
 sequence lived in the second.
+
+## Round 492 — a third door: creating a workspace made you admin of every workspace
+
+Rounds 487 and 491 closed the role door and the permission door. Enumerating
+every write to `user.role` found a third.
+
+`user.role` is a **single global field**. `is_admin` reads it and never asks
+which workspace. `create_workspace` set it to `Admin` for every creator —
+bootstrap or not.
+
+`Permission::for_role` gives an Owner `CreateWorkspace`. So an Owner holding the
+master password could create a throwaway workspace and come back a **global
+Admin**, carrying the `ConfigureSystem` that `for_role` deliberately withholds
+from Owner. Exactly the escalation the other two doors were closed against.
+
+The creator now gets `for_role(Admin)` **scoped to the workspace they created**.
+The bootstrap promotion survives untouched — with no workspace in existence that
+account IS the administrator — and is asserted, because a fix that broke it
+would otherwise look like a pass.
+
+**Control.** Restoring the unconditional promotion fails
+`an_owner_creating_another_workspace_does_not_become_a_global_admin`.
+
+**Two process notes, both about my own work.**
+
+The tests were first written as `if created.is_ok() { ...assert... }`. Had
+creation been refused, every assertion would have been skipped and the file
+would have passed while testing nothing. Replaced with `expect`, which also
+proved creation genuinely succeeds — so the assertions do run.
+
+The control's first planting **silently did nothing**: a `str.index` threw
+before the replace, and the run that followed exercised unmodified code and
+reported two passes. It was caught only because the planting step prints what it
+changed. That is the seventh time this session a control has measured nothing,
+and every catch has come from the same habit.
