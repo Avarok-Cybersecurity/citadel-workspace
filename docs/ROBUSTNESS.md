@@ -601,3 +601,45 @@ It is not: `registerInstance` populates it from three live call sites and
 `findInstanceByCid` drives CID routing off it. The listener was redundant, not
 load-bearing — a different finding with a different risk, and the note would
 have sent the next reader down the wrong path.
+
+## Round 481 — declining a peer registration registered them
+
+The highest-consequence finding of the campaign so far, and it came from the
+guards' own debt list rather than a fresh sweep. Reading what
+`check-event-listeners-have-emitters.mjs` already tolerated led into the
+registration path.
+
+**The chain, all three layers confirmed:**
+
+1. Decline sends `PeerRegisterRespond { accept: false }`
+   (`peer-registration-store/lifecycle.ts`).
+2. `respond_register.rs` calls `responses::peer_register(signal, accept, ..)`.
+   It returns `Ok` — the decline was delivered — and the handler answers
+   `PeerRegisterSuccess`. Accurate from the service's side.
+3. `handlePeerRegisterSuccess` ran the acceptance path unconditionally:
+   `isRegistered = true`, into `registeredPeers` and `outgoingRegistrations`,
+   `p2p:peer-registered` emitted, and the new contact broadcast to the other
+   tabs.
+
+So declining somebody added them as a registered contact. And because
+`p2p-auto-connect-service/event-handlers.ts` subscribes to
+`p2p:peer-registered`, the decline **also opened an outbound P2P connection to
+the person who had just been refused**. The test log is what surfaced that:
+`P2PAutoConnect ... confirmed, initiating immediate connection`, on a path that
+should have been a refusal.
+
+**Where the fix belongs.** One response type carries two outcomes, so no
+receiver can distinguish them from the message alone. Changing that is a
+protocol change and a regeneration of the WASM bindings; the party that already
+knows is the one that chose. The request id sent with a decline is recorded and
+consumed when its response arrives. Bounded at 100 and consumed on match —
+a decline whose response never comes would otherwise be remembered for the life
+of the tab, which is the leak of round 478 rebuilt by hand.
+
+**Control.** Removing the guard fails two of the three tests while the
+acceptance test stays green — the point being that the guard is not suppressing
+the registration path wholesale, only for responses to declines.
+
+**The protocol smell stands and is not fixed here.** `PeerRegisterSuccess`
+meaning both "they accepted" and "your refusal was delivered" is the root cause;
+this closes the consequence. Recorded as open.
