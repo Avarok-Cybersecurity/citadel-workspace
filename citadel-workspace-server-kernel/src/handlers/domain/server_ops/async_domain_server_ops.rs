@@ -636,8 +636,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             // admins among `workspace.members`, can no longer see them. Two
             // admins could then remove each other down to zero and the next
             // account to register would be promoted as "first member".
+            //
+            // Owner as well as Admin. `is_admin_or_owner` gates
+            // `update_workspace_member_role`, `update_member_permissions` and
+            // UpdateTreeSchema, and reads the same global `user.role` — so
+            // removing an Owner demoted nothing and revoked nothing, while
+            // removing an Admin (the case this block was written for) did. The
+            // comment above says a removed administrator must lose the role;
+            // "administrator" grew to include Owner and this did not follow.
             if let Some(mut removed) = self.backend_tx_manager.get_user(user_id_to_remove).await? {
-                if removed.role == UserRole::Admin {
+                if matches!(removed.role, UserRole::Admin | UserRole::Owner) {
                     removed.role = UserRole::Member;
                     removed.set_role_permissions(crate::WORKSPACE_ROOT_ID);
                     self.backend_tx_manager

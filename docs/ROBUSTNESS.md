@@ -1872,3 +1872,71 @@ and drops it. Noise, not a defect, and the log is easier to read once you know
 that.
 
 Nothing to fix.
+
+## Round 515 — the ban gate reached one of four readers; removing an Owner revoked nothing
+
+Two findings from the Fable fleet, and both are the same shape as the pattern
+`fixes-that-were-never-propagated` was written for: a correct fix, applied in
+one of the places it belonged.
+
+### The ban gate
+
+Round 507 taught `get_workspace` to require `ViewContent`, because banning
+changes a ROLE and leaves `workspace.members` untouched — so a membership-only
+gate kept admitting a banned account. Its siblings were never told:
+
+| reader | gate before | what it returned to a banned account |
+|---|---|---|
+| `get_workspace` | ViewContent (round 507) | — refused |
+| `get_node` | `is_member_of_domain` only | any node, `mdx_content` included |
+| `list_nodes` | `is_member_of_domain` only | **every** office and room |
+| `get_tree_structure` | `is_member_of_domain` only | the whole tree |
+| `ListMembers` | `is_admin \|\| is_member` | every `User` record: roles, permission maps |
+
+`is_member_of_domain` for a workspace id is literally
+`workspace.members.contains(user_id)` — role is never consulted. `DomainNode`
+carries `mdx_content`, `members` and `children`, so `ListNodes { parent_id: None }`
+returned exactly what the round-507 gate was added to withhold, and more of it.
+Meanwhile `GetUserPermissions` reported that the same account could view nothing.
+
+Fixed with one `ensure_may_view_workspace` helper (membership AND `ViewContent`)
+at the three node readers, and the same permission added to the non-admin half of
+the `ListMembers` gate. Asked as the permission rather than as `role != Banned`,
+for the reason round 507 records: what the permission editor reports must be what
+enforcement allows. `for_role` gives Banned nothing and gives Guest `ViewContent`.
+
+`a_banned_member_cannot_read_the_tree.rs` — three tests. The control removed the
+`ViewContent` clause from the helper and the failure named its own scope:
+
+```
+banning left the member list untouched, so these reads still admitted them:
+  ["get_node", "list_nodes", "get_tree_structure"]
+```
+
+`get_workspace` is absent from that list, which is the round-507 gate still
+holding on its own — the control demonstrates the propagation, not the gate.
+
+### Removing an Owner
+
+`remove_user_from_domain` drops the role as well as the membership, and its
+comment says why: `is_admin` reads the GLOBAL `user.role` and never consults the
+member list, so a removed administrator keeps passing every gate while
+`ensure_not_last_admin` can no longer see them.
+
+The check was `removed.role == UserRole::Admin`, written when Admin was the only
+role that gated anything. `is_admin_or_owner` later became the whole gate on
+`update_workspace_member_role`, `update_member_permissions` and UpdateTreeSchema,
+and `ensure_not_last_admin` grew to count Owner — its own doc says *"once the
+Owner gained that gate, the guard had to follow"*. This demotion did not follow.
+Removing an Owner was a no-op on their authority; removing an Admin, the case the
+block was written for, worked.
+
+Not an escalation — the Owner gains nothing they did not already hold. A
+revocation that revoked nothing. Widened to `matches!(role, Admin | Owner)`.
+
+`removal_takes_the_role_from_an_owner_too.rs` — three tests. The control reverted
+to `== UserRole::Admin`; the Owner test went red and the Admin test stayed green,
+which is what distinguishes a widening from a rewrite. The third test holds the
+scope: removing a Guest leaves them a Guest, not silently a Member.
+
+95 unit + all integration tests pass, clippy clean.

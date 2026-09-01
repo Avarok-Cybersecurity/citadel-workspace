@@ -36,6 +36,46 @@ fn current_timestamp() -> u64 {
         .as_secs()
 }
 
+/// Refuse a workspace-content read to an account that may not view content.
+///
+/// The three node readers below each asked only `is_member_of_domain`, which for
+/// a workspace id is literally `workspace.members.contains(user_id)` — role is
+/// never consulted. Banning sets a ROLE and leaves the member list untouched, so
+/// a banned account kept reading every office and room, `mdx_content` included,
+/// plus the full roster, from the same tree `get_workspace` had just been taught
+/// to withhold. That gate was added in one place and never propagated here.
+///
+/// Asked as `ViewContent` rather than `role != Banned` for the reason
+/// `get_workspace` records: what `GetUserPermissions` reports must be what
+/// enforcement allows. `for_role` gives Banned nothing and gives Guest
+/// `ViewContent`, so this refuses exactly the accounts the permission editor
+/// already shows as unable to view.
+///
+/// Scoped to the workspace root, matching the gate it propagates. Per-node read
+/// authorization is a separate question this does not answer.
+async fn ensure_may_view_workspace<R: Ratchet + Send + Sync + 'static>(
+    ops: &AsyncDomainServerOperations<R>,
+    user_id: &str,
+) -> Result<(), NetworkError> {
+    if !ops
+        .is_member_of_domain(user_id, crate::WORKSPACE_ROOT_ID)
+        .await?
+    {
+        return Err(NetworkError::msg(
+            "Permission denied: Not a member of this workspace",
+        ));
+    }
+    if !ops
+        .check_entity_permission(user_id, crate::WORKSPACE_ROOT_ID, Permission::ViewContent)
+        .await?
+    {
+        return Err(NetworkError::msg(
+            "Permission denied: ViewContent is required to read this workspace",
+        ));
+    }
+    Ok(())
+}
+
 #[async_trait]
 impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainServerOperations<R> {
     async fn create_node(
@@ -186,15 +226,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
     }
 
     async fn get_node(&self, user_id: &str, node_id: &str) -> Result<DomainNode, NetworkError> {
-        // Check if user is member of workspace (basic access check)
-        if !self
-            .is_member_of_domain(user_id, crate::WORKSPACE_ROOT_ID)
-            .await?
-        {
-            return Err(NetworkError::msg(
-                "Permission denied: Not a member of this workspace",
-            ));
-        }
+        // Membership AND ViewContent — see ensure_may_view_workspace.
+        ensure_may_view_workspace(self, user_id).await?;
 
         // Handle workspace-root sentinel ID (not stored as a DomainNode)
         if node_id == crate::WORKSPACE_ROOT_ID {
@@ -624,15 +657,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         depth: Option<u32>,
         entity_types: Option<&[NodeEntityType]>,
     ) -> Result<Vec<DomainNode>, NetworkError> {
-        // Check if user is member of workspace
-        if !self
-            .is_member_of_domain(user_id, crate::WORKSPACE_ROOT_ID)
-            .await?
-        {
-            return Err(NetworkError::msg(
-                "Permission denied: Not a member of this workspace",
-            ));
-        }
+        // Membership AND ViewContent — see ensure_may_view_workspace.
+        ensure_may_view_workspace(self, user_id).await?;
 
         let nodes = self.backend_tx_manager.get_all_nodes().await?;
         let schema = self.backend_tx_manager.get_tree_schema_or_default().await?;
@@ -752,15 +778,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         root_id: Option<&str>,
         max_depth: Option<u32>,
     ) -> Result<TreeNode, NetworkError> {
-        // Check if user is member of workspace
-        if !self
-            .is_member_of_domain(user_id, crate::WORKSPACE_ROOT_ID)
-            .await?
-        {
-            return Err(NetworkError::msg(
-                "Permission denied: Not a member of this workspace",
-            ));
-        }
+        // Membership AND ViewContent — see ensure_may_view_workspace.
+        ensure_may_view_workspace(self, user_id).await?;
 
         let nodes = self.backend_tx_manager.get_all_nodes().await?;
 
