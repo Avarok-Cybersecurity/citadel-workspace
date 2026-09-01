@@ -2086,3 +2086,70 @@ Two controls, disjoint: the early-drop fails only the new test; removing the
 guard entirely fails only `every_locked_helper_is_called_under_the_lock`.
 
 100 lib tests and every integration binary green, clippy clean.
+
+## Round 519 — the last three LOWs: a forget that was not a disconnect, a decline that read as a yes, a card nobody could take down
+
+### `DisconnectOrphan` removed the entry and told the SDK nothing
+
+Nothing in `Connection` tears the protocol session down when it drops — the only
+`Drop` impls are on the receive halves, and the C2S receive half is not in
+`Connection` at all; it lives in the task the connect handler spawned and keeps
+running. So the handler answered *"Disconnected orphan session X"* while a
+`SessionState::Connected` session carried on with its keepalives.
+
+The account was then wedged until the process restarted: with the map entry gone
+the next `Connect` calls `remote.connect()` and the protocol refuses it;
+`ClaimSession` and `Disconnect` both answer "not found". No wire command could
+reach the session that was still there.
+
+`peer/disconnect.rs` has always awaited `disconnect_removed` for the same
+removal. Propagated to the two branches that never got it.
+
+The test asserts the **consequence** — that the account can reconnect — because a
+handler that removes an entry and reports success passes any assertion about the
+message it just wrote. The existing bulk test does exactly that, and stayed green
+through the whole defect. The control fails with the protocol's own words:
+`Session for CID ... already exists. Disconnect first before reconnecting.`
+
+### `register_to_peer` returned `Ok` for a decline
+
+Correct as a contract — the round trip succeeded, the answer was no. But
+`PeerRegisterStatus` derived nothing: no `Debug`, no `PartialEq`. A caller could
+neither compare it nor log it, so `Ok(_)` was the only thing left to write, and
+all three real callers wrote it. `peer_connection.rs` then logged *"success ->
+now connecting"* and sent a PostConnect to a peer that had refused, waiting out a
+60s `RemoteP2pConnectTimeout` and reporting that instead.
+
+The derives are the fix for the type; `is_accepted` and `refusal_reason` are the
+fix for the call sites, which needed something shorter to write than the mistake.
+
+### A notification nothing could remove
+
+With auto-accept on, both consumers of one `PeerRegisterNotification` run: the
+store records the request and raises a HIGH card, while
+`p2p-registration-service` accepts it and removes only the pending entry.
+`removeNotification` is reachable only from the notification UI itself, so no
+code path could clear the card — an unread "X wants to connect" with live Accept
+and Decline for a request already accepted.
+
+Keyed on the REQUEST id, not the peer's CID. Clearing by peer would take down a
+second, genuinely pending request from someone just accepted — the plausible
+version of this fix, and the third test exists to fail it. It does.
+
+The 250-line gate caught both new modules before I did.
+
+## Campaign status
+
+All 18 confirmed Fable findings are addressed. Two are merged to
+Citadel-Protocol master (#293 CRITICAL, #294 HIGH). The rest are on #295 and #79.
+
+Open, recorded rather than fixed:
+
+- **`store_group_message` is O(history) per message.** All of a room's messages
+  live under one key, so every send parses and re-serialises the lot. The fix is
+  paging — the shape the UI already uses for P2P — which is an on-disk format
+  change with a migration. Round 517 bounded the blast radius to the room paying
+  it; it did not reduce the cost.
+- **Byte-map write amplification.** #294 removed the avoidable multiple (a read
+  that wrote, three mutations that mutated nothing); persisting one key still
+  serialises every key for that CID. Same reason: the format.
