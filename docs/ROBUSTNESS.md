@@ -183,3 +183,44 @@ process ends) is the actual cause-level fix. Evidence: `coverage` — the exact
 job that failed on #288 with `reconnection_p2p_one_c2s ... Test timed out` —
 passes on #289, as do `citadel_sdk (macos-latest)` and the Ratchet Stability
 Test. Intermittent failures make that a strong signal, not proof.
+
+## CORRECTION — #289 did not fix the reconnection wedge
+
+This supersedes two earlier claims in this file: that the wedge was "Fixed in
+Citadel-Protocol #289", and the entry asserting #289 was "the actual cause-level
+fix" on the evidence of a passing `coverage` job.
+
+Both are wrong, and the disproof is direct. PR #288's `citadel_sdk
+(macos-latest)` job wedged on a base that CONTAINS #289 —
+`reconnection_one_c2s::test_p2p_then_one_c2s_disconnect`, same 240s signature,
+a fourth distinct test. And the warning #289 emits when it wakes a parked caller
+("rekey process ended with a caller still waiting") appears ZERO times in that
+log. Nobody was on that listener. #289 closed a real gap — its unit test fails
+without it — but that gap was not this one.
+
+The mistake worth keeping is the reasoning, not the conclusion: I treated ONE
+passing job as evidence a known-intermittent failure was fixed. For a flake that
+had already been seen four times, a single green run was never going to
+distinguish "fixed" from "did not fire this time". The record said so
+confidently anyway.
+
+**What is actually known now**, after #290 made the phase markers survive CI's
+`RUST_LOG=citadel=info` filter — 134 of them were bare `log::info!` and had been
+dropped, which is why six observations produced no localisation at all:
+
+  - Both peers complete phase one in full: register, C2S connect, C2S rekey,
+    P2P register, P2P connect, P2P rekey.
+  - The disconnecting side then never logs the line immediately after
+    `conn.disconnect().await?`, and the other blocks for ever on the barrier it
+    never reaches.
+  - The only await between those two markers is that call, and the only
+    unbounded await inside it is `while let Some(event) = subscription.next()`
+    in the C2S branch of `disconnect()`.
+
+PR #291 bounds that wait at 30s. It is offered as a bound, NOT as a proven fix:
+there is no red-to-green control, because the hang still cannot be reproduced on
+demand. What is controlled is that the new branch is live — setting the bound to
+1ns fails `reconnection_c2s` with `RemoteDisconnectEventMissing (290)`.
+
+If the wedge survives #291, the next log names a phase rather than a silence,
+which is the point of having done #290 first.
