@@ -215,6 +215,9 @@ jobs:
       - name: Message storage has one owner
         run: node scripts/check-message-storage-has-one-owner.mjs
 
+      - name: Third-party images are pinned
+        run: node scripts/check-third-party-images-are-pinned.mjs
+
 
       - name: Every administrator promotion sits behind a gate
         run: node scripts/check-admin-promotions-are-gated.mjs

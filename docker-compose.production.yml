@@ -338,7 +338,16 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
-    image: cloudflare/cloudflared:latest
+    # Pinned, not `latest`. The three images above may sit on `latest` because CI
+    # only advances that tag through a `promote-latest` job requiring every image in
+    # the release to have built AND passed its smoke test. No such gate exists for a
+    # third-party tag: `cloudflare/cloudflared:latest` is whatever Cloudflare last
+    # pushed, and `restart: unless-stopped` plus a pull on the next host reboot would
+    # swap the process terminating the public tunnel without anyone choosing to.
+    # That also contradicts this file's own instruction to pin an explicit tag for a
+    # deploy you need to reproduce exactly -- which is unachievable while one service
+    # floats. Bump deliberately; releases are at github.com/cloudflare/cloudflared.
+    image: cloudflare/cloudflared:${CLOUDFLARED_TAG:-2026.8.3}
     # `--metrics 127.0.0.1:2000` exposes cloudflared's built-in /ready
     # endpoint so the healthcheck below can verify the tunnel actually
     # established a connection. Without it, an invalid token / network
