@@ -156,7 +156,12 @@ jobs:
           sudo rm -rf /usr/local/share/boost
           sudo rm -rf /usr/local/.ghcup
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          sudo apt-get clean
+          # Best effort: this frees cache, it does not build anything. apt takes a
+          # lock, and unattended-upgrades holds one for minutes after boot — the
+          # failure that killed test:crud in this same workflow. A cleanup that
+          # cannot run is not a reason to fail the build. Preventive: no run has
+          # failed here, but the mechanism is one already proven live in this file.
+          sudo apt-get clean || echo 'apt-get clean skipped (lock held)'
           df -h
 
       - name: Generate WASM artifacts (UI build needs them)

@@ -133,7 +133,29 @@ docker compose build internal-service server sync-wasm-client
 docker compose up -d
 ```
 
+## Before you push
+
+```bash
+npm run preflight
+```
+
+One command, and it is the same set CI runs: the gate list is DERIVED from
+`.github/workflows/validate.yml`, so a check added to CI appears here with no
+second edit and the two cannot drift.
+
+It needs the generated artefacts to exist first — the WASM bindings and the
+built client package — because the typecheck, lint and unit tests all consume
+them. `docker compose up -d --build --wait` produces them as a side effect, and
+`./sync-wasm-clients.sh` produces them on their own. Skip that and preflight now
+says which artefact is missing and what builds it, rather than reporting eight
+type errors about `GroupMessage` that look like broken source and are really an
+unbuilt tree.
+
 ## Tests
+
+The TypeScript commands below have the same prerequisite as `npm run preflight`
+above: build the WASM bindings first, or the types they depend on resolve to
+nothing.
 
 ```bash
 # Rust
@@ -160,6 +182,17 @@ cargo test -p citadel-workspace-types -p citadel-workspace-server-kernel
 The suite also gates accessibility (axe, zero serious violations), Lighthouse
 baselines, PWA installability and offline behaviour, and a landing-page bundle
 budget. See [docs/TESTING.md](docs/TESTING.md).
+
+## Committing across the submodules
+
+Changes have to land innermost-first — `intersession-layer-messaging`, then
+`citadel-internal-service`, then `citadel-workspaces`, then this repo's
+pointers — or a pointer references a commit nobody else can fetch.
+`npm run check:pointers` catches that before a push, and it runs as a git hook.
+
+[docs/COMMIT_PUSH_SCRIPTS.md](docs/COMMIT_PUSH_SCRIPTS.md) covers the helper
+scripts that automate the order, including what `commit.sh` stages and why that
+matters if anything else is working in the same tree.
 
 ## Documentation
 

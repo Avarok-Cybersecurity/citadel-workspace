@@ -86,14 +86,16 @@ pub async fn resolve_group_node<R: Ratchet>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     group_id: &str,
 ) -> Option<String> {
+    // Shared, not cloned: this runs once per broadcast RECIPIENT, and twice more
+    // inside the permission walk below it. See `nodes_cache`.
     let nodes = kernel
         .domain_operations
         .backend_tx_manager
-        .get_all_nodes()
+        .get_all_nodes_shared()
         .await
         .ok()?;
     nodes
-        .into_iter()
+        .iter()
         .find(|(_, node)| node.chat_channel_id.as_deref() == Some(group_id))
-        .map(|(id, _)| id)
+        .map(|(id, _)| id.clone())
 }

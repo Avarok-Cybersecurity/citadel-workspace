@@ -61,7 +61,30 @@ pub(crate) fn validate_content_segment(segment: &str) -> Result<(), NetworkError
             "Content segment '{segment}' contains a forbidden character"
         )));
     }
-    Ok(())
+    // Defence in depth, and WINDOWS-ONLY in effect: ask the platform's parser
+    // whether this is one ordinary component rather than trusting a character
+    // list to be complete.
+    //
+    // `Path::join` REPLACES the base when handed something carrying a prefix or
+    // a root, so a segment does not need a separator to escape. On Windows `C:`
+    // has no separator, no NUL and no leading dot, so it passes every check
+    // above and then discards the content root.
+    //
+    // No test on a Unix host can discriminate this line: there, any string
+    // without a separator already parses as a single Normal component, which a
+    // control confirmed — removing this check failed nothing locally. It is kept
+    // because it is correct and free, not because it is covered here.
+    let mut components = std::path::Path::new(segment).components();
+    match (components.next(), components.next()) {
+        (Some(std::path::Component::Normal(only)), None)
+            if only == std::ffi::OsStr::new(segment) =>
+        {
+            Ok(())
+        }
+        _ => Err(NetworkError::msg(format!(
+            "Content segment '{segment}' is not a single ordinary path component"
+        ))),
+    }
 }
 
 /// Who a broadcast is for.
@@ -1421,6 +1444,23 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     if !workspace.members().contains(&user_id) {
                         info!(target: "citadel", "[ASYNC_KERNEL] Adding user {} to workspace domain", user_id);
 
+                        // Taken BEFORE the user record is read, not after.
+                        //
+                        // The get_user -> insert_user below is a read-modify-write
+                        // on the same records every other writer takes this lock
+                        // for (`write_user_role`, `add_user_to_domain`,
+                        // `remove_user_from_domain`), and it ran outside it —
+                        // across a real await window, since `insert_user` is a
+                        // save plus an index write and `backend_save` retries with
+                        // backoff. An admin granting U the Admin role at the moment
+                        // U first connects could be silently reverted to Member,
+                        // with both callers reporting success.
+                        let _workspace_guard = this
+                            .domain_operations
+                            .backend_tx_manager
+                            .lock_workspaces()
+                            .await;
+
                         // First ensure the user exists in the system
                         let user_exists = this.get_user(&user_id).await?.is_some();
                         if !user_exists {
@@ -1438,13 +1478,13 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                         }
 
                         // Add user directly to workspace members (no admin required for initial connection)
-                        // Held across the whole read-decide-write cycle.
                         //
-                        // A workspace is stored WHOLE, so this reads the record,
-                        // decides `is_first_member` from it, and writes it back —
-                        // across two awaits. Two accounts connecting to a fresh
-                        // workspace both observed `members == []`, so BOTH were
-                        // promoted to Admin, and the second write erased the first's
+                        // Still under `_workspace_guard`, taken above. A workspace
+                        // is stored WHOLE, so this reads the record, decides
+                        // `is_first_member` from it, and writes it back — across
+                        // two awaits. Two accounts connecting to a fresh workspace
+                        // both observed `members == []`, so BOTH were promoted to
+                        // Admin, and the second write erased the first's
                         // membership. The promoted-but-unlisted admin still passes
                         // every gate (`is_admin` reads the global role and never
                         // consults membership) while `ensure_not_last_admin`, which
@@ -1453,12 +1493,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                         // `lock_workspaces` was built for exactly this and its only
                         // caller was the theme handler. First-run is precisely when
                         // two people are most likely to connect at once.
-                        let _workspace_guard = this
-                            .domain_operations
-                            .backend_tx_manager
-                            .lock_workspaces()
-                            .await;
-
+                        //
                         // This bypasses the permission check since authenticated users should be allowed
                         let mut ws = this
                             .domain_operations

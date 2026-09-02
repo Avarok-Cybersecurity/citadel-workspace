@@ -1,5 +1,5 @@
-import { notifyEach } from './notify-listeners';
-import { WorkspaceClient } from './WorkspaceClient';
+import { notifyEach } from './notify-listeners.js';
+import { WorkspaceClient } from './WorkspaceClient.js';
 import { isResponseType } from 'citadel-internal-service-wasm-client';
 import type { WasmConnectOptions as ConnectOptions, WasmRegisterOptions as RegisterOptions } from 'citadel-internal-service-wasm-client';
 import type { ConnectSuccess, RegisterSuccess, GetSessionsResponse } from 'citadel-internal-service-wasm-client';

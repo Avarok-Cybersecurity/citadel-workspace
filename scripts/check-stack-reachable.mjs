@@ -94,12 +94,26 @@ for (const target of TARGETS) {
 }
 
 if (failures.length > 0) {
-  console.error('\nThe stack reports healthy but is not reachable from this machine:\n');
+  // Says what was observed, not what the stack claims. This used to open with
+  // "The stack reports healthy but is not reachable", which this script has no
+  // way of knowing: it never asks compose anything. Run against a stack that is
+  // simply not up -- or half up, which is what a partial `docker compose` leaves
+  // -- it asserted a healthy stack and sent the reader after a networking
+  // problem that was not there.
+  console.error('\nNot reachable from this machine:\n');
   for (const f of failures) {
     console.error(`  ${f.name} — ${f.url} (${f.hint})`);
   }
+  if (failures.length < TARGETS.length) {
+    console.error(
+      '\nSome targets ARE reachable, so the stack is partly up. Check whether the\n' +
+        'unreachable service started at all (`docker compose ps`) before assuming\n' +
+        'a networking problem.',
+    );
+  }
   console.error(
-    '\nOn macOS and Windows this is almost always Docker host networking.\n' +
+    '\nIf `docker compose up -d --wait` reported success, then on macOS and\n' +
+      'Windows this is almost always Docker host networking.\n' +
       'Every dev service uses `network_mode: host`, so the ports are bound inside\n' +
       "Docker's VM rather than on your machine. Docker Desktop has an opt-in\n" +
       'host-networking mode (Settings > Resources > Network) which must be enabled\n' +

@@ -1,4 +1,4 @@
-import type { WorkspaceProtocolPayload } from './types/workspace-types';
+import type { WorkspaceProtocolPayload } from './types/workspace-types.js';
 
 /**
  * The single boundary between the ts-rs generated `bigint` annotations and the

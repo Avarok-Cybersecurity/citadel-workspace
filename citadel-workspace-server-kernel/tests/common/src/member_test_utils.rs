@@ -258,3 +258,35 @@ pub async fn create_test_room(
         other => Err(format!("Unexpected response when creating room: {:?}", other).into()),
     }
 }
+
+/// The kernel type the gate tests drive.
+pub type GateKernel = AsyncWorkspaceServerKernel<citadel_sdk::prelude::MonoRatchet>;
+
+/// Insert a user carrying `role`.
+///
+/// Shared rather than copied: two gate-test files assert against the same
+/// fixture, and a fixture that drifts between them would let one file pass
+/// while the other tested something subtly different.
+pub async fn insert_user_with_role(kernel: &GateKernel, id: &str, role: UserRole) {
+    kernel
+        .domain_operations
+        .backend_tx_manager
+        .insert_user(id.to_string(), create_test_user(id, role))
+        .await
+        .expect("insert user");
+}
+
+/// Put `id` in the root workspace's member list, which is what
+/// `is_member_of_domain` consults and therefore what scopes a role grant.
+pub async fn join_root(kernel: &GateKernel, id: &str) {
+    let mgr = &kernel.domain_operations.backend_tx_manager;
+    let mut workspace = mgr
+        .get_workspace(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID)
+        .await
+        .expect("read workspace")
+        .expect("root workspace exists");
+    workspace.members.push(id.to_string());
+    mgr.insert_workspace(workspace.id.clone(), workspace)
+        .await
+        .expect("save workspace");
+}

@@ -2,10 +2,10 @@ import { InternalServiceWasmClient } from 'citadel-internal-service-wasm-client'
 import type { WasmClientConfig, InternalServiceRequest, InternalServiceResponse, WasmModule, SecurityLevel } from 'citadel-internal-service-wasm-client';
 import { isResponseType } from 'citadel-internal-service-wasm-client';
 import { isVariant } from 'citadel-internal-service-wasm-client';
-import type { WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse } from './types/workspace-types';
-import { decodeWorkspacePayload, encodeWorkspacePayload } from './workspace-json';
-import { WorkspaceAuth } from './auth';
-import { WorkspaceSessionManager, type SessionConfig } from './session';
+import type { WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse } from './types/workspace-types.js';
+import { decodeWorkspacePayload, encodeWorkspacePayload } from './workspace-json.js';
+import { WorkspaceAuth } from './auth.js';
+import { WorkspaceSessionManager, type SessionConfig } from './session.js';
 
 // Extends parent WasmModule with workspace-specific WASM methods
 interface WorkspaceWasmModule extends WasmModule {

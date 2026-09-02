@@ -129,6 +129,34 @@ if [[ -z "$master_pw" || "$master_pw" == *"__CHANGE_ME__"* ]]; then
     exit 1
 fi
 
+# Same reasoning for the origin allowlist, which became a second required value
+# when the internal service stopped accepting a default. The service refuses to
+# start without it — correctly, since any default is either wrong for every real
+# deployment or is the hole itself — but that refusal arrives after the images
+# are built. Catch it here instead.
+# Either source, because that is how compose resolves `${VAR}`: the environment
+# first, then .env. Reading only the file rejected a correctly-configured deploy
+# that exports the value in the shell — which is exactly what
+# scripts/test-deploy-services.sh does, and how this check first failed.
+origins="${INTERNAL_SERVICE_ALLOWED_ORIGINS:-}"
+if [[ -z "$origins" ]]; then
+    origins=$(grep -E '^[[:space:]]*INTERNAL_SERVICE_ALLOWED_ORIGINS=' .env | tail -n1 | cut -d= -f2-)
+fi
+origins="${origins%$'\r'}"
+origins="${origins#"${origins%%[![:space:]]*}"}"
+origins="${origins%"${origins##*[![:space:]]}"}"
+if [[ -z "$origins" ]]; then
+    echo "ERROR: INTERNAL_SERVICE_ALLOWED_ORIGINS is unset or empty."
+    echo "  Set it to the origin(s) that may drive the internal service, e.g.:"
+    echo "    INTERNAL_SERVICE_ALLOWED_ORIGINS=https://yourdomain.com"
+    echo "  Any page allowed here can enumerate every account and act as them."
+    exit 1
+fi
+if [[ "$origins" == *"*"* ]]; then
+    echo "WARNING: INTERNAL_SERVICE_ALLOWED_ORIGINS contains '*'. Any page the user"
+    echo "  visits can drive this agent. This is for local experiments, not deployments."
+fi
+
 # jq is required by the readiness probe below. Check up front rather than
 # letting the probe loop forever against `state=""` parsed from a missing
 # `jq` binary.

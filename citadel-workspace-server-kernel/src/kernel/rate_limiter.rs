@@ -58,21 +58,31 @@ pub const DEFAULT_RATE_LIMIT_MAX: u32 = 100;
 /// Default refill window the kernel applies if it doesn't override.
 pub const DEFAULT_RATE_LIMIT_REFILL: Duration = Duration::from_secs(1);
 
-/// Default high-water mark for the per-CID bucket map. When
-/// `try_consume` would push the map past this, it first sweeps stale
-/// entries (see `STALE_BUCKET_AGE_MULTIPLIER`). This is a safety net
-/// against unbounded growth over a long-running process — a
-/// token-bucket whose refill window elapsed long ago is
-/// observationally equivalent to "no entry at all" (a fresh bucket is
-/// created with full tokens on the next request), so reaping them is
-/// a pure optimisation that never changes the observable rate-limit
-/// decision.
+/// Hard maximum for the per-CID bucket map. When `try_consume` would push the
+/// map past this, it first sweeps stale entries (see
+/// `STALE_BUCKET_AGE_MULTIPLIER`) — a token-bucket whose refill window elapsed
+/// long ago is observationally equivalent to "no entry at all", since a missing
+/// bucket is recreated with full tokens, so reaping those never changes the
+/// observable rate-limit decision.
+///
+/// If the sweep frees nothing, a previously-unseen CID is REFUSED rather than
+/// admitted. This was a soft watermark until it was measured: 10_000 entries
+/// accumulated against a limit of 3, because the sweep only fires for a new CID
+/// at capacity and reaps nothing when every bucket is recent. Fail-open there
+/// is unbounded, not brief.
 ///
 /// Tests can drop the bound to a small value via
 /// `RateLimiter::with_capacity` so the sweep path is exercised
-/// through the public API rather than left to a 100k-entry stress
+/// through the public API rather than left to a full-capacity stress
 /// test that won't run in CI.
-pub const DEFAULT_MAX_TRACKED_CIDS: usize = 100_000;
+/// Raised 10x from 100_000 when the bound became a real refusal rather than a
+/// sweep hint: the number is now an availability budget, so it is sized from
+/// memory rather than picked. A `(u64, Bucket)` entry is 32 bytes measured;
+/// with hashbrown's control byte and its ~87.5% load factor that is ~40 bytes
+/// live, so 1M tracked CIDs is ~40 MB and the old 100_000 was ~4 MB. Refusing a
+/// legitimate caller is the expensive failure here, and 40 MB is cheap
+/// insurance against it.
+pub const DEFAULT_MAX_TRACKED_CIDS: usize = 1_000_000;
 
 /// Buckets older than this are eligible for sweep on the next
 /// over-capacity insert. Pinned at 60× the refill interval so that
@@ -127,7 +137,7 @@ impl RateLimiter {
 
     /// Construct a limiter with a custom map-size bound. Intended for
     /// tests that need to trigger the stale-bucket sweep without
-    /// allocating `DEFAULT_MAX_TRACKED_CIDS` (100k) entries.
+    /// allocating `DEFAULT_MAX_TRACKED_CIDS` entries.
     pub fn with_capacity(
         max_tokens: u32,
         refill_interval: Duration,
@@ -160,6 +170,20 @@ impl RateLimiter {
         if !map.contains_key(&cid) && map.len() >= self.max_tracked_cids {
             let stale_threshold = self.refill_interval * STALE_BUCKET_AGE_MULTIPLIER;
             map.retain(|_, b| now.duration_since(b.last_refill) < stale_threshold);
+
+            // Everything still here has spent tokens within the stale window,
+            // so nothing can be dropped for free. Refuse the new CID rather
+            // than admit it.
+            //
+            // Evicting an existing bucket is the tempting alternative and is
+            // not safe: a partially-spent bucket recreates itself with a FULL
+            // budget, so flooding previously-unseen CIDs would reset a
+            // throttled one. That converts memory pressure into a rate-limit
+            // bypass. Refusing costs a first-time caller its request during
+            // pressure; every established bucket keeps its exact budget.
+            if map.len() >= self.max_tracked_cids {
+                return false;
+            }
         }
 
         let bucket = map
@@ -308,7 +332,7 @@ mod tests {
 
         // Force the bound by injecting DEFAULT_MAX_TRACKED_CIDS - 2 + 1
         // sentinels so the next *new* CID hits the sweep path. We
-        // can't realistically allocate 100k entries in a unit test,
+        // can't realistically allocate that many entries in a unit test,
         // so the `at_capacity` invariant is exercised by the
         // `sweep_reaps_stale_buckets_directly` test below using the
         // module-level helper. This case asserts the no-op path:
@@ -391,13 +415,10 @@ mod tests {
     }
 
     #[test]
-    fn sweep_does_not_reap_recent_buckets_at_capacity() {
-        // Mirror of the above: if the buckets at capacity are NOT
-        // stale, the sweep removes nothing and the new insert simply
-        // pushes the map one over the bound. This is the
-        // fail-open behaviour: we'd rather over-track briefly than
-        // refuse a legitimate caller a token. The bound is a
-        // soft watermark, not a hard cap.
+    fn new_cids_are_refused_once_capacity_holds_only_live_buckets() {
+        // The counterpart to the sweep test: when the buckets at capacity are
+        // NOT stale, nothing can be reaped for free, so the map must hold the
+        // line and refuse the newcomer. It used to admit it, without bound.
         let l = RateLimiter::with_capacity(1, Duration::from_millis(10), 3);
         let t = Instant::now();
         assert!(l.try_consume(1, t));
@@ -405,13 +426,38 @@ mod tests {
         assert!(l.try_consume(3, t));
         assert_eq!(l.tracked_cids(), 3);
 
-        // CID 4: sweep runs but finds nothing stale, insert proceeds.
-        assert!(l.try_consume(4, t));
-        assert_eq!(
-            l.tracked_cids(),
-            4,
-            "no stale entries to reap, soft over-track is fine"
+        // CID 4 is new, the sweep finds nothing stale, so it is refused and
+        // NOT allocated.
+        assert!(
+            !l.try_consume(4, t),
+            "a new CID must be refused at capacity"
         );
+        assert_eq!(l.tracked_cids(), 3, "and must not be allocated a bucket");
+    }
+
+    /// The reason eviction was rejected in favour of refusal: evicting a
+    /// partially-spent bucket would recreate it with a full budget, so a flood
+    /// of new CIDs could reset a CID that had already been throttled.
+    #[test]
+    fn pressure_from_new_cids_cannot_reset_a_throttled_bucket() {
+        let l = RateLimiter::with_capacity(1, Duration::from_secs(3600), 3);
+        let t = Instant::now();
+
+        assert!(l.try_consume(1, t), "CID 1 spends its only token");
+        assert!(!l.try_consume(1, t), "and is now throttled");
+        assert!(l.try_consume(2, t));
+        assert!(l.try_consume(3, t));
+
+        // Flood with previously-unseen CIDs while at capacity.
+        for cid in 100..1_000u64 {
+            let _ = l.try_consume(cid, t);
+        }
+
+        assert!(
+            !l.try_consume(1, t),
+            "CID 1 must still be throttled: pressure must not hand it a fresh budget"
+        );
+        assert_eq!(l.tracked_cids(), 3, "and the map must not have grown");
     }
 
     #[test]

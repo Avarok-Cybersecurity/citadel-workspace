@@ -205,6 +205,33 @@ jobs:
         run: node scripts/check-hover-only-controls.mjs
       - name: Check listener fan-outs isolate their subscribers
         run: node scripts/check-listener-fanouts-are-isolated.mjs
+
+      - name: Session teardown prunes CID-keyed kernel state
+        run: node scripts/check-session-teardown-prunes-cid-state.mjs
+
+      - name: Images build what the lockfile says
+        run: node scripts/check-images-build-what-the-lockfile-says.mjs
+
+
+      - name: Every administrator promotion sits behind a gate
+        run: node scripts/check-admin-promotions-are-gated.mjs
+
+      - name: The gate index lists every gate
+        run: node scripts/build-gates-index.mjs --check
+
+      - name: The committed WASM matches its source
+        run: node scripts/check-wasm-matches-its-source.mjs
+
+      - name: Every group-chat handler asks an authorization gate
+        run: node scripts/check-group-handlers-are-authorized.mjs
+      - name: Check every integration spec is named by a test script
+        run: node scripts/check-every-integration-spec-has-a-runner.mjs
+      - name: Check every value production requires is documented
+        run: node scripts/check-required-env-is-documented.mjs
+      - name: Check ESM packages' relative imports carry an extension
+        run: node scripts/check-esm-imports-have-extensions.mjs
+      - name: Check the preview CSP matches the one nginx serves
+        run: node scripts/check-preview-csp-matches-production.mjs
       - name: Check every service declares a restart policy
         run: node scripts/check-restart-policies.mjs
       - name: Check no control loses its name at narrow widths
@@ -491,6 +518,13 @@ jobs:
       - name: Build citadel-workspace-client-ts
         # Build client-ts to generate dist/ with TypeScript declarations
         run: npm run build
+        working-directory: citadel-workspace-client-ts
+      - name: Test citadel-workspace-client-ts
+        # These 13 tests existed and had never run: the package had no `test`
+        # script, no vitest/jest config, and its directory is outside the UI
+        # vitest include. The first run failed — the emitted ESM omitted `.js`
+        # on relative imports, so Node could not load the package at all.
+        run: npm test
         working-directory: citadel-workspace-client-ts
       - name: Install ESLint at root (workspaces hoisting issue)
         # Workspaces may hoist eslint to workspace dirs instead of root
@@ -874,7 +908,12 @@ jobs:
           sudo rm -rf /usr/local/share/boost
           sudo rm -rf /usr/local/.ghcup
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          sudo apt-get clean
+          # Best effort: this frees cache, it does not build anything. apt takes a
+          # lock, and unattended-upgrades holds one for minutes after boot — the
+          # failure that killed test:crud in this same workflow. A cleanup that
+          # cannot run is not a reason to fail the build. Preventive: no run has
+          # failed here, but the mechanism is one already proven live in this file.
+          sudo apt-get clean || echo 'apt-get clean skipped (lock held)'
           df -h
       - uses: actions/setup-node@v4
         with:
@@ -917,7 +956,31 @@ jobs:
         # way. Ten minutes is generous for a chromium download and short
         # enough that two retries still fit inside the job.
         run: |
+          # Wait for apt before asking playwright to use it.
+          #
+          # `--with-deps` shells out to apt-get, and the runner image's
+          # unattended-upgrades holds /var/lib/dpkg/lock-frontend for minutes
+          # after boot. Every attempt then dies on
+          #   E: Could not get lock /var/lib/dpkg/lock-frontend.
+          #      It is held by process NNNN (apt-get)
+          # with exit code 100 — which is not a download failure, so retrying
+          # into it does not help. The existing 30s/45s backoff was not the right
+          # shape: the wait needed is "until the lock is free", not a guess.
+          wait_for_apt_lock() {
+            command -v fuser >/dev/null 2>&1 || { sleep 30; return 0; }
+            waited=0
+            while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+              if [ "$waited" -ge 300 ]; then
+                echo "dpkg lock still held after 5m; attempting anyway"
+                return 0
+              fi
+              echo "waiting for the dpkg lock (${waited}s elapsed)"
+              sleep 10
+              waited=$((waited + 10))
+            done
+          }
           attempt=1
+          wait_for_apt_lock
           until timeout 600 npx playwright install chromium --with-deps; do
             if [ "$attempt" -ge 3 ]; then
               echo "playwright install still failing after 3 attempts"
@@ -926,6 +989,7 @@ jobs:
             echo "playwright install failed or stalled (attempt $attempt/3); retrying"
             attempt=$((attempt + 1))
             sleep $((attempt * 15))
+            wait_for_apt_lock
           done
       - name: Symlink workspace deps for integration-tests build
         # `tsc` in integration-tests resolves modules with NodeNext
@@ -1068,7 +1132,12 @@ jobs:
       - name: Free Disk Space
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/.ghcup "$AGENT_TOOLSDIRECTORY"
-          sudo apt-get clean
+          # Best effort: this frees cache, it does not build anything. apt takes a
+          # lock, and unattended-upgrades holds one for minutes after boot — the
+          # failure that killed test:crud in this same workflow. A cleanup that
+          # cannot run is not a reason to fail the build. Preventive: no run has
+          # failed here, but the mechanism is one already proven live in this file.
+          sudo apt-get clean || echo 'apt-get clean skipped (lock held)'
           df -h
       - uses: actions/setup-node@v4
         with:
@@ -1092,7 +1161,31 @@ jobs:
         # way. Ten minutes is generous for a chromium download and short
         # enough that two retries still fit inside the job.
         run: |
+          # Wait for apt before asking playwright to use it.
+          #
+          # `--with-deps` shells out to apt-get, and the runner image's
+          # unattended-upgrades holds /var/lib/dpkg/lock-frontend for minutes
+          # after boot. Every attempt then dies on
+          #   E: Could not get lock /var/lib/dpkg/lock-frontend.
+          #      It is held by process NNNN (apt-get)
+          # with exit code 100 — which is not a download failure, so retrying
+          # into it does not help. The existing 30s/45s backoff was not the right
+          # shape: the wait needed is "until the lock is free", not a guess.
+          wait_for_apt_lock() {
+            command -v fuser >/dev/null 2>&1 || { sleep 30; return 0; }
+            waited=0
+            while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+              if [ "$waited" -ge 300 ]; then
+                echo "dpkg lock still held after 5m; attempting anyway"
+                return 0
+              fi
+              echo "waiting for the dpkg lock (${waited}s elapsed)"
+              sleep 10
+              waited=$((waited + 10))
+            done
+          }
           attempt=1
+          wait_for_apt_lock
           until timeout 600 npx playwright install chromium --with-deps; do
             if [ "$attempt" -ge 3 ]; then
               echo "playwright install still failing after 3 attempts"
@@ -1101,6 +1194,7 @@ jobs:
             echo "playwright install failed or stalled (attempt $attempt/3); retrying"
             attempt=$((attempt + 1))
             sleep $((attempt * 15))
+            wait_for_apt_lock
           done
       - name: Symlink workspace deps for integration-tests
         run: |
@@ -1482,7 +1576,12 @@ jobs:
           sudo rm -rf /usr/local/share/boost
           sudo rm -rf /usr/local/.ghcup
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          sudo apt-get clean
+          # Best effort: this frees cache, it does not build anything. apt takes a
+          # lock, and unattended-upgrades holds one for minutes after boot — the
+          # failure that killed test:crud in this same workflow. A cleanup that
+          # cannot run is not a reason to fail the build. Preventive: no run has
+          # failed here, but the mechanism is one already proven live in this file.
+          sudo apt-get clean || echo 'apt-get clean skipped (lock held)'
           df -h
       # BEFORE the sync container runs, not after.
       #
@@ -1611,7 +1710,26 @@ jobs:
         # way. Ten minutes is generous for a chromium download and short
         # enough that two retries still fit inside the job.
         run: |
+          # `--with-deps` shells out to apt-get, and unattended-upgrades holds
+          # /var/lib/dpkg/lock-frontend for minutes after boot, so every attempt
+          # dies with exit 100. Retrying into a held lock does not help; waiting
+          # for the lock does.
+          wait_for_apt_lock() {
+            command -v fuser >/dev/null 2>&1 || { sleep 30; return 0; }
+            waited=0
+            while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+              if [ "$waited" -ge 300 ]; then
+                echo "dpkg lock still held after 5m; attempting anyway"
+                return 0
+              fi
+              echo "waiting for the dpkg lock (${waited}s elapsed)"
+              sleep 10
+              waited=$((waited + 10))
+            done
+          }
+          wait_for_apt_lock
           attempt=1
+          wait_for_apt_lock
           until timeout 600 npx playwright install --with-deps chromium; do
             if [ "$attempt" -ge 3 ]; then
               echo "playwright install still failing after 3 attempts"
@@ -1620,6 +1738,7 @@ jobs:
             echo "playwright install failed or stalled (attempt $attempt/3); retrying"
             attempt=$((attempt + 1))
             sleep $((attempt * 15))
+            wait_for_apt_lock
           done
         working-directory: citadel-workspaces
 

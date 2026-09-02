@@ -35,6 +35,19 @@ RUN apt-get update && \
 
 COPY ./docker/workspace-server/kernel.toml /usr/src/app/kernel.toml
 COPY ./Cargo.toml /usr/src/app/Cargo.toml
+# The lockfile, or this image is not building what the repository says.
+#
+# `citadel_sdk` is a git dependency on `branch = "master"` (Cargo.toml), and
+# without the lock cargo re-resolves it to master's TIP at image build time. So
+# the same workspace commit built twice can produce two different binaries, and
+# a change merged to the protocol repo reaches this image with no change here and
+# no signal anywhere. That is not hypothetical: a protocol merge landed between
+# two CI runs of one unchanged branch and turned an integration test red.
+#
+# With the lock present cargo keeps the recorded revision, so upgrading the
+# protocol becomes what it should be — an explicit, reviewable commit that moves
+# Cargo.lock.
+COPY ./Cargo.lock /usr/src/app/Cargo.lock
 COPY ./citadel-workspace-server-kernel /usr/src/app/citadel-workspace-server-kernel
 COPY ./citadel-workspace-internal-service /usr/src/app/citadel-workspace-internal-service
 COPY ./citadel-workspace-types /usr/src/app/citadel-workspace-types

@@ -1,12 +1,18 @@
 #!/usr/bin/env node
 /**
- * Fails if a Cargo workspace member has no cargo-fmt / cargo-clippy job.
+ * Fails if a Cargo workspace member has no cargo-fmt, cargo-clippy or test job.
  *
  * A gate that exists but does not run against a path is indistinguishable from
  * a gate that passes. `intersession-layer-messaging` is a member of
  * citadel-internal-service's workspace and was named by NEITHER matrix, so a
  * committed file sat there failing `cargo fmt --check` while every CI run was
  * green. Nobody had removed a check; the check simply never looked.
+ *
+ * All three kinds are checked, not just linting: the citadel-internal-service
+ * workspace once had lint jobs and no test job at all, so fmt and clippy ran
+ * over eight crates whose tests ran nowhere. This header said "fmt / clippy"
+ * for long enough that a later reader went looking for the test gap it already
+ * covers.
  *
  * This compares the two `[workspace] members` lists against the matrices in
  * validate.yml. Deliberate exclusions belong in EXCLUDED below, WITH a reason,

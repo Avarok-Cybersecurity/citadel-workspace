@@ -15,9 +15,22 @@ target_ide/
 target/
 **/target/
 
-# Cargo lock files - let Docker resolve its own deps to avoid stale git revision hashes
-Cargo.lock
-**/Cargo.lock
+# Cargo.lock is NOT ignored, deliberately.
+#
+# It was, with the rationale "let Docker resolve its own deps to avoid stale git
+# revision hashes". That is precisely the failure mode, wearing the language of a
+# fix: `citadel_sdk` is a git dependency on `branch = "master"`, so resolving
+# fresh means the image builds whatever that branch happens to be at the moment
+# the image is built.
+#
+# A "stale" revision is the one that was tested. Freshness is how a change merged
+# to another repository arrives here with no commit, no review and no signal —
+# which happened: a protocol PR landed between two CI runs of an unchanged branch
+# and turned an integration test red, and only a passing-versus-failing log
+# comparison could have found it.
+#
+# Upgrading the protocol is now a commit that moves Cargo.lock, which is what an
+# upgrade should look like.
 
 # Node.js dependencies (assuming they are installed within the container or managed differently)
 node_modules/

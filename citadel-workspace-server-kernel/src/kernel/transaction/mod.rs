@@ -19,6 +19,27 @@ use std::sync::Arc;
 pub mod backend_ops_simple;
 // Note: TransactionManager has been removed. Use BackendTransactionManager instead.
 
+/// How many message locks exist, total.
+///
+/// Two groups collide with probability 1/GROUP_LOCK_STRIPES, and a collision
+/// costs only the throughput the single global lock used to cost for every pair.
+/// 256 `Mutex<()>` is a few KB, fixed for the life of the process.
+const GROUP_LOCK_STRIPES: usize = 256;
+
+/// Which stripe guards this group. A pure function of the id — see
+/// `BackendTransactionManager::group_msg_mutex`.
+fn group_stripe(group_id: &str) -> usize {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    group_id.hash(&mut hasher);
+    (hasher.finish() % GROUP_LOCK_STRIPES as u64) as usize
+}
+
+/// A parsed node map and the exact bytes it came from.
+///
+/// The bytes are the validity check — see `BackendTransactionManager::nodes_cache`.
+type CachedNodes = (Vec<u8>, Arc<HashMap<String, DomainNode>>);
+
 /// Transaction manager that uses NodeRemote backend for persistence
 pub struct BackendTransactionManager<R: Ratchet> {
     /// NodeRemote for backend operations
@@ -40,12 +61,32 @@ pub struct BackendTransactionManager<R: Ratchet> {
     /// save — the second save silently overwrites the first, dropping
     /// a message edit or insert on the floor.
     ///
-    /// A single mutex serializes across *all* groups (rather than
-    /// per-group-id) because the cost is small (group message ops are
-    /// infrequent compared to index ops) and the data-loss
-    /// consequence of a missed lock is severe. Refactor to a per-id
-    /// mutex if profiling shows contention.
-    group_msg_mutex: Arc<tokio::sync::Mutex<()>>,
+    /// One stripe per group, chosen by hashing the group id.
+    ///
+    /// The lock protects a read-modify-write of `group_messages:{group_id}`, and
+    /// two different groups share nothing — but it was ONE mutex across every
+    /// group, with a note to "refactor to a per-id mutex if profiling shows
+    /// contention" on the grounds that group message ops are infrequent. They
+    /// are chat. And the cost held under the guard is not small: the whole of a
+    /// room's history is parsed and re-serialised per message, and
+    /// `backend_save`'s 100/200/400ms retry sleeps happen inside the guard. So
+    /// one busy room throttled sending for every room on the server.
+    ///
+    /// Striped rather than a map keyed by group id, which is what this was
+    /// first written as. A map has to be bounded — an entry per group id is an
+    /// unbounded collection keyed by user-supplied data — and every bound has a
+    /// saturation case. That one shared a lock without recording which group it
+    /// had been handed to, so the next caller for the same group could mint a
+    /// fresh one and run its read-modify-write concurrently with the first,
+    /// restoring exactly the lost update the mutex exists to prevent.
+    ///
+    /// Striping has no saturation case to get wrong. A group's stripe is a pure
+    /// function of its id, so the same group always takes the same lock, for the
+    /// life of the process. Memory is fixed. Two groups sharing a stripe costs
+    /// throughput, never correctness, and `GROUP_LOCK_STRIPES` sets how often
+    /// that happens.
+    group_msg_mutex: Vec<Arc<tokio::sync::Mutex<()>>>,
+
     /// Serializes DomainNode-collection read-modify-write operations.
     /// All nodes share a single `citadel_workspace.nodes` HashMap key,
     /// so `insert_node` / `remove_node` / `update_node` all do a
@@ -55,6 +96,26 @@ pub struct BackendTransactionManager<R: Ratchet> {
     /// first's change — losing a node insert/delete/update silently.
     /// Same data-loss-vs-cost trade-off as `group_msg_mutex` above.
     node_mutex: Arc<tokio::sync::Mutex<()>>,
+
+    /// The parsed node map, kept beside the exact bytes it was parsed from.
+    ///
+    /// Every group broadcast re-authorises every connected client, and each
+    /// authorization walks `resolve_group_node` -> `check_entity_permission` ->
+    /// `is_member_of_domain`, each of which calls `get_all_nodes`. So one message
+    /// to a room of C clients cost 3*C `serde_json` parses of the single
+    /// `citadel_workspace.nodes` blob — which carries every node's
+    /// `mdx_content`, i.e. every document in the workspace. At 1 MB of nodes and
+    /// 50 clients that is on the order of a CPU-second per message, paid inside
+    /// each connection's own receive loop, so a client's requests stall behind
+    /// other people's chat and its broadcast receiver falls behind the channel.
+    ///
+    /// Validated by comparing the raw bytes, not a hash or a TTL. This gates
+    /// authorization, so an entry that is stale for even a moment is a removed
+    /// member still reading; a memcmp is exact, has no collision to reason
+    /// about, and is still an order of magnitude cheaper than the parse it
+    /// replaces. The blob is fetched every time either way — only the parse and
+    /// the map allocation are skipped.
+    nodes_cache: Arc<RwLock<Option<CachedNodes>>>,
 
     /// Serializes read-modify-write sequences over a single `Workspace` record.
     ///
@@ -138,8 +199,11 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             test_storage: Arc::new(RwLock::new(HashMap::new())),
             migrated: Arc::new(RwLock::new(false)),
             index_write_mutex: Arc::new(tokio::sync::Mutex::new(())),
-            group_msg_mutex: Arc::new(tokio::sync::Mutex::new(())),
+            group_msg_mutex: (0..GROUP_LOCK_STRIPES)
+                .map(|_| Arc::new(tokio::sync::Mutex::new(())))
+                .collect(),
             node_mutex: Arc::new(tokio::sync::Mutex::new(())),
+            nodes_cache: Arc::new(RwLock::new(None)),
             workspace_mutex: Arc::new(tokio::sync::Mutex::new(())),
             #[cfg(test)]
             failing_delete_keys: Arc::new(RwLock::new(std::collections::HashSet::new())),
@@ -182,15 +246,13 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
 
     /// Generic get: deserializes a value from the backend by key.
     /// Returns `None` if the key doesn't exist.
-    async fn backend_get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, NetworkError> {
+    /// The stored bytes for a key, before any deserialization.
+    ///
+    /// Split out so `get_all_nodes_shared` can compare what it just fetched
+    /// against what it last parsed.
+    async fn backend_get_raw(&self, key: &str) -> Result<Option<Vec<u8>>, NetworkError> {
         if self.node_remote.read().is_none() {
-            return if let Some(data) = self.test_storage.read().get(key) {
-                serde_json::from_slice(data)
-                    .map(Some)
-                    .map_err(|e| NetworkError::msg(format!("Failed to deserialize {key}: {e}")))
-            } else {
-                Ok(None)
-            };
+            return Ok(self.test_storage.read().get(key).cloned());
         }
 
         let node_remote = self.get_node_remote()?;
@@ -199,12 +261,15 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             .await
             .map_err(|e| NetworkError::msg(format!("Failed to get backend handler: {e}")))?;
 
-        if let Some(data) = backend.get(key).await? {
-            serde_json::from_slice(&data)
+        backend.get(key).await
+    }
+
+    async fn backend_get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, NetworkError> {
+        match self.backend_get_raw(key).await? {
+            Some(data) => serde_json::from_slice(&data)
                 .map(Some)
-                .map_err(|e| NetworkError::msg(format!("Failed to deserialize {key}: {e}")))
-        } else {
-            Ok(None)
+                .map_err(|e| NetworkError::msg(format!("Failed to deserialize {key}: {e}"))),
+            None => Ok(None),
         }
     }
 
@@ -698,6 +763,16 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         Ok(thread_messages)
     }
 
+    /// The lock guarding one group's message list.
+    ///
+    /// A pure function of the id: same group, same stripe, always. That is the
+    /// whole correctness argument, and it is why this cannot have the bug the
+    /// map version had — there is no state to saturate and no moment at which a
+    /// group's answer changes.
+    fn group_lock(&self, group_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+        self.group_msg_mutex[group_stripe(group_id)].clone()
+    }
+
     async fn save_group_messages(
         &self,
         group_id: &str,
@@ -714,8 +789,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// (both read the same prior list, both push, second save
     /// overwrites the first — silently dropping the earlier message).
     pub async fn store_group_message(&self, message: GroupMessage) -> Result<(), NetworkError> {
-        let _guard = self.group_msg_mutex.lock().await;
         let group_id = message.group_id.clone();
+        let lock = self.group_lock(&group_id);
+        let _guard = lock.lock().await;
         let mut messages = self.get_group_messages(&group_id).await?;
 
         // If this is a reply, increment the parent's reply_count
@@ -741,7 +817,8 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         new_content: String,
         edited_at: u64,
     ) -> Result<Option<GroupMessage>, NetworkError> {
-        let _guard = self.group_msg_mutex.lock().await;
+        let lock = self.group_lock(group_id);
+        let _guard = lock.lock().await;
         let mut messages = self.get_group_messages(group_id).await?;
 
         let mut updated_message = None;
@@ -768,7 +845,8 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         group_id: &str,
         message_id: &str,
     ) -> Result<Option<GroupMessage>, NetworkError> {
-        let _guard = self.group_msg_mutex.lock().await;
+        let lock = self.group_lock(group_id);
+        let _guard = lock.lock().await;
         let mut messages = self.get_group_messages(group_id).await?;
 
         // Find and remove the message
@@ -814,7 +892,8 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// Serialized through `group_msg_mutex` like every other writer of this key,
     /// so a send racing the delete cannot re-create the entry after it is gone.
     pub async fn delete_all_group_messages(&self, group_id: &str) -> Result<(), NetworkError> {
-        let _guard = self.group_msg_mutex.lock().await;
+        let lock = self.group_lock(group_id);
+        let _guard = lock.lock().await;
         self.backend_delete(&Self::group_messages_key(group_id))
             .await
     }
@@ -831,11 +910,38 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
 
     // ========== DomainNode (Generalized Tree Hierarchy) Storage ==========
 
+    /// The node map for READERS, shared rather than cloned.
+    ///
+    /// The authorization walk that runs per broadcast recipient only reads, and
+    /// it reads three times. Handing back an `Arc` lets those three calls share
+    /// one parse and one allocation instead of making three of each — see
+    /// `nodes_cache`.
+    pub async fn get_all_nodes_shared(
+        &self,
+    ) -> Result<Arc<HashMap<String, DomainNode>>, NetworkError> {
+        let Some(raw) = self.backend_get_raw("citadel_workspace.nodes").await? else {
+            return Ok(Arc::new(HashMap::new()));
+        };
+
+        if let Some((cached_raw, cached)) = self.nodes_cache.read().as_ref() {
+            if cached_raw == &raw {
+                return Ok(cached.clone());
+            }
+        }
+
+        let parsed: Arc<HashMap<String, DomainNode>> =
+            Arc::new(serde_json::from_slice(&raw).map_err(|e| {
+                NetworkError::msg(format!(
+                    "Failed to deserialize citadel_workspace.nodes: {e}"
+                ))
+            })?);
+        *self.nodes_cache.write() = Some((raw, parsed.clone()));
+        Ok(parsed)
+    }
+
+    /// The node map for MUTATORS, owned so it can be modified and saved back.
     pub async fn get_all_nodes(&self) -> Result<HashMap<String, DomainNode>, NetworkError> {
-        Ok(self
-            .backend_get("citadel_workspace.nodes")
-            .await?
-            .unwrap_or_default())
+        Ok((*self.get_all_nodes_shared().await?).clone())
     }
 
     pub async fn save_nodes(
@@ -1311,5 +1417,289 @@ mod node_concurrency_tests {
             "concurrent insert must not be lost"
         );
         assert_eq!(stored.get("a").unwrap().name, "renamed");
+    }
+}
+
+#[cfg(test)]
+mod node_cache_tests {
+    //! The node map is parsed once per distinct blob, and never once too few.
+    //!
+    //! Every group broadcast re-authorises every recipient, and each
+    //! authorization calls `get_all_nodes` three times — `resolve_group_node`,
+    //! `check_entity_permission`, `is_member_of_domain`. The blob they parse
+    //! carries every node's `mdx_content`, so the parse is proportional to every
+    //! document in the workspace, and it was paid 3*C times per message.
+    //!
+    //! The risk in fixing that with a cache is the opposite failure: serving a
+    //! map that no longer reflects the tree, in a path that decides who may read
+    //! a room. So both directions are asserted here, and the staleness direction
+    //! is asserted on the value, not just on the pointer.
+    use super::*;
+    use citadel_sdk::prelude::StackedRatchet;
+    use citadel_workspace_types::structs::NodeEntityType;
+
+    fn fresh() -> BackendTransactionManager<StackedRatchet> {
+        BackendTransactionManager::new()
+    }
+
+    fn node(id: &str, chat: Option<&str>) -> DomainNode {
+        DomainNode {
+            id: id.to_string(),
+            parent_id: None,
+            entity_type: NodeEntityType::Child("Office".to_string()),
+            depth: 1,
+            name: id.to_string(),
+            description: String::new(),
+            owner_id: "owner".to_string(),
+            members: vec![],
+            children: vec![],
+            mdx_content: String::new(),
+            mdx_content_hash: None,
+            rules: None,
+            chat_enabled: chat.is_some(),
+            chat_channel_id: chat.map(str::to_string),
+            default_permissions: citadel_workspace_types::structs::DomainPermissions::default(),
+            metadata: vec![],
+            allowed_child_types: None,
+            is_default: false,
+            created_at: 0,
+            updated_at: 0,
+        }
+    }
+
+    fn map(nodes: Vec<DomainNode>) -> HashMap<String, DomainNode> {
+        nodes.into_iter().map(|n| (n.id.clone(), n)).collect()
+    }
+
+    #[tokio::test]
+    async fn unchanged_nodes_are_parsed_once_and_shared() {
+        let mgr = fresh();
+        mgr.save_nodes(&map(vec![node("a", Some("chan-a"))]))
+            .await
+            .unwrap();
+
+        let first = mgr.get_all_nodes_shared().await.unwrap();
+        let second = mgr.get_all_nodes_shared().await.unwrap();
+        let third = mgr.get_all_nodes_shared().await.unwrap();
+
+        // Pointer equality is the assertion: the same allocation, so the same
+        // single parse, which is exactly what the three authorization calls per
+        // recipient were each doing for themselves.
+        assert!(Arc::ptr_eq(&first, &second));
+        assert!(Arc::ptr_eq(&first, &third));
+    }
+
+    #[tokio::test]
+    async fn a_changed_tree_is_reparsed_not_served_from_cache() {
+        let mgr = fresh();
+        mgr.save_nodes(&map(vec![node("a", Some("chan-a"))]))
+            .await
+            .unwrap();
+        let before = mgr.get_all_nodes_shared().await.unwrap();
+        assert_eq!(before.len(), 1);
+
+        mgr.save_nodes(&map(vec![
+            node("a", Some("chan-a")),
+            node("b", Some("chan-b")),
+        ]))
+        .await
+        .unwrap();
+
+        let after = mgr.get_all_nodes_shared().await.unwrap();
+        assert!(
+            !Arc::ptr_eq(&before, &after),
+            "the cache was served after a write"
+        );
+        assert_eq!(
+            after.len(),
+            2,
+            "the second node is missing from the reparse"
+        );
+        assert!(after.contains_key("b"));
+    }
+
+    #[tokio::test]
+    async fn a_removed_node_does_not_survive_in_the_cache() {
+        // The direction that matters for authorization: `resolve_group_node`
+        // denies an unknown channel, and a deleted node's chat must not stay
+        // resolvable. A TTL cache would fail this for the length of the TTL.
+        let mgr = fresh();
+        mgr.save_nodes(&map(vec![
+            node("a", Some("chan-a")),
+            node("b", Some("chan-b")),
+        ]))
+        .await
+        .unwrap();
+        let _warm = mgr.get_all_nodes_shared().await.unwrap();
+
+        mgr.save_nodes(&map(vec![node("a", Some("chan-a"))]))
+            .await
+            .unwrap();
+
+        let after = mgr.get_all_nodes_shared().await.unwrap();
+        assert!(
+            !after.contains_key("b"),
+            "a deleted node was still served, so its chat channel still resolves",
+        );
+    }
+
+    #[tokio::test]
+    async fn a_shrinking_edit_is_still_seen() {
+        // A same-length blob would defeat a length check; a different-length one
+        // would defeat nothing. This covers the case a cheaper validity test
+        // (length, or a count) would get wrong, since only the bytes differ in
+        // content while the shape stays the same.
+        let mgr = fresh();
+        let mut before = node("a", Some("chan-a"));
+        before.name = "xxxx".to_string();
+        mgr.save_nodes(&map(vec![before])).await.unwrap();
+        let _warm = mgr.get_all_nodes_shared().await.unwrap();
+
+        let mut after = node("a", Some("chan-a"));
+        after.name = "yyyy".to_string();
+        mgr.save_nodes(&map(vec![after])).await.unwrap();
+
+        let seen = mgr.get_all_nodes_shared().await.unwrap();
+        assert_eq!(seen.get("a").unwrap().name, "yyyy");
+    }
+
+    #[tokio::test]
+    async fn mutators_still_get_an_owned_map() {
+        // `get_all_nodes` is the mutators' entry point and must keep handing back
+        // something they can modify without touching what readers are sharing.
+        let mgr = fresh();
+        mgr.save_nodes(&map(vec![node("a", None)])).await.unwrap();
+        let shared = mgr.get_all_nodes_shared().await.unwrap();
+
+        let mut owned = mgr.get_all_nodes().await.unwrap();
+        owned.insert("scratch".to_string(), node("scratch", None));
+
+        assert_eq!(shared.len(), 1, "a mutator's edit reached the shared map");
+    }
+}
+
+#[cfg(test)]
+mod group_lock_tests {
+    //! The message lock is per group, and there is no state to get wrong.
+    //!
+    //! It used to be one mutex across ALL groups, on the recorded grounds that
+    //! "group message ops are infrequent compared to index ops". They are chat.
+    //! And the work held under the lock is a full parse and re-serialise of the
+    //! room's whole history, plus `backend_save`'s 100/200/400ms retry sleeps —
+    //! so one busy room throttled sending for every room on the server.
+    //!
+    //! Splitting it is the easy half. The half that goes wrong is whatever holds
+    //! the pieces. The first version was a map keyed by group id, pruned by
+    //! `Arc::strong_count`, capped, with a fallback that shared a lock at
+    //! saturation — and that fallback did not RECORD which group it had been
+    //! handed to, so the next caller for the same group could mint a fresh lock
+    //! and run its read-modify-write against the first. The lost update the
+    //! mutex exists to prevent, restored by the code meant to bound it.
+    //!
+    //! Striping has no such state. A group's stripe is a pure function of its id,
+    //! so the tests below are about that function and about the property it
+    //! buys, not about a cache.
+    use super::*;
+    use citadel_sdk::prelude::StackedRatchet;
+
+    fn fresh() -> BackendTransactionManager<StackedRatchet> {
+        BackendTransactionManager::new()
+    }
+
+    /// Two group ids that land on different stripes, for the tests that need
+    /// non-collision. Found rather than assumed: any fixed pair could collide.
+    fn two_groups_on_different_stripes() -> (String, String) {
+        let first = "room-0".to_string();
+        for i in 1..1000 {
+            let candidate = format!("room-{i}");
+            if group_stripe(&candidate) != group_stripe(&first) {
+                return (first, candidate);
+            }
+        }
+        panic!("group_stripe put 1000 distinct ids on one stripe; it is not distributing");
+    }
+
+    #[tokio::test]
+    async fn one_group_always_gets_the_same_lock() {
+        // The whole point of the lock, and the property the map version lost at
+        // saturation. If this ever returns distinct mutexes, two concurrent
+        // sends to one room both load the prior list, both push, and the second
+        // save drops the first message on the floor.
+        let mgr = fresh();
+        let first = mgr.group_lock("room-a");
+        let second = mgr.group_lock("room-a");
+        assert!(Arc::ptr_eq(&first, &second));
+
+        // Including while one is held, and after many other groups have asked.
+        let held = first.lock().await;
+        for i in 0..10_000 {
+            let _ = mgr.group_lock(&format!("other-{i}"));
+        }
+        let third = mgr.group_lock("room-a");
+        assert!(
+            Arc::ptr_eq(&first, &third),
+            "a group's lock changed identity under load, which is how the map version failed",
+        );
+        drop(held);
+    }
+
+    #[tokio::test]
+    async fn two_groups_can_be_written_at_once() {
+        let mgr = fresh();
+        let (a, b) = two_groups_on_different_stripes();
+        assert!(
+            !Arc::ptr_eq(&mgr.group_lock(&a), &mgr.group_lock(&b)),
+            "two rooms on different stripes share a lock, so one busy room blocks the other",
+        );
+    }
+
+    #[tokio::test]
+    async fn the_lock_set_does_not_grow_with_the_number_of_groups() {
+        // The reason for striping rather than a map: an entry per group id is an
+        // unbounded collection keyed by user-supplied data.
+        let mgr = fresh();
+        for i in 0..50_000 {
+            let _ = mgr.group_lock(&format!("room-{i}"));
+        }
+        assert_eq!(mgr.group_msg_mutex.len(), GROUP_LOCK_STRIPES);
+    }
+
+    #[tokio::test]
+    async fn the_stripe_function_distributes() {
+        // A constant stripe would satisfy every correctness test above while
+        // reinstating the single global lock this replaced.
+        let used: std::collections::HashSet<usize> = (0..10_000)
+            .map(|i| group_stripe(&format!("room-{i}")))
+            .collect();
+        assert_eq!(
+            used.len(),
+            GROUP_LOCK_STRIPES,
+            "10k ids reached only {} of {GROUP_LOCK_STRIPES} stripes",
+            used.len(),
+        );
+    }
+
+    #[tokio::test]
+    async fn concurrent_sends_to_different_rooms_do_not_serialise() {
+        // Holding one room's lock must not delay a send to a room on another
+        // stripe. Asserted by completing the second while the first is held:
+        // with one global mutex this deadlocks rather than failing, so the outer
+        // timeout is the discriminator.
+        let mgr = Arc::new(fresh());
+        let (a, b) = two_groups_on_different_stripes();
+        let first = mgr.group_lock(&a);
+        let _held = first.lock().await;
+
+        let mgr2 = mgr.clone();
+        let second = tokio::time::timeout(std::time::Duration::from_secs(5), async move {
+            let lock = mgr2.group_lock(&b);
+            let _guard = lock.lock().await;
+        })
+        .await;
+
+        assert!(
+            second.is_ok(),
+            "a send to another room waited on a lock held for {a}"
+        );
     }
 }

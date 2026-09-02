@@ -487,12 +487,28 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     .is_admin(actor_user_id)
                     .await
                     .unwrap_or(false);
+                // Membership alone was the whole non-admin gate, and membership
+                // survives a ban: `update_workspace_member_role` sets the ROLE
+                // and never touches `workspace.members`. A banned account went
+                // on reading every User record — roles and full permission maps
+                // — while `GetUserPermissions` reported it could view nothing.
+                // Same propagation the node readers needed: `get_workspace`
+                // learned to ask ViewContent and its siblings did not.
+                let may_view = kernel
+                    .domain_ops()
+                    .check_entity_permission(
+                        actor_user_id,
+                        target_id,
+                        citadel_workspace_types::structs::Permission::ViewContent,
+                    )
+                    .await
+                    .unwrap_or(false);
                 let is_member = kernel
                     .domain_ops()
                     .is_member_of_domain(actor_user_id, target_id)
                     .await
                     .unwrap_or(false);
-                if !is_admin && !is_member {
+                if !is_admin && !(is_member && may_view) {
                     return Ok(WorkspaceProtocolResponse::Error(
                         "Permission denied: not a member of this domain".to_string(),
                     ));
@@ -1206,16 +1222,17 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         }
 
         WorkspaceProtocolRequest::UpdateTreeSchema { schema } => {
-            use crate::handlers::domain::async_ops::AsyncDomainOperations;
-            // Check if user is admin
-            let is_admin = kernel
+            // Admin or Owner. The trait import that was here went with the
+            // `is_admin` call: `is_admin_or_owner` is an inherent method.
+            let may_edit_schema = kernel
                 .domain_ops()
-                .is_admin(actor_user_id)
+                .is_admin_or_owner(actor_user_id)
                 .await
                 .unwrap_or(false);
-            if !is_admin {
+            if !may_edit_schema {
                 return Ok(WorkspaceProtocolResponse::Error(
-                    "Permission denied: Only admins can update tree schema".to_string(),
+                    "Permission denied: only an admin or the owner can update tree schema"
+                        .to_string(),
                 ));
             }
 
