@@ -218,6 +218,9 @@ jobs:
       - name: Third-party images are pinned
         run: node scripts/check-third-party-images-are-pinned.mjs
 
+      - name: Tenant provisioning refuses what it must
+        run: bash scripts/test-provision-tenant.sh
+
 
       - name: Every administrator promotion sits behind a gate
         run: node scripts/check-admin-promotions-are-gated.mjs
