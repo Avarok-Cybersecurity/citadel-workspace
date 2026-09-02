@@ -96,7 +96,20 @@ async fn a_failed_history_purge_leaves_the_delete_retryable() {
         .await
         .expect("seed message");
 
-    let channel_key = "citadel_workspace.group_messages.chan-1";
+    // The key that actually holds the history now that rooms are paged.
+    //
+    // `citadel_workspace.group_messages.chan-1` is the pre-paging blob, and the
+    // first write migrates it away — so faulting it would fault a key holding
+    // nothing, and the purge would succeed at removing every message before
+    // failing on an empty legacy delete. The assertion below would then be
+    // measuring a purge that HAD happened.
+    //
+    // Faulting the page is also what makes the original property still true:
+    // `delete_all_group_messages` removes the pages first and the index last, so
+    // a failure among the pages leaves the index pointing at everything that is
+    // still there. Nothing is orphaned and the history is still readable, which
+    // is exactly what this test asserted before paging existed.
+    let channel_key = "citadel_workspace.group_messages.chan-1.page.0";
     mgr.fail_deletes_of(channel_key);
 
     let _ = ops

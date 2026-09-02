@@ -17,6 +17,7 @@ use std::sync::Arc;
 // resurrected it. The live paths are the handlers in `crate::handlers` over
 // `BackendTransactionManager` directly.
 pub mod backend_ops_simple;
+mod group_message_pages;
 // Note: TransactionManager has been removed. Use BackendTransactionManager instead.
 
 /// How many message locks exist, total.
@@ -137,6 +138,16 @@ pub struct BackendTransactionManager<R: Ratchet> {
     /// including the integration-test build of this crate as a dependency.
     #[cfg(test)]
     failing_delete_keys: Arc<RwLock<std::collections::HashSet<String>>>,
+    /// Every key `backend_save` has written since the last reset.
+    ///
+    /// The point of paging is that a send writes ONE page rather than the whole
+    /// history — and that is a claim about which keys are written, which no
+    /// assertion about the RESULT can see. The first version of
+    /// `a_send_writes_one_page_not_the_history` asserted page 0's contents and
+    /// passed against a build that rewrote every page on every send, because
+    /// splitting the whole history back into pages produces the same page 0.
+    #[cfg(test)]
+    saved_keys: Arc<RwLock<Vec<String>>>,
 }
 
 impl<R: Ratchet + Send + Sync + 'static> Default for BackendTransactionManager<R> {
@@ -207,6 +218,8 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             workspace_mutex: Arc::new(tokio::sync::Mutex::new(())),
             #[cfg(test)]
             failing_delete_keys: Arc::new(RwLock::new(std::collections::HashSet::new())),
+            #[cfg(test)]
+            saved_keys: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -221,6 +234,18 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     #[cfg(test)]
     pub(crate) fn clear_delete_fault(&self, key: &str) {
         self.failing_delete_keys.write().remove(key);
+    }
+
+    /// Forget which keys have been written, so a test can measure one operation.
+    #[cfg(test)]
+    pub(crate) fn reset_saved_keys(&self) {
+        self.saved_keys.write().clear();
+    }
+
+    /// The keys written since the last reset, in order.
+    #[cfg(test)]
+    pub(crate) fn saved_keys(&self) -> Vec<String> {
+        self.saved_keys.read().clone()
     }
 
     /// Set the NodeRemote instance
@@ -276,6 +301,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// Generic save: serializes a value and writes it to the backend by key.
     /// Includes retry logic with exponential backoff for transient failures.
     async fn backend_save<T: Serialize>(&self, key: &str, value: &T) -> Result<(), NetworkError> {
+        #[cfg(test)]
+        self.saved_keys.write().push(key.to_string());
+
         let data = serde_json::to_vec(value)
             .map_err(|e| NetworkError::msg(format!("Failed to serialize {key}: {e}")))?;
 
@@ -700,16 +728,111 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
 
     // ========== Group Messaging Storage ==========
 
-    fn group_messages_key(group_id: &str) -> String {
-        format!("citadel_workspace.group_messages.{}", group_id)
+    /// Every page of a room's history, oldest first.
+    ///
+    /// A room still in the pre-paging single-blob form reads as one page. It is
+    /// NOT migrated here: reads must not write, and a reader that migrates would
+    /// race every other reader. `migrate_if_legacy` does it under the group lock,
+    /// on the next write.
+    async fn load_group_pages(
+        &self,
+        group_id: &str,
+    ) -> Result<Vec<Vec<GroupMessage>>, NetworkError> {
+        let count: Option<usize> = self
+            .backend_get(&group_message_pages::index_key(group_id))
+            .await?;
+
+        let Some(count) = count else {
+            let legacy: Vec<GroupMessage> = self
+                .backend_get(&group_message_pages::legacy_key(group_id))
+                .await?
+                .unwrap_or_default();
+            return Ok(vec![legacy]);
+        };
+
+        let mut pages = Vec::with_capacity(count);
+        for page in 0..count {
+            pages.push(
+                self.backend_get(&group_message_pages::page_key(group_id, page))
+                    .await?
+                    .unwrap_or_default(),
+            );
+        }
+        Ok(pages)
+    }
+
+    /// Move a room from the single-blob form to pages. Caller holds the lock.
+    ///
+    /// Idempotent: the index's presence is the flag, so a second call is a
+    /// single get. The legacy key is deleted only after every page and the index
+    /// are written, so a failure part-way leaves the room readable in its old
+    /// form rather than half in each.
+    async fn migrate_group_to_pages(&self, group_id: &str) -> Result<(), NetworkError> {
+        let existing: Option<usize> = self
+            .backend_get(&group_message_pages::index_key(group_id))
+            .await?;
+        if existing.is_some() {
+            return Ok(());
+        }
+
+        let legacy: Vec<GroupMessage> = self
+            .backend_get(&group_message_pages::legacy_key(group_id))
+            .await?
+            .unwrap_or_default();
+        let pages = group_message_pages::split_into_pages(legacy);
+
+        for (index, page) in pages.iter().enumerate() {
+            self.backend_save(&group_message_pages::page_key(group_id, index), page)
+                .await?;
+        }
+        self.backend_save(&group_message_pages::index_key(group_id), &pages.len())
+            .await?;
+        self.backend_delete(&group_message_pages::legacy_key(group_id))
+            .await?;
+        Ok(())
+    }
+
+    /// Write `pages` back whole, replacing whatever the room held.
+    ///
+    /// Used by the paths that can change any page — an edit, a delete, a reply
+    /// count on an older message. The append path does NOT use this; that is the
+    /// whole point of paging.
+    async fn save_group_pages(
+        &self,
+        group_id: &str,
+        pages: &[Vec<GroupMessage>],
+    ) -> Result<(), NetworkError> {
+        let previous: usize = self
+            .backend_get(&group_message_pages::index_key(group_id))
+            .await?
+            .unwrap_or(0);
+
+        for (index, page) in pages.iter().enumerate() {
+            self.backend_save(&group_message_pages::page_key(group_id, index), page)
+                .await?;
+        }
+        self.backend_save(&group_message_pages::index_key(group_id), &pages.len())
+            .await?;
+
+        // A shorter history leaves pages behind otherwise, and the next full
+        // read would stop at the index while the orphans kept their storage.
+        for index in pages.len()..previous {
+            self.backend_delete(&group_message_pages::page_key(group_id, index))
+                .await?;
+        }
+        Ok(())
     }
 
     pub async fn get_group_messages(
         &self,
         group_id: &str,
     ) -> Result<Vec<GroupMessage>, NetworkError> {
-        let key = Self::group_messages_key(group_id);
-        Ok(self.backend_get(&key).await?.unwrap_or_default())
+        Ok(self
+            .load_group_pages(group_id)
+            .await?
+            .into_iter()
+            .flatten()
+            .collect())
     }
 
     /// Get paginated messages for a group
@@ -778,8 +901,8 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         group_id: &str,
         messages: &[GroupMessage],
     ) -> Result<(), NetworkError> {
-        let key = Self::group_messages_key(group_id);
-        self.backend_save(&key, &messages).await
+        let pages = group_message_pages::split_into_pages(messages.to_vec());
+        self.save_group_pages(group_id, &pages).await
     }
 
     /// Store a new group message.
@@ -792,20 +915,62 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         let group_id = message.group_id.clone();
         let lock = self.group_lock(&group_id);
         let _guard = lock.lock().await;
-        let mut messages = self.get_group_messages(&group_id).await?;
+        self.migrate_group_to_pages(&group_id).await?;
 
-        // If this is a reply, increment the parent's reply_count
-        if let Some(parent_id) = &message.reply_to {
-            for msg in &mut messages {
-                if &msg.id == parent_id {
-                    msg.reply_count += 1;
-                    break;
-                }
+        // A reply has to find its parent, which may be on any page — so that
+        // case still reads the room. An ordinary message does not: it reads the
+        // index and the last page, and writes the same two. That is the whole
+        // difference, and it is the case that happens per message sent.
+        if let Some(parent_id) = message.reply_to.clone() {
+            let mut pages = self.load_group_pages(&group_id).await?;
+            if let Some((page, offset)) = group_message_pages::locate(&pages, &parent_id) {
+                pages[page][offset].reply_count += 1;
+                self.backend_save(
+                    &group_message_pages::page_key(&group_id, page),
+                    &pages[page],
+                )
+                .await?;
             }
         }
 
-        messages.push(message);
-        self.save_group_messages(&group_id, &messages).await
+        let count: usize = self
+            .backend_get(&group_message_pages::index_key(&group_id))
+            .await?
+            .unwrap_or(0);
+        let last_len = if count == 0 {
+            0
+        } else {
+            self.backend_get::<Vec<GroupMessage>>(&group_message_pages::page_key(
+                &group_id,
+                count - 1,
+            ))
+            .await?
+            .unwrap_or_default()
+            .len()
+        };
+
+        let target = group_message_pages::append_target(count, last_len);
+        let mut page: Vec<GroupMessage> = if target.starts_a_page {
+            Vec::new()
+        } else {
+            self.backend_get(&group_message_pages::page_key(&group_id, target.page))
+                .await?
+                .unwrap_or_default()
+        };
+        page.push(message);
+        self.backend_save(
+            &group_message_pages::page_key(&group_id, target.page),
+            &page,
+        )
+        .await?;
+        if target.starts_a_page {
+            self.backend_save(
+                &group_message_pages::index_key(&group_id),
+                &(target.page + 1),
+            )
+            .await?;
+        }
+        Ok(())
     }
 
     /// Update a group message (edit). Serialized through
@@ -894,7 +1059,30 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     pub async fn delete_all_group_messages(&self, group_id: &str) -> Result<(), NetworkError> {
         let lock = self.group_lock(group_id);
         let _guard = lock.lock().await;
-        self.backend_delete(&Self::group_messages_key(group_id))
+        // Every page, the index and the legacy blob. Deleting only the legacy
+        // key would leave a paged room's history intact under keys nothing
+        // reaches — which is the same "retained indefinitely" the paragraph
+        // above is about, one storage format later.
+        //
+        // This is the one path paging makes MORE expensive, and it is a
+        // deliberate trade. On the filesystem backend each backend_delete that
+        // actually removes something rewrites the whole account file, so a
+        // 40-page room costs 40 of those where the single blob cost one. A room
+        // is deleted once in its life and written to on every message, so the
+        // send path is the one worth optimising; stated here so the cost is
+        // found by reading rather than by measuring. A batch delete in the
+        // backend would remove it, and there is no such primitive today.
+        let count: usize = self
+            .backend_get(&group_message_pages::index_key(group_id))
+            .await?
+            .unwrap_or(0);
+        for page in 0..count {
+            self.backend_delete(&group_message_pages::page_key(group_id, page))
+                .await?;
+        }
+        self.backend_delete(&group_message_pages::index_key(group_id))
+            .await?;
+        self.backend_delete(&group_message_pages::legacy_key(group_id))
             .await
     }
 
@@ -1701,5 +1889,314 @@ mod group_lock_tests {
             second.is_ok(),
             "a send to another room waited on a lock held for {a}"
         );
+    }
+}
+
+#[cfg(test)]
+mod group_paging_tests {
+    //! A room's history survives being paged, and a send stops rewriting it.
+    //!
+    //! Every message used to live under one key as a single Vec, so sending one
+    //! parsed and re-serialised the whole history — ~3MB in and ~3MB out per
+    //! send in a 10k-message room, amplified again on the filesystem backend by
+    //! the account-file rewrite. Round 517 bounded that cost to the room paying
+    //! it; it did not reduce it.
+    //!
+    //! The dangerous half is not the append, it is the migration: these rooms
+    //! hold the only copy of everyone's chat.
+    use super::*;
+    use citadel_sdk::prelude::StackedRatchet;
+    use citadel_workspace_types::{GroupMessage, GroupMessageType};
+
+    fn fresh() -> BackendTransactionManager<StackedRatchet> {
+        BackendTransactionManager::new()
+    }
+
+    fn message(id: &str) -> GroupMessage {
+        GroupMessage {
+            id: id.to_string(),
+            group_id: "room".to_string(),
+            sender_id: "s".to_string(),
+            sender_name: String::new(),
+            content: format!("body of {id}"),
+            message_type: GroupMessageType::Text,
+            timestamp: 0,
+            edited_at: None,
+            reply_to: None,
+            reply_count: 0,
+            mentions: vec![],
+        }
+    }
+
+    fn ids(messages: &[GroupMessage]) -> Vec<String> {
+        messages.iter().map(|m| m.id.clone()).collect()
+    }
+
+    /// Seed a room in the PRE-PAGING form, which is what a real upgrade meets.
+    async fn seed_legacy(mgr: &BackendTransactionManager<StackedRatchet>, count: usize) {
+        let messages: Vec<GroupMessage> = (0..count).map(|i| message(&format!("m{i}"))).collect();
+        mgr.backend_save(&group_message_pages::legacy_key("room"), &messages)
+            .await
+            .expect("seed");
+    }
+
+    #[tokio::test]
+    async fn a_legacy_room_reads_before_it_is_ever_migrated() {
+        // Reads must not write: a reader that migrated would race every other
+        // reader, and `get_group_messages` is called on every history fetch.
+        let mgr = fresh();
+        seed_legacy(&mgr, 5).await;
+
+        let read = mgr.get_group_messages("room").await.unwrap();
+        assert_eq!(ids(&read).len(), 5);
+        let index: Option<usize> = mgr
+            .backend_get(&group_message_pages::index_key("room"))
+            .await
+            .unwrap();
+        assert!(index.is_none(), "a read migrated the room");
+    }
+
+    #[tokio::test]
+    async fn migrating_keeps_every_message_in_order() {
+        let mgr = fresh();
+        let count = group_message_pages::PAGE_SIZE * 2 + 5;
+        seed_legacy(&mgr, count).await;
+        let before = ids(&mgr.get_group_messages("room").await.unwrap());
+
+        mgr.store_group_message(message("newest")).await.unwrap();
+
+        let after = ids(&mgr.get_group_messages("room").await.unwrap());
+        assert_eq!(after.len(), count + 1);
+        assert_eq!(
+            &after[..count],
+            &before[..],
+            "the migration reordered or lost messages"
+        );
+        assert_eq!(after[count], "newest");
+
+        // And the old blob is gone, or the next read would see both copies.
+        let legacy: Option<Vec<GroupMessage>> = mgr
+            .backend_get(&group_message_pages::legacy_key("room"))
+            .await
+            .unwrap();
+        assert!(
+            legacy.unwrap_or_default().is_empty(),
+            "the legacy blob survived"
+        );
+    }
+
+    #[tokio::test]
+    async fn migration_runs_once() {
+        let mgr = fresh();
+        seed_legacy(&mgr, 3).await;
+        mgr.store_group_message(message("a")).await.unwrap();
+        let after_first = ids(&mgr.get_group_messages("room").await.unwrap());
+        mgr.store_group_message(message("b")).await.unwrap();
+        let after_second = ids(&mgr.get_group_messages("room").await.unwrap());
+
+        assert_eq!(after_first.len(), 4);
+        assert_eq!(
+            after_second.len(),
+            5,
+            "the second write re-ran the migration"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_send_writes_one_page_not_the_history() {
+        // The point of the change. Asserted by the bytes actually written: with
+        // one blob per room, the write grows with the room; with pages it does
+        // not.
+        let mgr = fresh();
+        for i in 0..(group_message_pages::PAGE_SIZE * 3) {
+            mgr.store_group_message(message(&format!("m{i}")))
+                .await
+                .unwrap();
+        }
+
+        let index: usize = mgr
+            .backend_get(&group_message_pages::index_key("room"))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(index, 3, "three full pages");
+
+        // WHICH KEYS a send writes, not what they end up containing.
+        //
+        // The first version of this test asserted page 0's contents and passed
+        // against a build that rewrote every page on every send — splitting the
+        // whole history back into pages produces the same page 0, so the result
+        // is identical and only the cost differs. A control caught it.
+        // Page 2 is exactly full after PAGE_SIZE*3 sends, so this one rolls
+        // over: the new page and the index, and nothing else.
+        mgr.reset_saved_keys();
+        mgr.store_group_message(message("rolls-over"))
+            .await
+            .unwrap();
+        assert_eq!(
+            mgr.saved_keys(),
+            vec![
+                group_message_pages::page_key("room", 3),
+                group_message_pages::index_key("room"),
+            ],
+            "a send that starts a page must write the page and the index, and nothing else",
+        );
+
+        // And the ordinary case: a send into a page with room writes ONE key.
+        mgr.reset_saved_keys();
+        mgr.store_group_message(message("ordinary")).await.unwrap();
+        assert_eq!(
+            mgr.saved_keys(),
+            vec![group_message_pages::page_key("room", 3)],
+            "a send must write exactly the page it appends to",
+        );
+
+        // Neither wrote an older page, which is the whole claim: the cost of a
+        // send no longer grows with the room.
+        for page in 0..3 {
+            assert!(
+                !mgr.saved_keys()
+                    .contains(&group_message_pages::page_key("room", page)),
+                "a send rewrote page {page} of a four-page room",
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn an_edit_and_a_delete_reach_an_older_page() {
+        let mgr = fresh();
+        for i in 0..(group_message_pages::PAGE_SIZE + 10) {
+            mgr.store_group_message(message(&format!("m{i}")))
+                .await
+                .unwrap();
+        }
+
+        mgr.update_group_message("room", "m0", "edited".to_string(), 7)
+            .await
+            .unwrap()
+            .expect("m0 exists on page 0");
+        let read = mgr.get_group_message("room", "m0").await.unwrap().unwrap();
+        assert_eq!(read.content, "edited");
+
+        mgr.delete_group_message("room", "m1")
+            .await
+            .unwrap()
+            .expect("m1 exists on page 0");
+        assert!(mgr.get_group_message("room", "m1").await.unwrap().is_none());
+        assert_eq!(
+            mgr.get_group_messages("room").await.unwrap().len(),
+            group_message_pages::PAGE_SIZE + 9,
+        );
+    }
+
+    #[tokio::test]
+    async fn a_reply_finds_its_parent_on_an_older_page() {
+        let mgr = fresh();
+        for i in 0..(group_message_pages::PAGE_SIZE + 2) {
+            mgr.store_group_message(message(&format!("m{i}")))
+                .await
+                .unwrap();
+        }
+        let mut reply = message("reply");
+        reply.reply_to = Some("m0".to_string());
+        mgr.store_group_message(reply).await.unwrap();
+
+        let parent = mgr.get_group_message("room", "m0").await.unwrap().unwrap();
+        assert_eq!(
+            parent.reply_count, 1,
+            "the reply count never reached page 0"
+        );
+    }
+
+    #[tokio::test]
+    async fn deleting_a_room_leaves_no_page_behind() {
+        // A purge that removed only the legacy key would leave a paged room's
+        // whole history under keys nothing reaches — the same "retained
+        // indefinitely" the delete was written to stop, one format later.
+        let mgr = fresh();
+        for i in 0..(group_message_pages::PAGE_SIZE * 2 + 1) {
+            mgr.store_group_message(message(&format!("m{i}")))
+                .await
+                .unwrap();
+        }
+
+        mgr.delete_all_group_messages("room").await.unwrap();
+
+        assert!(mgr.get_group_messages("room").await.unwrap().is_empty());
+        for page in 0..3 {
+            let leftover: Option<Vec<GroupMessage>> = mgr
+                .backend_get(&group_message_pages::page_key("room", page))
+                .await
+                .unwrap();
+            assert!(
+                leftover.unwrap_or_default().is_empty(),
+                "page {page} survived the purge",
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_shrinking_history_leaves_no_orphan_page() {
+        // save_group_messages rewrites whole. If the new history is shorter, the
+        // pages past the new end must go, or a later read stops at the index
+        // while the orphans keep their storage forever.
+        let mgr = fresh();
+        for i in 0..(group_message_pages::PAGE_SIZE * 2) {
+            mgr.store_group_message(message(&format!("m{i}")))
+                .await
+                .unwrap();
+        }
+        for i in 0..group_message_pages::PAGE_SIZE {
+            mgr.delete_group_message("room", &format!("m{i}"))
+                .await
+                .unwrap();
+        }
+
+        let index: usize = mgr
+            .backend_get(&group_message_pages::index_key("room"))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            index, 1,
+            "the index still claims the pages the history lost"
+        );
+        let orphan: Option<Vec<GroupMessage>> = mgr
+            .backend_get(&group_message_pages::page_key("room", 1))
+            .await
+            .unwrap();
+        assert!(
+            orphan.unwrap_or_default().is_empty(),
+            "page 1 was orphaned rather than deleted",
+        );
+    }
+
+    #[tokio::test]
+    async fn a_half_finished_migration_reads_the_pages_and_ignores_the_blob() {
+        // The migration writes every page, then the index, then deletes the
+        // legacy blob. A crash between the last two leaves BOTH — and if a read
+        // ever preferred the blob, or concatenated the two, the room would show
+        // its history twice or roll back to the pre-migration copy.
+        //
+        // The index is the discriminator, and `migrate_group_to_pages` returns
+        // early when it exists, so the leftover blob is inert rather than
+        // re-migrated. It is reclaimed when the room is deleted.
+        let mgr = fresh();
+        seed_legacy(&mgr, 3).await;
+        mgr.store_group_message(message("migrated")).await.unwrap();
+
+        // Put the legacy blob back, as a crash before its delete would have.
+        seed_legacy(&mgr, 3).await;
+
+        let read = mgr.get_group_messages("room").await.unwrap();
+        assert_eq!(
+            ids(&read),
+            vec!["m0", "m1", "m2", "migrated"],
+            "the leftover blob was read instead of, or as well as, the pages",
+        );
+
+        // And a further write does not re-run the migration onto itself.
+        mgr.store_group_message(message("after")).await.unwrap();
+        assert_eq!(mgr.get_group_messages("room").await.unwrap().len(), 5);
     }
 }

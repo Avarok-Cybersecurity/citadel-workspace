@@ -2283,6 +2283,207 @@ fails it by name.
 That is the same mistake as round 520's, one level down: a control that passes
 because something *else* covers for the thing being measured.
 
+## Round 523 — the last open MEDIUM: a send stops rewriting the room
+
+Every message in a room lived under one key as a single `Vec<GroupMessage>`, so
+sending one parsed and re-serialised the whole history — a 10k-message room at
+~300B each is ~3MB in and ~3MB out per send, amplified again on the filesystem
+backend by the account-file rewrite. Round 517 gave each room its own lock, which
+bounded the blast radius of that cost to the room paying it; it did not reduce
+it, and the record said so.
+
+Now paged. `…group_messages.{gid}.page.{n}` holds up to 256 messages,
+`…group_messages.{gid}.pages` holds the count, and the pre-paging key is the
+migration source.
+
+| operation | before | after |
+|---|---|---|
+| send | whole history in and out | one page (+ the index when it rolls over) |
+| send that is a reply | whole history | one page, plus the parent's page |
+| edit / delete | whole history | the page holding it |
+| full read | whole history | unchanged — callers ask for all of it |
+
+Split SBIO: which page a message belongs to, how a legacy blob splits, and where
+an id lives are pure functions in `group_message_pages`, testable with no
+backend. The reads and writes stay in the manager. That split is what made the
+migration testable at all.
+
+**Reads never migrate.** A reader that migrated would race every other reader,
+and `get_group_messages` runs on every history fetch. Migration happens on the
+next write, under the group lock, and is idempotent — the index's presence is the
+flag. The legacy blob is deleted only after every page and the index are written,
+so a failure part-way leaves the room readable in its old form rather than half
+in each.
+
+### The headline test measured nothing, and a control said so
+
+`a_send_writes_one_page_not_the_history` first asserted page 0's *contents* —
+that it still held the first 256 messages, oldest first. It passed against a
+build where every send rewrote the entire history, because splitting the whole
+history back into pages produces an identical page 0. The result is the same; only
+the cost differs, and a result assertion cannot see cost.
+
+Rewritten to record which KEYS `backend_save` writes, via a `#[cfg(test)]`
+counter. Then it caught my own expectation as well: page 2 is exactly full after
+768 sends, so the next send correctly rolls over and writes the new page *and*
+the index. It now asserts both cases — a rollover writes two keys, an ordinary
+send writes one, and neither touches an older page.
+
+### An existing test's fault target moved, and the property survived
+
+`a_failed_history_purge_leaves_the_delete_retryable` faulted deletes of
+`citadel_workspace.group_messages.chan-1` — the pre-paging blob, which the first
+write now migrates away. Faulting it would fault a key holding nothing, and the
+purge would succeed at removing every message before failing on an empty delete;
+the assertion would have been measuring a purge that HAD happened.
+
+Pointed at the page key instead. That is also what keeps the original property
+true: `delete_all_group_messages` removes the pages first and the index last, so a
+failure among the pages leaves the index pointing at everything still there —
+nothing orphaned, history still readable, retry completes it. The test asserts the
+same thing it always did.
+
+Nothing above LOW is now open in either audit.
+
+## Round 524 — two CI failures, and the difference between them
+
+Both PRs went red on the same job name. They were nothing alike.
+
+### One was mine, and the assertion was the bug
+
+`rejections_reach_the_caller` asserted the caller receives *the server's* reason
+for a refused registration. On ubuntu it received the backstop's generic one
+instead — an error either way, and never a hang, but not the string the test
+named.
+
+Two answers are possible **by design**, and the commit that built the second one
+said so: the final-reply flush is best-effort because the writer's channel has no
+drain signal to await, and a peer that has hung up will never let the write
+finish. I then wrote an assertion that pinned the race anyway.
+
+The tempting repair was a longer grace. That hides it. It now asserts that one of
+the two arrived — which the control shows is not toothless: with both layers
+disabled the test still fails with *"the refused registration never returned"*.
+
+Making the server's reason deterministic needs a drain signal on the outbound
+sender's item type. Open, and named as open, rather than papered over with a
+sleep.
+
+### The other was not mine, and the discipline was not to fix it
+
+`test_single_connection_transient::case_4` is the intermittent UDP one-shot
+failure carried since round 488. Twelve local runs of the failing test passed, so
+there is no reproduction here.
+
+But the instrumentation added in #292 did its job. The failing run shows, in
+order: the server's `[udp-oneshot] receiver: …no channel receiver at connect
+STAGE0`, then two `udp_mode_assertions` — the first completing through AB2, the
+second panicking at AB1. That pins the side: the SERVER had no receiver.
+
+From a fresh `UdpChannelSender::default()` that is impossible. The only route
+there is a re-entry of `handle_success_as_receiver` after `rx` was taken while
+`tx` had not been: the guard `tx.is_none() && rx.is_none()` sees a half-consumed
+pair, declines to reinstall, and every later connect on that session finds no
+receiver.
+
+The fix writes itself — key the guard on `rx` alone. **It was not made.** The
+comment directly above that guard records a previous change in exactly this area
+that made the receiver present when the hole punch had failed, turning a 1.4s
+failure into a 90s hang. A speculative fix there, with no reproduction, trades a
+visible flake for an invisible one.
+
+So the hypothesised state is logged instead (PR #297). If the next occurrence
+prints `[udp-oneshot] install: receiver already taken while the sender was not`,
+the one-line fix has evidence behind it. If it does not, the hypothesis was
+wrong and that is worth knowing too.
+
+The pattern is the same one that got this far: #292's line is the only reason
+today's failure was localisable at all.
+
+### Round 523, postscript: the cost paging moves rather than removes
+
+Checking whether `backend_delete` errors on a missing key (it does not — the
+byte-map remove answers `Ok(None)`) surfaced something the round-523 entry did
+not say: on the filesystem backend, every delete that actually removes something
+rewrites the whole account file. So purging a 40-page room now costs 40 of those
+where the single blob cost one.
+
+That is the right trade — a room is deleted once in its life and written to on
+every message — but it is a trade, and an entry that only listed the wins would
+have been the kind of half-report this campaign keeps finding in other people's
+work. It is now written at the call site too, so it is found by reading rather
+than by measuring.
+
+A batch delete in the backend would remove the cost entirely. There is no such
+primitive today.
+
+## Round 525 — three Fable agents on the flake, and two defects nobody was looking for
+
+The user asked for three parallel agents on the intermittent UDP failure, one
+architectural. Two have reported. **My hypothesis was wrong**, and the review
+found two defects that are not test flakes at all.
+
+### The mechanism, proved from the log rather than argued
+
+`connect_packet.rs:74` gates connect STAGE0 on `pre_connect_state.success` alone.
+The preconnect SUCCESS arm sets that from the PEER's packet
+(`preconnect_packet.rs:436`), without waiting for this session's own hole punch —
+and inbound packets are processed concurrently (`session.rs:1093`,
+`try_for_each_concurrent(64)`). So connect STAGE0 can take a receiver that
+`handle_success_as_receiver` has not installed yet.
+
+The CI log settles it. In job 100054920908, lines 2037–2039:
+
+```
+Hole Punch Status: Ok(… 33b98969 …)      <- one side's punch resolves
+[udp-oneshot] receiver: … no channel receiver at connect STAGE0
+Hole Punch Status: Ok(… e3a7add7 …)      <- the SERVER's punch resolves, too late
+```
+
+The take is sandwiched between the two completions. Not a hypothesis.
+
+It also explains the shape: the hole-punch **loser** returns as soon as it sends
+`WinnerCanEnd` while the winner blocks, so the client is always installed — which
+is the one-side-passes asymmetry in the log. And it explains why only the
+transient test: transient accounts skip Argon at STAGE0
+(`client_account.rs:276`), which is what makes the server fast enough to lose.
+The review also found `case_3` failing identically in an earlier job, so the
+server password in `case_4` was a red herring.
+
+### Two defects that are not flakes
+
+- **A production leak.** In the losing order the server's loader still installs
+  and sends into the orphaned receiver, and `insert_udp_channel` builds an
+  `unbounded()` channel (`channels.rs:67`). The orphan keeps it alive in the
+  state container for the session's lifetime, so every client datagram
+  accumulates unread while the loader logs success.
+- **A live client-side hang.** On punch failure the client leaves the zero-state
+  pair intact and only warns (`preconnect_packet.rs:669`); its `udp_mode` is
+  never set to Disabled, so the take at `:332` returns a receiver nothing will
+  ever send on. The "1.4s became a 90s hang" the install-site comment warns about
+  is already shipping, on the client, for anyone behind an uncooperative NAT.
+
+### The one-line fix is rejected, with a reason
+
+Keying the install guard on `rx` alone does nothing here — the pair is `empty()`
+at take time, so the guard already installs — and it reopens what #292 fixed:
+between the connect take and the loader's `tx.take()`, the state is
+`(tx Some, rx None)`, and any re-entry in that window would replace a live sender
+and orphan the application's receiver.
+
+### What is open, and what it needs
+
+The fix is to order the server's BEGIN_CONNECT behind its own punch completion —
+which `last_stage` already records, set on BOTH the success and the fallback
+branch. Roughly 30 lines and one wait.
+
+It is not made here, and the reason is a reproduction, not nerve: the review
+named a deterministic one through the existing `PlatformOps` seam
+(`platform_ops.rs:93`) — a test implementation whose `c2s_hole_punch` returns
+~50ms late — with the control being that the warn fires before the change and
+cannot after. That is worth building first, because twelve local runs proved
+nothing and this area has already turned a 1.4s failure into a 90s hang once.
+
 ## Round 526 — the containers were not building what the repository says
 
 `test:file-manager` went red on an unchanged branch. The comparison that found
@@ -2329,3 +2530,87 @@ for the paging branch. On this branch its subject does not exist, and its vacuit
 guard failed the run rather than reporting "OK: 0 shapes checked". That is the
 guard earning its place — every gate in this suite has one, and this is the first
 time one has fired for real.
+
+## Open, as of round 526
+
+Everything both Fable fleets confirmed is fixed: 2 critical/high, 13 medium, 15
+low, across 30 findings. What follows is what is NOT fixed, stated so the next
+person does not have to infer it from silence.
+
+### `reconnection_p2p_one_c2s` fails intermittently
+
+`RemoteDisconnectEventMissing` — a 30s wait for a `Disconnect` that never
+arrives. Seen on Windows and on ubuntu multi-threaded, on two PRs that cannot
+have caused it (a one-line log change and a single `else` branch).
+
+Eliminated by reading, so nobody repeats them:
+
+- `Disconnect` has none of the `cid_opt` routing asymmetry #295 fixed for
+  `InternalServerError`; both emitters (`session.rs:2554`,
+  `session_manager.rs:1052`) set `cid_opt: Some(session_cid)`.
+- The pending-disconnect ticket is not double-taken: the graceful FINAL path
+  clears it AND emits with the explicit ticket (`disconnect_packet.rs:113-118`),
+  while the ungraceful path uses the pending one. Both route to the caller.
+
+Not reproducible here: 6 targeted runs and a full 97/97 suite on the exact CI
+feature set (`multi-threaded,localhost-testing`). PR #297 instruments the wait to
+report how many other events the subscription carried — non-zero means it was
+alive and the Disconnect went elsewhere, zero means it heard nothing at all.
+Those want different fixes and the error distinguishes them not at all.
+
+### The server's BEGIN_CONNECT wait is a bounded poll
+
+Round 526's fix waits for `last_stage == SUCCESS` by polling every millisecond
+up to five seconds. A `Notify` on `PreConnectState` would be the better shape.
+The poll was chosen because it adds no shared state and cannot deadlock, and
+because the fix was wanted before a reproduction went stale — not because it is
+the right long-term mechanism.
+
+### Two costs paging moves rather than removes
+
+Persisting one byte-map key still serialises every key for that CID; that is the
+account-file format, not the call site. And purging an N-page room now costs N
+account-file rewrites where the single blob cost one — the right trade, since a
+room is deleted once and written to on every message, but a trade. A batch delete
+in the backend would remove it; there is no such primitive.
+
+### The client's UDP promise is still overloaded
+
+PR #299 makes the initiator report a failed punch as "no receiver", matching the
+server. But `Option<Receiver>` still encodes both "UDP was never requested" and
+"UDP was requested and failed", and a present receiver still means only "udp_mode
+was Enabled when I sent SYN" rather than "UDP is negotiated". An architectural
+review recommended making the promise honest — a receiver that resolves to an
+explicit `UdpUnavailable` — and noted that doing the install half without the
+rejection half is exactly what caused a previous 90s hang. That is a larger
+change than this campaign should make unattended.
+
+### The lockfile gate read an intention, not a capability
+
+Round 526 added `COPY ./Cargo.lock` to both images and a gate to keep it there.
+Both builds then failed with `"/Cargo.lock": not found`, because `.dockerignore`
+excluded the lockfile — with the rationale *"let Docker resolve its own deps to
+avoid stale git revision hashes"*, which is the failure mode written in the
+language of a fix.
+
+The gate passed anyway. It read the Dockerfile text and nothing else: that the
+COPY was written, not that the file could arrive. That is the same defect the
+gate exists to prevent, one level up, committed two rounds after four other gates
+were fixed for exactly it. It now also refuses when `.dockerignore` excludes the
+lockfile.
+
+It failed loudly rather than quietly, which is the only thing that makes it a bad
+gate rather than a dangerous one — a blind spot that produces a red build costs
+an hour; one that produces a green build costs whatever it was hiding.
+
+## Where this ended
+
+Two Fable fleets, 30 confirmed findings, 30 fixed. Six protocol PRs merged
+(#293 CRITICAL, #294 HIGH, #295, #296, #297, #298); the workspace's own fixes and
+the deliberate protocol upgrade in one PR behind them.
+
+The habit that produced most of it is not "write tests". It is: **run the control
+against the check, not only against the code the check guards.** Nine checks this
+campaign turned out to be measuring nothing, four of them written in the same
+campaign by the same hands, and every one was found by asking what single change
+would turn it red — never by reading it.
