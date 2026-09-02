@@ -2530,3 +2530,57 @@ for the paging branch. On this branch its subject does not exist, and its vacuit
 guard failed the run rather than reporting "OK: 0 shapes checked". That is the
 guard earning its place — every gate in this suite has one, and this is the first
 time one has fired for real.
+
+## Open, as of round 526
+
+Everything both Fable fleets confirmed is fixed: 2 critical/high, 13 medium, 15
+low, across 30 findings. What follows is what is NOT fixed, stated so the next
+person does not have to infer it from silence.
+
+### `reconnection_p2p_one_c2s` fails intermittently
+
+`RemoteDisconnectEventMissing` — a 30s wait for a `Disconnect` that never
+arrives. Seen on Windows and on ubuntu multi-threaded, on two PRs that cannot
+have caused it (a one-line log change and a single `else` branch).
+
+Eliminated by reading, so nobody repeats them:
+
+- `Disconnect` has none of the `cid_opt` routing asymmetry #295 fixed for
+  `InternalServerError`; both emitters (`session.rs:2554`,
+  `session_manager.rs:1052`) set `cid_opt: Some(session_cid)`.
+- The pending-disconnect ticket is not double-taken: the graceful FINAL path
+  clears it AND emits with the explicit ticket (`disconnect_packet.rs:113-118`),
+  while the ungraceful path uses the pending one. Both route to the caller.
+
+Not reproducible here: 6 targeted runs and a full 97/97 suite on the exact CI
+feature set (`multi-threaded,localhost-testing`). PR #297 instruments the wait to
+report how many other events the subscription carried — non-zero means it was
+alive and the Disconnect went elsewhere, zero means it heard nothing at all.
+Those want different fixes and the error distinguishes them not at all.
+
+### The server's BEGIN_CONNECT wait is a bounded poll
+
+Round 526's fix waits for `last_stage == SUCCESS` by polling every millisecond
+up to five seconds. A `Notify` on `PreConnectState` would be the better shape.
+The poll was chosen because it adds no shared state and cannot deadlock, and
+because the fix was wanted before a reproduction went stale — not because it is
+the right long-term mechanism.
+
+### Two costs paging moves rather than removes
+
+Persisting one byte-map key still serialises every key for that CID; that is the
+account-file format, not the call site. And purging an N-page room now costs N
+account-file rewrites where the single blob cost one — the right trade, since a
+room is deleted once and written to on every message, but a trade. A batch delete
+in the backend would remove it; there is no such primitive.
+
+### The client's UDP promise is still overloaded
+
+PR #299 makes the initiator report a failed punch as "no receiver", matching the
+server. But `Option<Receiver>` still encodes both "UDP was never requested" and
+"UDP was requested and failed", and a present receiver still means only "udp_mode
+was Enabled when I sent SYN" rather than "UDP is negotiated". An architectural
+review recommended making the promise honest — a receiver that resolves to an
+explicit `UdpUnavailable` — and noted that doing the install half without the
+rejection half is exactly what caused a previous 90s hang. That is a larger
+change than this campaign should make unattended.
