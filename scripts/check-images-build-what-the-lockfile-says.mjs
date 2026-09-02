@@ -16,8 +16,28 @@
 // server image builds from an alternate manifest and may legitimately need to
 // resolve deps the root lock does not carry. Copying the lock is what pins the
 // git revision either way.
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+
+// A COPY that names a file the build context excludes is not a copy.
+//
+// The first version of this gate checked only the Dockerfile text, and passed
+// while `.dockerignore` carried `Cargo.lock` — so both images failed to build
+// with `"/Cargo.lock": not found`. The gate was reading an intention, not a
+// capability, which is the same defect it exists to prevent one level down.
+//
+// The ignore entry was there on purpose, with the rationale "let Docker resolve
+// its own deps to avoid stale git revision hashes" — the failure mode in the
+// language of a fix.
+function lockfileReachesTheBuildContext() {
+  if (!existsSync('.dockerignore')) return { ok: true };
+  const patterns = readFileSync('.dockerignore', 'utf8')
+    .split('\n')
+    .map((line) => line.replace(/#.*$/, '').trim())
+    .filter(Boolean);
+  const offending = patterns.filter((p) => /(^|\/|\*)Cargo\.lock$/.test(p));
+  return { ok: offending.length === 0, offending };
+}
 
 const MANIFEST = /^COPY\s+\S*Cargo(\.docker)?\.toml\s/m;
 const LOCK = /^COPY\s+\S*Cargo\.lock\s/m;
@@ -28,6 +48,14 @@ try {
     .trim().split('\n').filter(Boolean);
 } catch {
   console.error('FAIL: cannot scan docker/.');
+  process.exit(1);
+}
+
+const reach = lockfileReachesTheBuildContext();
+if (!reach.ok) {
+  console.error(`::error file=.dockerignore::excludes the lockfile: ${reach.offending.join(', ')}`);
+  console.error('\nFAIL: .dockerignore excludes Cargo.lock, so the COPY in each Dockerfile');
+  console.error('cannot find it and the build fails with \'"/Cargo.lock": not found\'.');
   process.exit(1);
 }
 
@@ -57,4 +85,4 @@ if (problems.length) {
   console.error('branch = "master" resolves to whatever that branch happens to be at build time.');
   process.exit(1);
 }
-console.log(`OK: all ${checked} workspace-building image(s) copy the lockfile.`);
+console.log(`OK: all ${checked} workspace-building image(s) copy the lockfile, and the build context carries it.`);
