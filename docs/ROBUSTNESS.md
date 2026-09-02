@@ -2531,13 +2531,142 @@ guard failed the run rather than reporting "OK: 0 shapes checked". That is the
 guard earning its place — every gate in this suite has one, and this is the first
 time one has fired for real.
 
-## Open, as of round 526
+## Round 527 — thirty-four alerts nobody had counted
+
+Every wave up to here reported "30 raised, 30 fixed, no critical/high/medium
+remaining". That was true of what the two Fable fleets found by reading code. It
+was **not** an answer to the question being asked, because nothing in this
+campaign had looked at dependency advisories.
+
+There were **34 open: 17 high, 14 medium, 8 low.** Several are reachable from
+shipped code rather than from tooling:
+
+- `quinn-proto` — **unauthenticated remote DoS via panic in QUIC**, plus remote
+  memory exhaustion from unbounded buffering. Any peer that can send packets, in
+  the transport this product's P2P path runs on.
+- `openssl` ×5 — memory safety: a write past a caller-supplied buffer in
+  `MdCtxRef::digest_final()`, overflow in `Deriver::derive`, UB in
+  `X509Ref::ocsp_resp`, an unchecked callback length in the PSK/cookie
+  trampolines, a bad bounds assertion in AES key wrap.
+- `rustls-webpki` — panic on a malformed CRL.
+
+Three fixes were already sitting green and unmerged (#78 `quinn-proto`, #77
+`brace-expansion`, #76 `js-yaml`). Merging them cleared **six** highs, not three:
+each bump closed several advisories against the same package. #81 and
+citadel-internal-service#59 take `openssl` 0.10.75 → 0.10.79 and `rustls-webpki`
+0.103.9 → 0.103.13 in both lockfiles — patch-level within the same minor, so no
+API surface moves. Since round 526 both images COPY the lockfile, so this bump
+reaches the built containers instead of stopping at the host build.
+
+### Five highs deliberately not fixed
+
+`minimatch` ×2 and `flatted` are transitive under `eslint` / `@typescript-eslint`
+— lint tooling parsing our own source in CI. npm's advisory database does not yet
+flag those versions, so neither `npm update` nor `npm audit fix` moves them; the
+only mechanism is a manual `overrides` block. I tried it, and backed out: it
+required deleting and re-resolving a tracked lockfile, and while attempting it I
+(a) deleted `citadel-workspace-client-ts/package-lock.json` expecting
+`npm install --package-lock-only` to regenerate it, which it did not, and
+(b) silently stripped 430 lines from the ROOT lockfile — the package name and
+every `@esbuild` platform entry — by running npm inside a workspace member.
+Both were caught by diffing before staging and reverted. Neither reached a
+commit. The churn was out of proportion to a ReDoS in a glob matcher that only
+ever sees our own file paths.
+
+`vite`'s fix is 6.4.3 against 5.4.21 installed — a major bump for a
+`server.fs.deny` bypass affecting the dev server, not the static assets that
+deploy. `extract-zip` has **no patched version at all**; it arrives via
+`lighthouse` → `puppeteer-core` → `@puppeteer/browsers`, and the zip it extracts
+is Chrome's own signed download.
+
+Each is real; none is reachable from deployed code. Written into #81's
+description so a lower alert count is not read as "handled".
+
+## Round 528 — a draft proposing the approach master had already rejected
+
+#281 ("external_ipv6 must actually be an IPv6 address") had one red job and I
+opened it expecting that job to be the flake #302 fixes — planning to rebase and
+merge. It was not. A previous session had diagnosed it as **deterministic**: two
+failures on the branch, three greens on master.
+
+The remedy that PR proposed in its own closing comment had since shipped as #282
+(`dfdff3c2`), arrived at from the other side — keep the deliberately dual-stack
+`[::]` bind and correct the advertised **candidate** to the IPv4-mapped internal
+address, plus a Windows guard for where `[::]` binds IPv6-only. `routable_candidate`
+now names this attempt directly as the branch not taken. Merging it would have
+re-broken the test #282 exists to keep green.
+
+Closed with that recorded, including the part still true: `external_ipv6` holds
+an IPv4 address on IPv4-only hosts, and that field still doubles as the
+dual-stack bind switch, so it cannot be corrected at the source until the two are
+untangled.
+
+## Round 529 — the one service in production that floats
+
+`docker-compose.production.yml` argues at length for pinning and tells operators
+to "pin an explicit SHA tag for a deploy you need to be able to reproduce
+exactly" — and then ran `cloudflare/cloudflared:latest`.
+
+`latest` is defensible for our own three images and the file explains why: CI
+advances that tag only through a `promote-latest` job requiring every image in
+the release to have built and passed its smoke test, and
+`verify-image-revisions.sh` proves the pulled set came from one commit. No such
+gate exists for a tag someone else controls. With `restart: unless-stopped`, a
+host reboot following a registry pull swaps the process **terminating the public
+tunnel**, with nobody choosing to and no record of which version had run.
+
+Pinned as `${CLOUDFLARED_TAG:-2026.8.3}`.
+`check-third-party-images-are-pinned` keeps it pinned, exempting
+`ghcr.io/avarok-cybersecurity/*` and resolving `${VAR:-default}` so a pin
+expressed through a variable counts.
+
+Three controls, all run: the floating tag is caught, a tagless reference is
+caught, and **removing the only third-party image fails rather than passing
+vacuously**. The third is the one that earns its place — without it, deleting or
+renaming the last third-party image would make the gate scan nothing and report
+the same green as a gate that passed.
+
+Scope is written into the gate's header: it checks the tag is not floating, NOT
+that it is digest-pinned, so a publisher force-pushing a version tag still moves
+the image underneath us. Digest pinning is strictly stronger and deliberately not
+required, because operators edit these files by hand and a digest cannot be read
+in review.
+
+### Two audits that found nothing
+
+`docker-compose.local.yml` — the stack every user runs on their own machine —
+holds up: the agent has **no `ports:` block at all**, so the unauthenticated
+control plane is never published; `INTERNAL_SERVICE_BIND_HOST=0.0.0.0` is the
+container's interfaces, unreachable without a publish; the UI publishes as
+`127.0.0.1:8080:8080` with a note that the left-hand address is load-bearing.
+And the server's master password fails fast on both empty **and** the
+`.env.example` placeholder. Recorded as negative results rather than left unsaid.
+
+### Three assessments I got wrong
+
+Worth more than the findings. I reported as broken or unassessed: four UI defects
+(fabricated upload, no `ErrorBoundary`, two toast systems, no `ThemeProvider`),
+deployment/ops entirely, and #281's red job. All three were wrong.
+
+The UI claims came from `git show origin/master:...` **inside the submodule** —
+whose own `origin/master` is a stale branch. The parent repo pins
+`citadel-workspaces` at a much newer commit, where all four are fixed, and the
+code documents the exact bugs I "found" as already corrected. Deploy/ops turned
+out to be among the most carefully reasoned surfaces in the tree. #281's failure
+was deterministic, not flaky.
+
+The pattern is one mistake, not three: **asserting a state without checking the
+revision that actually ships.** The merged work stands on CI evidence; the
+assessments were the weak part, and a reader of this file should weight them
+accordingly.
+
+## Open, as of round 529
 
 Everything both Fable fleets confirmed is fixed: 2 critical/high, 13 medium, 15
 low, across 30 findings. What follows is what is NOT fixed, stated so the next
 person does not have to infer it from silence.
 
-### `reconnection_p2p_one_c2s` fails intermittently
+### `reconnection_p2p_one_c2s` — FIXED in #302, entry kept for the reasoning
 
 `RemoteDisconnectEventMissing` — a 30s wait for a `Disconnect` that never
 arrives. Seen on Windows and on ubuntu multi-threaded, on two PRs that cannot
