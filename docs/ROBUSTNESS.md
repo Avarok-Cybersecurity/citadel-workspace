@@ -2283,52 +2283,6 @@ fails it by name.
 That is the same mistake as round 520's, one level down: a control that passes
 because something *else* covers for the thing being measured.
 
-## Round 526 — the containers were not building what the repository says
-
-`test:file-manager` went red on an unchanged branch. The comparison that found
-it: **0** gate refusals and **0** ILM storage errors in the 19:04 run, **152** and
-**2,060** in the 23:17 run of the same code.
-
-The difference is not in this repository. `Cargo.toml:43` declares
-`citadel_sdk = { git = ..., branch = "master" }`, the committed `Cargo.lock` pins
-`da66b47c` — and **neither Dockerfile copies the lockfile**. So cargo re-resolves
-the git dependency to master's TIP when the image is built. The failing run's
-logs name `citadel-protocol-…/a90e75d`: PR #294, merged to the protocol repo at
-21:33, between the two runs.
-
-Three consequences, and the third is the one that matters:
-
-1. The same workspace commit built twice can produce two different binaries.
-2. The tested binary is not the one `Cargo.lock` describes.
-3. **A regression merged to another repository arrives here with no change and no
-   signal.** Nothing in this repo could have shown it; only a passing-vs-failing
-   log comparison could.
-
-And that is what happened. #294 skips a byte-map write when the value equals what
-is already in memory — but memory is written before the file and never rolled
-back, so a retry with identical bytes short-circuits to `Ok` without touching the
-disk. `backend_save` (`transaction/mod.rs:317`) retries exactly that way, with
-the same serialised bytes, three times. A node-map write that failed once was
-acknowledged and silently lost, which is a folder deletion that never persisted
-and a peer that keeps seeing the folder through three syncs.
-
-PR #296 fixes that in the protocol repo. This round fixes why it could arrive
-unannounced: both images now copy the lockfile, so upgrading the protocol becomes
-an explicit commit that moves `Cargo.lock` rather than a side effect of somebody
-else's merge.
-
-`check-images-build-what-the-lockfile-says` guards it. The gate is the COPY, not
-`--locked`: the server image builds from an alternate manifest and may
-legitimately need to resolve dependencies the root lock does not carry, but
-copying the lock pins the git revision either way.
-
-### A gate refused to lie about a subject it could not find
-
-The same commit tried to register `check-message-storage-has-one-owner`, written
-for the paging branch. On this branch its subject does not exist, and its vacuity
-guard failed the run rather than reporting "OK: 0 shapes checked". That is the
-guard earning its place — every gate in this suite has one, and this is the first
-time one has fired for real.
 ## Round 523 — the last open MEDIUM: a send stops rewriting the room
 
 Every message in a room lived under one key as a single `Vec<GroupMessage>`, so
@@ -2529,3 +2483,50 @@ named a deterministic one through the existing `PlatformOps` seam
 ~50ms late — with the control being that the warn fires before the change and
 cannot after. That is worth building first, because twelve local runs proved
 nothing and this area has already turned a 1.4s failure into a 90s hang once.
+
+## Round 526 — the containers were not building what the repository says
+
+`test:file-manager` went red on an unchanged branch. The comparison that found
+it: **0** gate refusals and **0** ILM storage errors in the 19:04 run, **152** and
+**2,060** in the 23:17 run of the same code.
+
+The difference is not in this repository. `Cargo.toml:43` declares
+`citadel_sdk = { git = ..., branch = "master" }`, the committed `Cargo.lock` pins
+`da66b47c` — and **neither Dockerfile copies the lockfile**. So cargo re-resolves
+the git dependency to master's TIP when the image is built. The failing run's
+logs name `citadel-protocol-…/a90e75d`: PR #294, merged to the protocol repo at
+21:33, between the two runs.
+
+Three consequences, and the third is the one that matters:
+
+1. The same workspace commit built twice can produce two different binaries.
+2. The tested binary is not the one `Cargo.lock` describes.
+3. **A regression merged to another repository arrives here with no change and no
+   signal.** Nothing in this repo could have shown it; only a passing-vs-failing
+   log comparison could.
+
+And that is what happened. #294 skips a byte-map write when the value equals what
+is already in memory — but memory is written before the file and never rolled
+back, so a retry with identical bytes short-circuits to `Ok` without touching the
+disk. `backend_save` (`transaction/mod.rs:317`) retries exactly that way, with
+the same serialised bytes, three times. A node-map write that failed once was
+acknowledged and silently lost, which is a folder deletion that never persisted
+and a peer that keeps seeing the folder through three syncs.
+
+PR #296 fixes that in the protocol repo. This round fixes why it could arrive
+unannounced: both images now copy the lockfile, so upgrading the protocol becomes
+an explicit commit that moves `Cargo.lock` rather than a side effect of somebody
+else's merge.
+
+`check-images-build-what-the-lockfile-says` guards it. The gate is the COPY, not
+`--locked`: the server image builds from an alternate manifest and may
+legitimately need to resolve dependencies the root lock does not carry, but
+copying the lock pins the git revision either way.
+
+### A gate refused to lie about a subject it could not find
+
+The same commit tried to register `check-message-storage-has-one-owner`, written
+for the paging branch. On this branch its subject does not exist, and its vacuity
+guard failed the run rather than reporting "OK: 0 shapes checked". That is the
+guard earning its place — every gate in this suite has one, and this is the first
+time one has fired for real.

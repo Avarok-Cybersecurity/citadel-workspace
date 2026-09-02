@@ -212,6 +212,9 @@ jobs:
       - name: Images build what the lockfile says
         run: node scripts/check-images-build-what-the-lockfile-says.mjs
 
+      - name: Message storage has one owner
+        run: node scripts/check-message-storage-has-one-owner.mjs
+
 
       - name: Every administrator promotion sits behind a gate
         run: node scripts/check-admin-promotions-are-gated.mjs
