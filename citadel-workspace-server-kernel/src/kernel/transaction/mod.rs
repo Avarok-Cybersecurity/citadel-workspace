@@ -2170,4 +2170,33 @@ mod group_paging_tests {
             "page 1 was orphaned rather than deleted",
         );
     }
+
+    #[tokio::test]
+    async fn a_half_finished_migration_reads_the_pages_and_ignores_the_blob() {
+        // The migration writes every page, then the index, then deletes the
+        // legacy blob. A crash between the last two leaves BOTH — and if a read
+        // ever preferred the blob, or concatenated the two, the room would show
+        // its history twice or roll back to the pre-migration copy.
+        //
+        // The index is the discriminator, and `migrate_group_to_pages` returns
+        // early when it exists, so the leftover blob is inert rather than
+        // re-migrated. It is reclaimed when the room is deleted.
+        let mgr = fresh();
+        seed_legacy(&mgr, 3).await;
+        mgr.store_group_message(message("migrated")).await.unwrap();
+
+        // Put the legacy blob back, as a crash before its delete would have.
+        seed_legacy(&mgr, 3).await;
+
+        let read = mgr.get_group_messages("room").await.unwrap();
+        assert_eq!(
+            ids(&read),
+            vec!["m0", "m1", "m2", "migrated"],
+            "the leftover blob was read instead of, or as well as, the pages",
+        );
+
+        // And a further write does not re-run the migration onto itself.
+        mgr.store_group_message(message("after")).await.unwrap();
+        assert_eq!(mgr.get_group_messages("room").await.unwrap().len(), 5);
+    }
 }
