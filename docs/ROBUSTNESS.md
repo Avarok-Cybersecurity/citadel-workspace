@@ -2462,3 +2462,70 @@ than by measuring.
 
 A batch delete in the backend would remove the cost entirely. There is no such
 primitive today.
+
+## Round 525 — three Fable agents on the flake, and two defects nobody was looking for
+
+The user asked for three parallel agents on the intermittent UDP failure, one
+architectural. Two have reported. **My hypothesis was wrong**, and the review
+found two defects that are not test flakes at all.
+
+### The mechanism, proved from the log rather than argued
+
+`connect_packet.rs:74` gates connect STAGE0 on `pre_connect_state.success` alone.
+The preconnect SUCCESS arm sets that from the PEER's packet
+(`preconnect_packet.rs:436`), without waiting for this session's own hole punch —
+and inbound packets are processed concurrently (`session.rs:1093`,
+`try_for_each_concurrent(64)`). So connect STAGE0 can take a receiver that
+`handle_success_as_receiver` has not installed yet.
+
+The CI log settles it. In job 100054920908, lines 2037–2039:
+
+```
+Hole Punch Status: Ok(… 33b98969 …)      <- one side's punch resolves
+[udp-oneshot] receiver: … no channel receiver at connect STAGE0
+Hole Punch Status: Ok(… e3a7add7 …)      <- the SERVER's punch resolves, too late
+```
+
+The take is sandwiched between the two completions. Not a hypothesis.
+
+It also explains the shape: the hole-punch **loser** returns as soon as it sends
+`WinnerCanEnd` while the winner blocks, so the client is always installed — which
+is the one-side-passes asymmetry in the log. And it explains why only the
+transient test: transient accounts skip Argon at STAGE0
+(`client_account.rs:276`), which is what makes the server fast enough to lose.
+The review also found `case_3` failing identically in an earlier job, so the
+server password in `case_4` was a red herring.
+
+### Two defects that are not flakes
+
+- **A production leak.** In the losing order the server's loader still installs
+  and sends into the orphaned receiver, and `insert_udp_channel` builds an
+  `unbounded()` channel (`channels.rs:67`). The orphan keeps it alive in the
+  state container for the session's lifetime, so every client datagram
+  accumulates unread while the loader logs success.
+- **A live client-side hang.** On punch failure the client leaves the zero-state
+  pair intact and only warns (`preconnect_packet.rs:669`); its `udp_mode` is
+  never set to Disabled, so the take at `:332` returns a receiver nothing will
+  ever send on. The "1.4s became a 90s hang" the install-site comment warns about
+  is already shipping, on the client, for anyone behind an uncooperative NAT.
+
+### The one-line fix is rejected, with a reason
+
+Keying the install guard on `rx` alone does nothing here — the pair is `empty()`
+at take time, so the guard already installs — and it reopens what #292 fixed:
+between the connect take and the loader's `tx.take()`, the state is
+`(tx Some, rx None)`, and any re-entry in that window would replace a live sender
+and orphan the application's receiver.
+
+### What is open, and what it needs
+
+The fix is to order the server's BEGIN_CONNECT behind its own punch completion —
+which `last_stage` already records, set on BOTH the success and the fallback
+branch. Roughly 30 lines and one wait.
+
+It is not made here, and the reason is a reproduction, not nerve: the review
+named a deterministic one through the existing `PlatformOps` seam
+(`platform_ops.rs:93`) — a test implementation whose `c2s_hole_punch` returns
+~50ms late — with the control being that the warn fires before the change and
+cannot after. That is worth building first, because twelve local runs proved
+nothing and this area has already turned a 1.4s failure into a 90s hang once.
