@@ -2584,3 +2584,33 @@ review recommended making the promise honest — a receiver that resolves to an
 explicit `UdpUnavailable` — and noted that doing the install half without the
 rejection half is exactly what caused a previous 90s hang. That is a larger
 change than this campaign should make unattended.
+
+### The lockfile gate read an intention, not a capability
+
+Round 526 added `COPY ./Cargo.lock` to both images and a gate to keep it there.
+Both builds then failed with `"/Cargo.lock": not found`, because `.dockerignore`
+excluded the lockfile — with the rationale *"let Docker resolve its own deps to
+avoid stale git revision hashes"*, which is the failure mode written in the
+language of a fix.
+
+The gate passed anyway. It read the Dockerfile text and nothing else: that the
+COPY was written, not that the file could arrive. That is the same defect the
+gate exists to prevent, one level up, committed two rounds after four other gates
+were fixed for exactly it. It now also refuses when `.dockerignore` excludes the
+lockfile.
+
+It failed loudly rather than quietly, which is the only thing that makes it a bad
+gate rather than a dangerous one — a blind spot that produces a red build costs
+an hour; one that produces a green build costs whatever it was hiding.
+
+## Where this ended
+
+Two Fable fleets, 30 confirmed findings, 30 fixed. Six protocol PRs merged
+(#293 CRITICAL, #294 HIGH, #295, #296, #297, #298); the workspace's own fixes and
+the deliberate protocol upgrade in one PR behind them.
+
+The habit that produced most of it is not "write tests". It is: **run the control
+against the check, not only against the code the check guards.** Nine checks this
+campaign turned out to be measuring nothing, four of them written in the same
+campaign by the same hands, and every one was found by asking what single change
+would turn it red — never by reading it.
