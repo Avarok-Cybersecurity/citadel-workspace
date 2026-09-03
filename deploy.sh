@@ -145,7 +145,18 @@ fi
 origins="${origins%$'\r'}"
 origins="${origins#"${origins%%[![:space:]]*}"}"
 origins="${origins%"${origins##*[![:space:]]}"}"
-if [[ -z "$origins" ]]; then
+# ...but only when this deployment actually RUNS the internal service. A
+# server-only tenant's compose file declares just `server`: the agent is not
+# deployed at all, which is the whole point of that topology -- each user runs
+# their own, on their own machine, on loopback. Demanding an origin allowlist
+# for a service that will not exist rejected a correct deployment, and the
+# operator's only way forward was to invent a value naming a UI nobody serves.
+#
+# Asked of the compose file rather than of a flag, so this cannot disagree with
+# what gets deployed. `--services` is a metadata read; the fuller selection via
+# select-deploy-services.sh happens later and is the one source of truth for
+# pull/verify/restart.
+if [[ -z "$origins" ]] && docker compose -f "$COMPOSE_FILE" config --services 2>/dev/null | grep -qx 'internal-service'; then
     echo "ERROR: INTERNAL_SERVICE_ALLOWED_ORIGINS is unset or empty."
     echo "  Set it to the origin(s) that may drive the internal service, e.g.:"
     echo "    INTERNAL_SERVICE_ALLOWED_ORIGINS=https://yourdomain.com"
