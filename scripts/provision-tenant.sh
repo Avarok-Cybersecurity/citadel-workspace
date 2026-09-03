@@ -3,10 +3,10 @@
 # Provision one tenant of the Citadel Workspace stack.
 # =============================================================================
 #
-# deploy.sh UPDATES a stack that already exists. It refuses to run without a
-# populated .env, and says so. This is the step before it: create the tenant
-# directory, generate its master password, allocate its ports, and write the
-# ingress config -- so that onboarding is a command rather than a runbook.
+# deploy.sh UPDATES a stack that exists and refuses to run without a populated
+# .env. This is the step before it: create the tenant directory, generate its
+# master password, allocate ports, write the ingress config -- so that
+# onboarding is a command rather than a runbook.
 #
 # WHY A TENANT IS A WHOLE SERVER INSTANCE
 #
@@ -18,33 +18,31 @@
 # is not multi-tenancy. So the unit of provisioning is a server instance:
 # its own compose project, data volumes, ports and password.
 #
-# FUTURE INTENT, recorded here because the constant does not say it: supporting
-# several workspaces per server means giving the root a tenant-scoped id rather
-# than a constant, and threading that id through the 92 call sites and the
-# backend key space. Nothing here forecloses that -- a tenant would simply stop
-# being one-to-one with a server process.
+# FUTURE INTENT, recorded because the constant does not say it: several
+# workspaces per server means a tenant-scoped root id rather than a constant,
+# threaded through those 92 call sites and the backend key space. Nothing here
+# forecloses it; a tenant would stop being one-to-one with a server process.
 #
 # WHAT THIS DELIBERATELY DOES NOT HOST
 #
-# `--topology full` runs the agent (internal-service) alongside the server. The
-# agent is the P2P ratchet ENDPOINT, not a relay: peer_channel_created.rs takes
-# already-decrypted messages off the stream and forwards the plaintext to the
-# browser. Running it for OTHER people puts their P2P plaintext on this host.
-# Hosting the workspace server has no such property -- it sees only C2S traffic,
-# under a bundle distinct from any peer-to-peer one. So `server-only` is the
-# default, and `full` is for a host whose agent serves its own operator.
+# `--topology full` runs the agent alongside the server. The agent is the P2P
+# ratchet ENDPOINT, not a relay: peer_channel_created.rs takes already-decrypted
+# messages off the stream and forwards plaintext to the browser, so running it
+# for OTHER people puts their P2P plaintext on this host. The workspace server
+# has no such property -- only C2S traffic, under a distinct bundle. Hence
+# `server-only` by default; `full` is for a host whose agent serves its operator.
 #
 # Usage:
 #   ./scripts/provision-tenant.sh --tenant acme [options]
 #
-#   --tenant NAME        Required. [a-z0-9-], becomes the compose project name.
-#   --ingress MODE       nginx | tunnel | none   (default: none)
-#   --topology MODE      server-only | full      (default: server-only)
-#   --domain FQDN        Required unless --ingress none.
-#   --base-port N        First port of this tenant's block (default: auto).
-#   --root DIR           Where tenants live (default: /srv/citadel-tenants).
-#   --dry-run            Print what would be written; touch nothing.
-#   --force              Overwrite an existing tenant directory.
+#   --tenant NAME   Required. [a-z0-9-]; becomes the compose project name.
+#   --ingress MODE  nginx | tunnel | none        (default: none)
+#   --topology MODE server-only | full           (default: server-only)
+#   --domain FQDN   Required unless --ingress none.
+#   --base-port N   First port of this tenant's block (default: auto).
+#   --root DIR      Where tenants live (default: /srv/citadel-tenants).
+#   --dry-run       Print what would be written; touch nothing.
+#   --force         Overwrite an existing tenant directory.
 # =============================================================================
 set -euo pipefail
 
@@ -86,14 +84,13 @@ if [ "$INGRESS" != "none" ] && [ "$TOPOLOGY" = "server-only" ]; then
 fi
 
 # --- port allocation ---------------------------------------------------------
-# A tenant owns a contiguous block of 10: +0 server, +1 agent, +2 UI. The block
-# is spaced so adding a fourth service later does not collide with the next
-# tenant. Ports are checked against what is actually listening, not against a
-# registry file that can drift from reality.
-# A port check that cannot see is worse than none: it reports every port free
-# and hands out one already in use. `ss` is Linux-only, so pick a tool that
-# exists and REFUSE if none does, rather than silently approving everything.
-# Caught by a control: --base-port 443 was accepted on a host without `ss`.
+# A tenant owns a block of 10: +0 server, +1 agent, +2 UI -- spaced so a fourth
+# service later cannot collide with the next tenant. Checked against what is
+# actually listening, not a registry file that drifts from reality.
+# A port check that cannot see is worse than none: it calls every port free and
+# hands out one in use. `ss` is Linux-only, so pick a tool that exists and
+# REFUSE if none does. Caught by a control: --base-port 443 was accepted on a
+# host with no `ss`.
 if command -v ss >/dev/null 2>&1; then
   port_busy() { ss -tlnH 2>/dev/null | awk '{print $4}' | grep -qE "[:.]$1\$"; }
 elif command -v lsof >/dev/null 2>&1; then
@@ -168,39 +165,6 @@ EOF
   return 0
 }
 
-render_vhost() {
-  cat <<EOF
-# $DOMAIN -> tenant $TENANT UI on 127.0.0.1:$UI_PORT
-server {
-    listen 80; listen [::]:80;
-    server_name $DOMAIN;
-    return 301 https://\$server_name\$request_uri;
-}
-server {
-    listen 443 ssl; listen [::]:443 ssl;
-    server_name $DOMAIN;
-    http2 on;
-    ssl_certificate     /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    client_max_body_size 500m;
-    location / {
-        proxy_pass http://127.0.0.1:$UI_PORT;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        # The UI reaches its agent over a WebSocket. Without these two the
-        # connection is downgraded to a plain request and the app loads but
-        # never connects -- which looks like an application bug, not an
-        # ingress one, and is why they are here rather than left to a default.
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_read_timeout 180s;
-        proxy_buffering off;
-    }
-}
-EOF
-}
 
 # --- emit --------------------------------------------------------------------
 echo "tenant      : $TENANT"
@@ -212,7 +176,7 @@ echo "directory   : $TENANT_DIR"
 if [ "$DRY_RUN" = true ]; then
   echo "--- .env (password redacted) ---"
   render_env "__REDACTED__"
-  [ "$INGRESS" = "nginx" ] && { echo "--- $DOMAIN.conf ---"; render_vhost; }
+  [ "$INGRESS" = "nginx" ] && { echo "--- $DOMAIN.conf ---"; bash scripts/render-nginx-vhost.sh "$DOMAIN" "$UI_PORT" "$TENANT"; }
   echo "--- dry run: nothing written ---"
   exit 0
 fi
@@ -222,12 +186,31 @@ mkdir -p "$TENANT_DIR"
 umask 077
 render_env "$MASTER_PASSWORD" > "$TENANT_DIR/.env"
 chmod 600 "$TENANT_DIR/.env"
-cp docker-compose.production.yml "$TENANT_DIR/"
+# A server-only tenant gets a compose file declaring only `server`: that is how
+# deploy.sh expresses a slimmed deployment (it intersects the deployable set
+# with what the file declares), and it is why this topology needs no
+# INTERNAL_SERVICE_ALLOWED_ORIGINS -- the agent is not deployed here at all,
+# which is the point. Users run their own, on their own machine, on loopback.
+# Generated from the canonical file, never maintained as a second one.
+if [ "$TOPOLOGY" = "server-only" ]; then
+  python3 scripts/trim-compose.py docker-compose.production.yml server \
+    > "$TENANT_DIR/docker-compose.production.yml" || die "could not trim the compose file"
+else
+  cp docker-compose.production.yml "$TENANT_DIR/"
+fi
 cp -r scripts "$TENANT_DIR/scripts" 2>/dev/null || true
+# Prove the generated file says what the topology claims, before anyone deploys
+# it: a trim that silently kept the agent would put a hosted agent on a public
+# host, the one thing this topology exists to prevent.
+if [ "$TOPOLOGY" = "server-only" ]; then
+  d=$(cd "$TENANT_DIR" && docker compose -f docker-compose.production.yml config --services 2>/dev/null | sort | tr '\n' ' ')
+  [ "${d% }" = "server" ] || die "server-only tenant declares '${d% }'; expected exactly 'server'"
+  echo "verified   : compose declares exactly [server]"
+fi
 cp deploy.sh "$TENANT_DIR/" 2>/dev/null || true
 
 if [ "$INGRESS" = "nginx" ]; then
-  render_vhost > "$TENANT_DIR/$DOMAIN.conf"
+  bash scripts/render-nginx-vhost.sh "$DOMAIN" "$UI_PORT" "$TENANT" > "$TENANT_DIR/$DOMAIN.conf"
   echo "wrote $TENANT_DIR/$DOMAIN.conf"
   echo "NEXT: obtain a cert for $DOMAIN, install the vhost, then 'nginx -t && systemctl reload nginx'."
   echo "      The existing mx.avarok.net cert does NOT cover new names; expanding it touches"
