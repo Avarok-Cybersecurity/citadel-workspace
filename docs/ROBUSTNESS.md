@@ -2823,7 +2823,56 @@ Landed in ILM PR #4. Not yet in the line this repository pins: that needs
 the internal-service pointer, whose own `master` is 109 commits behind what
 is pinned here (round 531).
 
-## Open, as of round 533
+## Round 534 — one FAIL line, two defects, found from opposite ends
+
+**Found.** `test:tree-structure` failed on UI #17 and UI #20 — both script-only
+diffs — with `Admin status: FAIL` after "Workspace fully loaded". Attempt-1 of
+run 33914939883: the `_admin_ready` screenshot shows the avatar with no admin
+ring; the `_node_updated` screenshot seconds later shows the ring, the ADMIN
+SETTINGS badge, and an office that user had just created. React took 6.9s to
+render on that runner. The user was admin; the role is read from
+`state.currentUser`, which the server fills in after the sidebar is up, and it
+trailed a 10s wall. The check measured latency and called it a role.
+
+**Then locally**, the same spec failed every run — and not for that reason.
+`createAccount` swept modals the instant the init modal was accepted. The
+registration wizard stays on its Profile step until Landing finishes
+`postAuthSetup` and navigates; and even after the URL changes, the lazy route
+keeps the old screen up until the chunk loads (measured by the new sweep
+diagnostic: `<div Create your profile>` 1280x720 at opacity 1, z-50, 800ms
+after `/workspace`). Escape is "back" for the wizard, so the sweep walked
+Profile → Security → Server and clicked its own Cancel: live session chip on
+the landing page, no workspace. A slow CI runner navigated first — the only
+reason this ever passed there. The CI log has no sweep detections at all, so
+the two failures share a line and nothing else.
+
+**Fix (UI #22).** `waitForAdminRole()` waits on the workspace-load budget and
+names three outcomes: role arrived (with latency), avatar present but never
+admin, no avatar at all. `waitForRegistrationToSettle()` waits for the
+navigation and for the wizard overlay to detach, logging both gaps.
+`closeAnyModals` now says what it matched — `[data-state="open"]` is every
+open Radix primitive — and the first-user branch logs every outcome instead of
+none. Propagated: `office-room-crud` had the identical 10s wall.
+
+**Controls.** `ADMIN_ROLE_BUDGET_MS=1` → "avatar present but role never became
+admin within 1ms" (the third outcome, not the first — the workspace was up).
+The four pre-fix local runs are the sweep defect measured before the change.
+Both specs pass locally; the member path reports "Entered the workspace 0ms
+after registration", wizard gone 226ms later.
+
+**Closed in the same round.** Does a real new member see the wizard linger?
+Measured with one script against both servers: production bundle (vite
+preview), three registrations — overlay gone 94, 125 and 128ms after the URL
+changed; dev server, two — 217 and 219ms. The 800ms figure above was the sweep
+arriving mid-transition on a cold dev chunk, not what a person sees. Not a
+defect. The number a person does see is submit → workspace, 3.8–4.0s on both
+servers: that is `postAuthSetup` (permissions, workspace, members), the same
+cost the onboarding flow already pays and already shows a spinner for.
+
+**Also this round.** ILM #4 merged (`688a688`) — green on all three platforms,
+which retires the "macOS is slow" story for good.
+
+## Open, as of round 534
 
 Everything both Fable fleets confirmed is fixed: 2 critical/high, 13 medium, 15
 low, across 30 findings. What follows is what is NOT fixed, stated so the next
