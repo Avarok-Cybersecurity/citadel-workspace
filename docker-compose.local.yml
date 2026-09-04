@@ -121,6 +121,8 @@ services:
       # name - which is what stops a malicious site you visit from driving your agent through your
       # own browser. A publicly-served UI must leave this off; see docker-compose.production.yml.
       - WS_PROXY_ENABLED=1
+      # None, explicitly: a locally-served page reaches its agent through the /ws proxy above.
+      - LOOPBACK_AGENT_ORIGIN=
     ports:
       # 127.0.0.1 on the LEFT is load-bearing: it publishes the UI to THIS MACHINE only. A bare
       # "8080:8080" would bind every interface and hand /ws - and the agent behind it - to anyone

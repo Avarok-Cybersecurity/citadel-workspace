@@ -3,8 +3,8 @@
 #
 # Rendered at CONTAINER START by the nginx image's envsubst entrypoint
 # (/docker-entrypoint.d/20-envsubst-on-templates.sh), which writes the result to
-# /etc/nginx/conf.d/. Exactly three variables are substituted - ${AGENT_UPSTREAM},
-# ${WS_PROXY_ENABLED} and ${LISTEN_ADDR} - because NGINX_ENVSUBST_FILTER in the
+# /etc/nginx/conf.d/. Exactly four variables are substituted - ${AGENT_UPSTREAM},
+# ${WS_PROXY_ENABLED}, ${LISTEN_ADDR} and ${LOOPBACK_AGENT_ORIGIN} - because NGINX_ENVSUBST_FILTER in the
 # Dockerfile pins the list to those names.
 #
 # That pinning is an INJECTION GUARD, not (as one might assume) protection against
@@ -85,6 +85,23 @@ map $http_host $ws_host_allowed {
     "~*^0\.0\.0\.0(:[0-9]+)?$"         1;
 }
 
+# The Content-Security-Policy, defined ONCE.
+#
+# `add_header` does not inherit into a block that declares its own, so six locations each
+# carried a byte-identical copy of this string and any change had to land in all six -- the
+# kind of duplication that lets one copy drift silently. A map evaluates per request, so every
+# `add_header Content-Security-Policy $csp` below emits the same policy.
+#
+# ${LOOPBACK_AGENT_ORIGIN} is the ONE off-origin socket a hosted page may open: the agent on
+# the VISITOR'S OWN machine, reached through a name the operator points at 127.0.0.1 and holds
+# a real certificate for (e.g. wss://local.example.com:12345). The same value is written into
+# the page's <meta name="citadel-loopback-agent"> below, so what the app dials and what the
+# policy permits cannot disagree. Empty (the default) leaves `connect-src 'self'` alone.
+# 16-validate-runtime-vars.sh admits only a bare wss://host:port here.
+map $host $csp {
+    default "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ${LOOPBACK_AGENT_ORIGIN}; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+}
+
 server {
     # LISTEN_ADDR is 0.0.0.0 by default, which is what a bridge-networked container
     # needs for `-p 8080:8080` to reach it. Under HOST networking, though, 0.0.0.0
@@ -154,7 +171,7 @@ server {
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+    add_header Content-Security-Policy $csp always;
 
     # -------------------------------------------------------------------------
     # The agent socket.
@@ -279,7 +296,7 @@ server {
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+        add_header Content-Security-Policy $csp always;
     }
 
     # WASM files
@@ -302,7 +319,7 @@ server {
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+        add_header Content-Security-Policy $csp always;
     }
 
     # ---------------------------------------------------------------------------
@@ -329,7 +346,7 @@ server {
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+        add_header Content-Security-Policy $csp always;
     }
 
     location = /manifest.webmanifest {
@@ -340,7 +357,7 @@ server {
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+        add_header Content-Security-Policy $csp always;
     }
 
     # SPA fallback - serve index.html for all non-file routes.
@@ -375,11 +392,15 @@ server {
     # security header set is repeated here - see the note at the top of the server block.
     location / {
         try_files $uri $uri/ /index.html;
+        # Hand the page the loopback agent origin the policy above permits. index.html ships
+        # the meta empty; this fills it in. Same variable as the CSP, so the two cannot drift.
+        sub_filter 'name="citadel-loopback-agent" content=""' 'name="citadel-loopback-agent" content="${LOOPBACK_AGENT_ORIGIN}"';
+        sub_filter_once on;
         add_header Cache-Control "public, no-cache" always;
         add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(self), display-capture=(self)" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+        add_header Content-Security-Policy $csp always;
     }
 }

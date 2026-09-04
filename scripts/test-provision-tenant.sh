@@ -40,6 +40,10 @@ refuses "no port tool available"      env PATH=/nonexistent bash $S --tenant a -
 accepts "server-only, no ingress"     $S --tenant ok1 --dry-run
 accepts "full + tunnel"               $S --tenant ok2 --topology full --ingress tunnel --domain w.example --dry-run
 accepts "full + nginx"                $S --tenant ok3 --topology full --ingress nginx --domain w.example --dry-run
+refuses "loopback-host on server-only" $S --tenant a --loopback-host local.w.example --dry-run
+refuses "loopback-host with a scheme"  $S --tenant a --topology full --loopback-host wss://local.w.example --dry-run
+refuses "loopback-host with a port"    $S --tenant a --topology full --loopback-host local.w.example:12345 --dry-run
+accepts "full + nginx + loopback-host" $S --tenant ok4 --topology full --ingress nginx --domain w.example --loopback-host local.w.example --dry-run
 
 # An occupied port must be rejected. Bind one here rather than trusting that
 # some well-known port happens to be busy on the runner -- a port that is free
@@ -77,5 +81,19 @@ for topo in server-only full; do
   fi
 done
 
+# The .env a --loopback-host tenant gets carries the origin the UI will dial, and one without
+# the flag carries the key empty -- present, so the compose default never silently applies.
+out=$($S --tenant ok5 --topology full --ingress nginx --domain w.example --loopback-host local.w.example --dry-run 2>/dev/null || true)
+if echo "$out" | grep -q "^LOOPBACK_AGENT_ORIGIN=wss://local.w.example:12345$"; then
+  echo "  ok: --loopback-host lands in .env as wss://host:12345"
+else
+  echo "  FAIL: --loopback-host did not produce LOOPBACK_AGENT_ORIGIN=wss://local.w.example:12345"; fails=$((fails+1))
+fi
+out=$($S --tenant ok6 --topology full --ingress nginx --domain w.example --dry-run 2>/dev/null || true)
+if echo "$out" | grep -q "^LOOPBACK_AGENT_ORIGIN=$"; then
+  echo "  ok: without --loopback-host the key is present and empty"
+else
+  echo "  FAIL: without --loopback-host the key is missing or non-empty"; fails=$((fails+1))
+fi
 if [ "$fails" -ne 0 ]; then echo "FAIL: $fails assertion(s)"; exit 1; fi
 echo "provision-tenant: all guards refuse, all valid inputs accepted."

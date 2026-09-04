@@ -273,6 +273,12 @@ services:
       # P2P traffic. Users run their own agent locally instead - see docker-compose.local.yml,
       # which is where /ws is both safe and enabled.
       - WS_PROXY_ENABLED=0
+      # The agent on the VISITOR'S machine, as a bare wss://host:port (e.g. wss://local.example.com:12345),
+      # or empty. A hosted page cannot reach an agent through its own origin (the proxy above is off),
+      # so the operator points a name at 127.0.0.1, holds a certificate for it, and publishes it here:
+      # nginx puts it in the CSP and in the page meta from this one value. provision-tenant.sh
+      # --loopback-host writes it. Empty leaves both untouched.
+      - LOOPBACK_AGENT_ORIGIN=${LOOPBACK_AGENT_ORIGIN:-}
     deploy:
       resources:
         limits:

@@ -247,7 +247,7 @@ ENV LISTEN_ADDR=0.0.0.0
 # That makes this an injection guard: whoever can set env vars on the container could
 # otherwise alter the proxy's behaviour, including the headers it forwards. The smoke
 # test asserts the property directly by starting the image with a colliding variable.
-ENV NGINX_ENVSUBST_FILTER=^(AGENT_UPSTREAM|WS_PROXY_ENABLED|LISTEN_ADDR)$
+ENV NGINX_ENVSUBST_FILTER=^(AGENT_UPSTREAM|WS_PROXY_ENABLED|LISTEN_ADDR|LOOPBACK_AGENT_ORIGIN)$
 
 # The entrypoint renders templates into /etc/nginx/conf.d at start-up, and we run as
 # the unprivileged `nginx` user - so that directory must be writable by it. Without

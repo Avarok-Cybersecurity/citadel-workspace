@@ -39,6 +39,10 @@
 #   --ingress MODE  nginx | tunnel | none        (default: none)
 #   --topology MODE server-only | full           (default: server-only)
 #   --domain FQDN   Required unless --ingress none.
+#   --loopback-host NAME
+#                   A name that resolves to 127.0.0.1 (e.g. local.example.com) and holds a
+#                   certificate; the hosted UI dials the visitor's OWN agent at
+#                   wss://NAME:12345. Needs --topology full. See docker-compose.production.yml.
 #   --base-port N   First port of this tenant's block (default: auto).
 #   --root DIR      Where tenants live (default: /srv/citadel-tenants).
 #   --dry-run       Print what would be written; touch nothing.
@@ -58,6 +62,7 @@ while [ $# -gt 0 ]; do
     --ingress)   INGRESS="${2:?--ingress needs a value}"; shift 2 ;;
     --topology)  TOPOLOGY="${2:?--topology needs a value}"; shift 2 ;;
     --domain)    DOMAIN="${2:?--domain needs a value}"; shift 2 ;;
+    --loopback-host) LOOPBACK_HOST="${2:?--loopback-host needs a value}"; shift 2 ;;
     --base-port) BASE_PORT="${2:?--base-port needs a value}"; shift 2 ;;
     --root)      ROOT="${2:?--root needs a value}"; shift 2 ;;
     --dry-run)   DRY_RUN=true; shift ;;
@@ -82,6 +87,17 @@ fi
 if [ "$INGRESS" != "none" ] && [ "$TOPOLOGY" = "server-only" ]; then
   die "--ingress $INGRESS needs --topology full: a server-only tenant serves no UI to route to"
 fi
+LOOPBACK_HOST="${LOOPBACK_HOST:-}"
+if [ -n "$LOOPBACK_HOST" ]; then
+  [ "$TOPOLOGY" = "full" ] || die "--loopback-host needs --topology full: only a served UI dials a visitor's agent"
+  # Lowercase DNS label(s) only: this value is substituted into the UI's CSP and page meta, and
+  # 16-validate-runtime-vars.sh in the image refuses anything else at container start -- but a
+  # refusal there is a failed deploy, and a refusal here is a failed provision, which is cheaper.
+  echo "$LOOPBACK_HOST" | grep -Eq '^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$' \
+    || die "--loopback-host '$LOOPBACK_HOST' must be a lowercase DNS name (no scheme, port or path)"
+fi
+# The port the published agent binary binds by convention (docs/AGENT_README.md).
+LOOPBACK_AGENT_ORIGIN="${LOOPBACK_HOST:+wss://$LOOPBACK_HOST:12345}"
 
 # --- port allocation ---------------------------------------------------------
 # A tenant owns a block of 10: +0 server, +1 agent, +2 UI -- spaced so a fourth
@@ -159,6 +175,7 @@ WORKSPACE_BIND_ADDR=$BIND_ADDR
 INTERNAL_SERVICE_PORT=$AGENT_PORT
 INTERNAL_SERVICE_BIND_HOST=$AGENT_BIND_HOST
 INTERNAL_SERVICE_ALLOWED_ORIGINS=$ORIGINS
+LOOPBACK_AGENT_ORIGIN=$LOOPBACK_AGENT_ORIGIN
 IMAGE_TAG=${IMAGE_TAG:-latest}
 EOF
   [ "$INGRESS" = "tunnel" ] && echo "TUNNEL_TOKEN=${TUNNEL_TOKEN:-__SET_ME__}"
@@ -170,6 +187,7 @@ EOF
 echo "tenant      : $TENANT"
 echo "topology    : $TOPOLOGY"
 echo "ingress     : $INGRESS${DOMAIN:+ ($DOMAIN)}"
+echo "loopback    : ${LOOPBACK_AGENT_ORIGIN:-none}"
 echo "ports       : server=$SERVER_PORT agent=$AGENT_PORT ui=$UI_PORT"
 echo "directory   : $TENANT_DIR"
 
