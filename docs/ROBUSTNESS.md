@@ -2660,7 +2660,125 @@ revision that actually ships.** The merged work stands on CI evidence; the
 assessments were the weak part, and a reader of this file should weight them
 accordingly.
 
-## Open, as of round 529
+## Round 530 — the flake that froze releases for nine days
+
+`member-promotion.spec.ts` was filed as a test annoyance. It is not. The
+`Publish Images` workflow runs a full `Validate before publishing` gate, and
+that gate fails on this one spec:
+
+    Validate before publishing / Playwright - shard 2/3   FAILED
+    Publish ${{ matrix.image }}                           skipped
+    Promote latest                                        skipped
+
+73 passed, 1 failed, 2 skipped. The two skipped jobs are the ones that build
+and tag images. So **no image has been published since 25 August** and `latest`
+still points at week-old code; the newest tag in GHCR is `sha-aeafb7ec`, a
+commit behind master. A deployment today would ship code predating the
+CRITICAL auth-bypass fix, the openssl bump and the paging work.
+
+It has now failed this gate on `aeafb7e`, `af5481a`, `8c711fa` and `af2e64f`.
+Earlier rounds called it "intermittent, passes most runs"; against the publish
+gate it fails more often than it passes.
+
+The spec fails on its BASELINE -- a plain member's Edit button reads enabled --
+and the instrument built for exactly that condition,
+`logOfferedWithoutAnswer`'s "edit offered without an answer", reached no
+artifact the run produced: not the job log (container output, not page
+console), not the fixture (no console listener), and not the trace, whose
+event types were `before`/`after`/`stdout`/`context-options`/`error` with zero
+console entries. Rounds 531-532 put that diagnostic where the failure happens.
+
+## Round 531 — six CI rungs, each hiding the next
+
+Landing the diagnostic in the UI repo took six fixes, because that repo's own
+workflow had a stack of failures where each one masked the one below:
+
+| # | Cause | Whose |
+|---|---|---|
+| 1 | `Pull base images` used a step-level `working-directory` relative to the WORKSPACE ROOT, not the job's `defaults.run.working-directory: parent` | pre-existing |
+| 2 | `vite build` could not resolve the wasm-pack glue: the production-bundle gates were copied from the parent without the `sync-wasm-client` step that generates their input | pre-existing |
+| 3 | `EACCES` on `dist/sw.js.map`: the sync container runs as root and leaves `dist/` root-owned | pre-existing |
+| 4 | my reclaim step removed `parent/parent/...` -- `rm -rf` on a missing path exits 0, so it went green having done nothing | mine |
+| 5 | `multi-user.fixture.ts` hit 269 lines | mine |
+| 6 | the repo carried its own drifted copy of the 250-line rule | pre-existing |
+
+Rung 4 is the one worth keeping. I wrote it one commit after diagnosing rung 1,
+in the same file, and got the direction backwards: a step's `run:` is relative
+to the job default, a step-level `working-directory:` is relative to the
+workspace root. Those are opposite. The step now verifies the directory is
+actually gone -- a cleanup that cannot fail reports a success it has not
+earned, which is the same defect as a gate that cannot fail.
+
+Rung 6 is the other: two implementations of one rule had drifted, and the
+parent's was the stricter (it pins each exception to an EXACT line count, so a
+held file cannot quietly grow). **Two implementations of one rule drift toward
+the weaker one.** Replaced with a delegation; 45 lines of duplicate deleted.
+
+### A pointer bump that would have reverted 109 commits
+
+Routine-looking submodule work. `git diff --submodule=log` showed six `<`
+lines -- commits being REMOVED -- for `citadel-internal-service`. The parent
+pins `e21933c`, which lives on `origin/audio-video-support`; that repository's
+own `master` is **109 commits behind it**. Moving the pointer to `master` would
+have reverted session-ownership fixes, the WebSocket origin allowlist, media
+transport and the whole ILM series.
+
+Consequence still open: **PR #59's openssl bump merged into that stale
+`master`**, so the submodule's lockfile fix is not in the line the parent pins.
+Which branch is canonical there is a decision, not a commit.
+
+## Round 532 — onboarding that costs the test suite nothing
+
+There was no onboarding at all: no tour component, no tour dependency, no
+first-run detection, no "seen intro" flag. The survey that established this
+also produced the number that shaped the design -- account creation costs **9
+UI interactions** (11 for the first user, who also initialises the workspace)
+across two full page loads, and the suite creates an account for nearly every
+spec, roughly 90 per run.
+
+So the gate is the INVERSE of `isDiagnosticsUiEnabled`: off in development, on
+in production. Diagnostics are for us and hidden from users; onboarding is for
+users and hidden from us.
+
+What it fixes is specific, not decorative. "Create Account" against a bare
+address does two different jobs -- the first person becomes administrator and
+needs `WORKSPACE_MASTER_PASSWORD`; everyone after is joining and cannot hold
+it. Today that secret is first named in a modal shown AFTER the account exists,
+including to members who have no way to obtain it. `OnboardingIntent` names
+both paths before the wizard, and deliberately does not branch registration.
+
+One thing the diagnostics gate does not have: an explicit `?onboarding=0` that
+beats production. Without it, testing onboarding against a production build
+would make every fixture account pay for the dialog too.
+
+Controls, and what each proved:
+
+- unit: inverting the environment default fails 3 assertions; removing the
+  off-switch fails 2; treating a storage throw as an opt-out fails 1. The last
+  is unreachable from any dev-only test -- partitioned storage would otherwise
+  make onboarding vanish in production.
+- Playwright, run live: 5 passed. Forcing the gate off fails 4 and passes
+  exactly one -- "is absent in the environment the suite runs in". A control
+  that failed all five would have discriminated less.
+
+### The dev stack was broken, in three layers
+
+The UI container was crash-looping on `Cannot find package 'vite-plugin-pwa'`,
+a dependency declared at `citadel-workspaces/package.json:119`.
+
+1. `package.json` is **baked into the image** (`docker/ui/Dockerfile:7`), not
+   bind-mounted. A dependency added to the repo never reaches a running
+   container.
+2. Running `npm install` inside the container made it worse: it pruned 164
+   packages to match the stale manifest.
+3. Rebuilding the image did not help either -- the named volume
+   `citadel-workspace_ui_node_modules` SHADOWS `/app/node_modules`.
+
+Fixed by removing the volume and recreating. Worth stating as a standing trap:
+a dependency added to the repo is invisible to the running dev container until
+someone deletes that volume, and nothing anywhere says so.
+
+## Open, as of round 532
 
 Everything both Fable fleets confirmed is fixed: 2 critical/high, 13 medium, 15
 low, across 30 findings. What follows is what is NOT fixed, stated so the next
