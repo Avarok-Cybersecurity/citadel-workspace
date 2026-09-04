@@ -719,7 +719,14 @@ wait_for_port() {
     # old one — the mixed-version state the ordering exists to avoid on a
     # build/pull failure, but which a STARTUP failure lands in anyway. Say so,
     # rather than leaving an exit 1 that reads like "nothing happened".
-    echo "The stack is now MIXED-VERSION: ${svc} is on the new image, later services are not."
+    # Only a mixed stack is mixed. When ${svc} was the LAST (or only) service, the honest
+    # statement is that it is on the new image and unhealthy -- a server-only tenant was
+    # told "later services are not" about services it does not have.
+    if [ "${DEPLOY_SERVICES[${#DEPLOY_SERVICES[@]}-1]}" = "$svc" ]; then
+        echo "${svc} is on the new image and did not become healthy; no other service was touched."
+    else
+        echo "The stack is now MIXED-VERSION: ${svc} is on the new image, later services are not."
+    fi
     rollback_hint "${PREVIOUS_TAGS:-}"
     exit 1
 }
@@ -777,8 +784,17 @@ rollback_hint() {
 # silently re-compile on the host and defeat the whole point of the registry.
 echo "  Restarting server..."
 docker compose -f "$COMPOSE_FILE" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} up -d --no-deps server
-echo "  Waiting for server to be healthy..."
-wait_for_port server 12349
+# The port the server was told to bind, from the same .env the container reads. Health
+# itself comes from Docker (the compose healthcheck derives its port the same way); this
+# is the port the messages name, and "did not become healthy on port 12349" for a tenant
+# on 12400 sent an operator to look at the wrong socket. The default matches the
+# compose file's own, so an .env that omits the key reports the port it actually uses.
+server_bind=$(grep -E '^[[:space:]]*WORKSPACE_BIND_ADDR=' .env | tail -n1 | cut -d= -f2- || true)
+server_bind="${server_bind%$'\r'}"
+server_port="${server_bind##*:}"
+[ -n "$server_port" ] || server_port=12349
+echo "  Waiting for server to be healthy (port ${server_port})..."
+wait_for_port server "$server_port"
 echo "  Server is up."
 
 # Internal service next, when this deployment includes one.

@@ -183,6 +183,7 @@ run_deploy() { # <name> <service>...
   {
     [ -n "${NO_MASTER_PW:-}" ] || printf 'WORKSPACE_MASTER_PASSWORD=test-password-not-a-placeholder\n'
     [ -n "${NO_ORIGINS:-}" ] || printf 'INTERNAL_SERVICE_ALLOWED_ORIGINS=https://tenant.example\n'
+    [ -z "${BIND_PORT:-}" ] || printf 'WORKSPACE_BIND_ADDR=0.0.0.0:%s\n' "$BIND_PORT"
   } > "$dir/.env"
   export CALLS="$dir/calls.txt"
   export PREEXISTING="${PREEXISTING:-}"
@@ -333,6 +334,14 @@ assert_failed "$d"
 grep -q "WORKSPACE_MASTER_PASSWORD is unset" "$d/out.txt" \
   || fail "a .env without the master password was refused without saying why (see $d/out.txt)"
 echo "  no-master   -> refused, and says so (was a silent exit)"; pass_count=$((pass_count+1))
+
+# The health wait names the port the .env binds, not a literal 12349. A tenant on any
+# other port was told to look at the wrong socket when the server did not come up.
+d=$(BIND_PORT=12400 run_deploy bind-port server)
+assert_succeeded "$d"
+grep -q "healthy (port 12400)" "$d/out.txt" || fail "the health wait did not name the .env port (see $d/out.txt)"
+if grep -q "12349" "$d/out.txt"; then fail "the health wait still names 12349 for a tenant bound to 12400 (see $d/out.txt)"; fi
+echo "  bind-port   -> the health wait names the port from .env"; pass_count=$((pass_count+1))
 
 # --- slimming an EXISTING full stack: refuse, do not half-apply --------------
 # `docker compose up` leaves containers for undeclared services running and merely warns, so
