@@ -44,6 +44,7 @@ COMPOSE_FILE="docker-compose.production.yml"
 PROFILE_ARGS=()
 TUNNEL_PROFILE_ACTIVE=false
 SKIP_PULL=false
+LOCAL_IMAGES=false
 
 # One description of the interface, printed both on request and on a mistake, so
 # the two can never drift apart.
@@ -54,6 +55,11 @@ Citadel Workspace - deploy / update the running production stack.
 Usage: $0 [--no-pull] [--tunnel] [--help]
 
   --no-pull   Skip the git pull; deploy using the compose file already checked out.
+  --local-images
+              Do not contact the registry; deploy the images already present on this
+              host (e.g. shipped with 'docker save | ssh host docker load' while the
+              GHCR packages are private). The revision gate still inspects every image,
+              so a missing one aborts before anything is restarted.
   --tunnel    Include the Cloudflare tunnel profile. Requires TUNNEL_TOKEN in .env.
   --help, -h  Print this and exit.
 
@@ -72,6 +78,9 @@ for arg in "$@"; do
     case $arg in
         --no-pull)
             SKIP_PULL=true
+            ;;
+        --local-images)
+            LOCAL_IMAGES=true
             ;;
         --tunnel)
             PROFILE_ARGS=(--profile tunnel)
@@ -118,7 +127,10 @@ fi
 # document the contract, so `cp .env.example .env` + editing only the
 # assignment would leave the marker in a comment and a whole-file grep
 # would wrongly reject a correctly-edited file.
-master_pw=$(grep -E '^[[:space:]]*WORKSPACE_MASTER_PASSWORD=' .env | tail -n1 | cut -d= -f2-)
+# `|| true`, for the same reason as the origins read below: without it a .env that lacks
+# the key makes grep exit 1 under pipefail and `set -e` exits here, silently -- BEFORE the
+# "unset" message two lines down can ever print. The check must be reachable.
+master_pw=$(grep -E '^[[:space:]]*WORKSPACE_MASTER_PASSWORD=' .env | tail -n1 | cut -d= -f2- || true)
 master_pw="${master_pw%$'\r'}"                                # strip CR
 master_pw="${master_pw#"${master_pw%%[![:space:]]*}"}"       # trim leading ws
 master_pw="${master_pw%"${master_pw##*[![:space:]]}"}"       # trim trailing ws
@@ -140,7 +152,11 @@ fi
 # scripts/test-deploy-services.sh does, and how this check first failed.
 origins="${INTERNAL_SERVICE_ALLOWED_ORIGINS:-}"
 if [[ -z "$origins" ]]; then
-    origins=$(grep -E '^[[:space:]]*INTERNAL_SERVICE_ALLOWED_ORIGINS=' .env | tail -n1 | cut -d= -f2-)
+    # `|| true`: with pipefail, a .env that simply lacks this key makes grep exit 1, the
+    # pipeline exit 1, and `set -e` kill the deploy right here -- after the banner, with
+    # no message at all. A server-only tenant has every reason to omit the key. Empty is
+    # handled two lines down; absent must mean empty, not "abort silently".
+    origins=$(grep -E '^[[:space:]]*INTERNAL_SERVICE_ALLOWED_ORIGINS=' .env | tail -n1 | cut -d= -f2- || true)
 fi
 origins="${origins%$'\r'}"
 origins="${origins#"${origins%%[![:space:]]*}"}"
@@ -538,7 +554,14 @@ in_deployment() {
     printf '%s\n' "${DEPLOY_SERVICES[@]}" | grep -qx "$1"
 }
 
-if ! docker compose -f "$COMPOSE_FILE" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} pull "${DEPLOY_SERVICES[@]}"; then
+# --local-images: the images were placed on this host by other means (docker load over
+# ssh, a local build). Skipping the pull is safe ONLY because the revision gate below
+# runs `docker image inspect` on every image in DEPLOY_SERVICES and exits non-zero for
+# one it cannot find -- so "the image was never loaded" still stops the deploy here,
+# before any container is touched, instead of surfacing as a failed `up`.
+if [ "$LOCAL_IMAGES" = true ]; then
+    echo "  --local-images: not contacting the registry; using the images already on this host."
+elif ! docker compose -f "$COMPOSE_FILE" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} pull "${DEPLOY_SERVICES[@]}"; then
     echo "" >&2
     echo "ERROR: failed to pull images (tag: ${IMAGE_TAG:-latest})." >&2
     echo "  Common causes:" >&2
