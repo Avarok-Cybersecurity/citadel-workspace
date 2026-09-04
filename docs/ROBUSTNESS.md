@@ -2778,7 +2778,52 @@ Fixed by removing the volume and recreating. Worth stating as a standing trap:
 a dependency added to the repo is invisible to the running dev container until
 someone deletes that volume, and nothing anywhere says so.
 
-## Open, as of round 532
+## Round 533 — a lost wakeup in ILM's outbound loop, found by refusing a flake
+
+A timing assertion in `intersession-layer-messaging` failed on macOS CI and
+was filed, for one wave, as "the runner is slow, the bar is tight". It was
+not. Making the test persist its per-leg measurements as an artifact -- the
+log was truncated before the panic on every run -- showed legs at ~1ms and
+then **one send that never arrives**: leg 3 on one run, leg 4 on the next.
+
+Every alternative was eliminated on evidence before the code was read for a
+mechanism: Windows was a `fail-fast` cancellation rendered as a failure, not
+a failure; `worker_threads = 1` locally passes 8/8, so it is not starvation;
+peer 2 delivered every message it was sent; peer 1 held the ACK for the
+previous leg both times with zero `can_send=false`; and there was **no
+`SENDING` line at all** for the stranded message -- it was stored and never
+attempted. No loop-exit, backend-error or peer-disconnected log line either.
+
+The mechanism, once read for: the outbound loop wakes on a nudge or a 200ms
+timer, **drains every queued nudge on every wake**, and then -- if the wake
+was the timer and the hint says the queue was empty last time -- skips the
+read. A nudge that lands while the loop is parked, when the timer fires at
+nearly the same instant and wins the select, is eaten by the drain and thrown
+away by the skip. `send_raw_message` never set the hint, so nothing else
+would ever trigger a read. A message stored and stranded until an unrelated
+nudge happened along.
+
+Reproduced locally with a phase sweep -- idle sleeps of 190..210ms in 1ms
+steps, so sends land at every offset from a tick. **Unfixed: 5/5 runs strand
+a message**, each at an idle of 193..202ms, on the boundary, at a different
+leg (24, 71, 5, 12, 9). **Fixed: 0/5.** Two lines, and each alone suffices
+(5/5 -> 0/5 either way): a drained nudge marks the wake as Nudged, and
+`send_raw_message` sets the hint before nudging. Full crate 38/38, clippy
+clean. The sweep is kept as a regression test.
+
+Two things worth keeping from how this went. The evidence mechanism itself
+was broken twice before it produced anything -- first writing to a `target/`
+that was the workspace's rather than the crate's, with the error discarded
+by `let _ =`; then writing only at the end of the test, after the panic that
+mattered. Both were caught by checking the file existed rather than trusting
+the step went green. And the hypothesis I stated first ("platform speed")
+was wrong; it is on the PR as refuted, with the artifact that refuted it.
+
+Landed in ILM PR #4. Not yet in the line this repository pins: that needs
+the internal-service pointer, whose own `master` is 109 commits behind what
+is pinned here (round 531).
+
+## Open, as of round 533
 
 Everything both Fable fleets confirmed is fixed: 2 critical/high, 13 medium, 15
 low, across 30 findings. What follows is what is NOT fixed, stated so the next
