@@ -391,18 +391,25 @@ graph TD
 
 **Use WorkspaceProtocol (Inscribed in Message) for:**
 - Workspace CRUD: `CreateWorkspace`, `GetWorkspace`, `UpdateWorkspace`
-- Office/Room CRUD: `CreateOffice`, `ListOffices`, `CreateRoom`, `ListRooms`
+- The tree: `CreateNode`, `GetNode`, `UpdateNode`, `DeleteNode`, `MoveNode`,
+  `ListNodes`, `GetTreeStructure`
 - Member Management: `AddMember`, `UpdateMemberRole`, `ListMembers`
 
-**Use Triple-Nested for P2P Chat:**
+> The hierarchy is **nodes**, not offices and rooms. An earlier revision of this
+> file listed `CreateOffice` / `ListOffices` / `CreateRoom` / `ListRooms`; those
+> names appear nowhere in `citadel-workspace-types`, and code written against
+> them does not compile. "Office" and "room" survive as node *types* and in the
+> UI, not as protocol operations.
+
+**P2P chat is two layers, not three.** The UI builds a `P2PCommand`, encodes it
+with CBOR, and hands it to the messenger; ILM wraps that in a `WireWrapper`
+(bincode) and sends it as an ordinary `InternalServiceRequest::Message`. There
+is no `WorkspaceProtocol` layer in a chat message.
+
 ```
 InternalServiceRequest::Message {
-  peer_cid: target_peer,
-  message: WorkspaceProtocol::Message {
-    contents: MessageProtocol::TextMessage {
-      text: "Hello!"
-    }
-  }
+  cid, peer_cid, security_level,
+  message: <bincode WireWrapper { <CBOR P2PCommand> }>
 }
 ```
 
@@ -651,12 +658,21 @@ let p2p = peer_handle.connect_to_peer().await?;
 
 ### Disconnect Signal Types
 
-The SDK uses `NodeResult::Disconnect` for BOTH C2S and P2P disconnects. Distinguish via `v_conn_type`:
+Since SDK v0.13.1 the two arrive as **different events**, so there is nothing to
+discriminate:
 
-| v_conn_type | Meaning |
-|-------------|---------|
-| `LocalGroupServer` / `ExternalGroupServer` / `None` | C2S disconnect |
-| `LocalGroupPeer` / `ExternalGroupPeer` | P2P disconnect |
+| Event | Meaning |
+|-------|---------|
+| `NodeResult::Disconnect` with `conn_type: Some(ClientConnectionType::Server \| Extended)` | C2S disconnect |
+| `NodeResult::PeerEvent` carrying `PeerSignal::Disconnect` | P2P disconnect |
+
+`Disconnect` carries `conn_type`, not `v_conn_type`, and `ClientConnectionType`
+has only `Server` and `Extended`.
+
+> An earlier revision of this file described one event discriminated by
+> `v_conn_type` on `LocalGroupPeer` / `ExternalGroupPeer`; that handler does not
+> compile. The service's own `kernel/responses/disconnect.rs` module doc has
+> said the correct thing all along.
 
 **Example handler:**
 ```rust

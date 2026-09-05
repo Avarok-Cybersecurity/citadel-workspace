@@ -111,6 +111,14 @@ jobs:
         run: node scripts/check-doc-file-refs.mjs
       - name: "Check verify: annotations still hold"
         run: node scripts/check-doc-assertions.mjs
+      - name: The docs name symbols that exist
+        # CLAUDE.md and ARCHITECTURE.md are loaded into every session, so a
+        # fictional protocol operation is not a stale doc -- it is an agent
+        # writing code against a name that does not compile, or "fixing"
+        # working code to match one. Four such fictions were shipped at once:
+        # Office/Room CRUD, a triple-nested chat envelope, a `v_conn_type`
+        # disconnect discriminant, and six Permission variants.
+        run: node scripts/check-docs-name-real-symbols.mjs
       - name: Check the Docker root manifest defines every inherited dep
         run: node scripts/check-docker-workspace-manifest.mjs
       - name: Check failure-reporting intent results are read
