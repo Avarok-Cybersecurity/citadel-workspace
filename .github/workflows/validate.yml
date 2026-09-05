@@ -117,6 +117,14 @@ jobs:
         run: node scripts/check-intent-results-checked.mjs
       - name: Check the quickstart works on a clean clone
         run: node scripts/check-doc-setup-steps.mjs
+      - name: Agent instructions name things that exist
+        # CLAUDE.md and .claude/agents/*.md are executed, not read. Every UI
+        # agent opened :5173 after the dev server moved to :5291; three ran
+        # `tilt logs workspace-server`, which names no resource; and the sync
+        # agent waited for a `Running target/debug/...` line that a release
+        # container never logs -- five minutes of timeout per service on every
+        # healthy rebuild, reported as a broken service.
+        run: node scripts/check-agent-docs-name-real-things.mjs
       - name: Check icon-only buttons have accessible names
         run: node scripts/check-icon-button-names.mjs
       - name: Check every subscribed event has an emitter

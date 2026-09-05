@@ -30,7 +30,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 ## Prerequisites
 
 - Backend services running: `tilt logs server` and `tilt logs internal-service` should show active services
-- Navigate to the landing page http://localhost:5173/
+- Navigate to the landing page http://localhost:5291/
 - checkForErrors()
 - scanScreen()
 
@@ -38,7 +38,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 
 ### Phase 1: Create User 1 (First User - Workspace Initialization)
 
-**Step 1:** Navigate to http://localhost:5173/
+**Step 1:** Navigate to http://localhost:5291/
 **Step 2:** Click "Join Workspace" button
 **Step 3:** Fill in workspace connection form:
   - Workspace location: 127.0.0.1:12349
@@ -61,7 +61,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 **Step 9:** verifyWorkspaceLoaded()
 **Step 10:** takeScreenshot("01_user1_workspace_loaded")
 **Step 11:** checkLogs() - Verify workspace initialization succeeded
-**Step 12:** Navigate to http://localhost:5173/
+**Step 12:** Navigate to http://localhost:5291/
 **Step 13:** Wait 2 seconds for OrphanSessionsNavbar to load
 **Step 14:** takeScreenshot("02_after_user1_landing_page")
 
@@ -88,7 +88,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 **Step 22:** verifyWorkspaceLoaded()
 **Step 23:** takeScreenshot("03_user2_workspace_loaded")
 **Step 24:** checkLogs() - Verify user2 was added to workspace domain
-**Step 25:** Navigate to http://localhost:5173/
+**Step 25:** Navigate to http://localhost:5291/
 **Step 26:** Wait 2 seconds for OrphanSessionsNavbar to load
 **Step 27:** Verify via browser_snapshot that 2 workspace icons are visible
 **Step 28:** takeScreenshot("04_after_user2_two_icons_visible")
@@ -115,7 +115,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 **Step 36:** verifyWorkspaceLoaded()
 **Step 37:** takeScreenshot("05_user3_workspace_loaded")
 **Step 38:** checkLogs() - Verify user3 was added to workspace domain
-**Step 39:** Navigate to http://localhost:5173/
+**Step 39:** Navigate to http://localhost:5291/
 **Step 40:** Wait 2 seconds for OrphanSessionsNavbar to load
 **Step 41:** Verify via browser_snapshot that 3 workspace icons are visible
 **Step 42:** takeScreenshot("06_all_three_icons_visible")
@@ -125,7 +125,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 
 ### Phase 4: Test Workspace Switching - Switch to User 1
 
-**Step 44:** On landing page (http://localhost:5173/), verify 3 workspace icons are visible
+**Step 44:** On landing page (http://localhost:5291/), verify 3 workspace icons are visible
 **Step 45:** Identify user1's workspace icon (should show first letter of username or "U")
 **Step 46:** Click user1's workspace icon in OrphanSessionsNavbar
 **Step 47:** Wait for workspace to load (max 5 seconds)
@@ -137,13 +137,13 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 **Step 50:** verifyWorkspaceLoaded()
 **Step 51:** Verify workspace displays correct user:
   - Check top left shows "RW Root Workspace" with User One's name
-  - Verify URL is http://localhost:5173/office
+  - Verify URL is http://localhost:5291/office
 **Step 52:** takeScreenshot("07_switched_to_user1")
 **Step 53:** checkLogs() - Look for:
   - "Successfully claimed session {cid}" in internal-service logs
   - "MessageNotification" with workspace data in logs
   - "GetWorkspace for user: {user1_username}" in server logs
-**Step 54:** Navigate to http://localhost:5173/
+**Step 54:** Navigate to http://localhost:5291/
 
 ---
 
@@ -159,7 +159,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 **Step 62:** Verify workspace displays User Two
 **Step 63:** takeScreenshot("08_switched_to_user2")
 **Step 64:** checkLogs() - Same checks as Step 53
-**Step 65:** Navigate to http://localhost:5173/
+**Step 65:** Navigate to http://localhost:5291/
 
 ---
 
@@ -175,7 +175,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 **Step 73:** Verify workspace displays User Three
 **Step 74:** takeScreenshot("09_switched_to_user3")
 **Step 75:** checkLogs() - Same checks as Step 53
-**Step 76:** Navigate to http://localhost:5173/
+**Step 76:** Navigate to http://localhost:5291/
 
 ---
 
@@ -203,7 +203,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 
 ### Phase 9: Disconnect Test
 
-**Step 82:** Navigate to http://localhost:5173/
+**Step 82:** Navigate to http://localhost:5291/
 **Step 83:** Wait 2 seconds for OrphanSessionsNavbar to load
 **Step 84:** takeScreenshot("13_before_disconnect")
 **Step 85:** Verify via browser_snapshot that 3 workspace icons are visible
@@ -231,7 +231,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 
 ### Phase 10: Re-login Verification
 
-**Step 96:** On landing page (http://localhost:5173/), verify only 2 workspace icons visible
+**Step 96:** On landing page (http://localhost:5291/), verify only 2 workspace icons visible
 **Step 97:** Click "Login Workspace" button
 **Step 98:** Fill in login form with user2's credentials:
   - Username: {user2_username} (stored from Phase 2)
@@ -244,7 +244,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 **Step 103:** checkLogs() - Verify successful reconnection:
   - Look for "ConnectSuccess" with new CID for user2
   - Verify workspace data loaded (GetWorkspace, ListOffices)
-**Step 104:** Navigate to http://localhost:5173/
+**Step 104:** Navigate to http://localhost:5291/
 **Step 105:** Wait 2 seconds for OrphanSessionsNavbar to load
 **Step 106:** Verify via browser_snapshot that 3 workspace icons are visible again
   - user2's icon should be back in the navbar
@@ -261,7 +261,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 
 ### Phase 11: Final Verification and Report
 
-**Step 112:** Navigate to http://localhost:5173/
+**Step 112:** Navigate to http://localhost:5291/
 **Step 113:** Wait 2 seconds for OrphanSessionsNavbar
 **Step 114:** takeScreenshot("17_final_all_three_icons")
 **Step 115:** checkLogs() - Final comprehensive log check
