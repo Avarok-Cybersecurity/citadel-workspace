@@ -546,6 +546,46 @@ pub fn first_member_outcome(
     }
 }
 
+/// What the connection handler does with an account that is not in the member
+/// list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectEnrolment {
+    /// Never joined. Enrol them, subject to `first_member_outcome`.
+    Enrol,
+    /// An administrator removed them. Leave them out; only `AddMember` can
+    /// bring them back.
+    RefuseRemoved,
+}
+
+/// Whether an account absent from `workspace.members` should be enrolled on
+/// connect.
+///
+/// Extracted for the same reason as `first_member_outcome`: the decision lived
+/// inline in the connection handler, reachable only with a kernel, a backend
+/// and a live Citadel session, so nothing covered it.
+///
+/// What it was missing: the handler enrolled anyone absent from the member
+/// list, and could not tell "never joined" from "an administrator removed
+/// them". `RemoveMember` therefore lasted until the removed account's next
+/// reconnect -- which happens by itself -- whereupon it enrolled itself again
+/// as a Member, with nothing logged. Removal was undone by the person it was
+/// applied to.
+///
+/// `remove_user_from_domain` records the removal by leaving the account at
+/// `UserRole::Banned`: no permissions, rank 0, and a role the code defined but
+/// never assigned. Re-admission is `AddMember`, which writes an explicit role
+/// and so clears it.
+pub fn connect_enrolment(
+    existing_role: Option<citadel_workspace_types::structs::UserRole>,
+) -> ConnectEnrolment {
+    match existing_role {
+        Some(citadel_workspace_types::structs::UserRole::Banned) => {
+            ConnectEnrolment::RefuseRemoved
+        }
+        _ => ConnectEnrolment::Enrol,
+    }
+}
+
 /// Run the workspace server with the given configuration and base path.
 pub async fn run_server_with_base_path(
     config: ServerConfig,
