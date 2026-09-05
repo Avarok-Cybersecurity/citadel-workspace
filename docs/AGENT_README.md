@@ -33,6 +33,28 @@ Both flags matter:
   account and message history are gone the next time the agent restarts. Data
   is written to `./internal-service-data` unless `--data-dir` says otherwise.
 
+## Using a hosted Citadel Workspace
+
+When the web app is served from somewhere else (work.avarok.net, say), your
+browser reaches this agent as `wss://local.avarok.net:12345` -- a name the
+operator points at `127.0.0.1` and holds a certificate for. Tell the agent the
+name and where to fetch the certificate:
+
+```bash
+./citadel-agent --bind 127.0.0.1:12345 --backend filesystem \
+  --allowed-origins https://work.avarok.net \
+  --loopback-host local.avarok.net \
+  --loopback-cert-url https://work.avarok.net/agent
+```
+
+The certificate is fetched at start (with `curl`) and cached beside your data,
+so later starts work offline. It is renewed every ninety days on the operator's
+side; you never handle it. The private key it comes with is public by
+construction -- the name resolves to your own machine, so there is no network
+between the browser and the agent to protect -- it exists to make the browser
+willing to open the socket. What protects the socket is `--allowed-origins`
+and the agent refusing any `Host` that is not its own.
+
 ## Windows
 
 ```powershell
