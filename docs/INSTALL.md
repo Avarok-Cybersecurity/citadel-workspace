@@ -51,10 +51,20 @@ cp .env.example .env          # then edit it
 docker compose -f docker-compose.production.yml up -d --wait
 ```
 
-`.env` must set `WORKSPACE_MASTER_PASSWORD`. It has no default, and the server
-refuses to start if it is missing or still the `__CHANGE_ME__` placeholder —
-two independent checks, in `deploy.sh` and in the binary. Generate one with
-`openssl rand -hex 32`.
+`.env` must set **two** variables. Both have no default, and the stack will not
+come up without them — `--wait` fails while you look for a reason.
+
+`WORKSPACE_MASTER_PASSWORD`. The server refuses to start if it is missing or
+still the `__CHANGE_ME__` placeholder — two independent checks, in `deploy.sh`
+and in the binary. Generate one with `openssl rand -hex 32`.
+
+`INTERNAL_SERVICE_ALLOWED_ORIGINS`. The comma-separated list of origins the UI
+is served from, e.g. `https://work.example.com`. The agent exits at startup
+without it, because an agent that accepts any origin can be driven by any page
+the user happens to visit. Pass `*` on a development box only.
+
+`./deploy.sh` checks both before it starts anything, and reports which one is
+missing. `docker compose … up -d --wait` does not.
 
 Optional: `IMAGE_TAG` (defaults to `latest`; pin it to `sha-<commit>` to control
 exactly what runs), `WORKSPACE_BIND_ADDR`, `INTERNAL_SERVICE_PORT`, and
