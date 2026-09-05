@@ -156,9 +156,19 @@ The `message` field contains a **serialized `MessageEventType`** from `citadel-w
 **Fields of `MessageNotification`:**
 | Field | Type | Description |
 |-------|------|-------------|
-| `message` | `BytesMut` | Serialized `MessageEventType` (JSON string as UTF-8 bytes) |
-| `cid` | `u64` | Connection identifier of the sender |
-| `peer_cid` | `u64` | Connection identifier of the receiver |
+| `message` | `Vec<u8>` | Serialized message payload |
+| `cid` | `u64` | The **RECIPIENT** — the session this notification is for |
+| `peer_cid` | `u64` | The **SENDER** — the peer the message came from |
+
+> These two were documented the other way round, and that inversion is the
+> multi-tab misrouting bug. `MessageNotification` carries the recipient in
+> `cid` while `request_id` belongs to the sender, which is why the field is
+> listed in `CID_ROUTED_NOTIFICATIONS` (`routing-rules.ts`) and routed by
+> `cid` rather than by `request_id`. Route it the way this table used to say
+> and, with two sessions in one browser, one session receives the other's
+> messages, files and call media.
+
+<!-- verify: grep 'cid: session_cid' citadel-internal-service/citadel-internal-service/src/kernel/responses/peer_channel_created.rs -->
 | `request_id` | `Option<Uuid>` | Optional request identifier for correlation |
 
 *The `MessageNotification` struct is used only for **peer‑to‑peer** messaging via the ILM. The server does not interpret this struct when handling client‑to‑server messages.*
