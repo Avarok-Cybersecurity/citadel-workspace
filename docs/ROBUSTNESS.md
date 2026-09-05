@@ -3235,7 +3235,45 @@ tree; CI rebuilds four images in 50 jobs with no caching; the browser↔agent
 socket is JSON with byte arrays as `number[]`; the shipped WASM carries a
 449 KB name section.
 
-## Open, as of round 544
+## Round 545 — a question that could not be answered was read as "no", five times
+
+Tonight's fixes are one shape restated. Something asks; the answer does not
+arrive; the code treats the silence as a negative answer and acts on it.
+
+**The agent, asked whether a session is alive.** `Connect` mapped an error from
+`remote.sessions()` to `false` and `ClaimSession` mapped it to `vec![]`. Both
+then took the not-active branch, which DELETES the map entry — for a session
+that is, as far as anyone knows, still live. `remote.connect()` is refused
+afterwards because the SDK still holds it, so the account is unreachable until
+the agent restarts; for `ClaimSession` the deleted session is the one the user
+was reloading back into. `session_liveness::classify` now returns Active, Stale
+or Unknown and both handlers refuse on Unknown, touching nothing. The type is
+the fix: a `bool` cannot express "did not answer", which is exactly how both
+sites came to spell it `false`.
+
+**The agent, asked to disconnect.** The map entry is removed before the SDK
+call so RAII cleanup cannot fire mid-call; when the call then failed or timed
+out, both arms logged "Proceeding anyway" and returned a success notification.
+Same wedge, arrived at from the other side, and the person was told they had
+signed out. Both arms now restore what was removed and answer
+`PeerDisconnectFailure`.
+
+**The UI, told a message could not be sent.** `MessageSendFailure` appeared
+nowhere in the repository. Measured against the live server: 125 refusals in
+one session while both directions showed `sent` and neither arrived.
+
+**A tab, asked whose workspace this is.** `handleStateSync` was the one
+broadcast handler with no session check, and its payload carried no cid, so a
+leader's workspace was applied by a tab signed in as somebody else.
+
+**And two gates that reported safety.** The admin-promotion gate matched three
+decorative sites and missed the only real one. Then the gate I wrote for the
+disconnect fix used a fixed 900-character window that reached into the NEXT
+match arm — so deleting the first arm's handling left it green. Its own
+control caught it within the hour. A guard that cannot fail is worse than no
+guard, including when I am the one who wrote it.
+
+## Open, as of round 545
 
 Everything both Fable fleets confirmed is fixed: 2 critical/high, 13 medium, 15
 low, across 30 findings. What follows is what is NOT fixed, stated so the next
@@ -3258,14 +3296,13 @@ explain — the wasm32 check of the client passes — and it deletes the package
 directory before it builds. `SKIP_WASM_BUILD=1` for local `cargo test` of the
 agent crate until it is understood.
 
-### The UI never reads the agent's only send-failure signal
+### The send-failure answer cannot name which message failed
 
-`MessageSendFailure` is answered when the agent has no peer connection and when
-the send times out. Nothing in the UI references it, so a message the agent
-refused stays `sent` and is silently lost; `markSendFailed` and a retry gated on
-`failed` already exist for the two paths that do report. Fixing it needs a
-control that can fail — a fixture where the agent refuses a send — which is the
-next wave's work, not a same-night patch (round 543).
+The UI now reads `MessageSendFailure` and reports it once per session per 15s
+(round 545), but the response carries the sender's cid and a reason and no
+peer cid, and the reliable path retries in the messaging layer — so no bubble
+is marked failed. Adding `peer_cid` to the response is the follow-up, and it
+needs a fixture where the agent genuinely refuses a send.
 
 ### The public UI waits for the agent release
 
