@@ -3,6 +3,8 @@ use citadel_internal_service::OriginPolicy;
 use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
 use std::error::Error;
 use std::net::SocketAddr;
+mod loopback;
+
 use structopt::StructOpt;
 
 #[tokio::main]
@@ -40,7 +42,47 @@ async fn main() -> Result<(), Box<dyn Error>> {
         );
     }
 
-    let service = CitadelWorkspaceService::new_websocket(opts.bind, origins).await?;
+    // TLS on loopback, for a UI served from elsewhere: see loopback.rs. Resolved before the
+    // backend so a misconfiguration is refused before any account store is opened.
+    let cache_root: std::path::PathBuf = std::env::var("INTERNAL_SERVICE_DATA_DIR")
+        .ok()
+        .filter(|d| !d.is_empty())
+        .or_else(|| opts.data_dir.clone())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("./data"));
+    let tls_choice = loopback::choose_tls(&loopback::TlsInputs {
+        env_host: std::env::var("INTERNAL_SERVICE_LOOPBACK_HOST")
+            .ok()
+            .as_deref(),
+        env_cert_url: std::env::var("INTERNAL_SERVICE_LOOPBACK_CERT_URL")
+            .ok()
+            .as_deref(),
+        env_cert: std::env::var("INTERNAL_SERVICE_TLS_CERT").ok().as_deref(),
+        env_key: std::env::var("INTERNAL_SERVICE_TLS_KEY").ok().as_deref(),
+        cli_host: opts.loopback_host.as_deref(),
+        cli_cert_url: opts.loopback_cert_url.as_deref(),
+        cli_cert: opts.tls_cert.as_deref(),
+        cli_key: opts.tls_key.as_deref(),
+        cache_root: &cache_root,
+    })?;
+    let service = match loopback::obtain(&tls_choice)? {
+        None => CitadelWorkspaceService::new_websocket(opts.bind, origins).await?,
+        Some(pem) => {
+            let acceptor = citadel_internal_service::acceptor_from_pem(&pem.certificate, &pem.key)?;
+            let name: Option<&str> = match &tls_choice {
+                loopback::TlsChoice::Files { name, .. }
+                | loopback::TlsChoice::Fetch { name, .. } => name.as_deref(),
+                loopback::TlsChoice::Plain => None,
+            };
+            citadel_logging::info!(
+                target: "citadel",
+                "TLS on loopback: reachable as wss://{}:{} (and 127.0.0.1 / localhost / [::1])",
+                name.unwrap_or("<no published name>"),
+                opts.bind.port()
+            );
+            CitadelWorkspaceService::new_websocket_tls(opts.bind, origins, name, acceptor).await?
+        }
+    };
 
     // Backend selection precedence:
     //   1. INTERNAL_SERVICE_BACKEND / INTERNAL_SERVICE_DATA_DIR env vars
@@ -100,6 +142,22 @@ struct Options {
     /// INTERNAL_SERVICE_ALLOWED_ORIGINS, which takes precedence.
     #[structopt(long)]
     allowed_origins: Option<String>,
+    /// A name the hosting operator points at 127.0.0.1 and holds a certificate for
+    /// (e.g. local.example.com): the hosted UI dials wss://NAME:PORT. Needs a
+    /// certificate source below. INTERNAL_SERVICE_LOOPBACK_HOST takes precedence.
+    #[structopt(long)]
+    loopback_host: Option<String>,
+    /// Fetch the loopback certificate from URL/loopback.pem and URL/loopback.key at
+    /// start (https only), caching it under the data dir so later starts work offline.
+    /// INTERNAL_SERVICE_LOOPBACK_CERT_URL takes precedence.
+    #[structopt(long)]
+    loopback_cert_url: Option<String>,
+    /// PEM certificate chain for TLS on loopback (with --tls-key). INTERNAL_SERVICE_TLS_CERT.
+    #[structopt(long)]
+    tls_cert: Option<String>,
+    /// PEM private key for TLS on loopback (with --tls-cert). INTERNAL_SERVICE_TLS_KEY.
+    #[structopt(long)]
+    tls_key: Option<String>,
 }
 
 /// Resolve the origin allowlist from env + CLI, or explain what is missing.
