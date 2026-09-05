@@ -2956,3 +2956,107 @@ symbol → green. The last three each failed the first draft of the rule.
 green did so because the control itself had not applied, not because the check
 was weak. Assert the anchor, and verify the tree is byte-identical after
 restoring.
+
+## Round 551 — the master password was compared one byte at a time
+
+`String == String` compares lengths and then runs `memcmp`, which returns at
+the first differing byte. How long that takes is a function of how many leading
+bytes the guess got right, so guessing and timing recovers the secret a byte at
+a time instead of searching the space.
+
+The workspace master password — what makes somebody the administrator — was
+compared that way at five sites, four reachable from a request
+(`async_domain_server_ops.rs:1043,1069,1231,1307`; `async_kernel.rs:469` is
+startup-only and was never a vulnerability). All five now use
+`kernel::secret_eq::secrets_match`: SHA-256 both sides, compare the digests with
+`subtle`.
+
+Hashing first is not ceremony. A constant-time compare of the raw bytes still
+takes time proportional to the longer input, which tells an attacker how many
+characters to guess.
+
+**Gate:** `check-secrets-are-compared-in-constant-time.mjs`, over all three Rust
+service roots. It reports how many roots it scanned, so an uninitialised
+submodule narrows the scan visibly rather than silently.
+**Controls:** one `==` back → red; a comment naming the defect → green; a
+non-secret `==` → green.
+**Propagation:** grepped the mechanism across all three service roots; no other
+instances.
+
+## Round 552 — removing a member lasted until they reconnected
+
+The connection handler enrols any authenticated account absent from
+`workspace.members` — its own comment says "no admin required for initial
+connection". It could not tell *never joined* from *an administrator removed
+them*, so `RemoveMember` was undone by the removed account's own next
+reconnect, which happens by itself. Nothing was logged; the member list simply
+showed them back.
+
+Two more things the old code did not do: it touched the role only for Admin and
+Owner, so an ordinary member's removal left no trace at all; and it demoted to
+`Member`, which for a Guest was a rank *increase*.
+
+Removal now records itself as `UserRole::Banned` — no permissions, rank 0, and a
+role the codebase defined, gave a permission table, and never once assigned.
+Re-admission is `AddMember`, which writes an explicit role and clears it.
+
+The decision is extracted as `connect_enrolment`, for the same reason
+`first_member_outcome` was: inline in the handler it is reachable only with a
+kernel, a backend and a live Citadel session.
+
+**Tests:** 5 new; full kernel suite 77 binaries, no failures.
+**Controls:** `connect_enrolment` always `Enrol` → red on 2 of 5; removal
+reverted to Admin/Owner→Member → red on the *joined* test only, which is
+correct: the pure decision is untouched, and only the joined test asserts that
+what removal writes is what connect reads.
+
+**A first design, rejected:** setting the role globally over-reached, since
+`user.role` is global and a user may belong to another workspace. Checked
+`set_role_permissions` is per-domain before proceeding. The existing tests
+caught this, which is what they are for.
+
+## Round 553 — CI was not queued, it was stalled
+
+Reported for two cycles as a deep queue: 262 jobs against 20 slots. It was not.
+Zero jobs were executing anywhere — `in_progress=0` across all four repos —
+while six runs sat marked "queued", the oldest since 08:03. Cancelling PR runs
+to "free slots" did nothing, because no slots were occupied.
+
+Three stale master validate runs from 06:21 and 07:11 were wedging the queue.
+Cancelling those, jobs started within 40 seconds.
+
+The causal claim is not airtight: earlier cancellations may simply have been
+slow to propagate. What is certain is that the deep-queue explanation was
+wrong, and that the check which would have shown it — *are any jobs actually
+in progress* — is one API call and was never made.
+
+**Lesson:** a check-count on a PR says nothing about whether CI is running.
+`gh api "repos/<r>/actions/runs?status=in_progress" --jq .total_count` does.
+
+## Round 554 — a read failure was written back as an empty tree
+
+`OpfsStorage.readFile` caught every error and returned null, so a revoked
+handle, a quota error, a locked file or any transient `NotReadableError` was
+indistinguishable from a first run. `loadTree` returned null;
+`RevfsService.getTree` then built a default tree, cached it, and PERSISTED it —
+over a tree still on disk (`revfs-service.ts:117`). One transient read error
+destroyed the user's files, silently, and the UI repainted as though they had
+never existed. Both `getTree` and `getServerTree` had it.
+
+Storage now reports the two cases apart: null only for `NotFoundError`,
+everything else rethrown. `RevfsIO.loadTree` returns `unreadable: true` rather
+than flattening the failure, and the service renders a default while caching and
+persisting nothing — so nothing is destroyed and the next call retries.
+
+**Tests:** 3 + 3; full revfs suite 39 files, 271 tests, no regressions.
+
+**The control that mattered.** Reverting `readFile` to `catch { return null }`
+left all three of the first tests GREEN. They stub the IO layer, so they never
+execute the storage code the fix changed — the tests measured half the fix and
+would have shipped saying otherwise. The second commit adds
+`storage-tells-absent-from-unreadable.test.ts`, which drives the real storage
+class against a fake OPFS; the control then goes red on exactly the two cases it
+should.
+
+That is the third time this campaign that a green control meant the *test* was
+wrong rather than the code. It is now the most reliable defect-finder here.
