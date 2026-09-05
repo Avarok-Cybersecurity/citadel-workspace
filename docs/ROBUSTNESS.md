@@ -3142,7 +3142,100 @@ Every one of the ten failures is now attributed, none to "flake".
 **Also.** UI #22's first CI failure was the runner's apt install of browser
 dependencies (exit 100), before any test ran.
 
-## Open, as of round 542
+## Round 543 — three users, the production bundle, and the live avarok server
+
+**The setup, as close to a tester's as this machine allows.** The production UI
+image (so production onboarding is ACTIVE), the agent built from the merged
+agent stacks on loopback, and the real tenant at `51.81.107.44:12400`. One
+browser, three tabs — one WebSocket, one agent, three sessions, which is how
+the product is designed to be used.
+
+**Onboarding works, and costs what it should.** All three users saw the
+production intent dialog. The admin path (intent → wizard → register → master
+password → workspace) is 12 interactions; the member path is 10. Registration
+against a remote server takes 4.2–5.7s, the workspace renders in full —
+hierarchy, three offices, seven rooms, members, files — and the run recorded
+**zero console errors** for all three users. The first admin claim showed
+"Workspace Initialized. You are now the workspace administrator"; later users
+correctly got no init modal at all, because the workspace then had one.
+
+**P2P works against production.** Peer discovery lists the server's other
+accounts, Connect sends the request, the recipient's pending-requests badge
+appears within seconds, Accept completes, and a message sent immediately after
+accepting was **delivered in 2.5s** and shown as `delivered`. Bidirectional.
+
+**What did not work, and it is not the network.** An earlier run of the same
+script had both directions report `sent` and neither arrive, with
+`Network inbound task ended. Messenger is shutting down` and
+`ListRegisteredPeers request timed out` in two of the three sessions, while the
+agent logged, 125 times, `[P2P-MSG] Peer connection not found for peer_cid=…`.
+So the failure is intermittent and correlates with a session's messenger
+ending — not with the send itself.
+
+**And underneath it, a defect that is not intermittent at all.** When the agent
+cannot send, it answers `MessageSendFailure` (`requests/message.rs:57` and the
+timeout branch). The UI contains **no reference to `MessageSendFailure`
+anywhere** — not in `routing-rules.ts`, not in any handler — so that answer is
+discarded and the bubble stays `sent`. The machinery to do better already
+exists and is used by two other paths (`markSendFailed`, retry gated on
+`failed`, persisted before any rethrow). This is the "built from one end"
+shape: the agent emits, nothing consumes. Open, with the fix scoped for the
+next wave because correlating a failure to a message id needs a control that
+can actually fail.
+
+## Round 544 — four inspection agents, and what survived verification
+
+**Deploy surface (WS #96).** `cp -r scripts "$TENANT_DIR/scripts" || true`
+copies INTO the destination when it exists, which is every `--force`
+re-provision: fresh scripts landed at `scripts/scripts/` while the PREVIOUS
+revision's `verify-image-revisions.sh` stayed exactly where the freshly-copied
+`deploy.sh` calls it. Reproduced in a temp directory before fixing. `--domain`
+was the one operator input with no validation, and it reaches an nginx
+`server_name`, a certificate path, a filename and the agent's Origin
+allowlist. `--dry-run` redacted the master password and printed `TUNNEL_TOKEN`
+in full. The vhost gained HSTS and nosniff. Eight assertions; restoring the
+original provisioner fails six of them.
+
+**Release path (WS #97), and a second frozen-release cause.**
+`publish-images.yml` starts the internal-service image for its smoke with
+`INTERNAL_SERVICE_PORT` and `INTERNAL_SERVICE_BIND_HOST` and nothing else. The
+binary refuses to start without an origin allowlist — by design — so that
+container exits, the smoke reports "exited instead of serving", and
+`promote-latest` is skipped. That has been true since the allowlist landed, in
+parallel with the Lighthouse gate already fixed.
+
+**A guard that could not fail (same PR).**
+`check-admin-promotions-are-gated.mjs` matched `.role = UserRole::Admin`,
+found three literal sites, and printed "all 3 sit behind a gate". Every real
+promotion goes through `user.role = role` in `write_user_role_locked`, reached
+via `write_user_role` from `add_user_to_domain` and
+`update_workspace_member_role`. Deleting either `ensure_may_grant_role` left
+the check green. It now follows a promoting helper's callers two levels and
+uses the enclosing function BODY as the gate window (the real gate sits ~70
+lines above the write). Four promotions found; both controls red.
+
+**The agent's accept path (citadel-agent #60).** TLS accept and HTTP upgrade
+both READ from the socket and both were awaited inline on the accept loop,
+whose only consumer is the kernel. A client that connected and said nothing
+parked the agent for everyone, and no allowed Origin was needed because the
+Origin and Host checks live inside the upgrade. Accepting and handshaking are
+now separate, each handshake bounded at 10s, completed connections arriving
+through a bounded channel. The control is why this is the second version:
+spawning the handshake but still awaiting it from the accept loop serialised
+them just the same, and `an_idle_client_does_not_block_the_next_one` failed
+exactly as it should have.
+
+**Not yet acted on, ranked and evidenced:** AddMember on a room rewrites the
+target's GLOBAL role (kernel); logout reports success after an SDK disconnect
+fails, stranding the session; a failed `sessions()` query is read as "inactive"
+and deletes a live session's map entry; a failed `GetSessions` makes
+auto-reconnect re-authenticate everything; `handleStateSync` applies another
+account's workspace across tabs; a transient OPFS read error wipes the REVFS
+tree; CI rebuilds four images in 50 jobs with no caching; the browser↔agent
+socket is JSON with byte arrays as `number[]`; the shipped WASM carries a
+449 KB name section.
+
+## Open, as of round 544
 
 Everything both Fable fleets confirmed is fixed: 2 critical/high, 13 medium, 15
 low, across 30 findings. What follows is what is NOT fixed, stated so the next
@@ -3164,6 +3257,15 @@ It failed locally during round 538 for a reason the change there does not
 explain — the wasm32 check of the client passes — and it deletes the package
 directory before it builds. `SKIP_WASM_BUILD=1` for local `cargo test` of the
 agent crate until it is understood.
+
+### The UI never reads the agent's only send-failure signal
+
+`MessageSendFailure` is answered when the agent has no peer connection and when
+the send times out. Nothing in the UI references it, so a message the agent
+refused stays `sent` and is silently lost; `markSendFailed` and a retry gated on
+`failed` already exist for the two paths that do report. Fixing it needs a
+control that can fail — a fixture where the agent refuses a send — which is the
+next wave's work, not a same-night patch (round 543).
 
 ### The public UI waits for the agent release
 
