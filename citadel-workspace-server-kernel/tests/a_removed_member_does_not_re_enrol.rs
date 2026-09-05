@@ -16,7 +16,7 @@
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
 use citadel_workspace_server_kernel::{connect_enrolment, ConnectEnrolment};
-use citadel_workspace_types::structs::UserRole;
+use citadel_workspace_types::structs::{Permission, UserRole};
 use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
@@ -119,4 +119,69 @@ async fn a_removed_account_holds_no_permissions_on_the_root() {
             .expect("backend read"),
         "a removed administrator keeps every is_admin_or_owner gate if the role survives",
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn removal_takes_the_per_node_grants_too() {
+    // `set_role_permissions` writes exactly ONE key. Setting the role and
+    // stopping left every per-node grant in place -- and
+    // `check_entity_permission` honours a direct grant BEFORE role or
+    // membership, so a member added to a room and then removed from the
+    // workspace kept reading and posting in that room.
+    let kernel = create_test_kernel().await;
+    insert_user_with_role(&kernel, "departing", UserRole::Member).await;
+    join_root(&kernel, "departing").await;
+
+    // A direct grant on a node, the shape `AddMember { domain_id: <room> }`
+    // leaves behind.
+    {
+        let mut user = kernel
+            .domain_operations
+            .backend_tx_manager
+            .get_user("departing")
+            .await
+            .expect("backend read")
+            .expect("user exists");
+        user.permissions.insert(
+            "room-1".to_string(),
+            Permission::for_role(&UserRole::Member),
+        );
+        kernel
+            .domain_operations
+            .backend_tx_manager
+            .insert_user("departing".to_string(), user)
+            .await
+            .expect("seed grant");
+    }
+
+    assert!(
+        !role_of_permissions(&kernel, "departing").await.is_empty(),
+        "the grant was not seeded, so nothing below is being measured",
+    );
+
+    kernel
+        .domain_operations
+        .remove_user_from_domain(TEST_ADMIN_USER_ID, "departing", ROOT)
+        .await
+        .expect("an admin may remove a member");
+
+    assert!(
+        role_of_permissions(&kernel, "departing").await.is_empty(),
+        "removal left per-node grants behind; a direct grant outranks role and \
+         membership, so the account still reads and posts in that room",
+    );
+}
+
+async fn role_of_permissions(
+    kernel: &Kernel,
+    user: &str,
+) -> std::collections::HashMap<String, std::collections::HashSet<Permission>> {
+    kernel
+        .domain_operations
+        .backend_tx_manager
+        .get_user(user)
+        .await
+        .expect("backend read")
+        .expect("user exists")
+        .permissions
 }
