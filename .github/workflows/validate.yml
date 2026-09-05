@@ -107,6 +107,12 @@ jobs:
         run: node scripts/check-doc-commands.mjs
       - name: Check request handlers cannot panic
         run: node scripts/check-handlers-cannot-panic.mjs
+      - name: Secrets are compared in constant time
+        # `String == String` runs memcmp, which returns at the first differing
+        # byte, so guess-and-time recovers the secret one byte at a time. The
+        # workspace master password -- what makes somebody an administrator --
+        # was compared that way at five sites, four reachable from a request.
+        run: node scripts/check-secrets-are-compared-in-constant-time.mjs
       - name: Check doc file references still resolve
         run: node scripts/check-doc-file-refs.mjs
       - name: "Check verify: annotations still hold"
