@@ -3273,7 +3273,61 @@ match arm — so deleting the first arm's handling left it green. Its own
 control caught it within the hour. A guard that cannot fail is worse than no
 guard, including when I am the one who wrote it.
 
-## Open, as of round 545
+## Round 546 — the inspection waves, and what measurement found that reading did not
+
+Four agents an hour, read-only, each told what earlier waves had already found.
+The findings that survived verification, and what happened to them.
+
+**The push path never asked what the pull path always asks (WS #101).**
+`NodeContentUpdated` carries the full `mdx_content`; `Node` carries the whole
+record. All three sites broadcast them as `BroadcastAudience::Everyone`, and
+the per-connection forwarding loop gated only `Group`. So every save reached
+every connected socket: a member removed a moment ago whose socket is still
+open, and — where one server holds several workspaces — the other one's
+members. `GetNode` has always checked `ViewContent`.
+
+`BroadcastAudience::Node(id)` is now gated by that same check. Three tests,
+including the case the old audience could not express: still connected, no
+longer entitled. And the CI gate earned its keep twice over — my first version
+matched `WorkspaceProtocolResponse::Node` by proximity, which also matches
+`NodeContentUpdated`, and failed in EVERY state including the correct one (a
+gate that is always red teaches people to ignore it); rewritten as exact
+statements, it then found a THIRD broadcast site I had missed.
+
+**A list of what you own says nothing about what you were given (UI #32).**
+The group reconciliation removed groups the agent's list did not name. That
+request is `list_owned_groups`, keyed by owner CID, so a group somebody else
+created is never in it — present or not. Every group an invitee had been added
+to was deleted from the sidebar and from storage on every login and every
+reload. Group ids are `<ownerCid>:<mgid>`, so this was decidable throughout.
+
+**Three situations, one branch, the most destructive reading (citadel-agent
+#60).** `WrappedStream::poll_next` was `_ => Poll::Ready(None)`: a genuine end,
+a request on a response stream, and a DECODE ERROR all meant "the stream has
+ended". The socket stays open; the messenger's read loop exits; every later
+message is dropped while `isConnected()` answers true. One unparseable frame —
+a cached bundle meeting an agent that learned a new enum variant — ends
+messaging for that session, silently and permanently.
+
+**CI was measured, not guessed (WS #100).** 1,282 runner-minutes per pull
+request against a pool of 20 concurrent jobs shared by three repositories, and
+no `needs:` edges, so wall-clock is minutes ÷ 20. Every master merge ran the
+whole 74-job suite TWICE on the same commit, because publish-images already
+calls it. The Docker fan-out ran to completion behind one-minute jobs that had
+already failed. `cargo clippy` ran inside the server image, 55 times per pull
+request, WITHOUT `-D warnings`, so it could not fail anything. Removing those
+three took a run from ~75 checks to 27.
+
+**And the UI said things that were not true (UI #31).** The empty state's only
+guard was `isLoadingMore`, which is pagination — so opening any conversation
+printed "No messages yet. Say hello to Bob" over months of history until four
+awaits returned.
+
+**What was tried and abandoned.** `for cmd in commands.clone()` looked like a
+free win; the enclosing `match &command` borrows, so the clone is load-bearing.
+Reverted rather than restructured at four in the morning.
+
+## Open, as of round 546
 
 Everything both Fable fleets confirmed is fixed: 2 critical/high, 13 medium, 15
 low, across 30 findings. What follows is what is NOT fixed, stated so the next
@@ -3303,6 +3357,21 @@ The UI now reads `MessageSendFailure` and reports it once per session per 15s
 peer cid, and the reliable path retries in the messaging layer — so no bubble
 is marked failed. Adding `peer_cid` to the response is the follow-up, and it
 needs a fixture where the agent genuinely refuses a send.
+
+### Found by the waves, evidenced, not yet fixed
+
+Ranked as the agents left them. The server: Connect re-enrols removed members
+on reconnect; the master password is plaintext, compared with `==`, and checked
+BEFORE the actor gate, which makes it a guessing oracle for any member. The
+agent: detached P2P reader tasks are never aborted (one per reconnect, forever);
+the per-client response channel is unbounded; ILM does ~9 whole-queue round
+trips per message; `background_invoked_requests` only grows. The UI: a failed
+`GetSessions` makes auto-reconnect re-authenticate everything; a transient OPFS
+read wipes the REVFS tree; the live-document index is overwritten after a
+timeout; group sends fail silently; ClaimSession from a second window renders a
+workspace whose traffic goes elsewhere; auto-reconnect is disabled for good
+after any sign-out. Performance: the office tree has thirteen quadratics, none
+of its lists is virtualised, and `React.memo` appears once in the whole app.
 
 ### The public UI waits for the agent release
 
