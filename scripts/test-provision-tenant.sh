@@ -77,5 +77,15 @@ for topo in server-only full; do
   fi
 done
 
+# The compose the provisioner ships must probe the port the server was TOLD to bind.
+# A literal port in the server healthcheck made every tenant on a non-default port run
+# "unhealthy" forever while answering registrations, and deploy.sh's health wait timed
+# out on a working server. Asserted on the trimmed file, which is what a tenant gets.
+if python3 scripts/trim-compose.py docker-compose.production.yml server \
+     | awk '/^  server:/{f=1} f' | grep -qE 'nc -z 127\.0\.0\.1 \$\$\{WORKSPACE_BIND_ADDR##\*:\}'; then
+  echo "  ok: server healthcheck derives its port from WORKSPACE_BIND_ADDR"
+else
+  echo "  FAIL: server healthcheck does not derive its port from WORKSPACE_BIND_ADDR"; fails=$((fails+1))
+fi
 if [ "$fails" -ne 0 ]; then echo "FAIL: $fails assertion(s)"; exit 1; fi
 echo "provision-tenant: all guards refuse, all valid inputs accepted."
