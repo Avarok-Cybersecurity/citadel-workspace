@@ -41,7 +41,21 @@ for (const dir of DIRS) {
   try {
     files = execSync(`find ${dir} -maxdepth 1 -name 'check-*.mjs'`, { encoding: 'utf8' })
       .trim().split('\n').filter(Boolean).sort();
-  } catch { /* directory absent */ }
+  } catch {
+    // A missing scan root is a FAILURE, not an empty result.
+    //
+    // `citadel-workspaces/scripts` lives in a submodule. In a worktree without
+    // submodules the find failed, this swallowed it, and the generator wrote a
+    // 57-gate index -- while a full checkout has 98. `--check` then PASSED on
+    // the truncated index and CI, which does check out submodules, failed with
+    // "out of date" and no indication of why. The anti-vacuity floor below
+    // could not catch it either: it only fires when NO gates are found, and 57
+    // is not none.
+    console.error(`FAIL: scan root '${dir}' does not exist.`);
+    console.error('An index built from a subset of its roots reports a');
+    console.error('completeness it never measured. Initialise submodules first.');
+    process.exit(1);
+  }
   for (const file of files) rows.push({ dir, file, name: file.split('/').pop(), summary: summarise(file) });
 }
 
