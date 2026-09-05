@@ -25,5 +25,5 @@ This workflow logs out of the current account via the ui using playwright MCP
 Step 1: On the top right of the screen for the user avatar, click it
 Step 2: A dropdown menu will appear with options including to logout. Click "Sign out"
 Step 3: The user should be redirected to the index page `/`
-Step 4: checkForErrors(). Scan for errors in the internal service and server: `tilt logs server` and `tilt logs workspace-server`
+Step 4: checkForErrors(). Scan for errors in the internal service and server: `tilt logs server` and `tilt logs internal-service`
 Step 5: scanScreen()

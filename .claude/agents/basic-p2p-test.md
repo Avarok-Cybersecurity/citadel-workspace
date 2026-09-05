@@ -13,7 +13,7 @@ Tests P2P messaging between 2 users while documenting UX/UI issues and console w
 
 ## Configuration
 
-- **UI_URL**: http://localhost:5173/
+- **UI_URL**: http://localhost:5291/
 - **SERVER_LOCATION**: 127.0.0.1:12349
 - **WORKSPACE_PASSWORD**: SUPER_SECRET_ADMIN_PASSWORD_CHANGE_ME
 - **USER_PASSWORD**: test12345
@@ -35,17 +35,18 @@ Tests P2P messaging between 2 users while documenting UX/UI issues and console w
 ```bash
 tilt logs internal-service 2>&1 | tail -3
 ```
-- **PASS if**: Contains "Citadel client established" or "Running target/debug/citadel-workspace-internal-service"
+- **PASS if**: Contains "Citadel client established" (the release binary logs
+  this; it never logs a `Running target/debug/...` line)
 - **FAIL if**: Contains "connection refused" or command fails
 - **ON FAIL**: Return immediately with "PREREQUISITE FAILED: Internal service not running. Run `tilt up` first."
 
 **Step 0.2:** Check if UI is accessible
 ```bash
-curl -s -o /dev/null -w "%{http_code}" http://localhost:5173/ --max-time 5
+curl -s -o /dev/null -w "%{http_code}" http://localhost:5291/ --max-time 5
 ```
 - **PASS if**: Returns 200
 - **FAIL if**: Returns non-200 or times out
-- **ON FAIL**: Return immediately with "PREREQUISITE FAILED: UI not accessible at http://localhost:5173/. Check if `tilt up` is running and UI service is healthy."
+- **ON FAIL**: Return immediately with "PREREQUISITE FAILED: UI not accessible at http://localhost:5291/. Check if `tilt up` is running and UI service is healthy."
 
 **Step 0.3:** Check server is running
 ```bash
@@ -63,7 +64,7 @@ tilt logs server 2>&1 | tail -3
 
 ### Tab 0: Create User 1
 
-**Step 1.1:** Navigate to http://localhost:5173/
+**Step 1.1:** Navigate to http://localhost:5291/
 - Use browser_navigate
 - **ON FAIL**: Return "STEP 1.1 FAILED: Cannot navigate to UI"
 
@@ -105,7 +106,7 @@ tilt logs server 2>&1 | tail -3
 
 **Step 1.10:** Open new tab using browser_tabs action="new"
 
-**Step 1.11:** Navigate to http://localhost:5173/
+**Step 1.11:** Navigate to http://localhost:5291/
 - **ON FAIL**: Return "STEP 1.11 FAILED: Cannot navigate in Tab 1"
 
 **Step 1.12:** Click "Join Workspace"
@@ -262,7 +263,7 @@ tilt logs internal-service 2>&1 | tail -20
 ## Error Handling Rules
 
 1. **Service Not Running**: If tilt logs show errors or connection refused, EXIT IMMEDIATELY
-2. **UI Not Accessible**: If curl to localhost:5173 fails, EXIT IMMEDIATELY
+2. **UI Not Accessible**: If curl to localhost:5291 fails, EXIT IMMEDIATELY
 3. **Step Timeout**: If any step takes >10 seconds without progress, note it and try to continue
 4. **Critical Failure**: If account creation or P2P registration fails, EXIT and report
 5. **Message Failure**: If messaging fails, document but try to complete other tests

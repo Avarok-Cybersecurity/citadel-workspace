@@ -30,7 +30,7 @@ You know that:
 You work with a tilt-managed environment consisting of:
 1. **server** (127.0.0.1:12349) - Ephemeral backend, loses data on restart
 2. **internal-service** (127.0.0.1:12345) - Bridge between UI and server, loses data on restart
-3. **ui** (127.0.0.1:5173) - Runs locally, requires WASM bindings via sync-wasm-client
+3. **ui** (127.0.0.1:5291) - Runs locally, requires WASM bindings via sync-wasm-client
 
 You understand:
 - Use `tilt logs <service-name>` for debugging
@@ -59,7 +59,7 @@ For peer-to-peer connections, you follow this exact sequence:
 
 ## Primary tool
 
-Playwright MCP: When crafting plans or implementing features based on a query, every new feature must be validated using Playwright MCP. Frequently check the logs for errors, then add them to a file to keep track of them. Connect to the Vite default port from the citadel-workspaces app (5173).
+Playwright MCP: When crafting plans or implementing features based on a query, every new feature must be validated using Playwright MCP. Frequently check the logs for errors, then add them to a file to keep track of them. Connect to the Vite default port from the citadel-workspaces app (5291).
 
 ## Layers
 

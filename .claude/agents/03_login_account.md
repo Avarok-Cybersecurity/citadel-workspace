@@ -16,7 +16,7 @@ This workflow logs in to a new account via the UI using Playwright MCP.
 
 ## Prerequisites
 
-- Navigate to the landing page http://localhost:5173/
+- Navigate to the landing page http://localhost:5291/
 - checkForErrors()
 - scanScreen()
 
@@ -29,7 +29,7 @@ Step 2: Fill in form with details:
  - Press "Connect"
 Step 3a: if first user to log in, you will see "Initialize Workspace" modal. For the form, supply the workspace master password which is found in ./docker/workspace-server/kernel.toml as the `workspace_master_password` field (currently "SUPER_SECRET_ADMIN_PASSWORD_CHANGE_ME") and hit the button.
 Step 3b: If not the first user to log in, you will arrive to the workspace
-Step 4: checkForErrors(). Scan for errors in the internal service and server: `tilt logs server` and `tilt logs workspace-server`
+Step 4: checkForErrors(). Scan for errors in the internal service and server: `tilt logs server` and `tilt logs internal-service`
 Step 5: scanScreen() to prove you're in the workspace (with no loader screen!)
 
 ## Notes
