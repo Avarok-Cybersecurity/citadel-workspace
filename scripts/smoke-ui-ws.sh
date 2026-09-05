@@ -224,7 +224,7 @@ done
 echo "  opt-in: only the literal WS_PROXY_ENABLED=1 enables the proxy; unset, '', 0, false, off, no, on, yes and true all disable it while still serving the SPA."
 
 # ---------------------------------------------------------------------------
-# 3. envsubst is pinned to our three variables (NGINX_ENVSUBST_FILTER).
+# 3. envsubst is pinned to our four variables (NGINX_ENVSUBST_FILTER).
 # ---------------------------------------------------------------------------
 # Unfiltered, envsubst is eligible to replace EVERY environment variable - so an env var
 # whose name collides with an nginx variable rewrites the config. Start the image with a
@@ -250,7 +250,8 @@ echo "  envsubst: pinned - colliding env vars (host, http_upgrade) cannot rewrit
 # entrypoint validator must now refuse to start instead.
 for bad_var in "AGENT_UPSTREAM=127.0.0.1:12345/; return 200 \"X\"; #" \
                "WS_PROXY_ENABLED=1\"; return 200 \"X\"; #" \
-               "LISTEN_ADDR=0.0.0.0; return 200 \"X\"; #"; do
+               "LISTEN_ADDR=0.0.0.0; return 200 \"X\"; #" \
+               "LOOPBACK_AGENT_ORIGIN=wss://local.example.com:12345\"; return 200 \"X\"; #"; do
   vc="smoke-ui-inject"
   docker rm -f "$vc" >/dev/null 2>&1 || true
   docker run -d --name "$vc" -e WS_PROXY_ENABLED=1 -e AGENT_UPSTREAM=127.0.0.1:12345 \
@@ -265,4 +266,28 @@ for bad_var in "AGENT_UPSTREAM=127.0.0.1:12345/; return 200 \"X\"; #" \
 done
 echo "  injection: runtime variables containing nginx metacharacters are rejected at startup."
 
+# ---------------------------------------------------------------------------
+# 5. A published loopback agent origin reaches the page AND the policy, from one value.
+# ---------------------------------------------------------------------------
+# This is the rendered container, not the template: the meta must be filled in the HTML
+# nginx actually serves (a build step that rewrote the placeholder would break it silently),
+# and the CSP header the browser enforces must carry the same origin. Without the variable
+# both must be exactly as before -- an empty meta and `connect-src 'self'`.
+LOOP="wss://local.example.com:12345"
+cleanup
+docker run -d --name "$CTR" -e WS_PROXY_ENABLED=0 -e "LOOPBACK_AGENT_ORIGIN=$LOOP" \
+  -p "127.0.0.1:${PORT}:8080" "$IMAGE" >/dev/null
+for ((i = 1; i <= 30; i++)); do curl -sf -o /dev/null "$BASE/" 2>/dev/null && break; sleep 1; done
+curl -sf "$BASE/" | grep -q "name=\"citadel-loopback-agent\" content=\"$LOOP\"" \
+  || fail "the served index.html does not carry the loopback origin in <meta name=\"citadel-loopback-agent\">."
+curl -s -D - -o /dev/null "$BASE/" | grep -i '^content-security-policy' | grep -q "connect-src 'self' $LOOP;" \
+  || fail "the Content-Security-Policy header does not permit the loopback origin the page was told to dial."
+cleanup
+docker run -d --name "$CTR" -e WS_PROXY_ENABLED=0 -p "127.0.0.1:${PORT}:8080" "$IMAGE" >/dev/null
+for ((i = 1; i <= 30; i++)); do curl -sf -o /dev/null "$BASE/" 2>/dev/null && break; sleep 1; done
+curl -sf "$BASE/" | grep -q 'name="citadel-loopback-agent" content=""' \
+  || fail "without LOOPBACK_AGENT_ORIGIN the meta is not present-and-empty; the app would dial something other than same-origin /ws, or nothing."
+curl -s -D - -o /dev/null "$BASE/" | grep -i '^content-security-policy' | grep -q "connect-src 'self' ;" \
+  || fail "without LOOPBACK_AGENT_ORIGIN connect-src changed."
+echo "  loopback: the published origin lands in the served meta and the CSP; absent, both are untouched."
 echo "== all /ws smoke assertions passed =="

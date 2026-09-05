@@ -1,0 +1,15 @@
+#!/bin/sh
+# Sourced (not executed) by the nginx entrypoint, so the export reaches
+# 20-envsubst-on-templates.sh. That step substitutes only the variables that are
+# PRESENT in the environment and match NGINX_ENVSUBST_FILTER; an absent one is
+# left as the literal `${LOOPBACK_AGENT_ORIGIN}` in the rendered config, which
+# nginx then reads as its own (undefined) variable and refuses to start:
+#
+#   nginx: [emerg] unknown "loopback_agent_origin" variable
+#
+# Compose deployments always pass the variable, if only empty; a bare
+# `docker run` of the image does not. Absent means "no loopback agent origin",
+# exactly as empty does, and 16-validate-runtime-vars.sh has already validated
+# whatever value was present. The three required variables are NOT defaulted
+# here: for those, absent is a misconfiguration and the validator says so.
+export LOOPBACK_AGENT_ORIGIN="${LOOPBACK_AGENT_ORIGIN:-}"

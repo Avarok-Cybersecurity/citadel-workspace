@@ -39,11 +39,35 @@ refuses "an HTML attribute breakout"      'wss://local.example.com:12345"><scrip
 refuses "a semicolon (CSP directive end)" "wss://local.example.com:12345; default-src *"
 refuses "an uppercase host"               "wss://Local.Example.com:12345"
 
-render() { # <LOOPBACK value> -> rendered config on stdout, only the filtered variables substituted
-  # env -i so nothing else in the caller's environment can leak into the render -- but keep
-  # PATH, or envsubst itself cannot be found.
-  env -i PATH="$PATH" "${base[@]}" "LOOPBACK_AGENT_ORIGIN=$1" envsubst '${AGENT_UPSTREAM} ${WS_PROXY_ENABLED} ${LISTEN_ADDR} ${LOOPBACK_AGENT_ORIGIN}' < "$T"
+# Mirror the nginx entrypoint exactly: 20-envsubst-on-templates.sh substitutes ONLY the
+# variables PRESENT in the environment whose names match NGINX_ENVSUBST_FILTER, after sourcing
+# every *.envsh in /docker-entrypoint.d. A test that hands envsubst a fixed variable list
+# cannot see what an absent variable does -- and an absent one is left as the literal
+# `${LOOPBACK_AGENT_ORIGIN}`, which nginx reads as its own undefined variable and dies on.
+ENVSH=docker/ui/17-default-runtime-vars.envsh
+FILTER='^(AGENT_UPSTREAM|WS_PROXY_ENABLED|LISTEN_ADDR|LOOPBACK_AGENT_ORIGIN)$'
+render() { # [LOOPBACK value | __absent__] -> rendered config on stdout
+  local -a e=("${base[@]}")
+  [ "${1:-__absent__}" = "__absent__" ] || e+=("LOOPBACK_AGENT_ORIGIN=$1")
+  # SKIP_ENVSH is the control's switch: it must cross env -i explicitly or the control cannot
+  # skip anything and reads green for nothing.
+  env -i PATH="$PATH" SKIP_ENVSH="${SKIP_ENVSH:-}" "${e[@]}" sh -c '
+    [ -z "${SKIP_ENVSH:-}" ] && . "$1"
+    defined=$(env | cut -d= -f1 | grep -E "$2" | sed "s/^/\${/; s/$/}/" | tr "\n" " ")
+    envsubst "$defined" < "$3"' sh "$ENVSH" "$FILTER" "$T"
 }
+grep -q "17-default-runtime-vars.envsh /docker-entrypoint.d/17-default-runtime-vars.envsh" docker/ui/Dockerfile \
+  && ok "the Dockerfile installs the default-variables envsh" || bad "the Dockerfile does not install 17-default-runtime-vars.envsh"
+# Present is not enough: the nginx entrypoint sources an .envsh only when it is executable and
+# otherwise ignores it. An image with the file copied and no chmod rendered the literal and
+# died at start -- with this assertion green. It must see the exec bit being set.
+grep -q "chmod +x /docker-entrypoint.d/17-default-runtime-vars.envsh" docker/ui/Dockerfile \
+  && ok "the Dockerfile makes the envsh executable, which is what makes the entrypoint source it" || bad "the Dockerfile never chmods 17-default-runtime-vars.envsh; the entrypoint will ignore it"
+[ "16-validate-runtime-vars.sh" \< "17-default-runtime-vars.envsh" ] && [ "17-default-runtime-vars.envsh" \< "20-envsubst-on-templates.sh" ] \
+  && ok "the default is applied after validation and before rendering (16- < 17- < 20-)" || bad "17-default-runtime-vars.envsh does not sort between 16- and 20-"
+rabs=$(render __absent__)
+if echo "$rabs" | grep -q 'LOOPBACK_AGENT_ORIGIN'; then bad "with the variable ABSENT the literal \${LOOPBACK_AGENT_ORIGIN} survived into the config (nginx: unknown variable)"; else ok "absent variable renders as empty, not as a literal nginx variable"; fi
+echo "$rabs" | grep -q "connect-src 'self' ;" && ok "absent variable leaves connect-src 'self' alone" || bad "absent variable changed connect-src"
 r=$(render "wss://local.example.com:12345")
 [ "$(echo "$r" | grep -c '^map \$host \$csp')" = "1" ] && ok "the CSP is defined once, as a map" || bad "the CSP map is missing or duplicated"
 [ "$(echo "$r" | grep -cE 'add_header Content-Security-Policy "')" = "0" ] && ok "no location carries its own CSP string" || bad "a location still carries a literal CSP"
