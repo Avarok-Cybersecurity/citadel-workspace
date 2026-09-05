@@ -87,9 +87,14 @@ jobs:
       # DOWNLOADED and run on someone else's machine, so linking against
       # whatever OpenSSL the build agent happened to have is a runtime failure
       # waiting to happen on a machine that has a different one, or none.
+      # THE BINARY THE BROWSER CAN TALK TO. citadel-workspace-internal-service (this repo)
+      # wraps the kernel in the WebSocket interface and the Origin allowlist; it is what the
+      # docker image runs. The submodule's citadel_service_bin starts the kernel on the raw
+      # TCP interface -- a browser cannot open that -- and agent-v0.1.0 shipped it: the
+      # binary bound its port, passed every smoke check, and closed the connection on the
+      # first WebSocket handshake. smoke-agent.sh now performs that handshake.
       - name: Build the agent
-        run: cargo build --release --target ${{ matrix.target }} -p citadel_service_bin --bin internal-service --features vendored
-        working-directory: citadel-internal-service
+        run: cargo build --release --target ${{ matrix.target }} -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features vendored
 
       # Packaged with the run instructions beside the binary. `--bind` has no
       # default in the agent's CLI, so a downloaded binary run bare exits with a
@@ -102,7 +107,7 @@ jobs:
         run: |
           set -euo pipefail
           staging="$(mktemp -d)"
-          cp citadel-internal-service/target/${{ matrix.target }}/release/internal-service "$staging/citadel-agent"
+          cp target/${{ matrix.target }}/release/citadel-workspace-internal-service "$staging/citadel-agent"
           cp docs/AGENT_README.md "$staging/README.md"
           tar -czf "${{ matrix.asset }}" -C "$staging" .
           shasum -a 256 "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"
@@ -113,7 +118,7 @@ jobs:
         run: |
           set -euo pipefail
           staging="$(mktemp -d)"
-          cp citadel-internal-service/target/${{ matrix.target }}/release/internal-service.exe "$staging/citadel-agent.exe"
+          cp target/${{ matrix.target }}/release/citadel-workspace-internal-service.exe "$staging/citadel-agent.exe"
           cp docs/AGENT_README.md "$staging/README.md"
           (cd "$staging" && 7z a -tzip "$OLDPWD/${{ matrix.asset }}" .)
           sha256sum "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"

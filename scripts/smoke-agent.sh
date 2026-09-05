@@ -69,7 +69,10 @@ fi
 # real agent already running on the machine doing the release.
 PORT="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
 
-"$BIN" --bind "127.0.0.1:$PORT" --backend in-memory >"$WORK/agent.log" 2>&1 &
+# The allowlist is REQUIRED by the WebSocket agent (it refuses to start without one); the
+# handshake below presents this origin, and a foreign one, to prove the policy shipped.
+INTERNAL_SERVICE_ALLOWED_ORIGINS="http://localhost:5291" \
+  "$BIN" --bind "127.0.0.1:$PORT" >"$WORK/agent.log" 2>&1 &
 AGENT_PID=$!
 
 for _ in $(seq 1 60); do
@@ -84,6 +87,30 @@ s=socket.socket(); s.settimeout(0.4)
 sys.exit(0 if s.connect_ex(('127.0.0.1',$PORT))==0 else 1)
 " 2>/dev/null; then
     echo "  agent listens on 127.0.0.1:$PORT"
+    # Listening is not speaking. agent-v0.1.0 listened, and was the raw-TCP kernel binary:
+    # a browser's WebSocket handshake got the connection closed. So: a real handshake, with
+    # the allowed Origin, must be answered 101 -- and one with a foreign Origin must be
+    # refused 403, which proves the allowlist is in the shipped binary and not only in the
+    # docker image.
+    handshake() { # <origin> -> first response line
+      curl -s -i --max-time 5 -H "Connection: Upgrade" -H "Upgrade: websocket" \
+        -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+        -H "Origin: $1" "http://127.0.0.1:$PORT/" 2>/dev/null | head -n1 | tr -d '\r' || true
+      # `|| true`: a closed connection makes curl exit non-zero, and under pipefail + set -e
+      # that killed this script before the assertion below could name the failure. The
+      # empty result IS the finding; the case statement reports it.
+    }
+    got="$(handshake http://localhost:5291)"
+    case "$got" in
+      *" 101 "*) echo "  WebSocket handshake from the allowed origin: $got" ;;
+      *) echo "::error::the agent does not speak WebSocket: handshake from the allowed origin got '${got:-<connection closed>}' (a browser cannot use this binary)" >&2
+         tail -20 "$WORK/agent.log" >&2; exit 1 ;;
+    esac
+    got="$(handshake http://evil.example)"
+    case "$got" in
+      *" 403 "*) echo "  handshake from a foreign origin refused: $got" ;;
+      *) echo "::error::the agent accepted (or did not refuse with 403) a handshake from a foreign origin: '${got:-<connection closed>}'. The Origin allowlist is not in this binary." >&2; exit 1 ;;
+    esac
     echo "== $ARCHIVE is runnable =="
     exit 0
   fi
