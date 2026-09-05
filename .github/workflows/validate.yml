@@ -149,6 +149,12 @@ jobs:
         # developer and no other job ever ran, so "CI is green" and "it works
         # here" were answers to different questions.
         run: node scripts/check-ci-runs-lockfile-versions.mjs
+      - name: No nested npm ci inside a root workspace
+        # `npm ci` in a directory that is already a root workspace re-resolves
+        # that subtree and unhoists the root's devDependencies, so later steps
+        # fail with exit 127. That is why an explicit `npm install eslint@...`
+        # followed one, two steps later -- to put back what it removed.
+        run: node scripts/check-no-nested-npm-ci-in-workspaces.mjs
       - name: Every nginx location carries the full header set
         # add_header does not inherit into a block that adds any header of its
         # own, so each location repeats all of them by hand. A location missing
@@ -538,7 +544,14 @@ jobs:
         run: npm ci
       - name: Build citadel-internal-service typescript-client
         # Build the WASM client's TypeScript wrapper first (innermost dependency)
-        run: npm ci && npm run build
+        # `npm run build` only. A nested `npm ci` inside a directory that is
+        # already a root workspace re-resolves that subtree and unhoists the
+        # root's devDependencies -- which is why an explicit
+        # `npm install eslint@9.39.2` had to follow it, and why removing that
+        # install alone turned this job into exit 127, `.bin/eslint` not found.
+        # The unit-tests job above has never had the nested `npm ci`, and has
+        # never needed the compensating install.
+        run: npm run build
         working-directory: citadel-internal-service/typescript-client
       - name: Build citadel-workspace-client-ts
         # Build client-ts to generate dist/ with TypeScript declarations
