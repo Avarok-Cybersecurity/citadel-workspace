@@ -251,7 +251,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                 )
             };
 
-            let nodes = self.backend_tx_manager.get_all_nodes().await?;
+            let nodes = self.backend_tx_manager.get_all_nodes_shared().await?;
             let children: Vec<String> = nodes
                 .values()
                 .filter(|n| n.parent_id.as_deref() == Some(crate::WORKSPACE_ROOT_ID))
@@ -660,7 +660,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         // Membership AND ViewContent — see ensure_may_view_workspace.
         ensure_may_view_workspace(self, user_id).await?;
 
-        let nodes = self.backend_tx_manager.get_all_nodes().await?;
+        let nodes = self.backend_tx_manager.get_all_nodes_shared().await?;
         let schema = self.backend_tx_manager.get_tree_schema_or_default().await?;
 
         // Start from specified parent or root.
@@ -781,7 +781,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         // Membership AND ViewContent — see ensure_may_view_workspace.
         ensure_may_view_workspace(self, user_id).await?;
 
-        let nodes = self.backend_tx_manager.get_all_nodes().await?;
+        let nodes = self.backend_tx_manager.get_all_nodes_shared().await?;
 
         // Find the root node
         let root_node = if let Some(rid) = root_id {
