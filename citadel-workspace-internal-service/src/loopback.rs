@@ -47,6 +47,12 @@ pub struct TlsInputs<'a> {
 
 impl<'a> TlsInputs<'a> {
     /// Nothing configured; fill in what the caller has.
+    ///
+    /// `#[cfg(test)]` because its only caller is `loopback_tests.rs`, which is
+    /// itself `#[cfg(test)]`. Without the gate clippy fails the non-test build
+    /// with "associated function `none` is never used" -- and CI runs clippy
+    /// with `-D warnings`, so this is a hard error rather than a note.
+    #[cfg(test)]
     pub fn none(cache_root: &'a Path) -> Self {
         Self {
             env_host: None,
