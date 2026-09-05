@@ -70,4 +70,50 @@ if (orphans.length > 0) {
   process.exit(1);
 }
 
+// The second half of what the message above asks for.
+//
+// "Named by a `test:` script" and "run by `npm run test:all`" are different
+// claims, and only the first was checked. `test:all` reached 39 of 47 specs --
+// missing all five reconnection specs, native-file-picker, group-messaging and
+// tree-structure-editor. README.md:178 offers `test:all` as *the* way to run
+// the suite locally, so a developer reproducing a CI reconnection failure ran
+// it for an hour against the shared backend, passed, and had never invoked a
+// reconnection spec. docs/TESTING.md:304 already warns that `test:all` "would
+// make any matrix look complete"; this implements that warning.
+const reachable = new Set();
+const visited = new Set();
+function expand(name, depth) {
+  if (depth > 15 || visited.has(name)) return; // cycle guard
+  visited.add(name);
+  const body = (pkg.scripts ?? {})[name];
+  if (!body) return;
+  for (const [, next] of body.matchAll(/npm run ([\w:.-]+)/g)) expand(next, depth + 1);
+  for (const [, file] of body.matchAll(/dist\/tests\/([\w/.-]+)\.js/g)) reachable.add(file);
+}
+expand('test:all', 0);
+
+if (reachable.size === 0) {
+  console.error('`test:all` reaches no spec at all; this check verified nothing.');
+  process.exit(1);
+}
+
+const unreached = all.filter((spec) => !reachable.has(spec.replace(/\.ts$/, '')));
+if (unreached.length > 0) {
+  console.error(
+    `\n\`npm run test:all\` reaches ${reachable.size} of ${all.length} specs. ` +
+      `These ${unreached.length} are never run by it:\n`,
+  );
+  for (const spec of unreached) console.error(`  - src/tests/${spec}`);
+  console.error(
+    `\nEach has a \`test:\` script, so the orphan check above passes -- but the\n` +
+      `command README.md offers for running the suite locally skips them. Chain\n` +
+      `them into test:all.`,
+  );
+  process.exit(1);
+}
+
+console.log(
+  `  \`test:all\` reaches all ${all.length} specs.`,
+);
+
 console.log(`Integration specs OK: all ${all.length} are named by one of ${runners.length} test: scripts.`);
