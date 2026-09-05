@@ -218,6 +218,9 @@ jobs:
       - name: Third-party images are pinned
         run: node scripts/check-third-party-images-are-pinned.mjs
 
+      - name: The submodule-pointer guard judges a worktree correctly
+        run: node scripts/check-submodule-gate-judges-a-worktree.mjs
+
       - name: Tenant provisioning refuses what it must
         run: bash scripts/test-provision-tenant.sh
 
