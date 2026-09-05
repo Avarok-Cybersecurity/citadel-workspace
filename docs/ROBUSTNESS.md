@@ -2861,3 +2861,709 @@ against the check, not only against the code the check guards.** Nine checks thi
 campaign turned out to be measuring nothing, four of them written in the same
 campaign by the same hands, and every one was found by asking what single change
 would turn it red — never by reading it.
+
+## Round 547 — CI was green on a vitest nobody ran
+
+`.github/workflows/validate.yml` ran `npm install vitest@3.0.7 --save-dev`
+immediately before `npx vitest run`. The root lockfile resolves vitest 3.2.7.
+So "CI is green" and "the tests pass locally" were statements about two
+different versions of the runner, and neither backed the other. The eslint step
+beside it did the same with a version that matches today, which is the same
+defect one lockfile bump from being visible.
+
+Neither install was needed: `npm ci` already hoists both to
+`node_modules/.bin`, and the ESLint step was already invoking that exact binary
+by absolute path.
+
+**Gate:** `check-ci-runs-lockfile-versions.mjs` — no workflow may pin a version
+of a package the root lockfile resolves.
+**Controls:** defect back → red; a matching-version pin → red; a package the
+lockfile does not resolve → green; a comment naming the defect → green.
+
+**What went wrong first:** the first control run used `git checkout` to restore
+between controls, on an uncommitted fix. That reverted to HEAD, which still had
+the defect, so controls B, C and D were all measuring the original file. Commit
+the fix *before* running controls against it.
+
+## Round 548 — the agent instructions named three things that do not exist
+
+These files are executed, not read, so a wrong name is a timeout or a blank
+page reported as a broken service.
+
+The sync agent — which CLAUDE.md marks MANDATORY after any backend change —
+waited for ``Running `target/debug/…` `` from both services. Both containers run
+release binaries out of `/usr/local/bin`. That line is never logged, so steps 2
+and 3 could only ever end at the five-minute timeout, on every *healthy*
+rebuild. The real lines, confirmed against the running stack, are
+`Creating AsyncWorkspaceServerKernel` and `Citadel client established`.
+
+Every UI agent opened `localhost:5173`, 24 times across five files; the dev
+server is on 5291 (`:5291` → 200, `:5173` → 000). Three ran
+`tilt logs workspace-server`, which names no Tilt resource.
+
+**Gate:** `check-agent-docs-name-real-things.mjs` — Tilt names against
+`dc_resource(`, ports against what compose and the Dockerfiles bind, the
+`target/debug` marker against the container `CMD`.
+**Controls:** each of the three back → red; prose *explaining* the marker does
+not exist → green; a legitimate `:12345` → green.
+
+**What went wrong first:** the third control came back green. The edit had not
+applied — nested-quote escaping through `bash -c` → `python3 -c` mangled it —
+so it was measuring nothing. Re-run with an assertion on the anchor, red. Every
+control edit now asserts its anchor before writing.
+
+## Round 549 — the hosting quickstart could not bring the stack up
+
+`docs/INSTALL.md` said `.env` must set `WORKSPACE_MASTER_PASSWORD` and listed
+everything else as optional. `INTERNAL_SERVICE_ALLOWED_ORIGINS` is also
+required: compose passes it with no default and the agent exits without it, on
+purpose. Following the doc exactly ends in a `--wait` timeout with no stated
+cause. Exactly two variables in that compose file have no default; one was
+documented.
+
+**Gate:** `check-install-doc-names-required-env.mjs` — derives the required set
+from `${VAR}` with no `:-`, rather than listing it.
+**Controls:** undocument it again → red; a new required var → red; a var *with*
+a default → green (without that one the rule would demand documentation for all
+five optional variables, and be wrong rather than noisy).
+
+## Round 550 — the protocol guidance described code that does not exist
+
+CLAUDE.md and ARCHITECTURE.md are loaded into every session, so a fictional
+operation is an agent writing code against a name that does not compile, or
+"fixing" working code to match. Four at once:
+
+- `CreateOffice` / `ListOffices` / `CreateRoom` / `ListRooms` as protocol
+  operations. Zero hits in the source. The hierarchy is nodes.
+- a triple-nested chat envelope with a `WorkspaceProtocol::Message` layer. The
+  send path is a CBOR `P2PCommand` in a bincode `WireWrapper`, sent as an
+  ordinary `InternalServiceRequest::Message`.
+- `NodeResult::Disconnect` discriminated by `v_conn_type` on `LocalGroupPeer` /
+  `ExternalGroupPeer`. The field is `conn_type`; `ClientConnectionType` has only
+  `Server` and `Extended`; since SDK v0.13.1 a P2P disconnect is a different
+  event. The example handler does not compile.
+- six `Permission` variants that the flat enum does not have.
+
+**Gate:** `check-docs-name-real-symbols.mjs` — a backticked CamelCase token must
+appear in the tree (4,217 source files, 7,123 identifiers). It hard-errors below
+500 files so an uninitialised submodule cannot pass it on an empty haystack —
+which it caught on the first local run. Blockquotes are exempt, being where
+these files retract earlier revisions; so are Future/proposed/roadmap sections.
+**Controls:** two fictions back → red; a proposal, a retraction and a real
+symbol → green. The last three each failed the first draft of the rule.
+
+**Method note, three rounds running:** every control this session that came back
+green did so because the control itself had not applied, not because the check
+was weak. Assert the anchor, and verify the tree is byte-identical after
+restoring.
+
+## Round 551 — the master password was compared one byte at a time
+
+`String == String` compares lengths and then runs `memcmp`, which returns at
+the first differing byte. How long that takes is a function of how many leading
+bytes the guess got right, so guessing and timing recovers the secret a byte at
+a time instead of searching the space.
+
+The workspace master password — what makes somebody the administrator — was
+compared that way at five sites, four reachable from a request
+(`async_domain_server_ops.rs:1043,1069,1231,1307`; `async_kernel.rs:469` is
+startup-only and was never a vulnerability). All five now use
+`kernel::secret_eq::secrets_match`: SHA-256 both sides, compare the digests with
+`subtle`.
+
+Hashing first is not ceremony. A constant-time compare of the raw bytes still
+takes time proportional to the longer input, which tells an attacker how many
+characters to guess.
+
+**Gate:** `check-secrets-are-compared-in-constant-time.mjs`, over all three Rust
+service roots. It reports how many roots it scanned, so an uninitialised
+submodule narrows the scan visibly rather than silently.
+**Controls:** one `==` back → red; a comment naming the defect → green; a
+non-secret `==` → green.
+**Propagation:** grepped the mechanism across all three service roots; no other
+instances.
+
+## Round 552 — removing a member lasted until they reconnected
+
+The connection handler enrols any authenticated account absent from
+`workspace.members` — its own comment says "no admin required for initial
+connection". It could not tell *never joined* from *an administrator removed
+them*, so `RemoveMember` was undone by the removed account's own next
+reconnect, which happens by itself. Nothing was logged; the member list simply
+showed them back.
+
+Two more things the old code did not do: it touched the role only for Admin and
+Owner, so an ordinary member's removal left no trace at all; and it demoted to
+`Member`, which for a Guest was a rank *increase*.
+
+Removal now records itself as `UserRole::Banned` — no permissions, rank 0, and a
+role the codebase defined, gave a permission table, and never once assigned.
+Re-admission is `AddMember`, which writes an explicit role and clears it.
+
+The decision is extracted as `connect_enrolment`, for the same reason
+`first_member_outcome` was: inline in the handler it is reachable only with a
+kernel, a backend and a live Citadel session.
+
+**Tests:** 5 new; full kernel suite 77 binaries, no failures.
+**Controls:** `connect_enrolment` always `Enrol` → red on 2 of 5; removal
+reverted to Admin/Owner→Member → red on the *joined* test only, which is
+correct: the pure decision is untouched, and only the joined test asserts that
+what removal writes is what connect reads.
+
+**A first design, rejected:** setting the role globally over-reached, since
+`user.role` is global and a user may belong to another workspace. Checked
+`set_role_permissions` is per-domain before proceeding. The existing tests
+caught this, which is what they are for.
+
+## Round 553 — CI was not queued, it was stalled
+
+Reported for two cycles as a deep queue: 262 jobs against 20 slots. It was not.
+Zero jobs were executing anywhere — `in_progress=0` across all four repos —
+while six runs sat marked "queued", the oldest since 08:03. Cancelling PR runs
+to "free slots" did nothing, because no slots were occupied.
+
+Three stale master validate runs from 06:21 and 07:11 were wedging the queue.
+Cancelling those, jobs started within 40 seconds.
+
+The causal claim is not airtight: earlier cancellations may simply have been
+slow to propagate. What is certain is that the deep-queue explanation was
+wrong, and that the check which would have shown it — *are any jobs actually
+in progress* — is one API call and was never made.
+
+**Lesson:** a check-count on a PR says nothing about whether CI is running.
+`gh api "repos/<r>/actions/runs?status=in_progress" --jq .total_count` does.
+
+## Round 554 — a read failure was written back as an empty tree
+
+`OpfsStorage.readFile` caught every error and returned null, so a revoked
+handle, a quota error, a locked file or any transient `NotReadableError` was
+indistinguishable from a first run. `loadTree` returned null;
+`RevfsService.getTree` then built a default tree, cached it, and PERSISTED it —
+over a tree still on disk (`revfs-service.ts:117`). One transient read error
+destroyed the user's files, silently, and the UI repainted as though they had
+never existed. Both `getTree` and `getServerTree` had it.
+
+Storage now reports the two cases apart: null only for `NotFoundError`,
+everything else rethrown. `RevfsIO.loadTree` returns `unreadable: true` rather
+than flattening the failure, and the service renders a default while caching and
+persisting nothing — so nothing is destroyed and the next call retries.
+
+**Tests:** 3 + 3; full revfs suite 39 files, 271 tests, no regressions.
+
+**The control that mattered.** Reverting `readFile` to `catch { return null }`
+left all three of the first tests GREEN. They stub the IO layer, so they never
+execute the storage code the fix changed — the tests measured half the fix and
+would have shipped saying otherwise. The second commit adds
+`storage-tells-absent-from-unreadable.test.ts`, which drives the real storage
+class against a fake OPFS; the control then goes red on exactly the two cases it
+should.
+
+That is the third time this campaign that a green control meant the *test* was
+wrong rather than the code. It is now the most reliable defect-finder here.
+
+## Round 555 — local lint was weaker than CI lint
+
+CI lints every workspace with `--max-warnings 0`. Two of the three `lint`
+scripts a developer actually runs did not, and `citadel-workspace-client-ts`
+has `no-unused-vars` and `no-explicit-any` at **warn** — exactly what the
+missing flag hides. Both packages already passed under the stricter flag, so
+the gap was latent rather than active, which is the only reason it had not
+already cost a red CI run.
+
+**Gate:** `check-lint-scripts-match-ci.mjs` reads the required flags off the
+workflow's own eslint line rather than listing them.
+**Controls:** drop the flag → red; **add a new flag to CI** → red; a comment
+mentioning eslint → green. The middle one is the one that matters: it proves
+the flags are derived, so the gate cannot drift into agreeing with itself.
+
+## Round 556 — nine tests that never ran
+
+`citadel-internal-service/typescript-client`'s test script ended in
+`node --test "dist/**/*.test.js"`. Glob support in `--test` arrived in Node 21;
+the CI image is `node:18-slim`, so the quoted glob is taken literally and
+matches nothing.
+
+Measured in `docker run --rm node:18-slim`, the same image
+`ci/docker-compose.test.yml` uses:
+
+| | Exit | Tests |
+|---|---|---|
+| Before | 1 | 0 — `Could not find '/w/dist/**/*.test.js'` |
+| After  | 0 | **9**, 3 suites |
+
+`citadel-workspace-client-ts` hit this exact failure and solved it by having the
+checker emit the paths it found, so one directory walk feeds both the assertion
+and the runner. Its own comment names the cause. The fix stayed in that one
+package.
+
+The shape is worth remembering: a checker printing "1 compiled test file found"
+immediately followed by a runner printing "could not find it". Two components
+disagreeing out loud, in CI, and nobody reading the line.
+
+## Round 557 — removing the install that was compensating
+
+Round 547 removed `npm install eslint@9.39.2 --save-dev` on the grounds that the
+root `npm ci` already hoists eslint to `node_modules/.bin`. It does — until two
+steps later, when the lint job runs `npm ci` **again** inside
+`citadel-internal-service/typescript-client`, which is itself a root workspace.
+That re-resolves the subtree and unhoists the root devDependencies, and all
+three lint jobs died with `exit 127`.
+
+The install was not redundant. It was compensating. The cause is the nested
+`npm ci`, and the unit-tests job is the proof: it has never had one, and never
+needed a compensating install either.
+
+Memory already recorded this trap in those words — "duplicate `npm ci` in
+subdirs breaks hoisting" — and it was not applied. Reading the note is not the
+same as consulting it before acting.
+
+**Gate:** `check-no-nested-npm-ci-in-workspaces.mjs`. **Controls:** nested via
+`working-directory` → red; nested via `cd` on the run line → red; `npm ci` at
+the repo root → green.
+
+## Round 558 — `test:all` reached 39 of 47 specs
+
+`README.md:178` offers `npm run test:all` as the way to run the suite locally.
+It never ran `group-messaging`, `native-file-picker`, `tree-structure-editor`,
+or **any of the five reconnection specs**.
+
+Each has its own `test:` script, so the orphan gate passed. "Named by a script"
+and "run by `test:all`" are different claims and only the first was checked —
+while the gate's own failure message said *"and chain it into test:all"*, and
+`docs/TESTING.md:304` already warned that `test:all` "would make any matrix look
+complete". The hazard was written down twice and implemented nowhere.
+
+The cost is misattributed flake: reproduce a CI reconnection failure locally,
+run for an hour against the shared backend, pass, file it as environmental.
+
+**Gate:** transitive expansion of `test:all` with a cycle guard, in the file
+that already asked for it. **Controls:** drop the reconnection legs → red; a
+spec named by no script → red; `test:all` emptied to `echo nothing` → red
+("verified nothing"), which is what stops this gate becoming the thing it was
+written to catch.
+
+**Two of my own errors, caught only because the numbers contradicted
+themselves:** the first reachability script reported 0 of 47 because its regex
+excluded dots and truncated every filename; the first version of the gate
+printed "reaches 47 of 47" while listing all 47 as unreached, because the
+capture drops `.js` and the comparison kept it.
+
+## Round 559 — a job named after its first step
+
+Nine parent PRs each carried a red check reported as
+"Every workspace crate has a lint job: failure". That step passed — its log
+says `all 11 workspace crates are covered`. The failure was three steps later
+in the same job: `docs/GATES.md is out of date`, because six new gate scripts
+had been added across six branches without re-running
+`build-gates-index.mjs`.
+
+Every one of those PRs had a guaranteed red check independent of its content,
+and the check name pointed at the wrong step. Regenerated on all seven
+branches in one pass.
+
+**Lesson:** a CI job named after its first step will mislead you about its
+last one. Read the log, not the name.
+
+## Round 560 — the WASM release gate could not fail on a missing WASM binary
+
+The whole WASM assertion in the UI release smoke was: the `Cache-Control`
+header is present, and does not say `immutable`. `add_header ... always` in
+`docker/ui/nginx.conf.template` emits that header on 4xx too, so a **404 for a
+missing binary satisfies both**. Measured against the production image on the
+deployment host:
+
+    GET /wasm/does_not_exist_bg.wasm
+    HTTP/1.1 404 Not Found
+    Cache-Control: public, no-cache
+       present?   PASS (wrongly)
+       immutable? PASS (wrongly)
+
+Not hypothetical: `sync-wasm-clients.sh` wipes `public/wasm` before
+repopulating it and that directory is gitignored, so a partial sync ships a UI
+where WASM init throws and every operation silently no-ops — register and login
+do nothing, with no error and no backend log line. That incident is on record.
+
+Now asserts status 200 and size > 1MB first. The real binary reads 200 and
+2,553,625 bytes.
+
+## Round 561 — a claimed session that is never activated
+
+`session:activated` is the sole trigger for session-startup-sequence. The
+sidebar workspace switcher claimed the session, set the index and the user, ran
+`postAuthSetup` — and emitted nothing. Because `postAuthSetup` loads the tree,
+offices and members, the switch **looked healthy** and the toast said
+"Connected!", while the ILM handle was still open for the previous account and
+no P2P channels existed for the new one. Outbound messages blocked on ACKs
+nobody would send. It is the most common multi-account action in the product.
+
+**The gate found a second site** the inspection agent had explicitly cleared:
+`adoptSession` in `use-connect-to-server.ts`, whose own doc says it "mirrors the
+orphan-claim path step for step". It did not.
+
+**And my first control came back green** — I had removed the emit and left the
+paragraph above it explaining why it was there, and the gate grepped the raw
+file, so the prose satisfied it. The gate now strips comments. This is the same
+defect the test-quality agent reported the same hour in
+`offline-banner-layering.test.ts`, which asserts on a class name that exists
+only in comments.
+
+## Round 562 — a failed read reported as an absent document, then overwritten
+
+`loadDocumentFromDB` caught every error and returned `null`. Its own comment
+said why that was wrong and returned null anyway. `adoptDocument` acts on that
+null by writing a fresh revision-0 document over the top, so a routine 5s
+LocalDB timeout replaced a real document with an empty one, permanently.
+
+`isGenuinelyAbsent` exists for exactly this. Its doc already names the same
+failure in the message store ("one transient timeout destroys a conversation")
+and in the auto-connect preference — and the correct form was **fifty lines
+below in the same file**, in `deleteDocumentFromDB`.
+
+`loadIndexIntoCache` gained a per-document try/catch: it iterates the whole
+index, so making the read throw would otherwise have meant the first unreadable
+document abandoned every one after it — a regression dressed as a fix.
+
+## Round 563 — the targetCid fix was held in place by nothing
+
+UI #27 added `targetCid` so a tab signed in as somebody else stops applying the
+leader's workspace. Two tests referenced it; neither held it. One greps a
+600-character window of a *different file* for a *different symbol*. The other
+hand-builds an envelope with the field already populated, asserting the
+receiver's behaviour against something production need not produce.
+
+Measured — delete `targetCid,` from the builder:
+
+    the two existing tests   5 passed     <- green, wrongly
+    the new test             1 failed     <- red, correctly
+
+Covered at both ends and never in the middle.
+
+## Round 564 — the tests holding the agent's security boundary never compiled
+
+`websockets` is not a default feature, and CI named it on neither platform. So
+the entire `io_interface` module was `#[cfg]`-ed out on every run.
+
+    --features=vendored              6 passed
+    --features=vendored,websockets  33 passed
+
+The 27 that never compiled are the ones enforcing loopback-only: an unlisted
+origin refused at the handshake, a permitted origin on a foreign Host refused
+403, plain ws to the TLS listener refused, the wildcard unable to hide inside a
+list, and the idle-client DoS fix. The agent holds decrypted P2P plaintext and
+an unauthenticated control plane; these are what keep it reachable only from the
+user's own machine, and nothing was checking them.
+
+### The through-line of rounds 560-564
+
+All five are the same defect, not five defects: **the work was done, and the
+thing meant to hold it in place measured nothing.** A gate that passes on a 404.
+A fix with tests that read a different file. Security tests behind a flag nobody
+set. An index built from half its roots. In every case the code was right and
+the check was theatre — which is worse than no check, because it reports safety.
+
+The habit that found all five is unchanged and remains the highest-yield one
+here: run the control against the *check*, not only against the code the check
+guards.
+
+## Rounds 565-571 — the correct form was already nearby, seven more times
+
+This block is recorded as one entry because the findings are one finding.
+Every item below had a sibling in the same file, often within twenty lines,
+that did the right thing.
+
+| Round | Defect | The sibling that was right |
+|---|---|---|
+| 565 | An exact spec count in README broke the parent on every UI addition | — (a floor, not a fix) |
+| 566 | `setConnectionAttempt` overwrote a timer without clearing it | `deleteConnectionAttempt`, 20 lines below |
+| 567 | `STACK_OVERVIEW.md` had `cid`/`peer_cid` inverted | the agent's own `// RECIPIENT` comment |
+| 568 | A refused group leave removed you from your own member list | `GroupEndNotification`, 20 lines below |
+| 569 | A peer who left mid-open came back; the call could never end | the failure path, 20 lines below |
+| 570 | Redelivered messages stacked a second bell entry | — (the test asserted the argument, not the effect) |
+| 571 | The idle-send test failed on one scheduler hiccup | — (a relaxation, with arithmetic) |
+
+Round 566's cost: with 15 offline peers and a tab open an hour, ~1,800 live
+timers, each firing a `connectToPeer` that reads the CID from IndexedDB and can
+open a real connection against the SDK's 30s timeout.
+
+Round 569 is the most severe: `openSessionFor` re-read the CALL's status after
+its await but never the PARTICIPANT's. Teardown could not cover it —
+`closeSessionFor` returns early on `!openSessions.delete(cid)` and a peer whose
+open has not resolved is not in that set yet. So a peer leaving mid-open got a
+close that no-oped, their open confirmed, and `peer-connected` marked them
+active again: a ghost tile, a media session held open forever, `sendFrame` still
+encoding to somebody who left, and `anyoneActive` true for the ghost — camera
+light on, duration ticking, nobody there.
+
+Round 570 is the clearest example of a test certifying a guarantee the product
+did not have. "keys a redelivered message to the same id, so it cannot stack"
+mocked `addMessageNotification` wholesale and asserted the ARGUMENT. Nothing
+reached the method that assigns the id. **That test is deliberately left
+unrepaired** — it still passes with the fix in or out, and repairing it would
+erase the evidence.
+
+Round 571 relaxes a guard, which is the move to be most suspicious of, so the
+arithmetic is in the commit: under the defect each leg exceeds the bar with
+p≈0.5, so over 8 rounds `worst < bar` catches it 99.6% of the time and
+`at most 1 slow leg` catches it 96.5%. Three points of detection for immunity to
+a single hiccup.
+
+### Two of my own mistakes, both caught by controls
+
+Round 566's gate came back GREEN on its first control: I had removed the emit
+and left the paragraph above it explaining why it was there, and the gate
+grepped the raw file, so the prose satisfied it. The gate now strips comments.
+The test-quality agent reported the identical class the same hour, in a spec
+asserting a class name that exists only in comments.
+
+Round 567's `verify:` pin took three attempts to parse — first inside a
+blockquote (the parser needs `#` or `<!--` at line start), then with double
+quotes where it wants single. Both times the annotation silently did nothing. A
+decaying pin becoming a no-op is exactly what that gate family exists to
+prevent, and I nearly shipped one.
+
+### The constraint moved
+
+Two independent agents rediscovered a bug already sitting in open PR #98 this
+hour, and the release agent's top finding was already open as UI #25. Finding is
+now well ahead of landing: ~20 PRs open, 8 merged today. The useful work is
+clearing failures on PRs that exist, not opening more.
+
+## Rounds 572-573 — the reviewer found the defect in the reviewer's own PR
+
+An inspection agent was pointed at the OPEN pull requests rather than at the
+codebase, and asked one question of each: *what single change to production
+code should turn this PR's test red?* It found a real defect in #107, a PR I had
+written and controlled hours earlier.
+
+**#107 left every per-node grant behind.** It set a removed account to `Banned`
+and called `set_role_permissions(ROOT)` — which writes exactly ONE key. And
+`check_entity_permission` honours a direct grant BEFORE it consults role or
+membership. So a member added to room R and then removed from the workspace went
+on reading and posting in R, and receiving R's group broadcasts, while
+`ListNodes` correctly refused them. Removal looked like it worked, and the PR's
+own tests agreed.
+
+The correct form was twenty lines above, in `write_user_role_locked`:
+"Revoking everything is what a ban means", clearing every key when the role
+grants nothing. Reusing it directly broke a passing test — it re-runs
+`ensure_not_last_admin`, and by that point the membership write has already
+removed the account, so removing an administrator is refused. The clear is
+applied inline with that reason recorded.
+
+## Round 574 — a red clippy still ran the whole Docker matrix
+
+Measured, not estimated: one parent PR run is ~1,281 runner-minutes and the
+integration matrix is 87% of it. The `needs:` edges gated only three cheap jobs,
+so a failing `cargo clippy` still fanned out 55 Docker jobs — about 1,230
+minutes on a change that could not merge. That happened THREE times in one day,
+each on a trivial `-D warnings` lint: a needless borrow, a dead-code gate, an
+unused import. With 20 slots shared across four repos, it is also the queue
+everything else waits behind.
+
+All four Docker jobs now wait for all five cheap gates. **Writing the gate found
+two the manual pass missed**: `playwright-tests` had no
+`internal-service-rust-lint` edge, and `deploy-gate-tests` had no `needs:` at
+all. A lint-red PR now costs about 25 jobs instead of 74.
+
+### Two stale signals, one caught, one to watch
+
+A monitor reported "#100 ALL GREEN" for a commit that had already been replaced
+by my own push seconds earlier. Comparing `headRefOid` against my last commit is
+what caught it; the replacement monitor pins the SHA and says so if the head
+moves. Merging on that reading would have shipped a different tree than the one
+CI passed.
+
+CI then stalled a second time: zero runs executing across all three repos with
+eleven queued, none older than 86 minutes — so not the stale-wedge cause from
+earlier. Cancelling dependabot runs and parking everything but #100 did not
+start it. The most likely cause is GitHub-side throttling from the volume of
+runs created and cancelled today, which is self-inflicted and decays on its own.
+The correct response is to stop generating CI load, not to generate more trying
+to clear it.
+
+## Round 575 — the pre-push guard refused every push made from a worktree
+
+Trying to push the round 572–574 entry, the submodule-pointer guard refused it
+and named four submodules as unpushed — two of them, `citadel-internal-service/
+citadel-internal-service` and `citadel-internal-service/citadel-workspaces`,
+paths that do not exist. The pointers it objected to were byte-identical to
+`origin/master`'s.
+
+A linked worktree does not populate submodules. `wt-docs/citadel-internal-service`
+is an empty directory, and `git -C` inside an empty directory walks up and
+answers as the **parent** repository. Every question the guard asked went to the
+wrong repo: `branch -r --contains <sha>` printed `no such commit` for commits
+that are on the remote, and the recursion re-read the parent's own pointers
+under a nested prefix. On a fixture with one submodule it recursed until it
+exhausted memory — the report contained `sub/.//.//.//…` repeated about 10^5
+times.
+
+All the work here happens in worktrees, so this was the guard blocking correct
+pushes essentially always — the state its own comment names as the reason a
+guard gets switched off.
+
+Submodule repositories are now addressed by **git directory**
+(`<git-common-dir>/modules/<name>`, which every worktree shares) instead of by
+working directory, with the name read from the `.gitmodules` of the commit under
+inspection because a name may differ from its path. Two further corrections fell
+out: a submodule whose repository cannot be found is reported as *unjudged*
+rather than as absent or as fine, and the recursion descends through the
+**recorded** pointer instead of whatever that submodule has checked out — those
+two commits differ routinely, and the one that breaks `actions/checkout` is the
+recorded one.
+
+`check-submodule-gate-judges-a-worktree.mjs` builds real repositories in a temp
+directory and asserts both directions from a linked worktree: a fully-pushed
+tree passes, and an unpushed pointer is still refused *by name*. The second
+assertion is the control — without it, a guard gutted into always passing
+satisfies the first. With `origin/master`'s guard restored the test fails; with
+the fix it passes both.
+
+Preflight: 92 of 93 green. The one failure, `generated artefacts present`, is a
+fresh worktree having no built WASM.
+
+## Round 576 — every group notification was delivered to the owning tab twice
+
+The leader runs two delivery paths over each inbound message: the inbound router
+forwards to the tab owning the message's CID, and `broadcastWorkspaceResponse`
+posts to every tab, which then filters by CID. The gate between them asked
+whether the type was in `CID_ROUTED_NOTIFICATIONS` — a list written to answer a
+different question (when *not* to route by request_id), holding nine of the
+internal service's seventeen notification variants.
+
+So anything routing by CID without being on that list was delivered twice. The
+seven remaining group notifications are all built with `request_id: None` and a
+recipient `cid` (`kernel/responses/group_event.rs`, `kernel/requests/mod.rs`),
+so every group invite, join request, member-state change, leave, end and
+disconnect reached the owning tab twice. A duplicated invite is a duplicated
+auto-accept. `DisconnectNotification` was worse: the router broadcasts it to
+every instance and the legacy path broadcast it again.
+
+The gate now asks the router what it did. `routeMessage` returns whether it
+delivered: true when it broadcast to all, when a pending request claimed it,
+when the instance owning the CID has it, or when the message was deliberately
+dropped; false when no instance owns the CID (buffered — the broadcast stays the
+second chance it has always been) and false when there is no CID at all. A
+verdict from what happened cannot drift the way a hand-kept list of type names
+does, which is how that list came to be eight variants short.
+
+**What the investigation ruled out.** The suspicion carried in the backlog was
+misrouting — that these notifications carried the *sender's* request_id and were
+delivered to the wrong tab. They do not: every construction site sets
+`request_id: None`, so `extractRequestId` already returned null and the router
+already routed them by CID. And the cross-session leak was already closed
+generically in an earlier round — `handleWorkspaceResponse` reads the payload's
+own `cid` via `notificationCid()` and skips a mismatch. What survived was the
+duplicate, which is a real defect and a different one.
+
+Controls: with `origin/master`'s two files restored, 11 of the 12 new assertions
+fail. The twelfth stays green — it asserts that an *undelivered* message is
+still broadcast, which this change does not alter, and it is the control against
+a gate hard-wired to never broadcast.
+
+## Round 577 — the shipped bundle's onboarding was never asserted
+
+Onboarding must run in production and NOT in development, so the integration
+suite's ~90 account creations do not each pay the two extra interactions it
+costs. Two things checked that, and both checked one side of it.
+`onboarding-gate.test.ts` asserts `isOnboardingEnabled()` with
+`import.meta.env.DEV` mocked — the gate's logic, not the bundle's value of DEV.
+The onboarding specs run against the Vite dev server and force `?onboarding=1`,
+which returns at the param branch **before** `!isDev` is ever evaluated.
+
+So a production build with DEV somehow true would ship with no onboarding at
+all and every existing check would still be green.
+
+`check-production-image.mjs` — the only check that drives a browser against the
+real image — now loads the landing page with no query parameter in a fresh
+context, where `isOnboardingEnabled()` can only reach `return !isDev`. Both
+branches are asserted, and that it comes before the wizard rather than beside
+it. The control is `?onboarding=0`, whose pass signal is `wizard-next` rather
+than the dialog's absence, because absence is also what a page that never
+handled the click looks like.
+
+Verified against a real `vite build --mode production` bundle: dialog present,
+both branches, wizard not yet open; with `?onboarding=0` the wizard opens
+directly and the dialog count is zero. The bundle inlines `catch{}return!0`,
+which is `!isDev` resolved to true — the requirement is met in the artefact,
+now demonstrated rather than assumed.
+
+**The negative control was wrong twice.** "The Create Account button went away"
+is not a click-landed signal: the wizard overlays the landing page, so the
+button stays in the DOM, and that version reported a failure that was not one.
+Then `vite build --mode development` did not flip DEV at all — both bundles
+inline the same byte, so a green control there proved nothing. The control that
+worked patches that exact byte to `return!1` in a COPY of the real bundle; the
+assertion then times out waiting for the dialog. The real dist was confirmed
+unpatched afterwards and re-verified green.
+
+## Round 578 — a retry queue that never reached disk told nobody
+
+`persistTree` reads `execute`'s result and raises `revfs:persist-failed`, which
+`PersistFailureNotice` renders. That fix was applied to one of the two places it
+belongs. All four `persist-pending-ops` calls in revfs-retry.ts discarded the
+result, so a failed write was invisible: the user made edits, the app queued
+them for retry, the queue did not reach disk, nothing was shown, and the
+operations were gone after the next reload. The notice component was already
+built and already listening.
+
+The gate for this shape could not see it. `check-intent-results-checked.mjs`
+matched `await \w+\.execute\({`, which matches `io.execute(` and not
+`deps.io.execute(` — and those four are the only unassigned `execute({` calls
+in the tree. It considered **zero** sites on every run since it was written and
+reported success. Receiver is `[\w.]+` now, plus a floor that refuses to pass on
+an empty candidate set.
+
+## Round 579 — preflight ran a check-only gate as a write
+
+CI runs `node scripts/build-gates-index.mjs --check`. Preflight's workflow parse
+captured the script path and dropped the rest of the line, so it ran the same
+script with no arguments — the branch that WRITES docs/GATES.md. Preflight
+rewrote a tracked file in the working tree and printed `build gates index … ok`
+for a gate that cannot fail, because the write branch always succeeds.
+
+`--print-plan` plus `check-preflight-runs-what-ci-runs.mjs` compares the two
+argument lists; 80 shared gates agree. Two things cost time and are recorded in
+the code: `process.exit(0)` after a `console.log` truncates a piped write at the
+8 KB pipe buffer (the plan is ~40 KB, and the reader got JSON that stopped
+mid-token), and the gate must bound its subprocess — running the control against
+the previous preflight ran the entire suite and **rewrote docs/GATES.md on the
+way past**, from a worktree with unpopulated submodules, dropping 46 of its 96
+rows. The defect demonstrated live while testing its own fix.
+
+## Round 580 — the gate that saves the matrix took its whole job down
+
+`check-expensive-jobs-wait-for-cheap-ones.mjs` parsed the workflow with js-yaml
+and runs in the crate-coverage job, which installs nothing. CI died on `Cannot
+find module 'js-yaml'` and took every other gate in that job with it, on the run
+meant to prove the gate works. Two gates here already carry a comment about
+this; check-ci-job-timeouts says "Third time." This was the fourth.
+
+Reading the job's raw text was then wrong in a way the first control caught:
+integration-tests and playwright-tests came out classified as CHEAP because
+their *comments* mention eslint and clippy, and a job cannot need itself, so the
+gate demanded impossible edges. It collects `run:` bodies and `uses:` values
+only now.
+
+Controls five ways — dropping each of clippy, lint, typecheck, fmt and
+internal-service-rust-lint from one Docker job's `needs:` makes it name that
+pair and exit 1. **The first control came back green**, because I removed
+`crate-coverage`, which the CHEAP pattern does not match. Recorded, because a
+green control is indistinguishable from a gate measuring nothing until you check
+which of the two you are looking at.
+
+### What the inspection wave found that reading had not
+
+Four read-only sweeps. Two of their findings are the two rounds above. Two
+independent confirmations are worth recording: the routing sweep found round
+576's duplicate delivery on its own and named a wider set — `PeerConnectSuccess`,
+`MediaSessionOpened/Closed/Failed` and the file-transfer successes are affected
+too, which the router-verdict fix covers generically rather than by adding names
+to a list. And the performance sweep reported the `GetNode` deep clone as still
+live on master, which is correct: the fix is open as PR #110, not merged.
+
+Still open from that wave, unverified by me: `RemoveMember` leaves per-room
+grants standing (round 522's ban fix, not propagated); `AddMember` on a room
+overwrites the member's *global* role; an Owner can ban an Admin; `fnv1a64` runs
+in production because it is an argument to a no-op `debugLog` (measured at 371ms
+for 1MB, on the main thread).
