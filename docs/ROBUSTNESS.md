@@ -3460,3 +3460,110 @@ Controls: with `origin/master`'s two files restored, 11 of the 12 new assertions
 fail. The twelfth stays green — it asserts that an *undelivered* message is
 still broadcast, which this change does not alter, and it is the control against
 a gate hard-wired to never broadcast.
+
+## Round 577 — the shipped bundle's onboarding was never asserted
+
+Onboarding must run in production and NOT in development, so the integration
+suite's ~90 account creations do not each pay the two extra interactions it
+costs. Two things checked that, and both checked one side of it.
+`onboarding-gate.test.ts` asserts `isOnboardingEnabled()` with
+`import.meta.env.DEV` mocked — the gate's logic, not the bundle's value of DEV.
+The onboarding specs run against the Vite dev server and force `?onboarding=1`,
+which returns at the param branch **before** `!isDev` is ever evaluated.
+
+So a production build with DEV somehow true would ship with no onboarding at
+all and every existing check would still be green.
+
+`check-production-image.mjs` — the only check that drives a browser against the
+real image — now loads the landing page with no query parameter in a fresh
+context, where `isOnboardingEnabled()` can only reach `return !isDev`. Both
+branches are asserted, and that it comes before the wizard rather than beside
+it. The control is `?onboarding=0`, whose pass signal is `wizard-next` rather
+than the dialog's absence, because absence is also what a page that never
+handled the click looks like.
+
+Verified against a real `vite build --mode production` bundle: dialog present,
+both branches, wizard not yet open; with `?onboarding=0` the wizard opens
+directly and the dialog count is zero. The bundle inlines `catch{}return!0`,
+which is `!isDev` resolved to true — the requirement is met in the artefact,
+now demonstrated rather than assumed.
+
+**The negative control was wrong twice.** "The Create Account button went away"
+is not a click-landed signal: the wizard overlays the landing page, so the
+button stays in the DOM, and that version reported a failure that was not one.
+Then `vite build --mode development` did not flip DEV at all — both bundles
+inline the same byte, so a green control there proved nothing. The control that
+worked patches that exact byte to `return!1` in a COPY of the real bundle; the
+assertion then times out waiting for the dialog. The real dist was confirmed
+unpatched afterwards and re-verified green.
+
+## Round 578 — a retry queue that never reached disk told nobody
+
+`persistTree` reads `execute`'s result and raises `revfs:persist-failed`, which
+`PersistFailureNotice` renders. That fix was applied to one of the two places it
+belongs. All four `persist-pending-ops` calls in revfs-retry.ts discarded the
+result, so a failed write was invisible: the user made edits, the app queued
+them for retry, the queue did not reach disk, nothing was shown, and the
+operations were gone after the next reload. The notice component was already
+built and already listening.
+
+The gate for this shape could not see it. `check-intent-results-checked.mjs`
+matched `await \w+\.execute\({`, which matches `io.execute(` and not
+`deps.io.execute(` — and those four are the only unassigned `execute({` calls
+in the tree. It considered **zero** sites on every run since it was written and
+reported success. Receiver is `[\w.]+` now, plus a floor that refuses to pass on
+an empty candidate set.
+
+## Round 579 — preflight ran a check-only gate as a write
+
+CI runs `node scripts/build-gates-index.mjs --check`. Preflight's workflow parse
+captured the script path and dropped the rest of the line, so it ran the same
+script with no arguments — the branch that WRITES docs/GATES.md. Preflight
+rewrote a tracked file in the working tree and printed `build gates index … ok`
+for a gate that cannot fail, because the write branch always succeeds.
+
+`--print-plan` plus `check-preflight-runs-what-ci-runs.mjs` compares the two
+argument lists; 80 shared gates agree. Two things cost time and are recorded in
+the code: `process.exit(0)` after a `console.log` truncates a piped write at the
+8 KB pipe buffer (the plan is ~40 KB, and the reader got JSON that stopped
+mid-token), and the gate must bound its subprocess — running the control against
+the previous preflight ran the entire suite and **rewrote docs/GATES.md on the
+way past**, from a worktree with unpopulated submodules, dropping 46 of its 96
+rows. The defect demonstrated live while testing its own fix.
+
+## Round 580 — the gate that saves the matrix took its whole job down
+
+`check-expensive-jobs-wait-for-cheap-ones.mjs` parsed the workflow with js-yaml
+and runs in the crate-coverage job, which installs nothing. CI died on `Cannot
+find module 'js-yaml'` and took every other gate in that job with it, on the run
+meant to prove the gate works. Two gates here already carry a comment about
+this; check-ci-job-timeouts says "Third time." This was the fourth.
+
+Reading the job's raw text was then wrong in a way the first control caught:
+integration-tests and playwright-tests came out classified as CHEAP because
+their *comments* mention eslint and clippy, and a job cannot need itself, so the
+gate demanded impossible edges. It collects `run:` bodies and `uses:` values
+only now.
+
+Controls five ways — dropping each of clippy, lint, typecheck, fmt and
+internal-service-rust-lint from one Docker job's `needs:` makes it name that
+pair and exit 1. **The first control came back green**, because I removed
+`crate-coverage`, which the CHEAP pattern does not match. Recorded, because a
+green control is indistinguishable from a gate measuring nothing until you check
+which of the two you are looking at.
+
+### What the inspection wave found that reading had not
+
+Four read-only sweeps. Two of their findings are the two rounds above. Two
+independent confirmations are worth recording: the routing sweep found round
+576's duplicate delivery on its own and named a wider set — `PeerConnectSuccess`,
+`MediaSessionOpened/Closed/Failed` and the file-transfer successes are affected
+too, which the router-verdict fix covers generically rather than by adding names
+to a list. And the performance sweep reported the `GetNode` deep clone as still
+live on master, which is correct: the fix is open as PR #110, not merged.
+
+Still open from that wave, unverified by me: `RemoveMember` leaves per-room
+grants standing (round 522's ban fix, not propagated); `AddMember` on a room
+overwrites the member's *global* role; an Owner can ban an Admin; `fnv1a64` runs
+in production because it is an argument to a no-op `debugLog` (measured at 371ms
+for 1MB, on the main thread).
