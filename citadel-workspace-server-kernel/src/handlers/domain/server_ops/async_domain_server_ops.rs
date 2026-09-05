@@ -703,14 +703,60 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             // removing an Admin (the case this block was written for) did. The
             // comment above says a removed administrator must lose the role;
             // "administrator" grew to include Owner and this did not follow.
+            //
+            // `Banned`, and for EVERY removed user, not only administrators.
+            //
+            // Demoting to Member recorded nothing: the connect handler enrols
+            // anyone missing from `workspace.members`, and could not tell
+            // "never joined" from "removed". So a removed account reconnected
+            // -- which it does by itself -- and added itself straight back as
+            // a Member. Removal lasted until the next reconnect and nothing
+            // said so. Only administrators were touched here at all, so an
+            // ordinary member's removal left no trace whatsoever.
+            //
+            // `Banned` grants no permissions and ranks 0, and it was a role
+            // the code defined but never assigned. Re-admission is `AddMember`,
+            // which writes an explicit role and clears it.
             if let Some(mut removed) = self.backend_tx_manager.get_user(user_id_to_remove).await? {
-                if matches!(removed.role, UserRole::Admin | UserRole::Owner) {
-                    removed.role = UserRole::Member;
-                    removed.set_role_permissions(crate::WORKSPACE_ROOT_ID);
-                    self.backend_tx_manager
-                        .insert_user(user_id_to_remove.to_string(), removed)
-                        .await?;
+                //
+                // Through `write_user_role_locked`, not by hand.
+                //
+                // `set_role_permissions` writes exactly ONE key, so setting the
+                // role here and stopping left every per-node grant in place --
+                // and `check_entity_permission` honours a direct grant BEFORE
+                // it consults role or membership. A member added to room R and
+                // then removed from the workspace went on reading and posting
+                // in R, and receiving R's group broadcasts, while ListNodes
+                // refused them.
+                //
+                // That function already does the right thing twenty lines up:
+                // "Revoking everything is what a ban means", clearing every key
+                // when the role grants nothing. Banned grants nothing, so this
+                // is exactly the case it was written for.
+                removed.role = UserRole::Banned;
+                removed.set_role_permissions(crate::WORKSPACE_ROOT_ID);
+                // Every key, not just the root one.
+                //
+                // `set_role_permissions` writes exactly ONE key, so setting the
+                // role and stopping left every per-node grant in place -- and
+                // `check_entity_permission` honours a direct grant BEFORE it
+                // consults role or membership. A member added to room R and then
+                // removed from the workspace went on reading and posting in R,
+                // and receiving R's group broadcasts, while ListNodes refused
+                // them.
+                //
+                // `write_user_role_locked` already does this twenty lines up --
+                // "Revoking everything is what a ban means" -- but it cannot be
+                // reused here: it re-runs `ensure_not_last_admin`, and by this
+                // point the membership write above has already removed this
+                // account, so the count differs and removing an administrator
+                // is refused.
+                if Permission::for_role(&removed.role).is_empty() {
+                    removed.permissions.clear();
                 }
+                self.backend_tx_manager
+                    .insert_user(user_id_to_remove.to_string(), removed)
+                    .await?;
             }
         } else {
             // For all other entities, use DomainNode tree storage.

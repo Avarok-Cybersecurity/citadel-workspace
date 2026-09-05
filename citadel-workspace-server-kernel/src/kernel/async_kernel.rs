@@ -1462,10 +1462,39 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             .await;
 
                         // First ensure the user exists in the system
-                        let user_exists = this.get_user(&user_id).await?.is_some();
-                        if !user_exists {
+                        use citadel_workspace_types::structs::{User, UserRole};
+                        let existing = this.get_user(&user_id).await?;
+
+                        // A removed member is not a new one.
+                        //
+                        // This branch runs for anyone absent from
+                        // `workspace.members`, and it could not tell "never
+                        // joined" from "an administrator removed them" -- so
+                        // RemoveMember lasted until the removed account
+                        // reconnected, which it does automatically, and
+                        // enrolled itself again as a Member. Removal was
+                        // undone by the person it was applied to, with nothing
+                        // logged.
+                        //
+                        // `remove_user_from_domain` now leaves the account at
+                        // `UserRole::Banned`, which grants no permissions and
+                        // ranks 0. Re-admission is `AddMember`, which writes an
+                        // explicit role and so clears it -- an administrator's
+                        // decision either way.
+                        if crate::connect_enrolment(existing.as_ref().map(|u| u.role.clone()))
+                            == crate::ConnectEnrolment::RefuseRemoved
+                        {
+                            info!(
+                                target: "citadel",
+                                "[ASYNC_KERNEL] {} was removed from the workspace; not \
+                                 re-enrolling on connect. An administrator must add them back.",
+                                user_id
+                            );
+                            return Ok(());
+                        }
+
+                        if existing.is_none() {
                             // Create a basic user with Member role
-                            use citadel_workspace_types::structs::{User, UserRole};
                             let user = User::new(
                                 user_id.clone(),
                                 user_id.clone(), // Use user_id as display name initially
