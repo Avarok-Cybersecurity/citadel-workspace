@@ -3264,3 +3264,66 @@ the check was theatre — which is worse than no check, because it reports safet
 The habit that found all five is unchanged and remains the highest-yield one
 here: run the control against the *check*, not only against the code the check
 guards.
+
+## Rounds 565-571 — the correct form was already nearby, seven more times
+
+This block is recorded as one entry because the findings are one finding.
+Every item below had a sibling in the same file, often within twenty lines,
+that did the right thing.
+
+| Round | Defect | The sibling that was right |
+|---|---|---|
+| 565 | An exact spec count in README broke the parent on every UI addition | — (a floor, not a fix) |
+| 566 | `setConnectionAttempt` overwrote a timer without clearing it | `deleteConnectionAttempt`, 20 lines below |
+| 567 | `STACK_OVERVIEW.md` had `cid`/`peer_cid` inverted | the agent's own `// RECIPIENT` comment |
+| 568 | A refused group leave removed you from your own member list | `GroupEndNotification`, 20 lines below |
+| 569 | A peer who left mid-open came back; the call could never end | the failure path, 20 lines below |
+| 570 | Redelivered messages stacked a second bell entry | — (the test asserted the argument, not the effect) |
+| 571 | The idle-send test failed on one scheduler hiccup | — (a relaxation, with arithmetic) |
+
+Round 566's cost: with 15 offline peers and a tab open an hour, ~1,800 live
+timers, each firing a `connectToPeer` that reads the CID from IndexedDB and can
+open a real connection against the SDK's 30s timeout.
+
+Round 569 is the most severe: `openSessionFor` re-read the CALL's status after
+its await but never the PARTICIPANT's. Teardown could not cover it —
+`closeSessionFor` returns early on `!openSessions.delete(cid)` and a peer whose
+open has not resolved is not in that set yet. So a peer leaving mid-open got a
+close that no-oped, their open confirmed, and `peer-connected` marked them
+active again: a ghost tile, a media session held open forever, `sendFrame` still
+encoding to somebody who left, and `anyoneActive` true for the ghost — camera
+light on, duration ticking, nobody there.
+
+Round 570 is the clearest example of a test certifying a guarantee the product
+did not have. "keys a redelivered message to the same id, so it cannot stack"
+mocked `addMessageNotification` wholesale and asserted the ARGUMENT. Nothing
+reached the method that assigns the id. **That test is deliberately left
+unrepaired** — it still passes with the fix in or out, and repairing it would
+erase the evidence.
+
+Round 571 relaxes a guard, which is the move to be most suspicious of, so the
+arithmetic is in the commit: under the defect each leg exceeds the bar with
+p≈0.5, so over 8 rounds `worst < bar` catches it 99.6% of the time and
+`at most 1 slow leg` catches it 96.5%. Three points of detection for immunity to
+a single hiccup.
+
+### Two of my own mistakes, both caught by controls
+
+Round 566's gate came back GREEN on its first control: I had removed the emit
+and left the paragraph above it explaining why it was there, and the gate
+grepped the raw file, so the prose satisfied it. The gate now strips comments.
+The test-quality agent reported the identical class the same hour, in a spec
+asserting a class name that exists only in comments.
+
+Round 567's `verify:` pin took three attempts to parse — first inside a
+blockquote (the parser needs `#` or `<!--` at line start), then with double
+quotes where it wants single. Both times the annotation silently did nothing. A
+decaying pin becoming a no-op is exactly what that gate family exists to
+prevent, and I nearly shipped one.
+
+### The constraint moved
+
+Two independent agents rediscovered a bug already sitting in open PR #98 this
+hour, and the release agent's top finding was already open as UI #25. Finding is
+now well ahead of landing: ~20 PRs open, 8 merged today. The useful work is
+clearing failures on PRs that exist, not opening more.
