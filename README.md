@@ -168,13 +168,19 @@ cargo test -p citadel-workspace-types -p citadel-workspace-server-kernel
 # End to end — these share ONE backend, so never run two at once.
 #
 # The suite has TWO runners, and `npx playwright test` is only one of them:
-# verify: count citadel-workspaces/integration-tests/src/tests-pw .spec.ts == 20
-# verify: count citadel-workspaces/integration-tests/src/tests .test.ts == 39
-# its testDir is ./src/tests-pw (20 specs). The rest are driven by npm scripts,
+# `>=`, not `==`. An exact count here makes every spec added in the UI submodule
+# break the PARENT on its next pointer bump: the UI repo's own gates cannot see
+# this file, so the spec merges green and the bump goes red for a README nobody
+# touched. That already happened -- onboarding.spec.ts took it from 20 to 21.
+# The point of the pin is that the playwright runner covers a MINORITY of the
+# suite; a floor says that and does not decay.
+# verify: count citadel-workspaces/integration-tests/src/tests-pw .spec.ts >= 20
+# verify: count citadel-workspaces/integration-tests/src/tests .test.ts >= 39
+# its testDir is ./src/tests-pw. The rest are driven by npm scripts,
 # which is what CI runs -- 39 at the top level of src/tests, plus more under
 # group-chat/ and reconnection/ -- so the playwright command alone covers well
 # under a quarter of the E2E suite.
-(cd citadel-workspaces/integration-tests && npx playwright test)   # the 11 ported specs
+(cd citadel-workspaces/integration-tests && npx playwright test)   # the tests-pw specs
 (cd citadel-workspaces/integration-tests && npm run test:all)      # the npm-script specs
 (cd citadel-workspaces/integration-tests && npm run test:crud)     # or just one
 ```
