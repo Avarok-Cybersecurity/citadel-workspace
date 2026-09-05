@@ -3046,7 +3046,68 @@ test gained no assertions, the "control" had nothing to fail, and the
 `nginx -t` ran on an empty file and passed. Stacked on #91, it all measured
 something.
 
-## Open, as of round 539
+## Round 540 — the whole hosted path in one browser, and a failure message that lied
+
+**Built (UI #24, WS #95).** A Playwright spec drives one Chromium at a page
+served from `work.test` (resolved to 127.0.0.1 by the browser's host-resolver
+rules, so the page is non-loopback by host while everything runs locally) and
+an agent on `wss://local.test:PORT` with a throwaway certificate. It asserts
+what the browser did: which WebSocket it opened and that frames came back —
+the image's meta, its CSP, the resolver's choice, the agent's TLS, Origin and
+Host checks, all on the line at once. The control opens the same image from a
+loopback host and must dial same-origin `/ws`. `scripts/test-hosted-ui-loopback.sh`
+starts the pieces (binary or, with `AGENT_IMAGE`, the built image on the host
+network — the Host allowlist is derived from the bound port, and a published-port
+mapping would put the browser's Host and the bound port out of step).
+
+**Controls.** An agent that refuses the page's origin: ~20 attempts to the
+loopback origin, no frames, hosted test red. An image publishing no origin:
+attempts to `/ws`, none to the loopback origin, hosted test red.
+
+**The message lied first.** Both controls initially reported "sockets opened:
+[]" — which would have meant the app never tried. A manual probe showed 24
+attempts and "Can't reach the Citadel agent". `expect.poll`'s `message` is a
+string evaluated when the call is made; it froze the empty initial state. The
+spec now waits, then asserts with a message built afterwards. Measured on the
+way: Playwright reports a socket whose upgrade was answered (even 403) but not
+one whose TCP connection was refused, so an empty list has one meaning only.
+
+**Both stacks together, from the images.** A local merge of the agent stack
+(#92 → #93, connector #60) and the UI/provision stack (#91 → #94 → #95) — never
+pushed — built the agent image from docker/internal-service/Dockerfile; the e2e
+in `AGENT_IMAGE` mode, agent from that image on the host network and UI from
+the production image, passed 2/2 and its control went red. That is the first
+time the two halves ran against each other as the artifacts a tenant gets.
+
+**Also.** The CI stall was misread as an organisation-level block and recorded
+as such; corrected the same hour (queue depth, largely self-inflicted). Cancelling
+the stacked PRs' queued runs was blocked by the session's permission
+classifier; the decision is the user's.
+
+## Round 541 — the hint told visitors to run a binary that was not in the box
+
+**Found** in a control screenshot: the Connection Failed dialog's "run it
+with" command named `./citadel-workspace-internal-service`; the archive it sat
+beside contains `citadel-agent`. The WebSocket agent also refuses to start
+without `--allowed-origins`, and a page served from elsewhere needs the
+loopback name and the certificate URL — none of which the visitor could have
+guessed, all of which the page knows.
+
+**Fix (UI #25, stacked on #23).** `agentRunCommand` derives the command from
+the page: the packaged binary name, `--allowed-origins <this page's origin>`,
+and — when the hosting nginx published a loopback origin — `--loopback-host`
+and `--loopback-cert-url <origin>/agent`. Windows gets `.\citadel-agent.exe`.
+A test reads release-agent.yml for the packaged name so a rename there fails
+here, not in a visitor's shell. 19 tests; control: naming the crate fails the
+cross-check.
+
+**Ops.** The certificate for work.avarok.net is issued and installed at the
+Let's Encrypt paths the vhost expects, renewal reload guarded by `nginx -t`.
+The amd64 UI image with loopback support is staged on avarok2. Nothing is
+exposed yet: the public UI would today offer the v0.1.0 download, which is the
+TCP binary; the cut-over waits for the release from #92/#93.
+
+## Open, as of round 541
 
 Everything both Fable fleets confirmed is fixed: 2 critical/high, 13 medium, 15
 low, across 30 findings. What follows is what is NOT fixed, stated so the next
@@ -3068,6 +3129,14 @@ It failed locally during round 538 for a reason the change there does not
 explain — the wasm32 check of the client passes — and it deletes the package
 directory before it builds. `SKIP_WASM_BUILD=1` for local `cargo test` of the
 agent crate until it is understood.
+
+### The public UI waits for the agent release
+
+work.avarok.net has its certificate, the vhost renders, the amd64 UI image is
+on the host — and none of it is enabled, deliberately: the page would offer
+the v0.1.0 download, which is the TCP binary. The cut-over is: merge #92 and
+#93, tag `agent-v0.2.0`, then re-provision the tenant as full + nginx with
+`--loopback-host local.avarok.net`. The tag is a user decision.
 
 ### The merge order, and one pointer that will move
 
