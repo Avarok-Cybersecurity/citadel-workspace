@@ -142,6 +142,8 @@ fi
 
 # verify-image-revisions.sh calls `docker image inspect --format ... <ref>`
 if [ "${1:-}" = "image" ] && [ "${2:-}" = "inspect" ]; then
+  for ref; do :; done   # last argument: the image reference
+  case " ${IMAGE_INSPECT_FAILS:-} " in *" $ref "*) exit 1 ;; esac
   echo "testrevision0000"
   exit 0
 fi
@@ -174,7 +176,15 @@ run_deploy() { # <name> <service>...
   cp "$REPO_ROOT/scripts/select-deploy-services.sh" "$REPO_ROOT/scripts/verify-image-revisions.sh" "$dir/scripts/"
   cp "$REPO_ROOT/deploy.sh" "$dir/deploy.sh"
   # deploy.sh requires a .env with a real master password.
-  printf 'WORKSPACE_MASTER_PASSWORD=test-password-not-a-placeholder\n' > "$dir/.env"
+  # The .env a real tenant has. Origins are required whenever internal-service is
+  # deployed, so every fixture carries them unless a case says otherwise (NO_ORIGINS=1
+  # for the server-only case that must succeed without them). CI exports the variable in
+  # its own environment; deploy.sh is run with it unset below so the FILE is what is tested.
+  {
+    [ -n "${NO_MASTER_PW:-}" ] || printf 'WORKSPACE_MASTER_PASSWORD=test-password-not-a-placeholder\n'
+    [ -n "${NO_ORIGINS:-}" ] || printf 'INTERNAL_SERVICE_ALLOWED_ORIGINS=https://tenant.example\n'
+    [ -z "${BIND_PORT:-}" ] || printf 'WORKSPACE_BIND_ADDR=0.0.0.0:%s\n' "$BIND_PORT"
+  } > "$dir/.env"
   export CALLS="$dir/calls.txt"
   export PREEXISTING="${PREEXISTING:-}"
   export PREEXISTING_ONEOFF="${PREEXISTING_ONEOFF:-}"
@@ -182,6 +192,7 @@ run_deploy() { # <name> <service>...
   export PREEXISTING_LATENT="${PREEXISTING_LATENT:-}"
   export PREEXISTING_PAUSED="${PREEXISTING_PAUSED:-}"
   export INSPECT_FAILS="${INSPECT_FAILS:-}"
+  export IMAGE_INSPECT_FAILS="${IMAGE_INSPECT_FAILS:-}"
   export PS_ID_FAILS="${PS_ID_FAILS:-}"
   : > "$CALLS"
   # --no-pull skips step 1 (git pull); the fixture dir is deliberately not a git repo, and the
@@ -210,7 +221,7 @@ run_deploy() { # <name> <service>...
     flock -n 8 || fail "test harness could not take the lock it is meant to hold"
   fi
   ( cd "$dir" && HOME="$dir" PATH="$WORK/bin:$PATH" \
-      bash ./deploy.sh --no-pull >"$dir/out.txt" 2>&1 ) || status=$?
+      env -u INTERNAL_SERVICE_ALLOWED_ORIGINS bash ./deploy.sh --no-pull ${DEPLOY_ARGS:-} >"$dir/out.txt" 2>&1 ) || status=$?
   [ -n "${HOLD_LOCK:-}" ] && exec 8>&-
   [ -n "${HOLD_CHECKOUT:-}" ] && exec 7<&-
   echo "$status" > "$dir/status.txt"
@@ -283,6 +294,54 @@ assert_pulled "$d" "server internal-service"
 assert_restarted "$d" server internal-service
 assert_never_mentions "$d" ui
 echo "  server-is   -> never touched ui"; pass_count=$((pass_count+1))
+
+# --local-images: no registry contact, and a missing image still stops the deploy
+# before anything is restarted. The second case is the control for the first: if
+# the revision gate stopped inspecting, or ran after `up`, it goes red.
+d=$(DEPLOY_ARGS=--local-images run_deploy local-images server)
+assert_succeeded "$d"
+if grep -qE '^compose .* pull ' "$d/calls.txt"; then
+  fail "--local-images still ran 'compose pull' (see $d/out.txt)"
+fi
+grep -qE '^image inspect .*citadel-workspace-server' "$d/calls.txt" \
+  || fail "--local-images skipped the pull but never inspected the image it is about to run (see $d/out.txt)"
+assert_restarted "$d" server
+echo "  local-images -> no pull; inspected and restarted server"; pass_count=$((pass_count+1))
+
+d=$(DEPLOY_ARGS=--local-images IMAGE_INSPECT_FAILS="ghcr.io/avarok-cybersecurity/citadel-workspace-server:latest" run_deploy local-images-missing server)
+assert_failed "$d"
+if grep -qE 'up -d' "$d/calls.txt"; then
+  fail "--local-images with a missing image still ran 'up -d' - the gate must stop it first (see $d/out.txt)"
+fi
+echo "  local-images -> a missing image aborts before any restart (control)"; pass_count=$((pass_count+1))
+
+# A .env WITHOUT INTERNAL_SERVICE_ALLOWED_ORIGINS (the harness never writes one) on a
+# server-only deploy must succeed. It used to die silently after the banner: grep found
+# no key, pipefail made the pipeline fail, set -e exited. CI exported the variable in
+# its environment, so deploy.sh never reached the file read there and this was never
+# measured. The harness now runs deploy.sh with the variable unset, always.
+d=$(NO_ORIGINS=1 run_deploy no-origins-key server)
+assert_succeeded "$d"
+assert_restarted "$d" server
+echo "  no-origins  -> a .env without the origins key deploys server-only (was a silent exit)"; pass_count=$((pass_count+1))
+
+# A .env without the master password must be refused WITH the message that says so.
+# The read had the same shape as the origins one: grep exit 1, pipefail, set -e, and
+# the deploy died before the "unset" branch could speak. An operator got a banner and
+# exit 1, and nothing to act on.
+d=$(NO_MASTER_PW=1 run_deploy no-master-password server)
+assert_failed "$d"
+grep -q "WORKSPACE_MASTER_PASSWORD is unset" "$d/out.txt" \
+  || fail "a .env without the master password was refused without saying why (see $d/out.txt)"
+echo "  no-master   -> refused, and says so (was a silent exit)"; pass_count=$((pass_count+1))
+
+# The health wait names the port the .env binds, not a literal 12349. A tenant on any
+# other port was told to look at the wrong socket when the server did not come up.
+d=$(BIND_PORT=12400 run_deploy bind-port server)
+assert_succeeded "$d"
+grep -q "healthy (port 12400)" "$d/out.txt" || fail "the health wait did not name the .env port (see $d/out.txt)"
+if grep -q "12349" "$d/out.txt"; then fail "the health wait still names 12349 for a tenant bound to 12400 (see $d/out.txt)"; fi
+echo "  bind-port   -> the health wait names the port from .env"; pass_count=$((pass_count+1))
 
 # --- slimming an EXISTING full stack: refuse, do not half-apply --------------
 # `docker compose up` leaves containers for undeclared services running and merely warns, so

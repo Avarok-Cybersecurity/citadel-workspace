@@ -128,7 +128,12 @@ services:
           cpus: '2.0'
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "12349"]
+      # Probe the port the server was TOLD to bind, not a literal. A tenant provisioned on
+      # any other port (provision-tenant.sh allocates them) ran forever "unhealthy" against
+      # 12349 while answering registrations on its real port, and deploy.sh's health wait
+      # timed out on a working server. `$$` keeps Compose from interpolating at parse time;
+      # the container's shell expands WORKSPACE_BIND_ADDR (host:port) to its port.
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 $${WORKSPACE_BIND_ADDR##*:}"]
       interval: 15s
       timeout: 5s
       retries: 5
