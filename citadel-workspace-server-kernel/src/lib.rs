@@ -579,9 +579,7 @@ pub fn connect_enrolment(
     existing_role: Option<citadel_workspace_types::structs::UserRole>,
 ) -> ConnectEnrolment {
     match existing_role {
-        Some(citadel_workspace_types::structs::UserRole::Banned) => {
-            ConnectEnrolment::RefuseRemoved
-        }
+        Some(citadel_workspace_types::structs::UserRole::Banned) => ConnectEnrolment::RefuseRemoved,
         _ => ConnectEnrolment::Enrol,
     }
 }
