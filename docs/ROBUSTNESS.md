@@ -2872,11 +2872,208 @@ cost the onboarding flow already pays and already shows a spinner for.
 **Also this round.** ILM #4 merged (`688a688`) — green on all three platforms,
 which retires the "macOS is slow" story for good.
 
-## Open, as of round 534
+## Round 535 — the server went live, and three things deploy.sh could not say
+
+**Found.** With server and UI images already at `sha-aeafb7ecad6c` (master@2 Sep;
+only the `latest` promotion was Lighthouse-gated), the avarok tenant did not have
+to wait for a publish. The packages are private and the host has no registry
+token, so the image went over `docker save | ssh avarok2 docker load` — and
+`deploy.sh --no-pull` still went to the registry: `--no-pull` skips the *git*
+pull. `--local-images` deploys what is on the host; safe only because the
+revision gate inspects every image and stops before any restart when one is
+missing. Harness: no pull recorded; a missing image aborts with no `up -d`.
+
+**Then the harness itself.** It fails at baseline on macOS, and the trace says
+why: `origins=$(grep KEY .env | tail | cut)` — no key, grep exits 1, pipefail,
+`set -e`, dead after the banner with no message. CI never saw it because
+validate.yml exports `INTERNAL_SERVICE_ALLOWED_ORIGINS` globally, so deploy.sh
+took the env branch and never read the file: the harness measured nothing about
+this path. The master-password read had the same shape, which meant its "is
+unset" message was unreachable. Both reads tolerate absence now; the harness
+runs deploy.sh with the variable unset and writes the `.env` a tenant has.
+Controls: each `|| true` removed turns its case red — one by exiting, one by
+refusing without the message.
+
+**Then the deployed server.** It accepted a registration from the internet
+(`probe_5469767` connected, added to the workspace domain, declined admin,
+landed on `/workspace` with the sidebar and four seeded offices, zero console
+errors) while Docker called it unhealthy: the healthcheck was a literal
+`nc -z 127.0.0.1 12349` and the tenant binds 12400. deploy.sh's wait timed out
+on a working server and reported MIXED-VERSION about "later services" a
+server-only tenant does not have. The check now expands `WORKSPACE_BIND_ADDR`
+in the container's shell; the tenant went healthy on the next deploy. The wait
+names the `.env` port; the last service says "did not become healthy". Guards:
+the trimmed compose must derive the port (literal back → FAIL); the wait must
+name the `.env` port and never 12349 (literal back → red). The first version of
+the provisioning guard referenced an unbound `$ROOT` and failed in both states
+— pushed that way, caught by running the control, fixed in the next commit.
+
+**What the tester model turns out to be.** A hosted UI derives its agent socket
+as same-origin `/ws` under `connect-src 'self'`; the agent proxy is off in the
+public stack by design. So a page at work.avarok.net cannot reach a tester's
+loopback agent today. certified.sh solves this with an A record
+(`local.certified.sh → 127.0.0.1`), a real certificate for that name issued via
+DNS-01 and *served* to the agent (ninety-day expiry; fetched at start, cached
+0600), the agent terminating TLS on loopback, and the page dialling
+`wss://local.certified.sh:4843`. The user has created `local.avarok.net`.
+
+**Open.** The agent cannot terminate TLS yet, and which citadel-agent branch is
+canonical is undecided (master is 109 commits behind the pinned e21933c).
+
+## Round 536 — a hosted page can reach the visitor's own agent
+
+**Found.** `resolve-url.ts` derives the agent socket as same-origin `/ws` under
+`connect-src 'self'`, and the public stack keeps that proxy off, correctly. So
+work.avarok.net could serve the app and the app could reach nothing: "run the
+agent, then reload the web app" (docs/AGENT_README.md) was written for a path
+that did not exist. certified.sh's shape — a name at 127.0.0.1 with a real
+certificate, the page dialling `wss://local.<domain>:<port>` — is the one that
+keeps the agent on loopback and satisfies every browser. The user created
+`local.avarok.net`.
+
+**UI #23.** `readLoopbackAgentOrigin` reads `<meta name="citadel-loopback-agent">`;
+the resolver dials it when the page is not itself on loopback, honours only a
+bare `wss://host:port`, and lets explicit and build-time overrides win. Control:
+the loopback branch removed fails exactly the hosted-page test.
+
+**WS #91.** `LOOPBACK_AGENT_ORIGIN` is the fourth runtime variable of the UI
+image. The validator admits only a bare wss origin (it is substituted into a
+quoted nginx string and an HTML attribute). The CSP was six byte-identical
+copies — `add_header` does not inherit — and is now one map every location
+references; the origin lands in `connect-src` and in the meta from the same
+variable. `provision-tenant.sh --loopback-host` writes it (needs `--topology
+full`). 23 render/validator assertions, 6 provisioning cases, controls on each.
+
+**What only the built image could show.** nginx's entrypoint substitutes only
+variables PRESENT in the environment; absent, the literal survived and nginx
+died at start (`unknown "loopback_agent_origin" variable`). A sourced `.envsh`
+defaults the optional variable — and then did nothing, because the entrypoint
+sources an `.envsh` only if executable, and it was copied 0644. The guard that
+said "installed" was green over a broken image; it now asserts the chmod. The
+render test's control had to be plumbed through `env -i` before it could go
+red at all. smoke-ui-ws.sh, which CI runs against the built image, asserts the
+served meta and the CSP header carry the origin; all sections pass locally.
+
+**Open.** The agent cannot terminate TLS or validate Host; that wave starts
+from the pinned e21933c. The certificate for local.avarok.net is not issued.
+
+## Round 537 — the agent people download could not be reached by a browser
+
+**Found** while sizing the agent's TLS change: the submodule's
+`service/src/main.rs` — the crate release-agent.yml builds — starts the kernel
+with `new_tcp`, the raw `Framed` TCP interface. The docker image runs this
+repo's `citadel-workspace-internal-service`, which wraps the kernel in the
+WebSocket interface and the Origin allowlist. Two binaries, same `--bind`, same
+"refuses without --bind", same port bound; only one speaks to a browser.
+
+**Verified** against the published asset, not the source: agent-v0.1.0
+(macos-arm64) bound its port and returned nothing to a WebSocket handshake —
+`<connection closed>` — while the docker agent answered
+`HTTP/1.1 101 Switching Protocols`. Every smoke assertion the release had
+(executable, refuses without --bind, right architecture, listens) was true of
+the wrong binary. "Listens" is not "speaks".
+
+**Fix (WS #92).** The workflow builds and packages
+`citadel-workspace-internal-service` with a `vendored` feature forwarded to the
+kernel crate. smoke-agent.sh performs a real handshake: 101 for the allowed
+origin, 403 for a foreign one — the second proves the allowlist is in the
+shipped binary. The README's invocation gains `--allowed-origins`, which this
+binary requires. Control: the v0.1.0 archive fails at the handshake; a package
+of the WebSocket binary passes.
+
+**Caught on the way.** The smoke's curl pipeline died under pipefail + set -e
+when the connection closed, so the first control run printed nothing — the
+same silent-exit shape as deploy.sh in round 535, in a script whose job is to
+report. The empty result is the finding; the case statement now names it.
+
+**Open.** The vendored release build of the parent crate is compiling locally
+as this is written; the tagged release has not been re-cut.
+
+## Round 538 — the agent speaks wss:// on loopback, proven with the real certificate
+
+**Built.** citadel-agent #60 (connector, from the pinned e21933c): `Transport`
+(plain or rustls server stream, ring — the provider the rest of the graph
+uses), `acceptor_from_pem` that names which of certificate or key is unusable,
+`HostPolicy::Loopback` admitting 127.0.0.1 / localhost / [::1] and one
+published name on exactly the bound port, and `WebSocketInterface::new_tls`
+deriving that policy from the port actually bound. Three integration tests
+against a self-signed listener: the published name over TLS is accepted; a
+permitted Origin on a foreign Host is refused 403 (DNS rebinding); plain
+`ws://` is not a connection. WS #93 (binary): `--loopback-host`,
+`--loopback-cert-url` (curl fetch, 0600 cache, offline on later starts) or
+`--tls-cert/--tls-key`; a name without a certificate source is refused rather
+than run plain; pure resolver, eight tests.
+
+**Proven, not unit-tested.** With the Let's Encrypt certificate for
+local.avarok.net (a public A record for 127.0.0.1) and curl verifying the chain
+over the real DNS name: allowed Origin → 101; foreign Origin → 403; spoofed
+Host → 403; wrong port → 403; `Host: localhost:port` → 101; the bare IP fails
+verification, as a browser would; plain `ws://` is closed.
+
+**Wrong on the way.** tokio-rustls 0.26 defaults to aws-lc-rs; the graph is
+on ring, and `crypto::ring` did not exist until the feature was selected. A
+`#[derive(Debug)]` above the interface survived my splice and failed on the
+acceptor. Two edits silently did not apply because `cargo fmt` had re-wrapped
+the anchor lines — the same lesson as the shell-script anchors, in Rust. My
+first Host-spoof probe verified the certificate against the spoofed URL host
+and never sent the request; a green "spoof refused" would have been fiction.
+
+**Open.** The parent's build.rs runs wasm-pack on every debug build and it
+failed locally for a reason this change does not explain (the wasm32 check of
+the client passes); `SKIP_WASM_BUILD=1` for now. Which citadel-agent branch
+is canonical is still the user's call; #60 targets the one the parent pins.
+
+## Round 539 — the vhost serves the certificate, and would not have loaded
+
+**Built (WS #94, stacked on #91).** For a tenant with `--loopback-host`, the
+host vhost serves exactly `/agent/loopback.pem` and `/agent/loopback.key` from
+`<tenant>/loopback/`, uncached, and nothing else; a tenant without a published
+name gets no such location. Two provisioning assertions; control: the renderer
+ignoring the directory turns the first red.
+
+**Found by checking under the nginx it targets.** `http2 on;` is a 1.25.1+
+directive. avarok2 runs Ubuntu's 1.18, where it is `unknown directive "http2"`
+and the vhost cannot be enabled at all — a defect that predates this wave and
+that no render-level test could see. `listen 443 ssl http2;` is accepted by
+both. `scripts/test-nginx-vhost.sh` renders with and without the loopback
+directory and runs `nginx -t` inside `nginx:1.18-alpine` and `nginx:1.30-alpine`
+with a throwaway certificate mounted; it runs in CI. Control: the directive put
+back is rejected by 1.18.
+
+**Also.** The first attempt at this change was cut from `origin/master`, which
+does not have `--loopback-host`; the provisioner anchors did not match, the
+test gained no assertions, the "control" had nothing to fail, and the
+`nginx -t` ran on an empty file and passed. Stacked on #91, it all measured
+something.
+
+## Open, as of round 539
 
 Everything both Fable fleets confirmed is fixed: 2 critical/high, 13 medium, 15
 low, across 30 findings. What follows is what is NOT fixed, stated so the next
 person does not have to infer it from silence.
+
+### Actions for the whole organisation has been idle for hours
+
+Since ~20:10Z on 4 Sep every run in every Avarok-Cybersecurity repository sits
+queued with nothing in progress — 74-job runs at 1/75 done, four and more
+hours on, on `ubuntu-latest` jobs that need no self-hosted runner (that job is
+commented out). The user-owned ILM repository ran three platforms in that
+window. That is an organisation-level block (billing or a spending limit is the
+usual cause), not a workflow defect; nothing in this repository can fix it.
+
+### The parent's build.rs runs wasm-pack on every debug build
+
+It failed locally during round 538 for a reason the change there does not
+explain — the wasm32 check of the client passes — and it deletes the package
+directory before it builds. `SKIP_WASM_BUILD=1` for local `cargo test` of the
+agent crate until it is understood.
+
+### The merge order, and one pointer that will move
+
+citadel-agent #60 → WS #92 → WS #93 (which pins the connector at the #60 branch
+head, 3c7a2aa, and must be bumped to whatever #60 merges as) → re-cut the agent
+release; UI #23 with WS #91 → WS #94 → re-provision avarok as full + nginx
+with `--loopback-host local.avarok.net` and ship the UI image.
 
 ### `reconnection_p2p_one_c2s` — FIXED in #302, entry kept for the reasoning
 
