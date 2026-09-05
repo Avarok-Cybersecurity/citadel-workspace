@@ -207,6 +207,13 @@ COPY docker/ui/nginx.conf.template /etc/nginx/templates/default.conf.template
 # Numbered 16 so it runs after the base image's own scripts and before 20-envsubst-on-templates.sh.
 COPY docker/ui/16-validate-runtime-vars.sh /docker-entrypoint.d/16-validate-runtime-vars.sh
 RUN chmod +x /docker-entrypoint.d/16-validate-runtime-vars.sh
+# Sourced by the entrypoint between validation (16-) and rendering (20-): defaults the one
+# OPTIONAL runtime variable to empty, because envsubst substitutes only variables present in
+# the environment and nginx refuses a config with the literal `${LOOPBACK_AGENT_ORIGIN}` left in.
+COPY docker/ui/17-default-runtime-vars.envsh /docker-entrypoint.d/17-default-runtime-vars.envsh
+# The entrypoint sources an .envsh only if it is executable, and IGNORES it otherwise -- a
+# file that is merely present changes nothing, silently.
+RUN chmod +x /docker-entrypoint.d/17-default-runtime-vars.envsh
 
 # Where the agent lives. Default suits host networking (and the dev stack). Override
 # with `-e AGENT_UPSTREAM=internal-service:12345` on a bridge network, or
@@ -247,7 +254,7 @@ ENV LISTEN_ADDR=0.0.0.0
 # That makes this an injection guard: whoever can set env vars on the container could
 # otherwise alter the proxy's behaviour, including the headers it forwards. The smoke
 # test asserts the property directly by starting the image with a colliding variable.
-ENV NGINX_ENVSUBST_FILTER=^(AGENT_UPSTREAM|WS_PROXY_ENABLED|LISTEN_ADDR)$
+ENV NGINX_ENVSUBST_FILTER=^(AGENT_UPSTREAM|WS_PROXY_ENABLED|LISTEN_ADDR|LOOPBACK_AGENT_ORIGIN)$
 
 # The entrypoint renders templates into /etc/nginx/conf.d at start-up, and we run as
 # the unprivileged `nginx` user - so that directory must be writable by it. Without

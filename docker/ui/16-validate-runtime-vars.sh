@@ -62,4 +62,13 @@ listen_addr="${LISTEN_ADDR:-}"
 echo "$listen_addr" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$|^\[[0-9A-Fa-f:]+\]$' \
   || die "LISTEN_ADDR='$listen_addr' must be an IPv4 address (e.g. 0.0.0.0 or 127.0.0.1) or a bracketed IPv6 address."
 
-echo "[validate-runtime-vars] ok: upstream=$upstream ws_proxy=$enabled listen=$listen_addr"
+# Optional. When set it is substituted into BOTH the Content-Security-Policy and the page's
+# <meta name="citadel-loopback-agent">, so it must be a bare wss://host:port and nothing that
+# could close a quoted nginx string or an HTML attribute: no path, no query, no quotes, no
+# semicolons, no spaces. Lowercase host, because a certificate name is.
+loopback="${LOOPBACK_AGENT_ORIGIN:-}"
+if [ -n "$loopback" ]; then
+  echo "$loopback" | grep -Eq '^wss://[a-z0-9]([a-z0-9.-]*[a-z0-9])?:[0-9]{1,5}$' \
+    || die "LOOPBACK_AGENT_ORIGIN='$loopback' must be a bare wss://host:port (e.g. wss://local.example.com:12345), or empty."
+fi
+echo "[validate-runtime-vars] ok: upstream=$upstream ws_proxy=$enabled listen=$listen_addr loopback=${loopback:-<none>}"
