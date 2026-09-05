@@ -218,6 +218,9 @@ jobs:
       - name: Third-party images are pinned
         run: node scripts/check-third-party-images-are-pinned.mjs
 
+      - name: Preflight invokes gates the way CI does
+        run: node scripts/check-preflight-runs-what-ci-runs.mjs
+
       - name: Tenant provisioning refuses what it must
         run: bash scripts/test-provision-tenant.sh
 

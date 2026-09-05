@@ -30,7 +30,7 @@
  * workflow means adding a gate to CI adds it here, with no second edit.
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -92,11 +92,31 @@ function ciScriptGates() {
   for (const step of steps) {
     const text = step.join('\n');
     const directory = /^\s*working-directory:\s*(\S+)/m.exec(text)?.[1] ?? '.';
-    for (const match of text.matchAll(/node\s+(scripts\/[a-z0-9-]+\.mjs)/g)) {
-      found.push([match[1], directory]);
+    // The rest of the line, not just the script path.
+    //
+    // This captured the path alone and ran every gate with no arguments, which
+    // is right for all but two of them and silently wrong for the one that
+    // matters: CI runs `node scripts/build-gates-index.mjs --check`, and
+    // WITHOUT `--check` that script takes its else branch and WRITES
+    // docs/GATES.md. So preflight rewrote a tracked file in the developer's
+    // working tree and printed `build gates index … ok` -- a check-only
+    // command turned into a mutation, and a gate that could not fail. The CI
+    // job it stands in for then went red on a file preflight claimed to have
+    // checked.
+    for (const match of text.matchAll(/node\s+(scripts\/[a-z0-9-]+\.mjs)([^\n]*)/g)) {
+      const args = match[2]
+        .split('#')[0] // a trailing YAML comment is not an argument
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+      found.push([match[1], directory, args]);
     }
   }
-  const unique = [...new Map(found.map(([script, dir]) => [`${dir}:${script}`, [script, dir]])).values()];
+  const unique = [
+    ...new Map(
+      found.map(([script, dir, args]) => [`${dir}:${script}:${args.join(' ')}`, [script, dir, args]]),
+    ).values(),
+  ];
   // A guard that silently checks nothing is the thing this repo keeps finding.
   // If the workflow is renamed or its shape changes, say so rather than
   // reporting a clean run over an empty list.
@@ -111,14 +131,15 @@ function ciScriptGates() {
 }
 
 const skipped = [];
-const derived = ciScriptGates().flatMap(([script, dir]) => {
+const derived = ciScriptGates().flatMap(([script, dir, args]) => {
   const name = script.replace(/^scripts\//, '').replace(/\.mjs$/, '');
   const reason = NEEDS_MORE_THAN_A_CHECKOUT.get(script.replace(/^scripts\//, ''));
   if (reason) {
     skipped.push([name, reason]);
     return [];
   }
-  return [[name.replace(/^check-/, '').replace(/-/g, ' '), 'node', [script], join(ROOT, dir)]];
+  const label = [name.replace(/^check-/, '').replace(/-/g, ' '), ...args].join(' ');
+  return [[label, 'node', [script, ...args], join(ROOT, dir)]];
 });
 
 /**
@@ -215,6 +236,21 @@ const CHECKS = [
   ['rust wasm target compiles', 'cargo', ['check', '-p', 'citadel-internal-service-wasm-client', '--target', 'wasm32-unknown-unknown'], IS],
   ...cargoChecks,
 ];
+
+// `--print-plan` prints what preflight WOULD run, as JSON, and exits.
+//
+// It exists so check-preflight-runs-what-ci-runs.mjs can compare this plan
+// against validate.yml without re-implementing the workflow parse. A second
+// copy of that parse is a second thing to drift, which is the failure this
+// file's header already describes once.
+if (process.argv.includes('--print-plan')) {
+  // writeFileSync to fd 1, not console.log: `process.exit` immediately after a
+  // console.log truncates a PIPED write at the 8 KB pipe buffer, and this plan
+  // is ~40 KB. The reader got valid JSON that simply stopped mid-token. A
+  // synchronous write finishes before the exit.
+  writeFileSync(1, `${JSON.stringify(CHECKS.map(([name, cmd, args, cwd]) => ({ name, cmd, args, cwd })))}\n`);
+  process.exit(0);
+}
 
 const failed = [];
 for (const [name, cmd, args, cwd] of CHECKS) {
