@@ -132,6 +132,10 @@ for p in "$SERVER_PORT" "$AGENT_PORT" "$UI_PORT"; do
 done
 
 TENANT_DIR="$ROOT/$TENANT"
+# Where the operator installs the certificate for the published loopback name (acme.sh
+# --install-cert with a reloadcmd targeting this directory); the vhost serves it at
+# /agent/. Empty without a name, and then no such location is rendered.
+LOOPBACK_DIR="${LOOPBACK_HOST:+$TENANT_DIR/loopback}"
 if [ -e "$TENANT_DIR" ] && [ "$FORCE" != true ]; then
   die "$TENANT_DIR already exists. Re-provisioning destroys its .env (and with it the
   master password that its stored root-workspace password must match). Pass --force
@@ -194,7 +198,7 @@ echo "directory   : $TENANT_DIR"
 if [ "$DRY_RUN" = true ]; then
   echo "--- .env (password redacted) ---"
   render_env "__REDACTED__"
-  [ "$INGRESS" = "nginx" ] && { echo "--- $DOMAIN.conf ---"; bash scripts/render-nginx-vhost.sh "$DOMAIN" "$UI_PORT" "$TENANT"; }
+  [ "$INGRESS" = "nginx" ] && { echo "--- $DOMAIN.conf ---"; bash scripts/render-nginx-vhost.sh "$DOMAIN" "$UI_PORT" "$TENANT" "$LOOPBACK_DIR"; }
   echo "--- dry run: nothing written ---"
   exit 0
 fi
@@ -228,7 +232,7 @@ fi
 cp deploy.sh "$TENANT_DIR/" 2>/dev/null || true
 
 if [ "$INGRESS" = "nginx" ]; then
-  bash scripts/render-nginx-vhost.sh "$DOMAIN" "$UI_PORT" "$TENANT" > "$TENANT_DIR/$DOMAIN.conf"
+  bash scripts/render-nginx-vhost.sh "$DOMAIN" "$UI_PORT" "$TENANT" "$LOOPBACK_DIR" > "$TENANT_DIR/$DOMAIN.conf"
   echo "wrote $TENANT_DIR/$DOMAIN.conf"
   echo "NEXT: obtain a cert for $DOMAIN, install the vhost, then 'nginx -t && systemctl reload nginx'."
   echo "      The existing mx.avarok.net cert does NOT cover new names; expanding it touches"

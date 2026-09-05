@@ -220,6 +220,11 @@ jobs:
 
       - name: Tenant provisioning refuses what it must
         run: bash scripts/test-provision-tenant.sh
+      - name: The tenant vhost is accepted by nginx 1.18 and 1.30
+        # avarok2 runs Ubuntu's 1.18; the UI image is on 1.30. `http2 on;` was rejected by the
+        # former, which no render-time check can see. Rendered with and without the loopback
+        # certificate location, nginx -t inside each official image.
+        run: bash scripts/test-nginx-vhost.sh
       - name: UI runtime config admits only what nginx can safely render
         # The validator that runs before nginx renders, and the rendered template: the CSP is
         # one map, every location references it, and LOOPBACK_AGENT_ORIGIN reaches the policy
