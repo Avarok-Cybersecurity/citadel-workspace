@@ -72,8 +72,12 @@ COPY ./citadel-internal-service /usr/src/app/citadel-internal-service
 ENV SKIP_WASM_BUILD=1
 ENV DOCKER_CONTAINER=1
 
-# Run clippy WITHOUT --tests to avoid enabling dev-dependencies (localhost-testing feature)
-RUN cargo clippy --bin citadel-workspace-server-kernel
+# Clippy does NOT run here.
+#
+# It cost 166 seconds in every image build, and the image is built once per integration-test
+# leg -- 55 times per pull request, about 150 runner-minutes -- to duplicate the `clippy` job
+# in validate.yml, which lints the same crate with `-D warnings`. This copy ran WITHOUT
+# `-D warnings`, so it could not fail the build: pure cost, no signal.
 
 # Build release binary to avoid dev-dependency features leaking through
 RUN cargo build --release --bin citadel-workspace-server-kernel

@@ -2,8 +2,16 @@ name: Validate PR
 on:
   workflow_call:
   pull_request:
-  push:
-    branches: ["master"]
+  # NOT on push to master.
+  #
+  # publish-images.yml already calls this whole workflow before it publishes
+  # (`uses: ./.github/workflows/validate.yml`), so a merge to master ran the full
+  # 74-job suite TWICE on the same commit: ~2,564 runner-minutes drawn from a pool of
+  # 20 concurrent jobs org-wide, shared with the UI and agent repositories. Measured on
+  # runs 33914958468 and 33914958814, the same SHA, minutes apart.
+  #
+  # The coverage is unchanged: nothing merges without the pull_request run, and nothing
+  # publishes without the run publish-images performs.
 
 concurrency:
   group: ${{ github.head_ref || github.run_id }}
@@ -135,6 +143,25 @@ jobs:
         # Docker build and three browser checks had already run. The directory
         # is a property of each step here, not of the job.
         run: node scripts/check-workflow-npm-scripts-exist.mjs
+      - name: CI runs the versions the lockfile resolves
+        # `npm install vitest@3.0.7 --save-dev` ran in the unit-tests job while
+        # the root lockfile resolved 3.2.7. The suite was green on a version no
+        # developer and no other job ever ran, so "CI is green" and "it works
+        # here" were answers to different questions.
+        run: node scripts/check-ci-runs-lockfile-versions.mjs
+      - name: No nested npm ci inside a root workspace
+        # `npm ci` in a directory that is already a root workspace re-resolves
+        # that subtree and unhoists the root's devDependencies, so later steps
+        # fail with exit 127. That is why an explicit `npm install eslint@...`
+        # followed one, two steps later -- to put back what it removed.
+        run: node scripts/check-no-nested-npm-ci-in-workspaces.mjs
+      - name: Expensive jobs wait for the cheap ones
+        # A red `cargo clippy` used to still run 55 Docker jobs -- about 1,230
+        # runner-minutes on a change that could not merge. Three times in one
+        # day, each on a trivial -D warnings lint. The org shares 20 slots
+        # across four repos, so that is also the queue everything else waits
+        # behind.
+        run: node scripts/check-expensive-jobs-wait-for-cheap-ones.mjs
       - name: Every nginx location carries the full header set
         # add_header does not inherit into a block that adds any header of its
         # own, so each location repeats all of them by hand. A location missing
@@ -429,11 +456,13 @@ jobs:
         # Build client-ts to generate dist/ with TypeScript declarations
         run: npm run build
         working-directory: citadel-workspace-client-ts
-      - name: Install Vitest
-        # Ensure vitest is available at root for workspace to use
-        run: npm install vitest@3.0.7 --save-dev
       - name: Run Unit Tests
-        # Run vitest directly to avoid npm -w matching nested integration-tests workspace
+        # Run vitest directly to avoid npm -w matching nested integration-tests workspace.
+        # No `npm install vitest@<version>` first: the root `npm ci` above already
+        # hoists the lockfile's vitest to `node_modules/.bin/vitest`, and an
+        # explicit install pinned CI to a DIFFERENT version than every developer
+        # runs -- 3.0.7 here against the 3.2.7 the lockfile resolves. A green run
+        # then said nothing about the version anyone else would use.
         run: npx vitest run
         working-directory: citadel-workspaces
 
@@ -522,7 +551,14 @@ jobs:
         run: npm ci
       - name: Build citadel-internal-service typescript-client
         # Build the WASM client's TypeScript wrapper first (innermost dependency)
-        run: npm ci && npm run build
+        # `npm run build` only. A nested `npm ci` inside a directory that is
+        # already a root workspace re-resolves that subtree and unhoists the
+        # root's devDependencies -- which is why an explicit
+        # `npm install eslint@9.39.2` had to follow it, and why removing that
+        # install alone turned this job into exit 127, `.bin/eslint` not found.
+        # The unit-tests job above has never had the nested `npm ci`, and has
+        # never needed the compensating install.
+        run: npm run build
         working-directory: citadel-internal-service/typescript-client
       - name: Build citadel-workspace-client-ts
         # Build client-ts to generate dist/ with TypeScript declarations
@@ -535,11 +571,12 @@ jobs:
         # on relative imports, so Node could not load the package at all.
         run: npm test
         working-directory: citadel-workspace-client-ts
-      - name: Install ESLint at root (workspaces hoisting issue)
-        # Workspaces may hoist eslint to workspace dirs instead of root
-        run: npm install eslint@9.39.2 --save-dev
       - name: Run ESLint
-        # Symlink hoisted packages and use root eslint binary via .bin
+        # Symlink hoisted packages and use root eslint binary via .bin.
+        # No `npm install eslint@<version>` first, for the same reason as vitest
+        # above: eslint is a root devDependency, so `npm ci` puts it in
+        # `node_modules/.bin/eslint` -- the binary this step already invokes by
+        # absolute path.
         run: |
           mkdir -p node_modules/@eslint
           ln -sf ${{ github.workspace }}/node_modules/@eslint/js node_modules/@eslint/js
@@ -790,6 +827,22 @@ jobs:
 
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
+    # The cheap checks first. Measured: of five recent red runs, two failed ONLY in
+    # 1-3 minute jobs (a lint, a crate-coverage gate) while seventy Docker jobs ran to
+    # completion behind them -- about 1,250 runner-minutes spent proving nothing, in a
+    # pool this repository shares with two others. Costs the green path a few minutes.
+    # The CHEAP gates, all of them.
+    #
+    # This listed only crate-coverage, lint and typecheck, so a red `clippy` or
+    # `fmt` still ran the whole Docker matrix -- 55 jobs, ~1,230 runner-minutes,
+    # for a change that could not merge. That happened three times in one day,
+    # each on a trivial `-D warnings` lint: a needless borrow, a dead-code gate,
+    # an unused import.
+    #
+    # Measured: a full parent run is ~1,281 runner-min and the integration
+    # matrix is 87% of it. Gating on every cheap job means a lint-red PR costs
+    # ~25 jobs instead of 74.
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint]
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
@@ -1117,6 +1170,7 @@ jobs:
           path: citadel-workspaces/integration-tests/screenshots/
 
   playwright-tests:
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint]
     # The @playwright/test suite under integration-tests/src/tests-pw. It existed
     # but ran in NO job, so those specs were dead weight: written, compiled by the
     # typecheck job, and never executed against a running stack.
@@ -1316,6 +1370,7 @@ jobs:
             citadel-workspaces/integration-tests/test-results/
 
   deploy-gate-tests:
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint]
     # Regression coverage for the release-consistency gate that stands between a `docker
     # compose pull` and a production restart. It is the mechanism that stops a partially
     # promoted `latest` from restarting production on two backend images that never shipped
@@ -1568,6 +1623,22 @@ jobs:
 
   production-build:
     name: Production Docker Build
+    # The cheap checks first. Measured: of five recent red runs, two failed ONLY in
+    # 1-3 minute jobs (a lint, a crate-coverage gate) while seventy Docker jobs ran to
+    # completion behind them -- about 1,250 runner-minutes spent proving nothing, in a
+    # pool this repository shares with two others. Costs the green path a few minutes.
+    # The CHEAP gates, all of them.
+    #
+    # This listed only crate-coverage, lint and typecheck, so a red `clippy` or
+    # `fmt` still ran the whole Docker matrix -- 55 jobs, ~1,230 runner-minutes,
+    # for a change that could not merge. That happened three times in one day,
+    # each on a trivial `-D warnings` lint: a needless borrow, a dead-code gate,
+    # an unused import.
+    #
+    # Measured: a full parent run is ~1,281 runner-min and the integration
+    # matrix is 87% of it. Gating on every cheap job means a lint-red PR costs
+    # ~25 jobs instead of 74.
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint]
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
