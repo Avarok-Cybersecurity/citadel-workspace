@@ -10,7 +10,7 @@ Nothing here phones home on its own. The agent connects where you tell it to.
 ## Running it
 
 ```bash
-./citadel-agent --bind 127.0.0.1:12345 --backend filesystem
+./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net
 ```
 
 Then reload Citadel Workspace in your browser.
@@ -21,6 +21,13 @@ Both flags matter:
   a usage error rather than starting. `127.0.0.1:12345` is what the web app
   expects; bind to `127.0.0.1` rather than `0.0.0.0` unless you intend other
   machines on your network to reach it.
+- **`--allowed-origins` names the web app that may drive this agent.** A
+  WebSocket is exempt from the browser's same-origin policy, so without this
+  list ANY page you visit could open a connection to your agent and act as you.
+  Put the origin you load Citadel Workspace from -- `https://work.avarok.net`
+  above; `http://localhost:5291` if you run the UI locally -- and nothing else.
+  The agent refuses to start without it. `INTERNAL_SERVICE_ALLOWED_ORIGINS` in
+  the environment does the same and takes precedence.
 - **`--backend filesystem` persists your account.** The default backend is
   in-memory, which is right for tests and wrong for you: without this flag your
   account and message history are gone the next time the agent restarts. Data
@@ -29,7 +36,7 @@ Both flags matter:
 ## Windows
 
 ```powershell
-.\citadel-agent.exe --bind 127.0.0.1:12345 --backend filesystem
+.\citadel-agent.exe --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net
 ```
 
 ## Checking it is up

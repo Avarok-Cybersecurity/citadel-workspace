@@ -6,6 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
+# Statically link OpenSSL so the released agent runs on machines with a different OpenSSL, or
+# none. Forwarded to the kernel crate, which defines what "vendored" means there.
+vendored = ["citadel-internal-service/vendored"]
 deadlock-detection = ["parking_lot/deadlock_detection", "parking_lot", "lazy_static"]
 native-dialogs = ["citadel-internal-service/native-dialogs"]
 
