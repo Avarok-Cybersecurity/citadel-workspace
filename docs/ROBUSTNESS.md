@@ -3135,7 +3135,9 @@ admin-lockout passes in CI and is open locally; touch-controls' "the message
 should send" fails on both branches and both agents, and its screenshot says
 why: the member's room reads "You do not have permission to send messages
 here." Two permission-shaped failures (this and admin-lockout), both green
-in CI, both red on this stack — a local seeding/permission discrepancy, open.
+in CI, both red on this stack. Closed the same round: the local server image
+was also from 26 Aug (kernel source last changed 2 Sep); rebuilt, both pass.
+Every one of the ten failures is now attributed, none to "flake".
 
 **Also.** UI #22's first CI failure was the runner's apt install of browser
 dependencies (exit 100), before any test ran.
@@ -3162,14 +3164,6 @@ It failed locally during round 538 for a reason the change there does not
 explain — the wasm32 check of the client passes — and it deletes the package
 directory before it builds. `SKIP_WASM_BUILD=1` for local `cargo test` of the
 agent crate until it is understood.
-
-### Two permission-shaped specs fail on the local stack and pass in CI
-
-admin-lockout ("with two administrators the control should be available
-again") and touch-controls ("You do not have permission to send messages
-here" for a fresh member) fail on this developer stack on `master` and on the
-branch, with the agent rebuilt or not. Same compose file as CI. What differs
-in how the local server seeds roles is not yet known (round 542).
 
 ### The public UI waits for the agent release
 
