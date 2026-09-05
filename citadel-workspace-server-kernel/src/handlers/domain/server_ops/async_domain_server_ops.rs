@@ -1040,7 +1040,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             let passwords = self.backend_tx_manager.get_all_passwords().await?;
             if !passwords
                 .get(crate::WORKSPACE_ROOT_ID)
-                .map(|p| p == &workspace_master_password)
+                .map(|p| crate::kernel::secret_eq::secrets_match(p, &workspace_master_password))
                 .unwrap_or(false)
             {
                 return Err(NetworkError::msg("Invalid workspace master password"));
@@ -1066,7 +1066,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             let passwords = self.backend_tx_manager.get_all_passwords().await?;
             if !passwords
                 .get(crate::WORKSPACE_ROOT_ID)
-                .map(|p| p == &workspace_master_password)
+                .map(|p| crate::kernel::secret_eq::secrets_match(p, &workspace_master_password))
                 .unwrap_or(false)
             {
                 return Err(NetworkError::msg("Invalid workspace password"));
@@ -1228,7 +1228,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         let passwords = self.backend_tx_manager.get_all_passwords().await?;
         if !passwords
             .get(workspace_id)
-            .map(|p| p == &workspace_master_password)
+            .map(|p| crate::kernel::secret_eq::secrets_match(p, &workspace_master_password))
             .unwrap_or(false)
         {
             return Err(NetworkError::msg(
@@ -1304,7 +1304,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         let passwords = self.backend_tx_manager.get_all_passwords().await?;
         if !passwords
             .get(workspace_id)
-            .map(|p| p == &workspace_master_password)
+            .map(|p| crate::kernel::secret_eq::secrets_match(p, &workspace_master_password))
             .unwrap_or(false)
         {
             return Err(NetworkError::msg(

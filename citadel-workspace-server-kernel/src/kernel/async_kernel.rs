@@ -466,7 +466,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                         .set_workspace_password(crate::WORKSPACE_ROOT_ID, workspace_master_password)
                         .await?;
                 }
-                Some(existing) if existing == workspace_master_password => {
+                Some(existing)
+                    if crate::kernel::secret_eq::secrets_match(
+                        existing,
+                        workspace_master_password,
+                    ) =>
+                {
                     debug!(target: "citadel", "Master password unchanged");
                 }
                 Some(_) => {
