@@ -3107,7 +3107,40 @@ The amd64 UI image with loopback support is staged on avarok2. Nothing is
 exposed yet: the public UI would today offer the v0.1.0 download, which is the
 TCP binary; the cut-over waits for the release from #92/#93.
 
-## Open, as of round 541
+## Round 542 — pre-validating the UI stack locally, and what the local stack is
+
+**Run.** The full `tests-pw` suite (138 tests, 21 files) against the local
+stack on the UI branch carrying #23 + #25: 128 passed, 10 failed. First the
+dev UI answered 404 — `index.html` is bind-mounted as a single file and a
+branch switch replaced its inode; the container kept the dead one until a
+restart (recorded as a memory).
+
+**Cluster A (5).** "global-setup did not initialise the workspace … registered
+an ordinary member": the log shows the Escape / Escape / Cancel signature from
+round 534 during global-setup's admin registration. The branch predates UI
+#22's fix to `createAccount`. Merged #22 locally: global-setup's admin
+"initialised the workspace and is admin", and all five pass.
+
+**Cluster B (5, plus one).** P2P delivery — call warmups, screen share, P2P
+handshake, a touch-controls send — and admin-lockout's "with two
+administrators the control should be available again". The same three
+representative specs on UI `master` fail identically against this stack, so
+these are the environment, not the branch. The local agent image is from
+26 Aug, pinned ILM cb137be — before the lost-wakeup fix (round 533) — and its
+log shows `find_target` succeeding with delivery never arriving. Rebuilt that
+image with ILM 688a688 and nothing else changed: call warmups delivered in 30s,
+P2P handshake green, 37 of 38 pass. The local stall WAS the lost-wakeup bug,
+now proven at the integration level; citadel-agent gets the pointer bump.
+admin-lockout passes in CI and is open locally; touch-controls' "the message
+should send" fails on both branches and both agents, and its screenshot says
+why: the member's room reads "You do not have permission to send messages
+here." Two permission-shaped failures (this and admin-lockout), both green
+in CI, both red on this stack — a local seeding/permission discrepancy, open.
+
+**Also.** UI #22's first CI failure was the runner's apt install of browser
+dependencies (exit 100), before any test ran.
+
+## Open, as of round 542
 
 Everything both Fable fleets confirmed is fixed: 2 critical/high, 13 medium, 15
 low, across 30 findings. What follows is what is NOT fixed, stated so the next
@@ -3129,6 +3162,14 @@ It failed locally during round 538 for a reason the change there does not
 explain — the wasm32 check of the client passes — and it deletes the package
 directory before it builds. `SKIP_WASM_BUILD=1` for local `cargo test` of the
 agent crate until it is understood.
+
+### Two permission-shaped specs fail on the local stack and pass in CI
+
+admin-lockout ("with two administrators the control should be available
+again") and touch-controls ("You do not have permission to send messages
+here" for a fresh member) fail on this developer stack on `master` and on the
+branch, with the agent rebuilt or not. Same compose file as CI. What differs
+in how the local server seeds roles is not yet known (round 542).
 
 ### The public UI waits for the agent release
 
