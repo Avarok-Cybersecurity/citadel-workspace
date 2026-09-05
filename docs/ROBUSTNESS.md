@@ -3327,3 +3327,56 @@ Two independent agents rediscovered a bug already sitting in open PR #98 this
 hour, and the release agent's top finding was already open as UI #25. Finding is
 now well ahead of landing: ~20 PRs open, 8 merged today. The useful work is
 clearing failures on PRs that exist, not opening more.
+
+## Rounds 572-573 — the reviewer found the defect in the reviewer's own PR
+
+An inspection agent was pointed at the OPEN pull requests rather than at the
+codebase, and asked one question of each: *what single change to production
+code should turn this PR's test red?* It found a real defect in #107, a PR I had
+written and controlled hours earlier.
+
+**#107 left every per-node grant behind.** It set a removed account to `Banned`
+and called `set_role_permissions(ROOT)` — which writes exactly ONE key. And
+`check_entity_permission` honours a direct grant BEFORE it consults role or
+membership. So a member added to room R and then removed from the workspace went
+on reading and posting in R, and receiving R's group broadcasts, while
+`ListNodes` correctly refused them. Removal looked like it worked, and the PR's
+own tests agreed.
+
+The correct form was twenty lines above, in `write_user_role_locked`:
+"Revoking everything is what a ban means", clearing every key when the role
+grants nothing. Reusing it directly broke a passing test — it re-runs
+`ensure_not_last_admin`, and by that point the membership write has already
+removed the account, so removing an administrator is refused. The clear is
+applied inline with that reason recorded.
+
+## Round 574 — a red clippy still ran the whole Docker matrix
+
+Measured, not estimated: one parent PR run is ~1,281 runner-minutes and the
+integration matrix is 87% of it. The `needs:` edges gated only three cheap jobs,
+so a failing `cargo clippy` still fanned out 55 Docker jobs — about 1,230
+minutes on a change that could not merge. That happened THREE times in one day,
+each on a trivial `-D warnings` lint: a needless borrow, a dead-code gate, an
+unused import. With 20 slots shared across four repos, it is also the queue
+everything else waits behind.
+
+All four Docker jobs now wait for all five cheap gates. **Writing the gate found
+two the manual pass missed**: `playwright-tests` had no
+`internal-service-rust-lint` edge, and `deploy-gate-tests` had no `needs:` at
+all. A lint-red PR now costs about 25 jobs instead of 74.
+
+### Two stale signals, one caught, one to watch
+
+A monitor reported "#100 ALL GREEN" for a commit that had already been replaced
+by my own push seconds earlier. Comparing `headRefOid` against my last commit is
+what caught it; the replacement monitor pins the SHA and says so if the head
+moves. Merging on that reading would have shipped a different tree than the one
+CI passed.
+
+CI then stalled a second time: zero runs executing across all three repos with
+eleven queued, none older than 86 minutes — so not the stale-wedge cause from
+earlier. Cancelling dependabot runs and parking everything but #100 did not
+start it. The most likely cause is GitHub-side throttling from the volume of
+runs created and cancelled today, which is self-inflicted and decays on its own.
+The correct response is to stop generating CI load, not to generate more trying
+to clear it.
