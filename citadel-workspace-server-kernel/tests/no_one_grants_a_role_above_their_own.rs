@@ -106,8 +106,21 @@ async fn a_custom_role_cannot_mint_an_admin_accomplice() {
     );
 }
 
+/// The Owner runs the workspace, and an Admin is someone they appoint.
+///
+/// This asserted the OPPOSITE, on the grounds that `for_role` withholds `All`
+/// and `ConfigureSystem` from Owner so permission containment refuses the
+/// grant. That is a correct reading of the permission sets and the wrong answer
+/// to the question: those sets say what a role may DO, and appointing is about
+/// who a role may MANAGE. `UserRole::command_authority` is that ladder now, and
+/// it puts Owner above Admin.
+///
+/// The `for_role` sets are deliberately unchanged. An Owner still does not hold
+/// `ConfigureSystem` -- a server-level permission -- and still does not hold the
+/// `All` wildcard. Being able to appoint an Admin is not the same as holding
+/// everything that Admin holds.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn an_owner_cannot_grant_admin() {
+async fn an_owner_may_grant_admin() {
     let kernel = create_test_kernel().await;
     insert_user_with_role(&kernel, "owner", UserRole::Owner).await;
     join_root(&kernel, "owner").await;
@@ -117,8 +130,53 @@ async fn an_owner_cannot_grant_admin() {
     assert!(
         try_set_role_as(&kernel, "owner", "target", UserRole::Admin)
             .await
+            .is_ok(),
+        "the Owner appoints administrators",
+    );
+}
+
+/// An Admin may fill a VACANT Owner seat. This is the bootstrap, and without it
+/// the role is unreachable.
+///
+/// `UserRole::Owner` is never assigned anywhere in the kernel's production code
+/// -- it is only ever read -- so this grant is the only way a workspace gains
+/// an Owner, and a workspace begins with an Admin and no Owner. A strict ladder
+/// would have made "Owner" a role nobody could ever hold.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_admin_may_fill_a_vacant_owner_seat() {
+    let kernel = create_test_kernel().await;
+    insert_user_with_role(&kernel, "target", UserRole::Member).await;
+    join_root(&kernel, "target").await;
+    join_root(&kernel, TEST_ADMIN_USER_ID).await;
+
+    assert!(
+        try_set_role_as(&kernel, TEST_ADMIN_USER_ID, "target", UserRole::Owner)
+            .await
+            .is_ok(),
+        "a workspace with no Owner must be able to gain one",
+    );
+}
+
+/// And the seat closes behind itself, which is what makes the ladder a ladder.
+///
+/// This is the assertion the bootstrap above must not cost: once an Owner
+/// exists, an Admin cannot manufacture a second one. That would be a lateral
+/// escalation -- a confederate placed above every other administrator, by an
+/// administrator.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_admin_cannot_grant_owner_once_one_exists() {
+    let kernel = create_test_kernel().await;
+    insert_user_with_role(&kernel, "founder", UserRole::Owner).await;
+    join_root(&kernel, "founder").await;
+    insert_user_with_role(&kernel, "target", UserRole::Member).await;
+    join_root(&kernel, "target").await;
+    join_root(&kernel, TEST_ADMIN_USER_ID).await;
+
+    assert!(
+        try_set_role_as(&kernel, TEST_ADMIN_USER_ID, "target", UserRole::Owner)
+            .await
             .is_err(),
-        "Admin carries ConfigureSystem, which for_role withholds from Owner",
+        "an Admin does not mint a peer for the person who appoints them",
     );
 }
 

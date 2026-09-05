@@ -187,6 +187,41 @@ impl UserRole {
         }
     }
 
+    /// Where this role sits in the workspace's chain of command.
+    ///
+    /// `Some(n)`, higher outranks lower. `None` for Custom roles, which have no
+    /// place in the ladder — see below.
+    ///
+    /// Deliberately NOT `get_rank`, and deliberately not derived from
+    /// `Permission::for_role`, because all three answer different questions:
+    ///
+    ///   - `get_rank` is a sort order and the scale Custom roles are created on.
+    ///     `ADMIN_RANK` is `u8::MAX` there so no Custom role can be minted above
+    ///     it, which is about namespacing, not authority.
+    ///   - `Permission::for_role` says what a role may DO. Admin holds the `All`
+    ///     wildcard and Owner holds everything except `All` and
+    ///     `ConfigureSystem`, so set containment makes Admin outrank Owner.
+    ///   - this says who a role may MANAGE, and there the Owner is above the
+    ///     Admin: the Owner runs the workspace, and an Admin is someone they
+    ///     appoint.
+    ///
+    /// Custom roles return `None` on purpose. Ranking them here would reopen a
+    /// hole that was closed once already: `create_custom_role` permits ranks
+    /// 21-254, and a Custom role above the editor threshold holds nine of the
+    /// twenty-seven permissions, so a rank-21 Custom would outrank Owner while
+    /// holding a third of its authority. Callers fall back to permission-set
+    /// containment for those, which does track power.
+    pub fn command_authority(&self) -> Option<u8> {
+        match self {
+            UserRole::Owner => Some(4),
+            UserRole::Admin => Some(3),
+            UserRole::Member => Some(2),
+            UserRole::Guest => Some(1),
+            UserRole::Banned => Some(0),
+            UserRole::Custom(_, _) => None,
+        }
+    }
+
     /// Creates a custom user role with a given name and rank.
     pub fn create_custom_role(name: String, rank: u8) -> Option<Self> {
         if rank == ADMIN_RANK
