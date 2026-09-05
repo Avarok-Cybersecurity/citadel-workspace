@@ -119,6 +119,13 @@ jobs:
         run: node scripts/check-doc-setup-steps.mjs
       - name: Check icon-only buttons have accessible names
         run: node scripts/check-icon-button-names.mjs
+      - name: The install doc names every variable the stack requires
+        # A `${VAR}` with no default in docker-compose.production.yml makes the
+        # container start and the binary exit, so `up -d --wait` reports a
+        # timeout with no reason. INSTALL.md named WORKSPACE_MASTER_PASSWORD
+        # and called the rest optional -- but INTERNAL_SERVICE_ALLOWED_ORIGINS
+        # is also required, so the documented quickstart could not come up.
+        run: node scripts/check-install-doc-names-required-env.mjs
       - name: Check every subscribed event has an emitter
         run: node citadel-workspaces/scripts/check-event-listeners-have-emitters.mjs
       - name: Check destructive text clears AA on every background
