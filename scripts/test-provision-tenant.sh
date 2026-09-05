@@ -95,5 +95,19 @@ if echo "$out" | grep -q "^LOOPBACK_AGENT_ORIGIN=$"; then
 else
   echo "  FAIL: without --loopback-host the key is missing or non-empty"; fails=$((fails+1))
 fi
+# The vhost serves the loopback certificate ONLY for a tenant with a published name, at
+# exactly /agent/loopback.pem|key, from that tenant's loopback directory, uncached.
+out=$($S --tenant ok7 --topology full --ingress nginx --domain w.example --loopback-host local.w.example --dry-run 2>/dev/null || true)
+if echo "$out" | grep -q 'location ~ ^/agent/loopback' && echo "$out" | grep -q "no-cache" && echo "$out" | grep -qE "root .*/ok7/loopback"; then
+  echo "  ok: --loopback-host renders the /agent/loopback.{pem,key} location from the tenant's loopback dir"
+else
+  echo "  FAIL: --loopback-host did not render the /agent/ certificate location correctly"; fails=$((fails+1))
+fi
+out=$($S --tenant ok8 --topology full --ingress nginx --domain w.example --dry-run 2>/dev/null || true)
+if echo "$out" | grep -q "/agent/"; then
+  echo "  FAIL: a tenant without --loopback-host got an /agent/ location"; fails=$((fails+1))
+else
+  echo "  ok: without --loopback-host the vhost has no /agent/ location"
+fi
 if [ "$fails" -ne 0 ]; then echo "FAIL: $fails assertion(s)"; exit 1; fi
 echo "provision-tenant: all guards refuse, all valid inputs accepted."
