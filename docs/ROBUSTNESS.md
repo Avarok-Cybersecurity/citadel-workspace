@@ -3052,14 +3052,15 @@ Everything both Fable fleets confirmed is fixed: 2 critical/high, 13 medium, 15
 low, across 30 findings. What follows is what is NOT fixed, stated so the next
 person does not have to infer it from silence.
 
-### Actions for the whole organisation has been idle for hours
+### CI is queue-bound, and the queue is largely mine
 
-Since ~20:10Z on 4 Sep every run in every Avarok-Cybersecurity repository sits
-queued with nothing in progress — 74-job runs at 1/75 done, four and more
-hours on, on `ubuntu-latest` jobs that need no self-hosted runner (that job is
-commented out). The user-owned ILM repository ran three platforms in that
-window. That is an organisation-level block (billing or a spending limit is the
-usual cause), not a workflow defect; nothing in this repository can fix it.
+Since ~20:10Z on 4 Sep every run in the organisation's repositories has sat at
+1/N done for hours. First read as an organisation-level block; wrong — all
+three repositories are public, GitHub reports Actions operational, and UI #21's
+run had three integration jobs in progress at 00:20Z. It is depth: eleven runs
+of 56–75 jobs each behind the plan's concurrency limit, and a docs-only PR
+(#89) occupies a 75-job slot like any other. The fix is structural — fewer
+jobs per run, no full suite for a docs-only change — and is a wave of its own.
 
 ### The parent's build.rs runs wasm-pack on every debug build
 
