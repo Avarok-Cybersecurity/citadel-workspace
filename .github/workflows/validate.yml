@@ -135,6 +135,13 @@ jobs:
         # Docker build and three browser checks had already run. The directory
         # is a property of each step here, not of the job.
         run: node scripts/check-workflow-npm-scripts-exist.mjs
+      - name: Local lint is as strict as CI lint
+        # CI lints every workspace with --max-warnings 0; two of the three
+        # `lint` scripts a developer runs did not, and client-ts has
+        # no-unused-vars and no-explicit-any at "warn" -- so a warning passed
+        # locally and failed in CI. The required flags are read off the lint
+        # job below, so tightening CI is what makes this demand more.
+        run: node scripts/check-lint-scripts-match-ci.mjs
       - name: Every nginx location carries the full header set
         # add_header does not inherit into a block that adds any header of its
         # own, so each location repeats all of them by hand. A location missing
