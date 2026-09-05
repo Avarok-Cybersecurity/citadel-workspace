@@ -155,6 +155,13 @@ jobs:
         # fail with exit 127. That is why an explicit `npm install eslint@...`
         # followed one, two steps later -- to put back what it removed.
         run: node scripts/check-no-nested-npm-ci-in-workspaces.mjs
+      - name: Expensive jobs wait for the cheap ones
+        # A red `cargo clippy` used to still run 55 Docker jobs -- about 1,230
+        # runner-minutes on a change that could not merge. Three times in one
+        # day, each on a trivial -D warnings lint. The org shares 20 slots
+        # across four repos, so that is also the queue everything else waits
+        # behind.
+        run: node scripts/check-expensive-jobs-wait-for-cheap-ones.mjs
       - name: Every nginx location carries the full header set
         # add_header does not inherit into a block that adds any header of its
         # own, so each location repeats all of them by hand. A location missing
@@ -824,7 +831,18 @@ jobs:
     # 1-3 minute jobs (a lint, a crate-coverage gate) while seventy Docker jobs ran to
     # completion behind them -- about 1,250 runner-minutes spent proving nothing, in a
     # pool this repository shares with two others. Costs the green path a few minutes.
-    needs: [crate-coverage, lint, typecheck]
+    # The CHEAP gates, all of them.
+    #
+    # This listed only crate-coverage, lint and typecheck, so a red `clippy` or
+    # `fmt` still ran the whole Docker matrix -- 55 jobs, ~1,230 runner-minutes,
+    # for a change that could not merge. That happened three times in one day,
+    # each on a trivial `-D warnings` lint: a needless borrow, a dead-code gate,
+    # an unused import.
+    #
+    # Measured: a full parent run is ~1,281 runner-min and the integration
+    # matrix is 87% of it. Gating on every cheap job means a lint-red PR costs
+    # ~25 jobs instead of 74.
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint]
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
@@ -1152,6 +1170,7 @@ jobs:
           path: citadel-workspaces/integration-tests/screenshots/
 
   playwright-tests:
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint]
     # The @playwright/test suite under integration-tests/src/tests-pw. It existed
     # but ran in NO job, so those specs were dead weight: written, compiled by the
     # typecheck job, and never executed against a running stack.
@@ -1351,6 +1370,7 @@ jobs:
             citadel-workspaces/integration-tests/test-results/
 
   deploy-gate-tests:
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint]
     # Regression coverage for the release-consistency gate that stands between a `docker
     # compose pull` and a production restart. It is the mechanism that stops a partially
     # promoted `latest` from restarting production on two backend images that never shipped
@@ -1607,7 +1627,18 @@ jobs:
     # 1-3 minute jobs (a lint, a crate-coverage gate) while seventy Docker jobs ran to
     # completion behind them -- about 1,250 runner-minutes spent proving nothing, in a
     # pool this repository shares with two others. Costs the green path a few minutes.
-    needs: [crate-coverage, lint, typecheck]
+    # The CHEAP gates, all of them.
+    #
+    # This listed only crate-coverage, lint and typecheck, so a red `clippy` or
+    # `fmt` still ran the whole Docker matrix -- 55 jobs, ~1,230 runner-minutes,
+    # for a change that could not merge. That happened three times in one day,
+    # each on a trivial `-D warnings` lint: a needless borrow, a dead-code gate,
+    # an unused import.
+    #
+    # Measured: a full parent run is ~1,281 runner-min and the integration
+    # matrix is 87% of it. Gating on every cheap job means a lint-red PR costs
+    # ~25 jobs instead of 74.
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint]
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
