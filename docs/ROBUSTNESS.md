@@ -2861,3 +2861,98 @@ against the check, not only against the code the check guards.** Nine checks thi
 campaign turned out to be measuring nothing, four of them written in the same
 campaign by the same hands, and every one was found by asking what single change
 would turn it red — never by reading it.
+
+## Round 547 — CI was green on a vitest nobody ran
+
+`.github/workflows/validate.yml` ran `npm install vitest@3.0.7 --save-dev`
+immediately before `npx vitest run`. The root lockfile resolves vitest 3.2.7.
+So "CI is green" and "the tests pass locally" were statements about two
+different versions of the runner, and neither backed the other. The eslint step
+beside it did the same with a version that matches today, which is the same
+defect one lockfile bump from being visible.
+
+Neither install was needed: `npm ci` already hoists both to
+`node_modules/.bin`, and the ESLint step was already invoking that exact binary
+by absolute path.
+
+**Gate:** `check-ci-runs-lockfile-versions.mjs` — no workflow may pin a version
+of a package the root lockfile resolves.
+**Controls:** defect back → red; a matching-version pin → red; a package the
+lockfile does not resolve → green; a comment naming the defect → green.
+
+**What went wrong first:** the first control run used `git checkout` to restore
+between controls, on an uncommitted fix. That reverted to HEAD, which still had
+the defect, so controls B, C and D were all measuring the original file. Commit
+the fix *before* running controls against it.
+
+## Round 548 — the agent instructions named three things that do not exist
+
+These files are executed, not read, so a wrong name is a timeout or a blank
+page reported as a broken service.
+
+The sync agent — which CLAUDE.md marks MANDATORY after any backend change —
+waited for ``Running `target/debug/…` `` from both services. Both containers run
+release binaries out of `/usr/local/bin`. That line is never logged, so steps 2
+and 3 could only ever end at the five-minute timeout, on every *healthy*
+rebuild. The real lines, confirmed against the running stack, are
+`Creating AsyncWorkspaceServerKernel` and `Citadel client established`.
+
+Every UI agent opened `localhost:5173`, 24 times across five files; the dev
+server is on 5291 (`:5291` → 200, `:5173` → 000). Three ran
+`tilt logs workspace-server`, which names no Tilt resource.
+
+**Gate:** `check-agent-docs-name-real-things.mjs` — Tilt names against
+`dc_resource(`, ports against what compose and the Dockerfiles bind, the
+`target/debug` marker against the container `CMD`.
+**Controls:** each of the three back → red; prose *explaining* the marker does
+not exist → green; a legitimate `:12345` → green.
+
+**What went wrong first:** the third control came back green. The edit had not
+applied — nested-quote escaping through `bash -c` → `python3 -c` mangled it —
+so it was measuring nothing. Re-run with an assertion on the anchor, red. Every
+control edit now asserts its anchor before writing.
+
+## Round 549 — the hosting quickstart could not bring the stack up
+
+`docs/INSTALL.md` said `.env` must set `WORKSPACE_MASTER_PASSWORD` and listed
+everything else as optional. `INTERNAL_SERVICE_ALLOWED_ORIGINS` is also
+required: compose passes it with no default and the agent exits without it, on
+purpose. Following the doc exactly ends in a `--wait` timeout with no stated
+cause. Exactly two variables in that compose file have no default; one was
+documented.
+
+**Gate:** `check-install-doc-names-required-env.mjs` — derives the required set
+from `${VAR}` with no `:-`, rather than listing it.
+**Controls:** undocument it again → red; a new required var → red; a var *with*
+a default → green (without that one the rule would demand documentation for all
+five optional variables, and be wrong rather than noisy).
+
+## Round 550 — the protocol guidance described code that does not exist
+
+CLAUDE.md and ARCHITECTURE.md are loaded into every session, so a fictional
+operation is an agent writing code against a name that does not compile, or
+"fixing" working code to match. Four at once:
+
+- `CreateOffice` / `ListOffices` / `CreateRoom` / `ListRooms` as protocol
+  operations. Zero hits in the source. The hierarchy is nodes.
+- a triple-nested chat envelope with a `WorkspaceProtocol::Message` layer. The
+  send path is a CBOR `P2PCommand` in a bincode `WireWrapper`, sent as an
+  ordinary `InternalServiceRequest::Message`.
+- `NodeResult::Disconnect` discriminated by `v_conn_type` on `LocalGroupPeer` /
+  `ExternalGroupPeer`. The field is `conn_type`; `ClientConnectionType` has only
+  `Server` and `Extended`; since SDK v0.13.1 a P2P disconnect is a different
+  event. The example handler does not compile.
+- six `Permission` variants that the flat enum does not have.
+
+**Gate:** `check-docs-name-real-symbols.mjs` — a backticked CamelCase token must
+appear in the tree (4,217 source files, 7,123 identifiers). It hard-errors below
+500 files so an uninitialised submodule cannot pass it on an empty haystack —
+which it caught on the first local run. Blockquotes are exempt, being where
+these files retract earlier revisions; so are Future/proposed/roadmap sections.
+**Controls:** two fictions back → red; a proposal, a retraction and a real
+symbol → green. The last three each failed the first draft of the rule.
+
+**Method note, three rounds running:** every control this session that came back
+green did so because the control itself had not applied, not because the check
+was weak. Assert the anchor, and verify the tree is byte-identical after
+restoring.
