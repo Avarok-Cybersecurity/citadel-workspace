@@ -174,6 +174,32 @@ echo "$MANHDR" | grep -qi '^content-type:.*application/manifest+json' \
 # the full max-age while the JS bindings that call into it — which ARE hashed —
 # updated underneath. That mismatch surfaces as undefined-function errors in the
 # console, nowhere near anything that looks like a caching problem.
+# Status and size FIRST, before anything about caching.
+#
+# These two assertions were the whole WASM check:
+#
+#   grep -qi '^cache-control:'          # present?
+#   grep -i '^cache-control:' | grep -qi 'immutable'   # and not immutable?
+#
+# `add_header ... always` in nginx.conf.template emits Cache-Control on 4xx
+# too, so a 404 for a MISSING WASM binary carries "public, no-cache" and
+# satisfies both. The release gate could not fail on the one condition that
+# matters most: the binary not being there at all.
+#
+# That is not hypothetical. `sync-wasm-clients.sh` wipes
+# citadel-workspaces/public/wasm before repopulating it, and that directory is
+# gitignored -- so a partial sync ships a UI where WASM init throws and every
+# internal-service operation silently no-ops. Register and login do nothing,
+# with no error and no backend log line. It has happened before.
+WASMFILE="$(mktemp)"
+WASMCODE="$(curl -s -o "$WASMFILE" -w '%{http_code}' "$BASE/wasm/citadel_internal_service_wasm_client_bg.wasm" || echo 000)"
+[ "$WASMCODE" = "200" ] \
+  || fail "The WASM binary is not being served: HTTP $WASMCODE. The app will load and every internal-service operation will silently do nothing."
+WASMSIZE="$(wc -c < "$WASMFILE" | tr -d ' ')"
+[ "$WASMSIZE" -gt 1000000 ] \
+  || fail "The WASM binary is $WASMSIZE bytes, far below the ~2.3MB expected - this is an error page or a truncated sync, not the client."
+rm -f "$WASMFILE"
+
 WASMHDR="$(curl -s -D - -o /dev/null "$BASE/wasm/citadel_internal_service_wasm_client_bg.wasm" || true)"
 echo "$WASMHDR" | grep -qi '^cache-control:' \
   || fail "The WASM binary carries no Cache-Control at all - nginx will apply heuristic caching to a file whose name never changes."
