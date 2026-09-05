@@ -139,6 +139,7 @@ jobs:
             smoke_env: >-
               -e INTERNAL_SERVICE_PORT=12345
               -e INTERNAL_SERVICE_BIND_HOST=127.0.0.1
+              -e INTERNAL_SERVICE_ALLOWED_ORIGINS=http://localhost:5291
 
     steps:
       - uses: actions/checkout@v4

@@ -22,7 +22,11 @@ import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
 const ROOT = 'citadel-workspace-server-kernel/src';
-const PROMOTION = /\.role\s*=\s*UserRole::(Admin|Owner)\b/;
+// Two shapes, because the gate previously saw only the first and reported "all 3 promotions
+// are gated" while the door everyone actually walks through was the second. `user.role = role`
+// in write_user_role_locked is reached from add_user_to_domain and update_workspace_member_role;
+// a deleted `ensure_may_grant_role` above either of them left this check green.
+const PROMOTION = /\.role\s*=\s*(?:UserRole::(?:Admin|Owner)\b|\w*role\b)/;
 const GATES = [
   'is_bootstrap',
   'root_exists',
@@ -83,6 +87,62 @@ function guardClauses(lines, target, window) {
   return out;
 }
 
+/// The `async fn name(` / `fn name(` enclosing a line, with the range of its body.
+function enclosingFunction(lines, target) {
+  for (let i = target; i >= 0; i--) {
+    const m = /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+([A-Za-z0-9_]+)\s*[(<]/.exec(lines[i]);
+    if (!m) continue;
+    let depth = 0;
+    for (let j = i; j < lines.length; j++) {
+      const code = lines[j].replace(/\/\/.*$/, '');
+      depth += (code.match(/\{/g) || []).length - (code.match(/\}/g) || []).length;
+      if (depth === 0 && j > i) return { name: m[1], start: i, end: j };
+    }
+    return { name: m[1], start: i, end: lines.length - 1 };
+  }
+  return null;
+}
+
+/// Lines that call `name(` from outside its own body.
+function callSites(lines, name, start, end) {
+  const out = [];
+  const call = new RegExp(`\\b${name}\\s*\\(`);
+  lines.forEach((line, i) => {
+    if (i >= start && i <= end) return;
+    const code = line.replace(/\/\/.*$/, '');
+    if (/\bfn\s+[A-Za-z0-9_]+\s*[(<]/.test(code)) return;
+    if (call.test(code)) out.push(i);
+  });
+  return out;
+}
+
+/// Every call site that reaches `target` without a gate, following helpers up to `depth`
+/// levels. `[]` means every path is gated; `null` means the write is not in a function this
+/// can follow, so the caller reports the write itself.
+///
+/// The gate window is the enclosing FUNCTION BODY up to the call, not a fixed number of
+/// lines: `ensure_may_grant_role` sits ~70 lines above the write it protects in
+/// add_user_to_domain, and a line window silently called that ungated.
+function ungatedCallers(lines, target, depth) {
+  const fn = enclosingFunction(lines, target);
+  if (!fn) return null;
+  const bodyGated = (from, to) =>
+    GATES.some((g) => lines.slice(from, to).some((l) => l.replace(/\/\/.*$/, '').includes(g)));
+  const callers = callSites(lines, fn.name, fn.start, fn.end);
+  if (callers.length === 0) return null;
+  const bad = [];
+  for (const c of callers) {
+    const outer = enclosingFunction(lines, c);
+    if (outer && bodyGated(outer.start, c)) continue;
+    if (depth > 1) {
+      const deeper = ungatedCallers(lines, c, depth - 1);
+      if (deeper !== null) { bad.push(...deeper); continue; }
+    }
+    bad.push(c);
+  }
+  return bad;
+}
+
 let files;
 try {
   files = execSync(`find ${ROOT} -name '*.rs'`, { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
@@ -106,9 +166,25 @@ for (const file of files) {
       ...enclosingConditionals(lines, i),
       ...guardClauses(lines, i, WINDOW),
     ].filter((l) => BRANCHES.test(l));
-    if (!GATES.some((g) => controlling.some((l) => l.includes(g)))) {
+    if (GATES.some((g) => controlling.some((l) => l.includes(g)))) return;
+    // The write may sit in a private helper whose CALLERS hold the gate — which is how the
+    // real promotion path is built: `write_user_role_locked` is reached through
+    // `write_user_role` from add_user_to_domain and update_workspace_member_role, each gated
+    // by ensure_may_grant_role. Following the callers (two levels, since there is a wrapper)
+    // is what makes this check able to fail: matching only the enclosing function reported
+    // "all 3 gated" while the door everyone walks through was not examined at all.
+    const ungated = ungatedCallers(lines, i, 2);
+    if (ungated === null) {
       problems.push({ file, line: i + 1, code: code.trim().slice(0, 80) });
+      return;
     }
+    ungated.forEach((c) =>
+      problems.push({
+        file,
+        line: c + 1,
+        code: `reaches a role write with no gate above it: ${lines[c].trim().slice(0, 60)}`,
+      }),
+    );
   });
 }
 
