@@ -73,6 +73,14 @@ done
 [[ "$TENANT" =~ ^[a-z0-9][a-z0-9-]{0,30}$ ]] || die "--tenant must match [a-z0-9][a-z0-9-]{0,30}"
 case "$INGRESS" in nginx|tunnel|none) ;; *) die "--ingress must be nginx, tunnel or none" ;; esac
 case "$TOPOLOGY" in server-only|full) ;; *) die "--topology must be server-only or full" ;; esac
+# The domain is substituted into an nginx server_name, a certificate path, a filename and the
+# agent's Origin allowlist. Every other operator input here is validated and says why; this one
+# was not, so `https://work.example` produced INTERNAL_SERVICE_ALLOWED_ORIGINS=https://https://...
+# (which the agent refuses at start), a trailing slash never matched any browser Origin, and a
+# `;` or `..` reached a root-owned nginx config or wrote outside the tenant directory.
+if [ -n "$DOMAIN" ] && ! echo "$DOMAIN" | grep -Eq '^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$'; then
+  die "--domain '$DOMAIN' must be a lowercase DNS name (no scheme, port, slash or path)"
+fi
 if [ "$INGRESS" != "none" ] && [ -z "$DOMAIN" ]; then
   die "--domain is required when --ingress is $INGRESS"
 fi
@@ -161,7 +169,11 @@ INTERNAL_SERVICE_BIND_HOST=$AGENT_BIND_HOST
 INTERNAL_SERVICE_ALLOWED_ORIGINS=$ORIGINS
 IMAGE_TAG=${IMAGE_TAG:-latest}
 EOF
-  [ "$INGRESS" = "tunnel" ] && echo "TUNNEL_TOKEN=${TUNNEL_TOKEN:-__SET_ME__}"
+  # Redacted on a dry run for the same reason the master password is: a dry run is what an
+  # operator pastes where others can see it, and TUNNEL_TOKEN is a live credential.
+  if [ "$INGRESS" = "tunnel" ]; then
+    if [ "$1" = "__REDACTED__" ]; then echo "TUNNEL_TOKEN=__REDACTED__"; else echo "TUNNEL_TOKEN=${TUNNEL_TOKEN:-__SET_ME__}"; fi
+  fi
   return 0
 }
 
@@ -198,7 +210,13 @@ if [ "$TOPOLOGY" = "server-only" ]; then
 else
   cp docker-compose.production.yml "$TENANT_DIR/"
 fi
-cp -r scripts "$TENANT_DIR/scripts" 2>/dev/null || true
+# `rm -rf` first, and NO error suppression. `cp -r src dst` copies INTO dst when dst exists,
+# so a --force re-provision put the fresh scripts at scripts/scripts/ and left the PREVIOUS
+# revision's select-deploy-services.sh and verify-image-revisions.sh exactly where the
+# freshly-copied deploy.sh calls them -- a fix to the revision gate never reaching the tenant,
+# silently, because of the `|| true`.
+rm -rf "$TENANT_DIR/scripts"
+cp -r scripts "$TENANT_DIR/scripts"
 # Prove the generated file says what the topology claims, before anyone deploys
 # it: a trim that silently kept the agent would put a hosted agent on a public
 # host, the one thing this topology exists to prevent.
@@ -207,7 +225,7 @@ if [ "$TOPOLOGY" = "server-only" ]; then
   [ "${d% }" = "server" ] || die "server-only tenant declares '${d% }'; expected exactly 'server'"
   echo "verified   : compose declares exactly [server]"
 fi
-cp deploy.sh "$TENANT_DIR/" 2>/dev/null || true
+cp deploy.sh "$TENANT_DIR/deploy.sh"
 
 if [ "$INGRESS" = "nginx" ]; then
   bash scripts/render-nginx-vhost.sh "$DOMAIN" "$UI_PORT" "$TENANT" > "$TENANT_DIR/$DOMAIN.conf"

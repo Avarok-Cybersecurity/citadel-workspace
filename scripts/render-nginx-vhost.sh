@@ -26,6 +26,13 @@ server {
     ssl_certificate     /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    # HSTS. Without it only the :80 redirect protects the first request, and a network attacker
+    # on that one plaintext hop serves their own page on this name -- which then talks to the
+    # visitor's own agent. The agent refuses the wrong Origin, so the symptom is "the agent is
+    # broken", not "you were attacked". A year, and subdomains, because local.<domain> is one.
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
     client_max_body_size 500m;
     location / {
         proxy_pass http://127.0.0.1:$UI_PORT;
