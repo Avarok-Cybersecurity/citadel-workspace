@@ -3060,3 +3060,106 @@ should.
 
 That is the third time this campaign that a green control meant the *test* was
 wrong rather than the code. It is now the most reliable defect-finder here.
+
+## Round 555 — local lint was weaker than CI lint
+
+CI lints every workspace with `--max-warnings 0`. Two of the three `lint`
+scripts a developer actually runs did not, and `citadel-workspace-client-ts`
+has `no-unused-vars` and `no-explicit-any` at **warn** — exactly what the
+missing flag hides. Both packages already passed under the stricter flag, so
+the gap was latent rather than active, which is the only reason it had not
+already cost a red CI run.
+
+**Gate:** `check-lint-scripts-match-ci.mjs` reads the required flags off the
+workflow's own eslint line rather than listing them.
+**Controls:** drop the flag → red; **add a new flag to CI** → red; a comment
+mentioning eslint → green. The middle one is the one that matters: it proves
+the flags are derived, so the gate cannot drift into agreeing with itself.
+
+## Round 556 — nine tests that never ran
+
+`citadel-internal-service/typescript-client`'s test script ended in
+`node --test "dist/**/*.test.js"`. Glob support in `--test` arrived in Node 21;
+the CI image is `node:18-slim`, so the quoted glob is taken literally and
+matches nothing.
+
+Measured in `docker run --rm node:18-slim`, the same image
+`ci/docker-compose.test.yml` uses:
+
+| | Exit | Tests |
+|---|---|---|
+| Before | 1 | 0 — `Could not find '/w/dist/**/*.test.js'` |
+| After  | 0 | **9**, 3 suites |
+
+`citadel-workspace-client-ts` hit this exact failure and solved it by having the
+checker emit the paths it found, so one directory walk feeds both the assertion
+and the runner. Its own comment names the cause. The fix stayed in that one
+package.
+
+The shape is worth remembering: a checker printing "1 compiled test file found"
+immediately followed by a runner printing "could not find it". Two components
+disagreeing out loud, in CI, and nobody reading the line.
+
+## Round 557 — removing the install that was compensating
+
+Round 547 removed `npm install eslint@9.39.2 --save-dev` on the grounds that the
+root `npm ci` already hoists eslint to `node_modules/.bin`. It does — until two
+steps later, when the lint job runs `npm ci` **again** inside
+`citadel-internal-service/typescript-client`, which is itself a root workspace.
+That re-resolves the subtree and unhoists the root devDependencies, and all
+three lint jobs died with `exit 127`.
+
+The install was not redundant. It was compensating. The cause is the nested
+`npm ci`, and the unit-tests job is the proof: it has never had one, and never
+needed a compensating install either.
+
+Memory already recorded this trap in those words — "duplicate `npm ci` in
+subdirs breaks hoisting" — and it was not applied. Reading the note is not the
+same as consulting it before acting.
+
+**Gate:** `check-no-nested-npm-ci-in-workspaces.mjs`. **Controls:** nested via
+`working-directory` → red; nested via `cd` on the run line → red; `npm ci` at
+the repo root → green.
+
+## Round 558 — `test:all` reached 39 of 47 specs
+
+`README.md:178` offers `npm run test:all` as the way to run the suite locally.
+It never ran `group-messaging`, `native-file-picker`, `tree-structure-editor`,
+or **any of the five reconnection specs**.
+
+Each has its own `test:` script, so the orphan gate passed. "Named by a script"
+and "run by `test:all`" are different claims and only the first was checked —
+while the gate's own failure message said *"and chain it into test:all"*, and
+`docs/TESTING.md:304` already warned that `test:all` "would make any matrix look
+complete". The hazard was written down twice and implemented nowhere.
+
+The cost is misattributed flake: reproduce a CI reconnection failure locally,
+run for an hour against the shared backend, pass, file it as environmental.
+
+**Gate:** transitive expansion of `test:all` with a cycle guard, in the file
+that already asked for it. **Controls:** drop the reconnection legs → red; a
+spec named by no script → red; `test:all` emptied to `echo nothing` → red
+("verified nothing"), which is what stops this gate becoming the thing it was
+written to catch.
+
+**Two of my own errors, caught only because the numbers contradicted
+themselves:** the first reachability script reported 0 of 47 because its regex
+excluded dots and truncated every filename; the first version of the gate
+printed "reaches 47 of 47" while listing all 47 as unreached, because the
+capture drops `.js` and the comparison kept it.
+
+## Round 559 — a job named after its first step
+
+Nine parent PRs each carried a red check reported as
+"Every workspace crate has a lint job: failure". That step passed — its log
+says `all 11 workspace crates are covered`. The failure was three steps later
+in the same job: `docs/GATES.md is out of date`, because six new gate scripts
+had been added across six branches without re-running
+`build-gates-index.mjs`.
+
+Every one of those PRs had a guaranteed red check independent of its content,
+and the check name pointed at the wrong step. Regenerated on all seven
+branches in one pass.
+
+**Lesson:** a CI job named after its first step will mislead you about its
+last one. Read the log, not the name.
