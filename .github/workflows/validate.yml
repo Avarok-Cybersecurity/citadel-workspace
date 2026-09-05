@@ -2,8 +2,16 @@ name: Validate PR
 on:
   workflow_call:
   pull_request:
-  push:
-    branches: ["master"]
+  # NOT on push to master.
+  #
+  # publish-images.yml already calls this whole workflow before it publishes
+  # (`uses: ./.github/workflows/validate.yml`), so a merge to master ran the full
+  # 74-job suite TWICE on the same commit: ~2,564 runner-minutes drawn from a pool of
+  # 20 concurrent jobs org-wide, shared with the UI and agent repositories. Measured on
+  # runs 33914958468 and 33914958814, the same SHA, minutes apart.
+  #
+  # The coverage is unchanged: nothing merges without the pull_request run, and nothing
+  # publishes without the run publish-images performs.
 
 concurrency:
   group: ${{ github.head_ref || github.run_id }}
@@ -790,6 +798,11 @@ jobs:
 
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
+    # The cheap checks first. Measured: of five recent red runs, two failed ONLY in
+    # 1-3 minute jobs (a lint, a crate-coverage gate) while seventy Docker jobs ran to
+    # completion behind them -- about 1,250 runner-minutes spent proving nothing, in a
+    # pool this repository shares with two others. Costs the green path a few minutes.
+    needs: [crate-coverage, lint, typecheck]
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
@@ -1568,6 +1581,11 @@ jobs:
 
   production-build:
     name: Production Docker Build
+    # The cheap checks first. Measured: of five recent red runs, two failed ONLY in
+    # 1-3 minute jobs (a lint, a crate-coverage gate) while seventy Docker jobs ran to
+    # completion behind them -- about 1,250 runner-minutes spent proving nothing, in a
+    # pool this repository shares with two others. Costs the green path a few minutes.
+    needs: [crate-coverage, lint, typecheck]
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
