@@ -3380,3 +3380,83 @@ start it. The most likely cause is GitHub-side throttling from the volume of
 runs created and cancelled today, which is self-inflicted and decays on its own.
 The correct response is to stop generating CI load, not to generate more trying
 to clear it.
+
+## Round 575 — the pre-push guard refused every push made from a worktree
+
+Trying to push the round 572–574 entry, the submodule-pointer guard refused it
+and named four submodules as unpushed — two of them, `citadel-internal-service/
+citadel-internal-service` and `citadel-internal-service/citadel-workspaces`,
+paths that do not exist. The pointers it objected to were byte-identical to
+`origin/master`'s.
+
+A linked worktree does not populate submodules. `wt-docs/citadel-internal-service`
+is an empty directory, and `git -C` inside an empty directory walks up and
+answers as the **parent** repository. Every question the guard asked went to the
+wrong repo: `branch -r --contains <sha>` printed `no such commit` for commits
+that are on the remote, and the recursion re-read the parent's own pointers
+under a nested prefix. On a fixture with one submodule it recursed until it
+exhausted memory — the report contained `sub/.//.//.//…` repeated about 10^5
+times.
+
+All the work here happens in worktrees, so this was the guard blocking correct
+pushes essentially always — the state its own comment names as the reason a
+guard gets switched off.
+
+Submodule repositories are now addressed by **git directory**
+(`<git-common-dir>/modules/<name>`, which every worktree shares) instead of by
+working directory, with the name read from the `.gitmodules` of the commit under
+inspection because a name may differ from its path. Two further corrections fell
+out: a submodule whose repository cannot be found is reported as *unjudged*
+rather than as absent or as fine, and the recursion descends through the
+**recorded** pointer instead of whatever that submodule has checked out — those
+two commits differ routinely, and the one that breaks `actions/checkout` is the
+recorded one.
+
+`check-submodule-gate-judges-a-worktree.mjs` builds real repositories in a temp
+directory and asserts both directions from a linked worktree: a fully-pushed
+tree passes, and an unpushed pointer is still refused *by name*. The second
+assertion is the control — without it, a guard gutted into always passing
+satisfies the first. With `origin/master`'s guard restored the test fails; with
+the fix it passes both.
+
+Preflight: 92 of 93 green. The one failure, `generated artefacts present`, is a
+fresh worktree having no built WASM.
+
+## Round 576 — every group notification was delivered to the owning tab twice
+
+The leader runs two delivery paths over each inbound message: the inbound router
+forwards to the tab owning the message's CID, and `broadcastWorkspaceResponse`
+posts to every tab, which then filters by CID. The gate between them asked
+whether the type was in `CID_ROUTED_NOTIFICATIONS` — a list written to answer a
+different question (when *not* to route by request_id), holding nine of the
+internal service's seventeen notification variants.
+
+So anything routing by CID without being on that list was delivered twice. The
+seven remaining group notifications are all built with `request_id: None` and a
+recipient `cid` (`kernel/responses/group_event.rs`, `kernel/requests/mod.rs`),
+so every group invite, join request, member-state change, leave, end and
+disconnect reached the owning tab twice. A duplicated invite is a duplicated
+auto-accept. `DisconnectNotification` was worse: the router broadcasts it to
+every instance and the legacy path broadcast it again.
+
+The gate now asks the router what it did. `routeMessage` returns whether it
+delivered: true when it broadcast to all, when a pending request claimed it,
+when the instance owning the CID has it, or when the message was deliberately
+dropped; false when no instance owns the CID (buffered — the broadcast stays the
+second chance it has always been) and false when there is no CID at all. A
+verdict from what happened cannot drift the way a hand-kept list of type names
+does, which is how that list came to be eight variants short.
+
+**What the investigation ruled out.** The suspicion carried in the backlog was
+misrouting — that these notifications carried the *sender's* request_id and were
+delivered to the wrong tab. They do not: every construction site sets
+`request_id: None`, so `extractRequestId` already returned null and the router
+already routed them by CID. And the cross-session leak was already closed
+generically in an earlier round — `handleWorkspaceResponse` reads the payload's
+own `cid` via `notificationCid()` and skips a mismatch. What survived was the
+duplicate, which is a real defect and a different one.
+
+Controls: with `origin/master`'s two files restored, 11 of the 12 new assertions
+fail. The twelfth stays green — it asserts that an *undelivered* message is
+still broadcast, which this change does not alter, and it is the control against
+a gate hard-wired to never broadcast.
