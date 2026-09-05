@@ -3567,3 +3567,113 @@ grants standing (round 522's ban fix, not propagated); `AddMember` on a room
 overwrites the member's *global* role; an Owner can ban an Admin; `fnv1a64` runs
 in production because it is an argument to a no-op `debugLog` (measured at 371ms
 for 1MB, on the main thread).
+
+## Round 581 — an Owner could ban, demote or remove an Admin
+
+`ensure_may_grant_role` closed one direction: you cannot hand out authority you
+do not hold. The other was open. Nothing anywhere compared the actor against the
+target's **current** role, so the rule was "you may not promote above yourself"
+with no matching "you may not demote someone above you".
+
+`Permission::for_role(Banned)` is EMPTY, so the granting check passes trivially
+for every actor — banning is granting nothing. An Owner holds 25 of the 27
+permissions and lacks Admin's `All`, so `an_owner_cannot_grant_admin` already
+passed while the same Owner could unseat that Admin through three doors:
+`update_workspace_member_role`, `remove_user_from_domain`, and
+`add_user_to_domain` with `role: Banned` at the root.
+
+`ensure_not_last_admin` is not this guard. It refuses only the change that
+empties the admin set; with two administrators present it permits either to be
+unseated by anyone who passed the entry gate.
+
+`ensure_may_act_on` uses the same comparison as the granting side, pointed at
+the target's role, so the two cannot drift. Self-action is exempt: standing down
+hands nobody any authority, and the last-admin guard already refuses the one
+case that matters. Control: neutered to `return Ok(())`, exactly the four
+refusals fail and the four permissions pass. Full kernel suite 355/355.
+
+**Two of the three findings from that sweep were already fixed in open PRs** —
+per-room grants surviving removal (#107) and AddMember overwriting the global
+role (#98). The agents read origin/master, so they reported them as live.
+Checking before building saved two duplicate fixes; it is worth doing every
+time a sweep reports against a branch that is not where the work is.
+
+**A behaviour change worth naming.** An existing test asserted that an Owner
+demoting the Admin succeeds. That is now refused, and its vehicle changed (the
+Admin steps down itself) so the test's own subject — the last-admin guard — is
+untouched. If "Owner" is meant to outrank Admin, this is the round to invert;
+the code currently says the opposite, in `ensure_may_grant_role`'s own comment.
+
+## Round 583 — a per-byte fingerprint ran in production, for a noop logger
+
+`debugLog` is a noop in production, and JavaScript evaluates arguments before
+the call. `fnv1a64` is a BigInt loop over every byte: measured here at 0.54 ms
+for 1 KB, 91 ms for 64 KB, 255 ms for 1 MB, on the main thread. Three call sites
+evaluated it as a `debugLog` argument, two of them on the same message, so a
+64 KB Yjs update or file chunk cost roughly a quarter-second of blocked UI for
+three strings nobody read.
+
+The fingerprint stays — it is byte-identical to `messenger/mod.rs`'s, which is
+what lets a message be joined from ILM delivery through the router to the P2P
+handler. `debugEnabled` is exported for this and documented as being only for
+arguments that cost something. `check-expensive-diagnostics-are-guarded.mjs`
+holds it, deliberately narrow: a blanket "no calls in debugLog arguments" would
+flag `String(x)` hundreds of times, and a gate that cries wolf gets switched
+off. Two controls — unguard a site, and rename the helpers so the candidate set
+is empty; both exit 1.
+
+### The more interesting half: five partial mocks
+
+Adding one export to debug-config broke a test that mocks it with a factory
+listing only `debugLog`. Vitest raises "No debugEnabled export is defined on the
+mock", the module fails to load, and it reads on screen as **the code under test
+doing nothing** — `expected [] to have a length of 1`. Four more files had the
+same shape. All five now spread `importOriginal`. No gate: this failure is loud
+and immediate at the import, and gates earn their keep on silent failures.
+
+One extra failure in the first full run, `outbound-queue-replay`, passed in
+isolation and did not reproduce in a second full run — a parallel-run flake,
+recorded with that evidence rather than asserted as unrelated.
+
+## Round 584 — two corrections about CI, one of them mine twice over
+
+I reported CI as "stalled" twice. It was not. `gh run list --json status` reports
+a RUN as `queued` until every one of its jobs finishes, so a run with eight jobs
+executing reads as queued. At job level the parent repo had nine jobs in flight
+the whole time.
+
+What was real is different: **#100 was starved.** Its 22 jobs sat with none
+running behind a 74-job docs run and a 66-job preflight run, in an org that
+shares 20 slots across four repos. #100 is the change that makes every future
+run a third the size, so cancelling the two runs ahead of it was the correct
+prioritisation, and it started within two minutes of doing so.
+
+The lesson is narrower than "CI is slow": the field that looks like a queue
+depth is not one, and a wrong reading of it sent two waves of effort at the
+wrong problem.
+
+## Round 585 — the UI image shipped the WASM binary twice
+
+`dist/assets/citadel_internal_service_wasm_client_bg-*.wasm` is 2,553,625 bytes
+and byte-identical to `dist/wasm/citadel_internal_service_wasm_client_bg.wasm`
+(same md5, verified). The running code fetches the second one:
+`InternalServiceWasmClient` always calls `wasmModule.default('/wasm/...')` with
+an explicit path, because Vite mangles `import.meta.url` inside the glue.
+
+The duplicate exists because wasm-bindgen's glue ends with a fallback —
+`if (module_or_path === undefined) module_or_path = new URL('..._bg.wasm', import.meta.url)`
+— and Vite resolves that statically even though the branch never runs. So 2.4 MiB
+of dead weight in every image layer, every registry push and every deploy, and
+served from the origin.
+
+A `globIgnores` entry already kept it out of the service worker's precache, with
+a comment correctly naming it "a hashed duplicate the bundler emits and nothing
+ever requests". That solved a different problem and left the file built and
+shipped.
+
+The transform rewrites the expression to the path the client already uses, which
+removes the emitted asset AND makes the dead fallback correct: a future caller
+that omits the argument now resolves to the file that is actually served. It
+throws if the pattern is absent, because a silent no-op would put the duplicate
+back on the next wasm-pack output whose wording changed, and nothing would say
+so.
