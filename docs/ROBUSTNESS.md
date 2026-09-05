@@ -3163,3 +3163,104 @@ branches in one pass.
 
 **Lesson:** a CI job named after its first step will mislead you about its
 last one. Read the log, not the name.
+
+## Round 560 — the WASM release gate could not fail on a missing WASM binary
+
+The whole WASM assertion in the UI release smoke was: the `Cache-Control`
+header is present, and does not say `immutable`. `add_header ... always` in
+`docker/ui/nginx.conf.template` emits that header on 4xx too, so a **404 for a
+missing binary satisfies both**. Measured against the production image on the
+deployment host:
+
+    GET /wasm/does_not_exist_bg.wasm
+    HTTP/1.1 404 Not Found
+    Cache-Control: public, no-cache
+       present?   PASS (wrongly)
+       immutable? PASS (wrongly)
+
+Not hypothetical: `sync-wasm-clients.sh` wipes `public/wasm` before
+repopulating it and that directory is gitignored, so a partial sync ships a UI
+where WASM init throws and every operation silently no-ops — register and login
+do nothing, with no error and no backend log line. That incident is on record.
+
+Now asserts status 200 and size > 1MB first. The real binary reads 200 and
+2,553,625 bytes.
+
+## Round 561 — a claimed session that is never activated
+
+`session:activated` is the sole trigger for session-startup-sequence. The
+sidebar workspace switcher claimed the session, set the index and the user, ran
+`postAuthSetup` — and emitted nothing. Because `postAuthSetup` loads the tree,
+offices and members, the switch **looked healthy** and the toast said
+"Connected!", while the ILM handle was still open for the previous account and
+no P2P channels existed for the new one. Outbound messages blocked on ACKs
+nobody would send. It is the most common multi-account action in the product.
+
+**The gate found a second site** the inspection agent had explicitly cleared:
+`adoptSession` in `use-connect-to-server.ts`, whose own doc says it "mirrors the
+orphan-claim path step for step". It did not.
+
+**And my first control came back green** — I had removed the emit and left the
+paragraph above it explaining why it was there, and the gate grepped the raw
+file, so the prose satisfied it. The gate now strips comments. This is the same
+defect the test-quality agent reported the same hour in
+`offline-banner-layering.test.ts`, which asserts on a class name that exists
+only in comments.
+
+## Round 562 — a failed read reported as an absent document, then overwritten
+
+`loadDocumentFromDB` caught every error and returned `null`. Its own comment
+said why that was wrong and returned null anyway. `adoptDocument` acts on that
+null by writing a fresh revision-0 document over the top, so a routine 5s
+LocalDB timeout replaced a real document with an empty one, permanently.
+
+`isGenuinelyAbsent` exists for exactly this. Its doc already names the same
+failure in the message store ("one transient timeout destroys a conversation")
+and in the auto-connect preference — and the correct form was **fifty lines
+below in the same file**, in `deleteDocumentFromDB`.
+
+`loadIndexIntoCache` gained a per-document try/catch: it iterates the whole
+index, so making the read throw would otherwise have meant the first unreadable
+document abandoned every one after it — a regression dressed as a fix.
+
+## Round 563 — the targetCid fix was held in place by nothing
+
+UI #27 added `targetCid` so a tab signed in as somebody else stops applying the
+leader's workspace. Two tests referenced it; neither held it. One greps a
+600-character window of a *different file* for a *different symbol*. The other
+hand-builds an envelope with the field already populated, asserting the
+receiver's behaviour against something production need not produce.
+
+Measured — delete `targetCid,` from the builder:
+
+    the two existing tests   5 passed     <- green, wrongly
+    the new test             1 failed     <- red, correctly
+
+Covered at both ends and never in the middle.
+
+## Round 564 — the tests holding the agent's security boundary never compiled
+
+`websockets` is not a default feature, and CI named it on neither platform. So
+the entire `io_interface` module was `#[cfg]`-ed out on every run.
+
+    --features=vendored              6 passed
+    --features=vendored,websockets  33 passed
+
+The 27 that never compiled are the ones enforcing loopback-only: an unlisted
+origin refused at the handshake, a permitted origin on a foreign Host refused
+403, plain ws to the TLS listener refused, the wildcard unable to hide inside a
+list, and the idle-client DoS fix. The agent holds decrypted P2P plaintext and
+an unauthenticated control plane; these are what keep it reachable only from the
+user's own machine, and nothing was checking them.
+
+### The through-line of rounds 560-564
+
+All five are the same defect, not five defects: **the work was done, and the
+thing meant to hold it in place measured nothing.** A gate that passes on a 404.
+A fix with tests that read a different file. Security tests behind a flag nobody
+set. An index built from half its roots. In every case the code was right and
+the check was theatre — which is worse than no check, because it reports safety.
+
+The habit that found all five is unchanged and remains the highest-yield one
+here: run the control against the *check*, not only against the code the check
+guards.
