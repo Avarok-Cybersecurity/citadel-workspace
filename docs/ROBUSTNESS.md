@@ -4234,3 +4234,145 @@ the two paths — which is now the fifth time this record has that sentence.
 Fixing it made two existing tests fail, because they wrote before reading. One
 of them would then have passed **vacuously**, asserting an empty list while
 nothing had been stored at all; it asserts the write landed first now.
+
+## Rounds 609-615 — the mechanism, closed at seven sites
+
+**A whole-collection write performed from a collection that was never
+successfully read.** Seven modules, twenty-three write sites, one shape.
+
+| # | module | writers | how it failed |
+|---|---|---|---|
+| 1 | session upsert helper | 2 | one tab's list erased another's |
+| 2 | peer-registration-store | 7 | a timed-out read deleted stored contact requests |
+| 3 | live-document-store | 1 | one transient timeout made every document unlistable |
+| 4 | connection session list | 5 | the fix for #1, applied to two of seven writers |
+| 5 | group-conversations | 1 | an invite overwrote every group |
+| 6 | RE-VFS retry queue | 4 | needed no read failure at all |
+| 7 | auto-connect sign-outs | 3 | signing out of one account un-signed-out the others |
+
+Every guard sits on the single function its call sites funnel through, never at
+the call sites. Site 4 is why: it *was* the correction for site 1, and it
+covered two of seven writers because it was applied where the bug had been
+noticed rather than where the mechanism lived.
+
+Two of these needed no failure to trigger. #6 wrote the whole retry queue on
+three paths while never restoring — `restorePersistedOps` was reachable only
+from the drain, so a reload while a peer was unreachable was enough. #7 is the
+one a user would feel: a boot with a timed-out read, then signing out of one
+account, auto-reconnected them into the others on the next boot, with stored
+credentials, into accounts they had deliberately left.
+
+### What the seven have in common
+
+In every case the careful handling already existed somewhere nearby. #5's guard
+was forty lines away in the same file, with a comment explaining exactly why it
+mattered. #3's `updateIndex` awaited `initialize()` *specifically* so the index
+would not be overwritten "with the one or zero entries in the cold cache" — it
+covered the not-yet-initialised case and did nothing for the failed case. #6's
+own header describes the loss it still permitted, as fixed.
+
+## Round 616 — checks that could not fail, and the meta-check
+
+Four gates were found reporting safety while measuring nothing, and the fourth
+made the class worth addressing systemically:
+
+| gate | satisfied by |
+|---|---|
+| readiness markers | the example quoted in its own header |
+| localdb absence rule | a comment, then the import line |
+| disconnect reports failure | an identifier the code had replaced |
+| intent results checked | **nothing — it matched zero call sites** |
+
+The last required `await \w+\.execute({` while every site writes
+`deps.io.execute(`. It printed "every failure-reporting intent is checked" on
+every run, for as long as it existed, while four discarded results let a failed
+retry-queue write report as queued.
+
+`check-gates-say-what-they-examined` now requires every gate's success line to
+interpolate a value it computed, because **"OK" and "OK, 0 files considered"
+are indistinguishable at a glance and only one of them is true.** Eleven gates
+were rewritten to report counts, and doing so found two things reading them had
+not: one reported scanning a single Dockerfile (an arity bug in the
+instrumentation, not the gate — it reads five), and one reports zero
+hand-rolled fan-outs across 934 files, which is correct and now legibly so.
+
+One gate deliberately reports files READ rather than a population count. It
+greps for a forbidden shape rather than enumerating a set, so a "handlers
+checked" number would exist only to satisfy the meta-gate. A number invented to
+pass a check is that check's own failure mode.
+
+### Written while building a gate against a different defect
+
+`check-debug-args-are-cheap` flagged, on its first run, the doc comment in
+`debug-config.ts` that documents the hazard. That is the fifth instance of a
+check satisfied by prose in this record, and the first written *while* fixing
+another one. It reads code now.
+
+It then turned out to have a second hole: it tested for the log call and the
+expensive argument on the SAME line, so a call spanning three lines escaped —
+and `router-diagnostics.ts` is exactly that shape, hashing every inbound
+message in every tab. Reading the whole call found a third site nobody had
+reported.
+
+## Round 617 — the agents were told to click buttons that do not exist
+
+Four of seven `.claude/agents/*.md` told the browser agent to click a "Join
+Workspace" or "Login Workspace" button. The landing CTAs are `Sign In` and
+`Create Account`, and the old copy survives in this repository only inside test
+comments explaining that the suite was MIGRATED OFF it. The UI had learned
+this; the agent docs never did.
+
+These are the entry point for every other UI agent, so step 1 of four agents
+could not be satisfied. One of them scripts the outcome: "Cannot find Join
+Workspace button". The multi-user agent additionally asserted, as CRITICAL
+CHECKs, a `/office` URL no route serves and a workspace name that appears
+nowhere — so it could only ever report failure.
+
+The master password was wrong in five places too: "found in kernel.toml as the
+`workspace_master_password` field (currently SUPER_SECRET_…)". That file has no
+such key — its header says the value comes from the environment — and the
+quoted literal exists nowhere but a stale test report. An agent would have
+opened the file, found nothing, and typed an invented password at a real
+deployment.
+
+`check-agent-docs-name-real-ui` enforces what can be enforced: a `data-testid`
+must exist, and a `localhost:5291` path must match a route. Visible copy is
+deliberately NOT checked — docs quote fragments, and an exact-match rule would
+be noisy or defeated by rewording, which is exactly why the docs now name test
+ids.
+
+## Round 618 — an hour lost to a dependency that was never missing
+
+`npm run build` died with `ReferenceError: crypto is not defined` inside
+`@rollup/plugin-terser`, which reads as a missing terser dependency. It is not:
+this machine runs Node 18 against a declared `engines: ">=20"`, and npm treats
+that as advisory. README.md had described the failure, including the exact
+error, for some time. Nothing prevented it.
+
+`.npmrc` sets `engine-strict`, `.nvmrc` pins 20, and a gate requires all three
+to agree — a floor declared in one place and enforced in none is not a floor.
+
+## Round 619 — "I could not ask" is not "there is nothing there"
+
+`remote.sessions()` is the agent's only way to ask the SDK which sessions and
+P2P channels are live. Three call sites turned an `Err` into a benign default,
+and each fed a branch that DESTROYS state on absence: removing the connection
+map entry and running the SDK connect against a session the SDK may still hold;
+removing a live claimable session and then denying the claim; dropping the peer
+sink that message routing depends on. One said so in its own log line:
+"assuming inactive".
+
+The gate for it found ONE of the three on its first run. A fixed fourteen-line
+window from `Err(` ran past the arm into the `if` that follows, whose branches
+contain `return` — so it saw a return, concluded the failure was handled, and
+excused the two sites it was written for. `check-disconnect-reports-failure`
+carries a comment about the same bug. The arm is brace-matched now.
+
+### On restores
+
+The control for that gate left the tree in a state neither version had. The
+three files were backed up by basename, and `requests/connect.rs` and
+`requests/peer/connect.rs` collide — so one restore silently overwrote the
+other, and the gate reported six sites instead of three, which is what caught
+it. **Copies are not a restore mechanism when paths can share a name.** `git
+checkout` is.
