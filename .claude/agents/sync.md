@@ -62,6 +62,12 @@ When errors are detected in Step 1, attempt these fixes ONCE:
 
 **Maximum 1 remediation attempt per error type** - if same error occurs after fix, STOP and report failure
 
+> **Why these markers and not a `cargo run` line:** the containers run release
+> binaries from `/usr/local/bin` (`docker/workspace-server/Dockerfile`,
+> `docker/internal-service/Dockerfile`), so no ``Running `target/debug/...` ``
+> line is ever logged. Waiting for one meant Steps 2 and 3 timed out at five
+> minutes on every *healthy* rebuild.
+
 ### Step 2: Trigger and Verify Server Rebuild
 **IMPORTANT**: This step TRIGGERS a rebuild, not just checks logs.
 
@@ -73,7 +79,9 @@ When errors are detected in Step 1, attempt these fixes ONCE:
    - **IF ERROR FOUND**: STOP, capture logs, return ERROR "Step 2 FAILED: server rebuild error"
    - **DO NOT PROCEED TO STEP 3**
 5. Only if no errors, check for success:
-   - **SUCCESS**: `"Running \`target/debug/citadel-workspace-server-kernel --config /usr/src/app/kernel.toml\`"`
+   - **SUCCESS**: `"Creating AsyncWorkspaceServerKernel"` (the last line of a
+     healthy start, after `"Citadel Workspace Server starting"` and
+     `"Loaded workspace structure:"`)
 6. **IF TIMEOUT (5 min)**: STOP, return ERROR "Step 2 FAILED: server rebuild timeout"
    - **DO NOT PROCEED TO STEP 3**
 7. **ONLY if SUCCESS found AND no errors**: Proceed to Step 3
@@ -89,7 +97,8 @@ When errors are detected in Step 1, attempt these fixes ONCE:
    - **IF ERROR FOUND**: STOP, capture logs, return ERROR "Step 3 FAILED: internal-service rebuild error"
    - **DO NOT PROCEED TO STEP 4**
 5. Only if no errors, check for success:
-   - **SUCCESS**: `"Running \`target/debug/citadel-workspace-internal-service --bind '0.0.0.0:12345'\`"`
+   - **SUCCESS**: `"Citadel client established"` (logged by the protocol layer
+     once the backend is connected and the node is up)
 6. **IF TIMEOUT (5 min)**: STOP, return ERROR "Step 3 FAILED: internal-service rebuild timeout"
    - **DO NOT PROCEED TO STEP 4**
 7. **ONLY if SUCCESS found AND no errors**: Proceed to Step 4

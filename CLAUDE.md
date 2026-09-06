@@ -189,9 +189,16 @@ tilt trigger sync-wasm-client → tilt trigger server → tilt trigger internal-
 - Changes to `citadel-internal-service/` require `tilt trigger internal-service`
 - Changes to `citadel-workspace-types/` require ALL of the above (shared types)
 
-The agent polls services every 10s, waiting for success indicators like:
-- `Running target/debug/citadel-workspace-internal-service --bind '0.0.0.0:12345'`
-- `Running target/debug/citadel-workspace-server-kernel --config /usr/src/app/kernel.toml`
+The agent polls services every 10s, waiting for the line each service logs
+when it is up:
+- internal-service: `Citadel client established`
+- server: `Creating AsyncWorkspaceServerKernel`
+
+These are the lines the **release** binaries emit. The containers run
+`/usr/local/bin/<binary>`, never `cargo run`, so there is no
+``Running `target/debug/...` `` line to wait for -- an earlier revision of this
+file named those, and both steps timed out at five minutes on every healthy
+rebuild.
 
 Timeout: 5 minutes per service. Errors captured to `./logs/sync-error-[timestamp].log`
 
