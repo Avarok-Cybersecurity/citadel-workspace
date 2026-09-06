@@ -32,6 +32,18 @@ const LIMIT = 250;
  * Ratcheting also self-cleans: drop a file under the limit and the entry stops
  * being needed, and the check below says so rather than letting a dead
  * exemption sit there shielding a future violation.
+ *
+ * THE RATCHET TURNS BOTH WAYS, which it did not. A file shrinking below its
+ * entry left the entry where it was, so the difference became slack that a
+ * later change could spend in silence. Four of the seven entries had grown
+ * slack that way, the largest 152 lines: `types/messaging-layer.ts` was
+ * recorded at 605 and is 453, so a hundred and fifty lines could be added to
+ * the file least likely to be split, with the gate green and its own header
+ * saying these "carry their exact length and cannot grow".
+ *
+ * So an entry above the file's real length is now a FAILURE, with the number to
+ * write. That is noisier -- every legitimate shrink asks for a one-line edit --
+ * and it is the only version of this gate whose promise is true.
  */
 const SKIP = new Map([
   // One to three lines over, each of them an `import type` the typing programme
@@ -39,7 +51,7 @@ const SKIP = new Map([
   // adds none -- but an exemption is still an exemption, so these carry their
   // exact length and cannot grow. They are the natural next candidates to split,
   // and dropping any of them under 250 removes its entry automatically.
-  // 262: a guard that refuses to sign out of a session with no CID, after the
+  // A guard that refuses to sign out of a session with no CID, after the
   // decision itself was moved to orphan-session-disconnect.ts. The remaining
   // growth is the branch and its explanation.
   ['lib/connection/service.ts', 252],
@@ -49,16 +61,16 @@ const SKIP = new Map([
   // just did, so in a group call they raced and the service refused the second
   // with "a media open or teardown is already in progress with this peer".
   // One field, and the explanation lives with the code that uses it.
-  // 798: seventeen forwardRef components each gained a two-line return type,
-  // which is what the explicit-type policy asks for. Still three times the cap
-  // and still the first file that should be split.
+  // Seventeen forwardRef components each gained a two-line return type, which
+  // is what the explicit-type policy asks for. Still nearly twice the cap and
+  // still the first file that should be split.
   ['components/ui/sidebar.tsx', 487],
-  ['components/layout/sidebar/TreeNodesSection.tsx', 356],
-  ['lib/file-transfer/service.ts', 324],
-  // 313: two data-testid attributes, so the integration suite's readiness
-  // probe can stop keying on button copy — see ROBUSTNESS round 168.
-  ['pages/Landing.tsx', 313],
-  ['types/messaging-layer.ts', 605],
+  ['components/layout/sidebar/TreeNodesSection.tsx', 320],
+  ['lib/file-transfer/service.ts', 293],
+  // Two data-testid attributes, so the integration suite's readiness probe can
+  // stop keying on button copy — see ROBUSTNESS round 168.
+  ['pages/Landing.tsx', 302],
+  ['types/messaging-layer.ts', 453],
   ['types/workspace-protocol.ts', 355],
 ]);
 
@@ -84,6 +96,7 @@ function* walk(dir) {
 const violations = [];
 const grown = [];
 const shrunk = [];
+const lowered = [];
 const seen = new Set();
 let checked = 0;
 for (const file of walk(SRC)) {
@@ -95,6 +108,9 @@ for (const file of walk(SRC)) {
     seen.add(rel);
     if (lines > allowance) grown.push({ rel, lines, allowance });
     else if (lines <= LIMIT) shrunk.push({ rel, lines });
+    // Still over the cap, but under its recorded length: the entry has become
+    // slack. Lower it, or the next change spends the difference for free.
+    else if (lines < allowance) lowered.push({ rel, lines, allowance });
     continue;
   }
 
@@ -123,6 +139,21 @@ if (shrunk.length > 0) {
     console.error(`${rel} is down to ${lines} lines and no longer needs its exemption.`);
   }
   console.error(`\nFAIL: remove ${shrunk.length} stale entr(y/ies) from SKIP.`);
+  process.exit(1);
+}
+
+if (lowered.length > 0) {
+  for (const { rel, lines, allowance } of lowered) {
+    console.error(
+      `::error file=citadel-workspaces/src/${rel}::${rel} is recorded at ${allowance} lines ` +
+        `but is ${lines}; lower the entry to ${lines}`,
+    );
+  }
+  console.error(
+    `\nFAIL: ${lowered.length} exemption(s) sit above the file's real length.`,
+  );
+  console.error('That difference is slack a later change can spend without this gate');
+  console.error('noticing. The ratchet only means anything if it turns both ways.');
   process.exit(1);
 }
 
