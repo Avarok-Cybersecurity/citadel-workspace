@@ -63,14 +63,34 @@ const problems = [];
  *
  * The number is a FLOOR on sites CONSIDERED, not on problems found. Zero
  * problems is the goal; zero sites examined means the gate is inert.
+ *
+ * TWO SHAPES, because only one was checked. `await io.execute({…})` discards the
+ * result outright and is caught below. `const r = await io.execute({…})` assigns
+ * it — and nothing required `r` to ever be READ, so the identical failure one
+ * binding later passed. Every site in the tree currently reads its result, so
+ * this is preventive rather than a live finding; it is the exact defect the gate
+ * was written for, one syntax away from the form it caught.
+ *
+ * Comments are stripped before any of this. Three of the `.execute({`
+ * occurrences in the tree are prose describing the defect, and counting them
+ * inflates the very floor that is supposed to prove the API still exists.
  */
 let considered = 0;
 
 /** Any `.execute(` at all, assigned or not — the signal that the API still exists. */
 let executeCallsSeen = 0;
 
+/** Source with comments blanked, LINE COUNT PRESERVED so numbers stay true. */
+function withoutComments(text) {
+  let out = text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
+  return out
+    .split('\n')
+    .map((line) => line.replace(/(^|[^:])\/\/.*$/, (m, p) => p + ' '.repeat(m.length - p.length)))
+    .join('\n');
+}
+
 for (const file of sourceFiles(ROOT)) {
-  const lines = readFileSync(file, 'utf8').split('\n');
+  const lines = withoutComments(readFileSync(file, 'utf8')).split('\n');
 
   lines.forEach((line, i) => {
     if (/\.execute\(\{/.test(line)) executeCallsSeen += 1;
@@ -81,13 +101,24 @@ for (const file of sourceFiles(ROOT)) {
     // the gate evaluated ZERO sites and printed success on every run while four
     // `persist-pending-ops` results went unread. A retry queue whose write
     // failed was reported as queued, and the operations were gone on reload.
-    if (!/^\s*await\s+[\w.?![\]]+\.execute\(\{/.test(line)) return;
+    const discards = /^\s*await\s+[\w.?![\]]+\.execute\(\{/.test(line);
+    const assignment = line.match(/^\s*(?:const|let|var)\s+(\w+)[^=]*=\s*await\s+[\w.?![\]]+\.execute\(\{/);
+    if (!discards && !assignment) return;
     considered += 1;
 
     // The intent type is on this line or the next.
     const window = `${line}\n${lines[i + 1] ?? ''}`;
     const match = window.match(/type:\s*'([a-z-]+)'/);
     if (!match || !REPORTS_FAILURE.has(match[1])) return;
+
+    // An assigned result counts as checked only if the binding is READ. Twenty
+    // lines is the body of a handler; beyond that a result is not being acted
+    // on in response to the call.
+    if (assignment) {
+      const name = assignment[1];
+      const after = lines.slice(i + 1, i + 21).join('\n');
+      if (new RegExp(`\\b${name}\\b`).test(after)) return;
+    }
 
     // An explicit, reasoned opt-out on the preceding line.
     const preceding = lines.slice(Math.max(0, i - 3), i).join('\n');
@@ -129,6 +160,6 @@ if (executeCallsSeen === 0) {
 }
 
 console.log(
-  `Intent results: ${executeCallsSeen} execute() call site(s) seen, ${considered} unassigned; ` +
+  `Intent results: ${executeCallsSeen} execute() call site(s) seen, ${considered} examined; ` +
     'every failure-reporting intent is checked or explicitly best-effort.',
 );

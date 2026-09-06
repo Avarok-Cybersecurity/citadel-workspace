@@ -7522,3 +7522,46 @@ problem. Here it was not, and the control said so twice before I checked.
 | clean tree | exit 0 | exit 0 |
 
 141 gates green.
+
+## Round 670 — a gate that examined eleven sites as zero
+
+`check-intent-results-checked` exists because four `persist-pending-ops` results
+went unread: `execute()` never rejects, so a failed write was reported as queued
+and the operations were gone on reload.
+
+It printed `14 execute() call site(s) seen, 0 unassigned`. The test-quality sweep
+read that as inertness. It is not — the gate's own comment reasons about exactly
+this case, and the `executeCallsSeen` floor exists to distinguish "everything is
+assigned" from "the pattern rotted". That part of the finding was overstated and
+is recorded as such.
+
+**The real hole is one syntax away.** The detector matched only
+`await io.execute({…})` — the result discarded outright. The other shape,
+`const r = await io.execute({…})`, was skipped entirely, and nothing required `r`
+to ever be READ. The identical defect one binding later would have passed.
+
+Both shapes are matched now, and an assigned result counts as checked only if
+the binding is read within twenty lines — the body of a handler; beyond that a
+result is not being acted on in response to the call.
+
+Every site in the tree does read its result, so this is preventive rather than a
+live finding. It is the exact defect the gate was written for, in the form it
+could not see.
+
+### Comments were inflating its own floor
+
+Three of the `.execute({` occurrences are **prose** — in
+`persist-pending-ops.ts` and `persist-tree.ts`, describing this defect. They
+counted toward `executeCallsSeen`, the number that proves the API still exists.
+Comments are blanked first now, with line counts preserved so reported line
+numbers stay true.
+
+The count went from `14 seen, 0 unassigned` to **`12 seen, 11 examined`**.
+
+| control | expected | observed |
+|---|---|---|
+| assign a `send-revfs-op` result and never read it | flagged | "Intent results discarded: 1", exit 1 |
+| rename `.execute(` throughout | floor fires | "no `.execute(` call sites found anywhere… this gate is now inert" |
+| clean tree | exit 0 | 12 seen, 11 examined |
+
+141 gates green.
