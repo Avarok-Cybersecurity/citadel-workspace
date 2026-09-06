@@ -5082,3 +5082,54 @@ rather than "Start Services" — the first time since the Docker manifest defect
 the stack builds and starts, and therefore the first real test signal. The three
 are `reconnect-p2p-only`, `reconnect-both-c2s` and `reconnect-one-c2s`, unread as
 of this entry.
+
+## Round 629 — the first real test signal, and what it turned out to say
+
+The UI run reached 13 green with three failures at "Run Integration Test" rather
+than "Start Services" — the first genuine test signal since the Docker manifest
+defect. `reconnect-c2s` passes; `reconnect-p2p-only`, `reconnect-one-c2s` and
+`reconnect-both-c2s` fail. `prev-sessions`, `group-multiuser` and `permissions`
+also pass, so LocalDB reads and the ownership gate work generally.
+
+### They are not a regression from this branch, and that is established, not assumed
+
+Run 34012041535 (04:39Z) shows the same two specs failing. The earliest agent
+commit in this wave is 09:24Z — **five hours later**. That run also has no
+"Resolve parent ref" job, confirming it predates the CI change too. These
+failures pre-date every change made here.
+
+### And they are not about reconnection
+
+Reading the log rather than the name: both accounts are created, both enter the
+workspace, `P2P registration request sent` at 12:27:19, and the invitee's pending
+badge never appears through 12:28:23. The wait is 20 attempts at 2s, so ~40s of
+polling and 63s wall-clock — not impatience. **The spec fails in its SETUP, before
+any reconnect happens.** The name says reconnection; the failure is initial peer
+registration not surfacing on the invitee.
+
+That is the next investigation, and it now starts from a located symptom rather
+than three red job names.
+
+### A capture list doing double duty
+
+The same log showed three `[ILM-Router] Registering CID <n> for self (leader's own
+connection)` lines reported as `critical/functional` UX failures. The app logs them
+with `debugLog`, which is `console.log` — the misclassification is in the harness.
+
+`errorPatterns` contains `'ILM'` deliberately: it is the CAPTURE list, and a
+delivery failure with no ILM lines has nothing to diagnose from. Four of the five
+reconnection specs then reused it as the FAILURE list, so every line worth
+recording became an error the run did not have.
+
+`c2s-reconnect.test.ts`, in the same directory, already separated the two. Once
+again the correct implementation was one file away from the four that had not
+adopted it.
+
+`check-captured-is-not-failed.mjs` requires the two decisions to be made
+separately. It deliberately does not judge either list's contents — a spec may
+decide what counts as a failure for itself — only that "what should I record" and
+"what counts as broken" are not answered by the same array.
+
+The cost of getting this wrong is not the noise. It is that a reader who sees
+three CRITICAL entries that are not critical stops reading the list, and the run
+where one of them is real looks identical.
