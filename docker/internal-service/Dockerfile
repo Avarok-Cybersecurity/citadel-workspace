@@ -160,8 +160,22 @@ EXPOSE ${INTERNAL_SERVICE_PORT}
 # are double-quoted so a path containing whitespace survives word-splitting and
 # reaches structopt as a single argument.
 #
-# The bind host is `INTERNAL_SERVICE_BIND_HOST` (default `0.0.0.0`).
-CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind ${INTERNAL_SERVICE_BIND_HOST:-0.0.0.0}:${INTERNAL_SERVICE_PORT}${INTERNAL_SERVICE_BACKEND:+ --backend \"$INTERNAL_SERVICE_BACKEND\"}${INTERNAL_SERVICE_DATA_DIR:+ --data-dir \"$INTERNAL_SERVICE_DATA_DIR\"}"]
+# The bind host is `INTERNAL_SERVICE_BIND_HOST`, defaulting to `127.0.0.1`.
+#
+# LOOPBACK, not `0.0.0.0`. This process holds decrypted P2P plaintext and an
+# UNAUTHENTICATED control plane: anything that can open a socket to it can claim
+# an orphaned session, read another account's persisted store, and deregister the
+# account. It is loopback-only by design.
+#
+# This defaulted to `0.0.0.0`. Every compose file in the repository sets the
+# variable explicitly, so the default only ever applied when somebody ran the
+# image directly -- `docker run`, a new compose file, a typo in the variable name
+# -- which is exactly the case with nobody reviewing it. The default has to be
+# safe when the operator changes nothing.
+#
+# scripts/check-agent-binds-loopback.mjs read only docker-compose*.yml, so it
+# reported this image as loopback-only for as long as the default was wrong.
+CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind ${INTERNAL_SERVICE_BIND_HOST:-127.0.0.1}:${INTERNAL_SERVICE_PORT}${INTERNAL_SERVICE_BACKEND:+ --backend \"$INTERNAL_SERVICE_BACKEND\"}${INTERNAL_SERVICE_DATA_DIR:+ --data-dir \"$INTERNAL_SERVICE_DATA_DIR\"}"]
 
 # =============================================================================
 # Dev runtime: equivalent to the previous single-stage image. Retains the
@@ -187,4 +201,4 @@ RUN chown appuser /usr/local/bin/citadel-workspace-internal-service
 RUN chown -R appuser /data/internal-service
 USER appuser
 
-CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind ${INTERNAL_SERVICE_BIND_HOST:-0.0.0.0}:${INTERNAL_SERVICE_PORT}${INTERNAL_SERVICE_BACKEND:+ --backend \"$INTERNAL_SERVICE_BACKEND\"}${INTERNAL_SERVICE_DATA_DIR:+ --data-dir \"$INTERNAL_SERVICE_DATA_DIR\"}"]
+CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind ${INTERNAL_SERVICE_BIND_HOST:-127.0.0.1}:${INTERNAL_SERVICE_PORT}${INTERNAL_SERVICE_BACKEND:+ --backend \"$INTERNAL_SERVICE_BACKEND\"}${INTERNAL_SERVICE_DATA_DIR:+ --data-dir \"$INTERNAL_SERVICE_DATA_DIR\"}"]

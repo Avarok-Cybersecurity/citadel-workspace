@@ -265,6 +265,14 @@ jobs:
         # condition it detects. A gate that runs nowhere looks identical to a
         # gate that passes.
         run: node scripts/check-every-gate-is-invoked.mjs
+      - name: Authorization is checked before any secret comparison
+        # Whichever check runs first owns the error the caller sees, and two
+        # distinguishable errors are an oracle on the master password -- the
+        # credential that grants Admin. `update_workspace` was fixed; its sibling
+        # `create_workspace` had the identical shape a round later. A constant-time
+        # compare does not help when the answer is returned as text.
+        run: node scripts/check-authorization-precedes-the-secret.mjs
+
       - name: Docker manifests match the crates they replace
         # The server image copies its own Cargo.toml over the crate's, so the
         # dependency list exists twice. `sha2` and `subtle` were added to the crate

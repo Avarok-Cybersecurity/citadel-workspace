@@ -12,6 +12,25 @@ exclude = ["./citadel-internal-service"]
 
 resolver = "3"
 
+# Release profile — MUST match the root Cargo.toml this file replaces.
+#
+# `overflow-checks` is the point of this block. Cargo has it ON for `cargo test`
+# (via debug-assertions) and OFF for `--release`, so an integer overflow panics in
+# CI and wraps silently in every shipped binary. In a codebase of u64 CIDs, ticket
+# counters, byte offsets, chunk indices and quotas, that is the divergence most
+# likely to make a real bug pass the suite and then misbehave in production.
+#
+# This file had no `[profile.*]` at all, and the Dockerfile copies it OVER the root
+# manifest — so the server binary users actually run was built with the checks off,
+# which is the exact failure the root's comment describes. The agent image copies
+# the real root, so the two shipped binaries were doing different arithmetic.
+#
+# scripts/check-docker-manifest-matches-the-crate.mjs compared dependency NAMES
+# only, so it passed this pair vacuously: the workspace root declares no
+# `[dependencies]`.
+[profile.release]
+overflow-checks = true
+
 [workspace.dependencies]
 # Workspace-specific packages
 citadel-workspace-server-kernel = { path = "./citadel-workspace-server-kernel" }

@@ -1287,17 +1287,22 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
 
         // Determine workspace ID: use sentinel for first workspace, UUID for additional
         let workspace_id = if root_exists {
-            // Creating a non-root workspace: verify against root workspace password
-            let passwords = self.backend_tx_manager.get_all_passwords().await?;
-            if !passwords
-                .get(crate::WORKSPACE_ROOT_ID)
-                .map(|p| crate::kernel::secret_eq::secrets_match(p, &workspace_master_password))
-                .unwrap_or(false)
-            {
-                return Err(NetworkError::msg("Invalid workspace master password"));
-            }
-
-            // Verify the creator has CreateWorkspace permission on the root workspace
+            // Authorization FIRST, then the password -- the same order, and for the
+            // same reason, as `update_workspace` below.
+            //
+            // These two blocks were the other way round, so every account on the
+            // server had a permanent yes/no oracle on the root master password:
+            // send a CreateWorkspace with a guess and read which of two distinct
+            // errors comes back. "Invalid workspace master password" means the
+            // guess was wrong; "Only root workspace admins can create additional
+            // workspaces" means the guess was RIGHT and only the caller was wrong.
+            // With open enrolment that is available to anyone who can register,
+            // and the rate limiter is per CID (100/s), so the guess rate scales
+            // with the number of accounts an attacker creates.
+            //
+            // Making the comparison constant-time did nothing about this: the
+            // answer was being returned as text. Ordered this way, a caller
+            // without CreateWorkspace is refused identically whatever they send.
             if !self
                 .check_entity_permission(
                     user_id,
@@ -1309,6 +1314,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
                 return Err(NetworkError::msg(
                     "Only root workspace admins can create additional workspaces",
                 ));
+            }
+
+            // Creating a non-root workspace: verify against root workspace password
+            let passwords = self.backend_tx_manager.get_all_passwords().await?;
+            if !passwords
+                .get(crate::WORKSPACE_ROOT_ID)
+                .map(|p| crate::kernel::secret_eq::secrets_match(p, &workspace_master_password))
+                .unwrap_or(false)
+            {
+                return Err(NetworkError::msg("Invalid workspace master password"));
             }
 
             uuid::Uuid::new_v4().to_string()

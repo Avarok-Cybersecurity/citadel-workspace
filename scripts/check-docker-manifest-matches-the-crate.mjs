@@ -22,11 +22,28 @@
  *
  * The production server was unbuildable, on a branch whose 120 gates were green.
  *
- * Only `[dependencies]` is compared. `[dev-dependencies]` are deliberately absent
- * from the Docker manifest — that is the entire point of it — and features,
- * versions and the `[package]` block are left alone, because the Docker copy
- * legitimately differs there (path rewrites, feature selections). What must not
- * differ is WHICH crates the binary links.
+ * Two things are compared, and the second was added an hour after the first, when
+ * this gate was found to have passed a worse drift than the one it was written for.
+ *
+ *   1. `[dependencies]` — WHICH crates the binary links. `[dev-dependencies]` are
+ *      deliberately absent from the Docker copy; that is the entire point of it.
+ *
+ *   2. `[profile.*]` — HOW it is compiled. The root manifest sets
+ *      `[profile.release] overflow-checks = true`, with a comment calling it "the
+ *      point of this block": Cargo has the checks ON for `cargo test` and OFF for
+ *      `--release`, so without it an integer overflow panics in CI and wraps
+ *      silently in the shipped binary — in a codebase of u64 CIDs, counters, byte
+ *      offsets and quotas. The Docker root manifest had NO `[profile.*]` at all,
+ *      so the server users run was built with the checks off while the agent image,
+ *      which copies the real root, was not. The two shipped binaries were doing
+ *      different arithmetic.
+ *
+ *      Comparing dependency names alone passed that pair VACUOUSLY, because a
+ *      virtual workspace root declares no `[dependencies]` — a gate reporting a
+ *      clean bill over a file it had effectively not opened.
+ *
+ * Versions, features and the `[package]` block are still left alone: the Docker
+ * copy legitimately differs there (path rewrites, feature selections).
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { join, relative, dirname } from 'node:path';
@@ -64,6 +81,29 @@ function repoPathFor(containerPath) {
   return containerPath.replace(/^\/usr\/src\/app\/?/, '') || 'Cargo.toml';
 }
 
+/**
+ * Every `[profile.*]` table, as `profile.release.overflow-checks = true` lines.
+ *
+ * Compared as whole key/value pairs rather than table names: a `[profile.release]`
+ * that exists but sets something else is the same failure as one that is missing.
+ */
+function profileSettings(text) {
+  const out = new Map();
+  let table = null;
+  for (const raw of text.split('\n')) {
+    const line = raw.split('#')[0].trim();
+    if (line.startsWith('[')) {
+      const name = line.replace(/^\[|\]$/g, '');
+      table = name.startsWith('profile.') ? name : null;
+      continue;
+    }
+    if (!table || line === '') continue;
+    const kv = /^([A-Za-z0-9_-]+)\s*=\s*(.+)$/.exec(line);
+    if (kv) out.set(`${table}.${kv[1]}`, kv[2].trim());
+  }
+  return out;
+}
+
 /** The names in a manifest's `[dependencies]` table, ignoring other tables. */
 function runtimeDependencies(text) {
   const names = new Set();
@@ -84,6 +124,7 @@ function runtimeDependencies(text) {
 
 const problems = [];
 let pairsChecked = 0;
+let profilesCompared = 0;
 
 for (const dockerfile of DOCKERFILES) {
   const text = readFileSync(join(ROOT, dockerfile), 'utf8');
@@ -118,6 +159,22 @@ for (const dockerfile of DOCKERFILES) {
         `${substitute} declares \`${dep}\`, which ${crate}/Cargo.toml does not — one of the two is wrong`,
       );
     }
+
+    // HOW it is compiled, not only what it links.
+    const realProfile = profileSettings(readFileSync(cratePath, 'utf8'));
+    const dockerProfile = profileSettings(readFileSync(substitutePath, 'utf8'));
+    for (const [key, value] of realProfile) {
+      if (!dockerProfile.has(key)) {
+        problems.push(
+          `${substitute} is missing \`${key} = ${value}\`, which ${crate}/Cargo.toml sets — the shipped binary is compiled differently from the one CI tests`,
+        );
+      } else if (dockerProfile.get(key) !== value) {
+        problems.push(
+          `${substitute} sets \`${key} = ${dockerProfile.get(key)}\` but ${crate}/Cargo.toml sets \`${value}\``,
+        );
+      }
+    }
+    profilesCompared += realProfile.size;
   }
 }
 
@@ -144,7 +201,19 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
+// The root manifest sets a release profile; comparing none means the parser or
+// that block moved, and this half is silently checking nothing again.
+if (profilesCompared === 0) {
+  console.error(
+    'FAIL: compared 0 `[profile.*]` settings. The root manifest sets `[profile.release]\n' +
+      'overflow-checks`, so finding none means the parser or that block moved — and this\n' +
+      'gate already passed one vacuous comparison of exactly this shape.',
+  );
+  process.exit(1);
+}
+
 console.log(
   `check-docker-manifest-matches-the-crate: ${pairsChecked} substituted manifest(s) declare the ` +
-    'same runtime dependencies as the crates they replace.',
+    `same runtime dependencies and the same ${profilesCompared} profile setting(s) as the ` +
+    'crates they replace.',
 );

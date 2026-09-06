@@ -29,7 +29,7 @@
  * host's network namespace (`network_mode: host`) or publishes the port itself
  * (`ports:`).
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -113,6 +113,60 @@ for (const file of composeFiles) {
   }
 }
 
+/**
+ * The IMAGE's own default, which no compose file can rescue.
+ *
+ * This gate read `docker-compose*.yml` only. Every compose file in the repository
+ * sets `INTERNAL_SERVICE_BIND_HOST` explicitly, so all of them passed — while the
+ * agent Dockerfile's CMD carried `${INTERNAL_SERVICE_BIND_HOST:-0.0.0.0}`. The
+ * default therefore applied exactly when nobody was setting the variable: a bare
+ * `docker run` of the published image, a new compose file, a mistyped variable
+ * name. Those are the cases with no review, and this gate reported the image as
+ * loopback-only throughout.
+ *
+ * A default has to be safe when the operator changes nothing.
+ */
+const DOCKERFILES = ['docker/internal-service/Dockerfile'];
+let imageDefaults = 0;
+
+for (const rel of DOCKERFILES) {
+  const path = join(ROOT, rel);
+  if (!existsSync(path)) {
+    console.error(
+      `check-agent-binds-loopback: ${rel} does not exist. The agent image moved, and its\n` +
+        'bind default — the one no compose file can override for a bare `docker run` — is\n' +
+        'no longer being checked.',
+    );
+    process.exit(1);
+  }
+  const lines = readFileSync(path, 'utf8').split('\n');
+  lines.forEach((line, i) => {
+    if (/^\s*#/.test(line)) return; // a comment cannot bind a socket
+    for (const m of line.matchAll(/\$\{INTERNAL_SERVICE_BIND_HOST:-([^}]*)\}/g)) {
+      imageDefaults += 1;
+      if (!LOOPBACK.has(m[1].trim())) {
+        problems.push({
+          file: rel,
+          line: i + 1,
+          name: 'the agent image CMD',
+          value: `\${INTERNAL_SERVICE_BIND_HOST:-${m[1]}}`,
+          why: 'the image default, used whenever the variable is unset',
+        });
+      }
+    }
+  });
+}
+
+// Every runtime stage in that image has a CMD, and each carries the default.
+// Finding none means the CMD was restructured and this half checks nothing.
+if (imageDefaults === 0) {
+  console.error(
+    'check-agent-binds-loopback: no `${INTERNAL_SERVICE_BIND_HOST:-...}` default found in the\n' +
+      'agent Dockerfile. The CMD was restructured, so the image default is unchecked.',
+  );
+  process.exit(1);
+}
+
 if (declarations === 0) {
   console.error(
     `check-agent-binds-loopback: no INTERNAL_SERVICE_BIND_HOST assignment in ` +
@@ -147,6 +201,6 @@ if (problems.length > 0) {
 }
 
 console.log(
-  `check-agent-binds-loopback: ${onHostNetwork} of ${declarations} agent bind(s) are on the ` +
-    `host's network, and all of those are loopback.`,
+  `check-agent-binds-loopback: ${onHostNetwork} of ${declarations} compose bind(s) are on the ` +
+    `host's network and all are loopback; ${imageDefaults} image CMD default(s) are loopback too.`,
 );

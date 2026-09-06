@@ -484,6 +484,18 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                         .set_workspace_password(crate::WORKSPACE_ROOT_ID, workspace_master_password)
                         .await?;
                 }
+                // No caller to authorize: this is the BOOT SEQUENCE, not a request.
+                //
+                // Everywhere else, comparing the master password before checking who
+                // is asking hands out an oracle -- the two distinct errors tell an
+                // attacker whether the guess was right. Here there is no attacker and
+                // no answer: the comparison is between the operator's configured
+                // password and the stored one, to decide whether to warn about a
+                // rotation, and nothing is returned to any client.
+                //
+                // Said out loud because scripts/check-authorization-precedes-the-secret.mjs
+                // flags every unexplained ordering of these two, which is how the
+                // create_workspace oracle was found.
                 Some(existing)
                     if crate::kernel::secret_eq::secrets_match(
                         existing,

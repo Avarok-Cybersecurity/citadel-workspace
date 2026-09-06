@@ -4672,3 +4672,105 @@ Also removed two preflight entries duplicating gates it already DERIVES from
 validate.yml, which is why one fault printed as two failures.
 
 121 gates green, and this time that includes the server image's dependency list.
+
+## Round 623 — a default that published the agent, and a gate that passed the worse drift
+
+Four sweeps: developer experience, robustness, performance, security. Acted on three
+security/robustness findings; the rest triaged below.
+
+### The agent image bound to every interface by default
+
+`docker/internal-service/Dockerfile` CMD carried
+`--bind ${INTERNAL_SERVICE_BIND_HOST:-0.0.0.0}`, in BOTH runtime stages.
+
+The agent holds decrypted P2P plaintext and an unauthenticated control plane:
+anything that can open a socket to it can claim an orphaned session, read another
+account's persisted store, and deregister the account. It is loopback-only by
+design, and that is a standing instruction on this work.
+
+Every compose file in the repository sets the variable explicitly — which is why
+`check-agent-binds-loopback.mjs` was green. It read `docker-compose*.yml` and
+nothing else. So the default applied exactly where no compose file was involved: a
+bare `docker run` of the published image, a new compose file, a mistyped variable
+name. Those are the cases with no reviewer, and the gate reported the image as
+loopback-only throughout.
+
+**A default has to be safe when the operator changes nothing.** Now `127.0.0.1`, and
+the gate reads the image's CMD as well as the compose files. Controls: the exact
+historical `0.0.0.0`, a non-loopback default in one stage only, and the CMD being
+restructured away — all red.
+
+### The master-password oracle, in the sibling of the function already fixed
+
+`create_workspace` compared the root master password BEFORE checking whether the
+caller may create workspaces. Whichever check runs first owns the error the caller
+sees, so the two distinct messages answered the guess:
+
+    "Invalid workspace master password"                     -> wrong
+    "Only root workspace admins can create additional ..."  -> RIGHT, wrong caller
+
+`update_workspace` had exactly this and was fixed in an earlier round, with a long
+comment explaining it. The comment did not reach the function 300 lines above it.
+Making the comparison constant-time did nothing about either: timing was never the
+leak, the answer was being returned as text.
+
+`check-authorization-precedes-the-secret.mjs` now requires an authorization check
+textually before every `secrets_match`. Two things it taught immediately:
+
+  - Its first parser, a brace-depth splitter, found ZERO call sites. Rust bodies
+    carry braces in string literals, `format!` placeholders and doc comments, so
+    counting them is guesswork. **Only the vacuity floor caught it** — a gate that
+    silently examines nothing is the failure this repository keeps re-finding, and
+    this time it was mine. Rewritten to walk backward to the enclosing signature.
+  - On its first working run it found a FIFTH site nobody had reported:
+    `inject_admin_user`. That one is legitimate — it is the boot sequence, with no
+    caller to authorize and nothing returned to anyone — so it is now annotated
+    saying so. The exemption must be written down, so the next reader can check
+    whether it still holds.
+
+### The gate written an hour earlier passed a worse drift than the one it caught
+
+`check-docker-manifest-matches-the-crate.mjs` compared dependency NAMES. The same
+Dockerfile also substitutes the WORKSPACE ROOT manifest, and a virtual root
+declares no `[dependencies]` — so that pair passed **vacuously**, over a file the
+gate had effectively not opened.
+
+What it missed: the root `Cargo.toml` sets `[profile.release] overflow-checks =
+true`, under a comment calling it "the point of this block" — Cargo has the checks
+ON for `cargo test` and OFF for `--release`, so without them an integer overflow
+panics in CI and wraps silently in the shipped binary, in a codebase of u64 CIDs,
+counters, byte offsets and quotas. The Docker root manifest had no `[profile.*]` at
+all. The server users would run was compiled with the checks off, while the agent
+image — which copies the real root — was not. **Two shipped binaries doing
+different arithmetic.**
+
+The gate now compares `[profile.*]` as whole key/value pairs, so a table that
+exists but sets something else fails too, with a floor that refuses to pass when it
+compares zero settings.
+
+### Triaged, not yet acted on
+
+Security: any page in the allowed origin can claim an ORPHANED session with no
+proof and then act as, read, or delete that account (`connection_management_auth.rs:64`)
+— highest remaining; MDX integrity fails open (`mdx-integrity.ts:54` returns
+`unhashed`, treated as verified) while the CSP allows `unsafe-eval` and the server
+writes `mdx_content_hash: None` almost everywhere; `LocalDBGetKV` is not in
+`requires_owned_session`, so another account's persisted store — including queued
+P2P payloads — is readable; group roles exist only in the browser and the agent's
+`GroupKick`/`GroupInvite`/`GroupEnd` have no role check; the production UI image
+resolves every dependency from the live registry with no lockfile;
+`MessageNotification` derives plain `Debug`, so decrypted bodies reach the log one
+level away.
+
+Robustness: a failed username read is stored as `#INVALID_USERNAME`, disabling the
+duplicate-session guard; `Deregister` is not in `requires_owned_session`; one
+undecodable frame ends the whole inbound stream (`connector.rs:46`); ILM init reads
+a failed pending-inbound query as "nothing pending" and ACKs undelivered messages;
+batched loads map responses to keys positionally with no count check; leader
+promotion replays queued requests before the outbound handler is active; six
+`is_admin` gates still refuse the Owner; the WASM staleness stamp omits ILM.
+
+Performance: broadcast fan-out re-authorises per recipient with three corpus copies
+each and drops on `Lagged`; `nodes_cache` still pays O(corpus) per permission check;
+the production filesystem backend serialises the whole store per write; every
+activation re-downloads the full corpus including document bodies.
