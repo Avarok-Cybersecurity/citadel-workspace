@@ -7465,3 +7465,60 @@ Its limit, written into the gate: this requires the question to be asked, not
 that the answer is used. Every instance so far has been a site that never asked.
 
 141 gates green.
+
+## Round 669 — the pattern was never the thing that was line-oriented
+
+The test-quality sweep's top finding: `check-one-answer-to-who-am-i` prints its
+constant success line over a **live** instance of the defect it names.
+
+The rule is that a `getCurrentCid` handed to a service may not be the bare
+connection lookup — that is the LAST step of `lib/p2p/current-cid.ts`'s chain
+used as the only step, and it names the CONNECTION rather than this tab, which
+is wrong whenever a browser holds two sessions. `CallLayer` had exactly this bug
+and its comment says so.
+
+`useConnectionHandler.ts:85-88` had it too, supplying it to **revfs**, which
+consumes it as the local CID for every P2P operation:
+
+```ts
+getCurrentCid: async () => {
+  const info: CurrentConnectionInfo | null = connectionManager.getConnectionInfo();
+  return info?.cid ?? null;
+},
+```
+
+Four lines. The fix was applied to one of the two places, again.
+
+### Three attempts, and the first two fixed the wrong thing
+
+The detector was `/getCurrentCid[^\n]*…/` — line-oriented, and the offender is
+wrapped. So:
+
+1. I widened `[^\n]` to `[\s\S]`. Control still green.
+2. I noticed the wrapped form assigns to a local, so `getConnectionInfo()` is
+   never adjacent to `?.cid`, and separated the two reads. Control still green.
+3. Only then did I read the CALL SITE:
+
+```js
+const bare = text.split('\n').findIndex((line) => BARE_CONNECTION_CID.test(line));
+```
+
+**No multi-line pattern could ever match there, however the regex was written.**
+Both earlier fixes were to a pattern that was never the line-oriented part. It
+matches against the whole text now, with the line number recovered from the match
+index.
+
+The lesson is the one this session keeps re-learning from the other direction: a
+control that stays green is telling you something specific, and the answer is
+rarely the first place you look. Two rounds ago the same shape appeared in the
+broadcast gate — a regex reading the call line while rustfmt wrapped the
+argument — and I fixed the regex there because there the regex really was the
+problem. Here it was not, and the control said so twice before I checked.
+
+| control | expected | observed |
+|---|---|---|
+| restore the wrapped bare lookup | flagged | green, green, then flagged at `:96` |
+| the single-line form | flagged | flagged throughout |
+| clean tree | exit 0 | exit 0 |
+
+141 gates green.
