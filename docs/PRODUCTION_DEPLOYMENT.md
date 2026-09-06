@@ -216,11 +216,36 @@ brand-new room has nobody to call until members are added.
 
 ## Existing Remote Deployment
 
-Two scripts exist for deploying to `avarok2` (51.81.107.44):
+The deployment on `avarok2` lives at **`/srv/citadel-tenants/avarok`** — compose
+project `avarok`, holding `deploy.sh`, `docker-compose.production.yml`, `.env`,
+the loopback certificate pair, and the tenant provisioning scripts.
+
+`~/development/citadel-workspace-server` is a stale source checkout on the same
+host. It has no `deploy.sh` in it. Both operator scripts defaulted to it, so
+both failed with `./deploy.sh: No such file or directory` for a deploy that was
+otherwise correct.
+
+`deploy.sh` on the host is the deploy. It reads `.env`, refuses a
+`__CHANGE_ME__` master password before touching anything, pulls prebuilt images
+from GHCR, verifies every image came from the same commit, and restarts
+services sequentially without touching the data volumes. It deploys the whole
+stack, not just the workspace server, and the data volumes persist across
+deploys.
 
 | Script | Purpose |
 |--------|---------|
-| `update-avarok-server.sh` | Pull, rebuild, run server with `--restart unless-stopped` |
-| `restart-remote-server.sh` | Same + copy custom `kernel.toml` + verify port access |
+| `update-avarok-server.sh` | SSH wrapper: checks `deploy.sh` is there, runs it, confirms the port. Flags pass straight through (`--no-pull`, `--tunnel`). |
 
-Both deploy **only the workspace server** — no internal-service or UI. Neither provisions persistent storage.
+`AVAROK_SSH_HOST` and `AVAROK_REMOTE_DIR` override the host and path.
+
+**The server's port comes from `WORKSPACE_BIND_ADDR` in the host's `.env`** — it
+is 12400 on avarok2, not the 12349 of the dev stack. Both scripts hardcoded
+12349 and so reported a closed port on a server that was serving. Read the port
+from that file; do not assume the dev value.
+
+`restart-remote-server.sh` is gone. Its one distinct job was uploading a
+`kernel.toml` to `$REMOTE_DIR/docker/workspace-server/`, and neither half of
+that exists any more: the deployment directory has no `docker/` tree, and
+`docker-compose.production.yml` mounts no kernel config — the file is baked into
+the image and production is configured through `.env`. Everything else it did
+was a second copy of `update-avarok-server.sh`.

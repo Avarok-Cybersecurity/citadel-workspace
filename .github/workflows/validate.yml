@@ -302,6 +302,13 @@ jobs:
         # that tab; the only trace was a line saying the send failed.
         run: node scripts/check-sessions-are-removed-in-two-places.mjs
 
+      - name: Remote checks read the deployment, not a literal
+        # The wrapper probed `nc -z 127.0.0.1 12349` while the deployed server
+        # binds WORKSPACE_BIND_ADDR (12400 on avarok2), and pointed at a source
+        # checkout with no deploy.sh in it. It reported a closed port on a server
+        # serving real sessions, having named that exact failure in its own header.
+        run: node scripts/check-remote-checks-read-the-deployment.mjs
+
       - name: Deploy paths can actually start the server
         # Two operator scripts each carried their own deploy and neither worked:
         # a `docker build` with no `--target` selects the LAST stage (`dev`, the

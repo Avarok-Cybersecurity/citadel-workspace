@@ -5383,3 +5383,71 @@ session* from *discarding the record of one that ended*, and points at the gate
 as the list that has to stay true.
 
 Red on the defect, green on the fix, 125 gates green.
+
+---
+
+## Round 634 — the deploy script had never been run against the deployment
+
+avarok2 is up. Server healthy 38h, UI 24h, real sessions in the log. What is NOT
+true is that the scripts in this repo could deploy to it.
+
+Round 630 collapsed two operator scripts into thin wrappers around the
+`deploy.sh` that runs ON the host, and wrote a long header about the failure it
+was fixing: an operator shown a CLOSED PORT when the configuration was wrong.
+The deploy part was right. Two assumptions inside it were not, and neither could
+fail in the environment they were written in:
+
+**The directory.** `AVAROK_REMOTE_DIR` defaulted to
+`~/development/citadel-workspace-server`. That path exists on the host and is a
+stale source checkout — `AUG4_REVIEW.md`, a dev `docker-compose.yml`, and **no
+`deploy.sh` in it at all**. The deployment is `/srv/citadel-tenants/avarok`:
+compose project `avarok`, holding `deploy.sh`, `docker-compose.production.yml`,
+`.env`, the loopback certificate pair and the tenant provisioning scripts. Every
+run of the wrapper died on `./deploy.sh: No such file or directory`, which reads
+as a broken deploy rather than a script pointed at the wrong place.
+
+**The port.** The post-deploy check was `nc -z 127.0.0.1 12349`. The deployed
+server binds `WORKSPACE_BIND_ADDR` from the host's `.env`, which is **12400**.
+So the check reported a closed port on a server serving real users, and
+`update-avarok-server.sh` exits 1 on that — the identical failure its own header
+described as the defect being fixed, removed from one place in the file and left
+in another four lines below. Reading the file was not enough.
+
+`check-remote-checks-read-the-deployment` now forbids a literal port in an
+`nc -z` probe and requires a script that runs a remote `./deploy.sh` to test for
+it first. Both controls red; restore verified by `diff`, not by grep (below).
+
+`restart-remote-server.sh` is deleted. Its one distinct job was uploading a
+`kernel.toml` to `$REMOTE_DIR/docker/workspace-server/`, and neither half of that
+exists: the deployment directory has no `docker/` tree, and
+`docker-compose.production.yml` mounts no kernel config — it is baked into the
+image and production is configured through `.env`. Everything else it did was a
+second copy of the other script. `docs/PRODUCTION_DEPLOYMENT.md` described both
+scripts by their pre-630 behaviour and claimed they deploy "only the workspace
+server"; it now states the real path, the real port, and that `deploy.sh`
+deploys the stack.
+
+### What the gate cannot see, and what I got wrong proving it
+
+No gate in this repo can know that the DEFAULT path is right. It took an `ls` on
+the host. What the gate can do is make the failure name the wrong assumption.
+
+Verifying the negative control, `grep -c 'test -x $REMOTE_DIR/deploy.sh'`
+returned 0 for a file that plainly contains that line. BSD grep treats `$` as an
+anchor mid-pattern, so the pattern can never match; `-F` matches. It reported
+"control APPLIED" for the deletion and "not restored" for the restore, and both
+readings were free — the same class of defect as the assertions this record
+already collects, one layer up: the control was fine, the proof that it applied
+was not. `diff` against the backup settled it. Controls are now verified with
+`grep -F` and an occurrence count before and after.
+
+### Three times now
+
+Round 623's `npm ci` broke the sync container. Round 624's `include_str!` broke
+the agent image because Docker never copies `scripts/`. Round 630's wrapper
+could not find the deploy. Each was correct where it was written and wrong where
+it runs, and each passed every gate and local check first. The common thread is
+not carelessness about the code; it is that none of the three was ever executed
+against the thing it targets.
+
+126 gates green.
