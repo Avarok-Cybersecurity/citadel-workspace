@@ -15,7 +15,9 @@ Tests P2P messaging between 2 users while documenting UX/UI issues and console w
 
 - **UI_URL**: http://localhost:5291/
 - **SERVER_LOCATION**: 127.0.0.1:12349
-- **WORKSPACE_PASSWORD**: SUPER_SECRET_ADMIN_PASSWORD_CHANGE_ME
+- **WORKSPACE_MASTER_PASSWORD**: read from the repo-root `.env`. Never type a
+  literal from a document — `.env.example` ships `__CHANGE_ME__`, and a real
+  deployment sets its own value.
 - **USER_PASSWORD**: test12345
 - **MAX_WAIT_SECONDS**: 10 (for any single operation)
 
@@ -75,9 +77,9 @@ tilt logs server 2>&1 | tail -3
 
 **Step 1.3:** Generate TIMESTAMP = current epoch time (e.g., Date.now() equivalent)
 
-**Step 1.4:** Click "Join Workspace" button
-- Look for button with text "Join Workspace" or similar
-- **ON FAIL**: Return "STEP 1.4 FAILED: Cannot find Join Workspace button"
+**Step 1.4:** Click the `Create Account` (`data-testid="create-account-button"`) button
+- Prefer the test id; the visible copy is "Create Account"
+- **ON FAIL**: Return "STEP 1.4 FAILED: Cannot find the Create Account button"
 
 **Step 1.5:** Fill workspace form:
 - Location: `127.0.0.1:12349`
@@ -94,7 +96,7 @@ tilt logs server 2>&1 | tail -3
 - Click "JOIN"
 
 **Step 1.8:** Check for "Initialize Workspace" modal
-- If appears, enter: `SUPER_SECRET_ADMIN_PASSWORD_CHANGE_ME`
+- If it appears, enter the value of `WORKSPACE_MASTER_PASSWORD` from `.env`
 - Click the button to submit
 
 **Step 1.9:** Wait up to 10 seconds for workspace to load
@@ -109,7 +111,7 @@ tilt logs server 2>&1 | tail -3
 **Step 1.11:** Navigate to http://localhost:5291/
 - **ON FAIL**: Return "STEP 1.11 FAILED: Cannot navigate in Tab 1"
 
-**Step 1.12:** Click "Join Workspace"
+**Step 1.12:** Click the `Create Account` (`data-testid="create-account-button"`) button
 
 **Step 1.13:** Fill workspace form (same location: 127.0.0.1:12349)
 

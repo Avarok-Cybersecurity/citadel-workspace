@@ -39,7 +39,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 ### Phase 1: Create User 1 (First User - Workspace Initialization)
 
 **Step 1:** Navigate to http://localhost:5291/
-**Step 2:** Click "Join Workspace" button
+**Step 2:** Click the `Create Account` (`data-testid="create-account-button"`) button
 **Step 3:** Fill in workspace connection form:
   - Workspace location: 127.0.0.1:12349
   - Workspace password: (leave empty)
@@ -54,8 +54,9 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 **Step 6:** storeUsername("user1", generated_username)
 **Step 7:** checkForErrors()
 **Step 8:** **IMPORTANT:** "Initialize Workspace" modal should appear (first user only)
-  - Read workspace master password from ./docker/workspace-server/kernel.toml
-  - Look for `workspace_master_password` field (currently "SUPER_SECRET_ADMIN_PASSWORD_CHANGE_ME")
+  - Read the workspace master password from `WORKSPACE_MASTER_PASSWORD` in the
+    repo-root `.env`. It is NOT in kernel.toml; that file reads it from the
+    environment (docker-compose.yml:88).
   - Enter the password in the modal
   - Click "Initialize"
 **Step 9:** verifyWorkspaceLoaded()
@@ -69,7 +70,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 
 ### Phase 2: Create User 2
 
-**Step 15:** On landing page, click "Join Workspace" button
+**Step 15:** On landing page, click the `Create Account` (`data-testid="create-account-button"`) button
 **Step 16:** Fill in workspace connection form:
   - Workspace location: 127.0.0.1:12349
   - Workspace password: (leave empty)
@@ -97,7 +98,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 
 ### Phase 3: Create User 3
 
-**Step 29:** On landing page, click "Join Workspace" button
+**Step 29:** On landing page, click the `Create Account` (`data-testid="create-account-button"`) button
 **Step 30:** Fill in workspace connection form:
   - Workspace location: 127.0.0.1:12349
   - Workspace password: (leave empty)
@@ -136,8 +137,13 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 **Step 49:** Verify toast notification appeared: "Connected! Now viewing {user1_username}"
 **Step 50:** verifyWorkspaceLoaded()
 **Step 51:** Verify workspace displays correct user:
-  - Check top left shows "RW Root Workspace" with User One's name
-  - Verify URL is http://localhost:5291/office
+  - Check the workspace switcher (`data-testid="workspace-switcher"`) shows the
+    workspace name and User One's name. The seeded name is "Citadel Workspace"
+    (docker/workspace-server/documents/defaults/root/workspace.json); "RW Root
+    Workspace" appears nowhere in the UI.
+  - Verify the URL is http://localhost:5291/workspace. There is no /office
+    route — App.tsx routes /, /connect, /workspace, /messages, /directory and
+    /groups/:groupId, so /office falls through to NotFound.
 **Step 52:** takeScreenshot("07_switched_to_user1")
 **Step 53:** checkLogs() - Look for:
   - "Successfully claimed session {cid}" in internal-service logs
@@ -232,7 +238,7 @@ This workflow performs comprehensive testing of multi-workspace functionality (S
 ### Phase 10: Re-login Verification
 
 **Step 96:** On landing page (http://localhost:5291/), verify only 2 workspace icons visible
-**Step 97:** Click "Login Workspace" button
+**Step 97:** Click the `Sign In` (`data-testid="sign-in-button"`) button
 **Step 98:** Fill in login form with user2's credentials:
   - Username: {user2_username} (stored from Phase 2)
   - Password: test12345

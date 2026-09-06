@@ -22,12 +22,18 @@ This workflow logs in to a new account via the UI using Playwright MCP.
 
 ## Steps
 
-Step 1: Click on the "Login Workspace" button
+Step 1: Click the `Sign In` (`data-testid="sign-in-button"`) button on the landing page
 Step 2: Fill in form with details:
  - Username: whatever user was created or passed to this agent
  - Password: test12345
  - Press "Connect"
-Step 3a: if first user to log in, you will see "Initialize Workspace" modal. For the form, supply the workspace master password which is found in ./docker/workspace-server/kernel.toml as the `workspace_master_password` field (currently "SUPER_SECRET_ADMIN_PASSWORD_CHANGE_ME") and hit the button.
+Step 3a: if the "Initialize Workspace" modal appears, supply the workspace master password. It is **not** in `kernel.toml` — that file's own
+header says it comes from the environment. Read it from `WORKSPACE_MASTER_PASSWORD`
+in the repo-root `.env`, which `docker-compose.yml:88` passes to the server.
+Do not type a value from any document: `.env.example` ships `__CHANGE_ME__` and a
+real deployment sets its own, then submit.
+Its appearance is not a reliable signal of being the first user — see
+`WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN` in docker-compose.yml.
 Step 3b: If not the first user to log in, you will arrive to the workspace
 Step 4: checkForErrors(). Scan for errors in the internal service and server: `tilt logs server` and `tilt logs internal-service`
 Step 5: scanScreen() to prove you're in the workspace (with no loader screen!)

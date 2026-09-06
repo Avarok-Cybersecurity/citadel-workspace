@@ -22,7 +22,7 @@ This workflow creates a new account via the UI using Playwright MCP.
 
 ## Steps
 
-Step 1: Click on the "Join Workspace" button
+Step 1: Click the `Create Account` (`data-testid="create-account-button"`) button on the landing page
 Step 2: Fill in form with details:
  - Workspace location: 127.0.0.1:12349
  - Workspace password leave empty
@@ -34,7 +34,16 @@ Step 4: Fill in form with user credentials:
  - Password: test12345
  - Confirm Password: test12345
 Step 5: checkForErrors()
-Step 6a: if first user to log in, you will see "Initialize Workspace" modal. For the form, supply the workspace master password which is found in ./docker/workspace-server/kernel.toml as the `workspace_master_password` field (currently "SUPER_SECRET_ADMIN_PASSWORD_CHANGE_ME") and hit the button.
+Step 6a: if the "Initialize Workspace" modal appears, supply the workspace master password. It is **not** in `kernel.toml` — that file's own
+header says it comes from the environment. Read it from `WORKSPACE_MASTER_PASSWORD`
+in the repo-root `.env`, which `docker-compose.yml:88` passes to the server.
+Do not type a value from any document: `.env.example` ships `__CHANGE_ME__` and a
+real deployment sets its own, then submit.
+
+Whether the modal appears depends on the stack, not on being the first user:
+`docker-compose.yml` sets `WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN=1`, which marks the
+workspace initialized when the first member is promoted, so on this stack it may
+not appear at all. Treat it as "handle it if shown", never as an assertion.
 Step 6b: If not the first user to log in, you will arrive to the workspace
 Step 7: checkForErrors(). Scan for errors in the internal service and server: `tilt logs server` and `tilt logs internal-service`
 Step 8: scanScreen()
