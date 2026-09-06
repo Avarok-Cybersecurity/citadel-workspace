@@ -17,6 +17,7 @@ what was already here.
 |---|---|
 | `check-admin-promotions-are-gated.mjs` | Every assignment that makes somebody an administrator must sit behind a gate. |
 | `check-agent-docs-name-real-things.mjs` | The agent instructions in CLAUDE.md and .claude/agents/ are executed, not read. |
+| `check-agent-binds-loopback.mjs` | The agent may only ever listen on loopback — where its network namespace is the host's. |
 | `check-base-image-pulls-retry.mjs` | Every step that builds images pre-pulls its base images, retried. |
 | `check-browser-installs-are-bounded.mjs` | Every `playwright install` in CI retries, and each attempt is bounded. |
 | `check-ci-job-timeouts.mjs` | Every CI job declares how long it may run. |
