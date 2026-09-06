@@ -6181,3 +6181,61 @@ could be believed, and the second where the invented findings were pointing
 directly at somebody's earlier fix.
 
 131 gates green.
+
+---
+
+## Round 645 — the failure list named two events that cannot exist and missed five that do
+
+`group-events.ts` maps every `Group*Failure` to one `group:failed` event, and
+the comment above that loop says, correctly, that "mapping them individually is
+how the next one comes to be forgotten". It was then a hand-maintained list —
+and it had drifted in **both directions at once**: it named `GroupJoinFailure`
+and `GroupDisconnectFailure`, neither of which exists in the wire types, and
+omitted five that do.
+
+The costly omission is `GroupRespondRequestFailure`. Accepting an invitation
+commits the group locally FIRST, so when the server refused — a stale key, a
+group that ended, a responder who is not the owner — no arm matched, no
+`group:failed` fired, and the user kept a group in their sidebar the server never
+counted them into, typing into a channel nobody would receive. That is the exact
+outcome this file's own header describes as the bug it was written to fix, for a
+different variant.
+
+`group-failure-toasts.ts` had verbs for the two fictional variants and none for
+the five real ones, so those fell to the generic fallback.
+
+### The test asserted coverage of events that cannot arrive
+
+`group-failure-events.test.ts` hardcoded the same eight names, including both
+fictions. So it was green while five real failures went unhandled, and two of
+its assertions exercised variants the wire cannot produce. **A test that keeps
+its own copy of the thing under test confirms the copy.** It now drives its loop
+from the arm's exported list, and a second test pins that list against the
+generated types in both directions.
+
+### Three attempts to find the generated types, and the first two lied
+
+The derivation test needs the generated `Group*Failure` types. Attempt one
+hardcoded `../citadel-internal-service/typescript-client/src/types`, which is
+absent in a standalone worktree. Attempt two used
+`createRequire(import.meta.url)`, which fails under vitest because the module URL
+is a transformed one. Attempt three used
+`createRequire(join(process.cwd(), 'package.json'))` — and still failed **from
+the parent checkout, where the app resolves that package perfectly well**.
+
+The cause was not the worktree at all: the package's `exports` map declares only
+`"."`, so `require.resolve('<pkg>/package.json')` is blocked by design. Every one
+of those three failures came with a message blaming the checkout, which would
+have sent the next reader to fix submodules that were already fine.
+
+It now tries three plain filesystem candidates in the order they occur. Verified
+by running it from the parent checkout — the layout CI uses — where all three
+assertions pass, and both controls hold there: dropping
+`GroupRespondRequestFailure` fails naming it, re-adding `GroupJoinFailure` fails
+naming that.
+
+The lesson is the one this record keeps re-learning from a new angle: a check
+that cannot run is not a check, and a check whose failure message names the wrong
+cause is worse than one that says nothing.
+
+131 gates green.
