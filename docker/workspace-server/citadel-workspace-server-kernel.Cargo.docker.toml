@@ -41,4 +41,18 @@ tempfile = "3.10.1"
 bcrypt = "0.17.0"
 chrono = { workspace = true }
 
+# The constant-time master-password comparison (kernel/secret_eq.rs).
+#
+# These were added to the crate's real Cargo.toml and not here, and the Docker
+# build REPLACES that manifest with this file — so the server image failed with
+# `unresolved import sha2` / `unresolved import subtle` while `cargo build` at the
+# repository root succeeded. The production server was unbuildable and nothing said
+# so until a Playwright job tried to start the stack.
+#
+# scripts/check-docker-manifest-matches-the-crate.mjs now compares the two
+# `[dependencies]` sections, because this file is a hand-maintained SECOND copy of
+# a list that lives elsewhere and nothing else keeps them equal.
+sha2 = "0.10"
+subtle = "2.6"
+
 # NOTE: dev-dependencies removed for Docker build to avoid localhost-testing feature

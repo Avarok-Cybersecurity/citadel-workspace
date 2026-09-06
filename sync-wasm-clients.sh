@@ -223,8 +223,16 @@ if [ -d "$DEST1" ]; then
     cd "$DEST1"
 
     # Always install dependencies (since we clean node_modules in step 0)
+    #
+    # `--package-lock=false`, as at the bottom of this script. This directory is a
+    # member of the ROOT npm workspace, so a plain `npm install` here walks up and
+    # rewrites the root package-lock.json: it renames the package to whatever the
+    # checkout directory is called and drops the platform-optional entries this
+    # host does not need -- 406 lines of @esbuild/@rollup binaries for other
+    # platforms, which every other platform then cannot install. Observed twice,
+    # reverted twice, before the cause was looked for.
     print_status "Installing npm dependencies..."
-    npm install
+    npm install --package-lock=false
 
     print_status "Running TypeScript build..."
     npm run build
@@ -336,7 +344,8 @@ mkdir -p ./node_modules
 find ./node_modules -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 
 print_status "Installing dependencies for citadel-workspace-client-ts..."
-npm install
+# Also a root workspace member; see the note above.
+npm install --package-lock=false
 
 # Build the TypeScript client
 print_status "Building TypeScript client..."
@@ -438,6 +447,28 @@ mkdir -p "$WORKSPACE_ROOT/node_modules"
 ln -sf ../citadel-internal-service/typescript-client "$WORKSPACE_ROOT/node_modules/citadel-internal-service-wasm-client"
 
 npx vite build --mode development
+
+# Put the tree back on the versions the lockfile pins.
+#
+# Every install above resolves FRESH (`--package-lock=false`), which is deliberate
+# -- see the note on the citadel-workspaces install for the ERESOLVE it avoids --
+# but it leaves the workspace holding whatever the registry served today rather
+# than what package-lock.json records. Observed after a run: typescript 6.0.3
+# installed at the root against a lockfile pinning 5.9.3, so `tsc` then failed on
+# a deprecation this repository has not adopted; and before that, component tests
+# timing out because the runner had been replaced underneath them. Both were
+# repaired by hand, twice, before anyone thought to make the script do it.
+#
+# The existing hand-patch three steps up -- deleting the Playwright copies this
+# install "just placed here" -- is the same repair for one package. This is that
+# repair for all of them, and it is what CI does anyway.
+print_status "Restoring the workspace to the versions package-lock.json pins..."
+if ! (cd "$WORKSPACE_ROOT" && npm ci); then
+    print_error "npm ci failed at the workspace root."
+    print_error "The tree is left holding freshly-resolved versions rather than the pinned ones;"
+    print_error "run 'npm ci' at $WORKSPACE_ROOT before trusting a test result."
+    exit 1
+fi
 
 print_status "WASM client synchronization complete!"
 print_status ""

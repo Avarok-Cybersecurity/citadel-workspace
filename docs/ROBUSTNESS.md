@@ -4584,3 +4584,91 @@ server kernel's 79 integration files never touch the real backend; the C2S byte 
 runs in an un-joined task; `hosted-ui-loopback.spec.ts` is permanently skipped and its
 driver does not exist; `LEADER_MUST_PROCESS_LOCALLY` is consumed by both routers and
 tested by nothing.
+
+## Round 622 — the production server did not compile, and 121 gates said it was fine
+
+### A refused write reported as a stored one
+
+The messenger backend persists the queues that make messaging durable: the
+outbound map, the inbound map, the delivery frontier, the next-id counter. Five
+call sites answered "did that work?" in four different ways.
+
+`update_map` and `store_value` used `wait_for_response(id).await.is_some()` — the
+PRESENCE of a reply. A `LocalDBSetKVFailure` is a reply, and the agent sends one
+on a backend error, on a failed `propose_target`, and on the ownership-gate
+refusal, with `request_id` populated so it routes straight to the waiter. So a
+refused write returned `Ok(())`, `backend_map::mutate` reported the map stored, ILM
+reported the message queued, and the sender saw it as sent. Nothing retransmitted
+it on reload.
+
+The comment under each branch claimed to prevent exactly that, and
+`store_values_batched` — which does match the variant — says all three "must agree
+with" it. They never did.
+
+The read side had the mirror fault: `load_values_batched` folded every non-success
+into `None`, so a backend error read as "no such key" and `MessageTracker::new`
+starts with an empty delivery frontier — re-delivering messages already received,
+resetting ACK state, restarting the id counter, on an error that should have
+failed initialisation.
+
+Grepping the mechanism rather than the reported symptom found a third the sweep
+had missed: `load_value` had BOTH faults, its timeout branch returning `Ok(None)`
+under a comment saying "assume the key doesn't exist".
+
+Both decisions are now one pure function each — `write_outcome`, `read_outcome` —
+so the five sites share one answer and the classification is testable with nothing
+mocked. Controls: `Some(_) => Ok(())` reddens exactly the refusal and wrong-variant
+tests; `_ => Ok(None)` reddens exactly the failed-read test. `KEY_NOT_FOUND` moved
+into the shared types crate: it was typed out in two crates and compared with `==`,
+so a reword on either side would silently invert the meaning with no build failure.
+
+### The server image had not compiled since the security fix landed
+
+Two Playwright shards failed at "Start Services". The cause, six log-levels down:
+
+    error[E0432]: unresolved import `sha2`
+      --> citadel-workspace-server-kernel/src/kernel/secret_eq.rs:20:5
+
+`docker/workspace-server/Dockerfile:62` COPIES a Docker-specific manifest OVER the
+crate's own `Cargo.toml`. It exists for a real reason — dropping dev-dependencies
+that would unify `localhost-testing` into a production build — but it re-declares
+the whole `[dependencies]` table by hand. The constant-time master-password
+comparison added `sha2` and `subtle` to the crate and not to the copy.
+
+So `cargo build`, clippy, the tests and all 120 gates passed, and the production
+server image could not compile. **The machine this stack is being stood up on was
+unbuildable, and nothing in the repository said so** — it surfaced as a Playwright
+job failing to start services, a message naming neither the crate, the dependency,
+nor the manifest.
+
+`check-docker-manifest-matches-the-crate.mjs` compares the two `[dependencies]`
+tables wherever a Dockerfile substitutes a manifest. Its own first run invented a
+fault — the same Dockerfile also substitutes the WORKSPACE ROOT manifest, and
+matching the last path segment turned that into a crate called "app" — which is
+how a useful gate gets switched off. Controls: removing the two deps again names
+both, with the exact `unresolved import` the image produced; an extra dep is caught
+too; a vacuity floor covers the COPY line being reworded.
+
+### The sync script rewrote the lockfile, and then lied about it
+
+`sync-wasm-clients.sh` runs `npm install` inside two workspace MEMBERS. npm walks
+up, so each rewrote the ROOT `package-lock.json`: renaming the package to the
+checkout directory and dropping 406 lines of platform-optional @esbuild/@rollup
+entries that every OTHER platform needs. Reverted twice this session before the
+cause was looked for. A third install site in the same file already carried
+`--package-lock=false` — the fix had reached one of three.
+
+Adding the flag to the other two stops the file being corrupted, and then does
+something subtler: it resolves FRESH, so the tree ends up holding whatever the
+registry served today while the lockfile still claims otherwise. Verified
+immediately: typescript 6.0.3 installed at the root against a lockfile pinning
+5.9.3, and `tsc` failed on a deprecation this repository has not adopted. The
+script now ends with a root `npm ci`, which is the repair I had already performed
+by hand twice, and which the existing hand-patch three steps above it — deleting
+"the Playwright copies this install just placed here" — is a single-package
+version of.
+
+Also removed two preflight entries duplicating gates it already DERIVES from
+validate.yml, which is why one fault printed as two failures.
+
+121 gates green, and this time that includes the server image's dependency list.

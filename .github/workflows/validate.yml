@@ -265,6 +265,21 @@ jobs:
         # condition it detects. A gate that runs nowhere looks identical to a
         # gate that passes.
         run: node scripts/check-every-gate-is-invoked.mjs
+      - name: Docker manifests match the crates they replace
+        # The server image copies its own Cargo.toml over the crate's, so the
+        # dependency list exists twice. `sha2` and `subtle` were added to the crate
+        # for the constant-time master-password comparison and never here, and the
+        # production server image stopped compiling while every gate stayed green.
+        run: node scripts/check-docker-manifest-matches-the-crate.mjs
+
+      - name: LocalDB responses are classified by variant
+        # `wait_for_response(..).is_some()` treated a `LocalDBSetKVFailure` as a
+        # stored write, so a refused write reported Ok, ILM reported the message
+        # queued, and the sender saw a message as sent that nothing would ever
+        # retransmit. The read side had the mirror fault: a backend error read as
+        # an absent key, which empties the delivery frontier.
+        run: node scripts/check-localdb-responses-are-classified.mjs
+
       - name: Deploys check out the pointers this commit records
         # `git submodule update --remote` on the live server took each submodule's
         # branch tip instead of the recorded commit, so the deployed tree was the
