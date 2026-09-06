@@ -902,6 +902,17 @@ jobs:
         # describing the failure. The set is derived from the Rust.
         run: node scripts/check-connect-awaiters-handle-every-answer.mjs
         working-directory: citadel-workspaces
+
+      - name: A failing test leaves a backend log
+        # `if: failure()` does not mean "at the end". Steps run in order, so a
+        # `Dump Service Logs` placed after `Start Services` can only fire for a
+        # stack that did not come up -- by the time a TEST fails it has already
+        # been skipped. Six P2P specs failed across three shards with no backend
+        # log at all, and a wave was spent on a hypothesis one log line would
+        # have settled. The parent workflow had the after-the-test step; the UI
+        # workflow did not.
+        run: node scripts/check-test-failures-capture-backend-logs.mjs
+        working-directory: citadel-workspaces
       - name: A success flag is read by somebody
         # sendAndAwaitAck was given a boolean return so an unacknowledged RE-VFS
         # operation would stop being invisible; all six callers then discarded

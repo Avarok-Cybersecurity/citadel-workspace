@@ -6969,3 +6969,64 @@ Two guards, both green, both measuring nothing, in one build script. Neither was
 visible from reading it.
 
 137 gates green; 11 new unit tests.
+
+## Round 659 — `if: failure()` does not mean "at the end"
+
+Round 657 could not be settled because the failing jobs carried no backend log.
+That is not an oversight; it is a positional bug, and it had the shape this
+codebase produces most.
+
+Both workflows have:
+
+```yaml
+- name: Start Services
+  run: docker compose up -d --build --wait
+- name: Dump Service Logs on Start Failure
+  if: failure()
+  run: docker compose logs internal-service 2>&1 | tail -50
+…
+- name: Run Integration Test
+```
+
+`if: failure()` reads as "on any earlier failure", and it is — but steps run in
+ORDER. By the time the test step fails, this one has already been reached and
+skipped. It can only ever fire for a stack that did not come up.
+
+Run 34050229807 finished with **six** P2P failures — registration and handshake,
+both call specs, screen share, member-list, and three reconnection legs, across
+all three Playwright shards — and not one of those jobs produced a backend log.
+The single line separating "the request never reached the agent" from "it
+reached the agent and was not answered" was in no artefact.
+
+**The parent workflow already had a second dump after the test step.** The UI
+workflow, which is where the failing run lives, did not. One correct fix, in one
+of the two places its mechanism appears.
+
+### The gate, and its rule
+
+`check-test-failures-capture-backend-logs.mjs` is positional because the defect
+is: within a job that brings the stack up, at least one `docker compose logs`
+step guarded by `if: failure()` must appear AFTER the last step that runs tests.
+A step before it does not count, however it is named. It reads BOTH workflows,
+so the parent cannot regress while this one is fixed.
+
+### Controls — and two that lied first
+
+| control | expected | observed |
+|---|---|---|
+| delete the after-test dump from the UI's integration job | that job flagged | flagged, exit 1 |
+| MOVE that dump to before the test step | same job flagged | flagged, exit 1 |
+| hide one workflow | refuse rather than check one | "is missing… a gate that silently examines one of the two files is how this defect survived" |
+
+My first two attempts at those controls **did not apply**. The mutation cut from
+the explanatory comment to the next `- name:` — which is the dump step's own
+name line — so it deleted the comment and left the step. The gate stayed green,
+correctly, and I nearly recorded that as the gate failing to fire.
+
+Worse, my "control applied?" check compared the first occurrence of the comment
+(in the `playwright-tests` job) against the first `Run Integration Test` (in a
+LATER job) and printed `True` for an unmodified file. A confirmation that is
+true of the untouched tree is not a confirmation. The controls above print the
+job's actual step ORDER, which cannot be satisfied by an unchanged file.
+
+138 gates green.
