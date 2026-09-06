@@ -914,6 +914,15 @@ jobs:
         run: node scripts/check-test-failures-capture-backend-logs.mjs
         working-directory: citadel-workspaces
 
+      - name: The failure capture covers the P2P log
+        # That grep is the ONLY view of what the agent did when a test fails, and
+        # it is a hand-written alternation. It matched the message-send phase and
+        # not `[PeerRegister]` (21 call sites) or `[PeerConnect]` (15) -- so six
+        # P2P specs failed on REGISTRATION and the captured log said nothing about
+        # registration while still looking full. Prefixes are derived from the
+        # agent's kernel sources; both workflows are checked.
+        run: node scripts/check-failure-capture-covers-the-p2p-log.mjs
+
       - name: A member list names its domain
         # The protocol carries no request id, so a `Members` response cannot be
         # attributed to the request that caused it. is-for-domain.ts names its
@@ -1473,7 +1482,7 @@ jobs:
           # spam, which fills all 120 lines on its own.
           echo "=== internal-service: P2P send/receive chain ==="
           docker compose logs -t internal-service 2>&1 \
-            | grep -E "\[P2P-MSG\]|\[PeerChannelCreated\]|\[P2P-RECV-CHANNEL\]|\[UDP-NEGOTIATION\]|Auto-accepted inbound REVFS|Failed to auto-accept" \
+            | grep -E "\[P2P-[A-Z-]+\]|\[Peer[A-Za-z]+\]|\[PostRegister\]|\[UDP-NEGOTIATION\]|Refusing |Auto-accepted inbound REVFS|Failed to auto-accept" \
             | tail -80 || true
           echo "=== internal-service: warnings and errors ==="
           docker compose logs -t internal-service 2>&1 \
@@ -1673,7 +1682,7 @@ jobs:
           # spam, which fills all 120 lines on its own.
           echo "=== internal-service: P2P send/receive chain ==="
           docker compose logs -t internal-service 2>&1 \
-            | grep -E "\[P2P-MSG\]|\[PeerChannelCreated\]|\[P2P-RECV-CHANNEL\]|\[UDP-NEGOTIATION\]|Auto-accepted inbound REVFS|Failed to auto-accept" \
+            | grep -E "\[P2P-[A-Z-]+\]|\[Peer[A-Za-z]+\]|\[PostRegister\]|\[UDP-NEGOTIATION\]|Refusing |Auto-accepted inbound REVFS|Failed to auto-accept" \
             | tail -80 || true
           echo "=== internal-service: warnings and errors ==="
           docker compose logs -t internal-service 2>&1 \

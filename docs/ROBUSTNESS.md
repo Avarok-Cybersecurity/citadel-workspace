@@ -7276,3 +7276,44 @@ always reported "loading" would satisfy the first assertion and hang a spinner o
 a workspace with no node selected.
 
 139 gates green.
+
+## Round 665 — the capture matched every phase except the one that was failing
+
+Round 664 ended by noting the failure-time capture omits `[PeerRegister]`. It is
+worse than an omission: it is the same hand-maintained-list defect as the
+broadcast gate, in the one place whose whole job is to explain a failure.
+
+The alternation was:
+
+```
+\[P2P-MSG\]|\[PeerChannelCreated\]|\[P2P-RECV-CHANNEL\]|\[UDP-NEGOTIATION\]|Auto-accepted inbound REVFS|Failed to auto-accept
+```
+
+Derived from the agent's kernel sources, the prefixes it actually emits are
+**11**. That list matched three of them. Missing: `[PeerRegister]` (21 call
+sites), `[PeerConnect]` (15), `[PeerConnectAccept]`, `[PeerRegisterRespond]`,
+`[PostRegister]`, `[P2P-RECV]`, `[P2P-RECV-CONNECT]` — and `Refusing`, the
+refusal line that turned out to be the only legible thing in the log.
+
+So six P2P specs failed on **registration**, and the captured log returned the
+message-send phase in full and nothing whatsoever about registration. It did not
+look empty. It looked like a log.
+
+Two of those names — `PeerConnectAccept` and `PeerRegisterRespond` — I would not
+have thought to add by hand, which is the argument for deriving rather than
+listing.
+
+### The gate
+
+`check-failure-capture-covers-the-p2p-log.mjs` walks the agent kernel for
+bracketed P2P/peer prefixes and requires the workflow's `grep -E` alternation to
+match each one, in **both** workflows. It deliberately does not require the
+converse: over-capture costs log lines, under-capture costs the diagnosis.
+
+| control | expected | observed |
+|---|---|---|
+| run before copying the widened pattern to the submodule | flags every missing prefix there | 14 findings across 2 captures — the gate was its own control |
+| drop `\[Peer[A-Za-z]+\]` from the parent's pattern | flags the 5 Peer prefixes | 5 flagged |
+| hide the agent kernel | refuse rather than pass | "not present, so no prefixes could be derived" |
+
+140 gates green.
