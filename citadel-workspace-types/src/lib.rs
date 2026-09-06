@@ -1,4 +1,16 @@
+/// The build script's cross-workspace dependency rule, here so it can be tested.
+///
+/// The parent and the agent are separate cargo workspaces with separate lock
+/// files and shared git dependencies. Updating one and not the other compiles
+/// cleanly and fails at runtime.
+pub mod dependency_agreement;
 pub mod structs;
+/// The build script's submodule-freshness rule, here so it can be tested.
+///
+/// `build.rs` is not a test target, so logic that lives only there is asserted
+/// rather than known. The classification is pure and lives here; `build.rs`
+/// `include!`s this file and supplies the git calls.
+pub mod submodule_freshness;
 
 use custom_debug::Debug;
 use serde::{Deserialize, Serialize};

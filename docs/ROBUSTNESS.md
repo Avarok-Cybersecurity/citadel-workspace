@@ -6876,7 +6876,96 @@ sessions…` without a following `Calling propose_target` — the line that woul
 settle it — is not available. A failure with no backend log is a failure that
 cannot be attributed, and that is itself the gap to close.
 
-Recorded as an open question rather than a diagnosis. The next step is either
-capturing agent logs in these jobs, or running the same spec locally against
-this branch's stack; the branches landing together would also remove the
-question by removing the difference.
+### Correction, same round
+
+The premise above is **wrong**, and the evidence was in the log I had already
+fetched. Line 240:
+
+```
+Submodule path 'citadel-internal-service': checked out '7e4cdf7ce578…'
+```
+
+That is THIS branch's agent, which has round 644's fix. `PARENT_BRANCH: master`
+appears in the environment of a post-job artefact step, not in the checkout that
+matters; the parent was checked out at the branch, and
+`check-parent-checkouts-agree-on-the-ref` was right.
+
+So master's unbounded `GetActiveSessions` await explains nothing here. The P2P
+failure is real, reproduced across two suites and three retries each, and
+**unexplained**. It stays open, with the diagnosis retracted rather than left
+standing as a lead someone would follow.
+
+I reached for a difference between branch and master before establishing which
+commits were actually built — the same mistake as attributing an integration
+failure to a type-only import, and the direct motivation for the round below.
+
+
+## Round 658 — a build that cannot tell you what it built
+
+Round 657 spent a wave on a hypothesis about which submodule commit was in play,
+and the answer had been sitting in a log line the whole time. Twice this week a
+failure has turned on that question and the answer was never on screen.
+
+Four repositories build one product. A stale submodule does not fail: it
+compiles, links, runs, and reports results from code nobody is looking at.
+
+`citadel-workspace-types/build.rs` now answers both halves of the question on
+every `cargo build` — that crate is depended on by every other member, so it is
+the earliest point at which any build in this workspace can speak.
+
+**Freshness.** `git submodule status --recursive`, and:
+
+| state | verdict |
+|---|---|
+| at the recorded pointer | fine |
+| an ANCESTOR of the pointer | **fatal** — the build is using older code than this commit asks for |
+| ahead, or diverged | warn only |
+| uninitialised, or conflicted | **fatal** |
+
+Ahead is deliberately not fatal. Committing inside a submodule and updating the
+parent's pointer afterwards is the documented workflow here; failing it would
+make the escape hatch permanent, which is how a check gets switched off.
+
+**Equivalence.** The parent and the agent are separate cargo workspaces with
+separate lock files and 18 shared git dependencies. `cargo update citadel_sdk` in
+one and not the other compiles cleanly in both — CLAUDE.md records what happens
+after that, and none of it is a compile error: "rekey timeouts, P2P connection
+hangs, protocol errors". Any git-sourced package appearing in more than one lock
+file must resolve to the same revision. They currently do, 18 of 18.
+
+The lock files are found from the submodule list the freshness pass already
+walked, so a fourth repository is covered by being a submodule rather than by an
+edit here.
+
+**Both halves are pure functions in `src/`,** `include!`d by the build script, so
+they have tests — 11 of them. A build script is not a test target, and a rule
+that lives only there is asserted rather than known.
+
+### Controls — and the one that came back green
+
+| control | expected | first result | after fix |
+|---|---|---|---|
+| agent 3 commits behind the pointer | build fails | **PASSED — green** | fails, exit 101 |
+| nested ILM behind ITS pointer | build fails | — | fails, exit 101 |
+| agent one commit ahead | warns, builds | builds | builds |
+| a shared git dep at two revisions | build fails | fails, names 14 crates | — |
+| `SKIP_SUBMODULE_CHECK=1` over both | builds | builds | builds |
+
+The first control passing is the finding. `merge-base --is-ancestor` was run in
+the PARENT repository, which does not have the submodule's commits: it exited
+128, the verdict fell through to "could not decide", and "could not decide" is
+deliberately permissive. Every ancestry question answered `None`, so nothing
+could ever be found stale, and the check reported safety over exactly the state
+it was written for.
+
+The recursion had a second copy of the same fault. `recorded_pointer` asked
+`git rev-parse HEAD:citadel-internal-service/intersession-layer-messaging` of
+THIS repository, whose tree contains no such path — ILM is recorded by the
+agent's tree. Every nested submodule resolved to "no pointer" and could never be
+found stale, so `--recursive` was decorative until the pointer was asked of the
+directory that actually records it.
+
+Two guards, both green, both measuring nothing, in one build script. Neither was
+visible from reading it.
+
+137 gates green; 11 new unit tests.
