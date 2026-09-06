@@ -6609,3 +6609,53 @@ that `SecurityLevel` is a type-only import, erased at runtime, and could not
 affect a running app.
 
 133 gates green.
+
+## Round 653 — the gate I wrote was blind to the disclosure it was written for
+
+`check-broadcasts-name-their-audience.mjs` (round 642) held a hand-written map of
+the response variants that must never go to every session on the box. It had a
+fictional entry and three omissions, and it reported green over a live instance
+of exactly the leak it exists to stop.
+
+| claim | evidence |
+|---|---|
+| `NodeContent` is not a variant | `grep -cE "^\s+NodeContent\b"` on `WorkspaceProtocolResponse` → 0; the real name is `NodeContentUpdated` |
+| `MemberRoleUpdated` broadcast unscoped | `async_process_command.rs:387`, `:433` |
+| gate saw neither | it matched the literal `NodeContent`, which appears nowhere, and never listed `MemberRoleUpdated` |
+
+`MemberRoleUpdated` carries a named user's global role. Sent through
+`kernel.broadcast`, it reached **every** session the kernel holds — other
+workspaces included, and members set to `Banned` among them, because nothing
+closes their socket. `NodeDeleted` and `NodeMoved` leaked structure the same way.
+
+### What changed
+
+- The gate now derives the variant set from `pub enum WorkspaceProtocolResponse`
+  in `citadel-workspace-types/src/lib.rs` and **fails if any SCOPED key is
+  fictional**. A name that no longer exists can no longer sit there matching
+  nothing.
+- It resolves one hop of local binding, so
+  `let notification = …; kernel.broadcast(notification, …)` is visible. All four
+  live sites were behind a binding; without this the gate saw zero.
+- Three missing variants added: `MemberRoleUpdated`, `NodeDeleted`, `NodeMoved`.
+- The four sites in `async_process_command.rs` now call
+  `broadcast_to_workspace(…, requester_cid, WORKSPACE_ROOT_ID)`, which filters on
+  `check_entity_permission(user_id, workspace_id, ViewContent)`.
+
+### Controls
+
+| control | expected | observed |
+|---|---|---|
+| revert one site to bare `broadcast` behind a binding | 1 offender, exit 1 | 1 offender, exit 1 |
+| restore the fictional `NodeContent` key | "names response variants that do not exist", exit 1 | same, exit 1 |
+| both reverted | exit 0 | exit 0 |
+
+### The pattern, again
+
+This is the third hand-maintained list inside a gate to be found drifted this
+session, and the first where the drift was in a gate **I** wrote. The rule stands
+and is now applied to itself: derive the list from the source, and fail loudly
+when a name in it does not exist there. A list that silently matches nothing is
+indistinguishable from a clean bill of health.
+
+133 gates green.

@@ -388,7 +388,14 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         user_id: user_id.clone(),
                         new_role: role.clone(),
                     };
-                    kernel.broadcast(notification.clone(), requester_cid);
+                    // Scoped to workspace members. A named user's GLOBAL role went
+                    // to every session on the box -- other workspaces included, and
+                    // a member set to Banned too, since nothing closes their socket.
+                    kernel.broadcast_to_workspace(
+                        notification.clone(),
+                        requester_cid,
+                        crate::WORKSPACE_ROOT_ID.to_string(),
+                    );
                     Ok(notification)
                 }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
@@ -430,12 +437,14 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         .flatten()
                         .map(|user| user.role);
                     if let Some(new_role) = subject_role {
-                        kernel.broadcast(
+                        // Same reasoning as the site above.
+                        kernel.broadcast_to_workspace(
                             WorkspaceProtocolResponse::MemberRoleUpdated {
                                 user_id: user_id.clone(),
                                 new_role,
                             },
                             requester_cid,
+                            crate::WORKSPACE_ROOT_ID.to_string(),
                         );
                     }
                     Ok(WorkspaceProtocolResponse::Success(
@@ -1178,7 +1187,15 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     };
                     // Without this, a deleted office stayed in every other
                     // user's sidebar and they kept opening and typing into it.
-                    kernel.broadcast(response.clone(), requester_cid);
+                    //
+                    // Workspace-scoped, not node-scoped: the node is gone, so a
+                    // node audience has nothing left to resolve a permission
+                    // against. Structural churn still belongs to the members.
+                    kernel.broadcast_to_workspace(
+                        response.clone(),
+                        requester_cid,
+                        crate::WORKSPACE_ROOT_ID.to_string(),
+                    );
                     Ok(response)
                 }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
@@ -1209,7 +1226,13 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         old_parent_id,
                         new_parent_id: node.parent_id,
                     };
-                    kernel.broadcast(response.clone(), requester_cid);
+                    // Workspace-scoped: the node has moved, so neither parent is
+                    // a stable audience for it.
+                    kernel.broadcast_to_workspace(
+                        response.clone(),
+                        requester_cid,
+                        crate::WORKSPACE_ROOT_ID.to_string(),
+                    );
                     Ok(response)
                 }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(

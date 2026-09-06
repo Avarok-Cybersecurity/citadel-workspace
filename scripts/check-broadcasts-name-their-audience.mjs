@@ -43,8 +43,34 @@ if (!existsSync(KERNEL)) {
 const SCOPED = new Map([
   ['Workspace', 'broadcast_to_workspace'],
   ['Node', 'broadcast_to_node'],
-  ['NodeContent', 'broadcast_to_node'],
+  ['NodeContentUpdated', 'broadcast_to_node'],
+  // A named user's GLOBAL role. Sent through plain `broadcast()` at two sites,
+  // so it reached every session on the box -- including other workspaces, and
+  // including a member set to Banned, whose socket nothing closes. That is
+  // verbatim the disclosure the `Node` variant's doc comment describes.
+  ['MemberRoleUpdated', 'broadcast_to_workspace'],
+  ['NodeDeleted', 'broadcast_to_workspace'],
+  ['NodeMoved', 'broadcast_to_workspace'],
 ]);
+
+/**
+ * Every variant the response enum actually has.
+ *
+ * The list above is checked against this, because it carried a name the enum
+ * does not have -- `NodeContent`, where the real variant is
+ * `NodeContentUpdated`. A regex built from a fictional name matches nothing and
+ * costs nothing to be wrong about, so one third of this gate was inert and
+ * said so nowhere.
+ */
+function responseVariants() {
+  const typesPath = join(ROOT, 'citadel-workspace-types', 'src', 'lib.rs');
+  if (!existsSync(typesPath)) return null;
+  const src = readFileSync(typesPath, 'utf8');
+  const start = src.indexOf('pub enum WorkspaceProtocolResponse');
+  if (start === -1) return null;
+  const body = src.slice(start, src.indexOf('\n}', start));
+  return new Set([...body.matchAll(/^\s{4}([A-Z]\w+)/gm)].map((m) => m[1]));
+}
 
 /** The unscoped helper. */
 const PLAIN_BROADCAST = /\bbroadcast\s*\(/;
@@ -56,6 +82,21 @@ function* walk(dir) {
     try { st = statSync(full); } catch { continue; }
     if (st.isDirectory()) { yield* walk(full); continue; }
     if (entry.endsWith('.rs')) yield full;
+  }
+}
+
+const variants = responseVariants();
+if (variants !== null) {
+  const fictional = [...SCOPED.keys()].filter((v) => !variants.has(v));
+  if (fictional.length > 0) {
+    console.error('FAIL: this gate names response variants that do not exist.\n');
+    for (const v of fictional) console.error(`  ${v}`);
+    console.error(
+      '\nA regex built from a name the enum does not have matches nothing, so the entry is\n' +
+        'inert and says so nowhere. That is how `NodeContent` sat here while\n' +
+        '`NodeContentUpdated` went unchecked.',
+    );
+    process.exit(1);
   }
 }
 
@@ -77,11 +118,25 @@ for (const file of walk(KERNEL)) {
     if (/fn\s+broadcast/.test(line)) continue;
     broadcastsSeen += 1;
 
-    // The variant is on this line or the next few (rustfmt wraps the argument).
+    // The variant is on this line or the next few (rustfmt wraps the argument)
+    // -- OR it was bound to a local a few lines earlier and passed by name.
+    //
+    // `let notification = WorkspaceProtocolResponse::MemberRoleUpdated {...};`
+    // followed by `kernel.broadcast(notification, ...)` was invisible to a
+    // forward-only window, which is how two live sites went unreported.
     const window = lines.slice(i, Math.min(i + 4, lines.length)).join('\n');
+    const argument = (line.match(/broadcast\s*\(\s*([A-Za-z_]\w*)/) ?? [])[1];
+    const binding = argument
+      ? lines
+          .slice(Math.max(0, i - 12), i)
+          .join('\n')
+          .match(new RegExp(`let\\s+${argument}\\s*(?::[^=]+)?=\\s*([\\s\\S]*)$`))
+      : null;
+    const searchable = binding ? `${window}\n${binding[1]}` : window;
+
     for (const [variant, helper] of SCOPED) {
       const named = new RegExp(`WorkspaceProtocolResponse::${variant}\\s*[({]`);
-      if (named.test(window)) {
+      if (named.test(searchable)) {
         problems.push(
           `${rel}:${i + 1}: broadcasts \`${variant}\` through the unscoped \`broadcast()\` — ` +
             `use \`${helper}\``,
