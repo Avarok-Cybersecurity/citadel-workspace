@@ -4140,3 +4140,97 @@ unknown rather than claimed.
 The transferable point is about instrumentation: a monitor that waits for
 completion cannot distinguish "running slowly" from "never started". Every push
 during those three hours was adding to a queue that was not draining.
+
+## Rounds 604-607 — four waves in which the checks were the defect
+
+Four consecutive inspection waves found the same thing, and it is worth
+separating from the ordinary run of bugs: **the gates were reporting safety
+while measuring nothing.** Each was written by the same process that was
+correctly finding real defects elsewhere.
+
+| gate | satisfied by | what it was missing |
+|---|---|---|
+| readiness markers (594) | the example in its own header | a marker nothing prints |
+| localdb absence rule | a comment, then an import line | five whole-collection writes |
+| disconnect reports failure | an identifier the code had replaced | nothing — it was about to fail correct code |
+| intent results checked | nothing at all: it matched zero sites | four discarded data-loss results |
+
+The last is the purest case. It required `await \w+\.execute({`, and every call
+site in the tree writes `deps.io.execute(`. So it evaluated **zero** sites and
+printed "every failure-reporting intent is checked" on every run since it was
+written. What it was missing: four `persist-pending-ops` results discarded in
+`revfs-retry.ts`. `RevfsIO.execute` never rejects — a full disk, a revoked OPFS
+handle, a serialisation error all arrive as `{ success: false }` on a resolved
+promise — so a retry queue whose write failed was reported as queued, and the
+user's operations were gone on the next reload.
+
+### The rule this produced
+
+It did not report "nothing matched". It reported success. **"OK" and "OK, 0
+files considered" are indistinguishable at a glance, and only one of them is
+true.**
+
+So `check-gates-say-what-they-examined` now requires every gate's success line
+to interpolate a value it computed. Eleven gates were rewritten to report
+counts, and writing those counts found two things that reading the gates had
+not:
+
+- `check-image-fetches-retry` reported scanning ONE Dockerfile. That was a bug
+  in the instrumentation, not the gate: `dockerfiles` is a function, so
+  `.length` was its arity. It reads five. Instrumenting a gate can be as wrong
+  as the gate.
+- `check-listener-fanouts-are-isolated` reports 0 hand-rolled fan-outs across
+  934 files. That reads alarming and is correct — the four files that do fan
+  out are exactly the ones exempt as the guard itself. The line says so now,
+  because a bare `0` cannot be told from a broken pattern.
+
+One gate deliberately does NOT report a population count.
+`check-sender-identity` greps for a forbidden shape rather than enumerating a
+set, so a "handlers checked" number would exist only to satisfy the rule. It
+reports files read, with that limit written into the line. A number invented to
+pass a meta-gate is the meta-gate's own failure mode.
+
+And the honest limit, stated inside the gate: interpolating a value is not
+proof the value is meaningful, and a gate can still print a computed `0`. This
+raises the floor. Per-gate floors — like the one added to
+`check-intent-results-checked`, which now fails when it finds no `.execute(`
+call sites at all — are what make a specific zero fail.
+
+### On controls, twice over
+
+Two lessons this stretch, both about the control rather than the fix.
+
+**Re-run the control after repairing a broken check.** Stripping comments from
+the absence rule looked like the fix; the control then came back green, because
+the IMPORT LINE alone still satisfied the substring. The first repair looked
+right and was still measuring nothing.
+
+**A control is code, and it can be wrong in the direction that makes a working
+fix look broken.** A control for the `wireMap` repair came back green and
+nearly persuaded me the fix had failed. The control was at fault: its counting
+regex did not allow for the generic in `wireMapValues<PeerEntry>(`, so it
+reported zero remaining calls while one was still there. When a control
+surprises you, verify the control before touching the fix.
+
+## Round 608 — the fifth site, in the store the rule cannot see
+
+`persistGroups` writes the whole group list for an account's key, and
+`updateGroups` calls it on every change. `loadPersistedGroups` returned `[]` on
+a failed IndexedDB read — another tab holding a `versionchange` open, private
+mode, a version mismatch — so one arriving invite wrote a list of exactly that
+group over every group the account had. The next reload shows one group, and a
+bookmarked link reports "This group may have been deleted", which is the defect
+`restorePersistedGroups` exists to prevent.
+
+The old comment justified it: "A read failure is not 'no groups' — but ... the
+live event stream still repopulates the list." That claim was load-bearing and
+false. `reconcileGroups` is deliberately remove-only, because the wire carries
+only a group key, and invites are not replayed. Nothing repopulates.
+
+`resetGroupsForSession` already refuses to persist for exactly this reason,
+forty lines away, in a comment that spells it out. The guard existed on one of
+the two paths — which is now the fifth time this record has that sentence.
+
+Fixing it made two existing tests fail, because they wrote before reading. One
+of them would then have passed **vacuously**, asserting an empty list while
+nothing had been stored at all; it asserts the write landed first now.
