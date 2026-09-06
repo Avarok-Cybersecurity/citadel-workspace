@@ -5641,3 +5641,76 @@ reads the lenient session query destructively; and opening a chat channel reads 
 room's entire history to return 50 messages.
 
 128 gates green.
+
+---
+
+## Round 637 — the gate for assertions that cannot fail could not fail
+
+`check-assertions-can-fail` quoted two real defects in its own header and
+detected neither of them.
+
+`expect(created).toBeTruthy()`, where the helper returns `{ success, name }`,
+was missed because the detector required an object LITERAL immediately inside
+`expect(` — `expect({ … }).toBeTruthy()`, which nobody writes. The defect is a
+VARIABLE holding an object. The second, `expect(url).toContain('/workspace')`
+after navigating within `/workspace`, is not decidable from the text at all.
+
+Over 116 specs it reported `none is of a shape that cannot fail`. Both shapes it
+named were among the ones it could not see. Its vacuity floor counted every
+`expect(` in the suite — decoupled from what the detectors actually read — so
+that could not fire either. The record's own claim about it, "its controls
+reproduce the two REAL defects rather than planted ones", was false.
+
+### What makes it decidable here
+
+`check-explicit-types` requires every declaration in this repo to carry a type.
+So `expect(x).toBeTruthy()` can be judged: if `x`'s declared type has no falsy
+value — an object, an array, a named non-primitive — the assertion is true for
+every input.
+
+Two things had to be right for that not to invent findings:
+
+**The `as` exemption.** `const el: HTMLElement = document.getElementById(x) as HTMLElement`
+declares a non-null type over a value that is `HTMLElement | null` at runtime,
+so `toBeTruthy()` there DOES discriminate. The rule flagged it on its first run.
+A declaration whose initialiser casts is now exempt — the declared type is a
+claim, not a fact.
+
+**Top-level union splitting.** `{ success: boolean; name: string }` is always
+truthy; a substring search for `boolean` says otherwise, and the naive type
+capture stopped at the `;` INSIDE the braces. Both made the gate miss its own
+fixtures.
+
+### The part worth copying
+
+The detectors are run over three known-bad and three known-good fixtures BEFORE
+the tree is scanned, and the gate fails if either direction breaks.
+
+That is the answer to a detector with an empty population, which is what this
+one has: **zero findings means nothing unless the detector is known to still
+fire.** The previous version was inert for its entire life and reported safety
+every day of it. Control: disabling the type check makes the gate fail on its own
+fixtures instead of passing over the tree; planting the header defect in a real
+spec turns it red at that file and line.
+
+Scope also widened from `integration-tests/src` to `src/`: 116 files and 383
+assertions became 1,558 files and 7,509 typed declarations. Every
+assertion-quality gate in the UI pointed only at the integration suite.
+
+### Preflight said 80 things and buried the one that mattered
+
+`scripts/preflight.mjs` ran `...derived` — 112 gates read out of validate.yml —
+ahead of `submodules are populated`, whose own comment claimed it was ordered
+first. It was first among the LOCAL checks, and that was worth nothing.
+
+Measured on a fresh-clone simulation: `npm run preflight` on a checkout without
+`--recurse-submodules` produced **80 failures across 1,279 lines**, with the
+block naming the cause at line 1,154. Every one of the other 79 was a true
+statement about an uninitialised tree, and none of them said so.
+
+The checkout check now runs before anything else and stops the run. The same
+simulation now produces **12 lines**, the first of which names the directory and
+prints the command. The total is `CHECKS.length + ENVIRONMENT.length`, so the
+reordering does not quietly report a smaller number than before.
+
+128 gates green.

@@ -210,14 +210,31 @@ const cargoChecks = CARGO_WORKSPACES.flatMap(([label, cwd]) => {
   ];
 });
 
+/**
+ * Checks about the CHECKOUT ITSELF, run before anything else and fatal on their
+ * own.
+ *
+ * Not in validate.yml, because by the time CI runs it is already too late:
+ * checkout is what fails.
+ *
+ * These used to sit after `...derived`, and the comment claiming they came
+ * "first among the local-only checks" was true and useless -- the 112 derived
+ * gates ran ahead of all of them. Measured on a faithful fresh-clone
+ * simulation: `npm run preflight` without `--recurse-submodules` produced **80
+ * failures across 1279 lines**, and the block naming the actual cause was at
+ * line 1154. Every one of the other 79 was a true statement about an
+ * uninitialised tree and none of them said so.
+ *
+ * `check-submodules-are-populated.mjs` already prints the directories and the
+ * exact `git submodule update --init --recursive` to run. It was simply
+ * unreachable in practice.
+ */
+const ENVIRONMENT = [
+  ['submodules are populated', 'node', ['scripts/check-submodules-are-populated.mjs'], ROOT],
+];
+
 const CHECKS = [
   ...derived,
-  // Not in validate.yml, because by the time CI runs it is already too late:
-  // checkout is what fails.
-  // Ordered first among the local-only checks: an uninitialised clone makes
-  // every check after it meaningless, and npm's own error names a workspace
-  // rather than the missing checkout.
-  ['submodules are populated', 'node', ['scripts/check-submodules-are-populated.mjs'], ROOT],
   ['submodule pointers pushed', 'node', ['scripts/check-submodule-pointers-pushed.mjs'], ROOT],
   // NOTE: gates that run in CI are DERIVED from validate.yml above -- do not add
   // them here as well. Doing so runs them twice and reports them twice, which is
@@ -280,6 +297,28 @@ if (process.argv.includes('--print-plan')) {
 }
 
 const failed = [];
+// The checkout first, and nothing else if it is wrong. Running 112 gates over a
+// tree that has no submodules in it produces 80 true failures and buries the one
+// that matters a thousand lines down.
+for (const [name, cmd, args, cwd] of ENVIRONMENT) {
+  process.stdout.write(`  ${name} … `);
+  const run = spawnSync(cmd, args, { cwd, encoding: 'utf8', env: { ...process.env, SKIP_WASM_BUILD: '1' } });
+  if (run.status === 0) {
+    console.log('ok');
+    continue;
+  }
+  console.log('FAILED');
+  const output = run.error
+    ? `${run.error.message}\n(the command could not be started; nothing ran)`
+    : `${run.stdout ?? ''}${run.stderr ?? ''}`.trim();
+  console.error(`\n${output}\n`);
+  console.error(
+    'Stopping here. Every remaining check reads this tree, so they would all fail\n' +
+      'for this one reason and bury it.',
+  );
+  process.exit(1);
+}
+
 for (const [name, cmd, args, cwd] of CHECKS) {
   process.stdout.write(`  ${name} … `);
   // SKIP_WASM_BUILD keeps the cargo gates from rebuilding the WASM client and
@@ -309,7 +348,7 @@ if (failed.length > 0) {
   for (const { name, output } of failed) {
     console.error(`\n─── ${name} ───\n${output.split('\n').slice(-40).join('\n')}`);
   }
-  console.error(`\n${failed.length} of ${CHECKS.length} checks failed.`);
+  console.error(`\n${failed.length} of ${CHECKS.length + ENVIRONMENT.length} checks failed.`);
   process.exit(1);
 }
 
@@ -319,4 +358,6 @@ if (skipped.length > 0) {
     console.log(`  ${name} … skipped here (${reason})`);
   }
 }
-console.log(`\nAll ${CHECKS.length} checks passed.`);
+// `+ ENVIRONMENT.length`: those ran too, and a total that silently omitted them
+// would report a smaller number after this reordering than before it.
+console.log(`\nAll ${CHECKS.length + ENVIRONMENT.length} checks passed.`);
