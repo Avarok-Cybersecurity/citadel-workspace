@@ -5193,3 +5193,50 @@ gate discriminates rather than banning the verb, which is the difference between
 a rule and a superstition.
 
 124 gates green.
+
+## Round 631 — four assertions no input could falsify
+
+An audit of the Playwright specs found four, each with a plausible reason to be
+there. Recorded together because the shapes differ and the lesson is the same.
+
+**The reload half of the clear-history test.** `p2p-messaging.spec.ts` asserted
+the cleared message was absent after a reload, under a comment saying that is
+"the half that proves the PERSISTED pages were deleted". `toHaveCount(0)`
+immediately after a reload is true before anything renders — and this test clears
+the WHOLE transcript, so there is no surviving message to wait for either. Delete
+the on-disk removal in `lib/p2p/message-page-delete.ts`, keep only the in-memory
+clear, and it stayed green.
+
+It now sends a message after the reload and waits for it to arrive. That proves
+the composer, the store and the list are working again, so the absence that
+follows is a statement about the data rather than about the timing. **The
+"waiting for absence passes instantly" entry in this record is what this is; it
+had not been applied to the specs.**
+
+**`expect(created).toBeTruthy()`** where `createRoomViaUI` returns
+`{ success, name }`. An object is always truthy, so it held when the helper
+reported failure — and a comment twelve lines above documents exactly this trap
+for the sibling call.
+
+**`expect(url).toContain('/workspace')`** after navigating to an office. Already
+true before the click: login waits for `/workspace`, and the office view lives
+under the same route. Deleting the sidebar node's `onClick` left it green.
+Replacing it with the helper's own boolean plus the office name on screen also
+removed that file's last hardcoded sleep.
+
+**`not.toContainText(marker)`** where `marker` embeds `Date.now()`. The document
+could not contain it. It read as a control and was not one.
+
+### What the gate can and cannot see
+
+`check-assertions-can-fail.mjs` catches the two shapes decidable from the text: a
+truthiness check on an object or array literal, and a negated `toContain` of a
+value the test itself minted from `Date.now()`. Its controls reproduce the two
+REAL defects rather than planted ones.
+
+It says plainly what it cannot see. An assertion that is true for reasons OUTSIDE
+the test — the URL that was already `/workspace` — is not decidable from the text
+at all. Nothing but a negative control finds that one, which is the argument for
+running one on every guard rather than trusting a gate to have caught everything.
+
+124 gates green.
