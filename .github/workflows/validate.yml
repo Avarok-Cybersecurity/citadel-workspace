@@ -292,6 +292,13 @@ jobs:
       - name: The submodule-pointer guard judges a worktree correctly
         run: node scripts/check-submodule-gate-judges-a-worktree.mjs
 
+      - name: Production persists per row, not per database
+        # WORKSPACE_BACKEND=filesystem rewrites the WHOLE store on every write:
+        # one chat message costs a serialisation of every document and every
+        # message page. Invisible in dev (7 KB of seed content) and invisible
+        # to the kernel's tests, which bypass the SDK.
+        run: node scripts/check-production-persists-per-row.mjs
+
       - name: WASM rebuild triggers match the staleness stamp
         # build.rs named two FILES while the binary is built from three trees,
         # so editing the connector's messenger (the P2P send path) rebuilt

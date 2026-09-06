@@ -105,7 +105,25 @@ services:
       # baked into the Docker image stays ephemeral by default for
       # `tilt`-driven dev. Production sets both vars below to mount
       # workspace state on the `server_data` volume defined above.
-      - WORKSPACE_BACKEND=filesystem
+      #
+      # sqlite, NOT filesystem. `filesystem` is the SDK's FileIOBackend, whose
+      # every write serialises and rewrites the WHOLE account file -- and for
+      # this server that file is the entire store: every document body, every
+      # user, every message page. One chat message costs one to three writes of
+      # the whole database; editing an old message rewrites every page, which
+      # is forty-one whole-database writes in a ten-thousand-message room. It
+      # is fine for dev, where the store is a few kilobytes of seed content,
+      # and it does not survive a real workspace.
+      #
+      # sqlite does a per-row upsert on a bytemap table, so a write costs the
+      # size of the value.
+      #
+      # MIGRATION: this changes where data lives. An existing deployment on
+      # `filesystem` starts EMPTY under sqlite -- the old account file is still
+      # on the volume and is simply not read. No migration ships with this
+      # change; a deployment with data to keep should stay on `filesystem`
+      # until one does.
+      - WORKSPACE_BACKEND=sqlite
       - WORKSPACE_DATA_DIR=/data/server
       # Which interface the Citadel listener binds to.
       #

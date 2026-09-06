@@ -781,8 +781,36 @@ pub fn select_backend_type(
             info!(target: "citadel", "Using filesystem backend with data directory: {}", data_dir);
             Ok(BackendType::Filesystem(data_dir))
         }
+        // SQLite, for any deployment that will hold real data.
+        //
+        // `filesystem` is the SDK's FileIOBackend, and its `set` path rewrites
+        // the WHOLE account file: `store_byte_map_value` -> `save_cnac_by_cid`
+        // -> `generate_proper_bytes()` + `fs::write` of everything. For this
+        // server that file IS the entire store -- every document body, every
+        // user, every message page. So one chat message costs one to three
+        // serialisations of the whole database; editing an old message rewrites
+        // every page, which is forty-one whole-database writes in a
+        // ten-thousand-message room; a new user's first connect costs six.
+        //
+        // The SQL backend does a per-row SELECT/INSERT on a `bytemap` table
+        // instead, so a write costs the size of the value.
+        //
+        // The kernel's own tests never saw this: they run on `test_storage`,
+        // which bypasses the SDK.
+        Some("sqlite") => {
+            let data_dir = data_dir_choice.unwrap_or("./data");
+            // `mode=rwc` creates the file if it is not there, which is what a
+            // first boot needs; without it sqlx fails on a fresh volume.
+            let url = format!("sqlite://{}/kernel.db?mode=rwc", data_dir.trim_end_matches('/'));
+            info!(target: "citadel", "Using SQLite backend at {}", url);
+            // `BackendType::sql` rather than naming SqlConnectionOptions: the
+            // options type is not re-exported through the SDK prelude, and the
+            // constructor supplies its default.
+            Ok(BackendType::sql(url))
+        }
         Some(other) => Err(NetworkError::msg(format!(
-            "Unknown backend type '{}'. Supported: 'filesystem' (or omit for in-memory)",
+            "Unknown backend type '{}'. Supported: 'sqlite', 'filesystem' (or omit for in-memory).\n\
+             'filesystem' rewrites the entire database on every write and is for development only.",
             other
         ))),
         None => {
@@ -800,6 +828,64 @@ mod backend_select_tests {
     //! precedence path has its own assertion. The function is pure,
     //! so the tests don't need a kernel or runtime.
     use super::*;
+
+    /// The backend a real deployment must use, and why the shape matters.
+    ///
+    /// `filesystem` rewrites the whole account file on every write, and for
+    /// this server that file is the entire store, so one chat message costs a
+    /// serialisation of every document and every message page. These pin the
+    /// URL because a wrong one fails at connect time, inside the SDK, with an
+    /// sqlx error that does not mention this function.
+    #[test]
+    fn sqlite_builds_a_creating_url_under_the_data_dir() {
+        let bt = select_backend_type(Some("sqlite"), Some("/srv/data"), None, None).unwrap();
+        match bt {
+            BackendType::SQLDatabase(url, _) => {
+                assert_eq!(url, "sqlite:///srv/data/kernel.db?mode=rwc");
+            }
+            other => panic!("expected SQLDatabase, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn sqlite_defaults_its_data_dir_like_filesystem_does() {
+        let bt = select_backend_type(Some("sqlite"), None, None, None).unwrap();
+        match bt {
+            BackendType::SQLDatabase(url, _) => {
+                assert_eq!(url, "sqlite://./data/kernel.db?mode=rwc")
+            }
+            other => panic!("expected SQLDatabase, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_trailing_slash_does_not_double_up() {
+        // `WORKSPACE_DATA_DIR=/srv/data/` is an ordinary way to write it, and
+        // `sqlite:///srv/data//kernel.db` is not the same file on every
+        // platform.
+        let bt = select_backend_type(Some("sqlite"), Some("/srv/data/"), None, None).unwrap();
+        match bt {
+            BackendType::SQLDatabase(url, _) => {
+                assert_eq!(url, "sqlite:///srv/data/kernel.db?mode=rwc");
+            }
+            other => panic!("expected SQLDatabase, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_unknown_backend_names_both_supported_values() {
+        // The error is the only place an operator learns sqlite exists.
+        let err = select_backend_type(Some("postgres"), None, None, None).unwrap_err();
+        let message = format!("{err}");
+        assert!(
+            message.contains("sqlite"),
+            "error must name sqlite: {message}"
+        );
+        assert!(
+            message.contains("filesystem"),
+            "error must name filesystem: {message}"
+        );
+    }
 
     #[test]
     fn defaults_to_in_memory_when_nothing_is_set() {
