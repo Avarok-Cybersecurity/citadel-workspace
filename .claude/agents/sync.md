@@ -102,8 +102,9 @@ When errors are detected in Step 1, attempt these fixes ONCE:
    - **IF ERROR FOUND**: STOP, capture logs, return ERROR "Step 3 FAILED: internal-service rebuild error"
    - **DO NOT PROCEED TO STEP 4**
 5. Only if no errors, check for success:
-   - **SUCCESS**: `"Citadel client established"` (logged by the protocol layer
-     once the backend is connected and the node is up)
+   - **SUCCESS**: `"Citadel client established"` <!-- emitted-by: citadel_proto -->
+     (logged by the protocol layer once the backend is connected and the node is
+     up; it comes from the SDK, not from this tree)
      - NOT `Running \`target/debug/...\``, for the same reason as Step 2: the
        container execs `/usr/local/bin/citadel-workspace-internal-service`.
 6. **IF TIMEOUT (5 min)**: STOP, return ERROR "Step 3 FAILED: internal-service rebuild timeout"

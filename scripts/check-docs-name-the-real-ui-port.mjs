@@ -79,7 +79,11 @@ function instructionFiles() {
   const docs = join(ROOT, 'docs');
   if (existsSync(docs)) {
     for (const f of readdirSync(docs)) {
-      if (f.endsWith('.md')) files.push(join(docs, f));
+      // ROBUSTNESS.md is an append-only RECORD, not an instruction. It has to be
+      // able to write "every UI agent opened localhost:5173" as the description
+      // of a defect -- which is exactly what this gate flagged it for. A history
+      // that cannot quote the wrong value cannot describe what was wrong.
+      if (f.endsWith('.md') && f !== 'ROBUSTNESS.md') files.push(join(docs, f));
     }
   }
   return files;

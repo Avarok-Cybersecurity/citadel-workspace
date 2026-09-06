@@ -26,12 +26,27 @@
  * Only markers in a POLLING instruction are checked, and only ones long enough
  * to be distinctive. "Finished" or "ready in" would match half the tree and
  * prove nothing either way.
+ *
+ * A marker emitted by a DEPENDENCY rather than by this tree must say so, with
+ * `<!-- emitted-by: <crate> -->` on the same line, and the crate must appear in
+ * Cargo.lock. `Citadel client established` is one: it comes from
+ * `citadel_proto`, so no amount of searching this repository would find it, and
+ * the first version of this gate reported that valid marker as missing. The
+ * annotation keeps the teeth -- an unprintable marker still cannot pass without
+ * naming a real dependency that does not print it either, which is a lie
+ * somebody has to write on purpose.
  */
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const SELF = fileURLToPath(import.meta.url);
+const ROOT = join(dirname(SELF), '..');
+
+/** Dependency names, for markers a dependency emits rather than this tree. */
+const cargoLock = existsSync(join(ROOT, 'Cargo.lock'))
+  ? readFileSync(join(ROOT, 'Cargo.lock'), 'utf8')
+  : '';
 
 /** Files that tell an agent to wait for a line. */
 const INSTRUCTIONS = ['.claude/agents'];
@@ -56,6 +71,12 @@ function* walk(dir, depth = 0) {
     let st;
     try { st = statSync(full); } catch { continue; }
     if (st.isDirectory()) yield* walk(full, depth + 1);
+    // Never read THIS file. Its header quotes marker strings as examples, and
+    // `scripts/` is in its own haystack -- so it found "Citadel client
+    // established" in its own comment and passed a marker nothing prints. A
+    // gate matched by its own explanation is the exact defect this repository
+    // keeps finding; it is easier to write than to notice.
+    else if (full === SELF) continue;
     else if (CODE.test(entry) || /Dockerfile/.test(entry)) yield full;
   }
 }
@@ -98,6 +119,32 @@ for (const dir of INSTRUCTIONS) {
         // A marker with a shell/format placeholder is a template, not a literal.
         if (/[${}]/.test(marker)) continue;
         checked += 1;
+
+        // Emitted by a dependency, not by this tree. Verify the CRATE is real
+        // rather than the string, which is the most this repository can know:
+        // `Citadel client established` comes from `citadel_proto`, so no amount
+        // of searching here would find it, and the first version of this gate
+        // reported that valid marker as missing.
+        const attributed = line.match(/<!--\s*emitted-by:\s*([A-Za-z0-9_-]+)\s*-->/);
+        if (attributed) {
+          // Cargo.lock carries the crate's real name, and crates.io permits
+          // both spellings -- `citadel_proto` and `citadel-internal-service`
+          // are both literal entries here. Normalising one way was wrong and
+          // rejected a valid attribution; accept either spelling.
+          const named = attributed[1];
+          const found = [named, named.replace(/_/g, '-'), named.replace(/-/g, '_')].some((c) =>
+            new RegExp(`^name = "${c}"$`, 'm').test(cargoLock),
+          );
+          if (!found) {
+            problems.push({
+              file: `${dir}/${name}`,
+              line: i + 1,
+              marker: `${marker} — attributed to "${attributed[1]}", which is not a dependency`,
+            });
+          }
+          continue;
+        }
+
         // Search for the most distinctive run of the marker: its first clause.
         // A full match would fail on any interpolation the code does.
         const probe = marker.split(/[`'"]/)[0].trim();
