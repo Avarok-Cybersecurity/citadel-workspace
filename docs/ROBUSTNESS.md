@@ -7111,3 +7111,58 @@ exactly that, and every other `saveTransfer` call site sits behind a state
 transition or a terminal event. Recorded as refuted rather than quietly dropped.
 
 138 gates green.
+
+## Round 662 — the guard went where the comment pointed
+
+`is-for-domain.ts` names its four subscribers in its own doc — "the sidebar, the
+admin members tab, the user-search corpus, and the group-call roster" — and says
+why it lives in one place: *"four copies of a filter is how three of them come to
+differ."* Three called it. The fourth did not.
+
+The fourth is `useMemberEventSetup`, which writes the **global** `state.members`
+— what `UserSearch.tsx:99` and `UserDirectory.tsx:58` read as "everyone in this
+workspace". The workspace protocol carries no request id, so a `Members`
+response for a room replaced that corpus wholesale, and a search for a real
+workspace member returned "No users found" until something re-fetched the
+workspace list.
+
+### Why it survived
+
+The comment on the **wrong hook** claimed the role. `use-domain-members.ts:79-81`
+said *"this hook's members are the corpus the user search searches"* — and the
+user search does not read that hook; it reads the global state. Whoever added the
+guard put it where the comment pointed, and the comment was checkable by nothing.
+
+Both are fixed: the guard is on the subscriber that writes the corpus, compared
+against `WORKSPACE_ROOT_ID` (this state is workspace-wide by definition, so a
+room's list is never the one it asked for), and the misleading comment now says
+what that hook actually backs.
+
+### The gate checks the subscription, not the prose
+
+`check-member-lists-name-their-domain.mjs`: a module subscribing to
+`'members:loaded'` must call `isForDomain`. Nothing about *which* domain — that
+is the subscriber's judgement — only that the question is asked. A doc comment
+asserting which consumer a piece of state feeds is not checkable by anything,
+which is precisely why the rule is on the subscription.
+
+| control | expected | observed |
+|---|---|---|
+| remove the guard from the fourth subscriber | that file flagged | flagged, exit 1 |
+| delete `is-for-domain.ts` | refuse rather than pass | "is gone… do not delete the gate" |
+| rename one subscriber's event | count floor fires | "found 3 subscriber(s); is-for-domain.ts names four" |
+
+### The fix broke a liveness test, and the test was right to fail
+
+`event-setups-let-go-on-unmount` counts live handlers by EMITTING the event and
+counting `setState` calls. Its probe payload said `domainId: 'd'` — which the new
+guard correctly rejects — so both tests failed with *"expected 0 to be greater
+than 0"*: their own positive control reporting a leak-check that could no longer
+see the handler, rather than a handler that had gone.
+
+That control is the reason this was caught in seconds. The probe now carries
+`WORKSPACE_ROOT_ID`; a liveness test whose probe the subscriber filters out is a
+test of the filter. Re-controlled afterwards by dropping the subscription's
+`keep()` — both tests go red, so it still discriminates a real leak.
+
+139 gates green.

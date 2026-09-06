@@ -913,6 +913,18 @@ jobs:
         # workflow did not.
         run: node scripts/check-test-failures-capture-backend-logs.mjs
         working-directory: citadel-workspaces
+
+      - name: A member list names its domain
+        # The protocol carries no request id, so a `Members` response cannot be
+        # attributed to the request that caused it. is-for-domain.ts names its
+        # four subscribers and says why it lives in one place; three had the
+        # check. The fourth writes the global state.members, which the user
+        # search reads as "everyone in this workspace" -- so a room roster
+        # replaced it and a search for a real member returned "No users found".
+        # It survived because the comment on the WRONG hook claimed to be the
+        # search corpus, and the guard went where the comment pointed.
+        run: node scripts/check-member-lists-name-their-domain.mjs
+        working-directory: citadel-workspaces
       - name: A success flag is read by somebody
         # sendAndAwaitAck was given a boolean return so an unacknowledged RE-VFS
         # operation would stop being invisible; all six callers then discarded
