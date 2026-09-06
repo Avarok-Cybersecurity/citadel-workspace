@@ -352,6 +352,13 @@ jobs:
         # hand-wrote the frame shape instead, and the hand copy had lost a field.
         run: node scripts/check-generated-types-are-all-exported.mjs
 
+      - name: Wire types match the Rust
+        # `typescript-client/src/types` IS the ts-rs output, and nothing checked
+        # it against the crate. No enum in this protocol carries a version field
+        # or a serde catch-all, so an unknown variant fails the WHOLE message --
+        # a client on stale types drops responses rather than degrading.
+        run: node scripts/check-wire-types-match-the-rust.mjs
+
       - name: Deploy paths can actually start the server
         # Two operator scripts each carried their own deploy and neither worked:
         # a `docker build` with no `--target` selects the LAST stage (`dev`, the

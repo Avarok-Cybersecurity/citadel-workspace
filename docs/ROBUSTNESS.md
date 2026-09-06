@@ -6468,3 +6468,50 @@ directory cannot read as a clean bill. Red on the pre-fix tree naming exactly
 the five; green after.
 
 132 gates green.
+
+---
+
+## Round 650 — the wire types had no freshness check at all
+
+`typescript-client/src/types/` IS the ts-rs output — no hand-copy — so nothing
+compared it against the crate that produces it. The drift it would miss is
+"somebody added or renamed an exported type and did not re-run
+`generate_types.sh`".
+
+Why that is worse here than a stale type usually is: **no enum in this protocol
+carries a version field or a `#[serde(other)]` catch-all**, so an unknown variant
+fails the WHOLE message rather than one field. A client built against stale types
+does not degrade — it drops responses.
+
+The parent already has this mechanism. `check-generated-types-fresh.mjs` was
+written for `citadel-workspace-types`, where a hand-copy had drifted six months
+and cost the client every type the theming feature added. It was never applied to
+the crate the agent actually speaks.
+
+There is no drift today: 101 exported Rust types, 101 generated files, agreeing
+in both directions.
+
+### Which makes it a tripwire, and tripwires need a self-test
+
+Its first run reported **all 101 files as orphans and zero exported types** —
+because the attribute here is
+`#[cfg_attr(feature = "typescript", ts(export))]`, not the bare `#[ts(export)]`
+a pattern would naturally be written for. On a tree with real drift that would
+have read as catastrophic; on this one it read as "everything is wrong", which
+is at least obviously wrong. The version that matters is the one where the
+attribute moves LATER, the scan silently matches nothing, and the gate reports a
+clean bill over an empty comparison.
+
+So the detector is checked against a fixture before the tree is read — the
+pattern established in round 637 — and there is a floor requiring at least fifty
+exported types, since a small number means the shape moved rather than that the
+crate shrank.
+
+Three controls, all red: a Rust type whose `.ts` is missing, a `.ts` with no Rust
+type behind it, and a broken detector caught by its own fixture.
+
+That is the second gate this hour whose first run was wrong about the whole tree,
+and the fifth this session to need narrowing or correcting before it could be
+believed. Writing the gate remains the easy half.
+
+133 gates green.
