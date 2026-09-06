@@ -39,7 +39,14 @@ function* walk(dir) {
 const CONTROL = /^(Button|TabsTrigger|ToggleGroupItem|MenubarTrigger|button|a)$/;
 const offenders = [];
 
+// Counted so a pass says what it examined. A fixed sentence cannot be told
+// apart from a scan that matched nothing -- see
+// check-gates-say-what-they-examined.
+let scanned = 0;
+let candidates = 0;
+
 for (const file of walk(ROOT)) {
+  scanned += 1;
   const src = readFileSync(file, 'utf8');
   // Walk each opening control tag and take the text up to its matching close.
   const openTag = /<([A-Za-z][A-Za-z0-9]*)\b([^>]*)>/g;
@@ -57,6 +64,10 @@ for (const file of walk(ROOT)) {
     const hiddenText = /className="[^"]*\bhidden\b[^"]*"[^>]*>\s*\{?\s*[A-Za-z]/.test(body)
       || /className=\{[^}]*'hidden[^}]*\}[^>]*>\s*[A-Za-z]/.test(body);
     if (!hiddenText) continue;
+    // A control that hides its text at a breakpoint: the population this gate
+    // is about. Counted before the accessible-name test so the success line
+    // says how many were examined, not how many survived.
+    candidates += 1;
 
     // Any text that survives the breakpoint, or an explicit name, is enough.
     const hasName = /\baria-label\b|\baria-labelledby\b|\btitle=/.test(attrs)
@@ -77,4 +88,7 @@ if (offenders.length > 0) {
   process.exit(1);
 }
 
-console.log('No control loses its accessible name at narrow widths.');
+console.log(
+  `No control loses its accessible name at narrow widths: ${scanned} file(s) scanned, ` +
+    `${candidates} responsive label(s) checked.`,
+);

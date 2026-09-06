@@ -292,6 +292,15 @@ jobs:
       - name: The submodule-pointer guard judges a worktree correctly
         run: node scripts/check-submodule-gate-judges-a-worktree.mjs
 
+      - name: Every gate says what it examined
+        # Four gates have been found reporting safety while measuring nothing.
+        # check-intent-results-checked printed "every failure-reporting intent
+        # is checked" on every run while matching ZERO call sites, because its
+        # regex wanted `io.execute(` and every site writes `deps.io.execute(`.
+        # A fixed sentence cannot be told apart from a scan that matched
+        # nothing; a computed count can.
+        run: node scripts/check-gates-say-what-they-examined.mjs
+
       - name: Every setup-node restores the npm cache
         # A 1154-package tree, installed in dozens of jobs per push. Uncached
         # `npm ci` costs 1-2 min against 20-40s warm -- roughly a runner-hour

@@ -34,8 +34,14 @@ function* walk(dir) {
 const OFFENDING = /senderCid\s*:\s*[^,\n}]*\bsender_cid\b/;
 
 const offenders = [];
+// Counted so a pass says what it examined. A fixed sentence cannot be told
+// apart from a scan that matched nothing -- see
+// check-gates-say-what-they-examined.
+let scanned = 0;
+
 for (const file of walk(ROOT)) {
   if (file.includes('__tests__')) continue;
+  scanned += 1;
   const lines = readFileSync(file, 'utf8').split('\n');
   lines.forEach((line, i) => {
     if (OFFENDING.test(line)) offenders.push(`${file}:${i + 1}  ${line.trim()}`);
@@ -50,4 +56,12 @@ if (offenders.length > 0) {
   process.exit(1);
 }
 
-console.log('Every inbound handler takes its sender from the transport.');
+// Files, not "handlers checked". This gate greps for a FORBIDDEN shape rather
+// than enumerating a population, so there is no set of handlers it inspected
+// and reporting one would be a number invented to satisfy a rule. What it can
+// honestly say is how much source it read; the limit is stated so nobody reads
+// more assurance into the line than it carries.
+console.log(
+  `Sender identity: ${scanned} non-test source file(s) read; none takes a sender ` +
+    'from the message body instead of the transport.',
+);

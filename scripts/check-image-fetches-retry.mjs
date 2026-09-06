@@ -72,14 +72,21 @@ function runInstructions(source) {
       text += `\n${lines[j]}`;
     }
     found.push({ line: i + 1, text });
+    downloads += 1;
     i = j;
   }
   return found;
 }
 
+// Counted so a pass says what it examined; a fixed sentence cannot be told
+// apart from a scan that matched nothing. See
+// check-gates-say-what-they-examined.
+let downloads = 0;
+let filesRead = 0;
 const offenders = [];
 const piped_offenders = [];
 for (const file of dockerfiles(ROOT)) {
+  filesRead += 1;
   const source = readFileSync(file, 'utf-8');
   for (const run of runInstructions(source)) {
     // apt-get is out of scope; a line that only apt-gets is not a fetch here.
@@ -128,4 +135,7 @@ if (offenders.length > 0) {
   process.exit(1);
 }
 
-console.log('  Image fetches: every network download in a Dockerfile is retried  ok');
+console.log(
+  `  Image fetches: ${downloads} network download(s) across ${filesRead} Dockerfile(s), ` +
+    'every one retried  ok',
+);

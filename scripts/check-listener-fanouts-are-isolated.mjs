@@ -61,15 +61,34 @@ function* sources(dir) {
   }
 }
 
+// Counted so a pass says what it examined; a fixed sentence cannot be told
+// apart from a scan that matched nothing. See
+// check-gates-say-what-they-examined.
+let filesRead = 0;
+let fanouts = 0;
+let guardFiles = 0;
 const problems = [];
 for (const dir of [UI_SRC, CLIENT_SRC]) {
-  for (const file of sources(dir)) {
+  // An unreadable root must be loud. `sources()` returns silently when
+  // readdirSync throws, so a moved or unpopulated directory removed half this
+  // gate's scope while it went on reporting success.
+  const found = sources(dir);
+  if (found.length === 0) {
+    console.error(
+      `FAIL: no sources under ${relative(ROOT, dir)} — this gate would pass by\n` +
+        'considering nothing. Populate the submodule, or update the scan root.',
+    );
+    process.exit(1);
+  }
+  for (const file of found) {
+    filesRead += 1;
     const rel = relative(ROOT, file);
-    if (IMPLEMENTS_THE_GUARD.has(rel)) continue;
+    if (IMPLEMENTS_THE_GUARD.has(rel)) { guardFiles += 1; continue; }
     const lines = readFileSync(file, 'utf8').split('\n');
     lines.forEach((line, i) => {
       const match = FANOUT.exec(line);
       if (!match) return;
+      fanouts += 1;
       // A loop body that catches for itself is fine; so is one that is not
       // actually invoking the listener (a map/filter over the collection).
       const window = lines.slice(i, i + 6).join('\n');
@@ -90,4 +109,8 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log('Listener fan-outs OK: every hand-rolled fan-out isolates its subscribers.');
+console.log(
+  `Listener fan-outs: ${fanouts} hand-rolled fan-out(s) across ${filesRead} file(s), ` +
+    `with ${guardFiles} file(s) exempt as the guard itself; every fan-out isolates ` +
+    'its subscribers.',
+);

@@ -75,12 +75,17 @@ function pointers(gitDir, commit) {
     });
 }
 
+// Counted so a pass says what it examined; a fixed sentence cannot be told
+// apart from a scan that matched nothing. See
+// check-gates-say-what-they-examined.
+let checked = 0;
 const problems = [];
 
 /** Recurse, because a nested pointer fails checkout just as hard as a top one. */
 function check(gitDir, commit, prefix = '') {
   const names = moduleNames(gitDir, commit);
   for (const { path, sha } of pointers(gitDir, commit)) {
+    checked += 1;
     const full = `${prefix}${path}`;
     const subGitDir = `${gitDir}/modules/${names.get(path) ?? path}`;
 
@@ -144,4 +149,4 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log('Every submodule pointer exists on its remote.');
+console.log(`Submodule pointers: ${checked} pointer(s) checked; every one exists on its remote.`);

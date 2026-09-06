@@ -69,9 +69,15 @@ if (!existsSync(DOCKER_ROOT)) {
 
 const dockerRootText = readFileSync(DOCKER_ROOT, 'utf8');
 const defined = definedDeps(dockerRootText);
+// Counted so a pass says what it examined; a fixed sentence cannot be told
+// apart from a scan that matched nothing. See
+// check-gates-say-what-they-examined.
+let members = 0;
+let deps = 0;
 const problems = [];
 
 for (const member of workspaceMembers(dockerRootText)) {
+  members += 1;
   // The Dockerfile swaps in a per-member manifest for the kernel itself; prefer
   // that one where it exists, since it is what the image actually compiles.
   const substitute = join(dirname(DOCKER_ROOT), `${member}.Cargo.docker.toml`);
@@ -79,6 +85,7 @@ for (const member of workspaceMembers(dockerRootText)) {
   if (!existsSync(memberManifest)) continue;
 
   for (const dep of inheritedDeps(readFileSync(memberManifest, 'utf8'))) {
+    deps += 1;
     if (!defined.has(dep)) {
       problems.push(`${memberManifest} inherits \`${dep}\`, which ${DOCKER_ROOT} does not define`);
     }
@@ -92,4 +99,7 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log('Every workspace-inherited dependency is defined in the Docker root manifest.');
+console.log(
+  `Docker manifest: ${deps} inherited dependenc(y|ies) across ${members} workspace member(s); ` +
+    'every one is defined in the Docker root manifest.',
+);

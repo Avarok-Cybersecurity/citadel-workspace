@@ -16,6 +16,10 @@ import { readFileSync } from 'node:fs';
 const FILE =
   'citadel-workspace-server-kernel/src/kernel/command_processor/async_process_command.rs';
 const source = readFileSync(FILE, 'utf8');
+// Counted so a pass says what it examined; a fixed sentence cannot be told
+// apart from a scan that matched nothing. See
+// check-gates-say-what-they-examined.
+let rules = 0;
 const problems = [];
 
 // Exactly the two payloads that carry content, and the call each must go out on. Written as
@@ -36,6 +40,7 @@ const REQUIRED = [
 ];
 
 for (const { what, good, bad } of REQUIRED) {
+  rules += 1;
   if (bad.test(source)) {
     problems.push(`${what} is sent with kernel.broadcast — audience Everyone — and must be node-scoped`);
   } else if (!good.test(source)) {
@@ -48,4 +53,7 @@ if (problems.length) {
   console.error('FAIL: node content must reach only sessions entitled to view that node.');
   process.exit(1);
 }
-console.log('OK: the document body and the node record are both broadcast node-scoped.');
+console.log(
+  `Node-scoped broadcast: ${rules} required send site(s) checked; ` +
+    'the document body and the node record are both broadcast node-scoped.',
+);

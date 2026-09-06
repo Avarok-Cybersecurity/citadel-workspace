@@ -111,4 +111,7 @@ if (failures.length > 0) {
   console.error('');
   process.exit(1);
 }
-console.log('\ncheck-destructive-contrast: OK — every destructive pairing clears AA in both themes.');
+console.log(
+  `\ncheck-destructive-contrast: OK — ${rows.length} pairing(s) measured across both ` +
+    'themes, every one clears AA.',
+);

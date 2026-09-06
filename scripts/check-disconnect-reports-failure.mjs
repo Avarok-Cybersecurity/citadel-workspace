@@ -52,7 +52,10 @@ function armBody(text, marker) {
   return null;
 }
 
+let armsChecked = 0;
+
 for (const arm of ['Ok(Err(', 'Err(_elapsed)']) {
+  armsChecked += 1;
   const body = armBody(source, arm);
   if (body === null) {
     problems.push(`the \`${arm}\` arm has gone — this gate is reading a shape that no longer exists`);
@@ -101,4 +104,6 @@ if (problems.length) {
   console.error('FAIL: a disconnect that did not happen must not be reported as one.');
   process.exit(1);
 }
-console.log('OK: neither SDK-disconnect failure branch reports success.');
+console.log(
+  `Disconnect outcome: ${armsChecked} SDK failure arm(s) checked; neither reports success.`,
+);

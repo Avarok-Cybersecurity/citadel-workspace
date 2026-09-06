@@ -31,9 +31,15 @@ const DOCKERFILES = [
 // Members that enable a test-only feature and must not be in a shipped build.
 const TEST_MEMBERS = ['citadel-workspace-server-kernel/tests/common'];
 
+// Counted so a pass says what it examined; a fixed sentence cannot be told
+// apart from a scan that matched nothing. See
+// check-gates-say-what-they-examined.
+let filesRead = 0;
+let buildLines = 0;
 const problems = [];
 
 for (const file of DOCKERFILES) {
+  filesRead += 1;
   if (!existsSync(file)) continue;
   const text = readFileSync(file, 'utf8');
 
@@ -50,6 +56,7 @@ for (const file of DOCKERFILES) {
   }
 
   for (const build of builds) {
+    buildLines += 1;
     const scoped = /\s-p\s+\S/.test(build);
     if (!scoped && !overrideExcludes) {
       problems.push(
@@ -69,4 +76,7 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log('No shipped binary is built with a test-only cargo feature.');
+console.log(
+  `Test features: ${buildLines} cargo build line(s) across ${filesRead} Dockerfile(s); ` +
+    'none builds a shipped binary with a test-only feature.',
+);

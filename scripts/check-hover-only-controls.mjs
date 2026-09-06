@@ -28,7 +28,14 @@ function* walk(dir) {
 }
 
 const offenders = [];
+// Counted so a pass says what it examined. A fixed sentence cannot be told
+// apart from a scan that matched nothing -- see
+// check-gates-say-what-they-examined.
+let scanned = 0;
+let candidates = 0;
+
 for (const file of walk(ROOT)) {
+  scanned += 1;
   const lines = readFileSync(file, 'utf8').split('\n');
   lines.forEach((line, i) => {
     // Same class attribute, or close enough to be one: a multi-line template
@@ -61,6 +68,10 @@ for (const file of walk(ROOT)) {
     if (/\[@media\(hover:hover\)[^\]]*\]:(?:opacity-0|invisible|hidden)/.test(window)) return;
 
     for (const [hidden, revealed] of HIDDEN_THEN_REVEALED) {
+      // Counted where the CANDIDATE is, not where the offender is: the number
+      // that matters for vacuity is how many hidden controls were examined,
+      // and a run that examined none must not read like a clean bill.
+      if (hidden.test(line)) candidates += 1;
       if (hidden.test(line) && revealed.test(window)) {
         offenders.push(`${file}:${i + 1}`);
         break;
@@ -113,4 +124,7 @@ if (unique.length > 0) {
   process.exit(1);
 }
 
-console.log('No hover-only controls: every fade-in also responds to touch and focus.');
+console.log(
+  `No hover-only controls: ${scanned} file(s) scanned, ${candidates} fade-in(s) checked; ` +
+    'every one also responds to touch and focus.',
+);
