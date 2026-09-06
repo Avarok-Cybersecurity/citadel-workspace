@@ -61,6 +61,7 @@ what was already here.
 | `check-responsive-label-loss.mjs` | A control's only text may not be hidden by a responsive `hidden` class. |
 | `check-restart-policies.mjs` | Every long-running service must declare a restart policy. |
 | `check-rust-modules-are-compiled.mjs` | Every .rs file under a crate's src/ must be reachable by a `mod` declaration. |
+| `check-secrets-are-compared-in-constant-time.mjs` | `String == String` in Rust compares lengths and then runs `memcmp`, which returns as soon as two bytes differ. |
 | `check-sender-identity.mjs` | A message's sender must come from the transport, never from its payload. |
 | `check-service-logs-are-captured.mjs` | A job that starts the stack must dump its logs when a test fails. |
 | `check-session-teardown-prunes-cid-state.mjs` | Every place a session leaves `server_connection_map` must also prune the CID-keyed kernel maps (pending peer signals, username cache). |

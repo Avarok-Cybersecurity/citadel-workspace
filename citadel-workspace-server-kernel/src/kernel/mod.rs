@@ -12,6 +12,7 @@
 pub mod command_processor;
 pub mod group_access;
 pub mod rate_limiter;
+pub mod secret_eq;
 pub mod transaction;
 
 // Import focused kernel modules - commented out old sync code
