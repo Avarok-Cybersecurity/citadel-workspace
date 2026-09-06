@@ -147,16 +147,27 @@ services:
       # exposes the write attempt before any port probe succeeds.
       - /var/lib/internal-service:size=128m,mode=1777
     environment:
-      # Bind dual-stack, not IPv4-only. `localhost` resolves to ::1 before
-      # 127.0.0.1 on macOS, and Node 17+ no longer reorders DNS results to
-      # prefer IPv4 — so anything that dials the agent by hostname (the Vite
-      # dev proxy did) hit ECONNREFUSED on ::1 while the IPv4 socket sat there
-      # accepting connections. A `[::]` listener accepts IPv6 and IPv4-mapped
-      # connections both, so either resolution order works.
-      # Brackets are required: the Dockerfile builds "--bind ${HOST}:${PORT}",
-      # so a bare "::" yields ":::12345", which is not valid socket-address
-      # syntax and the service exits 1 on startup.
-      - "INTERNAL_SERVICE_BIND_HOST=[::]"
+      # Loopback, exactly as production binds it. The agent holds decrypted
+      # P2P plaintext and an unauthenticated control plane; with
+      # `network_mode: host` a non-loopback bind publishes it to the entire
+      # network the developer is on.
+      #
+      # This was `[::]` — every interface — and the reason it was widened has
+      # since been fixed at the other end. The note said "anything that dials
+      # the agent by hostname (the Vite dev proxy did) hit ECONNREFUSED on ::1",
+      # and that proxy now dials `ws://127.0.0.1:${AGENT_PORT}` explicitly
+      # (citadel-workspaces/vite.config.ts, whose own comment reads "127.0.0.1,
+      # NOT localhost … The app itself, test.config.json and the compose
+      # healthchecks all already use 127.0.0.1; this was the one place that did
+      # not"). Two fixes landed for one bug; only one of them was still needed,
+      # and the other kept its exposure.
+      #
+      # Every remaining dialer is IPv4 loopback: the Vite proxy above, this
+      # file's healthcheck (`nc -z 127.0.0.1`), and the integration suite
+      # (`integration-tests/src/lib/config.ts`, `http://127.0.0.1:12345`). The
+      # browser never dials the agent directly at all — it uses the same-origin
+      # `/ws` proxy (`websocket-service/resolve-url.ts`).
+      - INTERNAL_SERVICE_BIND_HOST=127.0.0.1
       # citadel=info alone silently deletes the entire ILM subsystem. EnvFilter
       # adds its ERROR default only when the parsed directive set is EMPTY, so a
       # non-empty `citadel=info` leaves every non-matching target off at EVERY
