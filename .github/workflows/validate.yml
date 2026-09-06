@@ -109,6 +109,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          # Restore ~/.npm. Without it every job re-downloads 1154 packages;
+          # `npm ci` at this size costs 1-2 min uncached against 20-40s warm,
+          # and this workflow runs it in dozens of jobs per push.
+          cache: npm
+          cache-dependency-path: package-lock.json
       - name: Check crate coverage
         run: node scripts/check-crate-coverage.mjs
       - name: Check the docs' commands resolve
@@ -286,6 +291,12 @@ jobs:
 
       - name: The submodule-pointer guard judges a worktree correctly
         run: node scripts/check-submodule-gate-judges-a-worktree.mjs
+
+      - name: Every setup-node restores the npm cache
+        # A 1154-package tree, installed in dozens of jobs per push. Uncached
+        # `npm ci` costs 1-2 min against 20-40s warm -- roughly a runner-hour
+        # per push, and about a minute on every job's critical path.
+        run: node scripts/check-setup-node-restores-the-npm-cache.mjs
 
       - name: The server and the agent build against the same SDK
         # They are separate cargo workspaces with separate lockfiles, so `cargo update`
@@ -510,6 +521,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          # Restore ~/.npm. Without it every job re-downloads 1154 packages;
+          # `npm ci` at this size costs 1-2 min uncached against 20-40s warm,
+          # and this workflow runs it in dozens of jobs per push.
+          cache: npm
+          cache-dependency-path: package-lock.json
       - name: Install Workspace Dependencies
         # Install from root to resolve file: dependencies between workspaces
         run: npm ci
@@ -555,6 +571,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          # Restore ~/.npm. Without it every job re-downloads 1154 packages;
+          # `npm ci` at this size costs 1-2 min uncached against 20-40s warm,
+          # and this workflow runs it in dozens of jobs per push.
+          cache: npm
+          cache-dependency-path: package-lock.json
       - name: Install Workspace Dependencies
         # Install from root to resolve file: dependencies between workspaces
         run: npm ci
@@ -611,6 +632,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          # Restore ~/.npm. Without it every job re-downloads 1154 packages;
+          # `npm ci` at this size costs 1-2 min uncached against 20-40s warm,
+          # and this workflow runs it in dozens of jobs per push.
+          cache: npm
+          cache-dependency-path: package-lock.json
       - name: Install Workspace Dependencies
         # Install from root to resolve file: dependencies between workspaces
         run: npm ci
@@ -1045,6 +1071,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          # Restore ~/.npm. Without it every job re-downloads 1154 packages;
+          # `npm ci` at this size costs 1-2 min uncached against 20-40s warm,
+          # and this workflow runs it in dozens of jobs per push.
+          cache: npm
+          cache-dependency-path: package-lock.json
       - name: Install Dependencies
         # Run `npm ci` at the workspace root so playwright is installed
         # ONCE (hoisted at root) instead of being installed both at root
@@ -1270,6 +1301,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          # Restore ~/.npm. Without it every job re-downloads 1154 packages;
+          # `npm ci` at this size costs 1-2 min uncached against 20-40s warm,
+          # and this workflow runs it in dozens of jobs per push.
+          cache: npm
+          cache-dependency-path: package-lock.json
       - name: Install Dependencies
         # Root install first, for the same module-resolution reason documented on
         # the integration-tests job: two copies of playwright make tsc see two
@@ -1744,6 +1780,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          # Restore ~/.npm. Without it every job re-downloads 1154 packages;
+          # `npm ci` at this size costs 1-2 min uncached against 20-40s warm,
+          # and this workflow runs it in dozens of jobs per push.
+          cache: npm
+          cache-dependency-path: package-lock.json
       - name: Install workspace dependencies for the gates
         run: npm ci
       - name: Create the sync's mount points before Docker does
