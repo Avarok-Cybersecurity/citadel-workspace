@@ -584,23 +584,29 @@ Workspace (top-level)
 
 **Permission Types**:
 
-**Workspace Level**:
-- `CreateOffice` - Create new office
-- `DeleteWorkspace` - Delete entire workspace
-- `ManageDomains` - Modify domain hierarchy
-- `ManageMembers` - Add/remove members
+Permissions are not tiered by office and room. `Permission` is one flat enum in
+`citadel-workspace-types/src/structs.rs`, applied against a node:
 
-**Office Level**:
-- `CreateRoom` - Create new room within office
-- `UpdateOffice` - Modify office metadata
-- `DeleteOffice` - Delete office
-- `ManageOfficeMembers` - Office-specific member management
+**The tree**:
+- `CreateNode`, `UpdateNode`, `DeleteNode`, `AddNode` - node lifecycle
+- `EditTreeStructure` - reshape the hierarchy
+- `ManageNodeTypes`, `UpdateNodeSettings`, `EditNodeConfig` - node configuration
+- `ManageNodeMembers` - node-scoped membership
 
-**Room Level**:
-- `EditContent` - Modify MDX content
-- `SendMessages` - Send messages in room
-- `UploadFiles` - Upload files to room
-- `DeleteRoom` - Delete room
+**Content and messages**:
+- `ViewContent`, `EditContent`, `EditMdx` - document content
+- `SendMessages`, `ReadMessages` - messaging
+- `UploadFiles`, `DownloadFiles` - file transfer
+
+**Workspace**:
+- `CreateWorkspace`, `UpdateWorkspace`, `DeleteWorkspace`, `EditWorkspaceConfig`
+- `AddUsers`, `RemoveUsers`, `BanUser` - membership
+- `ManageDomains`, `ConfigureSystem`, `Themes`
+- `All` - every permission
+
+> An earlier revision listed `CreateOffice`, `UpdateOffice`, `DeleteOffice`,
+> `ManageOfficeMembers`, `CreateRoom` and `DeleteRoom` as three permission
+> tiers. None of those is a `Permission` variant.
 
 **Role-Based Permissions**:
 - `Admin` - Full permissions at all levels

@@ -29,6 +29,7 @@ what was already here.
 | `check-doc-setup-steps.mjs` | Fails if the stack REQUIRES configuration the quickstart never tells you to create. |
 | `check-docker-workspace-manifest.mjs` | The production server image builds against a SUBSTITUTE root manifest. |
 | `check-dockerfiles-copy-every-crate.mjs` | Every Rust workspace member must be COPY'd into every image that runs cargo. |
+| `check-docs-name-real-symbols.mjs` | CLAUDE.md and ARCHITECTURE.md are loaded into every session. |
 | `check-esm-imports-have-extensions.mjs` | In an ESM package, a relative import that runs must name a file Node can find. |
 | `check-every-gate-is-invoked.mjs` | Every `check-*.mjs` must be invoked by something. |
 | `check-every-integration-spec-has-a-runner.mjs` | Every integration spec must be named by an npm script that runs it. |
