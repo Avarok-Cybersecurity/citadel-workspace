@@ -6818,3 +6818,65 @@ or a handler that fired on every one would pass the first two tests while
 resolving one tab's registration out of another tab's session.
 
 137 gates green.
+
+## Round 657 — the first integration signal, and what it points at
+
+Run 34050229807 is the first UI run on this branch to reach the integration
+stage at all (the previous thirty were cancelled by my own pushes). Three
+failures so far, and two of them are the same failure:
+
+| job | spec | fails at |
+|---|---|---|
+| Playwright shard 2 | `p2p-messaging.spec.ts:116` P2P registration and handshake | ×3 with retries |
+| Playwright shard 2 | `member-list-loading.spec.ts:43` | ×3 with retries |
+| Integration | `test:reconnect-one-c2s` | `✗ No pending P2P request badge found after 20 attempts` |
+
+The reconnect leg waited ~60s in a real polling loop (`isVisibleWithin`, not the
+zero-wait `isVisible`), so the badge genuinely never appeared. Alongside it, on
+both browsers, repeatedly:
+
+```
+[WasmPeerBridge] QUERY localCid=… -> 0 peers (none)
+```
+
+Two independent suites agreeing rules out spec flake. Something stops a P2P
+registration from reaching the peer.
+
+### The environment these ran in
+
+`PARENT_BRANCH: master`. The UI branch is checked out against the **parent's
+master**, so the agent under test is master's, not this branch's. That is what
+`check-parent-checkouts-agree-on-the-ref` reports as correct — every checkout
+site takes `needs.parent-ref.outputs.ref` — but it means none of this branch's
+agent work is in play.
+
+And master's agent has this, in the peer-registration path, immediately before
+`propose_target`:
+
+```rust
+// citadel-internal-service/src/kernel/requests/peer/register.rs (origin/master)
+match remote.send_callback_subscription(NodeRequest::GetActiveSessions).await {
+    Ok(mut stream) => { if let Some(result) = stream.next().await { … } }
+```
+
+An unbounded await on a DEBUG subscription. If it never yields, PeerRegister
+blocks **before the peer is ever told**, which is exactly where both suites
+stop. `connect.rs:202` on master has the same shape. Round 644 deleted both on
+this branch and added `check-request-paths-do-not-wait-forever` to keep them
+out.
+
+### What is proved and what is not
+
+Proved: the block exists on master and not here; the failures occur at the point
+it sits; the wait was real.
+
+**Not** proved: that the subscription actually stalls in these runs. The jobs do
+not capture internal-service logs, so `[PeerRegister] Querying active
+sessions…` without a following `Calling propose_target` — the line that would
+settle it — is not available. A failure with no backend log is a failure that
+cannot be attributed, and that is itself the gap to close.
+
+Recorded as an open question rather than a diagnosis. The next step is either
+capturing agent logs in these jobs, or running the same spec locally against
+this branch's stack; the branches landing together would also remove the
+question by removing the difference.
