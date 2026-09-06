@@ -246,20 +246,45 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
         domain_id: &str,
         create_if_missing: bool,
     ) -> Result<(), NetworkError> {
-        if role != UserRole::Admin {
+        // `user.role` is the WORKSPACE role — the one field `is_admin` reads — so only a
+        // change AT THE ROOT may touch it.
+        //
+        // This wrote it whatever domain it was given, so `AddMember { user_id: A, domain_id:
+        // <a room>, role: Guest }` did not grant A a guest's rights in that room: it made A a
+        // Guest everywhere. The gate above does not catch that. `ensure_may_grant_role`
+        // refuses only roles ABOVE the actor's own, so an Owner adding an Admin to a room as a
+        // Guest passes it, and `ensure_not_last_admin` passes while a second admin exists.
+        // Two admins, and either could silently strip the other.
+        let scopes_workspace_role: bool = domain_id == crate::WORKSPACE_ROOT_ID;
+
+        // Only a real demotion needs the last-admin guard. Adding the last admin to a room as
+        // a guest is not one, and refusing it as "cannot demote the last admin" would be a
+        // refusal nobody could act on.
+        if scopes_workspace_role && role != UserRole::Admin {
             self.ensure_not_last_admin(user_id, "demote").await?;
         }
 
-        let mut user = match self.backend_tx_manager.get_user(user_id).await? {
-            Some(u) => u,
-            None if create_if_missing => {
-                User::new(user_id.to_string(), user_id.to_string(), role.clone())
-            }
+        let (mut user, is_new) = match self.backend_tx_manager.get_user(user_id).await? {
+            Some(u) => (u, false),
+            None if create_if_missing => (
+                // An account that does not exist yet has no workspace role to preserve, so the
+                // role it is created with is the one it was given.
+                User::new(user_id.to_string(), user_id.to_string(), role.clone()),
+                true,
+            ),
             None => return Err(NetworkError::msg("User not found")),
         };
 
-        user.role = role;
-        user.set_role_permissions(domain_id);
+        if scopes_workspace_role || is_new {
+            user.role = role.clone();
+            user.set_role_permissions(domain_id);
+        } else {
+            // Per-node grant only: what this role may do IN THIS DOMAIN. Written directly
+            // rather than through `set_role_permissions`, which derives from `user.role` and
+            // would hand out the workspace role's permissions instead of the one granted.
+            user.permissions
+                .insert(domain_id.to_string(), Permission::for_role(&role));
+        }
 
         // A role that grants nothing must grant nothing ANYWHERE.
         //
