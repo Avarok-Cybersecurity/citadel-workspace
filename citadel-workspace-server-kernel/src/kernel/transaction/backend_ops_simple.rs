@@ -264,10 +264,16 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         self.workspace_mutex.lock().await
     }
 
-    /// Get a single DomainNode by ID
+    /// Get a single DomainNode by ID.
+    ///
+    /// `_shared`, not `get_all_nodes`. The owned variant is
+    /// `(*shared).clone()`, and `DomainNode` holds the document body inline
+    /// (`mdx_content: String`) with every node under one backend key -- so
+    /// reading one node deep-cloned the entire workspace corpus and dropped
+    /// all of it. Opening a member roster cloned megabytes of MDX to read one
+    /// `members` field.
     pub async fn get_node(&self, node_id: &str) -> Result<Option<DomainNode>, NetworkError> {
-        let nodes = self.get_all_nodes().await?;
-        Ok(nodes.get(node_id).cloned())
+        Ok(self.get_all_nodes_shared().await?.get(node_id).cloned())
     }
 
     /// Insert a DomainNode. Serialized through `node_mutex`.
