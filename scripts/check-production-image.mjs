@@ -104,6 +104,87 @@ async function main() {
       unexpected.map((i) => i.details?.contentSecurityPolicyIssueDetails?.violatedDirective).join(', '),
     );
 
+    // ---- First-run onboarding is ON in the artefact users get. ----
+    //
+    // The requirement is that onboarding runs in production and NOT in
+    // development, so the integration suite's ~90 account creations do not each
+    // pay the two extra interactions it costs. Everything that checked it until
+    // now checked one side of that:
+    //
+    //   - onboarding-gate.test.ts asserts `isOnboardingEnabled()` with
+    //     `import.meta.env.DEV` mocked. That is the gate's LOGIC, not the
+    //     bundle's value of DEV.
+    //   - the onboarding specs run against the Vite DEV server and force
+    //     `?onboarding=1`, which returns at the param branch of
+    //     `isOnboardingEnabled` BEFORE `!isDev` is ever evaluated.
+    //
+    // So a production build with DEV somehow true — a wrong `--mode`, a stray
+    // `.env`, a Docker build arg — would ship with no onboarding at all, and
+    // every existing check would still be green.
+    //
+    // Here there is no query parameter and a fresh context has no
+    // `citadel:onboarding` key, so `isOnboardingEnabled()` can only reach
+    // `return !isDev`. The dialog appearing therefore proves the SHIPPED bundle
+    // has DEV false. Nothing else made that claim.
+    //
+    // Both branches are asserted because both were asked for: the new
+    // administrator, who must be told about the master password before the
+    // wizard, and the new member, who must be told they do not need it.
+    const onboardingContext = await browser.newContext();
+    const onboardingPage = await onboardingContext.newPage();
+    let onboarding = { shown: false, admin: 0, member: 0, beforeWizard: false, detail: '' };
+    try {
+      await onboardingPage.goto(ORIGIN, { waitUntil: 'domcontentloaded' });
+      await onboardingPage.click('[data-testid="create-account-button"]', { timeout: 30_000 });
+      await onboardingPage.waitForSelector('[data-testid="onboarding-intent"]', { timeout: 15_000 });
+      onboarding = {
+        shown: true,
+        admin: await onboardingPage.locator('[data-testid="onboarding-intent-admin"]').count(),
+        member: await onboardingPage.locator('[data-testid="onboarding-intent-member"]').count(),
+        // It has to come BEFORE the wizard, not beside it. Naming the master
+        // password after the step that needs it is the thing being fixed.
+        beforeWizard: (await onboardingPage.locator('[data-testid="wizard-next"]').count()) === 0,
+        detail: '',
+      };
+    } catch (error) {
+      onboarding.detail = String(error).split('\n')[0];
+    }
+    record('first-run onboarding appears with no query override', onboarding.shown, onboarding.detail);
+    record('the new-administrator branch is offered', onboarding.admin === 1, `count=${onboarding.admin}`);
+    record('the new-member branch is offered', onboarding.member === 1, `count=${onboarding.member}`);
+    record('it comes before the wizard, not beside it', onboarding.beforeWizard);
+    await onboardingContext.close();
+
+    // The control. Without it, a dialog hard-wired to render unconditionally
+    // satisfies every assertion above — and would then cost the integration
+    // suite the ~180 interactions this switch exists to avoid. So this asserts
+    // the SWITCH, not just the dialog.
+    //
+    // The pass signal is `wizard-next`, the wizard's first step, and not the
+    // absence of the dialog: absence is also what a page that never rendered
+    // the button, or never handled the click, looks like. An earlier version
+    // used "the Create Account button went away" as the click-landed proxy and
+    // was simply wrong — the wizard overlays the landing page, so the button
+    // stays in the DOM and the control reported a failure that was not one.
+    const suppressedContext = await browser.newContext();
+    const suppressedPage = await suppressedContext.newPage();
+    let suppressed = { wizard: false, dialogs: -1, detail: '' };
+    try {
+      await suppressedPage.goto(`${ORIGIN}/?onboarding=0`, { waitUntil: 'domcontentloaded' });
+      await suppressedPage.click('[data-testid="create-account-button"]', { timeout: 30_000 });
+      await suppressedPage.waitForSelector('[data-testid="wizard-next"]', { timeout: 15_000 });
+      suppressed = {
+        wizard: true,
+        dialogs: await suppressedPage.locator('[data-testid="onboarding-intent"]').count(),
+        detail: '',
+      };
+    } catch (error) {
+      suppressed.detail = String(error).split('\n')[0];
+    }
+    record('?onboarding=0 opens the wizard directly', suppressed.wizard, suppressed.detail);
+    record('?onboarding=0 shows no intent dialog', suppressed.dialogs === 0, `count=${suppressed.dialogs}`);
+    await suppressedContext.close();
+
     // ---- The PWA promise: it opens with no network at all. ----
     //
     // check-pwa-offline.mjs already asserts this story in full, but against the
