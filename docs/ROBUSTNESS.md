@@ -7565,3 +7565,47 @@ The count went from `14 seen, 0 unassigned` to **`12 seen, 11 examined`**.
 | clean tree | exit 0 | 12 seen, 11 examined |
 
 141 gates green.
+
+## Round 671 — the whole document hashed twice per keystroke, for a value nobody reads
+
+`MerkleTree.fromData` computed, alongside the per-chunk hashes it actually uses:
+
+```ts
+const sourceDataHash = sha256Sync(
+  new Uint8Array(chunks.flatMap(c => Array.from(strategy.serialize(c.data))))
+);
+```
+
+The whole document flattened into a **boxed `number[]`**, copied
+element-by-element into a `Uint8Array`, then hashed a second time — `sha256Sync`
+being a per-byte JS loop. For a 200 KB Yjs state that is ~196 intermediate
+arrays plus a 200,000-element array, on the main thread.
+
+It ran from `YjsMerkleTree.updateFromDocument` — the coalescer flushes every
+**300 ms of sustained typing** — and again on every remote sync message.
+`applyRemoteChunks` carried a second copy of it.
+
+Nothing read the result. The field was returned only by `getMetadata()`, and
+`getMetadata()` has **no callers anywhere** — not in `src/`, not in the specs.
+The sync protocol compares the root hash and the per-chunk hashes; this was a
+third hash of the same bytes that no code path consulted.
+
+Removed from both sites, with the reasoning left on the constructor so it is not
+reintroduced. Magnitudes here are arithmetic from the constants in the tree, not
+measured.
+
+| control | expected | observed |
+|---|---|---|
+| `getMetadata()` callers in `src/` | 0 | 0 |
+| `getMetadata()` callers in the specs | 0 | 0 |
+| `sourceDataHash` anywhere after removal | 0 (bar the note) | 1 — the explanatory comment |
+| merkle + yjs suites | unchanged | 18 passed |
+
+One thing to note about the full unit run from a bare UI clone: five tests fail
+there (`agent-download`, `the-root-sentinel-is-spelled-once`,
+`client-library-does-not-clobber-its-caller`) because they read files from the
+PARENT checkout, which a standalone clone does not have. They pass from the
+parent, which is where preflight and CI run them. Unrelated to this change, and
+recorded so the next person does not attribute them to one.
+
+141 gates green.
