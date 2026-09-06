@@ -9,6 +9,12 @@
  *
  * `cache: npm` is one line and setup-node does the rest. Nothing had it.
  *
+ * BOTH workflows. The parent's seven steps were fixed and the UI submodule's
+ * five were not -- because this gate read only the parent's workflow directory,
+ * so it reported 7 of 7 green while the repository where all UI work lands paid
+ * the full uncached cost on every job. The same one-of-two-places shape as the
+ * backend-log capture, found the same way: by a sweep, not by the gate.
+ *
  * Read as TEXT rather than parsed. A gate that imports js-yaml can only run in
  * a job that installs dependencies (see check-gates-have-their-dependencies),
  * and this one should be runnable on a bare checkout like the workflow it
@@ -20,7 +26,11 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const WORKFLOWS = join(ROOT, '.github/workflows');
+/** Both workflow directories: this repository's, and the UI submodule's. */
+const WORKFLOW_DIRS = [
+  join(ROOT, '.github/workflows'),
+  join(ROOT, 'citadel-workspaces/.github/workflows'),
+];
 
 /** Indentation width of a line, ignoring blank and comment-only lines. */
 function indentOf(line) {
@@ -30,17 +40,29 @@ function indentOf(line) {
 const problems = [];
 let checked = 0;
 
-const files = existsSync(WORKFLOWS)
-  ? readdirSync(WORKFLOWS).filter((f) => /\.ya?ml$/.test(f))
-  : [];
+/** `[label, absolute path]` for every workflow file in both directories. */
+const files = [];
+for (const dir of WORKFLOW_DIRS) {
+  if (!existsSync(dir)) {
+    console.error(
+      `FAIL: ${dir} is missing.\n` +
+        'Run from the parent checkout with submodules initialised. A gate that silently\n' +
+        'examines one of the two workflows is exactly how the UI half went unfixed.',
+    );
+    process.exit(1);
+  }
+  for (const f of readdirSync(dir).filter((f) => /\.ya?ml$/.test(f))) {
+    files.push([`${dir.includes('citadel-workspaces') ? 'citadel-workspaces/' : ''}${f}`, join(dir, f)]);
+  }
+}
 
-if (files.length === 0) {
-  console.error('FAIL: no workflow files found — this gate would pass by considering nothing.');
+if (files.length < 2) {
+  console.error('FAIL: fewer than two workflow files found — this gate would pass by considering nothing.');
   process.exit(1);
 }
 
-for (const file of files) {
-  const lines = readFileSync(join(WORKFLOWS, file), 'utf8').split('\n');
+for (const [file, path] of files) {
+  const lines = readFileSync(path, 'utf8').split('\n');
 
   for (let i = 0; i < lines.length; i += 1) {
     if (!/^\s*(- )?uses:\s*actions\/setup-node@/.test(lines[i])) continue;

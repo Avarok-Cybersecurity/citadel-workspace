@@ -7166,3 +7166,54 @@ test of the filter. Re-controlled afterwards by dropping the subscription's
 `keep()` — both tests go red, so it still discriminates a real leak.
 
 139 gates green.
+
+## Round 663 — the cache fix, applied to one of the two workflows
+
+`check-setup-node-restores-the-npm-cache` opens with its own reason for
+existing: *"roughly a runner-hour per push was being spent re-downloading a tree
+that had not changed … `cache: npm` is one line and setup-node does the rest.
+**Nothing had it.**"*
+
+The parent's seven `setup-node` steps have it. The UI submodule's five have
+**none** — and the UI submodule is where all UI work lands, so every job there
+paid the full uncached `npm ci` over the same 1154-package tree.
+
+The gate could not see it: `WORKFLOWS` was the parent's directory alone. It
+reported 7 of 7 green.
+
+This is the third instance today of one rule, two workflows, one fixed —
+after the after-the-test backend log capture (659) and before it the four
+member-list subscribers (662). The pattern is not that people forget; it is that
+**the gate is written from inside the repository whose problem was just fixed**,
+and the sibling is not in scope.
+
+Both workflows are read now, and the missing directory is a hard failure rather
+than an empty list.
+
+The UI's steps use `cache-dependency-path: parent/package-lock.json`: those jobs
+check the parent out into `parent/` and run with `working-directory: parent`, and
+all five `setup-node` steps run after that checkout, so the path resolves.
+
+| control | expected | observed |
+|---|---|---|
+| widen the gate before fixing the UI | finds all five | 5 of 12 flagged — the gate was its own control |
+| drop the cache from one UI step | 1 of 12 flagged | 1 of 12 flagged |
+| hide the UI workflow directory | refuse rather than pass | "is missing… a gate that silently examines one of the two workflows is exactly how the UI half went unfixed" |
+
+### Verified, not acted on
+
+`peer/register.rs` contains **no** `timeout(` at all, while every sibling
+cross-node wait is bounded — `peer/connect.rs`, `peer/disconnect.rs`,
+`peer/mod.rs`, `message.rs` each have one. `propose_target` and
+`register_to_peer` are awaited unbounded, so a request that is never answered
+leaks the task and the SDK callback entry, and the browser (bounded at
+`PEER_REGISTER_MS = 10000`) tells the user "Registration request timed out" for a
+request that is still open.
+
+It is **not** the cause of the six failing P2P specs: `PeerRegisterNotification`
+is emitted from the SDK event loop (`responses/peer_event.rs:200`), not from this
+handler, so the requester's await does not gate the peer's badge. Recorded here
+rather than fixed, because the right bound depends on whether that await is meant
+to span a human decision — which is a protocol question, not a timeout constant.
+
+139 gates green.
