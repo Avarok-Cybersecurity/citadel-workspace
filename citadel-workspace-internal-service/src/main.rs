@@ -3,6 +3,7 @@ use citadel_internal_service::OriginPolicy;
 use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
 use std::error::Error;
 use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 
 #[tokio::main]
@@ -40,7 +41,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
         );
     }
 
-    let service = CitadelWorkspaceService::new_websocket(opts.bind, origins).await?;
+    // TLS by default. See BUILTIN_TLS_CERT for why the key ships in the binary,
+    // and --no-tls for the one case where plain is right.
+    let service = if opts.no_tls {
+        citadel_logging::warn!(target: "citadel",
+            "Serving plain ws:// (--no-tls). A page served over HTTPS cannot open this \
+             socket; use this only behind a same-origin proxy on loopback.");
+        CitadelWorkspaceService::new_websocket(opts.bind, origins).await?
+    } else {
+        let (chain, key) = resolve_tls_material(opts.tls_cert.as_deref(), opts.tls_key.as_deref())?;
+        CitadelWorkspaceService::new_websocket_tls(opts.bind, origins, &chain, &key).await?
+    };
 
     // Backend selection precedence:
     //   1. INTERNAL_SERVICE_BACKEND / INTERNAL_SERVICE_DATA_DIR env vars
@@ -100,6 +111,62 @@ struct Options {
     /// INTERNAL_SERVICE_ALLOWED_ORIGINS, which takes precedence.
     #[structopt(long)]
     allowed_origins: Option<String>,
+    /// PEM certificate chain to serve on the WebSocket, leaf first. Overrides
+    /// the built-in certificate. Requires --tls-key.
+    #[structopt(long)]
+    tls_cert: Option<PathBuf>,
+    /// PEM private key for --tls-cert (PKCS#8 or RSA).
+    #[structopt(long)]
+    tls_key: Option<PathBuf>,
+    /// Serve plain `ws://` instead of `wss://`.
+    ///
+    /// Only correct when the page is itself on loopback and reaches the agent
+    /// through a same-origin proxy. A page served over HTTPS cannot open a
+    /// `ws://` socket at all, so this makes the agent unreachable from a hosted
+    /// UI.
+    #[structopt(long)]
+    no_tls: bool,
+}
+
+/// The certificate the agent serves when none is supplied.
+///
+/// `local.avarok.net` is a public name whose A record is 127.0.0.1, so a
+/// publicly-trusted certificate can be issued for it and every visitor's own
+/// agent can present it. That is what makes a HOSTED page able to reach an
+/// agent on the visitor's machine: the browser refuses `ws://` from an HTTPS
+/// page, and refuses `wss://` without a certificate it trusts.
+///
+/// The private key is therefore inside a binary anyone can download, and that
+/// is deliberate. What it authorises is a TLS handshake for a name that only
+/// ever resolves to the loopback interface of the machine doing the
+/// handshaking, so possession grants no access to anything of anyone else's.
+/// The agent's own authorisation is the Origin allowlist, which is unchanged
+/// and required.
+const BUILTIN_TLS_CERT: &[u8] = include_bytes!("../tls/local.avarok.net.crt.pem");
+const BUILTIN_TLS_KEY: &[u8] = include_bytes!("../tls/local.avarok.net.key.pem");
+
+/// The certificate and key to serve: the operator's if given, else the built-in.
+///
+/// Both flags or neither. One alone is always a mistake -- a chain with no key
+/// cannot serve and a key with no chain names nothing -- and silently falling
+/// back to the built-in certificate for a half-specified pair would present a
+/// certificate the operator did not choose.
+fn resolve_tls_material(
+    cert: Option<&Path>,
+    key: Option<&Path>,
+) -> Result<(Vec<u8>, Vec<u8>), Box<dyn Error>> {
+    match (cert, key) {
+        (None, None) => Ok((BUILTIN_TLS_CERT.to_vec(), BUILTIN_TLS_KEY.to_vec())),
+        (Some(cert), Some(key)) => {
+            let chain =
+                std::fs::read(cert).map_err(|e| format!("--tls-cert {}: {e}", cert.display()))?;
+            let key_bytes =
+                std::fs::read(key).map_err(|e| format!("--tls-key {}: {e}", key.display()))?;
+            Ok((chain, key_bytes))
+        }
+        (Some(_), None) => Err("--tls-cert was given without --tls-key".into()),
+        (None, Some(_)) => Err("--tls-key was given without --tls-cert".into()),
+    }
 }
 
 /// Resolve the origin allowlist from env + CLI, or explain what is missing.
