@@ -70,8 +70,38 @@ const buildRs = buildRsRaw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/
  * Both halves are required. `include_str!` alone embeds a stale copy at compile
  * time; the `rerun-if-changed` alone watches a file nothing consumes.
  */
-const readsTheList = buildRs.includes('include_str!("../scripts/wasm-source-trees.txt")');
-const watchesTheList = buildRs.includes('rerun-if-changed=../scripts/wasm-source-trees.txt');
+// `fs::read_to_string`, not `include_str!`.
+//
+// The first version of this accepted `include_str!`, and that is compile-time and
+// hard-fails when the file is absent — which it is in the Docker images, since they
+// copy specific crates and never `scripts/`. The agent image stopped compiling and
+// every "Start Services" job went down. Matching the runtime read means the form
+// this gate BLESSES is the one that works in both places it is built.
+const readsTheList = buildRs.includes('fs::read_to_string(list_path)');
+const watchesTheList = buildRs.includes('rerun-if-changed={list_path}');
+
+/**
+ * A read that cannot fail loudly is a read that fails silently.
+ *
+ * Degrading on a missing list is right for a Docker build and wrong for a host
+ * checkout, and the script cannot tell them apart — so it must SAY so. Without
+ * this, a checkout that lost the file would rebuild nothing on a WASM edit and
+ * nothing anywhere would mention it.
+ */
+const saysWhenItCannotRead = /cargo:warning=\{?list_path/.test(buildRs);
+
+if (readsTheList && !saysWhenItCannotRead) {
+  console.error(
+    '::error file=citadel-workspace-internal-service/build.rs::reads the tree list but is silent when it cannot',
+  );
+  console.error(
+    '\nFAIL: build.rs reads scripts/wasm-source-trees.txt but emits no `cargo:warning` when\n' +
+      'that read fails. Degrading is correct inside a Docker build, which never copies\n' +
+      'scripts/; on a host checkout the same silence means an edit to the WASM client\n' +
+      'rebuilds nothing and says nothing.',
+  );
+  process.exit(1);
+}
 
 if (readsTheList && !watchesTheList) {
   console.error(

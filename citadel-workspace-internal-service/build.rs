@@ -29,16 +29,45 @@ fn main() {
     // Reading the file makes the gate a redundancy check instead of the only
     // thing holding three copies together.
     //
-    // `include_str!` embeds it at compile time, so the file itself must also
-    // re-trigger this script; otherwise adding a tree would not take effect until
-    // something else invalidated the build.
-    println!("cargo:rerun-if-changed=../scripts/wasm-source-trees.txt");
-    for line in include_str!("../scripts/wasm-source-trees.txt").lines() {
-        let dir = line.trim();
-        if dir.is_empty() || dir.starts_with('#') {
-            continue;
+    // Read at BUILD-SCRIPT RUNTIME, not with `include_str!`.
+    //
+    // `include_str!` is compile-time and hard-fails when the file is absent, and
+    // the file IS absent in the Docker images: they copy specific crates and never
+    // `scripts/`. The agent image stopped compiling with
+    // `error[E0282]: type annotations needed` -- the macro failed, so `line` had no
+    // type -- and every "Start Services" job in CI went down with it. A build
+    // script that requires a file outside the copied tree is a build script that
+    // only works in one of the two places it runs.
+    //
+    // `fs::read_to_string` degrades instead. Where the list is present (a host
+    // checkout, which is where incremental rebuilds matter) the triggers are
+    // derived from it. Where it is not, this emits a warning rather than failing:
+    // those builds are one-shot and set SKIP_WASM_BUILD anyway, so there is no
+    // incremental rebuild for the triggers to serve.
+    //
+    // It is a warning and not silence because a MISSING list on a host checkout is
+    // a real problem -- editing the P2P send path would rebuild nothing -- and the
+    // difference between the two cases is not something this script can see.
+    let list_path = "../scripts/wasm-source-trees.txt";
+    println!("cargo:rerun-if-changed={list_path}");
+    match fs::read_to_string(list_path) {
+        Ok(list) => {
+            for line in list.lines() {
+                let dir = line.trim();
+                if dir.is_empty() || dir.starts_with('#') {
+                    continue;
+                }
+                println!("cargo:rerun-if-changed=../citadel-internal-service/{dir}");
+            }
         }
-        println!("cargo:rerun-if-changed=../citadel-internal-service/{dir}");
+        Err(err) => {
+            println!(
+                "cargo:warning={list_path} could not be read ({err}); no WASM source tree will \
+                 trigger a rebuild. Expected inside a Docker build, which copies specific crates \
+                 and not scripts/. On a host checkout it means an edit to the WASM client will \
+                 not rebuild it."
+            );
+        }
     }
 
     // Check if we should skip WASM building (e.g., in CI or Docker)

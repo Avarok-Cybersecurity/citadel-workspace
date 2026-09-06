@@ -4915,3 +4915,49 @@ than the freshly-resolved 6.0.3. Both were failures that had to be repaired by
 hand twice before the script was made to do it.
 
 123 gates green.
+
+## Round 626 — the SSOT fix broke the build in the other place it builds
+
+Round 624 replaced `build.rs`'s hand-copied list of WASM source trees with
+`include_str!("../scripts/wasm-source-trees.txt")`. That removed a fourth copy of
+one fact, which was right, and broke every "Start Services" job in CI, which was
+not:
+
+    error[E0282]: type annotations needed
+      --> citadel-workspace-internal-service/build.rs:37:19
+       |
+    37 |         let dir = line.trim();
+       |                   ^^^^ cannot infer type
+
+`include_str!` is compile-time and hard-fails when the file is absent — and it IS
+absent in the Docker images, which copy specific crates and never `scripts/`. The
+macro failed, so `line` had no type, and the error named type inference rather
+than a missing file. The server image built fine; the agent image did not.
+
+**A build script that requires a file outside the copied tree only works in one of
+the two places it runs.** `fs::read_to_string` degrades instead: where the list is
+present — a host checkout, which is where incremental rebuilds matter — the
+triggers come from it; where it is not, the script warns and continues, and those
+builds are one-shot with `SKIP_WASM_BUILD` set anyway.
+
+It warns rather than passing silently because a missing list on a HOST checkout is
+a real fault — an edit to the P2P send path would rebuild nothing — and the script
+cannot tell the two cases apart. The gate now requires that warning to exist:
+degrading quietly is the same defect wearing a friendlier face.
+
+Verified the way it should have been the first time: the build script was compiled
+in BOTH contexts, in a throwaway crate. List absent — compiles, warns, continues.
+List present — compiles clean. That check takes thirty seconds and would have
+caught this before the push.
+
+### Two regressions in three rounds, both from improvements
+
+Round 623's `npm ci` and round 624's `include_str!` were both correct fixes to
+real problems that failed in the OTHER environment. The pattern is the same one
+this record keeps finding in other people's code: a change verified in the place
+the author was standing, and not in the place it also runs.
+
+The generalisable habit is not "be more careful". It is: when a change touches
+something that runs in more than one context — a script that runs on a host and
+in a container, a build script compiled in a checkout and in an image — exercise
+BOTH before pushing. Both were cheap to exercise, and neither was.
