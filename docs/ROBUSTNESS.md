@@ -3677,3 +3677,103 @@ that omits the argument now resolves to the file that is actually served. It
 throws if the pattern is absent, because a silent no-op would put the duplicate
 back on the next wasm-pack output whose wording changed, and nothing would say
 so.
+
+## Round 586 — the dev agent was bound to every interface
+
+`docker-compose.yml` set `INTERNAL_SERVICE_BIND_HOST=[::]` on a service running
+`network_mode: host`. That is every interface of the developer's machine. The
+agent holds decrypted P2P plaintext and an unauthenticated control plane —
+`GetSessions` enumerates every account signed in, and a WebSocket is exempt from
+the same-origin policy and from CORS preflight — so anyone on the same office or
+café Wi-Fi could open `ws://<devbox>:12345` and act as any of them. The file's
+own comment, twenty lines below, describes that consequence as the reason the
+Origin allowlist exists. Production has always bound `127.0.0.1`.
+
+The widening was deliberate and correct at the time: the Vite dev proxy dialed
+by hostname, `localhost` resolves to `::1` first on macOS, and an IPv4-only
+socket refused it. **That proxy was later pinned to `127.0.0.1`** — its own
+comment reads "127.0.0.1, NOT localhost … this was the one place that did not".
+Two fixes landed for one bug; only one was still needed, and the redundant one
+kept its exposure.
+
+`check-agent-binds-loopback.mjs` holds it, and **what it does not flag is the
+substance of it**. A bind address is only a boundary when the socket is on the
+host's network. `docker-compose.local.yml` binds `0.0.0.0` on a private bridge
+network with no `ports:` — the container's interfaces, where loopback would make
+it unreachable from its own siblings. The first version of the gate failed that
+file, and a gate that cries wolf on the safe configuration is how the unsafe one
+gets widened. It now judges per-service exposure, and refuses to pass if no
+service is on the host's network at all.
+
+Controls three ways: dev `[::]` → red, production `0.0.0.0` → red,
+bridge-network `0.0.0.0` → stays green.
+
+## Round 587 — a document that could not be read was replaced with an empty one
+
+`loadDocumentFromDB` returned `null` for both "no such key" and "the read
+failed", under a comment saying "reporting it as missing, which it may not be".
+`adoptDocument` reads null as "not stored yet" and writes a fresh empty document
+over the key. One timed-out LocalDB read on reopening a document replaced its
+content and its entire revision chain.
+
+`deleteDocumentFromDB`, **twenty lines below in the same file**, already drew the
+distinction — "Real failures must surface" — and `isGenuinelyAbsent` was already
+imported at the top. That helper's own header lists four earlier sites of the
+same mistake. This is the fifth.
+
+**The first version of the adopt test could not fail**, and the control is what
+showed it: it mocked `../persistence`, the module holding the defect, so with
+origin/master's loader restored the loader test went red and the adopt test
+stayed green. A test that replaces the broken function with a correct fake
+measures the fake. The fake moved one layer down to `websocketService`; two
+tests now fail on master's code and the four absence assertions still pass.
+
+tsc caught a private constructor that vitest ran happily, and each case builds
+its own store — `getInstance` memoises and adopt's first line is a cache check,
+so a shared instance would have answered before any read happened.
+
+## Round 588 — the UI testing agents pointed at a port nothing serves
+
+Twenty-four references to Vite's 5173 default across five `.claude/agents/*.md`
+files, while the UI serves 5291. One of them is a prerequisite check:
+`basic-p2p-test` curls 5173 and, on the refusal it will always get, aborts with
+"Check if `tilt up` is running and UI service is healthy". So that agent could
+never run, and its own error sent the operator to restart a healthy stack.
+
+`check-docs-name-the-real-ui-port.mjs` derives the port from `vite.config.ts` and
+the UI Dockerfile rather than containing it — a gate with the number in it is one
+more copy to drift, and drift is the defect.
+
+**The first control run came back green and the gate was not at fault.**
+`sed -i '' '0,/re/s//../'` is a GNU address form that BSD sed ignores silently,
+so the file was never edited. Worth recording: a green control is
+indistinguishable from a check that measures nothing until you find out which —
+and here it was neither, it was the control that had not run.
+
+## Round 589 — two gates agreed with each other and were both wrong
+
+CI checks binding freshness with `git diff --exit-code -- bindings/`, under a
+comment calling it "the freshness check the parity gate cannot make". It cannot
+make this one either, structurally: ts-rs writes files and never deletes them, so
+a removed type leaves its binding untouched and the diff clean; and a newly
+exported type produces an untracked file, which a diff also ignores. That step
+can only fail on a **shape change** to an existing type.
+
+Found by counting — 26 binding files against 23 `#[ts(export)]` sites. `Office`,
+`Room` and `ListType` were deleted from the Rust source in February 2026 and
+their bindings sat there for seven months, still re-exported to consumers.
+
+`check-generated-types-fresh` did not catch it because it compares the two
+*copies* of the bindings to each other, and both carried the same three ghosts.
+**Two gates that agree with each other are not the same as two gates that are
+right.** The new gate compares exported type names against binding filenames in
+both directions, and refuses to pass if either set is empty.
+
+### Where the waves stand
+
+Finding is still far ahead of landing. #114 merged — the first parent merge of
+the day — and five parent PRs plus two UI PRs sit at "1 pass, N pending" because
+the account is throttled. That throttling is the direct consequence of the run
+churn earlier in the day: 37 cancelled runs. The lesson already recorded in round
+574 is holding up, and the correct response remains to stop generating load
+rather than to generate more clearing it.
