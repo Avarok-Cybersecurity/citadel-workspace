@@ -53,12 +53,22 @@ async fn still_administers(kernel: &Kernel, user: &str) -> bool {
         .expect("backend read")
 }
 
-async fn remove(kernel: &Kernel, target: &str) {
+/// Removal, by a named actor.
+///
+/// The actor used to be hard-coded to the seeded Admin. It has to be a
+/// parameter now, because an Admin may no longer unseat an Owner: the Owner
+/// runs the workspace and appoints administrators, so removing one is above an
+/// Admin's authority (see `no_one_unseats_a_role_above_their_own`).
+///
+/// That is a constraint on WHO may remove, and this file is about WHAT removal
+/// does to the role. Naming the actor keeps the two apart instead of letting
+/// the authority rule quietly decide the outcome of a revocation test.
+async fn remove_as(kernel: &Kernel, actor: &str, target: &str) {
     kernel
         .domain_operations
-        .remove_user_from_domain(TEST_ADMIN_USER_ID, target, ROOT)
+        .remove_user_from_domain(actor, target, ROOT)
         .await
-        .expect("an admin may remove a member");
+        .expect("the actor may remove this member");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -66,12 +76,18 @@ async fn removing_an_owner_takes_the_role() {
     let kernel = create_test_kernel().await;
     insert_user_with_role(&kernel, "founder", UserRole::Owner).await;
     join_root(&kernel, "founder").await;
+    // A peer Owner does the removing. An Admin cannot reach an Owner any more,
+    // and a peer of equal authority is the narrowest actor that can -- so the
+    // refusal under test below is the ROLE not being dropped, never the caller
+    // being turned away at the door.
+    insert_user_with_role(&kernel, "cofounder", UserRole::Owner).await;
+    join_root(&kernel, "cofounder").await;
     assert!(
         still_administers(&kernel, "founder").await,
         "an Owner administers before removal, or nothing below is being measured",
     );
 
-    remove(&kernel, "founder").await;
+    remove_as(&kernel, "cofounder", "founder").await;
 
     assert_eq!(
         role_of(&kernel, "founder").await,
@@ -92,7 +108,7 @@ async fn removing_an_admin_still_takes_the_role() {
     insert_user_with_role(&kernel, "deputy", UserRole::Admin).await;
     join_root(&kernel, "deputy").await;
 
-    remove(&kernel, "deputy").await;
+    remove_as(&kernel, TEST_ADMIN_USER_ID, "deputy").await;
 
     assert_eq!(role_of(&kernel, "deputy").await, UserRole::Banned);
     assert!(!still_administers(&kernel, "deputy").await);
@@ -109,7 +125,7 @@ async fn removing_a_plain_member_does_not_promote_them() {
     insert_user_with_role(&kernel, "visitor", UserRole::Guest).await;
     join_root(&kernel, "visitor").await;
 
-    remove(&kernel, "visitor").await;
+    remove_as(&kernel, TEST_ADMIN_USER_ID, "visitor").await;
 
     let after = role_of(&kernel, "visitor").await;
     assert_eq!(after, UserRole::Banned);

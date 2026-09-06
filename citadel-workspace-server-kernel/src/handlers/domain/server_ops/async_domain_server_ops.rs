@@ -92,6 +92,48 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
             Some(user) => user,
             None => return Err(NetworkError::msg("Permission denied: unknown actor")),
         };
+        // The chain of command decides between built-in roles; permission-set
+        // containment decides everything else.
+        //
+        // Containment alone said an Owner may not grant Admin, because Admin
+        // holds the `All` wildcard that `for_role` withholds from Owner. That is
+        // the right answer to "what may this role DO" and the wrong answer to
+        // "whom may this role APPOINT": the Owner runs the workspace, and an
+        // Admin is someone they appoint. `command_authority` is the ladder, and
+        // it returns None for Custom roles precisely so they keep falling
+        // through to containment -- a rank-21 Custom holding nine of the
+        // twenty-seven permissions must not outrank Owner, and containment is
+        // what stops it.
+        if let (Some(mine), Some(granting)) =
+            (actor.role.command_authority(), role.command_authority())
+        {
+            if mine >= granting {
+                return Ok(());
+            }
+            // A vacant seat may be filled; an occupied one may not be taken.
+            //
+            // Without this the Owner role is UNREACHABLE. `UserRole::Owner` is
+            // never assigned anywhere in the kernel's production code -- it is
+            // only ever read -- so the only way a workspace gains an Owner is
+            // this grant, and a workspace begins with an Admin and no Owner. A
+            // strict ladder would therefore have made "Owner" a role nobody
+            // could ever hold, which is not a hierarchy, it is a dead branch.
+            //
+            // Scoped as tightly as it can be: it applies only while the
+            // workspace has NO member holding the role being granted, so it
+            // bootstraps the seat and closes behind itself. An Admin cannot use
+            // it to manufacture a confederate above them once an Owner exists,
+            // which is the lateral escalation that would otherwise be the point
+            // of allowing this at all.
+            if self.workspace_has_no_member_holding(role).await? {
+                return Ok(());
+            }
+            return Err(NetworkError::msg(format!(
+                "Permission denied: {} cannot grant {}, which is above them",
+                actor.role, role
+            )));
+        }
+
         let granting: Vec<Permission> = Permission::for_role(role).into_iter().collect();
         self.ensure_may_grant_permissions(actor_user_id, &granting)
             .await
@@ -136,6 +178,127 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
             )));
         }
         Ok(())
+    }
+
+    /// Refuse acting ON someone whose authority the actor does not itself hold.
+    ///
+    /// `ensure_may_grant_role` closed one direction: you cannot hand out
+    /// authority you lack. This is the other, and it was open. Nothing anywhere
+    /// compared the actor against the target's CURRENT role, so the rule was
+    /// "you may not promote above yourself" with no matching "you may not
+    /// demote someone above you".
+    ///
+    /// `Permission::for_role(Banned)` is EMPTY, so the granting check passes
+    /// trivially for every actor: banning is granting nothing. An Owner holds 25
+    /// of the 27 permissions and lacks Admin's `All`, so an Owner could not
+    /// promote anyone to Admin — and could ban or demote an existing one. Three
+    /// paths reached it: `update_workspace_member_role`, `remove_user_from_domain`,
+    /// and `add_user_to_domain` with `role: Banned` at the workspace root.
+    ///
+    /// `ensure_not_last_admin` is not this guard. It refuses only the change
+    /// that empties the admin set; with two Admins present it permits either to
+    /// be removed by anyone who passed the entry gate.
+    ///
+    /// Same comparison as the granting side, pointed at the target's role, so
+    /// the two rules cannot drift: an Admin holds `All` and may act on anyone;
+    /// an actor may act on a peer of equal authority; nobody may act on someone
+    /// holding a permission they lack.
+    ///
+    /// Self-action is exempt. Demoting or removing YOURSELF hands nobody any
+    /// authority, and `ensure_not_last_admin` already refuses the one case that
+    /// matters — the workspace's last administrator standing down.
+    async fn ensure_may_act_on(
+        &self,
+        actor_user_id: &str,
+        target_user_id: &str,
+        action: &str,
+    ) -> Result<(), NetworkError> {
+        if actor_user_id == target_user_id {
+            return Ok(());
+        }
+        let target = match self.backend_tx_manager.get_user(target_user_id).await? {
+            Some(user) => user,
+            // Not a user yet. `add_user_to_domain` mints one, and there is no
+            // standing authority to protect.
+            None => return Ok(()),
+        };
+
+        // Only a MEMBER of this workspace holds authority in it.
+        //
+        // A `User` record can carry `UserRole::Owner` while belonging to no
+        // workspace at all -- roles live on the user, membership lives on the
+        // workspace -- and admitting such a person is not unseating anybody.
+        // Without this, an Admin could not `AddMember` anyone whose stored role
+        // outranked them, so a workspace could never admit its own Owner: the
+        // grant was permitted as a bootstrap and then refused one line later
+        // for acting on the very authority it was about to confer.
+        //
+        // Scoped to membership rather than skipped for AddMember, because
+        // AddMember at the root also WRITES the role: admitting a standing
+        // Owner as a Member is a demotion, and that must still be refused.
+        if !self
+            .is_member_of_domain(target_user_id, crate::WORKSPACE_ROOT_ID)
+            .await?
+        {
+            return Ok(());
+        }
+        let actor = match self.backend_tx_manager.get_user(actor_user_id).await? {
+            Some(user) => user,
+            None => return Err(NetworkError::msg("Permission denied: unknown actor")),
+        };
+
+        // Same ladder as the granting side, so the two rules cannot disagree:
+        // you may unseat someone you could have appointed.
+        if let (Some(mine), Some(theirs)) = (
+            actor.role.command_authority(),
+            target.role.command_authority(),
+        ) {
+            return if mine >= theirs {
+                Ok(())
+            } else {
+                Err(NetworkError::msg(format!(
+                    "Permission denied: {} cannot {action} {}, who is above them",
+                    actor.role, target.role
+                )))
+            };
+        }
+
+        let held = Permission::for_role(&actor.role);
+        if let Some(missing) = Permission::for_role(&target.role)
+            .into_iter()
+            .find(|p| !Permission::has_permission(&held, p))
+        {
+            return Err(NetworkError::msg(format!(
+                "Permission denied: {} cannot {action} {}, who holds {missing:?}",
+                actor.role, target.role
+            )));
+        }
+        Ok(())
+    }
+
+    /// Whether the workspace currently has nobody holding `role`.
+    ///
+    /// The same scan `ensure_not_last_admin` does, asked the other way round,
+    /// and used for one purpose only: letting an administrator fill a VACANT
+    /// seat above their own rank. See `ensure_may_grant_role`.
+    async fn workspace_has_no_member_holding(&self, role: &UserRole) -> Result<bool, NetworkError> {
+        let workspace = match self
+            .backend_tx_manager
+            .get_workspace(crate::WORKSPACE_ROOT_ID)
+            .await?
+        {
+            Some(ws) => ws,
+            // No workspace yet is as vacant as it gets.
+            None => return Ok(true),
+        };
+        for member_id in &workspace.members {
+            if let Some(member) = self.backend_tx_manager.get_user(member_id).await? {
+                if member.role == *role {
+                    return Ok(false);
+                }
+            }
+        }
+        Ok(true)
     }
 
     /// Refuse anything that would leave the workspace with nobody who can
@@ -564,6 +727,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         // they may hand out, and `user_id_to_add` may be the caller.
         self.ensure_may_grant_role(admin_id, &role).await?;
 
+        // `AddMember` is also a role WRITE at the workspace root, so it is the
+        // third door to the same demotion: `role: Banned` on a standing Admin
+        // passes the granting check (Banned grants nothing) and would otherwise
+        // strip them.
+        self.ensure_may_act_on(admin_id, user_id_to_add, "change the role of")
+            .await?;
+
         // If this is the workspace root, use the workspace storage
         // Held across BOTH writes: the membership below and the role at the end.
         //
@@ -682,6 +852,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             // below, which is the same erased-member race the connect path and
             // update_workspace take this lock for.
             let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+
+            // Inside the lock, beside the last-admin check, for the same
+            // reason: the target's role is what both read, and a concurrent
+            // promotion between the two would answer from different states.
+            self.ensure_may_act_on(admin_id, user_id_to_remove, "remove")
+                .await?;
 
             self.ensure_not_last_admin(user_id_to_remove, "remove")
                 .await?;
@@ -845,6 +1021,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         // above could otherwise grant Admin, which carries the ConfigureSystem
         // an Owner is deliberately not granted.
         self.ensure_may_grant_role(actor_user_id, &role).await?;
+
+        // And the other direction: what the target currently holds.
+        self.ensure_may_act_on(actor_user_id, target_user_id, "change the role of")
+            .await?;
 
         // See `write_user_role` — the lock, the last-admin check and the write
         // are one unit, and this was the writer that never took the lock.
