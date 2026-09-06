@@ -47,6 +47,7 @@ what was already here.
 | `check-images-build-what-the-lockfile-says.mjs` | An image that compiles this workspace must copy the lockfile. |
 | `check-install-doc-names-required-env.mjs` | `docker compose -f docker-compose.production.yml up -d --wait` fails with no useful message when a variable that has no default is unset: the container starts, the binary exits, and `--wait` reports a timeout. |
 | `check-intent-results-checked.mjs` | An intent whose result reports failure must have that result read. |
+| `check-lint-scripts-match-ci.mjs` | CI lints every workspace with `--max-warnings 0`. |
 | `check-listener-fanouts-are-isolated.mjs` | A fan-out over listeners must not let one of them silence the rest. |
 | `check-message-storage-has-one-owner.mjs` | A room's message keys are built in exactly one module. |
 | `check-network-fetches-are-bounded.mjs` | A retry bounds failures. |

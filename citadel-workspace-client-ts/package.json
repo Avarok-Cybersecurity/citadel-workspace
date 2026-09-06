@@ -22,7 +22,7 @@
     "dev": "tsc --watch",
     "clean": "rm -rf dist/",
     "typecheck": "tsc --noEmit",
-    "lint": "npx eslint .",
+    "lint": "npx eslint . --max-warnings 0",
     "test": "npm run build && node scripts/assert-tests-exist.mjs && node --test $(node scripts/assert-tests-exist.mjs --print)"
   },
   "dependencies": {
