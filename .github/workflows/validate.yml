@@ -339,6 +339,15 @@ jobs:
         # the reasoning was never carried to the workspace-shaped broadcast.
         run: node scripts/check-broadcasts-name-their-audience.mjs
 
+      - name: Acting on a member is guarded
+        # `ensure_may_act_on` compares the actor against the TARGET's standing.
+        # It was added to the three doors that write a ROLE and missed the
+        # fourth, which writes the permission MAP instead: an Admin could `Set`
+        # the Owner's grants to nothing while unable to demote that same Owner
+        # by one rank. `Permission::for_role(Banned)` is empty and Remove hands
+        # out nothing, so the granting check refuses neither.
+        run: node scripts/check-acting-on-a-member-is-guarded.mjs
+
       - name: Request paths do not wait forever
         # connect.rs opened a DEBUG `GetActiveSessions` subscription between the
         # SDK connect and building the Connection, and awaited its stream with no

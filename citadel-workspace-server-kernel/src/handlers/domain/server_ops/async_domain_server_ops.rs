@@ -1086,6 +1086,24 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
                 .await?;
         }
 
+        // And the other direction, which was open here alone. The three doors
+        // `no_one_unseats_a_role_above_their_own` closed all write a ROLE;
+        // this one writes the permission map, and the entry gate above admits
+        // any Admin. So an Admin could not demote or ban the Owner, and could
+        // `Set` the Owner's grants to nothing -- Remove is not even contained
+        // by the granting check, because taking away grants nothing.
+        //
+        // The role's own permissions survive a stripped map (see
+        // `check_entity_permission`, which falls through to
+        // `Permission::for_role` for a member of the domain), so this does not
+        // strand the Owner in the root workspace. What it does take is every
+        // EXPLICIT grant -- including access to a node the Owner holds by grant
+        // rather than by membership, and any `Permission::All` written there.
+        // That is unseating by another door, and it belongs behind the same
+        // rule as the other three.
+        self.ensure_may_act_on(actor_user_id, target_user_id, "change the permissions of")
+            .await?;
+
         // Check if domain exists (workspace or DomainNode tree storage)
         let domain_exists = if domain_id == crate::WORKSPACE_ROOT_ID {
             self.backend_tx_manager

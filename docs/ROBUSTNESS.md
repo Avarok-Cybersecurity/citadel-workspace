@@ -6659,3 +6659,59 @@ when a name in it does not exist there. A list that silently matches nothing is
 indistinguishable from a clean bill of health.
 
 133 gates green.
+
+## Round 654 — the fourth door into a rule that had shut three
+
+`ensure_may_act_on` is the only comparison of an actor against the **target's**
+current standing. Round-N work added it to three call sites and stopped, because
+those three are the ones that write a `UserRole`. A fourth writes the permission
+**map** instead, and stayed open.
+
+`update_member_permissions`
+(`async_domain_server_ops.rs:1067`) is gated on `is_admin_or_owner` — which
+admits any Admin — and then contains only what may be **handed out**
+(`ensure_may_grant_permissions`). Two facts make that no containment at all here:
+
+- an Admin holds `Permission::All`, so the granting check refuses them nothing;
+- `Remove` is exempt from the granting check entirely, on the reasoning that
+  taking a permission away grants nothing — which is the same reasoning that
+  made `Banned` a hole in the three doors already closed.
+
+So an Admin could `Set` the Owner's grants to the empty set, or `Remove` them,
+while `update_workspace_member_role` one function above refuses that same Admin
+a single-rank demotion of that same Owner. `command_authority` puts Owner at 4
+and Admin at 3; the ladder existed and this door did not consult it.
+
+**Scope, stated honestly.** `check_entity_permission` falls through to
+`Permission::for_role` for a member of the domain, so an emptied map does not
+strand the Owner in the root workspace. What it takes is every *explicit* grant:
+access to a node held by grant rather than by membership, and any
+`Permission::All` written there.
+
+### What changed
+
+- One call to `ensure_may_act_on(actor, target, "change the permissions of")`,
+  matching the sibling exactly.
+- `no_one_unseats_a_role_above_their_own` grew the fourth door: two refusals
+  (`Set` to empty, `Remove`) and two positive controls (an Admin may still manage
+  a Member's permissions; an Owner may still strip an Admin's). 12 tests.
+- New gate `check-acting-on-a-member-is-guarded.mjs`: any server op taking an
+  actor and a **second user** must pass the ladder or delegate to a sibling that
+  does. Two vacuity floors — the guard must still be defined, and at least four
+  ops must match as subjects, so a parameter rename cannot leave it blind.
+
+### Controls
+
+| control | expected | observed |
+|---|---|---|
+| drop the guard from `update_member_permissions` | 2 unit tests red, 10 green | exactly that |
+| same, against the gate | 1 offender, exit 1 | 1 offender, exit 1 |
+| drop it from the role door too | 2 offenders | 2 offenders |
+| rename `ensure_may_act_on` away | vacuity floor fires | "is not defined in the server ops any more" |
+
+I also got the fixture wrong first: the Owner-grants-`All` setup failed with
+"Owner does not hold All and cannot grant it" — the containment check working
+correctly, from the other direction. Rewritten against a permission the Owner
+does hold.
+
+134 gates green.
