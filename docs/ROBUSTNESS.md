@@ -4961,3 +4961,63 @@ The generalisable habit is not "be more careful". It is: when a change touches
 something that runs in more than one context — a script that runs on a host and
 in a container, a build script compiled in a checkout and in an image — exercise
 BOTH before pushing. Both were cheap to exercise, and neither was.
+
+## Round 627 — one bad frame, and a placeholder that defeated its own guard
+
+### A single unreadable frame ended the inbound stream
+
+`WrappedStream::poll_next` was `_ => Poll::Ready(None)`, which collapsed three
+different things into "the peer hung up": a genuine end of stream, a frame that
+failed to decode, and a `Request` arriving where a `Response` belongs.
+
+The middle one needs nothing to be broken. There is no `#[serde(other)]` anywhere
+in the wire types, so an agent one release ahead of the client emits a variant the
+client cannot parse. That ended the messenger's inbound task, which the TypeScript
+client reads as "Stream closed" — restarting the socket and clearing every
+messenger handle. One unknown frame per restart, dead after three, and nothing in
+the log said a frame had been dropped.
+
+The WASM read loop already skips such items and keeps reading. This was the same
+decision one layer down, where nobody had made it.
+
+Skipping FOREVER is the opposite mistake, so 64 consecutive unreadable frames still
+end the stream, with a message saying it is a decoder or version mismatch rather
+than one bad message. A decoder that can read nothing is a different fault, and
+that is where the two stop being treated the same. The test for it is a 200-frame
+flood that must still terminate — without it, a version that skipped everything
+and never returned `None` would satisfy the other tests and hang every consumer.
+
+The test double implements the real `IOInterface`, so what runs is the real
+`WrappedStream` over a real `Stream`; the only invented part is a stream that can
+yield the `Err` `InMemoryStream` cannot produce.
+
+`WrappedStream::new` is now the only constructor — the counter has to start
+somewhere, and there were three construction sites across two crates.
+
+### A placeholder that defeated the guard it fed
+
+`connect.rs` read the username as
+`.ok().flatten().unwrap_or_else(|| "#INVALID_USERNAME")`. The session is RECORDED
+under that value, and GUARD 2 compares the next Connect's username against
+`conn.username` — so a session stored under the placeholder matched nothing, the
+guard saw no existing session, and a second SDK connect ran against a live one.
+That is precisely the ratchet reset GUARD 2 exists to prevent.
+
+**The identical fix already sat fifteen lines below**, on the `server_address`
+read, with a comment explaining exactly this reasoning. It did not reach the read
+three lines above it. That is the dominant defect class in this tree, appearing
+this time inside a single function.
+
+One cleanup site had the matching fault: it ran AFTER the SDK-derived `username`
+shadows the request's, so it removed the wrong key from `connecting_usernames` and
+left the request's username in the set — GUARD 1 then refusing that user every
+attempt until the agent restarted. The other two exits already used
+`username_for_cleanup`.
+
+`check-session-query-failures-are-not-absence.mjs` now covers
+`get_username_by_cid`. Three observations, in order: against the pinned tree it
+reproduces the historical defect with no plant needed; against the fixed tree it
+passes; and reintroducing the combinator chain reddens it again. The third is the
+one that matters — a gate that passes because it stopped looking is
+indistinguishable from one that passes because the code is right, and only the
+reintroduction tells them apart.

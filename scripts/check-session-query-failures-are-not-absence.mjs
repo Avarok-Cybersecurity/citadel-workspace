@@ -84,7 +84,14 @@ function* walk(dir) {
  * queries whose EMPTY answer drives a destructive branch, and a list of those
  * is reviewable in a way "every fallible call" is not.
  */
-const QUERIES = /\.(sessions|get_hyperlan_peer_list|get_cnac_by_cid|get_registered_peers)\s*\(/;
+// `get_username_by_cid` joined the list after the same defect was found beside a
+// query already on it. `connect.rs` read the CNAC address strictly -- refusing
+// rather than reporting an empty one -- and read the USERNAME three lines above
+// with `.ok().flatten().unwrap_or_else(|| "#INVALID_USERNAME")`. The session is
+// recorded under that value, and the duplicate-session guard compares against it,
+// so the placeholder matched nothing and a second SDK connect ran against a live
+// session: the ratchet reset the guard exists to prevent.
+const QUERIES = /\.(sessions|get_hyperlan_peer_list|get_cnac_by_cid|get_registered_peers|get_username_by_cid)\s*\(/;
 
 const MEANS_ABSENT = /^\s*(false|vec!\[\]|None|Vec::new\(\)|Default::default\(\))\s*,?\s*$/;
 
