@@ -59,7 +59,7 @@ For peer-to-peer connections, you follow this exact sequence:
 
 ## Primary tool
 
-Playwright MCP: When crafting plans or implementing features based on a query, every new feature must be validated using Playwright MCP. Frequently check the logs for errors, then add them to a file to keep track of them. Connect to the Vite default port from the citadel-workspaces app (5291).
+Playwright MCP: When crafting plans or implementing features based on a query, every new feature must be validated using Playwright MCP. Frequently check the logs for errors, then add them to a file to keep track of them. Connect to the UI on port 5291 (set by `citadel-workspaces/vite.config.ts` and `docker/ui/Dockerfile`; it is NOT Vite's 5173 default).
 
 ## Layers
 

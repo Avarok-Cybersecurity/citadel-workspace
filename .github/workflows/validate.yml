@@ -296,6 +296,8 @@ jobs:
         run: node scripts/check-agent-binds-loopback.mjs
       - name: Every generated binding has a type, and every type a binding
         run: node scripts/check-bindings-match-exported-types.mjs
+      - name: Instructions name the port the UI actually serves
+        run: node scripts/check-docs-name-the-real-ui-port.mjs
 
       - name: Tenant provisioning refuses what it must
         run: bash scripts/test-provision-tenant.sh
