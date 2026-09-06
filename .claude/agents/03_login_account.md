@@ -16,7 +16,7 @@ This workflow logs in to a new account via the UI using Playwright MCP.
 
 ## Prerequisites
 
-- Navigate to the landing page http://localhost:5173/
+- Navigate to the landing page http://localhost:5291/
 - checkForErrors()
 - scanScreen()
 

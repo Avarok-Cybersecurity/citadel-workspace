@@ -218,6 +218,9 @@ jobs:
       - name: Third-party images are pinned
         run: node scripts/check-third-party-images-are-pinned.mjs
 
+      - name: Instructions name the port the UI actually serves
+        run: node scripts/check-docs-name-the-real-ui-port.mjs
+
       - name: Tenant provisioning refuses what it must
         run: bash scripts/test-provision-tenant.sh
 
