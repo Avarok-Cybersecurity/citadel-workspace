@@ -19,6 +19,22 @@ const FILE =
 const source = readFileSync(FILE, 'utf8');
 const problems = [];
 
+/**
+ * Ways this handler can say "the disconnect happened".
+ *
+ * Deliberately a small list of SHAPES rather than one identifier: the point is
+ * that a failure arm must not reach any of them, however the success path is
+ * spelled this month.
+ */
+const SUCCESS_SHAPES = [/SdkDisconnect::Succeeded/, /DisconnectNotification/, /PeerDisconnectSuccess/];
+
+/** Ways it can say the disconnect did NOT happen. */
+const FAILURE_SHAPES = [
+  /SdkDisconnect::(Failed|TimedOut)/,
+  /PeerDisconnectFailure/,
+  /restore_and_report/, // the earlier spelling, still acceptable
+];
+
 /** The body of the match arm introduced by `marker`, from its `{` to the matching `}`. */
 function armBody(text, marker) {
   const at = text.indexOf(marker);
@@ -42,8 +58,31 @@ for (const arm of ['Ok(Err(', 'Err(_elapsed)']) {
     problems.push(`the \`${arm}\` arm has gone — this gate is reading a shape that no longer exists`);
     continue;
   }
-  if (!/restore_and_report/.test(body)) {
-    problems.push(`the \`${arm}\` arm no longer restores state and reports failure`);
+  // Assert the PROPERTY, not an identifier.
+  //
+  // This used to require the literal `restore_and_report`, the helper the fix
+  // introduced at the time. That helper has since been replaced by an
+  // `SdkDisconnect` enum whose variants make the same distinction better --
+  // and the gate would have gone red on the improved, tested code the moment
+  // the submodule pointer moved. Somebody would then have rewritten a correct
+  // fix to satisfy a regex, or spent an hour learning the named function was
+  // gone.
+  //
+  // A gate that names the CURRENT implementation forbids the next one. What
+  // must hold is narrower and permanent: a failure arm must not evaluate to
+  // the success outcome. Everything else is free to change.
+  const claimsSuccess = SUCCESS_SHAPES.some((shape) => shape.test(body));
+  if (claimsSuccess) {
+    problems.push(
+      `the \`${arm}\` arm reports SUCCESS — a disconnect that failed must not be reported as one`,
+    );
+    continue;
+  }
+  if (!FAILURE_SHAPES.some((shape) => shape.test(body))) {
+    problems.push(
+      `the \`${arm}\` arm reports neither success nor failure; it must say the disconnect did ` +
+        `not happen (found: ${body.replace(/\s+/g, ' ').slice(0, 120)}…)`,
+    );
   }
 }
 
@@ -62,4 +101,4 @@ if (problems.length) {
   console.error('FAIL: a disconnect that did not happen must not be reported as one.');
   process.exit(1);
 }
-console.log('OK: both SDK-disconnect failure branches restore state and report failure.');
+console.log('OK: neither SDK-disconnect failure branch reports success.');
