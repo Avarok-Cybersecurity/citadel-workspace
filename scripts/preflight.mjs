@@ -219,6 +219,8 @@ const CHECKS = [
   // rather than the missing checkout.
   ['submodules are populated', 'node', ['scripts/check-submodules-are-populated.mjs'], ROOT],
   ['submodule pointers pushed', 'node', ['scripts/check-submodule-pointers-pushed.mjs'], ROOT],
+  // A pushed pointer is only worth having if the deploy actually USES it.
+  ['deploys use the recorded pointers', 'node', ['scripts/check-deploys-use-the-recorded-pointers.mjs'], ROOT],
   ['event listeners have emitters', 'node', ['scripts/check-event-listeners-have-emitters.mjs'], UI],
   ['generated artefacts present', 'node', ['scripts/check-generated-artefacts-present.mjs'], ROOT],
   // Ordered before typecheck deliberately: the three checks below all consume

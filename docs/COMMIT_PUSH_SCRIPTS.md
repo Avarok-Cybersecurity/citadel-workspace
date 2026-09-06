@@ -262,7 +262,8 @@ Submodule: intersession-layer-messaging at citadel-internal-service/intersession
 
 Tips:
   • Fix detached HEAD by checking out a branch in the submodule
-  • Use git submodule update --remote to update submodules
+  • Use git submodule update --init --recursive to match the recorded pointers
+    (NOT --remote: that takes each submodule's branch tip and discards what this commit records)
   • Use ./commit.sh to commit all changes
   • Use ./push.sh to push all changes (skips detached HEAD)
 ```

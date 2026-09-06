@@ -4471,3 +4471,116 @@ it.
 I read `tail`'s exit status, not cargo's. The same shape as the earlier `&&`-chained
 `cargo fmt && clippy`, where the chain short-circuited and the status belonged to the
 wrong command. **After a pipeline or a chain, `$?` is not the answer; the log is.**
+
+## Round 621 — a deploy that ignored what was tested, and three gates that could not see
+
+Four read-only inspection sweeps (developer experience, robustness, performance,
+test quality) against the CURRENT branch heads rather than `master`. Acted on four
+findings this round; the rest are triaged below.
+
+### The deploy discarded the pointers it had just pulled
+
+`update-avarok-server.sh:10` ran `git submodule update --remote --recursive` on the
+live server, one line after `git pull`. `--remote` deliberately IGNORES the commit
+the superproject records and takes each submodule's configured branch tip instead —
+`master` for the agent because `.gitmodules` names it, and the remote's default
+branch for the UI because it names none.
+
+Neither branch is where the work is. When this was found, `origin/master` was **118
+commits behind** the agent's active branch and 42 behind the UI's. So the server was
+rebuilt, successfully and with nothing in the output naming what shipped, from an
+agent months older than the commit it had just pulled. The recorded pointer IS the
+statement of what was tested; resolving it against a moving branch deploys something
+nobody validated.
+
+Every other invocation in the tree already used `--init --recursive`. This was the
+one that did not — the dominant defect class here, in the one place where it reaches
+a machine other people would be testing on.
+
+`check-deploys-use-the-recorded-pointers.mjs` closes it across scripts, workflows,
+Dockerfiles and docs. Its own first run flagged the CI step's comment explaining the
+fix, so comments are exempt in EXECUTABLE files only: a comment there cannot run,
+while prose in a runbook is the instruction, which is how this reached the server.
+Controls: the original defective line, a fresh `--remote` in a shell script, prose in
+a doc, and a vacuity floor — all red.
+
+One of those controls then destroyed the fix. `git checkout -- docs/COMMIT_PUSH_SCRIPTS.md`
+reverted the file to HEAD, and HEAD still held the defect this round was fixing, since
+it was not yet committed. The gate going red is what caught it. **git checkout is not
+an undo for a control when the file also carries uncommitted work** — a lesson this
+record already contains, relearned.
+
+### Three gates that had never looked at half the tree
+
+- **`check-no-nested-npm-ci-in-workspaces`** read only the parent's own workflows.
+  The submodule's lint job ran `npm ci && npm run build` inside
+  `citadel-internal-service/typescript-client` — a member of the ROOT npm workspace —
+  re-resolving it from a nested lockfile (uuid 9.0.1, ws 8.18.3 against the root's
+  13.0.2 and 8.21.3) and unhoisting the root devDependencies. Two later steps existed
+  only to undo that: a pinned `npm install eslint@9.39.2` over the lockfile, and three
+  `ln -sf` calls restoring what node resolution would have found anyway. This record
+  already claimed that `eslint@9.39.2` line had been deleted; it had been, in one repo
+  of two. Verified before removing all three: with a plain root `npm ci` and none of
+  them, the member resolves all four packages from the root and eslint exits 0.
+- **`check-specs-search-for-real-copy`** could not check the locator form it
+  RECOMMENDS. `member-list-loading.spec.ts` searched for `/No members yet/i`; the
+  sidebar has always said "Nobody else is here yet", so `sawEmptyState` was
+  structurally false and `expect(sawEmptyState).toBe(false)` — the one assertion the
+  spec exists for — could not fail.
+- **`check-gates-say-what-they-examined`** (reported, not yet fixed) reads only the
+  parent's `scripts/`, so 43 UI gates are unexamined and 7 violate its rule.
+
+### The gate's own controls found two faults in it
+
+Widening the copy gate to testids, the first control did NOT fire: changing the spec's
+id to `members-empty-nonexistent` still passed, because the matcher admitted any id
+that merely EXTENDED a known one. Now only *templated* prefixes may be extended. And
+reading only the JSX attribute form, it accused three specs over `preview-region-sidebar`,
+which `ThemePreview.tsx` renders as an object property — a check that invents findings
+gets disabled, and then catches nothing.
+
+Its limits are now written into it. It still cannot tell WHICH SCREEN a string is on:
+restoring the original `getByText('No members yet')` is reported clean today, because
+the app does contain that sentence, on another page. Only the testid closes it.
+
+### A green suite that exited 1
+
+The unit-tests job failed with **3098 passed, 0 failed**. Sonner arms a `setTimeout` to
+remove a dismissed toast, and nothing cancels it when the Toaster unmounts; the last
+test in `PwaUpdatePrompt.test.tsx` finished with one pending, vitest tore the jsdom
+environment down, and the timer fired into nothing — `setToasts` reaching react-dom's
+`getCurrentEventPriority`, which read `window`. A red run naming a file whose every
+test was green, pointing at react-dom internals. Fake timers make it impossible rather
+than unlikely. Measured while writing it: the flush does not reach zero pending, and
+the comment says so instead of claiming a clean sweep.
+
+### The onboarding answer did nothing
+
+`onChoose` and `onDismiss` were both wired to the same zero-argument `resolve`, so
+"setting up a workspace", "joining one" and closing the dialog were indistinguishable.
+The dialog tells a member they "do not need the master password, and should not be
+asked for it", and one screen later `WorkspaceInitializationModal` asks them for it.
+Answering "joining" now suppresses that prompt — the same suppression dismissing
+already performs, so no new state. Its first negative control silently applied to the
+WRONG function (`request` ends in the same two lines as `resolve`) and had to be
+redone; the control was verified as applied rather than assumed.
+
+### Triaged, not yet acted on
+
+Robustness: ILM's write ack accepts ANY response as success, including the agent's own
+refusal (`backend.rs:198,551`) — high; group owner's accept/decline answers success
+without asking the protocol (`respond_request.rs:113`); follower claim TTL (30 s)
+outlives the whole retry budget (~20 s); startup force-clears its concurrency flag
+after 100 ms; file-transfer is the only CID-routed family with no session filter;
+`PeerRegisterNotification` handled twice, once unfiltered.
+
+Performance: every document save rewrites the entire node corpus under the global lock;
+`GetUserPermissions` fetches the full node blob 54×; the ILM queue is one blob re-read
+and rewritten ~9× per message; media frames ride the decimal-array JSON path at 3.57×;
+every keystroke re-renders every bubble, each building an `Intl` formatter.
+
+Test quality: `file-transfer.test.ts` gates only on "sendFile threw anything"; the
+server kernel's 79 integration files never touch the real backend; the C2S byte check
+runs in an un-joined task; `hosted-ui-loopback.spec.ts` is permanently skipped and its
+driver does not exist; `LEADER_MUST_PROCESS_LOCALLY` is consumed by both routers and
+tested by nothing.

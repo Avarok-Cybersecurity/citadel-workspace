@@ -94,6 +94,7 @@ echo -e "${CYAN}╚════════════════════�
 echo ""
 echo -e "${YELLOW}Tips:${NC}"
 echo -e "  • Fix detached HEAD by checking out a branch in the submodule"
-echo -e "  • Use ${CYAN}git submodule update --remote${NC} to update submodules"
+echo -e "  • Use ${CYAN}git submodule update --init --recursive${NC} to match the recorded pointers"
+echo -e "    (NOT --remote: that takes each submodule's branch tip and discards what this commit records)"
 echo -e "  • Use ${CYAN}./commit.sh${NC} to commit all changes"
 echo -e "  • Use ${CYAN}./push.sh${NC} to push all changes (skips detached HEAD)"
