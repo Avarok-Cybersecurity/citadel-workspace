@@ -5524,3 +5524,120 @@ assertion, so they fail loudly instead of passing vacuously over a missing file
 — which is why they are noise here rather than a hole.
 
 126 gates green.
+
+---
+
+## Round 636 — the hourly sweep, and a gate that read green over a security hole
+
+Four read-only inspection agents (developer experience, robustness, performance,
+test quality). Fable's quota was exhausted and all four died on a 429 before
+doing anything; relaunched on opus, which is why the fallback in the standing
+instruction exists.
+
+### The one that mattered: 16 security tests compiled nowhere
+
+`origin_policy` and the `websockets` io_interface are both behind
+`#[cfg(feature = "websockets")]`, and that feature is a default nowhere. Measured:
+`cargo test -p citadel-internal-service-connector --lib` compiles **11** tests;
+with `--features websockets` it compiles **27**.
+
+The 16 missing ones are the entire suite for the agent's loopback boundary —
+which browser origins may open a control connection to it — including
+`a_listed_origin_completes_the_handshake` and
+`an_unlisted_origin_is_refused_at_the_handshake`. They were not skipped and not
+reported as skipped. They were absent from the binary, so replacing the origin
+check with "accept every origin" would have turned nothing red, while any web
+page the user visited could drive their agent.
+
+Production ships the feature. CI was green over a configuration nobody runs
+while the one everybody runs went untested.
+
+**This is the second occurrence.** Round 564 records the same defect and the same
+fix, "6 passed" becoming "33 passed". The flag was lost again in the interim,
+silently — because a test count going DOWN looks exactly like a green run.
+
+`check-feature-gated-tests-are-compiled` now fails if it goes missing again.
+Its own first version reported two ILM modules as uncompiled while
+`cargo nextest list` showed their six tests running: the connector depends on ILM
+with `features = ["testing"]`, which turns the feature on for the whole build.
+Two invented findings out of two new ones is the ratio that gets a gate switched
+off, so it resolves three sources — a CI flag, a manifest dependency's feature
+list, and the crate's own `default`. Control: deleting the flag from both
+workflows turns it red naming both security modules.
+
+### Work whose only reader is a log line
+
+`log::info!` checks the level. A `let` above it does not. Three bindings in the
+connector's messenger were built unconditionally and read only by log macros: an
+FNV-1a fingerprint over the WHOLE payload (three operations per byte — 1,048,576
+iterations per delivery for a 1 MiB update), the entire routing DashMap
+collected per routed message, and the same collect per ILM registration. The
+routing collect was also read by a `warn!` on a rare branch, so one binding
+served both and the rare branch's cost became the common branch's.
+
+The UI already knew this and has a gate for it. The fix never crossed the
+language boundary.
+
+`check-log-arguments-are-cheap-in-rust` now enforces it, and took **three**
+attempts to stop reporting green over the defect it was written for:
+
+1. It walked back to the nearest `{` to find the enclosing statement. Every Rust
+   format string is full of `{}` placeholders.
+2. Masking string literals fixed that, and it still missed the site, because the
+   macro's arguments contained a real `match … { … }`. Braces inside arguments
+   are not a statement boundary either. Fixed by computing actual paren-matched
+   macro spans.
+3. It still missed the COSTLIEST site, the byte loop, because the accumulator
+   branch was written `ACCUMULATOR.exec(line) ? null : null` — `null` either way.
+   A branch that cannot contribute, in the gate meant to catch exactly that.
+
+Each was found only by running it against the tree that still had the defect. A
+gate is not finished when it passes; it is finished when it has failed on the
+thing it is for.
+
+### A denylist is only as complete as its last edit
+
+`check-debug-args-are-cheap` did not name `formatForDebug`, which `JSON.parse`s
+its argument and rebuilds the whole object recursively. It sat unguarded inside a
+`debugLog` on the session-store write path, so every auth, auto-reconnect,
+logout, role update and active-index change re-parsed and rebuilt the entire
+stored-session list in production and discarded it.
+
+The control is the useful part: with the site unguarded AND the old denylist
+restored, the gate passes. That is the hole demonstrated rather than inferred.
+
+### The fix from round 635, applied to one of two buttons
+
+The robustness sweep found that round 635 guarded "Create Account" against an
+unreachable agent and left "Sign In" — the button immediately beside it —
+untouched. The reasoning written there is about the SCREEN, not registration.
+
+So: the most common defect class in this record, committed by the fix for
+another instance of it, one hour later, by me.
+
+Unguarded, a visitor with no agent clicks Sign In, gets the sign-in card
+(`fixed inset-0 z-50`, its own focus trap), then ConnectionRetryModal on top,
+OfflineBanner above, and after typing credentials "Connection timeout, check
+your network" — naming neither the agent nor the fix.
+
+`useAgentGatedStep` now owns both halves, refuse-to-open and retreat-once-open,
+in one hook. Landing crossed its length ceiling when the guard was inlined, and
+the ceiling was right: extraction was the fix, not a raised limit. Each half is
+independently controlled.
+
+### Still open, from the sweeps
+
+Recorded rather than acted on: the UI README is the untouched Lovable scaffold
+(`npm run dev` is `tilt trigger ui`, and `npm i` creates dangling symlinks and
+exits 0); preflight runs 112 derived gates BEFORE `submodules are populated`, so
+a clone without `--recurse-submodules` gets 80 failures over 1279 lines and the
+line naming the cause at 1154; `check-assertions-can-fail` matches zero sites and
+misses the two real defects quoted in its own header; every assertion-quality
+gate points only at `integration-tests/src`, leaving 4,338 unit assertions
+ungated; `hosted-ui-loopback.spec.ts` has never run because the script its skip
+message names does not exist; `test-session-management.sh` greps for log lines
+deleted months ago and can only print INCONCLUSIVE; the reconnect path still
+reads the lenient session query destructively; and opening a chat channel reads a
+room's entire history to return 50 messages.
+
+128 gates green.

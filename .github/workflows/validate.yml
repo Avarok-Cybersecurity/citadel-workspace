@@ -309,6 +309,20 @@ jobs:
         # serving real sessions, having named that exact failure in its own header.
         run: node scripts/check-remote-checks-read-the-deployment.mjs
 
+      - name: Log arguments are cheap (Rust)
+        # `log::info!` checks the level; a `let` above it does not. The connector
+        # hashed every byte of every delivered message, and walked the whole
+        # routing table per routed message, to build values only a filtered-out
+        # log line read. The UI gate for this never crossed into Rust.
+        run: node scripts/check-log-arguments-are-cheap-in-rust.mjs
+
+      - name: Feature-gated tests are compiled somewhere
+        # `websockets` is a default feature nowhere, so `cargo nextest run` left
+        # the origin-policy and handshake tests OUT OF THE BINARY -- 11 connector
+        # tests instead of 27, green, with every test of which browser origins may
+        # drive the agent simply absent. Second occurrence; round 564 fixed it once.
+        run: node scripts/check-feature-gated-tests-are-compiled.mjs
+
       - name: Deploy paths can actually start the server
         # Two operator scripts each carried their own deploy and neither worked:
         # a `docker build` with no `--target` selects the LAST stage (`dev`, the
@@ -584,7 +598,13 @@ jobs:
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
       - uses: taiki-e/install-action@nextest
       - name: Run Cargo Nextest
-        run: cargo nextest run --workspace
+        # `--features websockets`: the origin-policy and handshake tests are
+        # behind `#[cfg(feature = "websockets")]`, which is not a default. Without
+        # it they are not skipped, they are not COMPILED -- the run is green with
+        # 11 connector tests instead of 27, and the 16 missing ones are the whole
+        # suite for which browser origins may open a control connection to the
+        # agent. Production ships the feature.
+        run: cargo nextest run --workspace --features websockets
         working-directory: citadel-internal-service
 
   rust-tests:
