@@ -5937,3 +5937,73 @@ decision, recorded here rather than made quietly. The test says so in its own
 header, so nobody reads the round trip as proof the settings take effect.
 
 129 gates green.
+
+---
+
+## Round 641 — the known-servers list was always empty
+
+`listKnownServers` read `LocalDBGetAllKVSuccess.map` with `Object.keys`. That
+field is a Rust `HashMap`, and serde-wasm-bindgen delivers it as a real JS `Map`
+whatever the generated `Record<string, T>` says — so `Object.keys` returned
+NOTHING, silently, with the compiler agreeing.
+
+So the list of previously-connected workspaces was permanently empty, and every
+user retyped the address on every visit, while `known_servers` was being written
+correctly the whole time. The fix already existed in `local-db-operations.ts`,
+whose own comment spells out this exact trap, twenty lines from its sibling.
+
+### Why the gate for this defect did not catch this defect
+
+`wire-maps-are-not-objects` exists precisely for this, and was green. Two
+reasons, both fixed rather than patched around:
+
+**Its field list was hand-maintained and held ONE entry.** Six fields cross as
+Rust `HashMap`s (`map`, `peers`, `accounts`, `peer_information`,
+`peer_connections`). This is the same shape as the denylist that let
+`formatForDebug` through two rounds ago — a list is only as complete as its last
+edit. It is now DERIVED from the Rust wire types when they are reachable, with
+the hardcoded set kept as a floor that may only grow, so the derivation cannot
+silently return less.
+
+**The read was ALIASED.** `const kvMap = getAllKVSuccess.map` and then
+`Object.keys(kvMap)`, so a pattern matching the field name beside `Object.keys`
+could never fire. One level of aliasing is now resolved.
+
+### And the widened gate immediately invented two findings
+
+Three findings, of which two were wrong: `formatBytesMap`'s own parameter is
+named `map` and has nothing to do with the wire, and `discovery.ts` takes the
+`Map` path FIRST and falls back to `Object.entries` only in the `else if` —
+correct code, and flagging it would have been flagging the fix.
+
+So the field must now be reached through a property access rather than as a bare
+identifier, and a file that demonstrably handles the Map form is not treated as
+blind to it. Two invented out of three is the ratio that gets a gate switched
+off, and this gate had just been widened in order to be believed.
+
+### The landing page paid for a call whose result nothing read
+
+`checkForServers` awaited `listKnownServers` on mount and discarded the result.
+It checked nothing — no state, no render, no branch.
+
+It was not free. `LocalDBGetAllKV` has no key-listing form: it returns every
+key's VALUE in bucket 0, which is shared across every account on the device and
+holds every message page, every document snapshot and the session list. That
+crosses the WASM boundary as one boxed JS array element per byte, on first
+paint, before the user has done anything. `Connect.tsx` reads the list where it
+is actually used.
+
+### On the controls
+
+Control A holds: reintroducing the aliased read turns the gate red naming the
+alias. **Control B did not run** — the edit that was supposed to restore the old
+gate broke the test file's syntax, and vitest reported "no tests", which is not a
+pass. It is recorded here rather than counted, because a control that did not
+execute is not evidence. The blind-spot claim rests on the baseline instead: the
+gate was green on this tree while the defect was in it, which is why a sweep
+found this and the gate did not.
+
+`check-file-length` then failed because `Landing.tsx` SHRANK — the ratchet turns
+both ways, and its entry came down from 312 to 302.
+
+129 gates green.
