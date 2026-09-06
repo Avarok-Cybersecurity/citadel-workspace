@@ -6559,3 +6559,53 @@ would be a guess, and the honest position is that they are open with evidence
 recorded.
 
 133 gates green; the build break is fixed and the client compiles.
+
+---
+
+## Round 652 — a watcher that found NO error decided the outcome
+
+Every integration job and all three Playwright shards failed on the first UI run
+that was not cancelled, with `Account registered but its workspace never loaded`.
+The workspace loads fine.
+
+`createAccount` watches for a rejection toast and races that watcher against
+"the workspace loaded". The watcher resolves to `{ kind: 'no-error' }` **after 15
+seconds whenever no toast appears** — which is the ordinary SUCCESSFUL case.
+Raced bare, it beat the workspace-loaded signal on any machine where the
+workspace takes longer than ~15s, `outcome.kind` came back `no-error`, and the
+caller read that as "not loaded".
+
+Locally the workspace loads in a second or two, so it never fired there. On a
+loaded CI runner it fires every time.
+
+`Promise.race` does not cancel the loser, which is why the CI log carries the
+contradiction in plain sight:
+
+```
+[UX CRITICAL/functional]: Workspace never loaded for misc_...
+Workspace fully loaded
+```
+
+The first line is the race resolving on `no-error`; the second is the waiter,
+still running, finding the workspace exactly as expected.
+
+**The inner race seventy lines above already guards this** —
+`r.kind === 'rejected' ? undefined : new Promise(() => {})` — and the reasoning
+was not carried down. The rejection arm may now only WIN when it is actually a
+rejection.
+
+Pinned by a unit test on the race semantics alone, which needs no browser: the
+no-error case must not decide the outcome; a real rejection must still resolve
+promptly rather than waiting out the load timeout; and a genuinely unloaded
+workspace must still be reported. Racing the arm bare fails two of the three.
+
+### How this stayed hidden
+
+Thirty consecutive UI runs on this branch were cancelled by my own pushes under
+`cancel-in-progress`. The thirty-first is the first that reached the integration
+stage at all — so the defect was not new, it was simply never observed. I also
+spent a wave attributing it to my own `SecurityLevel` break before establishing
+that `SecurityLevel` is a type-only import, erased at runtime, and could not
+affect a running app.
+
+133 gates green.
