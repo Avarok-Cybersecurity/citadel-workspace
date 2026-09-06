@@ -7190,9 +7190,10 @@ and the sibling is not in scope.
 Both workflows are read now, and the missing directory is a hard failure rather
 than an empty list.
 
-The UI's steps use `cache-dependency-path: parent/package-lock.json`: those jobs
-check the parent out into `parent/` and run with `working-directory: parent`, and
-all five `setup-node` steps run after that checkout, so the path resolves.
+The UI's steps point `cache-dependency-path` at the parent's lockfile under the
+runner's `parent/` checkout directory — not a path in this repository. Those jobs
+check the parent out there and run with `working-directory: parent`, and all five
+`setup-node` steps run after that checkout, so it resolves on the runner.
 
 | control | expected | observed |
 |---|---|---|
@@ -7215,5 +7216,63 @@ is emitted from the SDK event loop (`responses/peer_event.rs:200`), not from thi
 handler, so the requester's await does not gate the peer's badge. Recorded here
 rather than fixed, because the right bound depends on whether that await is meant
 to span a human decision — which is a protocol question, not a timeout constant.
+
+139 gates green.
+
+## Round 664 — the first attributable CI failure, and a claim made before anyone was asked
+
+Round 659's after-the-test log capture worked. Run 34053232362's failing shards
+carry the backend logs, and they answer questions the previous six failures
+could not:
+
+- **Every** `[P2P-MSG]` in the window is `to SERVER (no peer_cid)`. Not one
+  peer-to-peer send, and no `[PeerChannelCreated]` line at all — so no P2P
+  channel was ever established, rather than one being established and dropping
+  messages.
+- Two refusals, with reasons now legible:
+  `Refusing ListRegisteredPeers for session 6818340270876739462 from connection
+  adc16e31…: the connection does not own it`, and the same for `ListAllPeers`.
+
+Neither settles the P2P failure yet, and one reason is that **the capture's grep
+list omits the registration phase**: it matches `[P2P-MSG]`,
+`[PeerChannelCreated]`, `[P2P-RECV-CHANNEL]`, `[UDP-NEGOTIATION]` and the REVFS
+auto-accept lines — and `[PeerRegister]` is in none of them. The phase that is
+failing is the phase not captured. Recorded as the next thing to widen.
+
+### What was settled: the sidebar asserts an empty room before asking
+
+`member-list-loading.spec.ts:43` fails across three retries with its own message:
+
+> the sidebar said "No members yet" while the member list was still loading —
+> the loading flag is being cleared when the request is sent rather than when it
+> is answered
+
+The diagnosis in that message is close but not right. Nothing clears the flag
+early; the flag **starts** down. `useDomainMembers` had
+`useState(false)` for `isLoadingMembers` and `useState([])` for `members`, and
+`MembersSection:143` renders the empty state on
+`!isLoadingMembers && members.length === 0`. React runs effects after paint, so
+on the very first render both held and "Nobody else is here yet" — a claim about
+the workspace — was on screen before anyone had been asked.
+
+Now `useState(() => activeDomainId !== null)`. The effect's own `!activeDomainId`
+branch already sets it false, so starting from the prop agrees with that branch
+rather than racing it.
+
+### The test's first version measured nothing
+
+`renderHook` flushes effects before `result.current` can be read, so reading the
+flag afterwards gives `true` **either way** — and the negative control came back
+green. The value is now recorded from inside the render body, which runs before
+any effect, and the first entry is what is asserted.
+
+| control | expected | observed |
+|---|---|---|
+| restore `useState(false)` | the first-render test red | green at first — then red once the probe moved into the render body |
+| `useState(true)` unconditionally | the no-domain test red | red |
+
+That second control is the discrimination one: without it, a hook that simply
+always reported "loading" would satisfy the first assertion and hang a spinner on
+a workspace with no node selected.
 
 139 gates green.
