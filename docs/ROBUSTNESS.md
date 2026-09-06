@@ -7849,3 +7849,104 @@ it did not before; where it stops after that is the next thread.
   controlled for.
 
 142 gates green.
+
+## Round 676 — the defect was in the instrument, and the instrument found a real one
+
+Two findings, and the order matters: the one I was chasing did not exist, and
+looking for it uncovered one that did.
+
+**What I believed.** Round 675 got A's peer request onto the wire. B's browser
+then received `PeerRegisterNotification` — captured off the socket — and my
+probe reported `B screen mentions a request: false`. I recorded that B's UI
+never surfaced the notification, and spent the next stretch reading every guard
+on the receiving path: the ownership gate, the auto-accept read, the duplicate
+check, the persistence refusal, the P2P hold buffer. All of them were correct.
+
+**What was actually true.** The probe asked
+`/pending|request|accept/i.test(document.body.innerText)`. The UI announces an
+incoming request with `pending-requests-badge`, whose entire text is `1`. A
+numeric badge contains none of those words, so the check could only ever have
+returned false — against a working UI, on any build, forever. Replacing the
+keyword test with a look at what is actually rendered:
+
+```
+  pending-requests-badge = 1
+  notification-bell = 2
+```
+
+The full flow then measured 8/8 on the production bundle against the live
+server: A requests, B's badge appears reading `1`, B accepts, the badge clears,
+each side lists the other as a peer, and a message crosses in each direction.
+
+This is the third time this project has been misled by an assertion that could
+not fail. `waiting-for-absence-passes-instantly` and `toast-assertions-never-matched`
+are the same shape: a check whose negative result is unconditional. The habit
+that catches it is the one already written down — a check that reports a defect
+must be shown to report *no* defect when the defect is absent, and this one
+never was.
+
+**The real defect, found on the way.** To read the debug trail I needed a build
+where `debugLog` is not a no-op, so I started the Vite dev server against the
+same live server. It could not reach the agent at all: `1006 Connection closed
+before receiving a handshake response`, with the agent running and the port
+open.
+
+Round 673 made TLS the agent's default, because the binary a user downloads is
+dialled straight from an https page and a secure context cannot open a `ws://`
+socket. Nothing that *fronts* the agent was changed with it:
+
+- `docker/ui/nginx.conf.template` — `proxy_pass http://${AGENT_UPSTREAM}/`
+- `citadel-workspaces/vite.config.ts` — `target: ws://127.0.0.1:${AGENT_PORT}`
+
+Both dial plaintext at what is now a TLS listener, with a failure mode that
+names nothing: no error in the agent log, none in the proxy, and a bare 1006 in
+the browser.
+
+Be precise about what is measured here, because the scope claim is easy to
+overstate and I did overstate it first. MEASURED: the Vite dev server against a
+current agent — the landing page sat on "Can't reach the Citadel agent on this
+machine" and every handshake closed 1006, and pointing it at an agent started
+with `--no-tls` fixed it outright. INFERRED, from reading the proxy directive
+and the image's `CMD`: the same mismatch in the nginx path, so the compose and
+Tilt stacks and the integration suite that runs against them. The CI run in
+flight while this was written (34066987869) had not reached its integration
+jobs — they are gated behind the Rust jobs — so that half is inference until it
+does.
+
+**The fix** makes the mode explicit at the launch site rather than inherited:
+both `CMD`s in `docker/internal-service/Dockerfile` now pass `--no-tls`. Adding
+TLS to the proxy hop would buy nothing — it is loopback, inside the boundary
+`check-agent-binds-loopback.mjs` already defends. What was missing is that the
+launch site never said which mode it wanted.
+
+**The gate**, `scripts/check-agent-tls-matches-its-proxies.mjs`, enforces
+agreement rather than a preferred mode: every launch site must state `--no-tls`
+or `--tls-cert`, and every proxy fronting the agent must dial the mode its agent
+serves. Moving that hop to TLS stays a legitimate choice; making it silently
+does not. It runs in BOTH workflows — the Vite half of the contract lives in the
+UI repository, whose CI checks the parent out at `parent/`, so enforcing it only
+upstream would leave one gate reading one of the two repos that can break it.
+
+**Negative controls**, three, each verified as applied and reverted:
+
+| Control | Gate |
+|---|---|
+| drop `--no-tls` from one `CMD` | RED |
+| nginx `proxy_pass https://` | RED |
+| Vite `target: wss://` | RED |
+
+The third passed GREEN on its first run. The control had mutated
+`wt-ustack/vite.config.ts` while the gate reads `citadel-workspaces/vite.config.ts`
+— a different file. Re-aimed at the gate's actual input it goes red. A control
+that edits a file the check never opens is indistinguishable from a check that
+measures nothing, which is why the apply-step is verified and not assumed.
+
+**Also corrected here:** the first draft of the gate matched
+`citadel-workspace-internal-service\s+--` and demanded a TLS flag on
+`cargo build --release -p citadel-workspace-internal-service --bin ...`. Build
+and copy lines are now excluded explicitly. A gate that cries wolf on a correct
+line gets deleted rather than fixed.
+
+**Still unproved:** work.avarok.net itself serves a UI image 138 commits behind,
+so the hosted page does not yet run any of this. The 8/8 above is the current
+production bundle against the live server, not the deployed one.

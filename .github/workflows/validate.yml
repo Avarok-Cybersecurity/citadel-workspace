@@ -499,6 +499,8 @@ jobs:
         run: node scripts/check-preflight-runs-what-ci-runs.mjs
       - name: The agent binds loopback wherever the network can reach it
         run: node scripts/check-agent-binds-loopback.mjs
+      - name: The agent's TLS mode matches every proxy that fronts it
+        run: node scripts/check-agent-tls-matches-its-proxies.mjs
       - name: Every generated binding has a type, and every type a binding
         run: node scripts/check-bindings-match-exported-types.mjs
       - name: Instructions name the port the UI actually serves

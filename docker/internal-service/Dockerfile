@@ -175,7 +175,29 @@ EXPOSE ${INTERNAL_SERVICE_PORT}
 #
 # scripts/check-agent-binds-loopback.mjs read only docker-compose*.yml, so it
 # reported this image as loopback-only for as long as the default was wrong.
-CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind ${INTERNAL_SERVICE_BIND_HOST:-127.0.0.1}:${INTERNAL_SERVICE_PORT}${INTERNAL_SERVICE_BACKEND:+ --backend \"$INTERNAL_SERVICE_BACKEND\"}${INTERNAL_SERVICE_DATA_DIR:+ --data-dir \"$INTERNAL_SERVICE_DATA_DIR\"}"]
+# `--no-tls` is stated, not inherited.
+#
+# The agent serves TLS by DEFAULT, because the binary a user downloads is dialled
+# straight from an https page (`wss://local.avarok.net:12345`) and a secure
+# context cannot open a `ws://` socket. That default is right for that topology
+# and wrong for this one: in the container the agent is never dialled by a
+# browser. nginx fronts it -- `proxy_pass http://${AGENT_UPSTREAM}/` in
+# docker/ui/nginx.conf.template -- and so does the Vite dev proxy, `target:
+# ws://127.0.0.1:${AGENT_PORT}` in citadel-workspaces/vite.config.ts. Both speak
+# plaintext to it over loopback.
+#
+# When TLS became the default, neither proxy was changed, so both dialled a
+# plaintext socket at a TLS listener and every handshake died as a bare 1006
+# `Connection closed before receiving a handshake response` -- with the agent
+# running, the port open, and nothing in either log saying why. Measured against
+# a current agent: the dev server could not reach it at all.
+#
+# Adding TLS to the proxy hop would buy nothing; it is loopback, inside the same
+# trust boundary the `--bind` note above describes. What was missing is that this
+# launch site never said which mode it wanted, so it silently followed a default
+# chosen for a different deployment. Both sides are now explicit, and
+# scripts/check-agent-tls-matches-its-proxies.mjs holds them to each other.
+CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --no-tls --bind ${INTERNAL_SERVICE_BIND_HOST:-127.0.0.1}:${INTERNAL_SERVICE_PORT}${INTERNAL_SERVICE_BACKEND:+ --backend \"$INTERNAL_SERVICE_BACKEND\"}${INTERNAL_SERVICE_DATA_DIR:+ --data-dir \"$INTERNAL_SERVICE_DATA_DIR\"}"]
 
 # =============================================================================
 # Dev runtime: equivalent to the previous single-stage image. Retains the
@@ -201,4 +223,26 @@ RUN chown appuser /usr/local/bin/citadel-workspace-internal-service
 RUN chown -R appuser /data/internal-service
 USER appuser
 
-CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --bind ${INTERNAL_SERVICE_BIND_HOST:-127.0.0.1}:${INTERNAL_SERVICE_PORT}${INTERNAL_SERVICE_BACKEND:+ --backend \"$INTERNAL_SERVICE_BACKEND\"}${INTERNAL_SERVICE_DATA_DIR:+ --data-dir \"$INTERNAL_SERVICE_DATA_DIR\"}"]
+# `--no-tls` is stated, not inherited.
+#
+# The agent serves TLS by DEFAULT, because the binary a user downloads is dialled
+# straight from an https page (`wss://local.avarok.net:12345`) and a secure
+# context cannot open a `ws://` socket. That default is right for that topology
+# and wrong for this one: in the container the agent is never dialled by a
+# browser. nginx fronts it -- `proxy_pass http://${AGENT_UPSTREAM}/` in
+# docker/ui/nginx.conf.template -- and so does the Vite dev proxy, `target:
+# ws://127.0.0.1:${AGENT_PORT}` in citadel-workspaces/vite.config.ts. Both speak
+# plaintext to it over loopback.
+#
+# When TLS became the default, neither proxy was changed, so both dialled a
+# plaintext socket at a TLS listener and every handshake died as a bare 1006
+# `Connection closed before receiving a handshake response` -- with the agent
+# running, the port open, and nothing in either log saying why. Measured against
+# a current agent: the dev server could not reach it at all.
+#
+# Adding TLS to the proxy hop would buy nothing; it is loopback, inside the same
+# trust boundary the `--bind` note above describes. What was missing is that this
+# launch site never said which mode it wanted, so it silently followed a default
+# chosen for a different deployment. Both sides are now explicit, and
+# scripts/check-agent-tls-matches-its-proxies.mjs holds them to each other.
+CMD ["sh", "-c", "/usr/local/bin/citadel-workspace-internal-service --no-tls --bind ${INTERNAL_SERVICE_BIND_HOST:-127.0.0.1}:${INTERNAL_SERVICE_PORT}${INTERNAL_SERVICE_BACKEND:+ --backend \"$INTERNAL_SERVICE_BACKEND\"}${INTERNAL_SERVICE_DATA_DIR:+ --data-dir \"$INTERNAL_SERVICE_DATA_DIR\"}"]
