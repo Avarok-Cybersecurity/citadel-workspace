@@ -3970,3 +3970,173 @@ suite is run from, not of the stack.
 
 The `persist-one-session.ts` defect in Round 596 surfaced only because the
 stacked tree ran all ten UI changes against each other. Alone, each was green.
+
+## Round 599 — the two halves of the system were built against different SDKs
+
+The server is built from the parent cargo workspace; the agent from its own,
+inside the submodule. Two workspaces, two lockfiles, and nothing that made them
+agree — so `cargo update` in one moved that half of the system forward and left
+the other behind.
+
+They had drifted **nine SDK commits** apart, across all fourteen Citadel crates.
+The commits the agent was missing:
+
+| commit | what it fixes |
+|---|---|
+| `d4b3eda1` | answering BEGIN_CONNECT before this side's hole punch resolved |
+| `b13d0d71` | a refused request parking the caller for ever |
+| `43003230` | a C2S disconnect that could wait for ever |
+| `aa1d6957` | binding a packet's header CID to the session that authenticated |
+| `52490c0f` | preserving errno on bind/connect; three unbounded receives |
+
+A P2P connect failure, two hangs, and a session-binding fix. That is not a list
+of incidental improvements — it is a description of the symptoms this record has
+been attributing to flake, including the branch this work was done on.
+
+CLAUDE.md already names "rekey timeouts, P2P connection hangs, protocol errors"
+as what a stale SDK looks like. Nothing checked whether the two halves were on
+the same one.
+
+### Why it survived
+
+The skew is invisible in every log. Each side builds a valid dependency,
+successfully, and says so. Only comparing the two lockfiles reveals it, and that
+is not a comparison anybody makes by hand.
+
+`check-git-deps-agree-across-lockfiles.mjs` compares only **git**-sourced
+packages: two workspaces on different crates.io patch versions is ordinary; two
+workspaces on different commits of the same *protocol implementation* is the
+defect. It fails rather than passes when a lockfile is absent, because a gate
+that reports success on an empty comparison is the failure mode this repository
+keeps finding.
+
+Controls in three states: red on the real skew, green on the aligned pair, red
+again after restoring — with the restore verified against git rather than
+assumed.
+
+## Round 600 — a browser could ask the agent for any file on the machine
+
+`SendFile` accepted `FileSource::Path(path) => Ok(path)`. Whatever absolute path
+arrived on the socket was opened and sent to the peer. The agent holds the
+ratchets, so the protocol then encrypted and delivered the caller's own files,
+faithfully, to a peer the caller nominated.
+
+The reachable caller is script in the allowlisted page — a hostile MDX document
+(the production CSP grants `unsafe-eval` so documents can execute), an XSS, or a
+compromised dependency. `PickFile` even returns absolute paths to the browser,
+so a page learns real paths to ask for.
+
+### The boundary is not "is the caller local"
+
+Every interface here is loopback. The question is whether naming a path *gains*
+the caller anything:
+
+- a native process runs as the user and can already open any file the agent
+  could — refusing it protects nothing, and the agent's own file-transfer tests
+  send by path over TCP in eight places;
+- page script cannot read the filesystem at all, so for it an accepted path is a
+  genuine escalation.
+
+That is a property of the caller's other capabilities, and it is knowable at
+compile time, because the service is generic over exactly one interface for the
+life of the process. Hence a trait constant rather than a runtime check — and
+adding it made the compiler point at a fourth implementation nobody had listed.
+
+In the SHIPPED build this refuses every browser `Path`: `native-dialogs` is off
+by default and the Dockerfile does not enable it, so there is no picker and the
+picked set is permanently empty. That is correct rather than a regression. It
+also means the shipped build was the one where the *unvalidated* branch was the
+only one that worked, because `PickFileRef` cannot resolve without a picker
+either.
+
+### The assertion that passed by never running
+
+The first version was a `#[test]` behind `#[cfg(feature = "websockets")]`. The
+connector declares `default = []` and CI runs a bare `cargo nextest run`, so it
+was filtered out of every run that mattered. It passed by never executing.
+
+It is a `const _: () = assert!(…)` now, which fails the BUILD of the module
+whose behaviour it constrains and cannot be skipped by a feature set or a test
+filter. Clippy then required the same of its two siblings, which made all three
+consistent.
+
+## Rounds 601-602 — one mechanism, four modules, fifteen write sites
+
+**A whole-collection write performed from a collection that was never
+successfully read.**
+
+| module | whole-list writers | round |
+|---|---|---|
+| the session upsert helper | 2 | 596 |
+| `peer-registration-store` | 7 | 601 |
+| `live-document-store` | 1 | 601 |
+| `connection` session list | 5 | 602 |
+
+In every case a read that FAILED was indistinguishable from a key that held
+NOTHING, the empty in-memory list was then written back over the key, and the
+write succeeded — so nothing surfaced.
+
+The peer-registration store lied in both directions at once: its read resolved
+`undefined` for a KV rejection, a send rejection and a timeout alike, while its
+write path rejected on send failure and *resolved* on timeout eight lines below.
+Same function, same kind of failure, two answers.
+
+The live-document index was the most costly, because that index is the only
+enumeration of what documents exist. `updateIndex` awaits `initialize()`
+specifically, by its own comment, so the index is never overwritten "with the
+one or zero entries in the cold cache" — which covers the not-yet-initialised
+case and did nothing for the failed-to-initialise one. `initPromise` memoised
+the failure, so one transient timeout disabled the index for the life of the
+page and the next `createDocument` wrote an index of one id over the real one.
+
+### The fix that had the defect it was fixing
+
+Round 596 narrowed two session writes to a single-session upsert and left FIVE
+whole-list writers standing, in three other files. The correction for "a correct
+fix applied in one of the places its mechanism appears" was itself applied in
+one of the places its mechanism appeared. Every guard now sits on the single
+method its call sites funnel through, so an eighth caller cannot bypass it.
+
+### The rule that could not fail, twice
+
+`every-localdb-reader-classifies-absence` is the test that should have caught
+this whole family. Its predicate was
+`source.includes('isGenuinelyAbsent')` — a substring test over the raw file.
+
+1. A **comment** naming the function satisfied it. Adding a comment saying the
+   *caller* does the classifying made a module look like it classified. This is
+   the same shape as round 594's gate, which matched the example quoted in its
+   own header.
+2. Stripping comments was not enough. The control — removing every real call
+   while leaving the import — came back **green**, because the **import line**
+   alone satisfied the substring. A file could import the classifier, never call
+   it, and pass.
+
+It requires a call now, with imports stripped, and the control fails as it
+should. The reader pattern was also widened from `FromLocalDB\(` to `FromDB\(`,
+which is why `live-document-store` had been outside the rule entirely.
+
+The lesson is narrower than "write controls": **run the control again after
+fixing a broken check.** The first repair looked right and was still measuring
+nothing.
+
+## Round 603 — CI had not run for three hours
+
+A monitor timed out waiting on two stacks. The stacks were not slow: across all
+three repositories there were twelve queued jobs and **zero** executing, the
+oldest queued for nearly three hours, with no other organisation repository
+holding runners and GitHub reporting Actions operational.
+
+Seven of the twelve were individual PRs the stacks supersede. Cancelling them
+was safe only after checking, and the check mattered: one branch that looked
+superseded by its name — `ci/stop-paying-for-the-same-work-twice` — is not an
+ancestor of the stack and was left alone. Branch names are not evidence;
+`git merge-base --is-ancestor` is.
+
+Three runs started immediately afterwards. Whether that was causal or
+coincidental with GitHub's scheduler is not established, and is recorded as
+unknown rather than claimed.
+
+The transferable point is about instrumentation: a monitor that waits for
+completion cannot distinguish "running slowly" from "never started". Every push
+during those three hours was adding to a queue that was not draining.
