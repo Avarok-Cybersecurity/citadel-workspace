@@ -7714,3 +7714,70 @@ certificate and private key for `local.avarok.net` — in a binary anyone can
 download. That is a known and legitimate pattern for a name that resolves to
 127.0.0.1, and it is still a deliberate trade the operator has to choose. It is
 recorded here rather than decided.
+
+## Round 674 — two production blockers found by using the product
+
+Testing work.avarok.net as a user found two things no gate had, because both
+are properties of the DEPLOYMENT rather than of the code in isolation.
+
+### 1. Nothing terminated TLS on the loopback origin (round 673), now fixed
+
+The agent serves `wss://` by default, presenting a Let's Encrypt certificate for
+`local.avarok.net` compiled into the binary. That name is public with an A record
+of 127.0.0.1, so the certificate validates in any browser while only ever
+reaching the visitor's own machine. The private key is therefore public: what it
+authorises is a TLS handshake for a name that resolves nowhere else, so
+possession grants no access to anyone's agent. Authorisation remains the Origin
+allowlist.
+
+Measured after the change: `openssl s_client` reports `Verify return code: 0
+(ok)` over TLS 1.3, a browser opens `wss://local.avarok.net:12345` with no
+errors, and **real accounts now register through work.avarok.net**. The release
+smoke test does the same handshake with **no `--insecure`**, so an expired or
+wrong-name certificate fails the build rather than the user.
+
+### 2. A hostname address could never work on a hosted UI
+
+`resolveServerAddress` fetched `https://dns.google/resolve` for anything that
+was not already an IP, because `Register.server_addr` was a `SocketAddr` and the
+agent demanded a resolved address. A hosted UI's own Content-Security-Policy
+refuses that connection — `connect-src` names the page's origin and the loopback
+agent and nothing else. Measured on the live site:
+
+```
+Refused to connect to 'https://dns.google/resolve?name=citadel.avarok.net&type=A'
+  because it violates the document's Content Security Policy.
+[MAIN REJECTION] Registration timed out after 30 seconds
+```
+
+So a raw IP worked and every hostname failed, and where the fetch did succeed it
+told Google which server each user was joining.
+
+The field is a `String` now and the agent resolves it with `lookup_host`,
+answering `RegisterFailure` with the address rather than letting the caller wait
+out its own timeout. On the wire nothing changed: serde renders a `SocketAddr` as
+exactly that string, so an older client still parses. The 78-line
+DNS-over-HTTPS helper is gone.
+
+| control | expected | observed |
+|---|---|---|
+| point the TLS test at the plain constructor | handshake test red | red |
+| put the DNS fetch back on the hostname path | 3 of 4 resolver tests red | exactly those 3; the IP case stayed green |
+| an IP address, after the change | still normalised with its port | `51.81.107.44:12400` |
+
+### Also done
+
+`citadel.avarok.net` now resolves **unproxied** to the server and is reachable on
+12400 — every other `avarok.net` name is behind Cloudflare, which terminates HTTP
+and will not carry the Citadel protocol, so a proxied name gives a socket that
+opens and then speaks nothing.
+
+### Still open
+
+Peer discovery lists a second user as Online and A's Connect reaches B's row —
+but **B receives no request within 50s**, reproduced on the live deployment. Not
+yet attributable: work.avarok.net is still serving a build 76 commits behind,
+without the `already-registered` fix. The image for the current branch is
+building.
+
+142 gates green.
