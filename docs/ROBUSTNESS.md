@@ -3869,3 +3869,104 @@ Two merges landed (#114, UI #38). One PR (#119) turns out to have **no workflow
 run at all** — only GitGuardian fired — so it can never merge until the event is
 re-triggered. Worth recording as a failure mode: a PR showing "1 pass" and
 nothing pending is not a green PR, it is a PR whose CI never started.
+
+## Round 594 — a gate satisfied by its own explanation
+
+`.claude/agents/sync.md` tells an agent to poll for readiness markers. Nothing
+checked that the markers are strings the services actually print, so a marker
+could rot silently and every sync would time out at five minutes with no
+indication of why. `check-readiness-markers-are-printed.mjs` extracts the
+quoted marker from each polling instruction and requires a source line that
+emits it.
+
+It passed on its first run, and the pass was fiction. The gate walks `scripts/`,
+which contains the gate, and its own header comment quotes
+`Citadel client established` as an example of a marker. It found its own
+sentence. Excluding `SELF` turned it red — and the red was **correct**: that
+marker is emitted by `citadel_proto`, a dependency, so no search of this tree
+could ever find it.
+
+Deleting the check would have been the easy answer. Instead a marker may now
+carry `<!-- emitted-by: <crate> -->`, and the crate is verified against
+`Cargo.lock`. That is the most this repository can know, and it keeps the teeth:
+an unprintable marker still cannot pass without naming a real dependency, which
+somebody has to write on purpose.
+
+The first version of that normalisation was itself wrong — it rewrote `_` to `-`
+before matching, and `citadel_proto` is literal in the lock, so it rejected the
+valid attribution it had just been built to accept. All three spellings are
+accepted now.
+
+## Round 595 — an allowance above the real length
+
+`check-file-length.mjs` carries per-file allowances for files that predate the
+250-line cap. Nothing checked that an allowance still corresponds to a file that
+long. Every one of the seven had been written when the file was longer, so a
+file could grow by dozens of lines and stay green because its allowance had been
+sized for a version that no longer existed.
+
+The gate now fails when an entry sits above the file's real length, and names
+the number to lower it to. All seven were tightened in the same commit. The
+control is the reverse of the usual one: raising an allowance by a line must go
+red, which proves the check reads the file rather than the table.
+
+## Round 596 — a whole-list write where a single-session write belonged
+
+Session persistence read `citadel_sessions`, modified one entry, and wrote the
+whole map back. Two tabs doing that concurrently lose one of the two writes, and
+the loser is silent. `persist-one-session.ts` narrows it to a read-modify-write
+touching only the addressed session.
+
+The module then caught a defect in **itself** during stacking. On a *failed*
+read — storage denied, quota, private mode — it fell back to this tab's
+in-memory list and wrote that, which is precisely the whole-list clobber the
+module exists to remove. The comment above the fallback said "a failed read is
+not an empty list". The code treated it as one. Genuine absence now returns
+`null` via `isGenuinelyAbsent`; every other error rethrows.
+
+## Round 597 — a disconnect that failed reported success
+
+`requests/peer/disconnect.rs` matched on the SDK's outcome and answered the same
+way for a completed disconnect, an error, and a timeout. A user who pressed
+"log out" against a wedged session was told it worked. `disconnect_outcome.rs`
+makes the three cases a type — `SdkDisconnect::{Succeeded, Failed, TimedOut}` —
+so the response is derived from the outcome rather than assumed.
+
+The negative control for this one came back green, and the reason is worth
+recording: the control **did not compile**. A non-exhaustive match failed cargo
+before any test ran, and the exit code being read was the grep's, not the
+suite's. A control has to be shown to have *run* before its colour means
+anything.
+
+## Round 598 — fifteen CI passes collapsed into three
+
+Thirty-three open PRs, each triggering a full validate run, against an
+organisation whose shared runner slots were already saturated by a sibling
+repository. The user's instruction was to stack them: one pass instead of
+fifteen.
+
+Three stacks, one per repository, merged in dependency order:
+
+| repo | PRs folded | conflicts | local verification |
+|---|---|---|---|
+| parent | 21 | 19 auto, 2 by hand | 61 gates green |
+| UI | 10 | none | tsc, eslint, 3053/3058 |
+| agent | 2 | 1 by hand | 123 tests, fmt clean |
+
+Two of the parent's conflicts were in generated files — `docs/GATES.md` and the
+gate-step list in `validate.yml`. Both were resolved by *union*, not by choosing
+a side: every entry in both parents belongs in the result. `GATES.md` was then
+regenerated rather than hand-merged, because it is derived and a hand-merge of a
+derived file is a guess.
+
+The five UI test failures that remained were verified identical on
+`origin/master` in the same worktree before being set aside. Each climbs out of
+the UI directory to read a file in the parent repository — the agent release
+workflow, the server kernel's lib.rs, and the client library's session module —
+none of which exist in a standalone UI checkout. That is a property of where the
+suite is run from, not of the stack.
+
+### What stacking found that fifteen separate passes would not have
+
+The `persist-one-session.ts` defect in Round 596 surfaced only because the
+stacked tree ran all ten UI changes against each other. Alone, each was green.
