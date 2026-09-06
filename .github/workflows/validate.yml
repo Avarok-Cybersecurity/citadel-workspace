@@ -290,6 +290,9 @@ jobs:
         run: node scripts/check-disconnect-reports-failure.mjs
       - name: Node content is not broadcast to every socket
         run: node scripts/check-node-content-is-not-broadcast-to-everyone.mjs
+      - name: Preflight invokes gates the way CI does
+        run: node scripts/check-preflight-runs-what-ci-runs.mjs
+
       - name: Tenant provisioning refuses what it must
         run: bash scripts/test-provision-tenant.sh
 
