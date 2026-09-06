@@ -27,6 +27,27 @@ impl From<WorkspaceProtocolResponse> for WorkspaceProtocolPayload {
     }
 }
 
+/// Never print a secret, whatever the log level.
+///
+/// `async_process_command` logs `"Processing command: {command:?}"` at
+/// `debug!`, and three variants of this enum carry `workspace_master_password`
+/// as a plain `String`. So raising `RUST_LOG` to `citadel=debug` -- which an
+/// operator does precisely when they are about to paste a log into a ticket --
+/// wrote the workspace master password in clear on every CreateWorkspace,
+/// UpdateWorkspace and DeleteWorkspace.
+///
+/// The mechanism was already here and already in use: `#[debug(with = ...)]`
+/// redacts the `metadata` byte blob on the line BELOW each of those password
+/// fields, and `ServerConfig` in the kernel hand-writes a `Debug` that redacts
+/// the same secret. It was applied to the byte blob and to one struct, and not
+/// to the secret next to it.
+///
+/// The length is omitted deliberately. It is not needed to debug a protocol
+/// message, and printing it narrows an offline guess.
+pub fn secret_debug_fmt(_: &String, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    write!(f, "<redacted>")
+}
+
 pub fn bytes_opt_debug_fmt<T: std::fmt::Debug + AsRef<[u8]>>(
     val: &Option<T>,
     f: &mut std::fmt::Formatter,
@@ -45,6 +66,7 @@ pub enum WorkspaceProtocolRequest {
     CreateWorkspace {
         name: String,
         description: String,
+        #[debug(with = secret_debug_fmt)]
         workspace_master_password: String,
         #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
@@ -60,6 +82,7 @@ pub enum WorkspaceProtocolRequest {
         workspace_id: Option<String>,
         name: Option<String>,
         description: Option<String>,
+        #[debug(with = secret_debug_fmt)]
         workspace_master_password: String,
         #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
@@ -67,6 +90,7 @@ pub enum WorkspaceProtocolRequest {
     DeleteWorkspace {
         /// Workspace ID to delete. None defaults to the sentinel workspace-root.
         workspace_id: Option<String>,
+        #[debug(with = secret_debug_fmt)]
         workspace_master_password: String,
     },
 
