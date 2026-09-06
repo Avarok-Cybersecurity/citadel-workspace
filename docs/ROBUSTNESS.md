@@ -7646,3 +7646,71 @@ to be switched off to keep the proof.
 proving work.avarok.net with multiple users under Playwright. Outstanding sweep
 findings are recorded above and in this session's transcript; they are not lost,
 but they are not being worked until that is done.
+
+## Round 673 — work.avarok.net cannot reach any agent that exists
+
+Focus moved to proving the hosted deployment with real users. It does not work,
+for one reason, and the reason is architectural rather than a bug.
+
+**Measured, as a user would experience it.** Downloaded
+`citadel-agent-macos-arm64.tar.gz` from the published release (`agent-v0.1.0`,
+2026-08-25), verified its SHA-256 against the published checksum, ran it exactly
+as its own README says:
+
+```
+./citadel-agent --bind 127.0.0.1:12345 --backend filesystem
+```
+
+Then opened `https://work.avarok.net` in Chromium:
+
+```
+WebSocket connection to 'wss://local.avarok.net:12345/' failed:
+  net::ERR_SSL_PROTOCOL_ERROR
+WASM client initialization failed: ConnectionFailed { code: 1006 }
+[Error initializing WorkspaceClient:] Failed to initialize WASM client
+```
+
+On screen: *"Can't reach the Citadel agent on this machine."*
+
+**The cause.** The hosted page publishes `wss://local.avarok.net:12345` as the
+loopback agent origin (`index.html`, `citadel-loopback-agent` meta), and
+`local.avarok.net` correctly resolves to `127.0.0.1`. But **nothing terminates
+TLS there.** `openssl s_client -connect local.avarok.net:12345` against the
+running agent returns `wrong version number` and `no peer certificate
+available`: it is a plain WebSocket listener.
+
+This is not a stale release. The **current** tree is the same:
+`CitadelWorkspaceService::new_websocket(bind_address, origins)`
+(`kernel/mod.rs:143`) takes no certificate, and
+`citadel-workspace-internal-service/src/main.rs` has no `--tls`/`--cert` option.
+The `--dangerous` flag concerns the Citadel protocol client's verification, not
+this listener.
+
+A page served over HTTPS cannot open a `ws://` socket — mixed content is blocked
+— so `wss://` is not a preference here, it is the only option. **The loopback
+design shipped without its TLS half, and work.avarok.net has therefore never
+been usable by anyone.**
+
+### Two further blockers behind it
+
+- The **deployed** page's run command names `./citadel-workspace-internal-service`;
+  the archive contains `citadel-agent`. A user copying it gets "command not
+  found". Already fixed in the tree, not deployed.
+- The **tree's** run command passes `--allowed-origins`, which the released agent
+  rejects outright: *"Found argument '--allowed-origins' which wasn't expected"*.
+  So deploying the current UI against the current release trades one broken
+  instruction for another. A new agent release is required alongside.
+
+### What works today, and what it costs
+
+`docker-compose.local.yml` — UI and agent both local, `WS_PROXY_ENABLED=1`,
+same-origin `/ws`, published on `127.0.0.1:8080` only. That path needs no
+certificate because the page is itself on loopback. It is not work.avarok.net.
+
+### The decision this needs
+
+Serving `wss://` on the visitor's machine means the agent must hold a
+certificate and private key for `local.avarok.net` — in a binary anyone can
+download. That is a known and legitimate pattern for a name that resolves to
+127.0.0.1, and it is still a deliberate trade the operator has to choose. It is
+recorded here rather than decided.
