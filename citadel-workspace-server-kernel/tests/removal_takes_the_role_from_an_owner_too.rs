@@ -16,6 +16,14 @@
 //! Not an escalation: the Owner gains nothing they did not already hold. It is a
 //! revocation that revoked nothing, which is why the Admin case is the control —
 //! the same call, one role over, has always worked.
+//!
+//! The demotion target is now `Banned`, not `Member`, and it applies to every
+//! removed account rather than only administrators. Demoting to Member recorded
+//! nothing, and the connection handler enrols anyone missing from the member
+//! list — so removal was undone by the removed account's own next reconnect.
+//! `Banned` is the record that connect path reads; see
+//! `a_removed_member_does_not_re_enrol.rs`. These tests keep asserting the
+//! thing this file was written for: the authority goes with the membership.
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
 use citadel_workspace_types::structs::UserRole;
@@ -67,7 +75,7 @@ async fn removing_an_owner_takes_the_role() {
 
     assert_eq!(
         role_of(&kernel, "founder").await,
-        UserRole::Member,
+        UserRole::Banned,
         "a removed Owner kept the role, and with it every is_admin_or_owner gate",
     );
     assert!(
@@ -86,19 +94,27 @@ async fn removing_an_admin_still_takes_the_role() {
 
     remove(&kernel, "deputy").await;
 
-    assert_eq!(role_of(&kernel, "deputy").await, UserRole::Member);
+    assert_eq!(role_of(&kernel, "deputy").await, UserRole::Banned);
     assert!(!still_administers(&kernel, "deputy").await);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn removing_a_plain_member_leaves_their_role_alone() {
-    // The demotion must be scoped to administrators. A Guest removed from the
-    // workspace is still a Guest, not silently promoted to Member.
+async fn removing_a_plain_member_does_not_promote_them() {
+    // This asserted that a removed Guest stays a Guest, guarding against a
+    // silent promotion to Member. The guarantee is unchanged and is what is
+    // asserted here; only the resting role moved, from Guest to Banned, so
+    // that removal leaves a record at all. Banned ranks 0 and grants nothing,
+    // so it cannot be the promotion this test exists to catch.
     let kernel = create_test_kernel().await;
     insert_user_with_role(&kernel, "visitor", UserRole::Guest).await;
     join_root(&kernel, "visitor").await;
 
     remove(&kernel, "visitor").await;
 
-    assert_eq!(role_of(&kernel, "visitor").await, UserRole::Guest);
+    let after = role_of(&kernel, "visitor").await;
+    assert_eq!(after, UserRole::Banned);
+    assert!(
+        after.get_rank() <= UserRole::Guest.get_rank(),
+        "removal must never raise an account's rank; got {after:?}",
+    );
 }
