@@ -2778,11 +2778,615 @@ Fixed by removing the volume and recreating. Worth stating as a standing trap:
 a dependency added to the repo is invisible to the running dev container until
 someone deletes that volume, and nothing anywhere says so.
 
-## Open, as of round 532
+## Round 533 — a lost wakeup in ILM's outbound loop, found by refusing a flake
+
+A timing assertion in `intersession-layer-messaging` failed on macOS CI and
+was filed, for one wave, as "the runner is slow, the bar is tight". It was
+not. Making the test persist its per-leg measurements as an artifact -- the
+log was truncated before the panic on every run -- showed legs at ~1ms and
+then **one send that never arrives**: leg 3 on one run, leg 4 on the next.
+
+Every alternative was eliminated on evidence before the code was read for a
+mechanism: Windows was a `fail-fast` cancellation rendered as a failure, not
+a failure; `worker_threads = 1` locally passes 8/8, so it is not starvation;
+peer 2 delivered every message it was sent; peer 1 held the ACK for the
+previous leg both times with zero `can_send=false`; and there was **no
+`SENDING` line at all** for the stranded message -- it was stored and never
+attempted. No loop-exit, backend-error or peer-disconnected log line either.
+
+The mechanism, once read for: the outbound loop wakes on a nudge or a 200ms
+timer, **drains every queued nudge on every wake**, and then -- if the wake
+was the timer and the hint says the queue was empty last time -- skips the
+read. A nudge that lands while the loop is parked, when the timer fires at
+nearly the same instant and wins the select, is eaten by the drain and thrown
+away by the skip. `send_raw_message` never set the hint, so nothing else
+would ever trigger a read. A message stored and stranded until an unrelated
+nudge happened along.
+
+Reproduced locally with a phase sweep -- idle sleeps of 190..210ms in 1ms
+steps, so sends land at every offset from a tick. **Unfixed: 5/5 runs strand
+a message**, each at an idle of 193..202ms, on the boundary, at a different
+leg (24, 71, 5, 12, 9). **Fixed: 0/5.** Two lines, and each alone suffices
+(5/5 -> 0/5 either way): a drained nudge marks the wake as Nudged, and
+`send_raw_message` sets the hint before nudging. Full crate 38/38, clippy
+clean. The sweep is kept as a regression test.
+
+Two things worth keeping from how this went. The evidence mechanism itself
+was broken twice before it produced anything -- first writing to a `target/`
+that was the workspace's rather than the crate's, with the error discarded
+by `let _ =`; then writing only at the end of the test, after the panic that
+mattered. Both were caught by checking the file existed rather than trusting
+the step went green. And the hypothesis I stated first ("platform speed")
+was wrong; it is on the PR as refuted, with the artifact that refuted it.
+
+Landed in ILM PR #4. Not yet in the line this repository pins: that needs
+the internal-service pointer, whose own `master` is 109 commits behind what
+is pinned here (round 531).
+
+## Round 534 — one FAIL line, two defects, found from opposite ends
+
+**Found.** `test:tree-structure` failed on UI #17 and UI #20 — both script-only
+diffs — with `Admin status: FAIL` after "Workspace fully loaded". Attempt-1 of
+run 33914939883: the `_admin_ready` screenshot shows the avatar with no admin
+ring; the `_node_updated` screenshot seconds later shows the ring, the ADMIN
+SETTINGS badge, and an office that user had just created. React took 6.9s to
+render on that runner. The user was admin; the role is read from
+`state.currentUser`, which the server fills in after the sidebar is up, and it
+trailed a 10s wall. The check measured latency and called it a role.
+
+**Then locally**, the same spec failed every run — and not for that reason.
+`createAccount` swept modals the instant the init modal was accepted. The
+registration wizard stays on its Profile step until Landing finishes
+`postAuthSetup` and navigates; and even after the URL changes, the lazy route
+keeps the old screen up until the chunk loads (measured by the new sweep
+diagnostic: `<div Create your profile>` 1280x720 at opacity 1, z-50, 800ms
+after `/workspace`). Escape is "back" for the wizard, so the sweep walked
+Profile → Security → Server and clicked its own Cancel: live session chip on
+the landing page, no workspace. A slow CI runner navigated first — the only
+reason this ever passed there. The CI log has no sweep detections at all, so
+the two failures share a line and nothing else.
+
+**Fix (UI #22).** `waitForAdminRole()` waits on the workspace-load budget and
+names three outcomes: role arrived (with latency), avatar present but never
+admin, no avatar at all. `waitForRegistrationToSettle()` waits for the
+navigation and for the wizard overlay to detach, logging both gaps.
+`closeAnyModals` now says what it matched — `[data-state="open"]` is every
+open Radix primitive — and the first-user branch logs every outcome instead of
+none. Propagated: `office-room-crud` had the identical 10s wall.
+
+**Controls.** `ADMIN_ROLE_BUDGET_MS=1` → "avatar present but role never became
+admin within 1ms" (the third outcome, not the first — the workspace was up).
+The four pre-fix local runs are the sweep defect measured before the change.
+Both specs pass locally; the member path reports "Entered the workspace 0ms
+after registration", wizard gone 226ms later.
+
+**Closed in the same round.** Does a real new member see the wizard linger?
+Measured with one script against both servers: production bundle (vite
+preview), three registrations — overlay gone 94, 125 and 128ms after the URL
+changed; dev server, two — 217 and 219ms. The 800ms figure above was the sweep
+arriving mid-transition on a cold dev chunk, not what a person sees. Not a
+defect. The number a person does see is submit → workspace, 3.8–4.0s on both
+servers: that is `postAuthSetup` (permissions, workspace, members), the same
+cost the onboarding flow already pays and already shows a spinner for.
+
+**Also this round.** ILM #4 merged (`688a688`) — green on all three platforms,
+which retires the "macOS is slow" story for good.
+
+## Round 535 — the server went live, and three things deploy.sh could not say
+
+**Found.** With server and UI images already at `sha-aeafb7ecad6c` (master@2 Sep;
+only the `latest` promotion was Lighthouse-gated), the avarok tenant did not have
+to wait for a publish. The packages are private and the host has no registry
+token, so the image went over `docker save | ssh avarok2 docker load` — and
+`deploy.sh --no-pull` still went to the registry: `--no-pull` skips the *git*
+pull. `--local-images` deploys what is on the host; safe only because the
+revision gate inspects every image and stops before any restart when one is
+missing. Harness: no pull recorded; a missing image aborts with no `up -d`.
+
+**Then the harness itself.** It fails at baseline on macOS, and the trace says
+why: `origins=$(grep KEY .env | tail | cut)` — no key, grep exits 1, pipefail,
+`set -e`, dead after the banner with no message. CI never saw it because
+validate.yml exports `INTERNAL_SERVICE_ALLOWED_ORIGINS` globally, so deploy.sh
+took the env branch and never read the file: the harness measured nothing about
+this path. The master-password read had the same shape, which meant its "is
+unset" message was unreachable. Both reads tolerate absence now; the harness
+runs deploy.sh with the variable unset and writes the `.env` a tenant has.
+Controls: each `|| true` removed turns its case red — one by exiting, one by
+refusing without the message.
+
+**Then the deployed server.** It accepted a registration from the internet
+(`probe_5469767` connected, added to the workspace domain, declined admin,
+landed on `/workspace` with the sidebar and four seeded offices, zero console
+errors) while Docker called it unhealthy: the healthcheck was a literal
+`nc -z 127.0.0.1 12349` and the tenant binds 12400. deploy.sh's wait timed out
+on a working server and reported MIXED-VERSION about "later services" a
+server-only tenant does not have. The check now expands `WORKSPACE_BIND_ADDR`
+in the container's shell; the tenant went healthy on the next deploy. The wait
+names the `.env` port; the last service says "did not become healthy". Guards:
+the trimmed compose must derive the port (literal back → FAIL); the wait must
+name the `.env` port and never 12349 (literal back → red). The first version of
+the provisioning guard referenced an unbound `$ROOT` and failed in both states
+— pushed that way, caught by running the control, fixed in the next commit.
+
+**What the tester model turns out to be.** A hosted UI derives its agent socket
+as same-origin `/ws` under `connect-src 'self'`; the agent proxy is off in the
+public stack by design. So a page at work.avarok.net cannot reach a tester's
+loopback agent today. certified.sh solves this with an A record
+(`local.certified.sh → 127.0.0.1`), a real certificate for that name issued via
+DNS-01 and *served* to the agent (ninety-day expiry; fetched at start, cached
+0600), the agent terminating TLS on loopback, and the page dialling
+`wss://local.certified.sh:4843`. The user has created `local.avarok.net`.
+
+**Open.** The agent cannot terminate TLS yet, and which citadel-agent branch is
+canonical is undecided (master is 109 commits behind the pinned e21933c).
+
+## Round 536 — a hosted page can reach the visitor's own agent
+
+**Found.** `resolve-url.ts` derives the agent socket as same-origin `/ws` under
+`connect-src 'self'`, and the public stack keeps that proxy off, correctly. So
+work.avarok.net could serve the app and the app could reach nothing: "run the
+agent, then reload the web app" (docs/AGENT_README.md) was written for a path
+that did not exist. certified.sh's shape — a name at 127.0.0.1 with a real
+certificate, the page dialling `wss://local.<domain>:<port>` — is the one that
+keeps the agent on loopback and satisfies every browser. The user created
+`local.avarok.net`.
+
+**UI #23.** `readLoopbackAgentOrigin` reads `<meta name="citadel-loopback-agent">`;
+the resolver dials it when the page is not itself on loopback, honours only a
+bare `wss://host:port`, and lets explicit and build-time overrides win. Control:
+the loopback branch removed fails exactly the hosted-page test.
+
+**WS #91.** `LOOPBACK_AGENT_ORIGIN` is the fourth runtime variable of the UI
+image. The validator admits only a bare wss origin (it is substituted into a
+quoted nginx string and an HTML attribute). The CSP was six byte-identical
+copies — `add_header` does not inherit — and is now one map every location
+references; the origin lands in `connect-src` and in the meta from the same
+variable. `provision-tenant.sh --loopback-host` writes it (needs `--topology
+full`). 23 render/validator assertions, 6 provisioning cases, controls on each.
+
+**What only the built image could show.** nginx's entrypoint substitutes only
+variables PRESENT in the environment; absent, the literal survived and nginx
+died at start (`unknown "loopback_agent_origin" variable`). A sourced `.envsh`
+defaults the optional variable — and then did nothing, because the entrypoint
+sources an `.envsh` only if executable, and it was copied 0644. The guard that
+said "installed" was green over a broken image; it now asserts the chmod. The
+render test's control had to be plumbed through `env -i` before it could go
+red at all. smoke-ui-ws.sh, which CI runs against the built image, asserts the
+served meta and the CSP header carry the origin; all sections pass locally.
+
+**Open.** The agent cannot terminate TLS or validate Host; that wave starts
+from the pinned e21933c. The certificate for local.avarok.net is not issued.
+
+## Round 537 — the agent people download could not be reached by a browser
+
+**Found** while sizing the agent's TLS change: the submodule's
+`service/src/main.rs` — the crate release-agent.yml builds — starts the kernel
+with `new_tcp`, the raw `Framed` TCP interface. The docker image runs this
+repo's `citadel-workspace-internal-service`, which wraps the kernel in the
+WebSocket interface and the Origin allowlist. Two binaries, same `--bind`, same
+"refuses without --bind", same port bound; only one speaks to a browser.
+
+**Verified** against the published asset, not the source: agent-v0.1.0
+(macos-arm64) bound its port and returned nothing to a WebSocket handshake —
+`<connection closed>` — while the docker agent answered
+`HTTP/1.1 101 Switching Protocols`. Every smoke assertion the release had
+(executable, refuses without --bind, right architecture, listens) was true of
+the wrong binary. "Listens" is not "speaks".
+
+**Fix (WS #92).** The workflow builds and packages
+`citadel-workspace-internal-service` with a `vendored` feature forwarded to the
+kernel crate. smoke-agent.sh performs a real handshake: 101 for the allowed
+origin, 403 for a foreign one — the second proves the allowlist is in the
+shipped binary. The README's invocation gains `--allowed-origins`, which this
+binary requires. Control: the v0.1.0 archive fails at the handshake; a package
+of the WebSocket binary passes.
+
+**Caught on the way.** The smoke's curl pipeline died under pipefail + set -e
+when the connection closed, so the first control run printed nothing — the
+same silent-exit shape as deploy.sh in round 535, in a script whose job is to
+report. The empty result is the finding; the case statement now names it.
+
+**Open.** The vendored release build of the parent crate is compiling locally
+as this is written; the tagged release has not been re-cut.
+
+## Round 538 — the agent speaks wss:// on loopback, proven with the real certificate
+
+**Built.** citadel-agent #60 (connector, from the pinned e21933c): `Transport`
+(plain or rustls server stream, ring — the provider the rest of the graph
+uses), `acceptor_from_pem` that names which of certificate or key is unusable,
+`HostPolicy::Loopback` admitting 127.0.0.1 / localhost / [::1] and one
+published name on exactly the bound port, and `WebSocketInterface::new_tls`
+deriving that policy from the port actually bound. Three integration tests
+against a self-signed listener: the published name over TLS is accepted; a
+permitted Origin on a foreign Host is refused 403 (DNS rebinding); plain
+`ws://` is not a connection. WS #93 (binary): `--loopback-host`,
+`--loopback-cert-url` (curl fetch, 0600 cache, offline on later starts) or
+`--tls-cert/--tls-key`; a name without a certificate source is refused rather
+than run plain; pure resolver, eight tests.
+
+**Proven, not unit-tested.** With the Let's Encrypt certificate for
+local.avarok.net (a public A record for 127.0.0.1) and curl verifying the chain
+over the real DNS name: allowed Origin → 101; foreign Origin → 403; spoofed
+Host → 403; wrong port → 403; `Host: localhost:port` → 101; the bare IP fails
+verification, as a browser would; plain `ws://` is closed.
+
+**Wrong on the way.** tokio-rustls 0.26 defaults to aws-lc-rs; the graph is
+on ring, and `crypto::ring` did not exist until the feature was selected. A
+`#[derive(Debug)]` above the interface survived my splice and failed on the
+acceptor. Two edits silently did not apply because `cargo fmt` had re-wrapped
+the anchor lines — the same lesson as the shell-script anchors, in Rust. My
+first Host-spoof probe verified the certificate against the spoofed URL host
+and never sent the request; a green "spoof refused" would have been fiction.
+
+**Open.** The parent's build.rs runs wasm-pack on every debug build and it
+failed locally for a reason this change does not explain (the wasm32 check of
+the client passes); `SKIP_WASM_BUILD=1` for now. Which citadel-agent branch
+is canonical is still the user's call; #60 targets the one the parent pins.
+
+## Round 539 — the vhost serves the certificate, and would not have loaded
+
+**Built (WS #94, stacked on #91).** For a tenant with `--loopback-host`, the
+host vhost serves exactly `/agent/loopback.pem` and `/agent/loopback.key` from
+`<tenant>/loopback/`, uncached, and nothing else; a tenant without a published
+name gets no such location. Two provisioning assertions; control: the renderer
+ignoring the directory turns the first red.
+
+**Found by checking under the nginx it targets.** `http2 on;` is a 1.25.1+
+directive. avarok2 runs Ubuntu's 1.18, where it is `unknown directive "http2"`
+and the vhost cannot be enabled at all — a defect that predates this wave and
+that no render-level test could see. `listen 443 ssl http2;` is accepted by
+both. `scripts/test-nginx-vhost.sh` renders with and without the loopback
+directory and runs `nginx -t` inside `nginx:1.18-alpine` and `nginx:1.30-alpine`
+with a throwaway certificate mounted; it runs in CI. Control: the directive put
+back is rejected by 1.18.
+
+**Also.** The first attempt at this change was cut from `origin/master`, which
+does not have `--loopback-host`; the provisioner anchors did not match, the
+test gained no assertions, the "control" had nothing to fail, and the
+`nginx -t` ran on an empty file and passed. Stacked on #91, it all measured
+something.
+
+## Round 540 — the whole hosted path in one browser, and a failure message that lied
+
+**Built (UI #24, WS #95).** A Playwright spec drives one Chromium at a page
+served from `work.test` (resolved to 127.0.0.1 by the browser's host-resolver
+rules, so the page is non-loopback by host while everything runs locally) and
+an agent on `wss://local.test:PORT` with a throwaway certificate. It asserts
+what the browser did: which WebSocket it opened and that frames came back —
+the image's meta, its CSP, the resolver's choice, the agent's TLS, Origin and
+Host checks, all on the line at once. The control opens the same image from a
+loopback host and must dial same-origin `/ws`. `scripts/test-hosted-ui-loopback.sh`
+starts the pieces (binary or, with `AGENT_IMAGE`, the built image on the host
+network — the Host allowlist is derived from the bound port, and a published-port
+mapping would put the browser's Host and the bound port out of step).
+
+**Controls.** An agent that refuses the page's origin: ~20 attempts to the
+loopback origin, no frames, hosted test red. An image publishing no origin:
+attempts to `/ws`, none to the loopback origin, hosted test red.
+
+**The message lied first.** Both controls initially reported "sockets opened:
+[]" — which would have meant the app never tried. A manual probe showed 24
+attempts and "Can't reach the Citadel agent". `expect.poll`'s `message` is a
+string evaluated when the call is made; it froze the empty initial state. The
+spec now waits, then asserts with a message built afterwards. Measured on the
+way: Playwright reports a socket whose upgrade was answered (even 403) but not
+one whose TCP connection was refused, so an empty list has one meaning only.
+
+**Both stacks together, from the images.** A local merge of the agent stack
+(#92 → #93, connector #60) and the UI/provision stack (#91 → #94 → #95) — never
+pushed — built the agent image from docker/internal-service/Dockerfile; the e2e
+in `AGENT_IMAGE` mode, agent from that image on the host network and UI from
+the production image, passed 2/2 and its control went red. That is the first
+time the two halves ran against each other as the artifacts a tenant gets.
+
+**Also.** The CI stall was misread as an organisation-level block and recorded
+as such; corrected the same hour (queue depth, largely self-inflicted). Cancelling
+the stacked PRs' queued runs was blocked by the session's permission
+classifier; the decision is the user's.
+
+## Round 541 — the hint told visitors to run a binary that was not in the box
+
+**Found** in a control screenshot: the Connection Failed dialog's "run it
+with" command named `./citadel-workspace-internal-service`; the archive it sat
+beside contains `citadel-agent`. The WebSocket agent also refuses to start
+without `--allowed-origins`, and a page served from elsewhere needs the
+loopback name and the certificate URL — none of which the visitor could have
+guessed, all of which the page knows.
+
+**Fix (UI #25, stacked on #23).** `agentRunCommand` derives the command from
+the page: the packaged binary name, `--allowed-origins <this page's origin>`,
+and — when the hosting nginx published a loopback origin — `--loopback-host`
+and `--loopback-cert-url <origin>/agent`. Windows gets `.\citadel-agent.exe`.
+A test reads release-agent.yml for the packaged name so a rename there fails
+here, not in a visitor's shell. 19 tests; control: naming the crate fails the
+cross-check.
+
+**Ops.** The certificate for work.avarok.net is issued and installed at the
+Let's Encrypt paths the vhost expects, renewal reload guarded by `nginx -t`.
+The amd64 UI image with loopback support is staged on avarok2. Nothing is
+exposed yet: the public UI would today offer the v0.1.0 download, which is the
+TCP binary; the cut-over waits for the release from #92/#93.
+
+## Round 542 — pre-validating the UI stack locally, and what the local stack is
+
+**Run.** The full `tests-pw` suite (138 tests, 21 files) against the local
+stack on the UI branch carrying #23 + #25: 128 passed, 10 failed. First the
+dev UI answered 404 — `index.html` is bind-mounted as a single file and a
+branch switch replaced its inode; the container kept the dead one until a
+restart (recorded as a memory).
+
+**Cluster A (5).** "global-setup did not initialise the workspace … registered
+an ordinary member": the log shows the Escape / Escape / Cancel signature from
+round 534 during global-setup's admin registration. The branch predates UI
+#22's fix to `createAccount`. Merged #22 locally: global-setup's admin
+"initialised the workspace and is admin", and all five pass.
+
+**Cluster B (5, plus one).** P2P delivery — call warmups, screen share, P2P
+handshake, a touch-controls send — and admin-lockout's "with two
+administrators the control should be available again". The same three
+representative specs on UI `master` fail identically against this stack, so
+these are the environment, not the branch. The local agent image is from
+26 Aug, pinned ILM cb137be — before the lost-wakeup fix (round 533) — and its
+log shows `find_target` succeeding with delivery never arriving. Rebuilt that
+image with ILM 688a688 and nothing else changed: call warmups delivered in 30s,
+P2P handshake green, 37 of 38 pass. The local stall WAS the lost-wakeup bug,
+now proven at the integration level; citadel-agent gets the pointer bump.
+admin-lockout passes in CI and is open locally; touch-controls' "the message
+should send" fails on both branches and both agents, and its screenshot says
+why: the member's room reads "You do not have permission to send messages
+here." Two permission-shaped failures (this and admin-lockout), both green
+in CI, both red on this stack. Closed the same round: the local server image
+was also from 26 Aug (kernel source last changed 2 Sep); rebuilt, both pass.
+Every one of the ten failures is now attributed, none to "flake".
+
+**Also.** UI #22's first CI failure was the runner's apt install of browser
+dependencies (exit 100), before any test ran.
+
+## Round 543 — three users, the production bundle, and the live avarok server
+
+**The setup, as close to a tester's as this machine allows.** The production UI
+image (so production onboarding is ACTIVE), the agent built from the merged
+agent stacks on loopback, and the real tenant at `51.81.107.44:12400`. One
+browser, three tabs — one WebSocket, one agent, three sessions, which is how
+the product is designed to be used.
+
+**Onboarding works, and costs what it should.** All three users saw the
+production intent dialog. The admin path (intent → wizard → register → master
+password → workspace) is 12 interactions; the member path is 10. Registration
+against a remote server takes 4.2–5.7s, the workspace renders in full —
+hierarchy, three offices, seven rooms, members, files — and the run recorded
+**zero console errors** for all three users. The first admin claim showed
+"Workspace Initialized. You are now the workspace administrator"; later users
+correctly got no init modal at all, because the workspace then had one.
+
+**P2P works against production.** Peer discovery lists the server's other
+accounts, Connect sends the request, the recipient's pending-requests badge
+appears within seconds, Accept completes, and a message sent immediately after
+accepting was **delivered in 2.5s** and shown as `delivered`. Bidirectional.
+
+**What did not work, and it is not the network.** An earlier run of the same
+script had both directions report `sent` and neither arrive, with
+`Network inbound task ended. Messenger is shutting down` and
+`ListRegisteredPeers request timed out` in two of the three sessions, while the
+agent logged, 125 times, `[P2P-MSG] Peer connection not found for peer_cid=…`.
+So the failure is intermittent and correlates with a session's messenger
+ending — not with the send itself.
+
+**And underneath it, a defect that is not intermittent at all.** When the agent
+cannot send, it answers `MessageSendFailure` (`requests/message.rs:57` and the
+timeout branch). The UI contains **no reference to `MessageSendFailure`
+anywhere** — not in `routing-rules.ts`, not in any handler — so that answer is
+discarded and the bubble stays `sent`. The machinery to do better already
+exists and is used by two other paths (`markSendFailed`, retry gated on
+`failed`, persisted before any rethrow). This is the "built from one end"
+shape: the agent emits, nothing consumes. Open, with the fix scoped for the
+next wave because correlating a failure to a message id needs a control that
+can actually fail.
+
+## Round 544 — four inspection agents, and what survived verification
+
+**Deploy surface (WS #96).** `cp -r scripts "$TENANT_DIR/scripts" || true`
+copies INTO the destination when it exists, which is every `--force`
+re-provision: fresh scripts landed at `scripts/scripts/` while the PREVIOUS
+revision's `verify-image-revisions.sh` stayed exactly where the freshly-copied
+`deploy.sh` calls it. Reproduced in a temp directory before fixing. `--domain`
+was the one operator input with no validation, and it reaches an nginx
+`server_name`, a certificate path, a filename and the agent's Origin
+allowlist. `--dry-run` redacted the master password and printed `TUNNEL_TOKEN`
+in full. The vhost gained HSTS and nosniff. Eight assertions; restoring the
+original provisioner fails six of them.
+
+**Release path (WS #97), and a second frozen-release cause.**
+`publish-images.yml` starts the internal-service image for its smoke with
+`INTERNAL_SERVICE_PORT` and `INTERNAL_SERVICE_BIND_HOST` and nothing else. The
+binary refuses to start without an origin allowlist — by design — so that
+container exits, the smoke reports "exited instead of serving", and
+`promote-latest` is skipped. That has been true since the allowlist landed, in
+parallel with the Lighthouse gate already fixed.
+
+**A guard that could not fail (same PR).**
+`check-admin-promotions-are-gated.mjs` matched `.role = UserRole::Admin`,
+found three literal sites, and printed "all 3 sit behind a gate". Every real
+promotion goes through `user.role = role` in `write_user_role_locked`, reached
+via `write_user_role` from `add_user_to_domain` and
+`update_workspace_member_role`. Deleting either `ensure_may_grant_role` left
+the check green. It now follows a promoting helper's callers two levels and
+uses the enclosing function BODY as the gate window (the real gate sits ~70
+lines above the write). Four promotions found; both controls red.
+
+**The agent's accept path (citadel-agent #60).** TLS accept and HTTP upgrade
+both READ from the socket and both were awaited inline on the accept loop,
+whose only consumer is the kernel. A client that connected and said nothing
+parked the agent for everyone, and no allowed Origin was needed because the
+Origin and Host checks live inside the upgrade. Accepting and handshaking are
+now separate, each handshake bounded at 10s, completed connections arriving
+through a bounded channel. The control is why this is the second version:
+spawning the handshake but still awaiting it from the accept loop serialised
+them just the same, and `an_idle_client_does_not_block_the_next_one` failed
+exactly as it should have.
+
+**Not yet acted on, ranked and evidenced:** AddMember on a room rewrites the
+target's GLOBAL role (kernel); logout reports success after an SDK disconnect
+fails, stranding the session; a failed `sessions()` query is read as "inactive"
+and deletes a live session's map entry; a failed `GetSessions` makes
+auto-reconnect re-authenticate everything; `handleStateSync` applies another
+account's workspace across tabs; a transient OPFS read error wipes the REVFS
+tree; CI rebuilds four images in 50 jobs with no caching; the browser↔agent
+socket is JSON with byte arrays as `number[]`; the shipped WASM carries a
+449 KB name section.
+
+## Round 545 — a question that could not be answered was read as "no", five times
+
+Tonight's fixes are one shape restated. Something asks; the answer does not
+arrive; the code treats the silence as a negative answer and acts on it.
+
+**The agent, asked whether a session is alive.** `Connect` mapped an error from
+`remote.sessions()` to `false` and `ClaimSession` mapped it to `vec![]`. Both
+then took the not-active branch, which DELETES the map entry — for a session
+that is, as far as anyone knows, still live. `remote.connect()` is refused
+afterwards because the SDK still holds it, so the account is unreachable until
+the agent restarts; for `ClaimSession` the deleted session is the one the user
+was reloading back into. `session_liveness::classify` now returns Active, Stale
+or Unknown and both handlers refuse on Unknown, touching nothing. The type is
+the fix: a `bool` cannot express "did not answer", which is exactly how both
+sites came to spell it `false`.
+
+**The agent, asked to disconnect.** The map entry is removed before the SDK
+call so RAII cleanup cannot fire mid-call; when the call then failed or timed
+out, both arms logged "Proceeding anyway" and returned a success notification.
+Same wedge, arrived at from the other side, and the person was told they had
+signed out. Both arms now restore what was removed and answer
+`PeerDisconnectFailure`.
+
+**The UI, told a message could not be sent.** `MessageSendFailure` appeared
+nowhere in the repository. Measured against the live server: 125 refusals in
+one session while both directions showed `sent` and neither arrived.
+
+**A tab, asked whose workspace this is.** `handleStateSync` was the one
+broadcast handler with no session check, and its payload carried no cid, so a
+leader's workspace was applied by a tab signed in as somebody else.
+
+**And two gates that reported safety.** The admin-promotion gate matched three
+decorative sites and missed the only real one. Then the gate I wrote for the
+disconnect fix used a fixed 900-character window that reached into the NEXT
+match arm — so deleting the first arm's handling left it green. Its own
+control caught it within the hour. A guard that cannot fail is worse than no
+guard, including when I am the one who wrote it.
+
+## Round 546 — the inspection waves, and what measurement found that reading did not
+
+Four agents an hour, read-only, each told what earlier waves had already found.
+The findings that survived verification, and what happened to them.
+
+**The push path never asked what the pull path always asks (WS #101).**
+`NodeContentUpdated` carries the full `mdx_content`; `Node` carries the whole
+record. All three sites broadcast them as `BroadcastAudience::Everyone`, and
+the per-connection forwarding loop gated only `Group`. So every save reached
+every connected socket: a member removed a moment ago whose socket is still
+open, and — where one server holds several workspaces — the other one's
+members. `GetNode` has always checked `ViewContent`.
+
+`BroadcastAudience::Node(id)` is now gated by that same check. Three tests,
+including the case the old audience could not express: still connected, no
+longer entitled. And the CI gate earned its keep twice over — my first version
+matched `WorkspaceProtocolResponse::Node` by proximity, which also matches
+`NodeContentUpdated`, and failed in EVERY state including the correct one (a
+gate that is always red teaches people to ignore it); rewritten as exact
+statements, it then found a THIRD broadcast site I had missed.
+
+**A list of what you own says nothing about what you were given (UI #32).**
+The group reconciliation removed groups the agent's list did not name. That
+request is `list_owned_groups`, keyed by owner CID, so a group somebody else
+created is never in it — present or not. Every group an invitee had been added
+to was deleted from the sidebar and from storage on every login and every
+reload. Group ids are `<ownerCid>:<mgid>`, so this was decidable throughout.
+
+**Three situations, one branch, the most destructive reading (citadel-agent
+#60).** `WrappedStream::poll_next` was `_ => Poll::Ready(None)`: a genuine end,
+a request on a response stream, and a DECODE ERROR all meant "the stream has
+ended". The socket stays open; the messenger's read loop exits; every later
+message is dropped while `isConnected()` answers true. One unparseable frame —
+a cached bundle meeting an agent that learned a new enum variant — ends
+messaging for that session, silently and permanently.
+
+**CI was measured, not guessed (WS #100).** 1,282 runner-minutes per pull
+request against a pool of 20 concurrent jobs shared by three repositories, and
+no `needs:` edges, so wall-clock is minutes ÷ 20. Every master merge ran the
+whole 74-job suite TWICE on the same commit, because publish-images already
+calls it. The Docker fan-out ran to completion behind one-minute jobs that had
+already failed. `cargo clippy` ran inside the server image, 55 times per pull
+request, WITHOUT `-D warnings`, so it could not fail anything. Removing those
+three took a run from ~75 checks to 27.
+
+**And the UI said things that were not true (UI #31).** The empty state's only
+guard was `isLoadingMore`, which is pagination — so opening any conversation
+printed "No messages yet. Say hello to Bob" over months of history until four
+awaits returned.
+
+**What was tried and abandoned.** `for cmd in commands.clone()` looked like a
+free win; the enclosing `match &command` borrows, so the clone is load-bearing.
+Reverted rather than restructured at four in the morning.
+
+## Open, as of round 546
 
 Everything both Fable fleets confirmed is fixed: 2 critical/high, 13 medium, 15
 low, across 30 findings. What follows is what is NOT fixed, stated so the next
 person does not have to infer it from silence.
+
+### CI is queue-bound, and the queue is largely mine
+
+Since ~20:10Z on 4 Sep every run in the organisation's repositories has sat at
+1/N done for hours. First read as an organisation-level block; wrong — all
+three repositories are public, GitHub reports Actions operational, and UI #21's
+run had three integration jobs in progress at 00:20Z. It is depth: eleven runs
+of 56–75 jobs each behind the plan's concurrency limit, and a docs-only PR
+(#89) occupies a 75-job slot like any other. The fix is structural — fewer
+jobs per run, no full suite for a docs-only change — and is a wave of its own.
+
+### The parent's build.rs runs wasm-pack on every debug build
+
+It failed locally during round 538 for a reason the change there does not
+explain — the wasm32 check of the client passes — and it deletes the package
+directory before it builds. `SKIP_WASM_BUILD=1` for local `cargo test` of the
+agent crate until it is understood.
+
+### The send-failure answer cannot name which message failed
+
+The UI now reads `MessageSendFailure` and reports it once per session per 15s
+(round 545), but the response carries the sender's cid and a reason and no
+peer cid, and the reliable path retries in the messaging layer — so no bubble
+is marked failed. Adding `peer_cid` to the response is the follow-up, and it
+needs a fixture where the agent genuinely refuses a send.
+
+### Found by the waves, evidenced, not yet fixed
+
+Ranked as the agents left them. The server: Connect re-enrols removed members
+on reconnect; the master password is plaintext, compared with `==`, and checked
+BEFORE the actor gate, which makes it a guessing oracle for any member. The
+agent: detached P2P reader tasks are never aborted (one per reconnect, forever);
+the per-client response channel is unbounded; ILM does ~9 whole-queue round
+trips per message; `background_invoked_requests` only grows. The UI: a failed
+`GetSessions` makes auto-reconnect re-authenticate everything; a transient OPFS
+read wipes the REVFS tree; the live-document index is overwritten after a
+timeout; group sends fail silently; ClaimSession from a second window renders a
+workspace whose traffic goes elsewhere; auto-reconnect is disabled for good
+after any sign-out. Performance: the office tree has thirteen quadratics, none
+of its lists is virtualised, and `React.memo` appears once in the whole app.
+
+### The public UI waits for the agent release
+
+work.avarok.net has its certificate, the vhost renders, the amd64 UI image is
+on the host — and none of it is enabled, deliberately: the page would offer
+the v0.1.0 download, which is the TCP binary. The cut-over is: merge #92 and
+#93, tag `agent-v0.2.0`, then re-provision the tenant as full + nginx with
+`--loopback-host local.avarok.net`. The tag is a user decision.
+
+### The merge order, and one pointer that will move
+
+citadel-agent #60 → WS #92 → WS #93 (which pins the connector at the #60 branch
+head, 3c7a2aa, and must be bumped to whatever #60 merges as) → re-cut the agent
+release; UI #23 with WS #91 → WS #94 → re-provision avarok as full + nginx
+with `--loopback-host local.avarok.net` and ship the UI image.
 
 ### `reconnection_p2p_one_c2s` — FIXED in #302, entry kept for the reasoning
 
