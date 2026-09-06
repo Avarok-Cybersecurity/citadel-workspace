@@ -22,7 +22,18 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 /** Each artefact, what produces it, and what breaks without it. */
 const REQUIRED = [
   {
-    path: 'citadel-internal-service/citadel-internal-service-wasm-client/pkg/citadel_internal_service_wasm_client.d.ts',
+    // The TRACKED copy, not wasm-pack's `pkg/` scratch directory inside the
+    // submodule. This gate used to name that one, and it is the wrong file in
+    // three separate ways: nothing consumes it (sync-wasm-clients.sh only ever
+    // copies FROM it), wasm-pack gitignores it, and both producers DELETE it
+    // before every rebuild. So a correct, fully built checkout failed here, and
+    // the remedy the gate printed was to install a Rust WASM toolchain and run
+    // a script that wipes node_modules in three directories and ends by
+    // triggering tilt -- all to regenerate a file no build reads.
+    //
+    // preflight.mjs explicitly calls a frontend-only checkout legitimate. That
+    // developer could not get past this gate at all.
+    path: 'citadel-workspace-client-ts/pkg/citadel_internal_service_wasm_client.d.ts',
     produced_by: './sync-wasm-clients.sh',
     without_it: 'types from the WASM bindings (GroupMessage, CID shapes) resolve to nothing',
   },
