@@ -248,6 +248,10 @@ jobs:
       - name: The submodule-pointer guard judges a worktree correctly
         run: node scripts/check-submodule-gate-judges-a-worktree.mjs
 
+      - name: A disconnect that did not happen is not reported as one
+        # The map entry is removed BEFORE the SDK disconnect, so a failure there leaves the SDK
+        # holding a session the map does not have and the account unreachable until a restart.
+        run: node scripts/check-disconnect-reports-failure.mjs
       - name: Tenant provisioning refuses what it must
         run: bash scripts/test-provision-tenant.sh
 
