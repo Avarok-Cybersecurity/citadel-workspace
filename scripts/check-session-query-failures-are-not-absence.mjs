@@ -70,7 +70,35 @@ function* walk(dir) {
 }
 
 /** Values that mean "nothing is there" and must not come from a failed query. */
+/**
+ * The SDK queries whose failure must not read as absence.
+ *
+ * `sessions()` was the first three. `get_hyperlan_peer_list` was the fourth,
+ * found after this gate had been written and passed: it asked the SDK whether a
+ * peer was already registered, and `.ok().flatten()...unwrap_or(false)` turned
+ * an unreadable list into "not registered" -- walking into the exact SDK error
+ * the check exists to prevent, and surfacing to the user as a failed
+ * registration for a peer they are already registered to.
+ *
+ * Named individually rather than matching every `.await`: the rule is about
+ * queries whose EMPTY answer drives a destructive branch, and a list of those
+ * is reviewable in a way "every fallible call" is not.
+ */
+const QUERIES = /\.(sessions|get_hyperlan_peer_list|get_cnac_by_cid|get_registered_peers)\s*\(/;
+
 const MEANS_ABSENT = /^\s*(false|vec!\[\]|None|Vec::new\(\)|Default::default\(\))\s*,?\s*$/;
+
+/**
+ * The combinator form, which has no `Err` arm to inspect.
+ *
+ * Anchored to the START of a line, so it matches a continuation of the query's
+ * own method chain and not an unrelated `.unwrap_or` nested inside a closure.
+ * Without the anchor this flagged `kernel/mod.rs`, whose `sessions().map(..)`
+ * propagates its Result correctly and merely contains
+ * `conn.peer_cid.unwrap_or(0)` two levels in — a false positive that would have
+ * taught the reader to ignore the gate.
+ */
+const SWALLOWING_CHAIN = /^\s*\.(ok\(\)|unwrap_or(_default|_else)?\s*\()/m;
 
 const problems = [];
 let queries = 0;
@@ -78,13 +106,39 @@ let queries = 0;
 for (const file of walk(AGENT)) {
   const lines = readFileSync(file, 'utf8').split('\n');
   lines.forEach((line, i) => {
-    if (!/\.sessions\(\)\s*\.await/.test(line)) return;
+    if (!QUERIES.test(line)) return;
     queries += 1;
 
     // The Err arm of this match, if there is one, within the query's block.
     const region = lines.slice(i, Math.min(lines.length, i + 40));
-    const errAt = region.findIndex((l) => /^\s*Err\(/.test(l));
-    if (errAt === -1) return; // `?` or no match — nothing to judge.
+
+    // Is this query the scrutinee of a `match`, or a method chain?
+    //
+    // Decided from the query's OWN statement, not by hunting for an `Err(`
+    // nearby. Searching 40 lines for one found an unrelated arm belonging to a
+    // later expression, took the match-arm path, found nothing absent in that
+    // arm's body, and reported success -- so a combinator chain rewritten back
+    // into peer/register.rs went unflagged. That is the third time in this
+    // family that a window reached past its subject.
+    const statement = region.slice(0, 3).join('\n');
+    const isMatch = /\bmatch\b/.test(statement) || /^\s*\{\s*$/.test(region[1] ?? '');
+    const errAt = isMatch ? region.findIndex((l) => /^\s*Err\(/.test(l)) : -1;
+
+    if (errAt === -1) {
+      // No `Err` arm. Either it propagates with `?` — fine — or it uses the
+      // combinator form, which has no arm to inspect and is how the fourth
+      // site hid: `.await.ok().flatten().map(..).unwrap_or(false)`.
+      const chain = region.slice(0, 8).join('\n');
+      if (/best-effort:/.test(chain)) return;
+      if (/\?;|\?\s*$/m.test(chain)) return;
+      if (SWALLOWING_CHAIN.test(chain)) {
+        problems.push(
+          `${relative(ROOT, file)}:${i + 1} — the query's failure is swallowed by a ` +
+            `combinator chain, so an unreadable answer reads as "not there"`,
+        );
+      }
+      return;
+    }
 
     // The Err arm's OWN body, brace-matched.
     //
