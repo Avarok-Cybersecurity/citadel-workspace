@@ -4,6 +4,25 @@
  * Default permissions for a domain node.
  * These define what actions are allowed by default for users in that node.
  * Read operations default to `true`, write/admin operations default to `false`.
+ * `serde(default)`: a missing field takes the type's default rather than
+ * failing the whole read.
+ *
+ * This was already true of `themes` alone, for a reason that applies to every
+ * field: `DomainPermissions` is embedded in `DomainNode`, which the backend
+ * reads with `serde_json::from_slice`, so a node stored before a field existed
+ * takes the entire node map down with `missing field ...`. The same rule bites
+ * operator config -- `docker/workspace-server/workspaces.json` was missing ten
+ * required fields, and `workspace_structure` is fatal on a load error, so
+ * uncommenting it in `kernel.toml` made the server refuse to start.
+ *
+ * Defaulting is the safe direction for a permission: an absent field grants
+ * nothing it did not already grant.
+ *
+ * NOT `deny_unknown_fields`, deliberately. That would reject stored records
+ * carrying a field this struct has since dropped -- live data on a running
+ * deployment. Unknown keys in SHIPPED CONFIG are caught statically instead, by
+ * `scripts/check-shipped-config-matches-the-type.mjs`, which is where a
+ * renamed key can be caught without risking anyone's data.
  */
 export type DomainPermissions = { 
 /**

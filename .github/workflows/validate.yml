@@ -348,6 +348,13 @@ jobs:
         # out nothing, so the granting check refuses neither.
         run: node scripts/check-acting-on-a-member-is-guarded.mjs
 
+      - name: Committed bindings match the Rust types (locally runnable)
+        # The `git diff --exit-code` step in the Rust Tests job asserts the same
+        # thing, but only there: a bare `run:` is invisible to
+        # check-preflight-runs-what-ci-runs, so nothing local could say it. A
+        # doc comment expanded on DomainPermissions went stale for 103 commits.
+        run: node scripts/check-committed-bindings-match-the-rust.mjs
+
       - name: Request paths do not wait forever
         # connect.rs opened a DEBUG `GetActiveSessions` subscription between the
         # SDK connect and building the Connection, and awaited its stream with no

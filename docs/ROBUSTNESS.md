@@ -6715,3 +6715,54 @@ correctly, from the other direction. Rewritten against a permission the Owner
 does hold.
 
 134 gates green.
+
+## Round 655 — the first parent CI run in 103 commits was red
+
+Opening parent PR #125 gave the parent branch CI for the first time. One job
+failed, and the cause is the smallest possible change:
+
+```
+Rust Tests - citadel-workspace-types — step: Committed bindings match the Rust types
+  git diff --exit-code -- citadel-workspace-types/bindings
+```
+
+ts-rs copies a Rust **doc comment** into the generated binding. A doc comment on
+`DomainPermissions` had been expanded by twenty lines — explaining why
+`serde(default)` is there and why `deny_unknown_fields` deliberately is not —
+without running `cargo test -p citadel-workspace-types`. The binding was twenty
+lines behind ever since.
+
+### Why nothing local could say so
+
+The assertion is a bare `run: git diff --exit-code` in the workflow.
+`check-preflight-runs-what-ci-runs` matches `node scripts/*.mjs` invocations —
+by construction, a shell step is invisible to it. So the only witness was a red
+CI job, and the parent had no open PR: there were no CI jobs at all.
+
+There is now `check-committed-bindings-match-the-rust.mjs`, which regenerates
+and diffs, registered in preflight **and** in the workflow.
+
+### Two gates, one chain, and neither was enough alone
+
+`check-generated-types-fresh` already existed. It compares the client copy in
+`citadel-workspace-client-ts/src/types/generated/` against
+`citadel-workspace-types/bindings/`. Its own message names its limit exactly:
+
+> `cp` alone propagates whatever is in bindings/, which is only rewritten by
+> this crate's ts-rs tests
+
+So it was **green** over a stale binding, because the copy faithfully matched
+the stale source. The chain is Rust → `bindings/` → client copy, and only the
+second link was gated. Regenerating turned the existing gate red — which is the
+correct reading of it, not a regression.
+
+### Controls
+
+| control | expected | observed |
+|---|---|---|
+| delete two lines of the Rust doc comment, leave bindings | stale, exit 1 | "bindings is stale — the Rust types generate something different" |
+| pre-existing dirty binding | refuse, rather than blame the Rust | "already has uncommitted changes, so regenerating cannot tell a stale binding from your own edit" |
+| binding directory shrunk below 20 files | vacuity floor fires | as written |
+| restored | exit 0 | 23 bindings, none differs |
+
+136 gates green.

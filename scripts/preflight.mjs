@@ -258,6 +258,14 @@ const CHECKS = [
   // once, and the only thing that said so was `tsc` in CI, a full cycle later.
   ['generated bindings typecheck', 'npx', ['tsc', '--noEmit', '-p', 'tsconfig.json'],
     join(ROOT, 'citadel-internal-service/typescript-client')],
+  // And the parent's own ts-rs bindings, which CI asserts with a bare
+  // `git diff --exit-code` — a shell step, invisible to
+  // check-preflight-runs-what-ci-runs, which compares `node scripts/*.mjs`
+  // invocations. So the ONLY thing that could report a stale binding was a red
+  // CI job, and with no open PR on the parent there were no CI jobs: a doc
+  // comment expanded on `DomainPermissions` sat stale for 103 commits.
+  ['committed bindings match the rust', 'node',
+    ['scripts/check-committed-bindings-match-the-rust.mjs'], ROOT],
   ['typecheck', 'npx', ['tsc', '-p', 'tsconfig.app.json', '--noEmit'], UI],
   ['eslint', 'npx', ['eslint', '.', '--max-warnings', '0'], UI],
   ['unit tests', 'npx', ['vitest', 'run'], UI],
