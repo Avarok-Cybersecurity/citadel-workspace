@@ -77,6 +77,47 @@ for topo in server-only full; do
   fi
 done
 
+refuses "domain with a scheme"        $S --tenant a --topology full --ingress nginx --domain https://w.example --dry-run
+refuses "domain with a trailing slash" $S --tenant a --topology full --ingress nginx --domain w.example/ --dry-run
+refuses "domain with a semicolon"     $S --tenant a --topology full --ingress nginx --domain "w.example;return 200" --dry-run
+refuses "uppercase domain"            $S --tenant a --topology full --ingress nginx --domain W.example --dry-run
+
+# A dry run is what an operator pastes where others can see it. The master password has always
+# been redacted there; the tunnel token was printed in full.
+out=$(TUNNEL_TOKEN=tunnel-token-not-a-placeholder $S --tenant ok9 --topology full --ingress tunnel --domain w.example --dry-run 2>/dev/null || true)
+if echo "$out" | grep -q "tunnel-token-not-a-placeholder"; then
+  echo "  FAIL: --dry-run printed the live TUNNEL_TOKEN"; fails=$((fails+1))
+else
+  echo "  ok: --dry-run redacts the tunnel token"
+fi
+
+# A --force re-provision must REPLACE the tenant's scripts, not nest a copy inside the old one.
+# `cp -r src dst` copies INTO dst when dst exists, so the previous revision's gate scripts kept
+# running while the fresh ones sat unused at scripts/scripts/.
+FROOT="$(mktemp -d)"
+$S --tenant reprov --topology server-only --base-port 21400 --root "$FROOT" >/dev/null 2>&1 || true
+if [ -d "$FROOT/reprov/scripts" ]; then
+  echo "STALE" > "$FROOT/reprov/scripts/verify-image-revisions.sh"
+  $S --tenant reprov --topology server-only --base-port 21400 --root "$FROOT" --force >/dev/null 2>&1 || true
+  if [ -d "$FROOT/reprov/scripts/scripts" ]; then
+    echo "  FAIL: a --force re-provision nested scripts/scripts inside the tenant"; fails=$((fails+1))
+  elif grep -q "^STALE$" "$FROOT/reprov/scripts/verify-image-revisions.sh" 2>/dev/null; then
+    echo "  FAIL: a --force re-provision left the previous revision's verify-image-revisions.sh in place"; fails=$((fails+1))
+  else
+    echo "  ok: --force replaces the tenant's scripts rather than nesting a copy"
+  fi
+else
+  echo "  FAIL: the first provision wrote no scripts directory"; fails=$((fails+1))
+fi
+rm -rf "$FROOT"
+
+# The public vhost must carry HSTS: only the :80 redirect protects a first request otherwise.
+if bash scripts/render-nginx-vhost.sh w.example 12402 t | grep -q "Strict-Transport-Security"; then
+  echo "  ok: the TLS vhost sends HSTS"
+else
+  echo "  FAIL: the TLS vhost sends no Strict-Transport-Security"; fails=$((fails+1))
+fi
+
 # The compose the provisioner ships must probe the port the server was TOLD to bind.
 # A literal port in the server healthcheck made every tenant on a non-default port run
 # "unhealthy" forever while answering registrations, and deploy.sh's health wait timed
