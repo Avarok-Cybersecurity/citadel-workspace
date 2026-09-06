@@ -82,6 +82,11 @@ When errors are detected in Step 1, attempt these fixes ONCE:
    - **SUCCESS**: `"Creating AsyncWorkspaceServerKernel"` (the last line of a
      healthy start, after `"Citadel Workspace Server starting"` and
      `"Loaded workspace structure:"`)
+     - NOT `Running \`target/debug/...\``, which this waited for until it was
+       corrected twice over. The container execs the release binary from
+       `/usr/local/bin` (docker/workspace-server/Dockerfile CMD); there is no
+       `cargo run`, so that line has never appeared in this image's output and
+       the step could only ever time out.
 6. **IF TIMEOUT (5 min)**: STOP, return ERROR "Step 2 FAILED: server rebuild timeout"
    - **DO NOT PROCEED TO STEP 3**
 7. **ONLY if SUCCESS found AND no errors**: Proceed to Step 3
@@ -99,6 +104,8 @@ When errors are detected in Step 1, attempt these fixes ONCE:
 5. Only if no errors, check for success:
    - **SUCCESS**: `"Citadel client established"` (logged by the protocol layer
      once the backend is connected and the node is up)
+     - NOT `Running \`target/debug/...\``, for the same reason as Step 2: the
+       container execs `/usr/local/bin/citadel-workspace-internal-service`.
 6. **IF TIMEOUT (5 min)**: STOP, return ERROR "Step 3 FAILED: internal-service rebuild timeout"
    - **DO NOT PROCEED TO STEP 4**
 7. **ONLY if SUCCESS found AND no errors**: Proceed to Step 4

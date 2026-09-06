@@ -5,6 +5,7 @@
 56 checks. Regenerate with `node scripts/build-gates-index.mjs`;
 55 checks. Regenerate with `node scripts/build-gates-index.mjs`;
 96 checks. Regenerate with `node scripts/build-gates-index.mjs`;
+97 checks. Regenerate with `node scripts/build-gates-index.mjs`;
 `--check` fails when this file is stale, so a new gate has to appear here.
 
 **Read this before writing a new guard.** Four times in one campaign a check
@@ -64,6 +65,7 @@ what was already here.
 | `check-preflight-runs-what-ci-runs.mjs` | Preflight must invoke each gate the way CI invokes it — arguments included. |
 | `check-preview-csp-matches-production.mjs` | The CSP `npm run preview` serves must be the one nginx serves. |
 | `check-production-image.mjs` | Drives a real browser against the real production image. |
+| `check-readiness-markers-are-printed.mjs` | A "wait until you see this line" marker must be a line something prints. |
 | `check-required-env-is-documented.mjs` | Every value production REQUIRES from `.env` must be in `.env.example`. |
 | `check-responsive-label-loss.mjs` | A control's only text may not be hidden by a responsive `hidden` class. |
 | `check-restart-policies.mjs` | Every long-running service must declare a restart policy. |
