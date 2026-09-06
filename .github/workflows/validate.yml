@@ -944,6 +944,14 @@ jobs:
         # channel was opened at all.
         run: node scripts/check-already-registered-is-not-a-failure.mjs
         working-directory: citadel-workspaces
+
+      - name: The search needle is folded once
+        # matchesSearch folds BOTH arguments -- NFD-normalise, strip combining
+        # marks, lower-case -- and every call site was inside a .filter with the
+        # needle loop-invariant. Filtering a 500-node tree normalised the same
+        # query 500 times, in the render pass, on every keystroke.
+        run: node scripts/check-the-needle-is-folded-once.mjs
+        working-directory: citadel-workspaces
       - name: A success flag is read by somebody
         # sendAndAwaitAck was given a boolean return so an unacknowledged RE-VFS
         # operation would stop being invisible; all six callers then discarded

@@ -92,7 +92,7 @@ const SKIP = new Map([
   ['lib/multi-instance/instance-channel.ts', 251],
 
   ['components/ui/sidebar.tsx', 487],
-  ['components/layout/sidebar/TreeNodesSection.tsx', 320],
+  ['components/layout/sidebar/TreeNodesSection.tsx', 319],
   ['lib/file-transfer/service.ts', 293],
   // Two data-testid attributes, so the integration suite's readiness probe can
   // stop keying on button copy — see ROBUSTNESS round 168.

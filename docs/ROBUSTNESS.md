@@ -7609,3 +7609,40 @@ parent, which is where preflight and CI run them. Unrelated to this change, and
 recorded so the next person does not attribute them to one.
 
 141 gates green.
+
+## Round 672 — the search query folded once per candidate
+
+`matchesSearch(haystack, needle)` folds BOTH arguments — NFD-normalise, strip
+combining marks, lower-case — and all three call sites had the needle
+loop-invariant inside a `.filter`. Filtering a 500-node tree normalised the same
+query 500 times, synchronously in the render pass, on every keystroke;
+`UserSearch` did it twice per member and also ran `exclude.includes` (an array
+scan) per member.
+
+`searchMatcher(needle)` folds once and returns the predicate. `matchesSearch`
+stays for a genuine one-off comparison, which is why the gate forbids it only
+inside an iteration callback.
+
+The saving is structural, so the test counts `String.prototype.normalize` calls:
+51 for the matcher over 50 candidates, 100 for the pair. Its third case is the
+discrimination control — an implementation that folded *nothing* would score
+better still and break matching outright.
+
+| control | expected | observed |
+|---|---|---|
+| make `searchMatcher` fold per call again | the fold-once test red | red; the other two green |
+| reintroduce `matchesSearch` inside a `.some(` | gate flags it | flagged at `TreeNodesSection.tsx:104` |
+| rename the authority's export | floor fires | "no longer exports `searchMatcher`" |
+
+The gate skips `__tests__`, and says why: the test for this rule uses BOTH forms
+on purpose to count the difference. A gate that flagged its own proof would have
+to be switched off to keep the proof.
+
+142 gates green.
+
+---
+
+**Wave cadence ends here.** The standing instruction changed: focus moves to
+proving work.avarok.net with multiple users under Playwright. Outstanding sweep
+findings are recorded above and in this session's transcript; they are not lost,
+but they are not being worked until that is done.
