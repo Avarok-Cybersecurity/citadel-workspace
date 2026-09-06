@@ -7317,3 +7317,52 @@ converse: over-capture costs log lines, under-capture costs the diagnosis.
 | hide the agent kernel | refuse rather than pass | "not present, so no prefixes could be derived" |
 
 140 gates green.
+
+## Round 666 — a store that could not read its keys called itself ready
+
+The widened capture (round 665) is not deployed yet, but the browser-side lines
+in the failing jobs were always there and say something on their own:
+
+```
+Refusing to write outgoing: 'outgoing_peer_requests_8501534568543635100' was
+never successfully read, so writing the in-memory list would erase …
+30 × Refusing stale-conversation cleanup: the valid peer set is empty
+```
+
+The write guard in `local-db-client` is right: every persist here writes the
+WHOLE list, so a list assembled without a successful read would replace what is
+stored with whatever this tab happens to hold — nothing.
+
+What was wrong is that `initialize()` **discarded both `LoadOutcome`s** and set
+`isInitializedFlag = true` regardless. So a read that failed at startup left the
+store believing it was ready while every later write was refused, for the life of
+the tab, with nothing retrying it and nothing on screen. A peer request that
+cannot be persisted is a peer request the other side never learns about.
+
+The poll loop re-reads the OUTGOING key each tick, so that half can recover — but
+only in the leader tab, and only for that one key. The pending key was read
+exactly once, ever.
+
+Now: latch only when every key reached a conclusion. `absent` counts as read — a
+key that genuinely holds nothing is a complete picture of nothing, and a
+first-run user's first write must land. Only `failed` withholds the latch, and
+the next `initialize()` retries.
+
+| control | expected | observed |
+|---|---|---|
+| latch unconditionally, as before | the two behavioural tests red | exactly those two red |
+| both keys merely `absent` | still latches | latches — the discrimination control |
+
+Whether this is the cause of the six failing P2P specs is **not** established. It
+is a real defect on the path that produced the log line, and the widened capture
+will say more.
+
+### The file-length gate asked for the right thing
+
+Adding the reasoning took `service.ts` to 266 lines, and the gate's message is
+"extract a cohesive unit rather than compressing prose — rewriting a comment at
+the same length does not reduce the count." The rule became
+`initialisation.ts::everyKeyWasRead`, a pure function with the reasoning attached
+and no store to stand up in order to test it.
+
+140 gates green.
