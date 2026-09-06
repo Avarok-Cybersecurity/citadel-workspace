@@ -331,6 +331,14 @@ jobs:
         # office and room on the RemoveUsers permission alone.
         run: node scripts/check-preconditions-precede-the-branch.mjs
 
+      - name: Broadcasts name their audience
+        # `UpdateWorkspace` and `UpdateWorkspaceTheme` pushed the whole Workspace
+        # record -- name, owner and the full member list -- to every connected
+        # session, including users whose GetWorkspace for it is refused. The
+        # BroadcastAudience::Node variant's own comment describes this defect;
+        # the reasoning was never carried to the workspace-shaped broadcast.
+        run: node scripts/check-broadcasts-name-their-audience.mjs
+
       - name: Deploy paths can actually start the server
         # Two operator scripts each carried their own deploy and neither worked:
         # a `docker build` with no `--target` selects the LAST stage (`dev`, the

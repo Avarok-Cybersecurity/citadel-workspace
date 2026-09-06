@@ -108,6 +108,21 @@ pub enum BroadcastAudience {
     /// workspaces) sessions belonging to a different one. The pull path has always checked
     /// `ViewContent`; the push path never did.
     Node(String),
+    /// Only sessions whose user is a MEMBER of this workspace.
+    ///
+    /// The reasoning written on `Node` above applied word for word to the
+    /// workspace-shaped broadcast, and was not carried to it: `UpdateWorkspace`
+    /// and `UpdateWorkspaceTheme` both sent the whole `Workspace` record —
+    /// name, description, `owner_id` and the FULL MEMBER LIST — as `Everyone`.
+    ///
+    /// Where one server holds several workspaces, renaming one pushed its
+    /// record to every session on the box, including users whose `GetWorkspace`
+    /// for it is refused and whose `ListWorkspaces` omits it. A member set to
+    /// `Banned` keeps receiving it too, because nothing closes their socket.
+    ///
+    /// The pull path checks membership AND `ViewContent`
+    /// (`async_domain_server_ops.rs`); this makes the push path check the same.
+    Workspace(String),
 }
 
 /// Message for broadcasting workspace updates to connected clients
@@ -343,6 +358,20 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         node_id: String,
     ) {
         self.broadcast_to(response, exclude_cid, BroadcastAudience::Node(node_id))
+    }
+
+    /// Broadcast a response only to sessions belonging to `workspace_id`.
+    pub fn broadcast_to_workspace(
+        &self,
+        response: WorkspaceProtocolResponse,
+        exclude_cid: Option<u64>,
+        workspace_id: String,
+    ) {
+        self.broadcast_to(
+            response,
+            exclude_cid,
+            BroadcastAudience::Workspace(workspace_id),
+        )
     }
 
     /// Broadcast a response only to sessions entitled to see `group_id`'s chat.
@@ -1778,6 +1807,30 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                             let may_view = this
                                                 .domain_operations
                                                 .check_entity_permission(&user_id, node_id, Permission::ViewContent)
+                                                .await
+                                                .unwrap_or(false);
+                                            if !may_view {
+                                                continue;
+                                            }
+                                        }
+
+                                        // A workspace-scoped broadcast reaches only that
+                                        // workspace's members. Same reasoning as the node case
+                                        // above; the record carries the full member list, so
+                                        // sending it to a non-member discloses the membership
+                                        // of a workspace they cannot even read.
+                                        if let BroadcastAudience::Workspace(ref workspace_id) =
+                                            broadcast_msg.audience
+                                        {
+                                            use crate::handlers::domain::async_ops::AsyncPermissionOperations;
+                                            use citadel_workspace_types::structs::Permission;
+                                            let may_view = this
+                                                .domain_operations
+                                                .check_entity_permission(
+                                                    &user_id,
+                                                    workspace_id,
+                                                    Permission::ViewContent,
+                                                )
                                                 .await
                                                 .unwrap_or(false);
                                             if !may_view {

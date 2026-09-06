@@ -494,10 +494,18 @@ The Citadel workspace system uses a layered protocol architecture where Workspac
 - Server processes WorkspaceProtocolRequests, peers exchange WorkspaceProtocol messages
 
 ### P2P Messaging Architecture
-P2P messaging uses triple-nested protocols:
-1. InternalServiceRequest::Message for P2P transport between peers
-2. WorkspaceProtocol::Message inscribed within as serialized payload
-3. MessageProtocol (chat subprotocol) serialized in WorkspaceProtocol::Message contents field
+
+P2P chat is TWO layers, not three — see the fuller note earlier in this file.
+
+1. `InternalServiceRequest::Message` carries the bytes between peers.
+2. A CBOR-encoded `P2PCommand` is those bytes.
+
+> An earlier revision of this section described a third layer, a
+> `WorkspaceProtocol::Message` envelope inscribed between the two. The send path
+> has no such wrapper: `lib/p2p/message-send-operations.ts` serialises the
+> command and hands it straight to `sendP2PMessageReliable`. Adding the envelope
+> makes the receiver's `cborDecode` throw — a mismatch that has already cost one
+> live-document integration test, as `src/types/p2p-commands.ts` records.
 
 ### Key Points
 - Authentication (Connect/Register/Disconnect) uses direct InternalService requests
@@ -682,29 +690,34 @@ has only `Server` and `Extended`.
 > compile. The service's own `kernel/responses/disconnect.rs` module doc has
 > said the correct thing all along.
 
-**Example handler:**
+**Example handler**, matching `kernel/responses/disconnect.rs` and
+`kernel/responses/peer_event.rs`:
 ```rust
 match event {
-    NodeResult::Disconnect(Disconnect { v_conn_type, .. }) => {
-        match v_conn_type {
-            Some(VirtualTargetType::LocalGroupPeer { .. }) |
-            Some(VirtualTargetType::ExternalGroupPeer { .. }) => {
-                // P2P peer disconnected
-            }
-            _ => {
-                // C2S server disconnected
-            }
-        }
+    // C2S. `conn_type`, and `ClientConnectionType` has only Server and Extended.
+    NodeResult::Disconnect(Disconnect { conn_type, .. }) => {
+        // the server connection ended
     }
+    // P2P is a DIFFERENT EVENT, not a discriminant on this one.
+    NodeResult::PeerEvent(PeerEvent { event: PeerSignal::Disconnect { .. }, .. }) => {
+        // a peer connection ended
+    }
+    _ => {}
 }
 ```
+
+> The block that stood here was the `v_conn_type` handler the paragraph above
+> retracts — printed under the heading "Example handler:" immediately beneath
+> the note saying it does not compile. A retraction a reader can see next to the
+> thing it retracts is worse than no retraction: it reads as a scoped
+> correction, and the code underneath it reads as the corrected version.
 
 ### Reconnection Scenarios (from SDK tests)
 
 | Scenario | What Happens | P2P Impact |
 |----------|--------------|------------|
 | C2S disconnect + reconnect | Same CID preserved, rekey works | P2P must reconnect via `find_target` |
-| P2P disconnect (C2S active) | C2S stays connected | Other peer receives `NodeResult::Disconnect` with `LocalGroupPeer` |
+| P2P disconnect (C2S active) | C2S stays connected | Other peer receives `NodeResult::PeerEvent` carrying `PeerSignal::Disconnect` |
 | One peer C2S disconnects | Other peer receives P2P disconnect signal | P2P auto-terminated when C2S drops |
 | Both peers C2S disconnect | Both must reconnect C2S first | Then reconnect P2P via `find_target` |
 

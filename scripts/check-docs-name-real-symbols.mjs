@@ -66,7 +66,21 @@ for (const doc of DOCS) {
     // wrong. Naming the fiction in order to retract it must not trip the gate.
     if (/^\s*>/.test(line)) return;
 
-    for (const [, tok] of line.matchAll(/`([A-Z][a-zA-Z]{5,})`/g)) {
+    // Every CamelCase token in a backtick span, not only a span that contains
+    // NOTHING but the token.
+    //
+    // The original pattern was ``/`([A-Z][a-zA-Z]{5,})`/`` -- an exact match on
+    // the whole span. ARCHITECTURE.md writes protocol operations the way anyone
+    // would, with their fields: `CreateOffice { workspace_id, name, ... }`, and
+    // permissions as `Permission::CreateOffice`. Neither form matched, so the
+    // gate was green while that document taught fifteen operations the protocol
+    // does not have -- including its canonical copy-paste example -- and this
+    // file's own header names those exact tokens as the defect it was built for.
+    const tokens = new Set();
+    for (const [, span] of line.matchAll(/`([^`]+)`/g)) {
+      for (const [, tok] of span.matchAll(/\b([A-Z][a-zA-Z0-9]{5,})\b/g)) tokens.add(tok);
+    }
+    for (const tok of tokens) {
       if (known.has(tok)) continue;
       if (existsSync(join(root, tok))) continue; // a real path, e.g. Tiltfile
       failures.push(

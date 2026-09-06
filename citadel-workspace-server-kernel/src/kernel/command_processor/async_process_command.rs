@@ -129,9 +129,15 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     // response into `workspace:loaded`, which
                     // `useWorkspaceEventSetup` applies -- so this was a
                     // broadcast nobody sent, not a message nobody could read.
-                    kernel.broadcast(
+                    // Scoped to this workspace's members. The record carries the
+                    // full member list, so sending it to every connected session
+                    // discloses the membership of a workspace the recipient
+                    // cannot read -- their GetWorkspace for it is refused and
+                    // ListWorkspaces omits it.
+                    kernel.broadcast_to_workspace(
                         WorkspaceProtocolResponse::Workspace(workspace.clone()),
                         requester_cid,
+                        workspace.id.clone(),
                     );
                     Ok(WorkspaceProtocolResponse::Workspace(workspace))
                 }
@@ -243,9 +249,15 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     // only its author is the one case where a silent broadcast
                     // is most obviously wrong. Same receiving half as
                     // UpdateWorkspace above.
-                    kernel.broadcast(
+                    // Scoped to this workspace's members. The record carries the
+                    // full member list, so sending it to every connected session
+                    // discloses the membership of a workspace the recipient
+                    // cannot read -- their GetWorkspace for it is refused and
+                    // ListWorkspaces omits it.
+                    kernel.broadcast_to_workspace(
                         WorkspaceProtocolResponse::Workspace(workspace.clone()),
                         requester_cid,
+                        workspace.id.clone(),
                     );
 
                     Ok(WorkspaceProtocolResponse::Workspace(workspace))

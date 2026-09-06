@@ -138,19 +138,31 @@ struct Connection {
 - `UpdateWorkspace { workspace_id, name, master_password }` - Modify workspace
 - `DeleteWorkspace { workspace_id, master_password }` - Delete workspace
 
-**Office Management**:
-- `CreateOffice { workspace_id, name, description, mdx_content }` - Create office
-- `GetOffice { office_id }` - Retrieve office details
-- `ListOffices { workspace_id }` - List all offices in workspace
-- `UpdateOffice { office_id, name, description, mdx_content }` - Modify office
-- `DeleteOffice { office_id }` - Delete office
+**Node Management** — offices and rooms are both NODES:
 
-**Room Management**:
-- `CreateRoom { office_id, name, description, mdx_content }` - Create room
-- `GetRoom { room_id }` - Retrieve room details
-- `ListRooms { office_id }` - List all rooms in office
-- `UpdateRoom { room_id, name, description, mdx_content }` - Modify room
-- `DeleteRoom { room_id }` - Delete room
+There are no office-specific or room-specific protocol operations, and there
+have not been since the hierarchy was generalised. An office is a node whose
+`entity_type` says so; a room is a node parented to one. The whole tree is these
+seven operations:
+
+- `CreateNode { parent_id, entity_type, name, description }` — create an office
+  (no `parent_id`, or the workspace root) or a room (an office's id as parent)
+- `GetNode { node_id }` — retrieve one node
+- `ListNodes { .. }` — list nodes, with optional filtering
+- `UpdateNode { node_id, name, description, mdx_content, rules, chat_enabled, .. }` — modify
+- `DeleteNode { node_id, cascade }` — delete, optionally with its children
+- `MoveNode { node_id, new_parent_id }` — re-parent; `None` moves to root
+- `GetTreeStructure { .. }` — the whole hierarchy
+
+> An earlier revision of this section listed ten operations named for offices
+> and rooms — `CreateOffice`, `ListOffices`, `CreateRoom`, `ListRooms` and their
+> siblings — with full field lists. None exists in `WorkspaceProtocolRequest`, and code
+> written against them fails deserialization with a generic error that names
+> nothing. They survived a gate written specifically to catch them
+> (`scripts/check-docs-name-real-symbols.mjs`, whose own header names these
+> tokens) because that gate matched only a backtick span containing NOTHING but
+> the token — and this document writes operations the way anyone would, with
+> their fields. The gate now reads every CamelCase token inside a span.
 
 **Member Management**:
 - `AddMember { workspace_id, username, role }` - Add workspace member

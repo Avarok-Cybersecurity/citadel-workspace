@@ -6007,3 +6007,76 @@ found this and the gate did not.
 both ways, and its entry came down from 312 to 302.
 
 129 gates green.
+
+---
+
+## Round 642 — a push that reached people the pull refuses, and two doc gates blind in the same direction
+
+### The workspace record went to every session on the server
+
+`BroadcastAudience` exists because this kept happening, and its `Node` variant
+carries the history in its own doc comment: node records went out as `Everyone`,
+so every connected socket received the full `mdx_content` of any document anyone
+saved — including a removed member whose socket stays open, and, where one
+server holds several workspaces, sessions belonging to a different one.
+
+That reasoning applied word for word to the workspace-shaped broadcast and was
+never carried to it. `UpdateWorkspace` and `UpdateWorkspaceTheme` both sent the
+whole `Workspace` record — name, description, `owner_id`, and the **full member
+list** — through plain `broadcast()`, which is `Everyone`.
+
+So renaming a workspace, or changing its theme, pushed its record to every
+session on the box: users whose `GetWorkspace` for it is refused and whose
+`ListWorkspaces` omits it, and members set to `Banned`, because nothing closes
+their socket. The pull path has always checked membership AND `ViewContent`.
+
+`BroadcastAudience::Workspace(id)` now scopes it, filtered beside the `Node`
+arm. `check-broadcasts-name-their-audience` fails if a scoped variant goes
+through the unscoped helper; reverting one call site turns it red at that line.
+
+### ARCHITECTURE.md taught fifteen operations the protocol does not have
+
+Including its canonical copy-paste example. `CreateOffice`, `ListOffices`,
+`CreateRoom`, `ListRooms` and their siblings do not exist in
+`WorkspaceProtocolRequest` — the hierarchy is nodes, and has been since it was
+generalised.
+
+**The gate written to catch exactly this was green.** Its own header names those
+four tokens as the defect it was built for. Its pattern was
+``/`([A-Z][a-zA-Z]{5,})`/`` — an exact match on a backtick span containing
+NOTHING but the token. ARCHITECTURE.md writes operations the way anyone would,
+with their fields: `` `CreateOffice { workspace_id, name, ... }` ``. Not one of
+the ten lines matched. CLAUDE.md was fixed in round 550 and its retraction
+happens to write the names bare, which is why the control went red there and the
+gate has read green ever since over the other document.
+
+It now reads every CamelCase token inside a span, and immediately found seven.
+
+### A retraction printed above the thing it retracts
+
+CLAUDE.md said, in a blockquote, that the `v_conn_type` disconnect handler "does
+not compile" — and then printed that handler, verbatim, under the heading
+**Example handler:**. The reconnection table below still described P2P
+disconnects arriving as `NodeResult::Disconnect` with `LocalGroupPeer`. Two
+hundred lines earlier it says P2P chat is two layers; two hundred lines later it
+says three.
+
+The docs sweep found this shape four times independently and named it well: a
+correction written as a note, with the corrected content left in place beneath
+it, reads as a scoped correction rather than a general one — and makes a careful
+reader *more* confident in what follows.
+
+### And my own dead reference
+
+Round 636's comment in the agent's CI cited
+`check-security-tests-are-compiled.mjs`. No such file: the gate is the parent's
+`check-feature-gated-tests-are-compiled.mjs`. Worth more than the typo is where
+that gate lives — the agent repo's CI does not run it, so dropping the
+`websockets` flag there stays green until someone bumps the parent pointer, and
+the failure lands on the bumper rather than on the change that caused it. That
+is now written next to the flag.
+
+`check-doc-file-refs` then caught a dead path in the CLAUDE.md correction I had
+just written, within the same preflight run.
+
+130 gates green.
