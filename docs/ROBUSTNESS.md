@@ -6420,3 +6420,51 @@ third whose invented findings pointed at working code. Writing the gate is
 reliably the easy half.
 
 131 gates green.
+
+---
+
+## Round 649 — five generated types nobody could import
+
+`typescript-client/src/types/index.ts` is the package's only entry point for the
+wire types, and `generate_types.sh` wrote it from a **heredoc of about a hundred
+hardcoded `export *` lines**. A newly generated type was therefore exported by
+nothing, silently, and nothing noticed — `tsc` is perfectly happy with a file
+nobody imports.
+
+Five media types lived that way: `MediaFrameNotification`,
+`MediaGapNotification`, `MediaSessionOpened`, `MediaSessionFailed`,
+`MediaSessionClosed`. Generated, committed, and reachable from no entry point in
+the stack.
+
+The consequence is the interesting part. The UI needed the frame shape, could
+not import it, and **hand-wrote the interface** — and the hand copy had already
+drifted, omitting `sequence`. An `as` cast at the use site meant the compiler
+never objected. So a generator that silently dropped a type produced a
+hand-maintained duplicate that silently lost a field.
+
+And anyone who fixed `index.ts` by hand lost the edit on the next run, because
+the heredoc overwrote it unconditionally — while `README.md` advertises that
+script as safe to re-run.
+
+The index is now derived from the directory, in a deterministic order so a
+regeneration that changes nothing produces no diff, and the script fails if the
+counts disagree. 101 types, 101 exports.
+
+### The fifth hand-maintained list this session
+
+`check-debug-args-are-cheap`'s denylist. `wire-maps-are-not-objects`' field
+list. `node-writes-are-narrowed`'s BROADCAST_WRITES. The group failure variants.
+And now the type index — the only one of the five that is not a gate, and the
+only one whose drift a compiler could plausibly have caught, except that the
+workaround it forced (a hand-written duplicate behind an `as` cast) removed the
+compiler from the loop as well.
+
+The rule that keeps earning its place: derive, then verify the derivation. Every
+one of these was a list somebody intended to keep current.
+
+`check-generated-types-are-all-exported` fails on either direction — a generated
+file nothing exports, or an export naming no file — with a floor so an empty
+directory cannot read as a clean bill. Red on the pre-fix tree naming exactly
+the five; green after.
+
+132 gates green.

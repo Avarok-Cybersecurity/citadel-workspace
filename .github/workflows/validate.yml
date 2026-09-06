@@ -346,6 +346,12 @@ jobs:
         # unanswered, with a last log line that reads as an SDK connect failure.
         run: node scripts/check-request-paths-do-not-wait-forever.mjs
 
+      - name: Generated types are all exported
+        # `generate_types.sh` wrote the index from a hardcoded heredoc, so five
+        # media types were generated, committed and importable by nobody. The UI
+        # hand-wrote the frame shape instead, and the hand copy had lost a field.
+        run: node scripts/check-generated-types-are-all-exported.mjs
+
       - name: Deploy paths can actually start the server
         # Two operator scripts each carried their own deploy and neither worked:
         # a `docker build` with no `--target` selects the LAST stage (`dev`, the
