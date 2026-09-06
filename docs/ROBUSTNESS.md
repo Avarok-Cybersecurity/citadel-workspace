@@ -5451,3 +5451,76 @@ not carelessness about the code; it is that none of the three was ever executed
 against the thing it targets.
 
 126 gates green.
+
+---
+
+## Round 635 — verified against the live site, which found two things reading could not
+
+https://work.avarok.net is up, behind Cloudflare, HTTP 200 from outside. The
+deployment is `/srv/citadel-tenants/avarok`, the server binds 12400, and 24h of
+production logs hold 19 errors — 7 "no route to host", 6 keep-alive timeouts, 6
+"queue worker ended" — all inside the `citadel-protocol` dependency and all the
+ordinary case of a client that went away. The stack is healthy.
+
+The onboarding dialog IS live there: the deployed bundle carries every line of
+its copy, including the promise a member "should not be asked for" the master
+password. So the feature shipped. Opening it in a browser is what found what
+reading the source could not.
+
+### Three notices for one condition, two of them modal
+
+On the hosted UI the FIRST-RUN state is an unreachable agent — the page comes
+from work.avarok.net, the agent runs on the visitor's own machine, and until
+they install it `wss://local.avarok.net:12345` refuses. Clicking "Create
+Account" there put the intent dialog on screen underneath ConnectionRetryModal,
+with OfflineBanner saying the same thing across the top. Two of the three are
+modal dialogs, each with its own focus trap.
+
+The retry dialog has to win: it alone carries the agent download links and the
+command to run it. The intent dialog now declines to open while the agent is
+unreachable, closes if the agent goes away while it is open, and does NOT fall
+through to the wizard instead — which would open a registration flow on a
+connection that cannot complete.
+
+WorkspaceApp already refuses to stack the retry dialog on OfflineBanner for the
+DEVICE-offline case, with this reasoning written beside it. `isOnline` is not
+this condition: the agent is on localhost and can be dead while the browser is
+perfectly online, which is exactly the hosted case. The same fix, in one of the
+two places it belongs — this record's most common entry.
+
+The guard's limit is in the test: `useServiceHealth` starts optimistic and
+learns otherwise from a 10s poll, so a click in the first seconds can still open
+the dialog. That is why the third test pins that it CLOSES when health arrives
+rather than only that it fails to open.
+
+### The buttons now wear their operating system
+
+At the user's request. Detection was already right — Windows gets one button,
+Linux one, a Mac both Apple builds (Safari and Chrome both report "MacIntel" on
+Apple Silicon, so guessing hands an ARM machine an Intel archive), a phone or
+tablet none with a sentence saying why. What was wrong is that all four buttons
+drew the same generic download arrow, so in the one case that shows TWO buttons
+the icon carried no information at all.
+
+Each platform now draws its own mark — Apple, the four-pane Windows logo, and
+Tux — as inline SVG, because lucide-react carries no brand marks and a remote
+sprite would be a network request on a screen shown BECAUSE the network failed.
+The test asserts three distinct rendered path strings rather than distinct
+component identities, since two components drawing the same glyph would pass the
+latter, and that is precisely the state being replaced.
+
+`check-components-are-mounted` then failed: exported individually, the three
+glyphs were components no JSX site renders. It was right — they are reached
+through the `OS_ICONS` record — and the fix was to stop exporting them rather
+than to take the exemption it offered, so the record is the only door.
+
+### A false failure worth naming
+
+Three UI test files fail in a standalone worktree because they read PARENT-repo
+files (`release-agent.yml`, a Rust constant, the client library). Verified as
+pre-existing by stashing every change and getting the identical 5 failures. They
+pass in CI, where the parent is checked out. Each opens with an existence
+assertion, so they fail loudly instead of passing vacuously over a missing file
+— which is why they are noise here rather than a hole.
+
+126 gates green.
