@@ -7781,3 +7781,71 @@ without the `already-registered` fix. The image for the current branch is
 building.
 
 142 gates green.
+
+## Round 675 — the bookkeeping cancelled the action
+
+Two users on the live server could not connect to each other. The cause was not
+in the protocol, the agent, or delivery: **the request was never sent.**
+
+`sendPeerRegistration` records the outgoing request before sending it, so a
+failure notification arriving early can be correlated. That record is a
+whole-list write, and the store refuses such a write when its key was never
+successfully read — correctly, since writing an in-memory list over an unread
+key erases requests it does not know about.
+
+But the refusal is a **throw**, and it was **awaited before the send**. So a
+storage read that failed at startup meant the `PeerRegister` never went out.
+
+### How it was isolated
+
+Each way the conclusion could have been wrong was closed before it was believed:
+
+| doubt | control | result |
+|---|---|---|
+| the log capture is not working | count console lines before vs after the click | 57 before, 0 after — the instrument works |
+| the wrong row was clicked | scope the locator to the peer's own row | exactly 1 row, 1 button |
+| the list re-rendered under the test (indices moved 45 → 10) | a locator that re-resolves at click time | same result |
+| an overlay swallowed the click | `dispatchEvent('click')` fires on the element itself | same result |
+| it is only the stale deployment | build the CURRENT tree and run it against the live server | same result |
+
+What finally named it was the toast, which is where the failure was reported and
+where nobody had looked:
+
+```
+Request Failed — Refusing to write outgoing:
+'outgoing_peer_requests_…' was never successfully read
+```
+
+`debugLog` in that catch is a no-op in a production build, so the only account of
+the failure was on screen.
+
+### The fix, and its cost
+
+The record is still attempted first. A refusal is caught, reported, and the send
+happens anyway. Losing the record costs the automatic resend for that one
+request; not sending costs the request.
+
+Measured after the change, same rig, same live server: the browser sends
+`{"Request":{"PeerRegister":…}}` and the sender is told **Request Sent**.
+
+| control | expected | observed |
+|---|---|---|
+| restore the awaited write | the send-despite-refusal test red | red; the other two green |
+| ordinary path | still sends | sends |
+| ordinary path | still records | `addOutgoingRequest` called once |
+
+### Still open
+
+The peer does not yet see the request. The frame now leaves the browser, which
+it did not before; where it stops after that is the next thread.
+
+### Two smaller findings from the same rig
+
+- The **"Find people" button is overlapped by the sidebar list** at 1280px wide:
+  Playwright refuses it as unactionable because a `<ul>` intercepts the pointer.
+  A real user at that width cannot click it either.
+- **`PeerListItem` has no per-row test handle**, which is what made the first
+  locators racy and produced two different answers before the ordering was
+  controlled for.
+
+142 gates green.
