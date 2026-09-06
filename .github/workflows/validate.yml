@@ -287,6 +287,14 @@ jobs:
       - name: The submodule-pointer guard judges a worktree correctly
         run: node scripts/check-submodule-gate-judges-a-worktree.mjs
 
+      - name: The server and the agent build against the same SDK
+        # They are separate cargo workspaces with separate lockfiles, so `cargo update`
+        # in one moved that half of the system forward and left the other behind. When
+        # this was added they were nine SDK commits apart, and the gap held a P2P
+        # connect fix, two hang fixes and a session-binding fix. A skew is invisible in
+        # every log -- each side builds a valid dependency successfully.
+        run: node scripts/check-git-deps-agree-across-lockfiles.mjs
+
       - name: A disconnect that did not happen is not reported as one
         # The map entry is removed BEFORE the SDK disconnect, so a failure there leaves the SDK
         # holding a session the map does not have and the account unreachable until a restart.
