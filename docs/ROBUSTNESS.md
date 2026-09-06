@@ -5714,3 +5714,91 @@ prints the command. The total is `CHECKS.length + ENVIRONMENT.length`, so the
 reordering does not quietly report a smaller number than before.
 
 128 gates green.
+
+---
+
+## Round 638 — my own gate was blind to two thirds of what it names
+
+The hourly sweep's robustness pass reported
+`check-log-arguments-are-cheap-in-rust` — written last round — as "blind to ~97%
+of the kernel's log calls, green today, red after one regex widened". It was
+right, and the number was generous.
+
+**Two independent blind spots, either alone sufficient.** `TREES` listed the
+agent's two crates and nothing else, so the workspace server kernel's 125
+logging sites were never read. And `LOG_MACRO_START` required a `log::` or
+`tracing::` path prefix, while the kernel imports the macros and writes
+`info!(target: "citadel", …)` — so adding the tree alone would have changed
+nothing. Coverage was 66 log macros across 79 files. It is now **380 across
+117**.
+
+Widened, it went red immediately on two sites the narrow version could not see:
+`get_sessions.rs:26-27` builds a `Vec<u64>` of every CID and a `Vec<String>`
+**cloning every username**, under a read lock on the connection map, read only
+by an `info!` the default filter drops. The leader tab polls GetSessions every 5
+seconds for as long as a browser is open — roughly 17,000 times a day, a String
+allocated per session each time, to produce nothing.
+
+### Two facades, one guard
+
+The fix would not compile: `log` is not a dependency of that crate.
+`citadel_sdk::logging` is `citadel_logging`, which re-exports **tracing**. So the
+agent runs two logging facades — the connector on `log`, everything through the
+SDK on `tracing` — and their guards are spelled differently (`log_enabled!` vs
+`enabled!`). The gate's GUARD pattern knew only the first, so the correct fix
+would have been reported as unguarded. It now accepts both.
+
+### The control caught the gate reading its own comment
+
+With the guard deleted, the widened gate stayed **green**. `guarded()` looked
+back 25 lines for the guard pattern without skipping comments — and every one of
+these guards carries a comment above it explaining why the work is conditional,
+containing the words `log_enabled!` and `enabled!`. The gate was matching its own
+explanation.
+
+That exact mistake is already in this record:
+`check-wasm-rebuild-triggers-match-the-stamp` was satisfied by the comment
+explaining its rule. Twice now, by me, in gates whose entire purpose is catching
+checks that cannot fail.
+
+Also worth recording: the first attempt at that control used the wrong path —
+the crate nests one level deeper than I typed — so it silently measured nothing
+and printed a confirmation. Only Control A visibly failing kept Control B's
+"green" from reading as proof. The lesson is the one already here: verify the
+control APPLIED before believing what it says.
+
+### An idle file manager re-rendered every two seconds, forever
+
+`getPeers()` built its arrays with `Array.from` on every call, so the result was
+never reference-equal and no caller could bail out. `useFileManagerContent`
+polls it every 2 seconds and feeds the result to `setState`: an idle file
+manager re-rendered its whole tree and grid — every tile a Radix ContextMenu
+root — in a 2-second sawtooth for as long as the tab stayed open.
+
+Fixed at the shared source, not that caller: the identity is the method's
+contract and every other consumer had the same trap waiting. Compared
+element-wise rather than by a dirty flag, because both maps are handed to helper
+modules by reference and a stale "unchanged" means the UI silently stops
+updating — worse than the re-render. The logic lives in its own module so it can
+be tested without the service singleton, whose module graph cannot be
+constructed under vitest.
+
+Both directions controlled, and the second is the important one: never reusing
+the previous object fails 2 tests; **always** reusing it — the over-correction
+that freezes the UI — fails 4.
+
+### Settled from production, not from reading
+
+The performance sweep could not close one question read-only: whether workspace
+persistence is inert, since all backend I/O targets CNAC cid 0 and the SDK
+rejects cid 0 at registration. If true, several storage findings were moot; if
+false, they were worse.
+
+`/data/server/accounts/personal/0.hca` exists on avarok2 — 32K, written within
+the last 40 hours, alongside 15 impersonal account files. So cid 0 does have a
+real CNAC and persistence works. Which means the finding that saving one
+document re-serialises every document in the workspace is **worse** than stated,
+not moot: those writes go through `save_cnac_by_cid`, which rewrites the entire
+account file per save.
+
+128 gates green.

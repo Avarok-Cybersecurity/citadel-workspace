@@ -40,9 +40,20 @@ import { join, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+/**
+ * Every Rust tree that logs, not just the one the defect was found in.
+ *
+ * The first version listed the agent's two crates and nothing else. The
+ * workspace SERVER KERNEL has 125 logging sites and was not read at all --
+ * a gate reporting "none is log-only work done unconditionally" over roughly a
+ * third of the population it names.
+ */
 const TREES = [
   join(ROOT, 'citadel-internal-service', 'citadel-internal-service-connector', 'src'),
   join(ROOT, 'citadel-internal-service', 'citadel-internal-service', 'src'),
+  join(ROOT, 'citadel-workspace-server-kernel', 'src'),
+  join(ROOT, 'citadel-workspace-internal-service', 'src'),
+  join(ROOT, 'citadel-workspace-types', 'src'),
 ];
 
 const present = TREES.filter((t) => existsSync(t));
@@ -81,11 +92,31 @@ const ACCUMULATOR = /^\s*let\s+mut\s+(\w+)\s*(?::[^=]+)?=\s*[^;]+;\s*$/;
 /** A `for` loop, whose body is the rest of the accumulator's construction. */
 const FOR_LOOP = /^\s*for\s+.*\{\s*$/;
 
-/** The start of a log-macro statement. */
-const LOG_MACRO_START = /(?:^|[^\w:])(?:::)?(?:log|tracing)::(?:trace|debug|info|warn|error)\s*!/;
+/**
+ * The start of a log-macro statement, PATH-QUALIFIED OR NOT.
+ *
+ * The first version required a `log::` or `tracing::` prefix. The server kernel
+ * imports the macros and writes `info!(target: "citadel", …)` — 125 sites, none
+ * of which this could see even once its tree was added. Two blind spots, and
+ * either alone was enough to keep the gate green over the whole crate.
+ *
+ * The `[^\w:]` prefix keeps `some_helper_info!` from matching, and the optional
+ * path segment keeps `::log::info!` matching.
+ */
+const LOG_MACRO_START =
+  /(?:^|[^\w:])(?:(?:::)?(?:log|tracing)::)?(?:trace|debug|info|warn|error)\s*!/;
 
-/** The guard that makes the work conditional. */
-const GUARD = /log_enabled\s*!/;
+/**
+ * The guard that makes the work conditional — in EITHER facade.
+ *
+ * This tree runs two. The connector logs through `log`, whose guard is
+ * `log_enabled!`; everything reaching `citadel_sdk::logging` logs through
+ * `tracing` (`citadel_logging` re-exports it), whose guard is `enabled!`.
+ * Recognising only the first would have reported a correctly guarded tracing
+ * site as unguarded the moment anyone wrote one — which is what happened on the
+ * first fix attempted after this gate's coverage was widened.
+ */
+const GUARD = /(?:log_enabled|enabled)\s*!/;
 
 /**
  * Which byte offsets of `source` sit inside a string literal or a comment.
@@ -179,12 +210,27 @@ function insideLogMacro(spans, idx) {
   return spans.some(([a, b]) => idx > a && idx < b);
 }
 
-/** Is the binding at `lineNo` already inside a `log_enabled!` block? */
+/**
+ * Is the binding at `lineNo` already inside a guard block?
+ *
+ * COMMENTS ARE SKIPPED, and that is not a detail. Every one of these guards
+ * carries a comment above it explaining why the work is conditional — and those
+ * comments contain the words `log_enabled!` and `enabled!`. Without this filter
+ * the gate reads its own explanation as the guard, so DELETING the guard leaves
+ * it green: caught by a negative control, on the very site the gate had just
+ * been widened to find.
+ *
+ * The same mistake, in a different gate, is already in this record —
+ * `check-wasm-rebuild-triggers-match-the-stamp` was satisfied by the comment
+ * explaining its rule. Twice now.
+ */
 function guarded(lines, lineNo) {
   // Bounded look-back: the guard is the enclosing `if`, so it is within a few
-  // lines and its own comment block. 25 covers the commented cases here.
+  // lines. 25 covers the commented cases here.
   for (let i = lineNo; i >= Math.max(0, lineNo - 25); i -= 1) {
-    if (GUARD.test(lines[i])) return true;
+    const line = lines[i];
+    if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue; // a comment guards nothing
+    if (GUARD.test(line)) return true;
   }
   return false;
 }
@@ -281,7 +327,7 @@ for (const dir of present) {
 // Vacuity floor. These trees are full of log macros; finding none means the
 // walk or the pattern moved, and a clean bill over that is the failure this
 // gate is about.
-if (filesRead < 20 || logMacrosSeen < 50) {
+if (filesRead < 20 || logMacrosSeen < 150) {
   console.error(
     `FAIL: read ${filesRead} file(s) and ${logMacrosSeen} log macro(s) — far too few.\n` +
       'The walk or the pattern moved, so this gate examined essentially nothing.',
