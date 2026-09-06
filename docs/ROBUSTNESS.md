@@ -6766,3 +6766,55 @@ correct reading of it, not a regression.
 | restored | exit 0 | 23 bindings, none differs |
 
 136 gates green.
+
+## Round 656 — the same rule, the same file, the remaining variant
+
+`connect.rs` settles a Connect with exactly three responses —
+`ConnectSuccess`, `ConnectFailure`, `SessionAlreadyActive` — and with
+`connect_after_register: true` the internal service re-dispatches a **real**
+Connect under the SAME `request_id` (`register.rs:74-86`), so a registration sees
+all three.
+
+`registration-response-handler.ts` handled two.
+
+The failure mode is the one already written into that file's own comments: an
+unmatched answer does not fail, it waits out the 30-second timeout, and the
+timeout is then reported as the cause. "Registration timed out" for a
+registration that succeeded; the user retries and is told the username already
+exists, for an account they did not know they owned. The previous round of this
+exact bug fixed the top-level `ConnectFailure` and left `SessionAlreadyActive`
+unhandled **four lines below the comment describing the failure**.
+
+Resolved rather than rejected, matching `useLoginHandler`: a live session for
+these credentials is what the caller asked for.
+
+### The gate derives the set rather than listing it
+
+`check-connect-awaiters-handle-every-answer.mjs` reads the terminal answers out
+of `connect.rs` — those bound to `let response = InternalServiceResponse::…`,
+which is what `HandledRequestResult` carries back. `MessageNotification` is bound
+to `message` and pumped from the session read stream: an event on the
+connection, not an answer, and requiring it would be wrong.
+
+Who must handle them is narrow on purpose: a file naming BOTH `'ConnectSuccess'`
+and `'ConnectFailure'` is settling a Connect. Three files do
+(`useLoginHandler`, `registration-response-handler`,
+`server-auto-connect-service/websocket-responses`); a file naming one is routing
+or logging, and demanding the full set there would report over most of `src/lib`.
+
+### Controls
+
+| control | expected | observed |
+|---|---|---|
+| delete the top-level branch | the top-level test red, other two green | exactly that |
+| delete the `Response`-wrapped branch | that test red, other two green | exactly that |
+| delete both, against the gate | 1 offender, exit 1 | "settles a Connect but never names SessionAlreadyActive" |
+| rename `let response =` in connect.rs | derivation floor fires | "derived only [ConnectFailure, SessionAlreadyActive] … missing ConnectSuccess" |
+| move `connect.rs` away | refuse, do not pass | "cannot read the internal service's connect.rs" |
+
+The third unit test is a discrimination control in its own right: a
+`SessionAlreadyActive` carrying somebody else's `request_id` must settle nothing,
+or a handler that fired on every one would pass the first two tests while
+resolving one tab's registration out of another tab's session.
+
+137 gates green.

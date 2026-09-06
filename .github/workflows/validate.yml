@@ -891,6 +891,17 @@ jobs:
         # bindings make it decidable.
         run: node scripts/check-wire-fields-exist.mjs
         working-directory: citadel-workspaces
+      - name: Connect awaiters handle every answer
+        # connect.rs settles a Connect with exactly ConnectSuccess,
+        # ConnectFailure and SessionAlreadyActive. An awaiter matching only some
+        # does not fail -- it waits out its own 30s timeout and reports the
+        # timeout as the cause, so a registration that SUCCEEDED is reported as
+        # timed out and the retry says the username already exists. The
+        # registration handler had this twice: first the top-level
+        # ConnectFailure, then SessionAlreadyActive four lines below the comment
+        # describing the failure. The set is derived from the Rust.
+        run: node scripts/check-connect-awaiters-handle-every-answer.mjs
+        working-directory: citadel-workspaces
       - name: A success flag is read by somebody
         # sendAndAwaitAck was given a boolean return so an unacknowledged RE-VFS
         # operation would stop being invisible; all six callers then discarded
