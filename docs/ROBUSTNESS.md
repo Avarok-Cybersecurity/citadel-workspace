@@ -6239,3 +6239,70 @@ that cannot run is not a check, and a check whose failure message names the wron
 cause is worse than one that says nothing.
 
 131 gates green.
+
+---
+
+## Round 646 — a workspace rename could resolve on someone else's answer
+
+`awaitWriteResponse` matches by response TYPE, because the workspace protocol
+carries no request id. `response-matchers.ts` exists to narrow that, and had
+matchers for `Node`, `NodeDeleted`, `NodeMoved` and `MemberRoleUpdated`.
+`Workspace` never got one — and it needed one for two independent reasons at
+once: `GetWorkspace` answers `Workspace`, so a concurrent read in the SAME TAB
+resolved a pending rename, and `UpdateWorkspace`/`UpdateWorkspaceTheme` broadcast
+`Workspace` to the other members, so a colleague's theme save resolved it too.
+
+The settings form then toasts "updated successfully", clears its dirty flag and
+closes. The server's real `Error` — no permission, or a wrong master password —
+arrives after the handler has unsubscribed, so it surfaces as a disjoint global
+toast if at all. The name is unchanged and the admin believes it is not.
+
+`workspaceWithId` covers the theme write, which names its workspace.
+`workspaceChangedTo` covers the rename, which does not: it matches on what the
+request CHANGES, because a concurrent read answers with the workspace as it is
+NOW — the very value being replaced. So the answer carrying the new name is ours
+and the one carrying the old name is not. It returns `undefined` when the
+request changes nothing it can name, so a metadata-only update keeps exactly the
+behaviour it had rather than gaining a matcher that accepts everything.
+
+### The third hand-maintained list this session
+
+`node-writes-are-narrowed` scans the call sites and is exactly the right shape.
+Its `BROADCAST_WRITES` was a hand-maintained set of five, and its own comment
+admitted the hole: *"making a variant a broadcast on the Rust side does not add
+it here, so the guard protects what it is told about and nothing else."* All
+three workspace writes were outside it.
+
+That is the same shape as `check-debug-args-are-cheap`'s denylist (round 638)
+and `wire-maps-are-not-objects`'s field list (round 641). Three gates this
+session whose hole was a hand-maintained list, each with a comment somewhere
+acknowledging it.
+
+It now derives from the Rust command processor, unioned with the known set as a
+floor.
+
+### My own control found the derivation's limit
+
+Asserting the floor was a subset of the derivation failed on `DeleteNode` and
+`MoveNode` — because those are broadcast as `kernel.broadcast(response.clone(),
+…)`, through a variable rather than a literal variant, so no reasonable regex
+sees them. That was the derivation being honest about its reach, not the code
+being wrong.
+
+So the derivation SUPPLEMENTS the floor rather than replacing it, and what is
+asserted instead is that it found something at all — a grep that stops matching
+cannot quietly return this to the hand-maintained list the change was about.
+
+### And a control that found nothing, which was the point
+
+Removing the matchers left every unit test green, because they call
+`awaitWriteResponse` directly. The gate that had to catch it is the call-site
+scan — and that scan only runs meaningfully from the parent checkout, where the
+Rust is reachable. Verified there: green, and removing the matcher from
+`updateWorkspace` fails naming that exact call site.
+
+Also verified there, rather than assumed: the three UI tests that fail in a
+standalone worktree pass from the parent. That claim had been made four times
+this session on the strength of the failure message alone.
+
+131 gates green.
