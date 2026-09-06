@@ -5021,3 +5021,64 @@ passes; and reintroducing the combinator chain reddens it again. The third is th
 one that matters — a gate that passes because it stopped looking is
 indistinguishable from one that passes because the code is right, and only the
 reintroduction tells them apart.
+
+## Round 628 — two silent losses in the delivery frontier
+
+Both are the same shape as the ILM write/read classification fixed two rounds ago,
+in the two places that decide what has already been delivered.
+
+### A failed pending-inbound read meant "nothing is pending"
+
+`MessageTracker::new` seeds its delivery frontier from `last_received_from`, but
+only for peers with NOTHING still pending inbound — for those, everything received
+was delivered by definition. The comment on that seed says exactly this, and names
+the test that catches the alternative.
+
+`get_pending_inbound().await.unwrap_or_default()` defeated it four lines later. A
+FAILED query yields an empty vec, which reads as "no peer has anything pending", so
+the seed was applied to every peer. A message received but not yet delivered was
+then claimed as delivered — ACKed, cleared, never retransmitted. **The guard and
+the thing that defeated it were four lines apart.**
+
+`new` already returns `Result` and its only production caller uses `?`, so refusing
+costs nothing.
+
+An existing test, `test_backend_error_handling`, constructed ILM over a backend
+that failed EVERYTHING and unwrapped it — so once construction refuses, it can no
+longer reach its own subject. It was split rather than weakened: its subject is a
+backend that cannot WRITE, so its pending-inbound read now succeeds, and the new
+property has its own test with a control asserting an empty but READABLE backend
+still starts. Without that control, refusing construction unconditionally passes.
+
+### A short batched reply was mapped to the wrong keys
+
+`load_values_batched` mapped responses to keys positionally with no length check.
+Its twin `store_values_batched` refuses a short reply and says so; this one instead
+papered over the possibility with `keys.get(index)` falling back to `"<unknown>"`.
+
+A short array is reachable — the agent assembles a batch response with `filter_map`,
+dropping any sub-command whose handler answered nothing — and every value after the
+gap is then attributed to the wrong key. That is not a visible error:
+`MessageTracker::new` loads six keys, five of them `HashMap<u64, u64>`, so
+`last_acked` deserialises perfectly from `last_sent`'s bytes. The frontier comes out
+built from the wrong counters — re-minted ids, re-delivery, duplicates swallowed as
+already-seen — with nothing anywhere reporting a fault.
+
+The refusal work earlier in this branch removed one way for the batch to come back
+short; this makes the remaining ways loud.
+
+### The ILM gitlink earned its place
+
+This is the first round where a change confined to intersession-layer-messaging
+made the WASM stamp go stale. Before round 626 added the gitlink to
+`wasm-source-trees.txt`, an ILM-only change left the stamp untouched and the gate
+reported a freshly-built binary containing none of it. The mechanism was added on
+reasoning; this is the observation that it works.
+
+### CI, for the record
+
+The UI run reached 13 green with its three failures at **"Run Integration Test"**
+rather than "Start Services" — the first time since the Docker manifest defect that
+the stack builds and starts, and therefore the first real test signal. The three
+are `reconnect-p2p-only`, `reconnect-both-c2s` and `reconnect-one-c2s`, unread as
+of this entry.
