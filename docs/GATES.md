@@ -3,6 +3,7 @@
 
 99 checks. Regenerate with `node scripts/build-gates-index.mjs`;
 56 checks. Regenerate with `node scripts/build-gates-index.mjs`;
+55 checks. Regenerate with `node scripts/build-gates-index.mjs`;
 `--check` fails when this file is stale, so a new gate has to appear here.
 
 **Read this before writing a new guard.** Four times in one campaign a check
