@@ -984,6 +984,22 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     ) -> Result<Option<GroupMessage>, NetworkError> {
         let lock = self.group_lock(group_id);
         let _guard = lock.lock().await;
+        // Migrate BEFORE reading, exactly as the append path does.
+        //
+        // `migrate_group_to_pages` is the only place the legacy key is deleted.
+        // Without this call, a room whose history is still in the pre-paging
+        // blob gets an index written by `save_group_pages` -- so every
+        // subsequent read goes through the pages and the change LOOKS applied --
+        // while the legacy blob keeps the original message bodies. And
+        // `save_group_pages` cannot clean up after itself here: it computes
+        // `previous` from the index, which does not exist yet, so its orphan
+        // sweep runs over an empty range.
+        //
+        // For a delete that means the plaintext of a "deleted" message stays in
+        // the backend until the whole room is deleted. For an edit it means the
+        // pre-edit content does. `store_group_message` has always migrated
+        // first; these two never did.
+        self.migrate_group_to_pages(group_id).await?;
         let mut messages = self.get_group_messages(group_id).await?;
 
         let mut updated_message = None;
@@ -1012,6 +1028,22 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     ) -> Result<Option<GroupMessage>, NetworkError> {
         let lock = self.group_lock(group_id);
         let _guard = lock.lock().await;
+        // Migrate BEFORE reading, exactly as the append path does.
+        //
+        // `migrate_group_to_pages` is the only place the legacy key is deleted.
+        // Without this call, a room whose history is still in the pre-paging
+        // blob gets an index written by `save_group_pages` -- so every
+        // subsequent read goes through the pages and the change LOOKS applied --
+        // while the legacy blob keeps the original message bodies. And
+        // `save_group_pages` cannot clean up after itself here: it computes
+        // `previous` from the index, which does not exist yet, so its orphan
+        // sweep runs over an empty range.
+        //
+        // For a delete that means the plaintext of a "deleted" message stays in
+        // the backend until the whole room is deleted. For an edit it means the
+        // pre-edit content does. `store_group_message` has always migrated
+        // first; these two never did.
+        self.migrate_group_to_pages(group_id).await?;
         let mut messages = self.get_group_messages(group_id).await?;
 
         // Find and remove the message

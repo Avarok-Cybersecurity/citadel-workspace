@@ -5802,3 +5802,74 @@ not moot: those writes go through `save_cnac_by_cid`, which rewrites the entire
 account file per save.
 
 128 gates green.
+
+---
+
+## Round 639 — a delete that did not delete, and a check that guarded one branch of two
+
+Two defects in the workspace kernel, one shape: a step every path needs, run
+after the path was chosen.
+
+### The deleted message kept its plaintext
+
+`store_group_message` calls `migrate_group_to_pages` immediately after taking
+the group lock. `update_group_message` and `delete_group_message` take the same
+lock and read straight through.
+
+`migrate_group_to_pages` is the ONLY place the legacy pre-paging key is deleted,
+and `save_group_pages` cannot clean up after itself on an unmigrated room: it
+computes `previous` from the page index, which does not exist yet, so its orphan
+sweep runs over an empty range.
+
+So in a room whose history is still in the legacy blob, deleting a message
+writes an index, every later read goes through the pages, the message LOOKS
+deleted — and its full plaintext stays in the backend until the whole room is
+deleted. An edit retains the pre-edit content the same way. The migration's own
+doc says "the legacy key is deleted only after every page and the index are
+written", which is true of the one path that calls it.
+
+One line in each of two functions.
+
+### Every office and room was gated by a role permission alone
+
+`remove_user_from_domain` called `ensure_may_act_on` INSIDE its
+`if domain_id == WORKSPACE_ROOT_ID` branch. The else-branch — every office and
+every room — never called it, so removal there was gated by the `RemoveUsers`
+permission alone. A Custom role at editor rank grants that. Its holder could
+remove the Owner from any office or room, while the identical request against
+the workspace root refused with "cannot remove …, who is above them".
+
+`add_user_to_domain` has it right, above the branch, with a comment saying why:
+"taken here rather than in the branch so the non-root path gets the same".
+
+**The sweep's suggested fix would have deadlocked the handler.** It proposed
+hoisting the call as `add_user_to_domain` does — but that function hoists the
+workspace LOCK too, and `remove_user_from_domain` takes `lock_workspaces()`
+again after both branches for the permissions cleanup. tokio's Mutex is not
+reentrant, and the comment at that later site depends on the branch guards
+having dropped. Only the check moves; the lock cannot.
+
+The root branch still repeats the check inside its lock, and that is not
+redundancy for its own sake: the hoisted call answers "may you act on them at
+all", the in-lock one answers it again against the state the write will use,
+which is what stops a concurrent promotion landing between check and write.
+
+### One gate, because it is one mechanism
+
+`check-preconditions-precede-the-branch` names a function, the call it must
+contain, and the branch or read that must not precede it. Comments are stripped
+first — an explanation of a call is not the call, which this record has now
+recorded twice as a way for a gate to pass over its own defect.
+
+Both controls red, independently: removing the migration from
+`delete_group_message` names that function and that call; putting
+`ensure_may_act_on` back inside the root branch reports it as reached "only
+AFTER WORKSPACE_ROOT_ID". Restore verified by `diff`.
+
+A near-miss worth recording: the inline shell counter I used to confirm control
+B had applied threw a `ValueError` and printed nothing. The gate's own output is
+what showed the control had taken effect. Verifying that a control applied is
+itself something that needs to be able to fail — this is the second time in two
+rounds that the check on a check was the broken part.
+
+129 gates green.

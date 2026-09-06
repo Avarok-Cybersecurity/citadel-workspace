@@ -837,6 +837,31 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             ));
         }
 
+        // Who may act on whom is not a property of the STORAGE the domain lives
+        // in, so it is checked before the branch that selects one.
+        //
+        // This call sat inside the root branch only, so every office and room
+        // went through `RemoveUsers` alone. A Custom role at editor rank grants
+        // that, so its holder could remove the Owner from any office or room,
+        // while the identical request against the workspace root refused with
+        // "cannot remove ..., who is above them". `add_user_to_domain` already
+        // does it this way, and its own comment says why -- "taken here rather
+        // than in the branch so the non-root path gets the same" treatment.
+        //
+        // Only the CHECK is hoisted, not the workspace lock. That lock cannot
+        // move: `lock_workspaces()` is taken again after both branches for the
+        // permissions cleanup, tokio's Mutex is not reentrant, and the comment
+        // there depends on the branch guards having dropped. Hoisting the lock
+        // deadlocks the whole handler.
+        //
+        // The root branch still repeats this check inside its lock. That is not
+        // redundancy for its own sake: this call answers "may you act on them
+        // at all", and the in-lock one answers it again against the state the
+        // write will actually use, which is what stops a concurrent promotion
+        // landing between the check and the write.
+        self.ensure_may_act_on(admin_id, user_id_to_remove, "remove")
+            .await?;
+
         // If this is the workspace root, use the workspace storage
         if domain_id == crate::WORKSPACE_ROOT_ID {
             // BEFORE the last-admin check, not after.

@@ -323,6 +323,14 @@ jobs:
         # drive the agent simply absent. Second occurrence; round 564 fixed it once.
         run: node scripts/check-feature-gated-tests-are-compiled.mjs
 
+      - name: Preconditions precede the branch
+        # `delete_group_message` skipped the page migration that is the only
+        # place the legacy key is deleted, so a "deleted" message kept its
+        # plaintext in the backend; and `remove_user_from_domain` gated
+        # `ensure_may_act_on` inside the workspace-root branch, leaving every
+        # office and room on the RemoveUsers permission alone.
+        run: node scripts/check-preconditions-precede-the-branch.mjs
+
       - name: Deploy paths can actually start the server
         # Two operator scripts each carried their own deploy and neither worked:
         # a `docker build` with no `--target` selects the LAST stage (`dev`, the
