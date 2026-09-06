@@ -41,7 +41,16 @@ const IMPLEMENTS_THE_GUARD = new Set([
   'citadel-workspace-client-ts/src/notify-listeners.ts',
 ]);
 
-const FANOUT = /\b(\w*(?:[Ll]isteners|[Hh]andlers|[Cc]allbacks))\s*\.forEach\s*\(/;
+/**
+ * A fan-out, in either spelling this codebase uses.
+ *
+ * The original matched only `.forEach(`. Every fan-out in the tree is written
+ * `for (const listener of listeners) listener()`, so the gate reported zero
+ * hand-rolled fan-outs across 934 files while seven unguarded ones existed —
+ * the exact shape its own header describes.
+ */
+const FANOUT =
+  /\b(\w*(?:[Ll]isteners|[Hh]andlers|[Cc]allbacks|[Ss]ubscribers))\s*\.forEach\s*\(|for\s*\(\s*(?:const|let)\s+\w+\s+of\s+((?:this\.)?\w*(?:[Ll]isteners|[Hh]andlers|[Cc]allbacks|[Ss]ubscribers))\s*\)/;
 
 function* sources(dir) {
   let entries;
@@ -72,7 +81,12 @@ for (const dir of [UI_SRC, CLIENT_SRC]) {
   // An unreadable root must be loud. `sources()` returns silently when
   // readdirSync throws, so a moved or unpopulated directory removed half this
   // gate's scope while it went on reporting success.
-  const found = sources(dir);
+  // MATERIALISED. `sources` is a generator, so `found.length` was `undefined`
+  // and `undefined === 0` is false: the guard below — added to make an
+  // unreadable scan root loud — could never fire, and an empty directory
+  // reported success. Written while adding a vacuity guard, which is the
+  // defect it exists to prevent.
+  const found = [...sources(dir)];
   if (found.length === 0) {
     console.error(
       `FAIL: no sources under ${relative(ROOT, dir)} — this gate would pass by\n` +
@@ -93,7 +107,7 @@ for (const dir of [UI_SRC, CLIENT_SRC]) {
       // actually invoking the listener (a map/filter over the collection).
       const window = lines.slice(i, i + 6).join('\n');
       if (/\btry\s*\{/.test(window)) return;
-      problems.push(`${rel}:${i + 1}  ${match[1]}.forEach(...)`);
+      problems.push(`${rel}:${i + 1}  ${match[1] ?? match[2]} fan-out`);
     });
   }
 }
