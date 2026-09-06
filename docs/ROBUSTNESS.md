@@ -4392,3 +4392,82 @@ three files were backed up by basename, and `requests/connect.rs` and
 other, and the gate reported six sites instead of three, which is what caught
 it. **Copies are not a restore mechanism when paths can share a name.** `git
 checkout` is.
+
+## Round 620 — the two repos each waited for the other, and both were right
+
+The UI submodule's CI had one red check for several waves: `check-file-length.mjs`
+reporting `remove 8 stale entr(y/ies) from SKIP`. Re-running it never changed
+anything, because nothing about the UI branch was wrong.
+
+Five jobs in the UI's workflow check the PARENT repo out to `parent/`, lay the PR's
+code over `parent/citadel-workspaces`, and run the parent's build layout and gate
+scripts against it. The parent ref was `PARENT_BRANCH: master`. So the UI's files
+were measured against an allowance table checked out from the parent's DEFAULT
+branch — and that table is keyed to the UI's own file lengths.
+
+One table cannot describe two pointer states. The entries sized for the new UI code
+read as "stale" against the old UI that parent `master` pins, and the gate's ratchet
+(an exemption above a file's real length is a failure) fired — correctly. So:
+
+  - the UI could not go green until the parent merged the new entries, and
+  - the parent could not go green until it pinned the new UI files.
+
+Neither order works. It is not a bug in either gate, and it is invisible as a CI
+configuration problem: it presents as one confident, correct-looking red check.
+
+The fix is in the coupling, not the ratchet. A `parent-ref` job resolves the parent
+once, preferring a parent branch of the SAME NAME as the branch under test and
+falling back to the default exactly as before, so the two halves of one change
+validate against each other. Confirmed in a live run: `Parent … will be checked out
+at 'master' (branch under test: 'stack/one-pass', fallback: 'master')` — correct,
+because the parent branch was not pushed yet.
+
+`check:parent-ref` guards it, and asserts BOTH halves, because either alone is
+satisfiable while broken: a `needs:` with a hardcoded ref checks out the wrong
+revision, and the resolved ref WITHOUT the `needs:` evaluates to the empty string,
+which `actions/checkout` reads as "the default branch" — silently the original bug.
+Three negative controls (hardcode one ref; drop one `needs:`; remove every parent
+checkout) each turned it red; the restore was verified by hash, not by assumption.
+
+### What the bump then exposed
+
+Bumping the parent's pointer to the new UI is what the whole tangle was about, and
+it had a second effect: **four parent gates had never once run against these files.**
+The parent runs its gates against the revision it PINS, so every UI file added since
+that months-old pin was unexamined by them, while CI looked green the entire time.
+
+The one that mattered: `routeByCid` returns whether an instance actually claimed a
+CID, and the orphan-buffer drain discarded it under a comment asserting the claim
+could not fail. When it does fail the message is not lost — routeByCid hands it to
+the leader — but a CID-routed notification processed by the LEADER instead of the
+session it names is the wrong session, which is the entire failure
+`CID_ROUTED_NOTIFICATIONS` exists to prevent. The drain is that message's last
+chance: the fallback timer is already cleared and the entry is out of the buffer.
+The boolean IS the comment's claim, tested; it is now read.
+
+Also five untyped declarations, and two console listeners truncating at 200 chars
+themselves — what `formatConsoleLine` exists to stop. The gate matched one of them;
+the `pageerror` listener one line below did the same thing and was fixed in the same
+pass rather than waiting to be found again.
+
+### The WASM had not been buildable on this machine
+
+`check-wasm-matches-its-source` was red, so `./sync-wasm-clients.sh` was the right
+move — and it failed at `xcrun: unable to load libxcrun … (have 'arm64,arm64e', need
+'x86_64')`. Not a broken Command Line Tools install: `~/.cargo/bin/wasm-pack` was an
+**x86_64 binary**, so it ran under Rosetta and every child down to `cc` and `xcrun`
+inherited x86_64, while the CLT dylib is arm64-only. `arch -x86_64 /usr/bin/xcrun`
+reproduces the error exactly. Reinstalled at the SAME version (0.13.1) so the
+architecture was the only variable.
+
+Worth noting what this means: the documented WASM rebuild path had been silently
+unusable locally, which is precisely the condition under which a stamp gate is the
+only thing standing between a source change and a browser running a binary without
+it.
+
+### Two of my own mistakes, both the same shape
+
+`cargo install` reported success when it had refused (`binary already exists`) —
+I read `tail`'s exit status, not cargo's. The same shape as the earlier `&&`-chained
+`cargo fmt && clippy`, where the chain short-circuited and the status belonged to the
+wrong command. **After a pipeline or a chain, `$?` is not the answer; the log is.**
