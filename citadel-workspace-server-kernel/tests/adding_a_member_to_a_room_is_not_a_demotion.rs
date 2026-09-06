@@ -10,9 +10,7 @@
 //! roles ABOVE the actor's own, so an Owner adding an Admin to a room as a
 //! Guest passes it, and `ensure_not_last_admin` passes too while a second
 //! admin exists. Two admins, and either can silently strip the other.
-use citadel_workspace_server_kernel::handlers::domain::async_ops::{
-    AsyncUserManagementOperations,
-};
+use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
 use citadel_workspace_server_kernel::handlers::domain::node_ops::AsyncNodeOperations;
 use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
 use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};

@@ -38,12 +38,18 @@ mod tests {
 
     #[test]
     fn identical_secrets_match() {
-        assert!(secrets_match("correct horse battery staple", "correct horse battery staple"));
+        assert!(secrets_match(
+            "correct horse battery staple",
+            "correct horse battery staple"
+        ));
     }
 
     #[test]
     fn different_secrets_do_not_match() {
-        assert!(!secrets_match("correct horse battery staple", "correct horse battery stapla"));
+        assert!(!secrets_match(
+            "correct horse battery staple",
+            "correct horse battery stapla"
+        ));
     }
 
     #[test]

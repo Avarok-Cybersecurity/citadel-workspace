@@ -478,15 +478,19 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             // that the caller belongs to it — so any authenticated account could
             // read the complete roster, roles and permission maps of every
             // office and room, including ones they were never added to.
-            {
-                use crate::handlers::domain::async_ops::{
-                    AsyncDomainOperations, AsyncPermissionOperations,
-                };
-                let is_admin = kernel
+            // Bound OUTSIDE the guard block: the redaction below needs it too,
+            // and recomputing it there would let the two answers drift.
+            let is_admin = {
+                use crate::handlers::domain::async_ops::AsyncDomainOperations;
+                kernel
                     .domain_ops()
                     .is_admin(actor_user_id)
                     .await
-                    .unwrap_or(false);
+                    .unwrap_or(false)
+            };
+
+            {
+                use crate::handlers::domain::async_ops::AsyncPermissionOperations;
                 // Membership alone was the whole non-admin gate, and membership
                 // survives a ban: `update_workspace_member_role` sets the ROLE
                 // and never touches `workspace.members`. A banned account went
@@ -536,6 +540,21 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 ));
             };
 
+            // Redacted for a non-admin caller.
+            //
+            // `GetMember`, two hundred lines above, restricts a single `User`
+            // to self-or-admin with the reason written out: "a `User` carries
+            // the role, the FULL per-domain permissions map and the metadata".
+            // This returns the same struct for EVERY member, and its guards --
+            // membership, ViewContent, not-banned -- are about who may see the
+            // roster, not about how much of each record they may see. So the
+            // rule GetMember enforces one record at a time was bypassed by
+            // asking for all of them at once.
+            //
+            // The roster itself is not the secret: names and roles are what a
+            // member list is for, and the UI renders both. The permissions map
+            // is the enforced authorization state of the whole workspace, and
+            // the metadata carries avatars. Neither belongs in a list call.
             let mut users = Vec::new();
             for user_id in member_ids {
                 if let Ok(Some(user)) = kernel
@@ -544,7 +563,17 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     .get_user(&user_id)
                     .await
                 {
-                    users.push(user);
+                    if is_admin || user.id == actor_user_id {
+                        users.push(user);
+                    } else {
+                        users.push(citadel_workspace_types::structs::User {
+                            id: user.id,
+                            name: user.name,
+                            role: user.role,
+                            permissions: Default::default(),
+                            metadata: Default::default(),
+                        });
+                    }
                 }
             }
             Ok(WorkspaceProtocolResponse::Members {

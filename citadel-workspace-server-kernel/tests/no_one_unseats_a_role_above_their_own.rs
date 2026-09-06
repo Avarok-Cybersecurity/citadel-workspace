@@ -32,7 +32,6 @@
 //! to stand down themselves.
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
-use citadel_workspace_server_kernel::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
 use citadel_workspace_types::structs::UserRole;
 use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
