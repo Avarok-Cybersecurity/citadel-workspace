@@ -292,6 +292,13 @@ jobs:
       - name: The submodule-pointer guard judges a worktree correctly
         run: node scripts/check-submodule-gate-judges-a-worktree.mjs
 
+      - name: A failed SDK session query is not an absent session
+        # Three call sites turned an Err into `false`/`vec![]`, and every
+        # branch that reads absence there DESTROYS state: it removes the
+        # session from the connection map, prunes CID-scoped state, or drops
+        # the peer sink message routing depends on.
+        run: node scripts/check-session-query-failures-are-not-absence.mjs
+
       - name: UI-testing agents name UI that exists
         # Four agent docs told the browser agent to click a "Join Workspace"
         # button. The landing CTAs are Sign In and Create Account; the old copy
