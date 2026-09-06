@@ -339,6 +339,13 @@ jobs:
         # the reasoning was never carried to the workspace-shaped broadcast.
         run: node scripts/check-broadcasts-name-their-audience.mjs
 
+      - name: Request paths do not wait forever
+        # connect.rs opened a DEBUG `GetActiveSessions` subscription between the
+        # SDK connect and building the Connection, and awaited its stream with no
+        # timeout -- so a subscription that never yields left LOGIN permanently
+        # unanswered, with a last log line that reads as an SDK connect failure.
+        run: node scripts/check-request-paths-do-not-wait-forever.mjs
+
       - name: Deploy paths can actually start the server
         # Two operator scripts each carried their own deploy and neither worked:
         # a `docker build` with no `--target` selects the LAST stage (`dev`, the

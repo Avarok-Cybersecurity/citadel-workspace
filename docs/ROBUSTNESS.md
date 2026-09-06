@@ -6140,3 +6140,44 @@ stamp went stale the moment this changed, and `check-wasm-rebuild-triggers-match
 said so.
 
 130 gates green.
+
+---
+
+## Round 644 — two DEBUG queries that could hang login forever
+
+`requests/connect.rs` opened a `GetActiveSessions` subscription **between** the
+successful SDK connect and building the `Connection` — so `ConnectSuccess` waited
+on it — and awaited `stream.next()` with no timeout. It was labelled `// DEBUG:`
+in the source, and its only consumer was the `info!` that printed the result.
+`requests/peer/register.rs` carried the identical block.
+
+A subscription that never yields therefore left **login** permanently
+unanswered. The last line in the log would read
+`"Querying active sessions after connect..."`, which reads as an SDK connect
+failure rather than as a discarded debug query — so the investigation would
+start in the wrong place.
+
+Every other SDK query in this tree is bounded: `PEER_LIST_TIMEOUT`,
+`PEER_SEND_TIMEOUT`, `SDK_DISCONNECT_TIMEOUT`, the 30s `connect_to_peer_custom`.
+These two were the exception, and neither needed to exist — the liveness check
+used elsewhere is `remote.sessions()`, which does not go through a subscription.
+
+### The gate reported the fix as the defect
+
+`check-request-paths-do-not-wait-forever` finds a `send_callback_subscription`
+whose stream is awaited with no bound. Its first run returned **five**: the two
+real ones, and three correctly-bounded sites — `group/request_join.rs`,
+`group/respond_request.rs`, `file/delete_virtual_file.rs` — whose bounds are
+named `GROUP_REQUEST_JOIN_WAIT`, `GROUP_RESPOND_WAIT` and `DELETE_WAIT`, applied
+through `await_*_outcome` helpers that exist for exactly that purpose.
+
+My `BOUNDED` pattern recognised `_TIMEOUT` and not `_WAIT`. Three invented out of
+five is the ratio that gets a gate switched off — and worse than the ratio is
+what it was pointing at: three deliberate, commented bounds, reported as the
+absence of a bound. The pattern now knows every form this tree uses.
+
+That is the third gate this session whose first run had to be narrowed before it
+could be believed, and the second where the invented findings were pointing
+directly at somebody's earlier fix.
+
+131 gates green.
