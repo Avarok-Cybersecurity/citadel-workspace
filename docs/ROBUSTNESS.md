@@ -5240,3 +5240,88 @@ at all. Nothing but a negative control finds that one, which is the argument for
 running one on every guard rather than trusting a gate to have caught everything.
 
 124 gates green.
+
+## Round 632 — why the P2P specs cannot recover, and the window that starts it
+
+A targeted hunt into the CI failure — every P2P job red, everything else green.
+Its most useful contribution was an ELIMINATION, and it is worth recording because
+it is what made the rest tractable.
+
+### What was ruled out, and how
+
+Group notifications take the SAME per-session delivery path on the agent
+(`responses/group_event.rs` → `server_connection_map[cid]` →
+`send_response_to_tcp_client`) and the SAME CID-routing path in the browser
+(`request_id: None` ⇒ `routeByCid`). `test:group` and `test:group-multiuser` pass,
+and `group-multiuser` runs multi-tab in ONE browser — the leader/follower forward
+path.
+
+So the agent's per-session delivery, `routeByCid`, the orphan buffer and the
+cross-tab forward-ack are all exercised and working in the failing run. Every
+hypothesis in those layers is refuted as the cause. What remains is the part group
+broadcasts do not use: the peer-registration handshake.
+
+### Why ~60 seconds of polling cannot help
+
+The handshake is ONE-SHOT with no recovery at either end. `pending_peer_registrations`
+lives on the agent and **no request variant can query it** — there is
+`ListAllPeers` and `ListRegisteredPeers` (mutuals only) and nothing for pending
+inbound registrations. The invitee's badge derives solely from a store populated
+solely by a single `PeerRegisterNotification`.
+
+Every drop point on that one delivery is therefore terminal, and two of them are
+silent: if the invitee's session is not yet in `server_connection_map` nothing is
+sent and nothing is logged; if the invitee's page has no cid yet the notification
+is filtered out on arrival. **This is why the poll count is irrelevant** — the
+event is not late, it is gone.
+
+### The window that starts it
+
+`test:p2p` waits for the invitee's workspace before registering and gets past
+registration. The four reconnection specs called `createAccount` and slept two
+seconds.
+
+And `createAccount` returned TRUE when the workspace never loaded — logging
+"WARNING: Workspace may not have fully loaded" and falling through. The comment
+forty lines above it describes exactly this defect for the REJECTED case, and says
+an unconditional `true` made every caller's
+`expect(await createAccount(...)).toBe(true)` an assertion on a constant. The
+not-loaded branch kept doing it. The wait it fails is 45 seconds, so this is a
+broken workspace rather than a slow one.
+
+Both are fixed: `createAccount` reports the not-loaded case, and the four specs
+wait for both pages before registering.
+
+**This is not established as the whole cause.** The agent log lines that would
+separate "never sent" from "sent and dropped in the browser" are not in the
+artefacts available. What has been removed is one reachable window; the next run's
+evidence is better either way, which is the honest claim.
+
+### Left standing, with file:line, for later waves
+
+`respond_register.rs:59-78` answers the invitee "success" for a DISPATCH — the
+answer was sent, not that the peer registered — so a harness can log an accept the
+inviter never received. `register.rs:112` matches `Ok(_)` on a
+`PeerRegisterStatus` that can be `Declined` or `Failed`, treating all three as
+success; the SDK added `is_accepted()` precisely because callers did this.
+`kernel/mod.rs:509-512` removes every session on a connection after ONE failed
+response send, which contradicts the invariant `ext.rs` and CLAUDE.md both state.
+And the harness line "P2P registration request sent" is printed after a click with
+nothing checked, which is why the logs cannot discriminate — the same "request send
+is not response" entry already in this record.
+
+### Selectors, while here
+
+`workspace-init.test.ts` read the init-modal error by `.text-red-400`, a class
+absent from the entire app, so that branch never ran and an initialization failure
+was reported without the reason that was on screen. The modal now has
+`data-testid="init-modal-error"`.
+
+`check-specs-search-for-real-copy` resolves `#id` and `.class` locators as well as
+testids. Its first run invented three findings — templated ids
+(``id={`${id}-error`}``) and `.ProseMirror`, which TipTap injects and the app
+itself queries — so it now reads template fragments and treats a class the app
+SELECTS as one the app has. Three of seven findings invented is the ratio that
+gets a gate switched off.
+
+124 gates green.
