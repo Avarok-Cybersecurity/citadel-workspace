@@ -750,15 +750,30 @@ regardless of orphan-mode setting, so a page refresh, a navigation or a closed
 tab leaves the session intact and reconnectable. The `orphan_sessions` map is no
 longer consulted for cleanup decisions at all.
 
-Sessions are removed in exactly two places:
+A session ends for exactly two reasons:
 
-1. **Disconnect** (`requests/peer/disconnect.rs`) — user-initiated logout.
-2. **Deregister** — account deletion.
-> There is no third path. `requests/get_sessions.rs` once reconciled the map
-> against the SDK's view; every branch of that filter returned false, so the
-> cleanup never ran, and the query whose result it used was discarded. Both are
-> gone — the handler reports what the connection map holds. An earlier revision
-> of this file listed it as a cleanup path; it was not one.
+1. **The user signed out** — `requests/peer/disconnect.rs` for the current
+   session, `requests/connection_management.rs` for a session in the Previous
+   Sessions list (DisconnectOrphan, single and bulk; the single-session branch
+   checks `may_disconnect` first).
+2. **The account is gone** — Deregister.
+
+Two further files take an entry out of `server_connection_map`, and neither ends
+a session: `requests/connect.rs` and `requests/connection_management_claim.rs`
+drop a record for a session the SDK no longer holds. The session had already
+ended; they are discarding the bookkeeping.
+
+That is five files, and `scripts/check-sessions-are-removed-in-two-places.mjs`
+holds the list with a reason for each — a sixth is a change to the session
+lifecycle and has to be argued for there.
+
+> Two paths that were listed here were not paths. `requests/get_sessions.rs`
+> once reconciled the map against the SDK's view; every branch of that filter
+> returned false, so the cleanup never ran, and the query whose result it used
+> was discarded. Both are gone. And until round 633, `kernel/mod.rs` deleted
+> every session a localhost connection owned whenever a response failed to send
+> — the ordinary case of a tab navigating between a request and its response.
+> That one was real, and it was the reason the gate exists.
 
 ### Connecting when a session already exists
 

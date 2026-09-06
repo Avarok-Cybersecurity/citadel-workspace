@@ -295,6 +295,13 @@ jobs:
         # an absent key, which empties the delivery frontier.
         run: node scripts/check-localdb-responses-are-classified.mjs
 
+      - name: Sessions are removed only where that is the job
+        # `kernel/mod.rs` deleted every session a localhost connection owned when
+        # a response failed to send -- the ordinary case of a tab navigating away.
+        # A refresh at the wrong moment logged the user out of every session in
+        # that tab; the only trace was a line saying the send failed.
+        run: node scripts/check-sessions-are-removed-in-two-places.mjs
+
       - name: Deploy paths can actually start the server
         # Two operator scripts each carried their own deploy and neither worked:
         # a `docker build` with no `--target` selects the LAST stage (`dev`, the

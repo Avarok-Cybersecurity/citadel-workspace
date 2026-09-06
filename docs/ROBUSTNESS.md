@@ -5325,3 +5325,61 @@ SELECTS as one the app has. Three of seven findings invented is the ratio that
 gets a gate switched off.
 
 124 gates green.
+
+---
+
+## Round 633 — a verdict discarded, and a socket mistaken for a user
+
+Both of the agent defects the P2P hunt left standing are the same mistake: a
+value that carries a verdict was read as though *reaching* it were the verdict.
+
+**`register_to_peer()` returns `Ok(PeerRegisterStatus)`, and `Ok` means the
+exchange completed.** `peer/register.rs:113` bound the status to
+`_peer_register_success` and discarded it, so `Declined` and `Failed { reason }`
+both produced `PeerRegisterSuccess`. The requester's UI showed the registration
+as done and went on to connect to somebody who had refused — and the refusal
+reason, which the peer had supplied, was thrown away one line from where it
+would have been shown. A non-accepted status now returns `PeerRegisterFailure`
+carrying `refusal_reason()`.
+
+**A failed response send is not a logout.** `kernel/mod.rs:509` ran
+`server_connection_map.retain(|_, v| v.associated_localhost_connection != uuid)`
+in the error branch of a send to the localhost client — deleting every session
+that connection owned. But a failed send is the ORDINARY case of a tab
+navigating between a request and its response. A page refresh at the wrong
+moment logged the user out of every session in that tab, and any later claim or
+reconnect found nothing to claim. The one line in the log said the send failed.
+The channel and the media lane still go; they belong to the dead connection. The
+session belongs to the user.
+
+### The gate, and the allow-list that was wrong
+
+`check-sessions-are-removed-in-two-places` reads every kernel file for a removal
+from `server_connection_map` and requires the file to be one whose job that is,
+with a recorded reason. Against the pre-fix tree it went red on exactly
+`mod.rs:509` — and flagged three more sites I had not examined.
+
+Three invented findings out of four is the ratio that switches a gate off, and
+this session has already done that twice. So I read all three. All three are
+legitimate, and all three had been examined in an earlier round — they carry
+comments explaining themselves. Two are DisconnectOrphan in
+`connection_management.rs`, which IS user-initiated logout: it signs out a
+session from the Previous Sessions list rather than the one in front of you, and
+the single-session branch checks `may_disconnect` first. The third is
+`connection_management_claim.rs`, where ClaimSession finds no SDK session behind
+the entry and drops a record of a session that had already ended — the same
+class as `connect.rs`.
+
+So the allow-list was incomplete, not the findings invented. It now holds five
+files with a reason each.
+
+### The document said two, and meant it
+
+CLAUDE.md stated "Sessions are removed in exactly two places… There is no third
+path." Five files remove sessions. The sentence was not loosely worded; it was
+the reason the third path in `mod.rs` read as unremarkable to everyone who
+walked past it, including me. It now names all five, separates *ending a
+session* from *discarding the record of one that ended*, and points at the gate
+as the list that has to stay true.
+
+Red on the defect, green on the fix, 125 gates green.
