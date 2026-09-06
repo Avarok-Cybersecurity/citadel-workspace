@@ -15,3 +15,18 @@
 citadel-internal-service-wasm-client/src
 citadel-internal-service-connector/src
 citadel-internal-service-types/src
+# ILM, for the same reason as the connector and by the same route.
+#
+# The wasm-client depends on the connector, and the connector depends on
+# intersession-layer-messaging -- so ILM's source is compiled INTO the binary the
+# browser runs. Omitting it meant a change to the reliability layer (the delivery
+# frontier, the ack and retransmit logic, the gap tracker) left the stamp
+# unchanged, and the gate reported a freshly-built binary that contained none of
+# it: precisely the failure described above for the connector, one dependency
+# further down.
+#
+# The GITLINK, not a directory inside it: ILM is a nested submodule, so its tree
+# is not in this repository's HEAD and `rev-parse HEAD:intersession-layer-messaging/src`
+# fails outright. The recorded commit is exactly the content identity wanted --
+# every ILM change moves it, and nothing else does.
+intersession-layer-messaging

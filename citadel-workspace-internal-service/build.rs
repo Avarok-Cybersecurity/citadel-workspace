@@ -19,13 +19,25 @@ fn main() {
     // previous binary, and the browser behaved as though the edit had not
     // happened.
     //
-    // Kept in step with scripts/wasm-source-trees.txt, which the stamp writer
-    // and the staleness gate share.
-    for dir in [
-        "citadel-internal-service-wasm-client/src",
-        "citadel-internal-service-connector/src",
-        "citadel-internal-service-types/src",
-    ] {
+    // READ from scripts/wasm-source-trees.txt rather than copied out of it.
+    //
+    // That file is already shared by the stamp writer (sync-wasm-clients.sh) and
+    // the staleness gate. This was a fourth hand-maintained copy of the same
+    // list, "kept in step" by a comment and by
+    // check-wasm-rebuild-triggers-match-the-stamp.mjs -- which duly caught it the
+    // first time the list grew, when intersession-layer-messaging was added.
+    // Reading the file makes the gate a redundancy check instead of the only
+    // thing holding three copies together.
+    //
+    // `include_str!` embeds it at compile time, so the file itself must also
+    // re-trigger this script; otherwise adding a tree would not take effect until
+    // something else invalidated the build.
+    println!("cargo:rerun-if-changed=../scripts/wasm-source-trees.txt");
+    for line in include_str!("../scripts/wasm-source-trees.txt").lines() {
+        let dir = line.trim();
+        if dir.is_empty() || dir.starts_with('#') {
+            continue;
+        }
         println!("cargo:rerun-if-changed=../citadel-internal-service/{dir}");
     }
 

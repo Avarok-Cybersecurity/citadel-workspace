@@ -462,12 +462,27 @@ npx vite build --mode development
 # The existing hand-patch three steps up -- deleting the Playwright copies this
 # install "just placed here" -- is the same repair for one package. This is that
 # repair for all of them, and it is what CI does anyway.
-print_status "Restoring the workspace to the versions package-lock.json pins..."
-if ! (cd "$WORKSPACE_ROOT" && npm ci); then
-    print_error "npm ci failed at the workspace root."
-    print_error "The tree is left holding freshly-resolved versions rather than the pinned ones;"
-    print_error "run 'npm ci' at $WORKSPACE_ROOT before trusting a test result."
-    exit 1
+# Only where there IS a workspace root to restore.
+#
+# The sync CONTAINER mounts three subtrees -- citadel-internal-service,
+# citadel-workspace-client-ts, citadel-workspaces -- and not the parent's
+# package-lock.json, so `/workspace` has no root lockfile at all. The first
+# version of this ran unconditionally and took down every "Start Services" job
+# with `npm ci can only install with an existing package-lock.json`, which is a
+# regression this script introduced into CI rather than a problem it found.
+#
+# On a host checkout the lockfile is there and the restore is exactly the repair
+# that was being done by hand after every run.
+if [ -f "$WORKSPACE_ROOT/package-lock.json" ]; then
+    print_status "Restoring the workspace to the versions package-lock.json pins..."
+    if ! (cd "$WORKSPACE_ROOT" && npm ci); then
+        print_error "npm ci failed at the workspace root."
+        print_error "The tree is left holding freshly-resolved versions rather than the pinned ones;"
+        print_error "run 'npm ci' at $WORKSPACE_ROOT before trusting a test result."
+        exit 1
+    fi
+else
+    print_status "No root package-lock.json at $WORKSPACE_ROOT (container mode); nothing to restore."
 fi
 
 print_status "WASM client synchronization complete!"

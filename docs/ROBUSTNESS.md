@@ -4774,3 +4774,82 @@ Performance: broadcast fan-out re-authorises per recipient with three corpus cop
 each and drops on `Lagged`; `nodes_cache` still pays O(corpus) per permission check;
 the production filesystem backend serialises the whole store per write; every
 activation re-downloads the full corpus including document bodies.
+
+## Round 624 — a disconnected account's store, and a regression I shipped into CI
+
+### The ownership gate let an unmapped session through, and two things went with it
+
+The gate lets an unmapped cid proceed, on the stated grounds that "the handler
+owns that error and already reports it". That holds for a cid naming an UNKNOWN
+account: `propose_target` fails and the handler answers honestly.
+
+It does not hold for one that is KNOWN and merely has no live session — after a
+Disconnect, or an agent restart while the browser keeps its cid. `propose_target`
+succeeds there; by its own doc it checks only that the cid names a locally-known
+account, never that the caller owns it. So `LocalDBGetKV` handed that account's
+stored ILM payloads — `inbound_messages-<cid>` and everything the UI persists per
+account — to any connection able to name the cid. A cid is a u64 that travels in
+peer lists and `GetSessions` responses; it is not a secret, and the agent's
+WebSocket has no CORS to stop a page opening it.
+
+`Deregister` is the same shape with a worse ending: its handler never consults the
+map, so an unmapped cid deletes the account permanently. The comment on `handle`
+already lists it among the operations that "are gated now" — it was gated only
+against a session held by SOMEBODY ELSE, never one held by nobody.
+
+Gating the read was only possible after removing what blocked it. `LocalDBGetKV`
+sat in the silent-refusal list under the reason that the queries "return DATA, and
+their response types carry no failure variant". True of `GroupListGroupsFor`; never
+true of this one — `LocalDBGetKVFailure` exists and the handler already builds one.
+**The false premise was load-bearing**: silence is why the variant could not be
+gated, and not being gated is what left the store readable.
+
+Two existing tests asserted the old behaviour. They were pinning the hole, so their
+REASONING was replaced rather than their assertions flipped, and a third was added
+as their control — an owned session still reads, so a gate that refused reads
+outright could not pass by refusing everything.
+
+### A regression I introduced, found by CI within the hour
+
+Last round's addition of a closing `npm ci` to `sync-wasm-clients.sh` took down
+every "Start Services" job:
+
+    npm error The `npm ci` command can only install with an existing package-lock.json
+
+The sync CONTAINER mounts three subtrees and not the parent's lockfile, so
+`/workspace` has no root lockfile at all. The fix I wrote for a host checkout was
+unconditional. Now guarded on the lockfile existing, which is the actual
+precondition rather than an assumption about where the script runs.
+
+Worth stating plainly: that was a fix for a real problem which introduced a worse
+one, and it was caught only because CI runs the container path. The error message
+at least named the tree and the command to run — which is why the diagnosis took
+one log read rather than a bisect.
+
+### The stamp did not cover ILM, and the fix removed a fourth copy
+
+`wasm-source-trees.txt` listed three trees. The wasm-client depends on the
+connector, and the connector depends on intersession-layer-messaging — so ILM is
+compiled INTO the binary the browser runs, and a change to the reliability layer
+left the stamp unchanged. Exactly the failure the file's own header describes for
+the connector, one dependency further down.
+
+Adding it surfaced three more things:
+
+  - ILM is a NESTED submodule, so `rev-parse HEAD:intersession-layer-messaging/src`
+    fails outright; the GITLINK is the content identity, and it is what the list
+    now names.
+  - The staleness gate's "cannot read the source" branch threw
+    `ReferenceError: SOURCE_DIR is not defined` — the one path whose job is to say
+    "this check could not run" was the one path that could not say it.
+  - `build.rs` held a FOURTH hand-copied list, "kept in step" by a comment and by
+    the trigger gate. Rather than adding a fourth copy of ILM, build.rs now READS
+    the shared file (with a `rerun-if-changed` on it, or embedding it would freeze
+    a stale copy). The gate accepts that as the stronger form.
+
+And the trigger gate then failed its own control: with the trigger removed it
+stayed green, because `buildRs.includes('intersession-layer-messaging')` was
+satisfied by the COMMENT explaining the rule. **A gate a comment can satisfy has
+the same shape as the bug it hunts** — the copy gate strips comments for this
+reason, and this one now does too. Only after that does removing the trigger
+redden it.

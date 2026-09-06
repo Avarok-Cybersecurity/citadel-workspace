@@ -76,7 +76,19 @@ function currentSourceTree() {
 
 const actual = currentSourceTree();
 if (!actual) {
-  console.error(`FAIL: cannot read ${SUBMODULE}/${SOURCE_DIR} — is the submodule populated?`);
+  // `SOURCE_DIR` here was a ReferenceError: this branch threw a stack trace
+  // instead of printing its message, so the one path that exists to say "this
+  // check could not run" was the one path that could not say it. Found by adding
+  // a tree the resolver could not read — a nested submodule's subdirectory.
+  console.error(
+    `FAIL: cannot hash the source trees under ${SUBMODULE}. Each entry in\n` +
+      'scripts/wasm-source-trees.txt must resolve with `git rev-parse HEAD:<entry>`:\n' +
+      sourceTrees()
+        .map((dir) => `  ${dir}`)
+        .join('\n') +
+      '\n\nA nested submodule is named by its GITLINK, not by a path inside it.\n' +
+      'Is the submodule populated?',
+  );
   console.error('A check that cannot find its subject must not report success.');
   process.exit(1);
 }
