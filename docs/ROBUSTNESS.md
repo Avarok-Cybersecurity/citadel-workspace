@@ -6080,3 +6080,63 @@ is now written next to the flag.
 just written, within the same preflight run.
 
 130 gates green.
+
+---
+
+## Round 643 — one silent socket denied the agent to everyone
+
+`accept_hdr_async` was awaited **inside** `next_connection()`, and its only
+caller is a serial `while let Some(..) = io.next_connection().await` loop. There
+was no timeout anywhere on that path.
+
+So a single process that opened a TCP connection to `127.0.0.1:12345` and sent
+no bytes parked the accept loop **forever**. Every later tab, reload and new
+account got a socket that never completed — and nothing appeared in
+`tilt logs internal-service`, because no bytes ever reached `handle_request`, so
+the symptom was a dead app with a silent backend.
+
+The agent binds loopback only, and that remains right. But loopback means every
+process on the machine, and the agent holds decrypted P2P plaintext and is the
+app's only backend. A suspended laptop's half-open TCP or a port scanner did
+this by accident; anything local could do it on purpose, with one connect and no
+data.
+
+### Both halves were necessary
+
+Spawning each handshake stops one stall from blocking the others — but with no
+bound, stalled sockets accumulate until the agent is exhausted anyway. And a
+timeout alone would not have been enough: with the handshake still inline,
+repeated connect-and-stall occupies the loop continuously, one timeout at a
+time. Neither change is sufficient; the pair is.
+
+`HANDSHAKE_TIMEOUT` is 10s, and `the_handshake_is_bounded` pins that it is a
+real bound in both directions — loose enough for a browser on a loaded machine,
+tight enough to mean something.
+
+### Writing a test for a hang
+
+The regression test stalls FIRST and connects SECOND, which is the order that
+matters: under the old code the second connection can never be accepted, so the
+test hangs rather than failing an assertion. It therefore asserts through a
+`tokio::time::timeout` whose `.expect` message names the cause, so the failure
+reads as "the handshake is inline again" rather than as a flaky test.
+
+The control is decisive: restoring the inline handshake makes it panic with
+`Elapsed(())`.
+
+Origin enforcement is untouched — `origin_check` still runs inside the
+handshake, so a refused page gets a 403 and never becomes a connection. Both
+origin-enforcement tests pass, as do the other 27 in that crate and all 336 in
+the agent workspace.
+
+### Two smaller things this touched
+
+`local_addr()` is now an accessor rather than a field read, since the listener
+moves into the accept task. The tests bind port 0 and need to learn what they
+got, and making each of them unwrap an `Option` would have been the wrong shape.
+
+The WASM client was rebuilt: the connector is in `wasm-source-trees.txt`, so the
+stamp went stale the moment this changed, and `check-wasm-rebuild-triggers-match-the-stamp`
+said so.
+
+130 gates green.
