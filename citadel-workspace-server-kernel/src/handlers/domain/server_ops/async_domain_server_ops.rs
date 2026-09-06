@@ -1551,18 +1551,6 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         metadata: Option<Vec<u8>>,
         workspace_master_password: String,
     ) -> Result<Workspace, NetworkError> {
-        // Verify master access password
-        let passwords = self.backend_tx_manager.get_all_passwords().await?;
-        if !passwords
-            .get(workspace_id)
-            .map(|p| crate::kernel::secret_eq::secrets_match(p, &workspace_master_password))
-            .unwrap_or(false)
-        {
-            return Err(NetworkError::msg(
-                "Invalid workspace master access password",
-            ));
-        }
-
         // Held across the whole read-modify-write, like the connect path.
         //
         // A mutex only excludes PARTICIPANTS. The connect-time member-add takes
@@ -1610,6 +1598,35 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
                     "Permission denied: only an admin or the workspace owner may update it",
                 ));
             }
+        }
+
+        // Password check AFTER authorization, deliberately.
+        //
+        // It used to run first, before anything looked at who was asking. So
+        // every account on the server -- and with open enrolment that is anyone
+        // who can register -- had a permanent yes/no oracle on the master
+        // password: send an UpdateWorkspace with a guess and read which of two
+        // distinct errors comes back. "Invalid workspace master access
+        // password" means wrong guess; "Permission denied" means right guess,
+        // wrong caller. The rate limiter is per CID (100/s), so with free
+        // accounts the guess rate scales with the number of accounts created.
+        //
+        // Ordered this way, a caller who is neither owner nor admin is refused
+        // identically whatever they send, and learns nothing.
+        //
+        // For a BOOTSTRAP workspace the password IS the authorization -- that
+        // is the documented way the first owner claims an unowned workspace --
+        // so the oracle is inherent there. It is bounded by the operator
+        // claiming, which is what the claim flow is for.
+        let passwords = self.backend_tx_manager.get_all_passwords().await?;
+        if !passwords
+            .get(workspace_id)
+            .map(|p| crate::kernel::secret_eq::secrets_match(p, &workspace_master_password))
+            .unwrap_or(false)
+        {
+            return Err(NetworkError::msg(
+                "Invalid workspace master access password",
+            ));
         }
 
         // Update fields
