@@ -190,8 +190,15 @@ tilt trigger sync-wasm-client → tilt trigger server → tilt trigger internal-
 - Changes to `citadel-workspace-types/` require ALL of the above (shared types)
 
 The agent polls services every 10s, waiting for success indicators like:
-- `Running target/debug/citadel-workspace-internal-service --bind '0.0.0.0:12345'`
-- `Running target/debug/citadel-workspace-server-kernel --config /usr/src/app/kernel.toml`
+- internal-service: `Using filesystem backend` (or `Using in-memory backend`)
+- server: `Citadel Workspace Server starting`
+
+These used to be given as ``Running `target/debug/...` `` — a `cargo run` banner.
+Both containers exec the RELEASE binary from `/usr/local/bin` (see the `CMD` in
+`docker/workspace-server/Dockerfile` and `docker/internal-service/Dockerfile`),
+so that line has never appeared in either image's output. The sync agent polled
+for it, hit its five-minute timeout on both steps, and reported a failed rebuild
+for a healthy one.
 
 Timeout: 5 minutes per service. Errors captured to `./logs/sync-error-[timestamp].log`
 

@@ -73,7 +73,11 @@ When errors are detected in Step 1, attempt these fixes ONCE:
    - **IF ERROR FOUND**: STOP, capture logs, return ERROR "Step 2 FAILED: server rebuild error"
    - **DO NOT PROCEED TO STEP 3**
 5. Only if no errors, check for success:
-   - **SUCCESS**: `"Running \`target/debug/citadel-workspace-server-kernel --config /usr/src/app/kernel.toml\`"`
+   - **SUCCESS**: `"Citadel Workspace Server starting"` (main.rs's first log line)
+     - NOT `Running \`target/debug/...\``. The container execs the release binary
+       from `/usr/local/bin` (docker/workspace-server/Dockerfile CMD); there is no
+       `cargo run`, so that line has never appeared in this image's output and the
+       step could only ever time out.
 6. **IF TIMEOUT (5 min)**: STOP, return ERROR "Step 2 FAILED: server rebuild timeout"
    - **DO NOT PROCEED TO STEP 3**
 7. **ONLY if SUCCESS found AND no errors**: Proceed to Step 3
@@ -89,7 +93,10 @@ When errors are detected in Step 1, attempt these fixes ONCE:
    - **IF ERROR FOUND**: STOP, capture logs, return ERROR "Step 3 FAILED: internal-service rebuild error"
    - **DO NOT PROCEED TO STEP 4**
 5. Only if no errors, check for success:
-   - **SUCCESS**: `"Running \`target/debug/citadel-workspace-internal-service --bind '0.0.0.0:12345'\`"`
+   - **SUCCESS**: `"Using filesystem backend"` or `"Using in-memory backend"`
+     (main.rs prints one of the two once the backend is selected)
+     - NOT `Running \`target/debug/...\``, for the same reason as Step 2: the
+       container execs `/usr/local/bin/citadel-workspace-internal-service`.
 6. **IF TIMEOUT (5 min)**: STOP, return ERROR "Step 3 FAILED: internal-service rebuild timeout"
    - **DO NOT PROCEED TO STEP 4**
 7. **ONLY if SUCCESS found AND no errors**: Proceed to Step 4

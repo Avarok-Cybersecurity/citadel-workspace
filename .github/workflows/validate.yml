@@ -218,6 +218,9 @@ jobs:
       - name: Third-party images are pinned
         run: node scripts/check-third-party-images-are-pinned.mjs
 
+      - name: Readiness markers are lines something prints
+        run: node scripts/check-readiness-markers-are-printed.mjs
+
       - name: The submodule-pointer guard judges a worktree correctly
         run: node scripts/check-submodule-gate-judges-a-worktree.mjs
 
