@@ -1036,17 +1036,22 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
 
         // Determine workspace ID: use sentinel for first workspace, UUID for additional
         let workspace_id = if root_exists {
-            // Creating a non-root workspace: verify against root workspace password
-            let passwords = self.backend_tx_manager.get_all_passwords().await?;
-            if !passwords
-                .get(crate::WORKSPACE_ROOT_ID)
-                .map(|p| crate::kernel::secret_eq::secrets_match(p, &workspace_master_password))
-                .unwrap_or(false)
-            {
-                return Err(NetworkError::msg("Invalid workspace master password"));
-            }
-
-            // Verify the creator has CreateWorkspace permission on the root workspace
+            // AUTHORISATION FIRST, then the secret.
+            //
+            // The order was the other way round, and the two failures return
+            // different strings, so anybody who could reach this endpoint had an
+            // online password oracle: send a guess, and "Invalid workspace master
+            // password" versus "Only root workspace admins can create additional
+            // workspaces" says whether the guess was right. The rate limiter
+            // allows 100 requests per second and resets its bucket each window,
+            // registration needs no invite, and CIDs are free -- so there is no
+            // lockout to run into.
+            //
+            // Checking the permission first means a caller who is not entitled
+            // to create workspaces learns nothing about the password no matter
+            // how many guesses they send. `delete_workspace` already did it in
+            // this order; this is the same fix, applied to the two places that
+            // did not have it.
             if !self
                 .check_entity_permission(
                     user_id,
@@ -1058,6 +1063,15 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
                 return Err(NetworkError::msg(
                     "Only root workspace admins can create additional workspaces",
                 ));
+            }
+
+            let passwords = self.backend_tx_manager.get_all_passwords().await?;
+            if !passwords
+                .get(crate::WORKSPACE_ROOT_ID)
+                .map(|p| crate::kernel::secret_eq::secrets_match(p, &workspace_master_password))
+                .unwrap_or(false)
+            {
+                return Err(NetworkError::msg("Invalid workspace master password"));
             }
 
             uuid::Uuid::new_v4().to_string()
@@ -1300,18 +1314,6 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         metadata: Option<Vec<u8>>,
         workspace_master_password: String,
     ) -> Result<Workspace, NetworkError> {
-        // Verify master access password
-        let passwords = self.backend_tx_manager.get_all_passwords().await?;
-        if !passwords
-            .get(workspace_id)
-            .map(|p| crate::kernel::secret_eq::secrets_match(p, &workspace_master_password))
-            .unwrap_or(false)
-        {
-            return Err(NetworkError::msg(
-                "Invalid workspace master access password",
-            ));
-        }
-
         // Held across the whole read-modify-write, like the connect path.
         //
         // A mutex only excludes PARTICIPANTS. The connect-time member-add takes
@@ -1327,8 +1329,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         // half of it.
         let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
 
-        // Get workspace directly from backend without permission check
-        // since we've verified the master password
+        // Read first, then authorise, then verify the secret. See below.
         let mut workspace = match self.backend_tx_manager.get_workspace(workspace_id).await? {
             Some(ws) => ws,
             None => return Err(NetworkError::msg("Workspace not found")),
@@ -1359,6 +1360,35 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
                     "Permission denied: only an admin or the workspace owner may update it",
                 ));
             }
+        }
+
+        // The password is verified AFTER authorisation, not before it.
+        //
+        // It used to be the first thing this function did, and the two failures
+        // return different strings -- so anyone who could reach this endpoint
+        // had an online password oracle: send a guess and read which refusal
+        // comes back. The rate limiter allows 100 requests per second and resets
+        // its bucket each window, registration needs no invite, and CIDs are
+        // free, so there is no lockout to run into.
+        //
+        // It cannot simply be moved above the read, because the authorisation
+        // DEPENDS on the record: an unowned workspace is claimable by whoever
+        // presents the password, which is how the first administrator is
+        // established. So the order is read, authorise, then verify the secret --
+        // and a caller not entitled to update this workspace learns nothing
+        // about the password however many guesses they send.
+        //
+        // Still required, and for the bootstrap case it is the only thing
+        // standing between a stranger and an unclaimed workspace.
+        let passwords = self.backend_tx_manager.get_all_passwords().await?;
+        if !passwords
+            .get(workspace_id)
+            .map(|p| crate::kernel::secret_eq::secrets_match(p, &workspace_master_password))
+            .unwrap_or(false)
+        {
+            return Err(NetworkError::msg(
+                "Invalid workspace master access password",
+            ));
         }
 
         // Update fields
