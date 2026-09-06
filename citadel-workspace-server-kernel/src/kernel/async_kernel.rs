@@ -100,6 +100,14 @@ pub enum BroadcastAudience {
     Everyone,
     /// Only sessions whose user may view the node owning this chat channel.
     Group(String),
+    /// Only sessions whose user may VIEW THIS NODE.
+    ///
+    /// Node content and node records went out as `Everyone`, so every connected socket
+    /// received the full `mdx_content` of any document anyone saved — including a member who
+    /// had just been removed, whose socket stays open, and (where one server holds several
+    /// workspaces) sessions belonging to a different one. The pull path has always checked
+    /// `ViewContent`; the push path never did.
+    Node(String),
 }
 
 /// Message for broadcasting workspace updates to connected clients
@@ -325,6 +333,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// Broadcast a response to all connected clients (except the excluded CID)
     pub fn broadcast(&self, response: WorkspaceProtocolResponse, exclude_cid: Option<u64>) {
         self.broadcast_to(response, exclude_cid, BroadcastAudience::Everyone)
+    }
+
+    /// Broadcast a response only to sessions entitled to VIEW `node_id`.
+    pub fn broadcast_to_node(
+        &self,
+        response: WorkspaceProtocolResponse,
+        exclude_cid: Option<u64>,
+        node_id: String,
+    ) {
+        self.broadcast_to(response, exclude_cid, BroadcastAudience::Node(node_id))
     }
 
     /// Broadcast a response only to sessions entitled to see `group_id`'s chat.
@@ -1701,6 +1719,22 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                         if let BroadcastAudience::Group(ref group_id) = broadcast_msg.audience {
                                             use crate::kernel::group_access::authorize_group_read;
                                             if authorize_group_read(&this, &user_id, group_id).await.is_none() {
+                                                continue;
+                                            }
+                                        }
+                                        // A node-scoped broadcast reaches only sessions that
+                                        // may view that node. Same reasoning as the group case
+                                        // above, and the same single place that knows whose
+                                        // socket this is.
+                                        if let BroadcastAudience::Node(ref node_id) = broadcast_msg.audience {
+                                            use crate::handlers::domain::async_ops::AsyncPermissionOperations;
+                                            use citadel_workspace_types::structs::Permission;
+                                            let may_view = this
+                                                .domain_operations
+                                                .check_entity_permission(&user_id, node_id, Permission::ViewContent)
+                                                .await
+                                                .unwrap_or(false);
+                                            if !may_view {
                                                 continue;
                                             }
                                         }

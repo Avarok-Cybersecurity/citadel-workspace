@@ -993,7 +993,11 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     // stayed invisible to every other user until they signed in
                     // again. The client handler for this variant already exists;
                     // it just never fired for anyone but the requester.
-                    kernel.broadcast(WorkspaceProtocolResponse::Node(node.clone()), requester_cid);
+                    kernel.broadcast_to_node(
+                        WorkspaceProtocolResponse::Node(node.clone()),
+                        requester_cid,
+                        node.id.clone(),
+                    );
                     Ok(WorkspaceProtocolResponse::Node(node))
                 }
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
@@ -1057,7 +1061,12 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                             timestamp,
                         };
 
-                        kernel.broadcast(broadcast_response, requester_cid);
+                        // Node-scoped: this carries the document body.
+                        kernel.broadcast_to_node(
+                            broadcast_response,
+                            requester_cid,
+                            node_id.clone(),
+                        );
                         info!(
                             target: "citadel",
                             "[ASYNC_PROCESS_COMMAND] Broadcast NodeContentUpdated for node {}",
@@ -1093,9 +1102,12 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         *chat_enabled,
                         *is_default,
                     ) {
-                        kernel.broadcast(
+                        // Node-scoped, like the content update above: a structural edit
+                        // carries the whole DomainNode, name, rules and all.
+                        kernel.broadcast_to_node(
                             WorkspaceProtocolResponse::Node(node.clone()),
                             requester_cid,
+                            node.id.clone(),
                         );
                     }
 
