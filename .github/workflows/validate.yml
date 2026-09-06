@@ -292,12 +292,19 @@ jobs:
       - name: The submodule-pointer guard judges a worktree correctly
         run: node scripts/check-submodule-gate-judges-a-worktree.mjs
 
-      - name: Production persists per row, not per database
-        # WORKSPACE_BACKEND=filesystem rewrites the WHOLE store on every write:
-        # one chat message costs a serialisation of every document and every
-        # message page. Invisible in dev (7 KB of seed content) and invisible
-        # to the kernel's tests, which bypass the SDK.
-        run: node scripts/check-production-persists-per-row.mjs
+      - name: The CI liveness recipe reads jobs, not run status
+        # A run reports "queued" until every job finishes, so the run-level
+        # filter returns 0 while jobs execute and hides failures that already
+        # happened. This repo's own record recommended it and was misled three
+        # times.
+        run: node scripts/check-ci-liveness-recipe-reads-jobs.mjs
+
+      - name: Production runs a backend that does not lose writes
+        # sqlite looked like the answer to filesystem's whole-store rewrites and
+        # is worse: the SDK's SQL backend has no unique constraint, a bare
+        # INSERT, and an unordered LIMIT 1 read, so updates are silently
+        # invisible. Slow and correct beats fast and wrong.
+        run: node scripts/check-production-backend-is-safe.mjs
 
       - name: WASM rebuild triggers match the staleness stamp
         # build.rs named two FILES while the binary is built from three trees,

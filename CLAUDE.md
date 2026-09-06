@@ -616,11 +616,12 @@ original request — so with two sessions in one browser, one session receives t
 other's messages, files or call media.
 
 The set lives in `citadel-workspaces/src/lib/multi-instance/routing-rules.ts`
-(not in the router itself), and currently holds eight entries: the three peer/
-message notifications, three file-transfer notifications, and both media
-notifications. Read it there rather than trusting a copy here — an earlier
-revision of this file listed three of the eight, which is the kind of excerpt
-that goes stale silently.
+(not in the router itself). **Read it there.** No count or list is repeated
+here, deliberately: an earlier revision of this file named three members, a
+later one said "eight entries" and enumerated three categories — and by then
+the set held ten, the additions being a peer-group message and a send failure,
+neither of which fits any category the prose offered. Both revisions were
+written by someone warning the reader not to trust a copy.
 
 A fixture-coverage test requires every member of that set to have a shape fixture,
 so adding one cannot silently skip the extraction tests.

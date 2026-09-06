@@ -3031,7 +3031,22 @@ wrong, and that the check which would have shown it — *are any jobs actually
 in progress* — is one API call and was never made.
 
 **Lesson:** a check-count on a PR says nothing about whether CI is running.
-`gh api "repos/<r>/actions/runs?status=in_progress" --jq .total_count` does.
+
+> **Corrected later, and the correction matters more than the lesson.**
+> Use `node scripts/ci-jobs.mjs <owner/repo> <branch|run-id>`. It reads
+> `/actions/runs/<id>/jobs` and prints per-state counts and every failed job.
+>
+> The command originally written here was
+> `gh api "repos/<r>/actions/runs?status=in_progress" --jq .total_count`, a
+> RUN-level filter — the exact field that lies. A run's status stays `queued`
+> until every one of its jobs finishes, so it returns 0 while dozens of jobs
+> execute, and a run whose jobs have already failed reads as "still waiting".
+>
+> This paragraph then misled twice more: once into cancelling other runs to
+> "free slots" that were never blocked, and once into reporting CI as starved
+> for hours while a run had been completing with readable failures throughout.
+> A lesson that names the right question — *are any jobs actually in progress* —
+> and gives a command that cannot answer it is worse than no lesson.
 
 ## Round 554 — a read failure was written back as an empty tree
 
@@ -3637,7 +3652,8 @@ recorded with that evidence rather than asserted as unrelated.
 
 ## Round 584 — two corrections about CI, one of them mine twice over
 
-I reported CI as "stalled" twice. It was not. `gh run list --json status` reports
+I reported CI as "stalled" twice. It was not — `node scripts/ci-jobs.mjs` reads
+the jobs and would have said so. `gh run list --json status` reports
 a RUN as `queued` until every one of its jobs finishes, so a run with eight jobs
 executing reads as queued. At job level the parent repo had nine jobs in flight
 the whole time.
