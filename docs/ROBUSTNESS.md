@@ -7404,3 +7404,64 @@ underneath it), and the UI's `check-every-gate-is-invoked` has all four
 exemptions stale because it reads one workflow. Both are recorded as next.
 
 140 gates green.
+
+## Round 668 — "already registered" is a success, and one of four call sites said otherwise
+
+The robustness sweep answered round 657's question. CLAUDE.md already states the
+rule, under "CID Lifecycle":
+
+> Registrations are stored by CID pairs, and the CID never changes. After a
+> disconnect and reconnect the same registrations exist on the server.
+> **"Peer Already Registered" is NOT an Error** — treat this as success.
+
+The agent answers it as `PeerRegisterFailure` (`requests/peer/register.rs:71-81`).
+Four UI modules read that variant. Three knew the rule. The fourth,
+`peer-registration-store/accept-matcher.ts`, rejected — and `lifecycle.ts` awaits
+that promise on the **line before** `connectToPeer`, so the rejection skipped the
+connect entirely.
+
+That is the shape of the CI failure. Registrations survive every reconnect, so on
+any re-run — and on all three reconnection legs by construction — Accept met that
+branch and no P2P channel was opened. It matches the agent log exactly: every
+send `to SERVER (no peer_cid)`, and not one `[PeerChannelCreated]`, across six
+specs.
+
+### The gate found two more the sweep had not
+
+- `usePeerDiscovery.ts` toasted **"Your request to Bob was not accepted: Peer 42
+  is already registered"** — telling the user the opposite of what happened, and
+  leaving the row unmarked so they try again.
+- `peer-registration-store/event-handlers.ts` emitted
+  `peer-registration:refused` for it, announcing a refusal for a peer who is
+  registered.
+
+The three spellings of the test are now one predicate,
+`already-registered.ts::isAlreadyRegistered`.
+
+### The gate had to be rewritten twice, both times because a control caught it
+
+**First rule — "the file mentions `already registered`".** A control renamed the
+guard's string and left a `debugLog('… Already registered …')` in place: green.
+It distinguished prose from code and nothing more.
+
+**Second rule — "the file calls `isAlreadyRegistered`".** That control now goes
+red. But extracting `classifyPeerRegisterFailure` for the line-length limit made
+`usePeerDiscovery` red too, correctly by the letter and wrongly in substance —
+and "add the new helper to the gate" would have been exactly the hand-maintained
+list this session keeps finding drifted.
+
+**Third rule — the asking set is computed.** A module qualifies if it calls the
+predicate, or imports from a module that does. Breaking the classifier's call
+turns its *caller* red, one hop away.
+
+| control | expected | observed |
+|---|---|---|
+| remove the branch from `accept-matcher` | the resolve test red | red; the two discrimination tests stay green |
+| remove it from `event-handlers` | gate flags that file | flagged |
+| break the guard, keep the log line | gate flags it | green under rule 1; red under rule 3 |
+| break the **delegated** path in the classifier | its caller flagged | flagged, one hop away |
+
+Its limit, written into the gate: this requires the question to be asked, not
+that the answer is used. Every instance so far has been a site that never asked.
+
+141 gates green.

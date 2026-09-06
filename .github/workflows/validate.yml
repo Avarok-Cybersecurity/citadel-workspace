@@ -934,6 +934,16 @@ jobs:
         # search corpus, and the guard went where the comment pointed.
         run: node scripts/check-member-lists-name-their-domain.mjs
         working-directory: citadel-workspaces
+
+      - name: Already registered is not a failure
+        # CIDs are permanent, so a registration survives every reconnect and the
+        # agent answers `PeerRegisterFailure: "already registered"` on the next
+        # attempt. CLAUDE.md: that is NOT an error. Three consumers knew;
+        # accept-matcher.ts did not, and its caller awaits it on the line before
+        # connectToPeer -- so the rejection skipped the connect and no P2P
+        # channel was opened at all.
+        run: node scripts/check-already-registered-is-not-a-failure.mjs
+        working-directory: citadel-workspaces
       - name: A success flag is read by somebody
         # sendAndAwaitAck was given a boolean return so an unacknowledged RE-VFS
         # operation would stop being invisible; all six callers then discarded
