@@ -6306,3 +6306,66 @@ standalone worktree pass from the parent. That claim had been made four times
 this session on the strength of the failure message alone.
 
 131 gates green.
+
+---
+
+## Round 647 — a peer's folder could erase your entire file index
+
+`getTree` already distinguishes "no tree yet" from "the tree could not be read",
+and its own comment states the stake: reaching the default branch after a
+storage failure "writes that default over a tree still on disk, and the user's
+files are gone". It correctly refuses to persist.
+
+**And then returns the empty default to its caller.** All twenty callers write
+the whole tree back through `persistTree`, which had no such guard. The fix
+stopped `getTree` destroying the index and left every one of its callers doing
+it.
+
+The worst path needs no action by the person who loses the data. An inbound peer
+operation reads the tree, applies the peer's `Mkdir` to the empty default, and
+persists three nodes over forty: **Bob's folder creation destroys Alice's file
+index.** The write SUCCEEDS, so no failure event fires, the file manager
+repaints as nearly empty, and the blobs remain on the backend with nothing left
+pointing at them. A `SyncResponse` does the same thing more quietly — it unions
+against an empty base, so every local-only node is dropped and the loss is
+partial.
+
+`persistPendingOps` is this function's twin for the retry queue and has carried
+exactly this guard all along, under a header saying it belongs *"on the single
+function every write funnels through, not at the call sites"*. `persistTree` is
+that function, for trees, and never got it.
+
+`markTreeRead` is called where the read actually succeeded — a loaded tree, and
+a genuine absence, both safe starting points — and never on `unreadable`. Per
+key, since reading peer A's tree says nothing about peer B's.
+
+### The test that had to change, and why it was the test
+
+One existing test broke: it stubs `getTree` entirely, so no read ever happens
+and the new guard correctly refused. The stub now declares the read it stands in
+for. That is the honest direction — it was modelling a state where the tree HAD
+been read, and simply never said so.
+
+### The extraction the length gate asked for was the right one
+
+`revfs-service.ts` crossed its ceiling. `getTree` and `getServerTree` were
+near-identical copies differing only in how the key is built — which is exactly
+how this round's read-tracking would have become a fourth thing to keep in step
+across two bodies, the same way the guard came to be on `persistPendingOps` and
+not on `persistTree`. One `loadTreeFor` now serves both.
+
+The pre-existing test still fails when the `unreadable` branch is deleted, so
+the extraction preserved the distinction it exists for. And the file came in
+under the base 250-line cap, so its exemption is gone — the ratchet turning both
+ways.
+
+### On this hour's sweeps
+
+Most died on a session rate limit. Two returned: the revfs finding above, and a
+six-item report on the agent repo's own CI and release path, whose headline is
+that `validate.yml` there has no `push:` trigger and no reachable
+`workflow_call` caller — so **master in that repository is validated by
+nothing**, and the first sign of a break lands on whoever next bumps the parent's
+submodule pointer. Recorded for the next wave.
+
+131 gates green.

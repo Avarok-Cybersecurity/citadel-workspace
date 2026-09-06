@@ -84,7 +84,6 @@ const SKIP = new Map([
   // lazy), revfs-service.ts and live-document-store/service.ts (each holds a
   // store AND its persistence).
   ['lib/live-document-store/service.ts', 279],
-  ['lib/revfs/revfs-service.ts', 269],
   ['lib/p2p/message-handler.ts', 262],
   ['pages/UserDirectory.tsx', 257],
   ['lib/server-auto-connect-service/service.ts', 256],
