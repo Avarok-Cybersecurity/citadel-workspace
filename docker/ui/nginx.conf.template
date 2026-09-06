@@ -95,8 +95,21 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
-    # Gzip compression
+    # Gzip compression.
+    #
+    # `gzip_comp_level` defaults to 1, which is nginx's fastest and weakest
+    # setting. Everything here is a STATIC asset with a content hash in its
+    # name, so it is compressed once per request of a file that never changes
+    # -- the CPU is not the constraint, the bytes are. Measured on the shipped
+    # bundle: the WASM client is 696 KB at level 1 and 590 KB at level 6, and
+    # the landing page's eight critical assets are 377 KB at level 1 against
+    # the 317 KB the bundle budget reports (it measures at zlib's default 6,
+    # so the budget was not measuring what is served).
+    #
+    # 6 rather than 9: the last three levels cost several times the CPU for
+    # about 1% more, which is a bad trade even on static files.
     gzip on;
+    gzip_comp_level 6;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript application/wasm;
     gzip_vary on;
     gzip_min_length 256;

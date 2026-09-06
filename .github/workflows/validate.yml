@@ -292,6 +292,13 @@ jobs:
       - name: The submodule-pointer guard judges a worktree correctly
         run: node scripts/check-submodule-gate-judges-a-worktree.mjs
 
+      - name: Static assets are compressed at a level worth the bytes
+        # nginx's gzip_comp_level defaults to 1 and the template did not set it.
+        # Everything served is a content-hashed static asset, so bytes are the
+        # constraint, not CPU: the WASM client is 696 KB at level 1 and 590 KB
+        # at level 6.
+        run: node scripts/check-static-assets-are-compressed-well.mjs
+
       - name: A failed SDK session query is not an absent session
         # Three call sites turned an Err into `false`/`vec![]`, and every
         # branch that reads absence there DESTROYS state: it removes the
