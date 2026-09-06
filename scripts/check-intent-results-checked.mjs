@@ -53,12 +53,36 @@ function sourceFiles(dir) {
 
 const problems = [];
 
+/**
+ * How many unassigned `execute({` calls this run actually looked at.
+ *
+ * A floor, because the failure above was silent: the gate did not report
+ * "nothing matched", it reported success. A pattern that stops matching -- an
+ * API rename, a move to a helper, a receiver spelled differently again --
+ * must be loud, not green.
+ *
+ * The number is a FLOOR on sites CONSIDERED, not on problems found. Zero
+ * problems is the goal; zero sites examined means the gate is inert.
+ */
+let considered = 0;
+
+/** Any `.execute(` at all, assigned or not — the signal that the API still exists. */
+let executeCallsSeen = 0;
+
 for (const file of sourceFiles(ROOT)) {
   const lines = readFileSync(file, 'utf8').split('\n');
 
   lines.forEach((line, i) => {
-    // Only unassigned awaits: `await io.execute({` with nothing binding it.
-    if (!/^\s*await\s+\w+\.execute\(\{/.test(line)) return;
+    if (/\.execute\(\{/.test(line)) executeCallsSeen += 1;
+    // A member CHAIN, not a bare identifier.
+    //
+    // This was `\w+\.execute\(` -- which matches `io.execute(` and not
+    // `deps.io.execute(`. Every call site in the tree used the second form, so
+    // the gate evaluated ZERO sites and printed success on every run while four
+    // `persist-pending-ops` results went unread. A retry queue whose write
+    // failed was reported as queued, and the operations were gone on reload.
+    if (!/^\s*await\s+[\w.?![\]]+\.execute\(\{/.test(line)) return;
+    considered += 1;
 
     // The intent type is on this line or the next.
     const window = `${line}\n${lines[i + 1] ?? ''}`;
@@ -91,4 +115,20 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log('Intent results: every failure-reporting intent is checked or explicitly best-effort.');
+// Every call site may legitimately be assigned, in which case `considered` is
+// zero and there is genuinely nothing to check -- but so is the state where
+// the pattern has rotted. Distinguish them by requiring that SOME `.execute(`
+// call exists at all; if the API is gone, say so rather than pass.
+if (executeCallsSeen === 0) {
+  console.error(
+    'FAIL: no `.execute(` call sites found anywhere. Either the intent API was\n' +
+      'renamed or the scan root moved -- this gate is now inert and reporting\n' +
+      'success, which is how it missed four unread results before.',
+  );
+  process.exit(1);
+}
+
+console.log(
+  `Intent results: ${executeCallsSeen} execute() call site(s) seen, ${considered} unassigned; ` +
+    'every failure-reporting intent is checked or explicitly best-effort.',
+);
