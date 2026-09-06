@@ -5873,3 +5873,67 @@ itself something that needs to be able to fail — this is the second time in tw
 rounds that the check on a check was the broken part.
 
 129 gates green.
+
+---
+
+## Round 640 — the shipped config could not load, and would have done nothing if it had
+
+`docker/workspace-server/workspaces.json` was written against an older
+`DomainPermissions` and never updated when its fields were generalised from
+office/room names to node names. Measured against the struct: **14 keys in the
+file exist nowhere in it** (`create_room`, `manage_office_members`, …) and **10
+required fields of the struct are absent from the file**.
+
+Nothing caught this because `kernel.toml:28` ships with
+`# workspace_structure = "./workspaces.json"` commented out. Uncomment it — the
+documented way to configure a workspace structure — and deserialization fails on
+a missing field, and that load is fatal, so **the server refuses to start**. An
+operator following the instructions gets a serde error naming one arbitrary
+field and a server that will not boot.
+
+### Two fixes, deliberately different in kind
+
+`DomainPermissions` is now `#[serde(default)]`. An absent field takes its
+default instead of taking the whole read down — which is the same reason
+`themes` already had one, generalised: the struct is embedded in `DomainNode`,
+which the backend reads with `serde_json::from_slice`, so a node stored before a
+field existed takes the entire node map with it. Defaulting is the safe
+direction for a permission: an absent field grants nothing it did not already
+grant.
+
+NOT `deny_unknown_fields`, deliberately. That would catch the renamed keys at
+runtime — and would also reject a live stored record carrying a field the struct
+has since dropped, on a running deployment. The unknown-key half is checked
+statically instead, in `tests/the_shipped_config_still_loads.rs`, where a
+renamed key can be caught without risking anyone's data.
+
+112 keys renamed in the shipped file, none dropped: every old name had an exact
+generalised equivalent. Where two old keys mapped to one new one (`create_room`
+and `create_office` → `create_node`) a `false` wins, since a permission the
+operator switched off must not be switched back on by its sibling.
+
+Both controls red, and the second is the direct proof: restoring one renamed key
+fails the unknown-key assertion; removing `serde(default)` makes the shipped
+config **panic** on deserialization, which is the boot failure itself rather than
+an argument for it.
+
+### The part I did not fix, because it is not mine to decide
+
+`default_permissions` is read by **nothing**. Every occurrence across both
+crates is a struct-literal initialiser or a `.clone()` into one, and
+`DomainPermissions::has_permission` has zero callers.
+
+So the shipped "Announcements" room, configured `send_messages: false` — an
+operator asking in as many words for a read-only channel — does not stop anyone
+posting. `check_entity_permission` consults the role table and membership and
+never looks at the node's configured permissions.
+
+Making it authoritative is a permissions-model change: it needs a defined
+precedence against the role and inheritance model, and the room-membership
+inheritance is deliberate and load-bearing (`group_chat_is_authorized_test.rs`
+has a test named `membership_of_the_parent_still_grants_the_childs_chat` whose
+comment calls a private room "a membership-model change"). That is a product
+decision, recorded here rather than made quietly. The test says so in its own
+header, so nobody reads the round trip as proof the settings take effect.
+
+129 gates green.
