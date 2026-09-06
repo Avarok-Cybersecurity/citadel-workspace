@@ -39,6 +39,13 @@
  * default features, since it reads this tree's manifests only. That is a
  * narrower blind spot than the one it was written for — the flag is what a
  * person deletes, and deleting it is what happened twice.
+ *
+ * IT COUNTS EVERY COMMAND THAT COMPILES TESTS, not only those that run them.
+ * `cargo clippy --tests` compiles the same targets and denies warnings in them,
+ * and in the agent repo it carried no `--features` — so the modules this gate
+ * exists to protect were linted by nothing, while the `nextest` line directly
+ * above satisfied the gate. A test that compiles but is never linted is a
+ * smaller hole than one that never compiles, and it is the same hole.
  */
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, dirname } from 'node:path';
@@ -86,6 +93,8 @@ const HAS_TESTS = /#\[(?:tokio::)?test\]|#\[cfg\(test\)\]/;
 /** Features named by any `--features` flag in a workflow that runs tests. */
 function ciFeatures() {
   const enabled = new Set();
+  /** One entry per command that compiles tests: where it is, and what it enables. */
+  const commands = [];
   let commandsSeen = 0;
   for (const dir of WORKFLOW_DIRS) {
     if (!existsSync(dir)) continue;
@@ -93,14 +102,25 @@ function ciFeatures() {
       if (!/\.ya?ml$/.test(f)) continue;
       for (const line of readFileSync(join(dir, f), 'utf8').split('\n')) {
         if (/^\s*#/.test(line)) continue; // a comment enables nothing
-        if (!/cargo\s+(nextest\s+run|test)\b/.test(line)) continue;
+        // Anything that COMPILES tests, not only what runs them.
+        //
+        // `cargo clippy --tests` compiles the same targets and denies warnings
+        // in them -- and in the agent repo it carried no `--features`, so the
+        // origin-policy and handshake modules were linted by nothing while the
+        // nextest command right above it enabled them. This gate was satisfied
+        // by that nextest line alone and never looked at clippy.
+        if (!/cargo\s+(nextest\s+run|test)\b/.test(line) && !/cargo\s+clippy\b[^\n]*--tests\b/.test(line)) {
+          continue;
+        }
         commandsSeen += 1;
         const m = line.match(/--features[=\s]+([A-Za-z0-9_,\-]+)/);
-        if (m) for (const name of m[1].split(',')) enabled.add(name.trim());
+        const own = new Set();
+        if (m) for (const name of m[1].split(',')) { enabled.add(name.trim()); own.add(name.trim()); }
+        commands.push({ where: `${dir.includes('citadel-internal-service') ? 'agent' : 'parent'}/${f}`, line: line.trim().slice(0, 90), features: own });
       }
     }
   }
-  return { enabled, commandsSeen };
+  return { enabled, commandsSeen, commands };
 }
 
 /**
@@ -158,10 +178,12 @@ function owningCrate(file) {
   return null;
 }
 
-const { enabled, commandsSeen } = ciFeatures();
+const { enabled, commandsSeen, commands } = ciFeatures();
 const viaManifest = manifestFeatures(AGENT);
 
 const problems = [];
+const gatingFeatures = new Set();
+const gatedOwners = new Set();
 let gatedModsSeen = 0;
 let filesRead = 0;
 
@@ -181,13 +203,49 @@ for (const file of rustFiles(join(AGENT))) {
     if (!HAS_TESTS.test(readFileSync(body, 'utf8'))) continue;
 
     gatedModsSeen += 1;
-    if (enabled.has(feature)) continue;
+    gatingFeatures.add(feature);
     const owner = owningCrate(file);
+    if (owner) gatedOwners.add(owner);
+    if (enabled.has(feature)) continue;
     if (owner && viaManifest.has(`${owner}/${feature}`)) continue;
     problems.push(
       `${rel}: \`mod ${modName}\` is behind \`#[cfg(feature = "${feature}")]\` and contains ` +
         `tests, but no CI test command passes \`--features ${feature}\` — those tests are ` +
         'not compiled anywhere',
+    );
+  }
+}
+
+// Every command that compiles the AGENT's tests must enable the features that
+// gate them — not merely one command somewhere in the file.
+//
+// The global rule above is satisfied by any single command carrying the flag,
+// which is how `cargo clippy --tests -- -D warnings` came to lint 11 tests
+// while the `nextest` line beside it compiled 27: the origin-policy and
+// handshake modules were denied warnings by nothing.
+//
+// Scoped deliberately, because a broader version invented two findings out of
+// three on its first run. It compared every test-compiling command in a file
+// against the union of its siblings, and so reported (a) the parent's
+// `cargo test -p <crate>` matrix for omitting `websockets`, a feature those
+// crates do not have, and (b) the agent's Linux `nextest` line for omitting
+// `vendored`, which is the Windows sibling's flag and is `if:`-guarded. Neither
+// is a hole. What IS required of a command is the features that gate a test
+// module it actually compiles.
+{
+  const required = [...gatingFeatures].filter((f) => {
+    // A feature the manifests already turn on needs no flag.
+    for (const owner of gatedOwners) if (viaManifest.has(`${owner}/${f}`)) return false;
+    return true;
+  });
+  for (const c of commands) {
+    if (!c.where.startsWith('agent/')) continue; // the gated modules are the agent's
+    const missing = required.filter((f) => !c.features.has(f));
+    if (missing.length === 0) continue;
+    problems.push(
+      `${c.where}: \`${c.line}\` compiles the agent's tests without --features ` +
+        `${missing.join(',')}, so the modules behind that feature are not compiled by it — ` +
+        'a sibling command carrying the flag does not protect the targets this one builds',
     );
   }
 }

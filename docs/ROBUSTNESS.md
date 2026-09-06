@@ -6369,3 +6369,54 @@ nothing**, and the first sign of a break lands on whoever next bumps the parent'
 submodule pointer. Recorded for the next wave.
 
 131 gates green.
+
+---
+
+## Round 648 — the agent's master was validated by nothing
+
+Two independent gaps in one workflow, either sufficient on its own.
+
+**The trigger.** The agent's `validate.yml` carried only `workflow_call` and
+`pull_request`. That `workflow_call` has no caller: the only
+`uses: ./.github/workflows/validate.yml` anywhere is the PARENT invoking its
+OWN workflow, since `./` is repo-relative. So nothing ran on `master`. Two PRs
+could each pass alone, conflict once merged, and leave master broken with
+nothing to say so — until the parent bumped its submodule pointer and the
+failure landed on the bumper rather than on the change that caused it. That file
+already documents exactly that misattribution for the `websockets` flag; it
+applied to the trigger itself.
+
+**Clippy.** `cargo clippy --tests -- -D warnings` carried no
+`--features websockets`, while the `nextest` line above it does. So clippy
+compiled 11 tests where the feature compiles 27, and the origin-policy and
+handshake modules — the agent's loopback boundary, the thing round 636 was about
+— were denied warnings by nothing at all.
+
+### The gate was satisfied by a sibling
+
+`check-feature-gated-tests-are-compiled` asked whether SOME CI command enables
+each gating feature. The `nextest` line did, so the gate was green while the
+clippy line beside it compiled a smaller world. One command carrying a flag does
+not protect the targets another command builds without it.
+
+It now requires every command that compiles the agent's tests to carry the
+gating features itself.
+
+### Narrowed twice before it could be believed
+
+The first version compared each test-compiling command against the union of its
+siblings in the same file. Three findings, **two invented**: the parent's
+`cargo test -p <crate>` matrix, reported for omitting `websockets` — a feature
+those crates do not have — and the agent's Linux `nextest` line, reported for
+omitting `vendored`, which is the Windows sibling's flag and is `if:`-guarded.
+Neither is a hole.
+
+Scoped to the real rule — a command must carry the features that gate a test
+module it actually compiles, minus anything the manifests already enable — it
+reports exactly one finding, which is the one that was true.
+
+That is the fourth gate this session to need narrowing before shipping, and the
+third whose invented findings pointed at working code. Writing the gate is
+reliably the easy half.
+
+131 gates green.
