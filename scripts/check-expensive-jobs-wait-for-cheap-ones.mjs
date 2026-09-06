@@ -13,6 +13,14 @@
 //
 // Rule: any job whose steps mention `docker compose` must `needs:` every job
 // that runs `cargo fmt`, `cargo clippy`, `eslint` or `tsc`.
+//
+// BOTH workflows. This read the parent's alone, and reported OK -- while the UI
+// submodule's `playwright-tests` and `integration-tests` sat on `needs:
+// parent-ref` and nothing else. That is the same 47-leg Docker matrix, and all
+// UI work lands in that repository, so a PR failing ESLint in 60 seconds still
+// paid for fifty Docker legs. The parent's own defect was fixed and the
+// sibling's was invisible to the gate written for it -- the shape this
+// codebase produces most, and the fourth instance of it in one session.
 
 // No js-yaml. This gate runs in the crate-coverage job, which installs nothing,
 // so a dependency here dies on `Cannot find module 'js-yaml'` and takes every
@@ -26,12 +34,16 @@
 // belonging to a job is indented further. The counts below are asserted, so a
 // file that stops matching fails loudly rather than reporting agreement it
 // never established.
-import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
+import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const file = join(root, '.github', 'workflows', 'validate.yml');
+/** This repository's workflow, and the UI submodule's, which runs the same matrix. */
+const FILES = [
+  join(root, '.github', 'workflows', 'validate.yml'),
+  join(root, 'citadel-workspaces', '.github', 'workflows', 'validate.yml'),
+];
 
 /** job name -> { text: everything under it, needs: Set } */
 function readJobs(source) {
@@ -91,50 +103,66 @@ function readJobs(source) {
   return jobs;
 }
 
-const jobs = Object.fromEntries(readJobs(readFileSync(file, 'utf8')));
 const stepsText = (job) => job.commands;
 
 const CHEAP = /cargo\s+fmt|cargo\s+clippy|eslint|tsc\b/;
 const EXPENSIVE = /docker\s+compose/;
 
-const cheapJobs = Object.entries(jobs)
-  .filter(([, j]) => CHEAP.test(stepsText(j)))
-  .map(([name]) => name);
-const expensiveJobs = Object.entries(jobs)
-  .filter(([, j]) => EXPENSIVE.test(stepsText(j)))
-  .map(([name]) => name);
-
-if (cheapJobs.length === 0 || expensiveJobs.length === 0) {
-  console.error(
-    `Found ${cheapJobs.length} cheap and ${expensiveJobs.length} expensive jobs; ` +
-      'this check verified nothing.',
-  );
-  process.exit(1);
-}
-
 const failures = [];
-for (const name of expensiveJobs) {
-  const declared = jobs[name].needs;
-  const missing = cheapJobs.filter((c) => c !== name && !declared.has(c));
-  if (missing.length) {
-    failures.push(
-      `${name} starts Docker without waiting for: ${missing.join(', ')}\n` +
-        `      A failure in any of those still costs this job's full matrix.`,
+let cheapSeen = 0;
+let expensiveSeen = 0;
+
+for (const file of FILES) {
+  if (!existsSync(file)) {
+    console.error(
+      `${file} is missing.\n` +
+        'Run from the parent checkout with submodules initialised. Reading one of the two\n' +
+        'workflows is exactly how the UI half of this rule went unenforced.',
     );
+    process.exit(1);
+  }
+  const label = relative(root, file);
+  const jobs = Object.fromEntries(readJobs(readFileSync(file, 'utf8')));
+
+  const cheapJobs = Object.entries(jobs)
+    .filter(([, j]) => CHEAP.test(stepsText(j)))
+    .map(([name]) => name);
+  const expensiveJobs = Object.entries(jobs)
+    .filter(([, j]) => EXPENSIVE.test(stepsText(j)))
+    .map(([name]) => name);
+
+  // Per file, because a workflow with no expensive job is fine but a workflow
+  // where the match stopped working is not.
+  if (cheapJobs.length === 0 || expensiveJobs.length === 0) {
+    console.error(
+      `${label}: found ${cheapJobs.length} cheap and ${expensiveJobs.length} expensive ` +
+        'jobs; this check verified nothing there.',
+    );
+    process.exit(1);
+  }
+  cheapSeen += cheapJobs.length;
+  expensiveSeen += expensiveJobs.length;
+
+  for (const name of expensiveJobs) {
+    const declared = jobs[name].needs;
+    const missing = cheapJobs.filter((c) => c !== name && !declared.has(c));
+    if (missing.length) {
+      failures.push(
+        `${label}: ${name} starts Docker without waiting for: ${missing.join(', ')}\n` +
+          `      A failure in any of those still costs this job's full matrix.`,
+      );
+    }
   }
 }
 
 if (failures.length) {
   console.error('Expensive jobs run before cheap gates have reported:\n');
   for (const f of failures) console.error('  ' + f + '\n');
-  console.error(
-    `Cheap jobs here: ${cheapJobs.join(', ')}\n` +
-      'Add them to that job\'s `needs:`.',
-  );
+  console.error("Add the missing job(s) to that job's `needs:`.");
   process.exit(1);
 }
 
 console.log(
-  `OK: all ${expensiveJobs.length} Docker job(s) wait for all ` +
-    `${cheapJobs.length} cheap gate(s).`,
+  `OK: all ${expensiveSeen} Docker job(s) across ${FILES.length} workflow(s) wait for all ` +
+    `${cheapSeen} cheap gate(s).`,
 );

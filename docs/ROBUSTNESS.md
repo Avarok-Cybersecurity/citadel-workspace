@@ -7366,3 +7366,41 @@ the same length does not reduce the count." The rule became
 and no store to stand up in order to test it.
 
 140 gates green.
+
+## Round 667 — fifty Docker legs behind a lint that fails in sixty seconds
+
+`check-expensive-jobs-wait-for-cheap-ones` opens with a measurement: one parent
+PR run is ~1,281 runner-minutes, the integration matrix is 87% of it, and a PR
+that fails `cargo clippy` in 229 seconds used to run 55 Docker jobs anyway. The
+parent was fixed. The gate then read the parent's workflow **alone**, and
+reported OK.
+
+The UI submodule's `playwright-tests` and `integration-tests` sat on
+`needs: parent-ref` and nothing else — the same 47-leg matrix, in the repository
+where all UI work lands. A PR failing ESLint in sixty seconds paid for fifty
+Docker legs, each doing a cold `cargo build --release` of the server kernel and
+the internal service.
+
+Both now wait on `[parent-ref, lint, typecheck, unit-tests]`.
+
+### The widened gate found a third one immediately
+
+`typecheck` in that workflow **also** starts Docker — it needs the generated WASM
+bindings — and waited for nothing. It was not in the sweep's finding; the gate
+found it the moment it could see the file. It now waits for `lint`.
+
+| control | expected | observed |
+|---|---|---|
+| widen the gate before fixing the workflow | flags both expensive jobs | flagged, plus `typecheck` nobody had noticed |
+| revert `integration-tests` to `needs: parent-ref` | flagged | "starts Docker without waiting for: typecheck, lint" |
+| hide the UI workflow | refuse rather than pass | "Reading one of the two workflows is exactly how the UI half of this rule went unenforced" |
+
+**This is the fourth time in one session.** Rounds 659, 662, 663 and now 667 are
+all one rule applied to one of two places, and in each the gate was written from
+inside the repository whose problem had just been fixed. Two of this hour's four
+sweeps independently reported further instances — `check-gates-say-what-they-examined`
+scans only the parent's `scripts/` (six UI gates print a constant success line
+underneath it), and the UI's `check-every-gate-is-invoked` has all four
+exemptions stale because it reads one workflow. Both are recorded as next.
+
+140 gates green.
