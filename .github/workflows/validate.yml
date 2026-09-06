@@ -265,6 +265,13 @@ jobs:
         # condition it detects. A gate that runs nowhere looks identical to a
         # gate that passes.
         run: node scripts/check-every-gate-is-invoked.mjs
+      - name: Byte-carrying wire fields do not print themselves
+        # Every response is logged whole with `{:?}` at debug level.
+        # `MessageNotification.message` -- the DECRYPTED body of a peer message --
+        # was the one `Vec<u8>` with no debug formatter, so raising RUST_LOG to
+        # diagnose delivery put every message's plaintext in the log.
+        run: node scripts/check-byte-fields-do-not-print-themselves.mjs
+
       - name: Authorization is checked before any secret comparison
         # Whichever check runs first owns the error the caller sees, and two
         # distinguishable errors are an oracle on the master password -- the

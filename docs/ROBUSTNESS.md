@@ -4853,3 +4853,65 @@ satisfied by the COMMENT explaining the rule. **A gate a comment can satisfy has
 the same shape as the bug it hunts** — the copy gate strips comments for this
 reason, and this one now does too. Only after that does removing the trigger
 redden it.
+
+## Round 625 — the plaintext the agent exists to protect was in the log
+
+`kernel/ext.rs` logs every response with `debug!("Sending kernel response to
+client: {:?}")`. That is a reasonable thing for it to do, provided the types
+redact what they carry.
+
+`MessageNotification.message` did not. It is the DECRYPTED body of a peer-to-peer
+message, it was the only `Vec<u8>` in the wire types with no debug formatter, and
+`RUST_LOG=debug` is the first thing an operator raises when diagnosing delivery.
+So the full plaintext of every message the agent handled went to the log, and from
+there to whatever collects it and to whatever gets pasted into an issue.
+
+### The obvious fix was the wrong one
+
+Every other byte field uses `bytes_debug_fmt`, which prints the length and the
+first and last five bytes. That is the right trade for a key, a ratchet sample or
+a file chunk: it identifies the value without disclosing anything usable.
+
+It is the wrong trade for a message body. Five bytes of a chat line is its opening
+word, and a log holds a great many opening words. `plaintext_debug_fmt` prints the
+length only — enough to distinguish an empty body from a truncated one from a
+whole one, which is the question a delivery bug actually asks, and no more than
+the ciphertext length already discloses.
+
+The test is what forced that distinction: it failed against the "fixed" code, and
+the right response was a stronger formatter rather than a weaker assertion.
+
+`GroupMessageNotification.message` gets the same treatment — the same material,
+reaching more people, and it carried the sampling formatter.
+
+### An assertion of mine that no input could falsify
+
+The first test asserted the body's ASCII was absent from the Debug output.
+`format!("{:?}")` of a `Vec<u8>` prints decimal numbers, never characters, so a
+completely unredacted field contains no ASCII to find. **It passed with the
+formatter deleted.** Only the negative control showed it; reading the test would
+not have. It now compares against the decimal rendering, and all four body tests
+go red when the formatters are removed.
+
+A second control also revealed that an earlier edit had reached
+`GroupMessageNotification` incidentally — the replacement had no count and matched
+two structs. The change was right on the merits, so it is now deliberate,
+commented and covered rather than accidental.
+
+### The gate found two more fields, and they were fine
+
+`password` and `proposed_password` are `SecBuffer`, which implements `Debug` as
+`***SECRET***`. So the gate exempts that type — a gate that reports faults it
+invented is a gate somebody switches off — and a test in the types crate pins the
+SDK behaviour the exemption rests on. An exemption is only as good as the
+dependency it trusts, and that dependency is now watched rather than assumed.
+
+### Verified from the previous round
+
+The two repairs to `sync-wasm-clients.sh` held across a full rebuild: the root
+lockfile is unchanged (still 23 platform-optional @esbuild entries, still named
+`citadel-workspace`), and the tree came back on the pinned typescript 5.9.3 rather
+than the freshly-resolved 6.0.3. Both were failures that had to be repaired by
+hand twice before the script was made to do it.
+
+123 gates green.
