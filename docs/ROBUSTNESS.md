@@ -3777,3 +3777,95 @@ the account is throttled. That throttling is the direct consequence of the run
 churn earlier in the day: 37 cancelled runs. The lesson already recorded in round
 574 is holding up, and the correct response remains to stop generating load
 rather than to generate more clearing it.
+
+## Round 590 — a preference that could not be read was treated as a preference
+
+Both auto-connect loaders caught every `sendLocalDBGet` rejection and returned
+their default — `true` for enabled, an empty set for the sessions the user had
+signed out of. So one transient failure turned auto-connect back ON for somebody
+who had turned it off, and made every session they had deliberately left
+reconnectable again.
+
+It was already written down. `loadEnabledSetting` carried the paragraph "A
+FAILED read means nothing at all — and returning the default there is how a user
+who turned auto-connect off finds it back on after one timed-out request",
+`isGenuinelyAbsent` was imported, and **the two branches differed only in their
+log text**. The predicate's own header names this service as one of the sites it
+was written to fix.
+
+And it was swallowed twice: `init()` caught whatever the loaders threw, set
+`isEnabled = true` and `isInitialized = true`, and returned — and `init()`
+returns early when initialised, so the wrong answer was latched for the whole
+session.
+
+Unknown now resolves to OFF rather than to the documented default of on, because
+the two errors are not symmetric: not connecting when the user wanted it is
+visible and recoverable, connecting when they asked not to is neither.
+
+The decision is extracted (`loadAutoConnectSettings`) rather than inlined,
+because the service class sits in an import cycle through `index.ts` — a test
+that constructs it fails at module load. A decision reachable only by mocking
+five collaborators is a decision nobody checks.
+
+## Round 591 — the master password was written to the log
+
+`async_process_command` logs `"Processing command: {command:?}"` at `debug!`, and
+three request variants carry `workspace_master_password` as a plain `String`. So
+raising `RUST_LOG` to `citadel=debug` — which an operator does precisely when
+about to paste a log into a ticket — wrote the credential that makes somebody an
+administrator, in clear.
+
+The redaction mechanism was already present and already in use: `#[debug(with =
+...)]` redacts the metadata byte blob **on the line below** each password field,
+and `ServerConfig` hand-writes a `Debug` that redacts the same secret. It was
+applied to a byte blob and to one struct, and not to the credential between
+them.
+
+## Round 592 — a wrong password answered differently from a wrong caller
+
+`create_workspace` and `update_workspace` verified the password FIRST and the
+caller's authority second, and the two refusals return different strings. So
+anyone who could reach either endpoint had an online oracle: one boolean per
+guess, at 100 requests per second, with a rate limiter that resets its bucket
+each window, no invite gate on registration and free CIDs.
+
+`create_workspace` reorders trivially. **`update_workspace` could not**: its
+authorisation depends on the record it is about to change, because an unowned
+workspace is claimable by whoever presents the password — that is how the first
+administrator is established. A naive swap would have closed the bootstrap. The
+order there is read, authorise, then verify.
+
+`delete_workspace` already did it in this order and says so in its own comment.
+Third instance this session of the correct code already being present in the
+same file.
+
+The test compares the two refusals **to each other** rather than to a fixed
+string; a string match would pass the moment somebody reworded one, and the
+property is indistinguishability, not any particular text.
+
+## Round 593 — CI ran a different test runner from the lockfile
+
+`npm ci` installs what the lockfile says; the step after it installed
+`vitest@3.0.7` over the lockfile's 3.2.7 and rewrote package.json and the lock in
+the runner. Every unit test in CI ran two minor versions behind the one they
+were written against, and both logs say only "vitest" — so a behaviour
+difference reads as "passes locally, fails in CI" with the version never
+suspected.
+
+**Verified before deleting**, because removing a redundant-looking install here
+previously broke all three ESLint jobs with exit 127 — that one had been
+compensating for a nested `npm ci` that broke hoisting. Here `npx vitest`
+already resolves the root-hoisted 3.2.7 and both preceding build steps are bare
+`tsc`.
+
+The gate then found the copy I was not looking for: the UI submodule's own
+workflow carries the identical step. The parent's commit is held until that
+lands, because until the pointer moves the gate is correctly red on a real
+override still in the tree.
+
+### On sequencing
+
+Two merges landed (#114, UI #38). One PR (#119) turns out to have **no workflow
+run at all** — only GitGuardian fired — so it can never merge until the event is
+re-triggered. Worth recording as a failure mode: a PR showing "1 pass" and
+nothing pending is not a green PR, it is a PR whose CI never started.
