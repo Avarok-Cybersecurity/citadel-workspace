@@ -27,6 +27,28 @@ print_warning() {
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 WORKSPACE_ROOT="$SCRIPT_DIR"
 INTERNAL_SERVICE_ROOT="$WORKSPACE_ROOT/citadel-internal-service"
+
+# Hash of every tree the WASM binary is built from, in the order
+# scripts/wasm-source-trees.txt lists them.
+#
+# That file is read by the staleness gate too, so the writer and the checker
+# cannot disagree about what counts as source. It used to be one hard-coded
+# directory here and the same one hard-coded there -- and it was the wrong
+# directory: the WASM client's lib.rs imports the connector's messenger, which
+# CLAUDE.md names as the P2P send path, so an edit there left the stamp
+# unchanged and the gate reported a match over a binary without it.
+wasm_source_stamp() {
+    local trees
+    trees=$(grep -v '^[[:space:]]*#' "$WORKSPACE_ROOT/scripts/wasm-source-trees.txt" | grep -v '^[[:space:]]*$')
+    local out=""
+    local dir
+    while IFS= read -r dir; do
+        local hash
+        hash=$(git -C "$INTERNAL_SERVICE_ROOT" rev-parse "HEAD:$dir" 2>/dev/null) || return 1
+        out="${out:+$out }$hash"
+    done <<< "$trees"
+    printf '%s\n' "$out"
+}
 NO_RESTART=false
 
 # Check to see if --no-restart was passed
@@ -177,7 +199,7 @@ if [ -d "$DEST1" ]; then
     # never rebuilds it (SKIP_WASM_BUILD=1), so without this a source change can
     # be committed, reviewed and merged while the browser keeps loading the old
     # binary — the fix present in the diff and absent at runtime.
-    if git -C "$INTERNAL_SERVICE_ROOT" rev-parse "HEAD:citadel-internal-service-wasm-client/src" > "$DEST1/.wasm-source-tree" 2>/dev/null; then
+    if wasm_source_stamp > "$DEST1/.wasm-source-tree"; then
         echo "  Stamped $DEST1/.wasm-source-tree"
     else
         echo "  WARNING: could not stamp the wasm source tree; check-wasm-matches-its-source will fail"
@@ -263,7 +285,7 @@ if [ -d "$DEST3/pkg" ] || mkdir -p "$DEST3/pkg"; then
     # is also exactly how you would make the gate green over a STALE binary.
     # The check measured whether somebody typed a hash, not whether the binary
     # was rebuilt.
-    if git -C "$INTERNAL_SERVICE_ROOT" rev-parse "HEAD:citadel-internal-service-wasm-client/src" > "$DEST3/pkg/.wasm-source-tree" 2>/dev/null; then
+    if wasm_source_stamp > "$DEST3/pkg/.wasm-source-tree"; then
         echo "  Stamped $DEST3/pkg/.wasm-source-tree"
     else
         echo "  WARNING: could not stamp $DEST3/pkg; check-wasm-matches-its-source will fail"

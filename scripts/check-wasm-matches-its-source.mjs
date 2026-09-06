@@ -33,11 +33,42 @@ import { execSync } from 'node:child_process';
 
 const STAMP = 'citadel-workspace-client-ts/pkg/.wasm-source-tree';
 const SUBMODULE = 'citadel-internal-service';
-const SOURCE_DIR = 'citadel-internal-service-wasm-client/src';
+
+/**
+ * The trees the binary is built from, read from the file the STAMP WRITER also
+ * reads.
+ *
+ * This used to be a single hard-coded directory,
+ * `citadel-internal-service-wasm-client/src`. The WASM client is mostly not
+ * that directory -- its lib.rs imports the connector's `connector`,
+ * `io_interface` and `messenger` modules, and CLAUDE.md names
+ * `connector/src/messenger/mod.rs` as the P2P send path. So an edit to the send
+ * path left the stamp unchanged, and this gate -- whose whole purpose is to
+ * refuse a committed binary that predates its source -- reported a match over a
+ * binary containing none of the change.
+ *
+ * Keeping the list in a file both readers share is the point: a gate and its
+ * stamp disagreeing about what counts as source is the same defect one level up.
+ */
+function sourceTrees() {
+  const listPath = new URL('./wasm-source-trees.txt', import.meta.url);
+  return readFileSync(listPath, 'utf8')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'));
+}
 
 function currentSourceTree() {
   try {
-    return execSync(`git -C ${SUBMODULE} rev-parse HEAD:${SOURCE_DIR}`, { encoding: 'utf8' }).trim();
+    const trees = sourceTrees();
+    if (trees.length === 0) return null;
+    // One hash over all of them, in the order the file lists, so adding a tree
+    // changes the stamp exactly as editing one does.
+    return trees
+      .map((dir) =>
+        execSync(`git -C ${SUBMODULE} rev-parse HEAD:${dir}`, { encoding: 'utf8' }).trim(),
+      )
+      .join(' ');
   } catch {
     return null;
   }

@@ -1,0 +1,17 @@
+# Every tree the WASM client binary is built from.
+#
+# Read by BOTH the stamp writer (sync-wasm-clients.sh) and the staleness gate
+# (check-wasm-matches-its-source.mjs), so the two cannot drift. One of them
+# knowing about a directory the other does not is the failure this file exists
+# to prevent.
+#
+# The stamp used to cover only the first line. The WASM client is mostly NOT
+# that directory: lib.rs imports connector::{connector, io_interface, messenger},
+# and CLAUDE.md names connector/src/messenger/mod.rs as the P2P send path. So a
+# change to the send path left the stamp unchanged and the gate reported a
+# freshly built binary that contained none of it.
+#
+# Paths are relative to the citadel-internal-service submodule root.
+citadel-internal-service-wasm-client/src
+citadel-internal-service-connector/src
+citadel-internal-service-types/src

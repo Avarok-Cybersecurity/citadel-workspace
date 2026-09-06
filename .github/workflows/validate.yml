@@ -292,6 +292,12 @@ jobs:
       - name: The submodule-pointer guard judges a worktree correctly
         run: node scripts/check-submodule-gate-judges-a-worktree.mjs
 
+      - name: WASM rebuild triggers match the staleness stamp
+        # build.rs named two FILES while the binary is built from three trees,
+        # so editing the connector's messenger (the P2P send path) rebuilt
+        # nothing locally and left the stamp unchanged.
+        run: node scripts/check-wasm-rebuild-triggers-match-the-stamp.mjs
+
       - name: Static assets are compressed at a level worth the bytes
         # nginx's gzip_comp_level defaults to 1 and the template did not set it.
         # Everything served is a content-hashed static asset, so bytes are the

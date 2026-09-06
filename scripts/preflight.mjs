@@ -170,6 +170,30 @@ const CARGO_WORKSPACES = [
 
 const haveCargo = spawnSync('cargo', ['--version'], { stdio: 'ignore' }).status === 0;
 
+// The wasm target, because nothing else local compiles it.
+//
+// Inside the cargo guard rather than beside it. This used to sit in CHECKS
+// unconditionally, so a frontend-only checkout -- which the comment above
+// CARGO_WORKSPACES calls a legitimate way to work here -- ran a `cargo` that is
+// not on PATH. spawnSync then returns `status: null` with stdout AND stderr
+// null, so the runner printed "rust wasm target compiles  FAILED" over an EMPTY
+// block, and the one line that would have explained it, the skip list, prints
+// after `process.exit(1)`.
+//
+// `cargo check` on the wasm CLIENT crate, not on ILM directly: a bare check of
+// ILM fails on uuid's randomness feature, which the client crate supplies. This
+// is a check, not a build -- it emits no pkg/ artifacts, so it cannot overwrite
+// the committed WASM the way a wasm-pack run would.
+const wasmCheck = haveCargo
+  ? [[
+      'rust wasm target compiles',
+      'cargo',
+      ['check', '-p', 'citadel-internal-service-wasm-client', '--target', 'wasm32-unknown-unknown'],
+      IS,
+    ]]
+  : [];
+if (!haveCargo) skipped.push(['rust wasm target compiles', 'cargo is not on PATH']);
+
 const cargoChecks = CARGO_WORKSPACES.flatMap(([label, cwd]) => {
   if (!haveCargo) {
     skipped.push([`${label} fmt + clippy`, 'cargo is not on PATH']);
@@ -213,7 +237,7 @@ const CHECKS = [
   // DROPS those imports while the files keep referencing the types. 36 files at
   // once, and the only thing that said so was `tsc` in CI, a full cycle later.
   ['generated bindings typecheck', 'npx', ['tsc', '--noEmit', '-p', 'tsconfig.json'],
-    'citadel-internal-service/typescript-client'],
+    join(ROOT, 'citadel-internal-service/typescript-client')],
   ['typecheck', 'npx', ['tsc', '-p', 'tsconfig.app.json', '--noEmit'], UI],
   ['eslint', 'npx', ['eslint', '.', '--max-warnings', '0'], UI],
   ['unit tests', 'npx', ['vitest', 'run'], UI],
@@ -233,7 +257,7 @@ const CHECKS = [
   // of ILM fails on uuid's randomness feature, which the client crate supplies.
   // This is a check, not a build -- it emits no pkg/ artifacts, so it cannot
   // overwrite the committed WASM the way a wasm-pack run would.
-  ['rust wasm target compiles', 'cargo', ['check', '-p', 'citadel-internal-service-wasm-client', '--target', 'wasm32-unknown-unknown'], IS],
+  ...wasmCheck,
   ...cargoChecks,
 ];
 
@@ -266,7 +290,15 @@ for (const [name, cmd, args, cwd] of CHECKS) {
     console.log('ok');
   } else {
     console.log('FAILED');
-    failed.push({ name, output: `${run.stdout ?? ''}${run.stderr ?? ''}`.trim() });
+    // `run.error` is the case where the command never STARTED -- a missing
+    // binary, an unreadable cwd. spawnSync then gives status: null and stdout
+    // and stderr BOTH null, so reporting only those two printed a failure
+    // header over an empty block and left the reader to guess. The reason is
+    // in `error.message`; say it.
+    const output = run.error
+      ? `${run.error.message}\n(the command could not be started; nothing ran)`
+      : `${run.stdout ?? ''}${run.stderr ?? ''}`.trim();
+    failed.push({ name, output });
   }
 }
 

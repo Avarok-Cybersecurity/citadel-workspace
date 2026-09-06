@@ -5,8 +5,29 @@ use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=../citadel-internal-service/citadel-internal-service-wasm-client/src/lib.rs");
-    println!("cargo:rerun-if-changed=../citadel-internal-service/citadel-internal-service-types/src/lib.rs");
+
+    // DIRECTORIES, not two files. Cargo scans a directory recursively, and the
+    // rule is that once any `rerun-if-changed` is emitted, ONLY those paths
+    // re-trigger the script.
+    //
+    // This named `wasm-client/src/lib.rs` and `types/src/lib.rs`. The WASM
+    // client is mostly neither: its lib.rs imports the connector's `connector`,
+    // `io_interface` and `messenger` modules, and CLAUDE.md names
+    // `connector/src/messenger/mod.rs` as the P2P send path. So editing the
+    // send path and running `cargo build` -- which docs/WASM_BUILD.md gives as
+    // the way to rebuild -- did not re-run this script, `public/wasm` kept the
+    // previous binary, and the browser behaved as though the edit had not
+    // happened.
+    //
+    // Kept in step with scripts/wasm-source-trees.txt, which the stamp writer
+    // and the staleness gate share.
+    for dir in [
+        "citadel-internal-service-wasm-client/src",
+        "citadel-internal-service-connector/src",
+        "citadel-internal-service-types/src",
+    ] {
+        println!("cargo:rerun-if-changed=../citadel-internal-service/{dir}");
+    }
 
     // Check if we should skip WASM building (e.g., in CI or Docker)
     if env::var("SKIP_WASM_BUILD").is_ok() {
