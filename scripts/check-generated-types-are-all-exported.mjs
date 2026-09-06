@@ -23,6 +23,23 @@
  * that it still does — the fifth hand-maintained list this session to be the
  * hole in something, and the reason the rule here is "derive, then verify the
  * derivation" rather than "keep the list up to date".
+ *
+ * AND IT CHECKS WHAT CONSUMERS IMPORT, because the first version of that
+ * derivation broke the build.
+ *
+ * The heredoc it replaced contained one line the directory cannot produce: a
+ * re-export of nine protocol types (`SecurityLevel` among them) from an
+ * external package, which `InternalServiceRequest` references in its field
+ * types. Deriving the index from the directory silently dropped it, and
+ * `citadel-workspace-client-ts` failed with `TS2614: no exported member
+ * 'SecurityLevel'`.
+ *
+ * A two-way diff of directory against index was satisfied throughout — because
+ * both sides of that comparison agreed, and the missing thing was in neither.
+ * Verifying a derivation against the source it derives from cannot see what the
+ * source never had. So this also asks the CONSUMER: every name
+ * `citadel-workspace-client-ts` imports from the package must be exported by
+ * it.
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
@@ -89,7 +106,78 @@ if (missing.length > 0 || phantom.length > 0) {
   process.exit(1);
 }
 
+// What the consumer actually imports must be exported. This is the half a
+// directory-versus-index diff structurally cannot see.
+const CLIENT = join(ROOT, 'citadel-workspace-client-ts', 'src');
+if (existsSync(CLIENT)) {
+  const wanted = new Set();
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) { walk(full); continue; }
+      if (!/\.tsx?$/.test(entry.name)) continue;
+      const src = readFileSync(full, 'utf8');
+      for (const m of src.matchAll(
+        /import\s+type\s*\{([^}]*)\}\s*from\s*'citadel-internal-service-wasm-client'/g,
+      )) {
+        for (const name of m[1].split(',')) {
+          const clean = name.trim().split(/\s+as\s+/)[0].trim();
+          if (clean) wanted.add(clean);
+        }
+      }
+    }
+  };
+  walk(CLIENT);
+
+  // A name is exported if a generated file bears it, or ANY of the package's
+  // own modules names it in an `export` clause.
+  //
+  // The package's public entry is `src/index.ts`, which re-exports the types
+  // index AND declares its own surface (`WasmClientConfig`, `WasmModule`, ...).
+  // Checking only the types index reported four of those as missing — four
+  // invented findings out of five, against names that are exported perfectly
+  // well one file up.
+  const explicit = new Set();
+  const collectExports = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) { collectExports(full); continue; }
+      if (!/\.tsx?$/.test(entry.name)) continue;
+      const src = readFileSync(full, 'utf8');
+      for (const m of src.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)) {
+        for (const n of m[1].split(',')) {
+          const clean = n.trim().split(/\s+as\s+/).pop().trim();
+          if (clean) explicit.add(clean);
+        }
+      }
+      for (const m of src.matchAll(/export\s+(?:declare\s+)?(?:type|interface|class|const|function)\s+(\w+)/g)) {
+        explicit.add(m[1]);
+      }
+    }
+  };
+  collectExports(join(TYPES, '..'));
+  const unexported = [...wanted].filter((n) => !generated.includes(n) && !explicit.has(n)).sort();
+
+  if (unexported.length > 0) {
+    for (const n of unexported) {
+      console.error(
+        `::error::citadel-workspace-client-ts imports ${n} from the package, which exports ` +
+          'nothing by that name — the build fails with TS2614',
+      );
+    }
+    console.error(
+      `\nFAIL: ${unexported.length} name(s) the client imports and the package does not export.\n` +
+        '\nThe last one of these was `SecurityLevel`, lost when the index stopped being a\n' +
+        'hardcoded list: the heredoc carried a re-export from an external package that a\n' +
+        'directory listing cannot produce, and a diff of directory against index agreed with\n' +
+        'itself while the build broke.',
+    );
+    process.exit(1);
+  }
+}
+
 console.log(
   `check-generated-types-are-all-exported: ${generated.length} generated type(s), ` +
-    'every one exported by index.ts and no export without a file.',
+    'every one exported by index.ts, no export without a file, and every name the client ' +
+    'imports is exported.',
 );

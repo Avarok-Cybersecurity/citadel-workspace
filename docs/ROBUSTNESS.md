@@ -6515,3 +6515,47 @@ and the fifth this session to need narrowing or correcting before it could be
 believed. Writing the gate remains the easy half.
 
 133 gates green.
+
+---
+
+## Round 651 — I broke the build, and the gate I wrote alongside it said green
+
+Round 649 replaced the types index heredoc with a listing derived from the
+directory, and verified that derivation two ways: every generated file exported,
+every export backed by a file. Both directions passed.
+
+The heredoc carried **one line the directory cannot produce** — a re-export of
+nine protocol types, `SecurityLevel` among them, from an external package, which
+`InternalServiceRequest` references in its field types. The derivation dropped
+it. `citadel-workspace-client-ts` failed with
+`TS2614: no exported member 'SecurityLevel'`, taking the parent's ESLint job with
+it.
+
+**The lesson is precise, and it is not "check both directions".** It was checked
+both directions. A derivation verified against the source it derives from cannot
+see what that source never had: the directory and the index agreed perfectly,
+and the missing thing was in neither. The only witness was the CONSUMER.
+
+So the gate now also asks what `citadel-workspace-client-ts` imports from the
+package, and requires the package to export it. That check reported five names
+on its first run, **four of them invented** — the `Wasm*` types are exported from
+the package's own `src/index.ts`, one directory up from the types index I was
+comparing against. Widened to the package's whole export surface, it reports
+exactly one: `SecurityLevel`.
+
+### On CI, and a bill coming due
+
+Thirty consecutive UI runs on this branch were **cancelled**, every one by my own
+next push under `cancel-in-progress`. So this session's UI work had no
+integration signal at all until the thirty-first run, which is the one that
+surfaced this. `pushing cancels the run you are waiting on` is already in my
+memory as a lesson; at this cadence it stopped being an occasional loss and
+became the normal state.
+
+The integration failures in that run are NOT yet attributed. Registration
+succeeds and the workspace never loads, and I have no baseline to compare
+against because no earlier run completed. Attributing them to a specific change
+would be a guess, and the honest position is that they are open with evidence
+recorded.
+
+133 gates green; the build break is fixed and the client compiles.
