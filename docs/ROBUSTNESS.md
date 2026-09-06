@@ -7030,3 +7030,84 @@ true of the untouched tree is not a confirmation. The controls above print the
 job's actual step ORDER, which cannot be satisfied by an unchanged file.
 
 138 gates green.
+
+## Round 660 — the same gate, wrong by omission a second time, and blind to how rustfmt writes
+
+The security sweep found that `check-broadcasts-name-their-audience`'s `SCOPED`
+map omits the three group-chat variants — `GroupMessageNotification`,
+`GroupMessageEdited`, `GroupMessageDeleted` — the ones carrying actual message
+**text**. Their call sites already use `broadcast_to_group`, and each carries a
+comment recording that it once did not: *"an edit — which carries the full
+new_content — fanned out to every connected session regardless of membership."*
+So there is no live leak. There was also nothing that would notice if one of
+those three were reverted.
+
+That is the second omission in this one map today (round 653 was the first). The
+lesson is not "add three more entries."
+
+### The map is now exhaustive, and checked to be
+
+Every one of the 25 `WorkspaceProtocolResponse` variants must appear in either
+`SCOPED` (with the helper it must go through) or `UNSCOPED` (with the reason it
+may reach every session). A variant in neither fails the gate. Listing what must
+be scoped can only ever be as complete as the last person to think about it;
+requiring every variant to be *classified* turns the next omission into a
+failure at the moment the variant is added.
+
+### And a control that was green for a third reason
+
+Adding the three variants was **not sufficient** — reverting a group site to
+bare `broadcast()` still passed. The binding resolution added in round 653 read
+the argument from the call LINE:
+
+```js
+const argument = (line.match(/broadcast\s*\(\s*([A-Za-z_]\w*)/) ?? [])[1];
+```
+
+rustfmt wraps a three-argument call, so the payload sits on the line *after*
+`kernel.broadcast(`. Read from `line` alone the argument came back `undefined`,
+no binding was resolved, and a wrapped call passing a bound variant was
+invisible. **Every scoped call site in that file is wrapped that way** — so the
+round-653 binding resolution worked only for the one shape that no longer
+occurs. It is read from the window now.
+
+| control | expected | observed |
+|---|---|---|
+| add an unclassified variant to the enum | fails, names it | "classified neither as scoped nor as broadcastable: SecretLeakingVariant" |
+| revert a group-chat site to bare `broadcast` | 1 offender | green at first — then 1 offender after the window fix |
+| revert a workspace-scoped site | ≥1 offender | 1 offender |
+
+## Round 661 — a courtesy that could cancel a fact
+
+`markMessagesAsRead` awaited `sendMessageAck` **inside** the loop that marks
+messages locally (`messenger-compatibility.ts:114`). Three lines above it, the
+rule was already written down: *"The LOCAL side of 'read' always happens … Only
+the ack is the user's to withhold."* The code did not implement it.
+
+One ack that rejects — a peer that has gone away, a socket mid-reconnect —
+threw out of the loop, and every message after it stayed `delivered`: unread
+badge intact, transcript wrong, for messages the user demonstrably read. The
+same `await` also serialised the sends: 200 unread meant 200 sequential P2P
+round trips before the call returned.
+
+Marked locally first, then `Promise.allSettled` over the acks. A read receipt is
+advisory — the sender learns later, or does not.
+
+| control | expected | observed |
+|---|---|---|
+| restore the awaited-in-loop ack | the 3 behavioural tests red | exactly those 3 red, discrimination test green |
+
+The fourth test is the discrimination control: a message already `read` must
+produce no ack, or a fix that acked everything in the conversation would satisfy
+the other three.
+
+### One sweep finding refuted
+
+The performance sweep reported (18b) that `persistTransfer` does a synchronous
+whole-map `localStorage` read-modify-write **per progress tick**. It does not.
+`handleProtocolProgress` (`protocol-transfer-events.ts:88-92`) calls
+`saveTransfer` only on the transition into `transferring`, with a comment saying
+exactly that, and every other `saveTransfer` call site sits behind a state
+transition or a terminal event. Recorded as refuted rather than quietly dropped.
+
+138 gates green.

@@ -37,8 +37,23 @@ if (!existsSync(KERNEL)) {
 }
 
 /**
- * Response variants that carry data scoped to one entity, with the helper each
- * must go through.
+ * Every variant of the response enum, classified.
+ *
+ * EXHAUSTIVE, and checked to be. A variant absent from both maps below fails
+ * this gate, because that is the only failure mode this rule has ever actually
+ * had: the map is hand-written, and twice it has been wrong by omission while
+ * reporting green.
+ *
+ *   - Round 653: `NodeContent` sat here as a name the enum does not have, so its
+ *     regex matched nothing, while `MemberRoleUpdated` -- a named user's GLOBAL
+ *     role -- was broadcast to every session on the box, unlisted.
+ *   - Round 660: the three GROUP-CHAT variants, which carry the message text
+ *     itself, were unlisted. Their call sites happened to be correct; nothing
+ *     here would have noticed if they stopped being.
+ *
+ * Listing what must be scoped can only ever be as complete as the last person
+ * to think about it. Requiring every variant to be classified turns the next
+ * omission into a failure at the moment the variant is added.
  */
 const SCOPED = new Map([
   ['Workspace', 'broadcast_to_workspace'],
@@ -51,6 +66,41 @@ const SCOPED = new Map([
   ['MemberRoleUpdated', 'broadcast_to_workspace'],
   ['NodeDeleted', 'broadcast_to_workspace'],
   ['NodeMoved', 'broadcast_to_workspace'],
+  // The three that carry actual message TEXT. Their call sites already use
+  // `broadcast_to_group`, and each carries a comment recording that it once did
+  // not -- "an edit, which carries the full new_content, fanned out to every
+  // connected session regardless of membership". They were not listed here, so
+  // reverting any of them would have been silent.
+  ['GroupMessageNotification', 'broadcast_to_group'],
+  ['GroupMessageEdited', 'broadcast_to_group'],
+  ['GroupMessageDeleted', 'broadcast_to_group'],
+]);
+
+/**
+ * Variants that may go to every session, and why each may.
+ *
+ * A reason is required so that adding one is a decision rather than a way to
+ * quiet the gate. "It is not currently broadcast" is a legitimate reason and is
+ * spelled out where it applies -- most of these are request RESPONSES, returned
+ * to the caller rather than fanned out at all.
+ */
+const UNSCOPED = new Map([
+  ['Success', 'an acknowledgement carrying no data'],
+  ['Error', 'an error returned to the caller'],
+  ['WorkspaceNotInitialized', 'a server-wide fact, true for everyone'],
+  ['ServerShutdown', 'a server-wide fact, and every session needs it'],
+  ['ServerCapabilities', 'static server configuration, not user data'],
+  ['Workspaces', 'a response to list_workspaces, which scopes by membership itself'],
+  ['Members', 'a response to a members query, already authorized at the handler'],
+  ['Member', 'a response to a member query, already authorized at the handler'],
+  ['UserPermissions', 'a response to a permissions query, already authorized'],
+  ['UserProfileUpdated', 'a profile is shown to anyone who can see the member list'],
+  ['GroupMessages', 'a response to a history query, already authorized'],
+  ['GroupMessage', 'a response to a single-message query, already authorized'],
+  ['Nodes', 'a response to a list query, filtered by the handler'],
+  ['TreeStructure', 'a response to a tree query, filtered by the handler'],
+  ['TreeSchema', 'schema, not content'],
+  ['NodeTypes', 'schema, not content'],
 ]);
 
 /**
@@ -87,7 +137,24 @@ function* walk(dir) {
 
 const variants = responseVariants();
 if (variants !== null) {
-  const fictional = [...SCOPED.keys()].filter((v) => !variants.has(v));
+  // Every variant must be classified. This is the check that would have caught
+  // both omissions; the fictional-name check below caught only the first.
+  const unclassified = [...variants].filter((v) => !SCOPED.has(v) && !UNSCOPED.has(v));
+  if (unclassified.length > 0) {
+    console.error(
+      'FAIL: response variant(s) are classified neither as scoped nor as broadcastable.\n',
+    );
+    for (const v of unclassified) console.error(`  ${v}`);
+    console.error(
+      '\nAdd each to SCOPED with the helper it must go through, or to UNSCOPED with the\n' +
+        'reason it may reach every session. A list of what must be scoped is only ever as\n' +
+        'complete as the last person to think about it — this gate has been wrong by\n' +
+        'omission twice while reporting green.',
+    );
+    process.exit(1);
+  }
+
+  const fictional = [...SCOPED.keys(), ...UNSCOPED.keys()].filter((v) => !variants.has(v));
   if (fictional.length > 0) {
     console.error('FAIL: this gate names response variants that do not exist.\n');
     for (const v of fictional) console.error(`  ${v}`);
@@ -125,7 +192,13 @@ for (const file of walk(KERNEL)) {
     // followed by `kernel.broadcast(notification, ...)` was invisible to a
     // forward-only window, which is how two live sites went unreported.
     const window = lines.slice(i, Math.min(i + 4, lines.length)).join('\n');
-    const argument = (line.match(/broadcast\s*\(\s*([A-Za-z_]\w*)/) ?? [])[1];
+    // From the WINDOW, not from `line`. rustfmt wraps a three-argument call, so
+    // the payload sits on the line AFTER `kernel.broadcast(` — and read from
+    // `line` alone the argument came back undefined, no binding was resolved,
+    // and a wrapped call passing a bound variant was invisible. Every scoped
+    // call site in this file is wrapped that way, so the binding resolution
+    // added in round 653 worked only for the one shape that no longer occurs.
+    const argument = (window.match(/broadcast\s*\(\s*([A-Za-z_]\w*)/) ?? [])[1];
     const binding = argument
       ? lines
           .slice(Math.max(0, i - 12), i)
