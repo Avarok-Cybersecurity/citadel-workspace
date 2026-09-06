@@ -295,6 +295,14 @@ jobs:
         # an absent key, which empties the delivery frontier.
         run: node scripts/check-localdb-responses-are-classified.mjs
 
+      - name: Deploy paths can actually start the server
+        # Two operator scripts each carried their own deploy and neither worked:
+        # a `docker build` with no `--target` selects the LAST stage (`dev`, the
+        # toolchain image), and a `docker run` with no WORKSPACE_MASTER_PASSWORD
+        # crash-loops because the kernel refuses to start. The operator was then
+        # shown a closed port.
+        run: node scripts/check-deploy-paths-can-start-the-server.mjs
+
       - name: Deploys check out the pointers this commit records
         # `git submodule update --remote` on the live server took each submodule's
         # branch tip instead of the recorded commit, so the deployed tree was the

@@ -5133,3 +5133,63 @@ decide what counts as a failure for itself — only that "what should I record" 
 The cost of getting this wrong is not the noise. It is that a reader who sees
 three CRITICAL entries that are not critical stops reading the list, and the run
 where one of them is real looks identical.
+
+## Round 630 — the documented way to deploy avarok could not start the server
+
+Two scripts point at the production host, and both are what an operator reaches
+for. Neither could work, and each layer reported something true while none
+reported the cause.
+
+`update-avarok-server.sh` and `restart-remote-server.sh` both ran:
+
+    docker build --network=host -t citadel-workspace-server \
+                 -f docker/workspace-server/Dockerfile .
+
+No `--target`, so Docker builds the LAST stage in that file — which is `dev`
+(`FROM builder AS dev`), the toolchain image, not `production`. It also compiled
+Rust on the production host, a practice `deploy.sh` removed on purpose.
+
+Then:
+
+    docker run -d --restart unless-stopped citadel-workspace-server
+
+No `WORKSPACE_MASTER_PASSWORD` and no env file. The kernel refuses to start
+without one — `citadel-workspace-server-kernel/src/main.rs:49`,
+"workspace_master_password is required" — so the container exited immediately,
+and `--restart unless-stopped` turned that into a loop.
+
+The script then ran `nc -zv 127.0.0.1 12349`, which failed, and told the operator
+**the port was shut**. A missing environment variable presented as a network
+problem, three layers from its cause.
+
+### Why fixing them in place would have been the wrong repair
+
+`deploy.sh` already does this job properly: it reads `.env` and refuses a
+`__CHANGE_ME__` master password before touching anything, pulls prebuilt images
+from GHCR instead of compiling on the host, verifies every image came from the
+SAME commit, and restarts services without touching the data volumes.
+
+So these were a second answer to a question that already had one — and adding
+`--target production` and an env file would have kept a duplicate deploy alive
+while recreating the host-side Rust build that `deploy.sh` deliberately dropped.
+
+They now keep only the part that was genuinely theirs — knowing which host, where
+the checkout is, and (for the second) uploading a specific `kernel.toml` — and
+hand off. `restart-remote-server.sh` also loses `git reset --hard origin/dev-next`:
+that branch does exist, which is not the problem; deciding for the operator,
+destructively, on a production host, is.
+
+### The gate, and what it deliberately does not do
+
+`check-deploy-paths-can-start-the-server.mjs` covers the top-level operator
+scripts only. Compose files and CI workflows are exempt on purpose: compose
+supplies `environment:` from the file, and CI builds with explicit targets and
+runs the dev stack deliberately. This is about the commands a person types at a
+production host, which is where missing configuration goes unnoticed.
+
+Three controls: the original untargeted build is caught; the original configless
+`docker run` is caught; and a `docker run --env-file .env` still PASSES — so the
+gate discriminates rather than banning the verb, which is the difference between
+a rule and a superstition.
+
+124 gates green.
