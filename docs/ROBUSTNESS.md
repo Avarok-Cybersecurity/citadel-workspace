@@ -9501,3 +9501,71 @@ code without a captured hang would be the same mistake rounds 693 and 697 made
 on `member-list-loading` — two fixes to code that was not on the failing path.
 What is recorded is the signature to look for: **one job, full budget, run reads
 `cancelled`.** Recurrence now has a name and a discriminator.
+
+## Round 708 — the check moved to where it can work, and both halves now hold
+
+Round 706 put the hostname/CSP walk into `check-production-image.mjs`. Running
+it against a real image built from this branch showed that it cannot live there:
+
+```
+the registration walk reaches submit    FAIL  security — locator.click timeout
+```
+
+Then a direct measurement settled why. Against the live deployment, collecting
+violations step by step:
+
+```
+at wizard      : [cloudflare beacon]
+after address  : [cloudflare beacon]          <- no DoH refusal yet
+```
+
+**The refusal fires at final submit, not at the address step.** Submit needs a
+reachable agent, and the UI-image gate has none — the image is nginx and a
+bundle. A version of the check that stopped at the address step would have run,
+gone green, and been incapable of catching the defect it was written for. That
+is the failure mode this record keeps returning to, so the wiring was removed
+rather than trimmed to fit.
+
+Its home is `scripts/prove-users-can-talk.mjs`, which already drives real
+browsers against a real agent and a real server. Every future live proof now
+also watches what the browser refuses.
+
+**RED** — the live deployment, which is still the pre-fix build:
+
+```
+FAIL  the app makes no request its own policy forbids
+      — connect-src:https://dns.google/resolve?name=citadel.avarok.net&type=A
+  note: CDN-injected resource refused by the site's own CSP — …cloudflareinsights…
+0/4 steps passed
+```
+
+**GREEN** — the fixed build, served by `serve-like-production.mjs` under a CSP
+byte-identical to the live header, same agent, same server:
+
+```
+9/9 steps passed against https://work.test:4299 (server citadel.avarok.net:12400)
+  PASS  the app makes no request its own policy forbids
+```
+
+That green is the first local proof ever run under the production policy. The
+CDN beacon is printed as a note rather than filtered away: it is injected in
+front of the site and is the operator's to remove, but a suppressed observation
+is one nobody acts on.
+
+### The round-706 "open question" was my own dev server
+
+Round 706 recorded an unexplained `connect-src:wss://127.0.0.1:4202/?token=…`
+and declined to call it environmental without evidence. The evidence:
+
+```
+lsof -nP -iTCP:4202 -sTCP:LISTEN
+node 17831  TCP 127.0.0.1:4202 (LISTEN)     <- vite --config vite.devhttps…
+node 68420  TCP *:4202        (LISTEN)     <- mine, IPv6
+```
+
+A Vite dev server already held IPv4 `127.0.0.1:4202`; mine bound IPv6 `*:4202`.
+`work.test` maps to `127.0.0.1`, so the browser reached **the other server**, and
+the phantom violation was Vite's own HMR client. Every "green" attempt in round
+706 was measuring a dev server. Binding a port that something already holds does
+not fail loudly when the families differ — it silently splits traffic by address
+family, and everything downstream measures the wrong process.

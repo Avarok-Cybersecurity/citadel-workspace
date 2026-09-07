@@ -18,7 +18,6 @@
 import { execFileSync, execSync } from 'node:child_process';
 import { chromium } from 'playwright';
 import { appMounted } from './lib/app-mounted.mjs';
-import { walkRegistrationWithHostname } from './lib/hostname-costs-no-violation.mjs';
 
 const IMAGE = process.argv[2] ?? 'ghcr.io/avarok-cybersecurity/citadel-workspace-ui:latest';
 const PORT = Number(process.argv[3] ?? 18100);
@@ -203,27 +202,6 @@ async function main() {
       await context.close();
       return result;
     };
-
-    // Typing a HOSTNAME must not cost a CSP violation.
-    //
-    // The check above collects violations from the landing page only, and the
-    // defect this guards against lives three screens further in: a build that
-    // resolved the address with `fetch('https://dns.google/resolve?...')` was
-    // refused by its own `connect-src`, and every new user on work.avarok.net
-    // got "Registration timed out" instead of an account. `reached` is asserted
-    // as well as the violation count, because a walk that fell over early also
-    // reports zero violations.
-    const hostnameWalk = await walkRegistrationWithHostname(browser, ORIGIN, 'citadel.example.net:12400');
-    record(
-      'the registration walk reaches submit',
-      hostnameWalk.reached === 'submitted',
-      `${hostnameWalk.reached}${hostnameWalk.detail ? ' — ' + hostnameWalk.detail : ''}`,
-    );
-    record(
-      'typing a hostname costs no CSP violation',
-      hostnameWalk.violations.length === 0,
-      hostnameWalk.violations.join(', '),
-    );
 
     const asMember = await walkOnboarding('member');
     const asAdmin = await walkOnboarding('admin');

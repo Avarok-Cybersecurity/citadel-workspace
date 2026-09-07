@@ -30,6 +30,7 @@
  * An assertion whose negative result is unconditional is worse than none.
  */
 import { chromium } from 'playwright';
+import { watchCspViolations } from './lib/hostname-costs-no-violation.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -106,7 +107,15 @@ for (let i = 0; i < USERS; i++) {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   const page = await context.newPage();
   await page.setViewportSize({ width: 1600, height: 1000 });
-  people.push({ name: `u${i + 1}x${stamp}`, page });
+  // Watch what the browser REFUSES, for the whole run. The deployment shipped a
+  // build that resolved the server hostname with `fetch('https://dns.google/…')`
+  // under a policy of `connect-src 'self' wss://local.<domain>:12345`, so every
+  // new user waited 30s for "Registration timed out" and no local proof could
+  // see it -- the local harness serves with no CSP at all. The refusal happens
+  // at submit, not at the address step, so only a run that registers for real
+  // observes it. This one does.
+  const violations = await watchCspViolations(context, page);
+  people.push({ name: `u${i + 1}x${stamp}`, page, violations });
 }
 
 for (const [index, person] of people.entries()) {
@@ -181,6 +190,20 @@ try {
   }
 } catch (error) {
   record('the run completed', false, String(error).split('\n')[0]);
+}
+
+// The app must not make a request its own policy forbids. Violations whose
+// blocked URL the app does not serve are reported but not failed: the Cloudflare
+// beacon is injected by the CDN in front of the site, so it is the operator's to
+// remove and not a property of this build. It is PRINTED rather than silently
+// filtered, because a suppressed observation is one nobody ever acts on.
+const CDN_INJECTED = /static\.cloudflareinsights\.com/;
+const raised = people.flatMap((p) => p.violations().map(
+  (d) => `${d.violatedDirective}:${(d.blockedURL ?? '').slice(0, 70)}`));
+const ours = raised.filter((v) => !CDN_INJECTED.test(v));
+record('the app makes no request its own policy forbids', ours.length === 0, ours.join(', '));
+for (const v of raised.filter((v) => CDN_INJECTED.test(v))) {
+  console.log(`  note: CDN-injected resource refused by the site's own CSP — ${v}`);
 }
 
 await browser.close();
