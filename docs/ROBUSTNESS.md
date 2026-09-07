@@ -10189,3 +10189,48 @@ plaintext build) prints that it was not checked rather than passing silently —
 cut from a renewed certificate, and users have to be on it. The guard makes a
 stale release impossible to publish; it does not make an already-published one
 renew itself.
+
+## Round 723 — file-manager failed, and what the log actually says
+
+`test:file-manager` failed in the publish run. Recorded rather than labelled,
+because "flaky" is a claim like any other.
+
+**Rate on this branch:** 1 failure in 3 completed runs (34112344920 failed;
+34101106762 and 34087908398 passed; three others were cancelled by supersession
+and do not count). That is not a rare event, and three is not a sample.
+
+**Signature.** Not a file-manager assertion failing on its own terms — the
+sessions died underneath it:
+
+```
+[Alice] [P2PRegistrationService] Error checking and registering peers:
+        Session for 16222952584141528256 not found in session manager.
+[Bob]   Network inbound task ended. Messenger is shutting down
+[Alice] Network inbound task ended. Messenger is shutting down
+  Final result: Folder visible: true, expected hidden: FAIL
+  Upload File: FAIL   File Visible: FAIL   Peer Sees File: FAIL   Delete File: FAIL
+```
+
+server-side, at the same moment:
+
+```
+[DC_SIGNAL:handle_session_terminating_error] C2S terminating
+  reason: peer closed connection without sending TLS close_notify
+```
+
+The order matters. **Both** accounts were created and P2P registration was under
+way — so everything up to and including the wizard worked — and then both
+messengers shut down. Every file assertion after that point failed because
+there was no session left to act on, not because file management is broken.
+Reading the first FAIL line as the defect would send someone into the file
+manager, which is the wrong subsystem entirely.
+
+**Not attributable to this change.** The only UI difference from the passing run
+is `ServerConnect`'s initial address value and a new empty `<meta>`. The address
+field had already done its work: the accounts exist, with CIDs, in the log.
+
+**Open.** No cause, and deliberately no guess — round 693/697 spent two fixes on
+`member-list-loading` code that was not on the failing path. What is recorded is
+the discriminator, so the next occurrence is recognised rather than re-diagnosed:
+**both peers' messengers shut down, server reports `close_notify` missing, and
+the visible failures are all downstream of a session that no longer exists.**
