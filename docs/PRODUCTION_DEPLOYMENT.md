@@ -276,7 +276,13 @@ Three divergences to reconcile deliberately, not one at a time:
 2. **`127.0.0.1:8080` on that host is already bound by an unrelated process.**
    A `network_mode: host` UI would collide with it while nginx kept proxying to
    8099, where nothing would answer. The service in this repo is therefore
-   bridge with an explicit `127.0.0.1:8099:8080`.
+   bridge with `127.0.0.1:${UI_PORT:-8080}:8080`, and this host sets
+   `UI_PORT=8099` in its `.env`.
+
+   The port is a variable and not a literal because hard-coding 8099 made the
+   shared compose file describe avarok2 and nobody else: CI's "Smoke Test -
+   Services Start" waits on `http://localhost:8080/` and timed out. A
+   deployment-specific value belongs in that deployment's `.env`.
 3. **`LOOPBACK_AGENT_ORIGIN` must be in the host's `.env`**
    (`wss://local.avarok.net:12345`). The running container has it; the compose
    file in this repo passes it through, and `deploy.sh` refuses to deploy a

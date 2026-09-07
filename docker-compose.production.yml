@@ -369,7 +369,16 @@ services:
     # machine; the public edge is the host nginx in front, which is where the
     # certificate and the rate limits live.
     ports:
-      - "127.0.0.1:8099:8080"
+      # The published port is the OPERATOR's, because it depends on what else is
+      # on their machine. Default 8080, which is what the CI smoke test curls and
+      # what a clean host has free; avarok2 sets UI_PORT=8099 in its .env because
+      # 127.0.0.1:8080 there is already bound by an unrelated process.
+      #
+      # Hard-coding 8099 here made the compose file describe avarok2 and no one
+      # else: CI's "Smoke Test - Services Start" waited out its timeout on
+      # http://localhost:8080/ and failed. A deployment-specific value belongs in
+      # a deployment's .env, not in the file every deployment shares.
+      - "127.0.0.1:${UI_PORT:-8080}:8080"
 
   # ---------------------------------------------------------------------------
   # Cloudflare Tunnel (Production only)

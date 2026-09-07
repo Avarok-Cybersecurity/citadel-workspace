@@ -9200,3 +9200,32 @@ prompt — that is the difference the two branches carry, and round 682 asserts
 it. If the prompt appears here it is dismissed so it cannot block the peering
 steps, and asserting its CONTENT is left to the production-image check. Two
 tools, one claim each, rather than both half-checking it.
+
+## Round 701 — a compose file that described one host and no other
+
+Round 687 pinned the `ui` service to `127.0.0.1:8099:8080`, because that is what
+avarok2 runs and `127.0.0.1:8080` there is taken. CI disagreed, from deep in the
+pipeline:
+
+```
+Server is healthy
+Internal-service is healthy
+Waiting for UI to start serving on port 8080 (host network)...
+Waiting... (thirty times, then exit 1)
+```
+
+The smoke test curls `localhost:8080`. Both values are right for their own
+machine, so neither is the answer: the port is the OPERATOR's, and a
+deployment-specific literal in a file every deployment shares describes one host
+and misdescribes the rest.
+
+`127.0.0.1:${UI_PORT:-8080}:8080` — 8080 by default, which is what CI expects
+and what a clean host has free, and `UI_PORT=8099` added to avarok2's `.env`,
+verified against the port its live container actually publishes.
+
+**Worth noting how far the run got before this.** Mobile layout passed (round
+696's tap targets), the production image BUILT, the `/ws` proxy security smoke
+test passed, and "the production image in a real browser" passed — which is the
+step that walks both onboarding doors added in round 682. Each failure this
+session has been later in the pipeline than the last, because a pipeline that
+stops at the first failure only ever shows you one.
