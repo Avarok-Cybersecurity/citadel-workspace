@@ -503,8 +503,6 @@ jobs:
         run: node scripts/check-agent-tls-matches-its-proxies.mjs
       - name: The loopback agent origin is wired end to end
         run: node scripts/check-the-loopback-agent-origin-is-wired.mjs
-      - name: Every agent download the UI offers is built
-        run: node scripts/check-agent-downloads-exist.mjs
       - name: Every generated binding has a type, and every type a binding
         run: node scripts/check-bindings-match-exported-types.mjs
       - name: Instructions name the port the UI actually serves

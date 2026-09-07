@@ -8247,37 +8247,41 @@ The first is the strongest negative control available anywhere in this document:
 not a mutation invented to make a check go red, but the actual artefact users
 downloaded, failing for the actual reason they could not join.
 
-## Round 681 — the four names that are the whole contract
+## Round 681 — RETRACTED: a gate that already existed, for the third time
 
-A new user's first step is a download button. The hosted page detects their
-platform and links to
-`releases/latest/download/citadel-agent-<platform>.tar.gz`; GitHub resolves that
-against the newest release. The NAME is the entire contract, and it is written
-in two files that nothing held together:
+I wrote `check-agent-downloads-exist.mjs` to hold the UI's `AGENT_ASSETS` and
+the release workflow's `asset:` entries to each other, and recorded that "two
+files, one rule, and nothing was holding them together".
 
-- `citadel-workspaces/src/lib/agent-download.ts` — `AGENT_ASSETS`, four names;
-- `.github/workflows/release-agent.yml` — the build matrix's `asset:` entries.
+That was false. `citadel-workspaces/src/lib/__tests__/agent-download.test.ts`
+already asserts it, in both directions —
 
-They agree today. The comment above `AgentPlatform` even says "matching the
-release workflow's matrix" — a claim, in prose, that nothing verified. A rename
-on either side 404s the download for every new user, on the first step of
-joining, with nothing in the app able to explain it.
+```
+every asset the UI links to is built and published by the workflow
+the workflow publishes nothing the UI cannot offer
+```
 
-`check-agent-downloads-exist.mjs` compares the two sets in both directions: a
-name the UI offers that the release never builds is a dead download, and a name
-the release builds that the UI never offers is unreachable. Negative controls,
-each verified applied and reverted:
+— and carries a floor test, `finds the workflow`, so it cannot pass vacuously
+when the file is missing. It runs in the UI's own unit tests and in the parent's
+preflight. The coverage I "added" was already there and slightly better placed.
 
-| Control | Gate |
-|---|---|
-| UI renames `linux-x64` → `linux-amd64` | RED |
-| release renames `windows-x64` → `win64` | RED |
+The gate and both its workflow registrations have been removed. Two
+implementations of one rule drift toward the weaker, which this repository has
+already written down about the file-length rule, and keeping mine would have
+been that.
 
-Found while checking something else: whether the UI pins a version. It does not
-— it uses `releases/latest`, so publishing `agent-v0.3.0` is enough for every
-new visitor to get the fixed binary without touching the UI. That was the
-question worth asking, because if the links HAD been pinned, round 680's release
-would have fixed nothing for anybody.
+**This is the third time.** `grep-for-the-guard-before-writing-one` exists as a
+recorded lesson from the first two. The habit that would have caught it costs
+one command — grep for what the rule is ABOUT, not for the name I was about to
+give it — and I did not run it. I found it only because the tests failed for an
+unrelated reason (this standalone UI worktree has no parent beside it, so the
+relative path to the workflow does not resolve) and I read them.
+
+What survives from the round is the question that led there, which was worth
+asking: does the UI pin an agent version? It does not — the download links use
+`releases/latest`, so publishing `agent-v0.3.0` is enough for every new visitor
+to get the fixed binary. Had they been pinned, round 680's release would have
+fixed nothing for anyone.
 
 ## Round 682 — onboarding's two branches were offered, never walked
 
@@ -8324,3 +8328,61 @@ handler.
 `storage-threw` is distinguished from `null` in the readout, because "storage
 refused" and "nothing was written" send a support conversation in different
 directions.
+
+## Round 683 — the copy-paste command could not start the agent
+
+The hosted page shows a new visitor the exact command to run. It appended two
+flags that do not exist:
+
+```
+$ ./citadel-agent --bind 127.0.0.1:12345 ... --loopback-host local.avarok.net
+error: Found argument '--loopback-host' which wasn't expected, or isn't valid in this context
+```
+
+The agent's entire CLI is `bind`, `backend`, `data-dir`, `allowed-origins`,
+`tls-cert`, `tls-key`, `no-tls`, `dangerous`. There has never been a
+`--loopback-host` or a `--loopback-cert-url`.
+
+**The conditional is what made it invisible.** Both were appended only when a
+loopback origin is published — which is the hosted deployment, and nowhere
+else. Locally, where it is developed and tested, the command is correct. On
+work.avarok.net, where it is the instruction a stranger follows to get started,
+it cannot run. The comment directly above the function describes this failure in
+so many words: *"A copy button that yields something unrunnable is worse than
+none: it looks like the instruction, so the reader stops looking for the real
+one."*
+
+**Both tests asserted the broken flags.**
+
+```
+expect(cmd).toContain('--loopback-host local.example.com');
+const cmd = screen.getByText(/--loopback-host local\.example\.com/);
+```
+
+So the command was correct according to its own suite, and the component test
+even *located* the rendered instruction by a flag that cannot run — a selector
+whose only match is the defect.
+
+Nothing replaces them. The agent serves TLS by default with the certificate for
+the published loopback name compiled in (round 673), so a visitor configures
+nothing; an operator publishing a different loopback name supplies
+`--tls-cert`/`--tls-key` when starting their own agent, which is not something
+this page can know.
+
+**The new pair reads the agent's own `main.rs`** and requires every `--flag` in
+every command the function can produce — four platforms × loopback present or
+absent — to appear in its `structopt` fields. From the agent's declaration
+rather than a list kept beside the UI, because a list kept beside the UI is the
+thing that drifted. Negative controls, each verified applied and reverted:
+
+| Control | Test |
+|---|---|
+| reintroduce `--loopback-host` | RED |
+| point the CLI path at a file that does not exist | RED |
+
+The second is the floor: without it, a moved or renamed `main.rs` would make
+every flag assertion pass by matching nothing.
+
+This one was found by reading the code that generates the command while waiting
+on CI — not by any check, and not by a failure. Nothing in the repository could
+have reported it, because every test that touched it agreed with it.
