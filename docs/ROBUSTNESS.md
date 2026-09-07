@@ -10755,3 +10755,53 @@ correct across unrelated dependency changes and cannot serve a browser from a
 different version. The install step is unchanged, retry and 600s bound included:
 `playwright install` returns in seconds when the browsers are present, and a
 cache miss costs exactly what today costs. It cannot be wrong, only absent.
+
+## Round 733 — three needles, none of which the agent threads
+
+Round 729's shape again, in the connect path. The agent refuses a duplicate
+connect with
+
+```
+requests/connect.rs:67   "Connection already in progress for user {username}"
+```
+
+and three UI sites tested for it three different ways:
+
+| Site | Needle | Matches? |
+|---|---|---|
+| `useLoginHandler.ts:160` | `'already connected'` | no |
+| `queries.ts:159` | `'session already connected'` | no |
+| `reconnect.ts:174` | `'localhost is already trying to connect'` | **exists nowhere in the stack** except that line |
+
+The third is the one worth pausing on. `grep -rl` over the UI and the agent
+returns exactly one file: the file testing for it. A condition written against a
+string nothing produces cannot fire, and nothing said so for as long as it has
+been there.
+
+**The consequence is an outcome, not a message.** Double-click Sign In, or let
+two tabs race a reconnect: nothing emits `session-already-connected`, so nothing
+claims the live session; `handleAutoReconnectError` falls through to exponential
+backoff, exhausts it, and broadcasts `isConnected: false` — while a perfectly
+good session exists. The user is told they are disconnected because the UI could
+not recognise the sentence saying they are already connected.
+
+One predicate now, in one place, because three spellings is how three of them
+come to be wrong independently.
+
+### The gate checks both directions
+
+Matching the agent is necessary and not sufficient: `return true` matches it too.
+So the gate also asserts the predicate does NOT match `"Invalid username or
+password"`, which would route a bad credential into the claim-session path.
+
+```
+CONTROL A  restore the old 'localhost is already trying to connect' needle
+           -> exit 1, printing what the agent actually sends
+CONTROL B  make the predicate return true for everything
+           -> exit 1, "not discriminating"
+reverted   -> exit 0
+```
+
+Sibling of `check-already-registered-predicate-matches-the-agent.mjs`. Two gates
+now exist because this stack couples behaviour to prose across a language
+boundary in at least two places, and prose is not a contract.

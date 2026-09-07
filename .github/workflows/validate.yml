@@ -511,6 +511,8 @@ jobs:
         run: node scripts/check-docs-are-listed-in-the-index.mjs
       - name: The workflows GitHub reads are parseable
         run: node scripts/check-workflows-parse.mjs
+      - name: The UI recognises the agent's duplicate-connect refusal
+        run: node scripts/check-connect-in-progress-matches-the-agent.mjs
       - name: Every generated binding has a type, and every type a binding
         run: node scripts/check-bindings-match-exported-types.mjs
       - name: Instructions name the port the UI actually serves
