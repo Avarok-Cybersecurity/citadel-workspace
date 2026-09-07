@@ -96,6 +96,113 @@ jobs:
       - name: Build the agent
         run: cargo build --release --target ${{ matrix.target }} -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features vendored
 
+      # Signed and notarised BEFORE packaging, so the tarball carries a binary
+      # macOS will run without argument.
+      #
+      # The binary Rust produces is "linker-signed" (ad-hoc): `spctl -a -t exec`
+      # rejects it, so a Finder double-click is refused with "the developer
+      # cannot be verified". Terminal execution of a quarantined ad-hoc binary
+      # happens to still work today, which is why the download instructions on
+      # the page work at all -- but that is Apple's tolerance, not a guarantee,
+      # and it has been narrowing for several releases.
+      #
+      # The identity is READ FROM THE CERTIFICATE rather than carried in a
+      # secret. A hand-typed "Developer ID Application: Name (TEAM)" is a second
+      # copy of something the .p12 already states, and the failure when it drifts
+      # is `codesign: no identity found`, which names neither copy.
+      - name: Import the signing certificate
+        if: runner.os == 'macOS'
+        env:
+          CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CERT_P12_BASE64:-}" ] || [ -z "${CERT_PASSWORD:-}" ]; then
+            echo "::error::MACOS_CERT_P12_BASE64 and MACOS_CERT_PASSWORD must both be set."
+            echo "  A release must not ship an unsigned macOS binary, so this fails rather"
+            echo "  than falling back to the ad-hoc signature Rust's linker produces."
+            exit 1
+          fi
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          kcpass="$(uuidgen)"
+          security create-keychain -p "$kcpass" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$kcpass" "$keychain"
+          printf '%s' "$CERT_P12_BASE64" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          rm -f "$RUNNER_TEMP/cert.p12"
+          # Without this, codesign blocks on a GUI prompt no runner can answer.
+          security set-key-partition-list -S apple-tool:,apple: -k "$kcpass" "$keychain" >/dev/null 2>&1
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity="$(security find-identity -v -p codesigning "$keychain" \
+            | awk -F'"' '/Developer ID Application/ {print $2; exit}')"
+          if [ -z "$identity" ]; then
+            echo "::error::the .p12 contains no 'Developer ID Application' identity."
+            echo "  A 'Mac App Distribution' or 'Apple Development' certificate cannot sign"
+            echo "  software distributed outside the App Store. Export the Developer ID one."
+            exit 1
+          fi
+          echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+          echo "Signing identity: $identity"
+
+      - name: Sign and notarise
+        if: runner.os == 'macOS'
+        env:
+          NOTARY_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="target/${{ matrix.target }}/release/citadel-workspace-internal-service"
+
+          # --options runtime is NOT optional: notarisation rejects anything
+          # without the hardened runtime, and the rejection names the flag only
+          # in the JSON log, not in the summary line.
+          codesign --force --options runtime --timestamp \
+            --sign "$SIGN_IDENTITY" "$bin"
+          codesign --verify --strict --verbose=2 "$bin"
+
+          if [ -z "${NOTARY_KEY_P8_BASE64:-}" ] || [ -z "${NOTARY_KEY_ID:-}" ] || [ -z "${NOTARY_ISSUER_ID:-}" ]; then
+            echo "::error::MACOS_NOTARY_KEY_P8_BASE64, MACOS_NOTARY_KEY_ID and MACOS_NOTARY_ISSUER_ID must be set."
+            echo "  Signed but un-notarised is still refused by Gatekeeper, so shipping it"
+            echo "  would look fixed and behave the same. Failing instead."
+            exit 1
+          fi
+
+          printf '%s' "$NOTARY_KEY_P8_BASE64" | base64 -d > "$RUNNER_TEMP/notary.p8"
+          # notarytool takes .zip, .pkg or .dmg -- never a bare binary or a
+          # .tar.gz -- so the artefact is zipped purely for submission. The
+          # ticket is issued against the signature, so the tarball built from
+          # this binary afterwards carries a notarised one.
+          ditto -c -k "$bin" "$RUNNER_TEMP/notarize.zip"
+          set +e
+          out="$(xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+            --key "$RUNNER_TEMP/notary.p8" \
+            --key-id "$NOTARY_KEY_ID" \
+            --issuer "$NOTARY_ISSUER_ID" \
+            --wait --timeout 30m 2>&1)"
+          rc=$?
+          set -e
+          rm -f "$RUNNER_TEMP/notary.p8"
+          echo "$out"
+          if [ "$rc" -ne 0 ] || ! echo "$out" | grep -q "status: Accepted"; then
+            id="$(echo "$out" | awk '/id:/ {print $2; exit}')"
+            echo "::error::notarisation did not return Accepted."
+            echo "  Fetch the reasons with:"
+            echo "    xcrun notarytool log $id --key-id <id> --issuer <issuer> --key <p8>"
+            exit 1
+          fi
+
+          # A ticket CANNOT be stapled to a bare executable -- stapler handles
+          # .app/.pkg/.dmg only -- so Gatekeeper validates online on first run.
+          # That is acceptable here specifically: the agent exists to reach a
+          # workspace server, so it is useless without a network anyway.
+          echo "Notarised. Gatekeeper assessment (online check):"
+          spctl -a -t exec -vv "$bin" || echo "  (spctl assessment is informational; the ticket may take a moment to propagate)"
+
       # Packaged with the run instructions beside the binary. `--bind` has no
       # default in the agent's CLI, so a downloaded binary run bare exits with a
       # structopt usage error; and the default account backend is in-memory, so
