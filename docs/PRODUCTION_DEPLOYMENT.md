@@ -319,6 +319,27 @@ Two consequences for the deploy that follows:
   server data volumes persist across it; the persistence smoke test in CI exists
   precisely to prove a restart does not re-seed the workspace tree.
 
+**Before moving `IMAGE_TAG`, back the data up.** The server's store is the
+docker volume `avarok_server_data` (mounted at `/data/server`), holding
+`accounts`, `config`, `server`, `transfers`, `virtual` — 7.4 MB, so this costs
+nothing:
+
+```bash
+sudo tar -czf /srv/citadel-tenants/avarok/backups/server_data-$(date +%Y%m%d-%H%M%S).tar.gz \
+     -C /var/lib/docker/volumes/avarok_server_data/_data .
+```
+
+Taken on 2026-09-07 (`server_data-20260907-061522.tar.gz`, 2.2 MB, 111 entries,
+verified by listing the archive back).
+
+The reason is the 140-commit jump, not superstition. The tree does carry
+migrations — `group_message_pages.rs` treats a room with no index as unmigrated
+and migrates on write, asserting that the migration "reordered or lost
+messages" did not happen, and `tree_validator.rs` validates the whole tree on
+startup — so this is handled rather than hoped. But nothing here has run a
+140-commit-old store against the new binary, and a backup is the difference
+between a bad deploy costing minutes and costing a workspace.
+
 After any UI deploy, check the two things that fail silently:
 
 ```bash
