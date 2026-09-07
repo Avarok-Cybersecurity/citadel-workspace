@@ -9332,3 +9332,69 @@ discovering it mid-run costs ten minutes and a failure that means nothing.
 What this still does not prove: that the *hosted* deployment serves that meta
 tag and the matching CSP. That is a property of the container on avarok2, and
 it is the next thing to measure — on the deployment, not locally.
+
+## Round 705 — the live site is broken for every new user, and measuring it took four wrong turns
+
+Everything local was green, so I pointed the operator's proof at the real thing:
+
+```
+node scripts/prove-users-can-talk.mjs --origin https://work.avarok.net \
+                                      --server citadel.avarok.net:12400 --users 2
+0/3 steps passed
+```
+
+Reproduced twice. The cause, from the page's own console:
+
+```
+Connecting to 'https://dns.google/resolve?name=citadel.avarok.net&type=A'
+violates the following Content Security Policy directive:
+"connect-src 'self' wss://local.avarok.net:12345".
+Error: Registration timed out after 30 seconds
+```
+
+**The deployed UI resolves the server hostname in the browser via DNS-over-HTTPS,
+and the site's own CSP forbids the request.** Anyone typing a hostname — which is
+what the field asks for, and what the docs tell people to type — waits thirty
+seconds and is told "Registration timed out", a message that names nothing real.
+The WebSocket to the local agent opened fine. The agent was never the problem.
+
+This is already fixed in the branch (`9cc2b9d4`, "hand the hostname to the agent
+instead of resolving it in the page", with a regression test named after the
+symptom). The agent resolves with `tokio::net::lookup_host`, which is why every
+local proof passes against `citadel.avarok.net:12400`. The deployment is running
+the build from before that fix. So the pending deploy is not a nice-to-have; it
+is the difference between a site that works for new users and one that cannot
+work for any of them.
+
+### Four wrong turns getting here, all self-inflicted
+
+1. **"The live UI predates the onboarding doors."** I enumerated `data-testid`
+   on the landing page, saw no `onboarding-intent-*`, and concluded the feature
+   was undeployed. It is deployed — the dialog only exists *after* clicking
+   Create Account. Absence measured in the wrong place is not absence.
+2. **"Something overlays the page."** The first failure log showed
+   `<html> intercepts pointer events` on the Create Account button, so I went
+   looking for a modal backdrop. Hit-testing the button showed it topmost and a
+   direct click succeeded. That log line came from a different script's earlier
+   run; I had matched a symptom across two logs.
+3. **My debug probe skipped the intent click**, so it stalled on `#serverAddress`
+   and looked like a site defect. It was a defect in the probe.
+4. Only after clicking the door did the real console appear.
+
+The proof script itself was never wrong — it clicks the intent when present and
+tolerates its absence. Three of the four detours were me reading a measurement
+taken somewhere other than where the claim applied.
+
+### What is now known about the deployment
+
+| Property | State |
+|---|---|
+| CSP header | correct, already serving `connect-src … wss://local.avarok.net:12345` |
+| `citadel-loopback-agent` meta tag | correct, already injected by nginx |
+| Onboarding doors | present |
+| Browser → agent WebSocket | opens |
+| Registration by hostname | **fails**, CSP-blocked DoH |
+| Cloudflare beacon | still violating the site's own CSP (cosmetic, operator's call) |
+
+The first two are what I expected to have to deploy. They are already right. The
+one thing that is wrong is the one nothing had measured.
