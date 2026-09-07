@@ -9088,3 +9088,43 @@ does not.
 Verified in both directions on fixtures — it names a flaky spec, stays silent on
 a clean run, and exits 1 with `::error::` if the report is absent, because "no
 flaky specs" must never be a sentence spoken by a missing file.
+
+## Round 698 — running my own tool found two defects in my own tool
+
+`prove-mistakes-are-explained.mjs` was written in round 692 and not executed
+until now. Both of its defects came from running it; neither was visible in it.
+
+**First run: it reported the wrong cause.** Thirty seconds of Playwright
+timeout and a stack trace naming `create-account-button`. The actual condition
+was that the agent was unreachable, so a modal sat over the page and every click
+waited out its timeout against a backdrop. An operator running this before
+telling people a deployment is ready would have gone debugging a button.
+
+It now checks that precondition first and says so in one line — that the agent
+is not reachable from that origin, that every state below would time out against
+a dialog rather than being measured, and the exact command to start an agent for
+that origin. Exit 2, distinct from a measured failure.
+
+**Second run: the control could not pass.**
+
+```
+FAIL  the control: a correct registration still succeeds
+      Registration Successful  Your account has been registered. Connecting to workspace...
+```
+
+The control inferred success from the ABSENCE of a message. Success toasts too.
+So it reported failure against a perfectly healthy system, and it was added
+specifically so the suite could not pass by failing everything.
+
+A check that cannot fail is useless. **A check that cannot pass is worse**,
+because somebody eventually deletes it as noise and the protection goes with it.
+It asserts landing on `/workspace` now — what actually distinguishes success —
+and carries the message alongside rather than in place of it.
+
+```
+5/5 states explained against https://work.test:4201 (server citadel.avarok.net:12400)
+```
+
+Every one of tonight's user-facing findings, and both of these, is the same
+distance: between what an assertion SAYS and what it MEASURES. The only reliable
+way across it has been to run the thing and read what came back.

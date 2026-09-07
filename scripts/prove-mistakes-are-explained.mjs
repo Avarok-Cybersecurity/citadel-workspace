@@ -65,17 +65,62 @@ const RAW = /something went wrong|lookup address information|nodename nor servna
 
 const browser = await chromium.launch({ args: RESOLVER ? [`--host-resolver-rules=${RESOLVER}`] : [] });
 
-async function toastAfter(page, action) {
+/**
+ * The precondition, checked first and named plainly.
+ *
+ * With no agent, the landing page puts a modal over everything and every click
+ * below waits out its timeout against a backdrop. The first run of this script
+ * did exactly that and reported a thirty-second Playwright stack trace naming
+ * `create-account-button` — which says nothing about the actual problem, and
+ * invites debugging the wrong thing. A tool that needs a running agent should
+ * say so in one line.
+ */
+{
+  const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  const page = await context.newPage();
+  await page.goto(ORIGIN, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  await page.waitForTimeout(9_000);
+  const blocked = await page.getByTestId('connection-retry-modal').count();
+  await context.close();
+  if (blocked > 0) {
+    console.error(`\nThe agent is not reachable from ${ORIGIN}, so every state below would time out`);
+    console.error('against a connection dialog rather than being measured.');
+    console.error('Start the agent for this origin, then run this again:');
+    console.error('  ./citadel-agent --bind 127.0.0.1:12345 --backend filesystem \\');
+    console.error(`      --allowed-origins ${ORIGIN}`);
+    await browser.close();
+    process.exit(2);
+  }
+}
+
+/**
+ * Returns `{ message, landed }` -- both, because SUCCESS ALSO TOASTS.
+ *
+ * This returned the first toast it saw and inferred success from the ABSENCE of
+ * one. A correct registration shows "Registration Successful -- Your account has
+ * been registered", so the control below reported failure against a perfectly
+ * healthy system. A check that cannot pass is worse than one that cannot fail:
+ * somebody eventually deletes it.
+ *
+ * Landing on /workspace is what actually distinguishes success, so that is what
+ * is measured, and the message is carried alongside rather than standing in for
+ * it.
+ */
+async function outcomeAfter(page, action) {
   await action();
+  let message = '';
   for (let i = 0; i < 22; i++) {
     await page.waitForTimeout(2500);
-    const text = await page.evaluate(() =>
-      [...document.querySelectorAll('[data-sonner-toast],[role="alert"]')]
-        .map((e) => e.textContent).join(' | '));
-    if (text) return text;
-    if (page.url().includes('/workspace')) return '(no message: it succeeded)';
+    if (!message) {
+      message = await page.evaluate(() =>
+        [...document.querySelectorAll('[data-sonner-toast],[role="alert"]')]
+          .map((e) => e.textContent).join(' | '));
+    }
+    if (page.url().includes('/workspace')) return { message, landed: true };
+    // A message that is not a success notice ends the wait: the state is decided.
+    if (message && !/registration successful/i.test(message)) return { message, landed: false };
   }
-  return '';
+  return { message, landed: page.url().includes('/workspace') };
 }
 
 async function openJoin(page) {
@@ -99,7 +144,7 @@ async function join(page, username, server) {
   await dlg.locator('#username').fill(username);
   await dlg.locator('#password').fill(PASSWORD);
   await dlg.locator('#confirmPassword').fill(PASSWORD);
-  return toastAfter(page, () => dlg.getByTestId('join-submit').click());
+  return outcomeAfter(page, () => dlg.getByTestId('join-submit').click());
 }
 
 const stamp = Date.now();
@@ -108,22 +153,23 @@ const user = `mx${stamp}`;
 // 1. A server address that does not resolve — the likeliest first mistake.
 {
   const page = await (await browser.newContext({ ignoreHTTPSErrors: true })).newPage();
-  const msg = await join(page, `${user}a`, 'no-such-host.invalid:12400');
-  record('a mistyped server address is explained', Boolean(msg) && !RAW.test(msg), msg);
+  const { message } = await join(page, `${user}a`, 'no-such-host.invalid:12400');
+  record('a mistyped server address is explained', Boolean(message) && !RAW.test(message), message);
 }
 
 // 2. A real account, so the next two have something to fail against.
 {
   const page = await (await browser.newContext({ ignoreHTTPSErrors: true })).newPage();
-  const msg = await join(page, user, SERVER);
-  record('the control: a correct registration still succeeds', msg.startsWith('(no message'), msg);
+  const { message, landed } = await join(page, user, SERVER);
+  // Landing in the workspace, not the absence of a toast -- success toasts too.
+  record('the control: a correct registration still succeeds', landed, message);
 }
 
 // 3. The same username again.
 {
   const page = await (await browser.newContext({ ignoreHTTPSErrors: true })).newPage();
-  const msg = await join(page, user, SERVER);
-  record('a taken username is explained', Boolean(msg) && !RAW.test(msg), msg);
+  const { message } = await join(page, user, SERVER);
+  record('a taken username is explained', Boolean(message) && !RAW.test(message), message);
 }
 
 // 4. The wrong password — the most common failure there is.
@@ -136,7 +182,7 @@ const user = `mx${stamp}`;
   const dlg = page.locator('[role="dialog"]');
   await dlg.locator('#username').fill(user);
   await dlg.locator('#password').fill('DefinitelyWrong123!');
-  const msg = await toastAfter(page, () => dlg.locator('button[type="submit"]').first().click());
+  const { message: msg } = await outcomeAfter(page, () => dlg.locator('button[type="submit"]').first().click());
   record('a wrong password is explained', Boolean(msg) && !RAW.test(msg), msg);
   // ...and does not say WHICH half was wrong: the SDK conflates them so that a
   // login form cannot be used to enumerate usernames.
