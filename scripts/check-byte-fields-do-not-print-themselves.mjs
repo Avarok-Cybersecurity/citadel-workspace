@@ -21,7 +21,14 @@
  *   - `plaintext_debug_fmt` prints the length only. Right for a message body,
  *     where five bytes is the opening word and a log holds a great many of them.
  *
- * This gate does not choose between them; it requires that somebody did.
+ * This gate does not choose between them in general; it requires that somebody
+ * did. It makes ONE exception, for a field literally named `message`.
+ *
+ * That field is the user's decrypted body wherever it appears, so the judgement
+ * is not open: it takes `plaintext_debug_fmt`. The inbound notifications had it
+ * and the outbound requests did not -- the same bytes, redacted two different
+ * ways, because the response side learned the lesson and the request side was
+ * never revisited. Leaving that to judgement is what produced the split.
  *
  * Scope is the wire types crate, because that is what gets logged wholesale. The
  * check is textual: the contiguous attribute block directly above the field must
@@ -67,6 +74,20 @@ const lines = readFileSync(TYPES, 'utf8').split('\n');
 const bare = [];
 let fieldsSeen = 0;
 
+/** True when this field's attribute block chooses `bytes_debug_fmt`. */
+function usesBytesFmt(all, i) {
+  for (let j = i - 1; j >= 0; j -= 1) {
+    const above = all[j].trim();
+    if (above.startsWith('//')) continue;
+    if (!above.startsWith('#[')) break;
+    if (above.includes('bytes_debug_fmt')) return true;
+    if (above.includes('plaintext_debug_fmt')) return false;
+  }
+  return false;
+}
+
+const wrongFormatter = [];
+
 lines.forEach((line, i) => {
   const m = BYTE_FIELD.exec(line);
   if (!m) return;
@@ -84,6 +105,9 @@ lines.forEach((line, i) => {
     if (REDACTED.test(above)) { redacted = true; break; }
   }
   if (!redacted) bare.push(`${relative(ROOT, TYPES)}:${i + 1}: \`${m[1]}: ${m[2]}\` prints itself under {:?}`);
+  else if (m[1] === 'message' && !wrongFormatter.includes(i) && usesBytesFmt(lines, i)) {
+    wrongFormatter.push(`${relative(ROOT, TYPES)}:${i + 1}: \`message\` uses bytes_debug_fmt, which prints its opening word`);
+  }
 });
 
 // Vacuity floor: this crate has a dozen byte fields. Finding none means the type
@@ -92,6 +116,19 @@ if (fieldsSeen < 5) {
   console.error(
     `FAIL: found only ${fieldsSeen} byte-carrying field(s) in ${relative(ROOT, TYPES)}.\n` +
       'The type spellings moved, so this gate examined essentially nothing.',
+  );
+  process.exit(1);
+}
+
+if (wrongFormatter.length > 0) {
+  for (const w of wrongFormatter) console.error(`::error::${w}`);
+  console.error(
+    `\nFAIL: ${wrongFormatter.length} \`message\` field(s) print their opening word.\n\n` +
+      wrongFormatter.map((w) => `  ${w}`).join('\n') +
+      "\n\nA field named `message` carries the user's own text. bytes_debug_fmt shows\n" +
+      'its first and last five bytes, which for a chat line is the opening word, and\n' +
+      'a log holds a great many of them. Use plaintext_debug_fmt, which prints the\n' +
+      'length only -- as the inbound notifications already do for the same bytes.\n',
   );
   process.exit(1);
 }

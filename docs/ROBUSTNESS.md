@@ -10488,3 +10488,45 @@ everything passes here and fails its own consumer. It asserts only that somebody
 wrote one — which is the failure that actually occurred.
 
 Preflight is now 145 checks; `docs/GATES.md` regenerated at 152 gates.
+
+## Round 728 — the same bytes, redacted two different ways
+
+The security sweep's third finding. `MessageNotification.message` and
+`GroupMessageNotification.message` use `plaintext_debug_fmt` — length only. The
+outbound counterparts, `InternalServiceRequest::Message.message` and
+`GroupMessage.message`, used `bytes_debug_fmt`, which prints the first and last
+five bytes.
+
+Same material: the user's decrypted body. For a chat line, five bytes is the
+opening word.
+
+Low reachability today — there is no wholesale `{:?}` log of an inbound request,
+only of the response path at `kernel/ext.rs:76`. But the response side is
+exactly where the original leak happened, and the attribute is a standing
+defence for the log line that does not exist *yet*. The split is the tell: the
+response side learned the lesson and the request side was never revisited.
+
+`check-byte-fields-do-not-print-themselves.mjs` states the rule in its own
+header — length-only "is right for a message body, where five bytes is the
+opening word and a log holds a great many of them" — and then declines to
+enforce it: *"This gate does not choose between them; it requires that somebody
+did."* Leaving it to judgement is what produced two answers for one question.
+
+The gate now makes ONE exception to that stance, for a field literally named
+`message`, because there the judgement is not open. Everything else still
+chooses.
+
+Control, measured properly:
+
+```
+control applied (one outbound field back to bytes_debug_fmt)
+::error::…/lib.rs:1433: `message` uses bytes_debug_fmt, which prints its opening word
+TRUE exit with control = 1
+TRUE exit reverted     = 0
+```
+
+"Measured properly" is not padding. The first run of this control reported
+`exit=0` because the command was piped to `head`, so `$?` was head's. That is
+the third time in this session a pipeline has hidden the status of the thing
+under test — twice on `| tail`, once here. A control whose exit code is read
+through a pipe is not a control.
