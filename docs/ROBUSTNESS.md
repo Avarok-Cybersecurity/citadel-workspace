@@ -8387,6 +8387,26 @@ This one was found by reading the code that generates the command while waiting
 on CI — not by any check, and not by a failure. Nothing in the repository could
 have reported it, because every test that touched it agreed with it.
 
+**Verified the only way that settles it.** The bundle was rebuilt, served with
+the loopback meta filled in exactly as nginx fills it, and the command read off
+the rendered page:
+
+```
+./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.test:4207
+```
+
+then pasted into a shell against the PUBLISHED `agent-v0.3.0` archive,
+downloaded from `releases/latest` as a visitor would get it. It starts, listens,
+and presents a valid certificate:
+
+```
+subject=CN=local.avarok.net
+Verify return code: 0 (ok)
+```
+
+The instruction, the artefact and the transport are the ones a stranger
+actually meets — not a unit test's idea of any of them.
+
 ## Round 684 — a validator laxer than its consumer
 
 Round 679 added validation for `LOOPBACK_AGENT_ORIGIN` at container start-up.
