@@ -249,3 +249,51 @@ that exists any more: the deployment directory has no `docker/` tree, and
 `docker-compose.production.yml` mounts no kernel config — the file is baked into
 the image and production is configured through `.env`. Everything else it did
 was a second copy of `update-avarok-server.sh`.
+
+### The UI half, which `deploy.sh` does not currently manage
+
+Measured on the host, because none of it was written down and all of it matters
+for the next deploy:
+
+```
+internet → nginx :443  (/etc/nginx/sites-available/work.avarok.net.conf,
+                        Let's Encrypt cert for work.avarok.net)
+         → 127.0.0.1:8099
+         → the citadel-ui container  (bridge network, 8099->8080)
+```
+
+There is **no cloudflared**, despite this compose file carrying a profile for
+one. The public edge is that host nginx.
+
+Three divergences to reconcile deliberately, not one at a time:
+
+1. **The HOST's `docker-compose.production.yml` declares only `server`.** That
+   is why `deploy.sh` prints "Skipping ui" and why the container currently
+   serving the site is an ad-hoc `docker run` outside compose — image
+   `citadel-workspace-ui:loopback-3078d2f1`, built by hand from a branch that
+   was never merged. Nothing in the tree can reproduce it, which is how the
+   loopback support in round 679 came to exist in a comment and in no file.
+2. **`127.0.0.1:8080` on that host is already bound by an unrelated process.**
+   A `network_mode: host` UI would collide with it while nginx kept proxying to
+   8099, where nothing would answer. The service in this repo is therefore
+   bridge with an explicit `127.0.0.1:8099:8080`.
+3. **`LOOPBACK_AGENT_ORIGIN` must be in the host's `.env`**
+   (`wss://local.avarok.net:12345`). The running container has it; the compose
+   file in this repo passes it through, and `deploy.sh` refuses to deploy a
+   `ui` service without it. Empty means the page ships an empty agent meta tag
+   and a `connect-src 'self'` that forbids the agent — it loads, looks correct,
+   and can open no socket.
+
+After any UI deploy, check the two things that fail silently:
+
+```bash
+curl -sI https://work.avarok.net/ | grep -i content-security-policy   # must name wss://local.avarok.net:12345
+curl -s  https://work.avarok.net/ | grep -o 'citadel-loopback-agent[^>]*'  # must have a non-empty content
+```
+
+Then the behaviour, not just the headers:
+
+```bash
+node scripts/prove-users-can-talk.mjs --origin https://work.avarok.net \
+                                      --server citadel.avarok.net:12400 --users 3
+```
