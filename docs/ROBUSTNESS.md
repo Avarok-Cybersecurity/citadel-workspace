@@ -11037,3 +11037,51 @@ reading the code and all three missed; the discipline that finally produced a
 fact was measuring, so the next step is one more measurement — capture
 `activeDomainId` and `loadedForDomain` alongside the DOM at the sighting — not a
 fourth guess. Recorded so the reframing is not lost.
+
+## Round 739 — the port is assumed, not required
+
+The address field demanded `host:port`, and everything downstream had been made
+to enforce it: the injected default's shape check, both shell validators, the
+placeholder, and two failure messages that told the user to supply a port.
+
+That made the commonest case the fiddly one. Somebody handed a workspace called
+`citadel.example.com` had to supply a number nobody had told them, and a bare
+hostname did not fail at the field — it failed thirty seconds later, at a
+timeout, having looked like it was working.
+
+`lib/workspace-address.ts` owns the rule now: `DEFAULT_WORKSPACE_PORT` is
+assumed when none is given, an explicit port always wins, and
+`ServerConnect` applies it ONCE — where the typed text becomes the address, so
+register, login and the stored session list all see the same `host:port` the
+agent dials. Normalising further down would have left each of them to remember.
+
+### What is deliberately not normalised
+
+A bare IPv6 literal has colons that are not a port separator, and there is no
+honest way to tell `::1` from a typo. Appending a port there would produce a
+different address that looks deliberate. Those pass through unchanged, to be
+refused by something that can say why:
+
+```
+normalizeWorkspaceAddress('citadel.example.com')      -> citadel.example.com:12400
+normalizeWorkspaceAddress('citadel.example.com:9000') -> citadel.example.com:9000
+normalizeWorkspaceAddress('::1')                      -> ::1          (unchanged)
+normalizeWorkspaceAddress('host:notaport')            -> host:notaport (unchanged)
+```
+
+That is the PCND line in a case where a default IS wanted: assume the port,
+never the address.
+
+### The relaxation had to reach everything that had been tightened
+
+The port requirement was not in one place. It was in the reader's regex, the
+`deploy-ui.sh` guard, the nginx-side `16-validate-runtime-vars.sh` guard, the
+placeholder, and two messages — and a test tying the placeholder to the message
+asserted the port explicitly. Loosening only the field would have left an
+operator publishing `citadel.example.com` with a container that refuses to
+start, which is the same defect shape as the fixes this record keeps finding
+half-applied. All six moved together.
+
+Control: removing the `ServerConnect` call turns the wiring test red — a
+normaliser nothing calls is the inert-feature shape, and the function's own
+tests cannot see it.
