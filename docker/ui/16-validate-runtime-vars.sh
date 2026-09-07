@@ -1,6 +1,10 @@
 #!/bin/sh
 #
-# Validate the three runtime variables BEFORE envsubst renders them into the nginx config.
+# Validate every filtered runtime variable BEFORE envsubst renders it into the nginx config.
+#
+# "Every" is load-bearing and is enforced: check-envsubst-vars-are-validated.mjs asserts this
+# script reads exactly the set NGINX_ENVSUBST_FILTER admits. The set has grown twice; this
+# validator followed once, and DEFAULT_WORKSPACE_SERVER reached the config unchecked as a result.
 #
 # WHY THIS EXISTS
 #
@@ -87,4 +91,24 @@ if [ -n "$loopback" ]; then
     || die "LOOPBACK_AGENT_ORIGIN='$loopback' must be a bare wss://host:port, lowercase, no underscores (e.g. wss://local.example.com:12345), or empty to reach the agent through same-origin /ws. The page's own shape check is this strict, and a value it rejects is silently ignored in the browser."
 fi
 
-echo "[validate-runtime-vars] ok: upstream=$upstream ws_proxy=$enabled listen=$listen_addr loopback=${loopback:-<none>}"
+# The workspace server this deployment publishes, substituted into a single-quoted
+# `sub_filter` argument in the template. A value containing a quote closes that
+# argument and everything after it becomes real configuration -- the same class as
+# AGENT_UPSTREAM above, and with the same reach, since a `sub_filter` block sits
+# beside the `add_header Content-Security-Policy` directives.
+#
+# Empty is legitimate and common: the join wizard then asks for the address, which
+# is right for a local build. Only a value that is SET must be well-formed.
+#
+# Exactly the shape readDefaultWorkspaceServer accepts in
+# citadel-workspaces/src/lib/default-workspace-server.ts. A validator laxer than
+# its consumer is worse than none: the container would report "ok", the meta tag
+# would carry a value the page then refuses, and the field would render empty with
+# nothing anywhere saying why.
+default_server="${DEFAULT_WORKSPACE_SERVER:-}"
+if [ -n "$default_server" ]; then
+  echo "$default_server" | grep -Eq '^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?:[0-9]{1,5}$' \
+    || die "DEFAULT_WORKSPACE_SERVER='$default_server' must be a bare host:port (e.g. citadel.example.com:12400), or empty to have the join wizard ask. A scheme, a path, or a quote is rejected because this value is substituted into a sub_filter argument."
+fi
+
+echo "[validate-runtime-vars] ok: upstream=$upstream ws_proxy=$enabled listen=$listen_addr loopback=${loopback:-<none>} default_server=${default_server:-<none>}"

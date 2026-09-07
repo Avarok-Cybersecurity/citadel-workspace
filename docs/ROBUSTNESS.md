@@ -10438,3 +10438,53 @@ grows. **Build from `certbot certificates`, not from that directory.**
 
 Not this project's, and the timer should handle it. Recorded because 15 days is
 the shortest on that host and it covers `avarok.net` itself.
+
+## Round 727 — the sweep's first finding was a hole I had just made
+
+Four read-only deep-inspection agents ran. The security agent's top finding was
+mine, from this session:
+
+`docker/ui/Dockerfile:250` admits `DEFAULT_WORKSPACE_SERVER` through
+`NGINX_ENVSUBST_FILTER`, and `nginx.conf.template:419` substitutes it inside a
+**single-quoted `sub_filter` argument**. `docker/ui/16-validate-runtime-vars.sh`
+validated the other four filtered variables and not that one. A value containing
+a quote closes the argument and the remainder becomes real nginx configuration —
+next door to the `add_header Content-Security-Policy` directives. That script
+exists for exactly this class; its header even demonstrates it for
+`AGENT_UPSTREAM`.
+
+Not reachable as deployed: `deploy-ui.sh` validates the variable, no compose
+file in the tree sets it, and whoever can set container env can usually replace
+the image. It is defence in depth that grew a hole — which is the point, because
+the hole took under an hour to appear and I did not notice while writing both
+halves.
+
+**The tell was in the comments.** The template still said "Exactly four
+variables are substituted" (five are filtered) and the validator said "the three
+runtime variables" (it checked four). The set grew twice and the validator
+followed once. Prose drifting behind a list is what this looks like from the
+outside, every time.
+
+Fixed, and then made mechanical. `scripts/check-envsubst-vars-are-validated.mjs`
+parses `NGINX_ENVSUBST_FILTER` out of the Dockerfile, parses what the validator
+reads, and asserts the two sets match — in both directions, because a check for
+a variable no longer substituted reads as protection that is not in force.
+
+Control:
+
+```
+$ (validator no longer mentions the variable)
+  These variables reach the nginx config but nothing validates them:
+    DEFAULT_WORKSPACE_SERVER
+  exit 1
+$ (reverted)
+  envsubst variables validated: AGENT_UPSTREAM, WS_PROXY_ENABLED, LISTEN_ADDR,
+                                LOOPBACK_AGENT_ORIGIN, DEFAULT_WORKSPACE_SERVER
+  exit 0
+```
+
+What the gate does NOT assert: that each validation is correct. A rule accepting
+everything passes here and fails its own consumer. It asserts only that somebody
+wrote one — which is the failure that actually occurred.
+
+Preflight is now 145 checks; `docs/GATES.md` regenerated at 152 gates.
