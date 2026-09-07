@@ -8984,3 +8984,58 @@ this. It is left as an open flake with the evidence attached. Widening the
 timeout would make the symptom go away without anyone learning whether the
 product can drop a message under load, which is the one thing worth knowing
 about a messenger.
+
+## Round 696 — a gate that stops at the first failure hides the next one
+
+Fixing the accessibility step let the Production Docker Build reach the step
+after it, which failed:
+
+```
+320px create-account: tap targets are at least 24px  FAIL
+  BUTTON "Copy the run command" 21x21
+  A "All releases and checksums" 173x18
+```
+
+Two controls under the WCAG 2.2 target floor, on the screen a visitor uses to
+copy the command that starts their agent. Not a regression — "Mobile layout"
+had been SKIPPED on every recent run because accessibility failed before it.
+The defect was there the whole time and nothing could report it. A pipeline that
+stops at the first failure tells you one thing per run, and the second thing
+waits however long the first one does.
+
+`min-h-[24px]`, not `min-h-6`. The utility form was tried first and **measurably
+did not take effect** — the button still reported 21x21 after a full rebuild —
+despite `tailwindcss ^3.4.11` supporting that scale. Written into the class list
+so the next person does not simplify it back to something that silently does
+nothing.
+
+### The stress-test diagnostic, and a control for it
+
+The ILM flake now says how far it got:
+
+```
+Timeout at peer 2: received 62 of 255 from peer 1 (waited 5s for message 62)
+```
+
+The deadline is a named constant used by both receivers and quoted by both
+messages, because a literal "5s" in the text would keep saying 5s after somebody
+changed the `Duration`. Verified by forcing it — with the constant at 1ns both
+panics fire and report real counts — which is the only way to know a message you
+have never seen is correct. Nothing about the assertion, the ordering check or
+the deadline changed.
+
+### What the sync script leaves behind
+
+`sync-wasm-clients.sh --no-restart` left the tree unbuildable:
+
+```
+Could not load node_modules/citadel-internal-service-wasm-client
+  (imported by ../citadel-workspace-client-ts/dist/index.js): EISDIR
+```
+
+Not the documented `node_modules` poisoning — a root `npm ci` did not fix it,
+and `typescript-client/package.json` was intact. The cause is that the sync
+clears `typescript-client/dist/`, which `package.json` names as `main`, and a
+package whose `main` is missing resolves to its own directory: `EISDIR`. The
+message names neither the package that is unbuilt nor the file that is missing.
+Building `typescript-client` restores it.
