@@ -33,6 +33,26 @@ Both flags matter:
   account and message history are gone the next time the agent restarts. Data
   is written to `./internal-service-data` unless `--data-dir` says otherwise.
 
+## That directory is your account
+
+Not a cache. Your account's identity and key material live there, on your
+machine — a Citadel account is not a row on a server that a password can
+retrieve.
+
+The consequences are worth knowing before you rely on it:
+
+- **Signing in works only from the machine you registered on**, with the same
+  data directory. From anywhere else the agent answers "Client does not exist",
+  because it has never heard of the account — the server is not even consulted.
+- **Registering again is not a way back in.** It creates a SEPARATE account with
+  a new identity. Anyone who had already connected to you still points at the
+  old one, so you would be a stranger to your own contacts.
+- **Keep the directory if you move machines**, and back it up as you would an
+  SSH key or a password manager's vault. It is the same kind of secret.
+
+If you run the agent from a temporary folder, or delete `./internal-service-data`
+between sessions, you are creating a new account every time.
+
 ## Windows
 
 ```powershell
