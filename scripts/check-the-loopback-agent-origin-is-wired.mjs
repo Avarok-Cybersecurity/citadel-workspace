@@ -32,7 +32,8 @@
  * class. This one was wired from zero ends and documented as though it were
  * finished.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 
 const VAR = 'LOOPBACK_AGENT_ORIGIN';
 const META = 'citadel-loopback-agent';
@@ -144,6 +145,62 @@ for (const [label, conf] of [['hosted', hosted], ['compose', compose]]) {
   }
 }
 
+// 6. And the container REFUSES what the page will ignore.
+//
+// The page has its own shape check -- LOOPBACK_ORIGIN_SHAPE in
+// resolve-url.ts -- and an origin it rejects is not an error there: it falls
+// through to same-origin `/ws`, which a hosted deployment disables. So a
+// validator laxer than the page produces a container that starts, reports "ok",
+// substitutes the value into the CSP and the meta tag, and hands every visitor
+// a dead socket. Measured: `wss://Local.Avarok.net:12345` and
+// `wss://local_agent.example:12345` were accepted here and ignored there.
+//
+// Differential, not duplicated: the page's regex is EXTRACTED and both are run
+// against the same probes, so a future change to either side that makes them
+// disagree fails here rather than in a browser.
+const UI_SHAPE_PATHS = [
+  'citadel-workspaces/src/lib/websocket-service/resolve-url.ts',
+  'src/lib/websocket-service/resolve-url.ts',
+];
+const shapePath = UI_SHAPE_PATHS.find((p) => existsSync(p));
+if (!shapePath) {
+  problems.push(`none of ${UI_SHAPE_PATHS.join(', ')} exists — the page's shape check could not be read.`);
+} else {
+  const literal = /LOOPBACK_ORIGIN_SHAPE:\s*RegExp\s*=\s*\/(.+?)\/;/.exec(readFileSync(shapePath, 'utf8'));
+  if (!literal) {
+    problems.push(`${shapePath}: LOOPBACK_ORIGIN_SHAPE not found — this comparison verified nothing.`);
+  } else {
+    const pageShape = new RegExp(literal[1]);
+    const PROBES = [
+      'wss://local.example.com:12345',
+      'wss://Local.Example.com:12345',
+      'wss://local_agent.example:12345',
+      'wss://local.example.com:12345/path',
+      'ws://local.example.com:12345',
+      'wss://local.example.com',
+    ];
+    for (const probe of PROBES) {
+      const pageAccepts = pageShape.test(probe);
+      const containerAccepts = spawnSync('sh', [files.validator], {
+        env: {
+          ...process.env,
+          LOOPBACK_AGENT_ORIGIN: probe,
+          AGENT_UPSTREAM: '127.0.0.1:12345',
+          WS_PROXY_ENABLED: '0',
+          LISTEN_ADDR: '0.0.0.0',
+        },
+        encoding: 'utf8',
+      }).status === 0;
+      if (pageAccepts !== containerAccepts) {
+        problems.push(
+          `"${probe}": ${files.validator} ${containerAccepts ? 'accepts' : 'rejects'} it but the page ` +
+          `${pageAccepts ? 'accepts' : 'IGNORES'} it. A value the container admits and the page ignores ` +
+          `is a dead socket for every visitor, with the container reporting "ok".`);
+      }
+    }
+  }
+}
+
 if (problems.length) {
   console.error('The loopback agent origin is not wired end to end:\n');
   for (const p of problems) console.error('  - ' + p);
@@ -154,5 +211,6 @@ if (problems.length) {
 }
 console.log(
   `The loopback agent origin is wired: meta, sub_filter, connect-src, envsubst filter and `
-  + `validation all name ${VAR}, and the template renders it into both the policy and the page.`,
+  + `validation all name ${VAR}; the template renders it into both the policy and the page; `
+  + `and the container and the page agree on which origins are acceptable.`,
 );

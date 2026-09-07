@@ -8386,3 +8386,41 @@ every flag assertion pass by matching nothing.
 This one was found by reading the code that generates the command while waiting
 on CI — not by any check, and not by a failure. Nothing in the repository could
 have reported it, because every test that touched it agreed with it.
+
+## Round 684 — a validator laxer than its consumer
+
+Round 679 added validation for `LOOPBACK_AGENT_ORIGIN` at container start-up.
+The page has its own shape check — `LOOPBACK_ORIGIN_SHAPE` in
+`resolve-url.ts` — and the two did not agree:
+
+| value | container | page |
+|---|---|---|
+| `wss://local.avarok.net:12345` | accept | accept |
+| `wss://Local.Avarok.net:12345` | **accept** | ignores |
+| `wss://local_agent.example:12345` | **accept** | ignores |
+
+An origin the page rejects is not an error there: `resolveWebsocketUrl` falls
+through to same-origin `/ws`, which a hosted deployment disables on purpose —
+one shared agent would hold every user's ratchet keys. So the container starts,
+prints `ok`, substitutes the value into the CSP and the meta tag, and every
+visitor gets a dead socket with nothing anywhere explaining it.
+
+A validator laxer than its consumer is worse than no validator: it reports
+safety for the exact input that breaks. The shell check is now the page's shape
+exactly — lowercase, no underscore.
+
+**The guard is differential, not a second copy of the rule.** The gate extracts
+`LOOPBACK_ORIGIN_SHAPE` from the page's own source and runs both it and the real
+shell script against the same probes, requiring identical verdicts. A future
+change to either side that makes them disagree fails there rather than in
+someone's browser — and the third implementation of the rule that a hand-written
+list would have been never exists.
+
+Negative control: restore the lax regex. The gate goes RED and names both
+values, in the words that describe the consequence rather than the mismatch —
+*"a value the container admits and the page ignores is a dead socket for every
+visitor, with the container reporting ok"*.
+
+Found by reading the hosted-only code paths after round 683, on the theory that
+"only fires when a loopback origin is published" is where the defects are. It
+was: three of the last six rounds came from that one conditional.

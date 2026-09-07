@@ -74,8 +74,17 @@ echo "$listen_addr" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$|^\[[0-9A-Fa-f:]+\]
 # of policy, so accepting it would produce a container that starts and a UI that cannot connect.
 loopback="${LOOPBACK_AGENT_ORIGIN:-}"
 if [ -n "$loopback" ]; then
-  echo "$loopback" | grep -Eq '^wss://[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?:[0-9]{1,5}$' \
-    || die "LOOPBACK_AGENT_ORIGIN='$loopback' must be a bare wss://host:port (e.g. wss://local.example.com:12345), or empty to reach the agent through same-origin /ws."
+  # EXACTLY the shape the page accepts -- lowercase, no underscore. This was
+  # laxer, and a validator laxer than its consumer is worse than none: nginx
+  # substituted `wss://Local.Example.com:12345` into the CSP and the meta tag,
+  # the container reported "ok", and then LOOPBACK_ORIGIN_SHAPE in
+  # citadel-workspaces/src/lib/websocket-service/resolve-url.ts rejected it and
+  # resolveWebsocketUrl fell through to same-origin /ws -- which a hosted
+  # deployment disables, because one shared agent would hold every user's
+  # ratchet keys. Every visitor gets a dead socket and nothing anywhere says
+  # why. Failing here names the rule while somebody is still looking at it.
+  echo "$loopback" | grep -Eq '^wss://[a-z0-9]([a-z0-9.-]*[a-z0-9])?:[0-9]{1,5}$' \
+    || die "LOOPBACK_AGENT_ORIGIN='$loopback' must be a bare wss://host:port, lowercase, no underscores (e.g. wss://local.example.com:12345), or empty to reach the agent through same-origin /ws. The page's own shape check is this strict, and a value it rejects is silently ignored in the browser."
 fi
 
 echo "[validate-runtime-vars] ok: upstream=$upstream ws_proxy=$enabled listen=$listen_addr loopback=${loopback:-<none>}"
