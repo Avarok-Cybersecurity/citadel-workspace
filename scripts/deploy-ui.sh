@@ -29,6 +29,7 @@ set -euo pipefail
 TAG="${1:-}"
 UI_PORT="${UI_PORT:-8099}"
 LOOPBACK_AGENT_ORIGIN="${LOOPBACK_AGENT_ORIGIN:-}"
+DEFAULT_WORKSPACE_SERVER="${DEFAULT_WORKSPACE_SERVER:-}"
 IMAGE="ghcr.io/avarok-cybersecurity/citadel-workspace-ui"
 NAME="${UI_CONTAINER_NAME:-citadel-ui}"
 
@@ -54,6 +55,19 @@ fi
 if ! printf '%s' "$LOOPBACK_AGENT_ORIGIN" | grep -Eq '^wss://[a-z0-9]([a-z0-9.-]*[a-z0-9])?:[0-9]{1,5}$'; then
   echo "ERROR: LOOPBACK_AGENT_ORIGIN must look like wss://local.example.com:12345" >&2
   echo "  got: $LOOPBACK_AGENT_ORIGIN" >&2
+  exit 1
+fi
+
+# Optional, unlike the origin above: empty means the join wizard asks for the
+# address, which is correct for a deployment that has not published one. But a
+# value that is set and malformed is worse than none -- the page's reader
+# refuses it, so the field renders empty and the operator sees the feature
+# simply not working, with nothing anywhere saying why. Fail here instead.
+if [ -n "$DEFAULT_WORKSPACE_SERVER" ] &&
+   ! printf '%s' "$DEFAULT_WORKSPACE_SERVER" | grep -Eq '^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?:[0-9]{1,5}$'; then
+  echo "ERROR: DEFAULT_WORKSPACE_SERVER must be host:port, e.g. citadel.example.com:12400" >&2
+  echo "  got: $DEFAULT_WORKSPACE_SERVER" >&2
+  echo "  (leave it unset to have the join wizard ask instead)" >&2
   exit 1
 fi
 
@@ -92,6 +106,7 @@ docker rm -f "${NAME}" >/dev/null 2>&1 || true
 docker run -d --name "${NAME}" --restart unless-stopped \
   -p "${PUBLISH}" \
   -e "LOOPBACK_AGENT_ORIGIN=${LOOPBACK_AGENT_ORIGIN}" \
+  -e "DEFAULT_WORKSPACE_SERVER=${DEFAULT_WORKSPACE_SERVER}" \
   -e WS_PROXY_ENABLED=0 \
   -e AGENT_UPSTREAM=127.0.0.1:12345 \
   -e LISTEN_ADDR=0.0.0.0 \
