@@ -10384,3 +10384,57 @@ round 712 is why the distinction is not academic.
 | Understand a failure | "check your network" / an invented sentence | names the address and its shape |
 
 The link is enough.
+
+## Round 726 — renewal is automated where it does not matter
+
+Round 722 found the released agent's built-in certificate expiring 2026-12-05.
+Chasing how it is obtained turned the picture around:
+
+```
+$ sudo certbot certificates
+  Certificate Name: local.avarok.net
+    Domains: local.avarok.net
+    Expiry Date: 2026-12-05 20:14:04+00:00 (VALID: 89 days)
+
+$ systemctl list-timers | grep certbot
+  Mon 2026-09-07 19:19 UTC   6h   certbot.timer   (last ran 1h15m ago)
+```
+
+**`local.avarok.net` is certbot-managed on avarok2 and renews itself.** The
+certificate is not a hand-made artefact anybody has to remember; it is renewed
+on a timer like every other certificate on that host.
+
+The problem is that renewal happens where it changes nothing. The agent
+**compiles a copy in at build time**, so a certificate renewed on the server
+does not reach a binary already on somebody's laptop. Automation covers the
+half that was never at risk.
+
+So the actual requirement is a cadence, not a rescue: **cut an agent release at
+least every ~60 days**, and cut it from the current certbot certificate rather
+than whatever is lying next to the compose file. Round 722's guard enforces the
+floor — a release built from a certificate with under 30 days left cannot be
+published — and now there is a renewing source for it to be built from.
+
+### The copy beside the compose file is already stale
+
+```
+/srv/citadel-tenants/avarok/loopback/loopback.pem   notAfter Dec  3 23:13:06 2026
+certbot's live certificate                          notAfter Dec  5 20:14:04 2026
+```
+
+Two days apart, from one renewal cycle. Nothing reads that copy today — the
+agent serves its built-in one — but it is exactly the file somebody would reach
+for when building a release, and it is already behind. A release cut from it
+would start life two days closer to expiry than necessary, and the drift only
+grows. **Build from `certbot certificates`, not from that directory.**
+
+### Unrelated, but visible from the same command
+
+```
+  Certificate Name: mx.avarok.net-0001
+    Domains: mx.avarok.net avarok.net thomaspbraun.com vizit.dev
+    Expiry Date: 2026-09-22 18:31:40+00:00 (VALID: 15 days)
+```
+
+Not this project's, and the timer should handle it. Recorded because 15 days is
+the shortest on that host and it covers `avarok.net` itself.
