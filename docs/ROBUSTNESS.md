@@ -9170,3 +9170,33 @@ error on load. Cloudflare injects that beacon at the edge; the policy the image
 serves does not admit it. Nothing breaks, and the two ways to make it consistent
 — admit the origin, or turn the injection off — are the operator's call, not
 something to change under them.
+
+## Round 700 — the administrator door had never been walked on a real deployment
+
+The requirement is production Playwright coverage of the onboarding workflows
+for new members AND new administrators. Both were covered, unevenly:
+
+- `check-production-image.mjs` walks both branches — against a LOCALLY BUILT
+  image;
+- every proof against a real deployment took the MEMBER door only.
+
+Those are different artefacts, and the one people are handed is the deployed
+one.
+
+`prove-users-can-talk.mjs` now sends the first user through the administrator
+door and the rest through member, in the same run, at no extra cost, with each
+step labelled by the door it took so the output states which was exercised
+rather than leaving it implicit:
+
+```
+PASS  u1... creates an account via the admin door
+PASS  u2... creates an account via the member door
+...
+8/8 steps passed against https://work.test:4201 (server citadel.avarok.net:12400, 2 users)
+```
+
+An administrator is deliberately NOT excused the workspace-initialisation
+prompt — that is the difference the two branches carry, and round 682 asserts
+it. If the prompt appears here it is dismissed so it cannot block the peering
+steps, and asserting its CONTENT is left to the production-image check. Two
+tools, one claim each, rather than both half-checking it.

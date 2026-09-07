@@ -60,15 +60,24 @@ const record = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`);
 };
 
-/** Create an account and land in the workspace. Resolves false on timeout. */
-async function join(page, user) {
+/**
+ * Create an account and land in the workspace. Resolves false on timeout.
+ *
+ * `branch` picks which onboarding door to walk. The first user takes the
+ * ADMINISTRATOR branch and the rest take MEMBER, so a single run exercises both
+ * against a real deployment at no extra cost. Until now every live proof took
+ * the member door, and the administrator door was walked only against a locally
+ * built image by check-production-image.mjs -- which is a different artefact
+ * from the one people are handed.
+ */
+async function join(page, user, branch) {
   await page.goto(ORIGIN, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForTimeout(9_000);
   await page.getByTestId('create-account-button').first().click();
   await page.waitForTimeout(2_500);
   // Onboarding is production-only, so this step is present in the deployed
   // build and absent on a dev server. Both are legitimate targets here.
-  const intent = page.getByTestId('onboarding-intent-member');
+  const intent = page.getByTestId(`onboarding-intent-${branch}`);
   if (await intent.count()) { await intent.first().click(); await page.waitForTimeout(2_500); }
   const dlg = page.locator('[role="dialog"]');
   await dlg.locator('#serverAddress').fill(SERVER);
@@ -100,8 +109,17 @@ for (let i = 0; i < USERS; i++) {
   people.push({ name: `u${i + 1}x${stamp}`, page });
 }
 
-for (const person of people) {
-  record(`${person.name} creates an account`, await join(person.page, person.name));
+for (const [index, person] of people.entries()) {
+  // First user: the administrator door. Everyone after: the member door.
+  const branch = index === 0 ? 'admin' : 'member';
+  person.branch = branch;
+  record(`${person.name} creates an account via the ${branch} door`,
+    await join(person.page, person.name, branch));
+  // An administrator is deliberately NOT excused the workspace-initialisation
+  // prompt -- that is the difference the branches carry. If it appears, put it
+  // away so it cannot block the peering steps below; its content is asserted by
+  // check-production-image.mjs, not here.
+  await person.page.keyboard.press('Escape').catch(() => {});
 }
 await people[0].page.waitForTimeout(9_000);
 
