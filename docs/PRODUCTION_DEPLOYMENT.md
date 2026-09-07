@@ -284,6 +284,16 @@ Three divergences to reconcile deliberately, not one at a time:
    and a `connect-src 'self'` that forbids the agent — it loads, looks correct,
    and can open no socket.
 
+   **Added to the host on 2026-09-07**, because it was NOT there: the `.env`
+   carried `WORKSPACE_MASTER_PASSWORD`, `INTERNAL_SERVICE_ALLOWED_ORIGINS`,
+   `INTERNAL_SERVICE_BIND_HOST`, `INTERNAL_SERVICE_PORT`, `WORKSPACE_BIND_ADDR`
+   and `IMAGE_TAG`, and nothing else. The value the running container carries
+   reached it through `docker run -e`, not from that file, so the first
+   compose-managed deploy would have aborted on the guard — which is the guard
+   working, and a better outcome than the alternative. The value now in `.env`
+   was verified equal to the one the live container is running, and a timestamped
+   backup of the previous file sits beside it.
+
 After any UI deploy, check the two things that fail silently:
 
 ```bash
