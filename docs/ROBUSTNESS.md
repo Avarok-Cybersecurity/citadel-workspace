@@ -10234,3 +10234,37 @@ field had already done its work: the accounts exist, with CIDs, in the log.
 the discriminator, so the next occurrence is recognised rather than re-diagnosed:
 **both peers' messengers shut down, server reports `close_notify` missing, and
 the visible failures are all downstream of a session that no longer exists.**
+
+### Round 723, refined — the removal is a consequence, not the cause
+
+Chasing the "Session not found in session manager" line led to the session
+lifecycle, and to a near-miss worth recording.
+
+The `CLAUDE.md` in this session's context says sessions are removed in "exactly
+two places" and names `requests/peer/disconnect.rs` as one. The code disagrees
+twice over: that file's own doc comment says *"This function does NOT clear the
+session from the InternalService's `server_connection_map`"*, and it is marked
+`#[allow(dead_code)]`. I was about to correct the document.
+
+**This branch had already corrected it.** Its version lists five files with a
+reason for each, names `connection_management.rs` and
+`connection_management_claim.rs` explicitly, and points at
+`scripts/check-sessions-are-removed-in-two-places.mjs`, which holds the list so
+a sixth has to be argued for. The stale text is the other branch's, arriving via
+session context rather than the tree. Checking which file actually carries a
+claim, before editing it, cost one grep and saved a wrong "fix" to a document
+that is right — and a duplicate of a gate that exists.
+
+What it does settle about round 723: `connection_management_claim.rs` removes a
+record only when **the SDK no longer holds that session**. So the removal is
+downstream. The first-mover is the server's own line, at the same moment:
+
+```
+C2S terminating | reason: peer closed connection without sending TLS close_notify
+```
+
+The transport dropped; the SDK dropped the session; the internal service then
+discarded bookkeeping for a session that had already ended, exactly as designed.
+So the question is not "what removed the session" — that is answered and
+correct — but **why the C2S connection died mid-test**. That is a transport
+question, and it is where a reproduction should look. Still no guess as to why.
