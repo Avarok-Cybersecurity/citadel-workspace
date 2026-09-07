@@ -10268,3 +10268,65 @@ discarded bookkeeping for a session that had already ended, exactly as designed.
 So the question is not "what removed the session" — that is answered and
 correct — but **why the C2S connection died mid-test**. That is a transport
 question, and it is where a reproduction should look. Still no guess as to why.
+
+## Round 724 — the member-list flake finally said something
+
+Round 703 gave up on guessing at `member-list-loading` and made the spec capture
+the DOM at first sighting instead. It fired in the publish run — and note how it
+appeared: the **job passed**.
+
+```
+1 flaky
+  [chromium] › member-list-loading.spec.ts:43 › the sidebar never reports an empty member list while loading
+2 skipped
+42 passed (7.1m)
+```
+
+Playwright's `retries: 2` turns a first-attempt failure into a green job. Without
+round 697's "Name any spec that only passed on a retry" step running at
+`if: always()`, this run reads as clean. Two guards from earlier rounds had to
+both be in place for this to be visible at all.
+
+What it captured:
+
+```
+Error: the sidebar said "No members yet" while the member list was still loading.
+At the first sighting the DOM held:
+  {"loading":"(absent)", "unavailable":"(absent)",
+   "empty":"Nobody else is here yet. Invite someone with the share butto",
+   "memberRows":0, "peerRows":0,
+   "url":".../workspace?nodeId=workspace-root"}
+```
+
+`loading` absent and `unavailable` absent rules out two of the three paths that
+end a load: the `catch` and the timeout both set `membersUnavailable`. That
+leaves one — the `members:loaded` handler — so **an event arrived, carried an
+empty list, and ended the load.** The hook is not clearing on send; that was
+fixed long ago and the file says so.
+
+### The mechanism this points at, and why it is not yet a fix
+
+`use-domain-members.ts` accepts an event when
+`isForDomain(payload.domainId, activeDomainId)`, and that function returns
+**true when the payload has no domain id at all**:
+
+```ts
+if (payloadDomainId === undefined || wantedDomainId === undefined) return true;
+```
+
+deliberately, so a client against a server predating the field still works. But
+it means any `Members` response without a `domain_id` is accepted as this
+domain's answer — and if it is empty, the sidebar marks the domain loaded and
+says nobody is here.
+
+That is a mechanism, not a diagnosis. **Nothing captured shows that the event
+which ended the load actually lacked a domain id** — the diagnostic recorded the
+DOM, not the payload. Rounds 693 and 697 each shipped a fix for this spec built
+on a plausible reading, and both missed, which is the whole reason round 703
+stopped fixing and started measuring.
+
+**Next step is another measurement, not another fix:** record the
+`members:loaded` payloads (domain id and member count, in order) and put them in
+the failure message beside the DOM. Then the next occurrence names the event
+that ended the load, and the question becomes which emitter sent it — answerable
+rather than arguable.
