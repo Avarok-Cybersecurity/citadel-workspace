@@ -10530,3 +10530,68 @@ TRUE exit reverted     = 0
 the third time in this session a pipeline has hidden the status of the thing
 under test — twice on `| tail`, once here. A control whose exit code is read
 through a pipe is not a control.
+
+## Round 729 — two messages, one phrase, opposite meanings
+
+The robustness sweep's second finding, and the more dangerous of the pair.
+
+The agent answers a **failed** peer-list read with:
+
+```
+Could not determine whether {peer} is already registered: {err}.
+Nothing was changed; try again.
+```
+
+which is the handler correctly refusing to guess. The UI's predicate was
+`/already registered/i.test(message)` — and that sentence contains the phrase.
+So a transient read error was classified as **success**, and five consumers
+acted on it:
+
+| Consumer | What it did |
+|---|---|
+| `accept-matcher.ts` | resolved → `lifecycle.ts` connected to an unregistered peer |
+| `event-handlers.ts` | deleted the outgoing retry record |
+| `peer-register-failure.ts` | marked the row registered |
+| `p2p-registration-service` | emitted `p2p:peer-registered` |
+| `p2p-auto-connect-service` | turned that into `addOnlinePeer` + `connectToPeer` |
+
+The connect then failed into a `debugLog` compiled out of production. Net: a
+peer shown online and registered, the retry record destroyed, no registration
+performed, and nothing said to anybody.
+
+**Excluded explicitly rather than matched more tightly.** The agent's success
+wording and the UI's own strings are both loose; an anchored pattern would
+silently start rejecting the case the predicate exists to accept — trading a
+false success for a false refusal, which is worse because it breaks the working
+path. What makes the loose form safe is not the exclusion list but the gate.
+
+`check-already-registered-predicate-matches-the-agent.mjs` extracts EVERY
+`PeerRegisterFailure` message the Rust can emit, renders it, runs it through the
+real predicate, and asserts exactly one reads as success:
+
+```
+2 of 2 PeerRegisterFailure messages are read as SUCCESS. Exactly one may be.
+    SUCCESS  Could not determine whether 99 is already registered: 99. …
+    SUCCESS  Peer 99 is already registered
+exit 1                                    (before the fix)
+
+already-registered predicate: exactly 1 of 2 agent messages reads as success
+exit 0                                    (after)
+```
+
+The red came for free: the gate was written before the predicate was fixed, so
+its first run *was* the negative control, against the real defect.
+
+### Two of my own mistakes, both caught by the machinery
+
+**The vacuity floor caught my parser.** The first version cut each block at
+`indexOf('}')` — which lands inside the format string's own `{}` placeholders,
+before `message:`. Extraction found zero, and the floor refused to report a
+clean bill over nothing. Without it the gate would have passed loudly and
+measured nothing at all.
+
+**The staleness trap, a fifth time.** The gate reads the parent's submodule
+checkout; my predicate fix was in the UI worktree and not yet committed, so the
+gate kept failing against the *old* file while I had the new one open. Every
+occurrence this session has the same shape — verify what the tool actually
+consumed, not what you edited.

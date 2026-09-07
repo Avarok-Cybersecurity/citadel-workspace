@@ -505,6 +505,8 @@ jobs:
         run: node scripts/check-the-loopback-agent-origin-is-wired.mjs
       - name: Every variable envsubst can substitute is validated first
         run: node scripts/check-envsubst-vars-are-validated.mjs
+      - name: Exactly one agent refusal is read as success
+        run: node scripts/check-already-registered-predicate-matches-the-agent.mjs
       - name: Every generated binding has a type, and every type a binding
         run: node scripts/check-bindings-match-exported-types.mjs
       - name: Instructions name the port the UI actually serves
