@@ -8891,3 +8891,42 @@ code: the gate reads `git ls-files`, and the component that renders them was
 still untracked in the checkout I had copied it into. Committing it properly
 made the gate correct again — a reminder that a gate reading tracked files
 cannot see work in progress, and that "the gate is wrong" is usually not.
+
+## Round 694 — every multi-user proof so far shared one agent
+
+`21/21`, twice, three users, both directions. All of it through **one agent**.
+
+That is a supported topology and it is what the local stack does — one agent
+multiplexing several sessions over one WebSocket, which CLAUDE.md documents as
+the designed testing method. It is not what two people do. Two people each run
+their own agent, so P2P crosses two independent Citadel clients with separate
+key material, separate data directories, and separate processes. Nothing had
+tested that, and the difference is exactly where a protocol between peers can
+fail while a protocol within one process cannot.
+
+Set up as two users on two agents, as close to two machines as one machine
+gets:
+
+| | user A | user B |
+|---|---|---|
+| page | `https://work.test:4201` | `https://work.test:4208` |
+| agent | `:12345` | `:12346` |
+| data | `/tmp/agentdata-recover` | `/tmp/agentdata-userB` |
+
+Each bundle's `citadel-loopback-agent` meta names its own agent, which is the
+mechanism nginx uses in production, and each agent presents the built-in
+`local.avarok.net` certificate — verified independently on both ports.
+
+```
+8/8 steps passed — two users, two agents
+```
+
+Both joined through their own agent, the request crossed, B accepted, each
+listed the other, and a message went each way. The earlier `21/21` results stop
+being "one agent multiplexing" and start being the thing the product claims.
+
+Checked before building it, so as not to duplicate the suite: `test:file-transfer`
+and `test:offline` both passed in the 47/47, so file transfer and offline
+delivery are covered. The gap worth filling was the one the suite structurally
+cannot reach — CI runs a single compose stack, and a single stack has a single
+agent.
