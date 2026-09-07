@@ -9128,3 +9128,45 @@ and carries the message alongside rather than in place of it.
 Every one of tonight's user-facing findings, and both of these, is the same
 distance: between what an assertion SAYS and what it MEASURES. The only reliable
 way across it has been to run the thing and read what came back.
+
+## Round 699 — what the deployed site can and cannot do, measured
+
+Everything about work.avarok.net so far has been read off headers. This is a
+real browser, the real origin, a real socket, against the image that is serving
+right now.
+
+**It reaches a local agent.** With `agent-v0.3.0` started for that origin:
+
+```
+connection-retry dialog present: 0 | any dialog: 0
+agent reachable from the live site: true
+```
+
+So the hosted loopback design works in production today: the page dials
+`wss://local.avarok.net:12345`, the CSP permits it, the agent's Origin allowlist
+accepts `https://work.avarok.net`, and the certificate validates. That is the
+part of round 673's work that is already live, and it is worth having measured
+rather than assumed.
+
+**The first attempt measured nothing**, and said so only because I checked which
+process was listening. The agent already on `:12345` was an earlier one whose
+allowlist named `https://work.test:4201`, so my new one never bound and the page
+got a correct `403`. Reading that as "the live site cannot reach an agent" would
+have been a confident, wrong, and expensive conclusion.
+
+**What the deployed image still lacks** is every UI fix since it was built —
+including round 675, where the peer request was never sent at all. Two people on
+work.avarok.net today can connect their agents and cannot become peers. The
+connection step works; the social step does not.
+
+**One incidental finding**, harmless but real: the live site loads
+
+```
+https://static.cloudflareinsights.com/beacon.min.js
+```
+
+which its own Content-Security-Policy refuses, so every visitor gets a console
+error on load. Cloudflare injects that beacon at the edge; the policy the image
+serves does not admit it. Nothing breaks, and the two ways to make it consistent
+— admit the origin, or turn the injection off — are the operator's call, not
+something to change under them.
