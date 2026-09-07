@@ -19,6 +19,12 @@
  * js-yaml is a devDependency and this FAILS rather than skips when it is
  * missing. A gate that quietly does nothing when its parser is absent is worse
  * than no gate: it reports safety on exactly the runs where it checked least.
+ *
+ * The consequence is where this runs. The cheap-gates job installs nothing, so
+ * this cannot live there -- it failed on its own dependency, not on a workflow.
+ * It runs in `unit-tests`, immediately after `npm ci`. That is the cost of
+ * refusing to skip, and it is the right cost: the alternative is a check that
+ * is green precisely when it did nothing.
  */
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';

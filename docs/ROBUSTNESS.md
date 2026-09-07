@@ -10908,3 +10908,37 @@ Three independent guards fired on one wave of my own work: the submodule-work
 gate (a doc left uncommitted), the WASM staleness gate (a binary predating its
 source), and, before them, the pre-push hook (a parent pointing at an unpushed
 UI commit). None of the three would have been caught by reading the diff.
+
+## Round 736 — the gate failed on its own dependency, in the job I put it in
+
+Round 732's workflow-parsing gate went red in CI, and not on a workflow:
+
+```
+  js-yaml is not installed, so the workflows were not parsed.
+  Run `npm ci` at the repository root.
+##[error]Process completed with exit code 1
+```
+
+I had put it in the cheap-gates job, having convinced myself that job installs
+dependencies. It does not. The `npm ci` occurrences I found there are inside
+COMMENTS — prose about npm ci, in a job that runs none. The neighbouring gate's
+header says so plainly, and I read it, doubted it, and did not check:
+
+> *"No js-yaml. This gate runs in the crate-coverage job, which installs nothing,
+> so a dependency here dies on `Cannot find module 'js-yaml'`…"*
+
+Grepping for `npm ci` and counting hits is not the same as finding a step that
+runs it. `run: npm ci` returns five, in `unit-tests`, `typecheck`, `lint`,
+`integration-tests` and `playwright-tests` — none of them the gates job.
+
+Moved to `unit-tests`, immediately after its `npm ci`.
+
+**The refusal to skip is what forced this, and it was right.** Had the gate
+skipped when js-yaml was missing, it would have sat in the cheap-gates job
+reporting success on every run while parsing nothing — indistinguishable from
+working, forever. Failing loudly cost one red run and produced a gate that
+actually runs. That is the trade the round-732 header claimed, tested.
+
+Recorded in the gate's own header, because the placement is not arbitrary and
+the next person to tidy the workflow will want to know why one check sits in a
+test job.

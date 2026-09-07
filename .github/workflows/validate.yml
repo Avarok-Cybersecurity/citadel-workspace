@@ -509,8 +509,6 @@ jobs:
         run: node scripts/check-already-registered-predicate-matches-the-agent.mjs
       - name: Every document in docs/ is reachable from its index
         run: node scripts/check-docs-are-listed-in-the-index.mjs
-      - name: The workflows GitHub reads are parseable
-        run: node scripts/check-workflows-parse.mjs
       - name: The UI recognises the agent's duplicate-connect refusal
         run: node scripts/check-connect-in-progress-matches-the-agent.mjs
       - name: Submodule work is committed, not just pointed at
@@ -737,6 +735,12 @@ jobs:
       - name: Install Workspace Dependencies
         # Install from root to resolve file: dependencies between workspaces
         run: npm ci
+      - name: The workflows GitHub reads are parseable
+        # HERE, not in the gates job: that job installs nothing, so js-yaml is
+        # absent and the check fails on its own dependency rather than on a
+        # workflow. It refuses to skip in that case -- deliberately -- so the
+        # only correct home is a job that has run `npm ci`.
+        run: node scripts/check-workflows-parse.mjs
       - name: Build citadel-internal-service typescript-client
         # Build the WASM client's TypeScript wrapper first (innermost dependency)
         run: npm run build
