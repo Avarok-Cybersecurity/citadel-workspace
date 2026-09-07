@@ -10942,3 +10942,52 @@ actually runs. That is the trade the round-732 header claimed, tested.
 Recorded in the gate's own header, because the placement is not arbitrary and
 the next person to tidy the workflow will want to know why one check sits in a
 test job.
+
+## Round 737 — the expensive thing is real; the proposed lever is not
+
+The performance sweep's largest finding: every integration leg runs
+`docker compose up -d --build`, `docker-compose.yml` pins no `target:`, and the
+last stage of both Rust Dockerfiles is `dev` — so CI builds the 5.6 GB
+toolchain image rather than the 145 MB production one, at roughly 950
+runner-minutes per run, duplicated in the UI submodule's identical matrix.
+
+All of that is verified:
+
+```
+docker-compose.yml            build: { context, dockerfile }   — no target:
+docker/internal-service/…     FROM debian:trixie-slim AS production   (line 99)
+                              FROM builder AS dev                     (line 209)
+docker/workspace-server/…     same shape, lines 93 and 154
+grep -rl "cache-from|cache-to|type=gha|cargo-chef" scripts/ docker/ .github/  → empty
+```
+
+**But pinning `target: production` would save almost nothing.** The production
+stage is `COPY --from=builder /usr/local/bin/…` — it copies a binary the
+`builder` stage compiled. Building `production` therefore compiles exactly the
+same 603 crates. What the smaller target saves is image export and disk, not the
+compile, and the compile is the cost.
+
+That distinction matters because "pin the target" is the cheap-looking action,
+and someone acting on the finding as stated would spend a day changing 47 jobs
+to a stage that builds the same thing.
+
+**The lever is a build cache**, and there is none anywhere:
+a BuildKit cache export (`cache-to: type=gha`) or a cargo-chef dependency stage,
+either of which requires `docker buildx` rather than `docker compose --build`.
+That is the day of work, and it is the one worth doing.
+
+### Why the dev stage is not simply wrong
+
+`docker-compose.yml` mounts `target_cache:/usr/src/app/target`. Locally that is
+a persistent Rust target directory, so a developer's rebuild is incremental and
+the toolchain image is exactly what they want. In CI the volume is empty on
+every run, so the same configuration yields a full cold build and a 5.6 GB image
+nobody keeps.
+
+So the dev stage is right for the case it was written for and wrong for the case
+that dominates the bill. A CI-only compose override is the shape of the fix, not
+a change to the default.
+
+**Not attempted here.** It cannot be validated without running the 47-job matrix,
+which shares a backend and cannot run concurrently. Recorded with the evidence
+and the corrected lever so the next attempt starts from the right end.
