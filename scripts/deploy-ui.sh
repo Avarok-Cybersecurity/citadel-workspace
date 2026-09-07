@@ -62,8 +62,28 @@ fi
 # whole network. See docs/ROBUSTNESS.md [agent-is-loopback-only].
 PUBLISH="127.0.0.1:${UI_PORT}:8080"
 
+# GHCR packages here are PRIVATE, and the host holds no registry credentials.
+# Rather than store a GitHub token on a public-facing server, an image can be
+# side-loaded (`docker save` on an authenticated machine, `docker load` here)
+# and this run told so EXPLICITLY.
+#
+# Explicit, not a fallback: "pull failed, use whatever is cached" would silently
+# redeploy a stale image on any transient registry error, which is precisely the
+# failure this script's pull-before-remove ordering exists to avoid. With
+# ALLOW_PRELOADED unset, a failed pull is still fatal and the running container
+# is untouched.
 echo "Pulling ${IMAGE}:${TAG}"
-docker pull "${IMAGE}:${TAG}"
+if ! docker pull "${IMAGE}:${TAG}"; then
+  if [ "${ALLOW_PRELOADED:-}" = "1" ] && docker image inspect "${IMAGE}:${TAG}" >/dev/null 2>&1; then
+    echo "  pull failed; using the preloaded image (ALLOW_PRELOADED=1)"
+    docker image inspect "${IMAGE}:${TAG}" --format "  loaded {{.Id}} created {{.Created}}"
+  else
+    echo "ERROR: could not pull ${IMAGE}:${TAG} and no preloaded image was authorised." >&2
+    echo "  Either authenticate this host to the registry, or side-load the image" >&2
+    echo "  and re-run with ALLOW_PRELOADED=1." >&2
+    exit 1
+  fi
+fi
 
 # Pull BEFORE removing: a failed pull must not leave the site down.
 echo "Replacing ${NAME}"

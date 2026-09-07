@@ -10004,3 +10004,62 @@ action for a `no-cache` document.
 The failure this rules out is the one where the deploy succeeds, `docker ps`
 shows the new image, the operator reloads and sees the old site, and half an hour
 goes into the container before anybody looks at `cf-cache-status`.
+
+## Round 719 — deployed, and work.avarok.net works
+
+```
+BEFORE   0/3 steps passed against https://work.avarok.net
+AFTER    9/9  (2 users, both onboarding doors)
+         22/22 (3 users, all pairs, both directions)
+```
+
+The image is `sha-81435e19c0be`, built by CI from a known commit — replacing an
+image that existed only as a layer cache on that host and whose provenance
+nobody knew (round 715). The served bundle now contains **zero** occurrences of
+`dns.google`, which is the whole defect: for weeks every new user waited thirty
+seconds and was told "Registration timed out" because the page tried to resolve
+the server hostname with a fetch its own CSP forbade.
+
+`Promote latest` was skipped, as designed — `latest` still points where it did,
+so nothing else that pulls it moved.
+
+### The deploy failed first, safely, twice by design
+
+**Pull unauthorized.** The GHCR packages are private and the host holds no
+registry credentials — not for `ubuntu`, not for root. The pull failed and
+`deploy.sh`'s ordering meant the running container was never touched:
+
+```
+Error response from daemon: ... manifests/sha-81435e19c0be: unauthorized
+$ docker ps  ->  citadel-ui  loopback-3078d2f1  Up 45 hours
+```
+
+That is the guard from round 715 doing exactly what it was built for, on the
+first real use.
+
+**Then: a token on the server, or the image?** Authenticating the host would
+have meant storing a broad GitHub token on a public-facing machine. Instead the
+image was side-loaded — pulled `--platform linux/amd64` on an authenticated
+machine, `docker save`, `scp`, `docker load` — and the host verified it received
+the same bits:
+
+```
+local  id=sha256:72c51dffb1655196d6c2472edcec3805197b2e0af261e31d503a25f6f2561596
+host   id=sha256:72c51dffb1655196d6c2472edcec3805197b2e0af261e31d503a25f6f2561596
+```
+
+That required a new flag, and it is **explicit** on purpose: `ALLOW_PRELOADED=1`.
+"Pull failed, use whatever is cached" would silently redeploy a stale image on
+any transient registry error — the precise failure the pull-before-remove
+ordering exists to prevent. Without the flag a failed pull is still fatal;
+verified with a nonexistent tag, which refuses and leaves everything running.
+
+### What remains
+
+The Cloudflare beacon still violates the site's own CSP. It is injected by the
+CDN, not by this build, so the proof prints it as a note rather than failing on
+it. It is the operator's to remove.
+
+The deployed image predates the message fix (round 713) and the published server
+address (this session's last wave). Both are committed and will ship on the next
+publish; neither blocks anyone from joining today.
