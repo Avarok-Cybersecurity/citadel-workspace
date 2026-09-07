@@ -103,6 +103,47 @@ if (!new RegExp(`\\b${VAR}\\b`).test(validator)) {
     `attribute, where a quote or a semicolon does not fail — it silently widens or breaks one.`);
 }
 
+// 5. And it RENDERS. Every check above asks whether a name is present; this one
+// asks what an operator actually gets, which is the only thing that matters and
+// is where a stray quote or an unbalanced brace would show up. envsubst's
+// allowlist is mirrored here rather than assumed: a variable outside it is left
+// as a literal, and serving a literal `${...}` to a browser is one of the
+// failure modes this gate exists for.
+const ALLOWED = filter ? filter[1].split('|') : [];
+const render = (env) =>
+  nginx.replace(/\$\{([A-Z_]+)\}/g, (whole, name) =>
+    (ALLOWED.includes(name) ? (env[name] ?? '') : whole));
+
+const SAMPLE = 'wss://local.example.com:12345';
+const hosted = render({
+  AGENT_UPSTREAM: '127.0.0.1:12345', WS_PROXY_ENABLED: '0', LISTEN_ADDR: '0.0.0.0',
+  [VAR]: SAMPLE,
+});
+const compose = render({
+  AGENT_UPSTREAM: 'internal-service:12345', WS_PROXY_ENABLED: '1', LISTEN_ADDR: '0.0.0.0',
+  [VAR]: '',
+});
+
+const connectSrc = (conf) => (/^\s*default\s+"([^"]+)";/m.exec(conf)?.[1] ?? '').match(/connect-src[^;]*/)?.[0] ?? '';
+const metaFilter = (conf) => /sub_filter\s+'name="citadel-loopback-agent"[^\n]*/.exec(conf)?.[0] ?? '';
+
+if (!connectSrc(hosted).includes(SAMPLE)) {
+  problems.push(`rendered with ${VAR}=${SAMPLE}, connect-src does not contain it: "${connectSrc(hosted)}"`);
+}
+if (!metaFilter(hosted).includes(SAMPLE)) {
+  problems.push(`rendered with ${VAR}=${SAMPLE}, the meta sub_filter does not write it in.`);
+}
+if (connectSrc(compose).includes('://')) {
+  problems.push(`rendered with ${VAR} empty, connect-src still names an origin: "${connectSrc(compose)}"`);
+}
+for (const [label, conf] of [['hosted', hosted], ['compose', compose]]) {
+  const leftover = [...new Set((conf.match(/\$\{[A-Z_]+\}/g) ?? []))].filter((v) =>
+    ALLOWED.includes(v.slice(2, -1)));
+  if (leftover.length) {
+    problems.push(`the ${label} render leaves ${leftover.join(', ')} unsubstituted; nginx would serve that literal.`);
+  }
+}
+
 if (problems.length) {
   console.error('The loopback agent origin is not wired end to end:\n');
   for (const p of problems) console.error('  - ' + p);
@@ -111,4 +152,7 @@ if (problems.length) {
     `${VAR} and gets a page that ignores it has no way to tell.`);
   process.exit(1);
 }
-console.log(`The loopback agent origin is wired: meta, sub_filter, connect-src, envsubst filter and validation all name ${VAR}.`);
+console.log(
+  `The loopback agent origin is wired: meta, sub_filter, connect-src, envsubst filter and `
+  + `validation all name ${VAR}, and the template renders it into both the policy and the page.`,
+);

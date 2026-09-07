@@ -8164,3 +8164,25 @@ Two other things this round corrected, both mine: a regex that read the phrase
 "add_header Content-Security-Policy $csp" out of a COMMENT and reported it as a
 rogue location, and a success line that said "1 location(s)" while counting
 policy definitions rather than the six locations it had actually checked.
+
+**The gate then learned to RENDER, not just to read names.** Every assertion
+above asks whether a string is present, and presence is not behaviour: the
+template now gets substituted with envsubst's own allowlist mirrored, once with
+a sample origin and once empty, and the result is asserted — the policy contains
+the origin, the meta filter writes it in, the empty render names no origin at
+all, and no allowlisted `${...}` survives into what nginx would serve. The
+control that justifies it changes `connect-src 'self' ${LOOPBACK_AGENT_ORIGIN}`
+to `${LOOPBACK_AGENT_ORIGIN_TYPO}`: every name-presence check still passes,
+because the literal string is still there, and only the render goes red.
+
+Verified against the deployment by hand, both directions:
+
+```
+=== HOSTED ===   connect-src 'self' wss://local.avarok.net:12345
+=== COMPOSE ===  connect-src 'self'
+```
+
+The first is byte-for-byte what work.avarok.net serves today. And the
+`sub_filter` pattern was matched against the SHIPPED `dist/index.html` — exactly
+once — so the substitution nginx performs is known to have something to match,
+which a template read on its own cannot tell you.
