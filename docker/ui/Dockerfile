@@ -247,7 +247,7 @@ ENV LISTEN_ADDR=0.0.0.0
 # That makes this an injection guard: whoever can set env vars on the container could
 # otherwise alter the proxy's behaviour, including the headers it forwards. The smoke
 # test asserts the property directly by starting the image with a colliding variable.
-ENV NGINX_ENVSUBST_FILTER=^(AGENT_UPSTREAM|WS_PROXY_ENABLED|LISTEN_ADDR|LOOPBACK_AGENT_ORIGIN)$
+ENV NGINX_ENVSUBST_FILTER=^(AGENT_UPSTREAM|WS_PROXY_ENABLED|LISTEN_ADDR|LOOPBACK_AGENT_ORIGIN|DEFAULT_WORKSPACE_SERVER)$
 
 # The one off-origin socket a hosted page may open: the agent on the VISITOR'S own
 # machine, at a name the operator points at 127.0.0.1 and holds a certificate for.
@@ -261,6 +261,11 @@ ENV NGINX_ENVSUBST_FILTER=^(AGENT_UPSTREAM|WS_PROXY_ENABLED|LISTEN_ADDR|LOOPBACK
 # whose meta tag was empty and whose CSP forbade the agent origin, which is a silent,
 # total outage for every user.
 ENV LOOPBACK_AGENT_ORIGIN=
+# The workspace server this deployment serves, as host:port, e.g.
+# citadel.example.com:12400. Empty means the join wizard asks, which is correct
+# for a local build. Unlike LOOPBACK_AGENT_ORIGIN this is NOT in the CSP: the
+# browser never connects to it -- the agent does, from the user's own machine.
+ENV DEFAULT_WORKSPACE_SERVER=
 
 # The entrypoint renders templates into /etc/nginx/conf.d at start-up, and we run as
 # the unprivileged `nginx` user - so that directory must be writable by it. Without

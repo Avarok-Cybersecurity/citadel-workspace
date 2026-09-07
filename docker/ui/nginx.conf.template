@@ -409,6 +409,17 @@ server {
         # Hand the page the loopback agent origin the policy above permits. index.html ships
         # the meta empty; this fills it in. Same variable as the CSP, so the two cannot drift.
         sub_filter 'name="citadel-loopback-agent" content=""' 'name="citadel-loopback-agent" content="${LOOPBACK_AGENT_ORIGIN}"';
+
+        # ...and the workspace server this deployment belongs to. A visitor cannot derive it:
+        # the UI and the server are different hosts on purpose, so window.location says nothing
+        # about it, and until this existed every new user had to be told the address out of band.
+        # The page pre-fills it and leaves the field editable; empty means "ask", which is right
+        # for a local build. NOT part of the CSP - it is a Citadel protocol address, not an origin
+        # the browser ever connects to; the agent dials it, from the user's own machine.
+        sub_filter 'name="citadel-default-server" content=""' 'name="citadel-default-server" content="${DEFAULT_WORKSPACE_SERVER}"';
+
+        # `once` is per-STRING, not per-location: each sub_filter above still replaces its
+        # own first match. Kept `on` so nginx stops scanning the body after each hit.
         sub_filter_once on;
 
         add_header Cache-Control "public, no-cache" always;
