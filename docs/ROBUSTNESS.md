@@ -8707,3 +8707,54 @@ inviting other people: the agent's data directory IS the account. Someone who
 runs the agent from a temporary directory, or reinstalls without keeping it,
 loses access to their identity. The message no longer misdirects them, but the
 underlying fact is a first-class thing to document before strangers arrive.
+
+## Round 690 — testing the mistakes instead of the happy path
+
+Two `21/21` runs prove the happy path. They say nothing about the states a
+stranger actually lands in, and those are where somebody decides whether this
+works. So: the three ways a server address can be wrong, and an agent that dies
+while you are using it.
+
+**A mistyped server address — the likeliest first mistake there is.**
+
+| what they typed | what they were told |
+|---|---|
+| a host that does not resolve | `Something went wrong: could not resolve no-such-host.avarok.net:12400: failed to lookup address information: nodename nor servname provided, or not known` |
+| a host with nothing listening | "Could not reach the server. Please check the server address and ensure the server is running." |
+| a host with no port | the same, correctly |
+
+The two neighbours were already fine, which is what made the first one visible.
+It is a `getaddrinfo` string, shown to somebody on their first attempt to join —
+**and it exists because of round 674.** Making the agent resolve hostnames
+created a new failure path (`could not resolve {addr}: {err}` and
+`{addr} resolved to no addresses`, both in register.rs) and I gave neither a
+friendly mapping. The fix names the shape instead: *"No server was found at that
+address. Check it for typos — it should be a host name or IP address, then a
+colon and the port, like citadel.example.com:12400."* Verified in a browser
+against the live deployment, with a control, and with an assertion that the
+reachable-but-dead-host case keeps its own distinct wording so this branch
+cannot swallow it.
+
+**An agent that dies mid-session — and this one is healthy.**
+
+```
+in the workspace: true
+--- agent killed ---
+dialog shown: "Connection Failed  Unable to reach the Citadel agent on this
+               machine. It may not be running yet, or may be restarting — try again…"
+kept them in the workspace (not logged out): true
+--- agent restarted ---
+recovered without a reload: true
+```
+
+Told, kept in place, and recovered on its own. Recorded because "no defect
+found" is a result, and because the recovery half is the part that decides
+whether a laptop waking from sleep feels like software working or software
+broken.
+
+**The first version of that probe reported a false positive**, and it is the
+same defect class as everything else in this document. It asked
+`/agent|connection|reconnect|unreachable/i.test(document.body.innerText)` and
+answered YES — from a word somewhere in the workspace chrome, not from anything
+the user had been told. The rewrite reads the dialog by testid and the banner by
+testid, and adds the restart, which the first version never tested at all.
