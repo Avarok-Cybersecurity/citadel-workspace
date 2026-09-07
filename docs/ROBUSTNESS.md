@@ -8018,3 +8018,66 @@ full coverage.
 
 The first is the one that matters: it proves the parent root is genuinely being
 read, rather than the gate passing because it never opened those files.
+
+## Round 678 — the doors that answered a click with nothing
+
+The image publish was blocked by `check-agent-down.mjs` failing, and the
+failure was a contradiction I had created. Round 674 changed the accessibility
+checker to assert that the sign-in door STAYS SHUT while the agent is
+unreachable, because that is what the app does. `check-agent-down.mjs` asserts
+the opposite — that Sign In opens the login form and then tells you the agent
+is the problem. Both cannot be right.
+
+Reproduced locally rather than read off CI, which mattered twice over: CI's
+logs are unavailable until a run completes, and the check serves a prebuilt
+`dist/` without rebuilding it, so the first two times I measured a fix I was
+measuring the old bundle.
+
+**Which one was wrong.** The app's refusal is correct and deliberate:
+`use-agent-gate.ts` declines every door on that screen because
+`ConnectionRetryModal` is the surface carrying the agent download link and the
+command to run, and stacking a login card on top of it is three notices for one
+condition with two of them modal.
+
+But that reasoning assumes the dialog is on screen, and the assumption is false
+exactly where it matters. The dialog is dismissible and a dismissal STICKS —
+also deliberate, from `connection-retry-visibility`: retries fail every couple
+of seconds, so reopening on failure made it impossible to put away. After a
+dismissal the refusal had nothing left to point at. Measured on a production
+bundle with `/ws` at a dead port:
+
+```
+dialog dismissed
+after click, dialogs: 0
+intent-member present: 0
+```
+
+Pressing Create Account produced nothing whatsoever — no dialog, no message, no
+navigation. So neither assertion described a good product: not "the form opens"
+and not "nothing happens".
+
+**The fix** adds `onRequested` to the pure visibility model — the one transition
+that un-dismisses — kept separate from `onFailure` for the reason that model
+already documents: a retry failing again is not new information, but a person
+pressing Sign In has just asked for what the dialog explains.
+
+**And the propagation, which was the point.** The first fix went to Sign In
+only, and the create-account half of the check then failed for a *different*
+reason: `useOnboardingIntent` had its own copy of `if (!isHealthy) return;`.
+That is the third pass of one rule over these two adjacent buttons — round 635
+guarded Create Account and not Sign In, and the fix for the silence guarded
+Sign In and not Create Account. Both now call one helper,
+`askWhyTheAgentIsUnreachable`, and `both-doors-need-the-agent.test.tsx` pins the
+call in both files so a third door gets it by calling rather than by
+remembering.
+
+**The control ran in the natural direction, twice.** Each assertion was RED on a
+freshly built bundle with the defect present and GREEN on a freshly built bundle
+after the fix — once for Sign In, once for Create Account. A synthetic mutation
+would have said less: these were the real defect, observed before and after, on
+the artefact that actually runs.
+
+**Also corrected:** the check's create-account block predated the
+production-only onboarding step and waited 20s for `#serverAddress` on a screen
+that legitimately shows the intent question first — a check reporting its own
+staleness as a product defect, two steps past where anything went wrong.
