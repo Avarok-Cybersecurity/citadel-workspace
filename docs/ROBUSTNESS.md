@@ -10140,3 +10140,52 @@ Taking the before is cheap and it is the difference between "the deploy worked"
 and "the deploy carried what I thought it carried". Round 712 is the reason:
 a fix can be present in the bundle, loaded by the browser, and still not reach
 the screen.
+
+## Round 722 — a dated outage nobody had written down
+
+The published agent serves TLS for the loopback name a hosted page dials, using
+a certificate compiled into the binary. Measured against the released
+`agent-v0.3.0`:
+
+```
+subject=CN=local.avarok.net
+issuer=C=US, O=Let's Encrypt, CN=YE1
+notAfter=Dec  5 20:14:04 2026 GMT      ->  89 days from now
+```
+
+**On 2026-12-05 every copy of that release stops working at the same moment.**
+The browser refuses the socket, the hosted page cannot reach the user's own
+agent, and there is no server-side remedy: redeploying the UI, restarting the
+server, editing DNS — none of it helps. Every user has to download a new binary.
+
+Nothing in the repository said so, nothing checked it, and the number would have
+been discovered by everyone at once.
+
+`scripts/smoke-agent.sh` already runs against the actual release artefact, so
+the guard belongs there rather than in a new script nobody invokes:
+
+```
+  agent listens on 127.0.0.1:63092
+  built-in certificate valid for 89 more days
+== citadel-agent-macos-arm64.tar.gz is runnable ==
+```
+
+Control, by raising the floor above the real remaining days:
+
+```
+$ MIN_CERT_DAYS=200 bash scripts/smoke-agent.sh …
+::error::the built-in certificate expires in 89 days (< 200).
+  Every user of this release loses TLS at that moment and needs a new binary.
+exit 1
+```
+
+30 days is a floor, not a target: Let's Encrypt issues for 90, so a build from a
+fresh certificate starts near 89 and this fires only when one has been left
+unrenewed for two months. An agent serving no certificate (a `--no-tls` or
+plaintext build) prints that it was not checked rather than passing silently —
+"no certificate" and "certificate fine" must not look the same.
+
+**This is a date, not a risk.** Before 2026-12-05 a new agent release has to be
+cut from a renewed certificate, and users have to be on it. The guard makes a
+stale release impossible to publish; it does not make an already-published one
+renew itself.
