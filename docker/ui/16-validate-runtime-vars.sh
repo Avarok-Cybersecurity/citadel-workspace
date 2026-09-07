@@ -107,8 +107,8 @@ fi
 # nothing anywhere saying why.
 default_server="${DEFAULT_WORKSPACE_SERVER:-}"
 if [ -n "$default_server" ]; then
-  echo "$default_server" | grep -Eq '^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?:[0-9]{1,5}$' \
-    || die "DEFAULT_WORKSPACE_SERVER='$default_server' must be a bare host:port (e.g. citadel.example.com:12400), or empty to have the join wizard ask. A scheme, a path, or a quote is rejected because this value is substituted into a sub_filter argument."
+  echo "$default_server" | grep -Eq '^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?(:[0-9]{1,5})?$' \
+    || die "DEFAULT_WORKSPACE_SERVER='$default_server' must be a host name or IP address, optionally followed by :port (e.g. citadel.example.com), or empty to have the join wizard ask. A scheme, a path, or a quote is rejected because this value is substituted into a sub_filter argument."
 fi
 
 echo "[validate-runtime-vars] ok: upstream=$upstream ws_proxy=$enabled listen=$listen_addr loopback=${loopback:-<none>} default_server=${default_server:-<none>}"

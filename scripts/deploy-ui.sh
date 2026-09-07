@@ -64,7 +64,7 @@ fi
 # refuses it, so the field renders empty and the operator sees the feature
 # simply not working, with nothing anywhere saying why. Fail here instead.
 if [ -n "$DEFAULT_WORKSPACE_SERVER" ] &&
-   ! printf '%s' "$DEFAULT_WORKSPACE_SERVER" | grep -Eq '^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?:[0-9]{1,5}$'; then
+   ! printf '%s' "$DEFAULT_WORKSPACE_SERVER" | grep -Eq '^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?(:[0-9]{1,5})?$'; then
   echo "ERROR: DEFAULT_WORKSPACE_SERVER must be host:port, e.g. citadel.example.com:12400" >&2
   echo "  got: $DEFAULT_WORKSPACE_SERVER" >&2
   echo "  (leave it unset to have the join wizard ask instead)" >&2
