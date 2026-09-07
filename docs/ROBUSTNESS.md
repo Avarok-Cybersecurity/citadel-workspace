@@ -8487,3 +8487,58 @@ production is how the site goes down while nobody is watching:
 
 Both are recorded here rather than fixed blind. The deploy that follows must
 reconcile them in one deliberate step, with the site checked after.
+
+## Round 686 — the whole user path, and the run that was blocking every other one
+
+**The proof, through the artefact a stranger downloads.**
+`agent-v0.3.0` was fetched from `releases/latest` exactly as the UI links to it,
+unpacked, and started with the command the hosted page itself renders. Three
+users then went through `scripts/prove-users-can-talk.mjs` against
+`citadel.avarok.net:12400` — the hostname, not an IP:
+
+```
+21/21 steps passed against https://work.test:4201 (server citadel.avarok.net:12400, 3 users)
+```
+
+Three accounts, three pairs, six accepted registrations, six delivered
+messages. Every hop is the one a real person meets: the published binary, the
+published hostname, the production bundle, TLS to `local.avarok.net` with a
+certificate that validates.
+
+**The administrator branch, walked on the live server for the first time.**
+`prove-users-can-talk` always chooses "joining", so nothing had taken the other
+door past the intent dialog on a real deployment:
+
+```
+admin branch offered: 1
+sessionStorage suppression after admin: null
+account created as administrator: true
+```
+
+`null` is the correct answer, and the one round 682 asserts: an administrator's
+choice is deliberately NOT recorded, because they should still be prompted for
+the master password. They were not prompted here, which is right for THIS
+server rather than a defect — its workspace is seeded at boot, so there is
+nothing to initialise.
+
+**The CI stall had one cause, and it was not "runners are busy".** Validate had
+sat at 0 of 22 jobs for roughly three hours across four pushes. I had recorded
+that as runner contention and left it. It was a single **Publish Images** run
+queued since 22:54 — 74 jobs, full validation plus the integration suite plus
+image builds — on commit `cd3aac89`, eight behind HEAD. Cancelling it moved the
+current run from 0 jobs to 17 in progress within twenty seconds.
+
+Two things worth keeping from that:
+
+- The stale run was not merely wasted. `cd3aac89` predates the loopback CSP and
+  meta implementation, so any image it published would carry round 679's
+  outage — a page that loads, looks correct, and can reach no agent. A green
+  artefact in the registry that breaks the site if deployed is worse than none.
+- **My own pushes were part of the jam.** `validate.yml` sets
+  `cancel-in-progress: true`, so each push cancelled the in-flight run and put a
+  fresh one behind the same blocker. Four rounds of work went out as four
+  pushes, each resetting the queue. Commits now accumulate locally and go out
+  once a run has finished.
+
+"Environmental" is a claim that needs evidence like any other, and I had not
+gone looking for three hours.
