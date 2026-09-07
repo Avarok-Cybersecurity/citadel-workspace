@@ -169,6 +169,23 @@ if (!existsSync(COMPOSE)) {
   }
 }
 
+// 6b. And the DEPLOY refuses to ship a hosted UI without one.
+//
+// The compose file only passes the variable through; it cannot require it,
+// because `${VAR:?}` makes every `docker compose config` on the file fail --
+// including the `--services` metadata read deploy.sh itself performs. (That was
+// tried, for one commit, and the "Deploy service selection covers every compose
+// shape" gate caught it.) So the requirement lives in deploy.sh, which knows
+// whether the deployment it is about to perform actually serves a UI.
+if (!existsSync('deploy.sh')) {
+  problems.push('deploy.sh does not exist — the deploy-time requirement could not be checked.');
+} else if (!new RegExp(`\\b${VAR}\\b`).test(readFileSync('deploy.sh', 'utf8'))) {
+  problems.push(
+    `deploy.sh never mentions ${VAR}, so nothing stops a hosted deploy going out with an empty ` +
+    `one. The compose file cannot enforce it: making the variable required there breaks ` +
+    `\`docker compose config --services\`, which deploy.sh uses to decide what to deploy.`);
+}
+
 // 7. And the container REFUSES what the page will ignore.
 //
 // The page has its own shape check -- LOOPBACK_ORIGIN_SHAPE in

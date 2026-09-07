@@ -8542,3 +8542,54 @@ Two things worth keeping from that:
 
 "Environmental" is a claim that needs evidence like any other, and I had not
 gone looking for three hours.
+
+## Round 687 — the "fail loudly" that broke reading the file at all
+
+Round 685 made the `ui` service require its loopback origin:
+
+```yaml
+- LOOPBACK_AGENT_ORIGIN=${LOOPBACK_AGENT_ORIGIN:?set this in .env, ...}
+```
+
+CI caught it within the hour. `${VAR:?}` is not a deploy-time requirement — it
+makes EVERY `docker compose` operation on the file fail while the variable is
+unset, including `config --services`, a metadata read that `deploy.sh` itself
+performs to decide what to deploy:
+
+```
+error while interpolating services.ui.environment.[]: required variable
+LOOPBACK_AGENT_ORIGIN is missing a value
+```
+
+The gate that caught it is "Deploy service selection covers every compose
+shape", and it caught it for the right reason: a wrong service set means a
+half-applied deploy. Reproduced locally, then fixed, then re-run — all five
+shapes back to their expected selections.
+
+The requirement was real; it was in the wrong place. It now lives in
+`deploy.sh`, beside the two checks that already work exactly this way: refuse a
+`__CHANGE_ME__` master password, and refuse an empty
+`INTERNAL_SERVICE_ALLOWED_ORIGINS` **when the compose file actually declares an
+`internal-service`**. The new one refuses an empty `LOOPBACK_AGENT_ORIGIN` when
+the compose file declares a `ui`, so a server-only tenant is never interrogated
+about a UI it does not serve.
+
+**Also settled, with evidence, what round 685 deliberately left open.** The
+`ui` service said `network_mode: host` with no port mapping. Measured on the
+host that serves work.avarok.net:
+
+- the request path is internet → nginx :443 (Let's Encrypt) → `127.0.0.1:8099`
+  → the container;
+- the running container is on the bridge network, `127.0.0.1:8099->8080/tcp`;
+- and `127.0.0.1:8080` there is **already bound by an unrelated process**.
+
+So a host-networked UI would collide on 8080 while nginx kept proxying to 8099,
+where nothing would answer. There is no cloudflared involved at all, despite the
+compose file carrying a profile for one. The service is now bridge with
+`127.0.0.1:8099:8080`, which is what actually works, and the reasoning is in the
+file so the next person does not have to ssh anywhere to learn it.
+
+The lesson is not "don't fail loudly". It is that a guard placed where it cannot
+distinguish the case it is guarding will fire on cases it should not — here,
+every read of the file, forever, including by the tool that would have honoured
+it.

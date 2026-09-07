@@ -314,7 +314,18 @@ services:
       # outage, not a configuration. See docs/ROBUSTNESS.md round 679, where
       # this mechanism was described in a comment and implemented in no file,
       # and the live site ran an image somebody had built by hand as a result.
-      - LOOPBACK_AGENT_ORIGIN=${LOOPBACK_AGENT_ORIGIN:?set this in .env, e.g. wss://local.example.com:12345 -- a hosted UI cannot reach any agent without it}
+      # Passed through, NOT required with `:?`. It was `:?` for one commit, and
+      # that made EVERY `docker compose config` on this file fail when the
+      # variable was unset -- including `--services`, a metadata read that
+      # deploy.sh itself performs to decide what to deploy, and which cannot
+      # need a deployment's secrets. The gate that caught it is
+      # "Deploy service selection covers every compose shape".
+      #
+      # The requirement is real, but it belongs where the deployment is known:
+      # deploy.sh refuses an empty value when the compose file actually declares
+      # a `ui` service, exactly as it already does for
+      # INTERNAL_SERVICE_ALLOWED_ORIGINS and internal-service.
+      - LOOPBACK_AGENT_ORIGIN=${LOOPBACK_AGENT_ORIGIN:-}
     deploy:
       resources:
         limits:
@@ -339,7 +350,26 @@ services:
         condition: service_healthy
       server:
         condition: service_healthy
-    network_mode: host
+    # BRIDGE, with the port published on loopback -- NOT `network_mode: host`.
+    #
+    # This said `network_mode: host` with no `ports:`, which does not describe
+    # the deployment that serves work.avarok.net and would not survive contact
+    # with it. Measured on that host:
+    #
+    #   - the request path is  internet -> nginx :443 (Let's Encrypt, terminates
+    #     TLS for work.avarok.net) -> 127.0.0.1:8099 -> this container;
+    #   - the container serving it today is on the bridge network with
+    #     `127.0.0.1:8099->8080/tcp`;
+    #   - and 127.0.0.1:8080 on that host is ALREADY BOUND by an unrelated
+    #     process, so a host-networked container asking for 8080 collides with
+    #     it -- and the host nginx would still be proxying to 8099, where
+    #     nothing would then answer.
+    #
+    # Publishing on loopback keeps the container unreachable from outside the
+    # machine; the public edge is the host nginx in front, which is where the
+    # certificate and the rate limits live.
+    ports:
+      - "127.0.0.1:8099:8080"
 
   # ---------------------------------------------------------------------------
   # Cloudflare Tunnel (Production only)

@@ -184,6 +184,37 @@ if [[ "$origins" == *"*"* ]]; then
     echo "  visits can drive this agent. This is for local experiments, not deployments."
 fi
 
+# The hosted UI's one off-origin socket, on exactly the same reasoning.
+#
+# A deployment that serves the UI publicly keeps `/ws` OFF -- one shared agent
+# would hold every user's ratchet keys -- so the page has nothing to dial unless
+# it is told the visitor's own agent origin. Empty then is not a default but an
+# outage, and a silent one: the page loads, looks entirely correct, and can open
+# no socket at all. Nothing in the image can catch it, because empty is RIGHT
+# for a local deployment, where the proxy is on.
+#
+# Asked of the compose file, like the check above, so it cannot disagree with
+# what is actually deployed: a server-only tenant declares no `ui` and is not
+# interrogated about one.
+loopback_origin="${LOOPBACK_AGENT_ORIGIN:-}"
+if [[ -z "$loopback_origin" ]]; then
+    # `|| true` for the same reason as above: a .env without the key must mean
+    # empty, not "abort with no message".
+    loopback_origin=$(grep -E '^[[:space:]]*LOOPBACK_AGENT_ORIGIN=' .env | tail -n1 | cut -d= -f2- || true)
+fi
+loopback_origin="${loopback_origin%$'\r'}"
+loopback_origin="${loopback_origin#"${loopback_origin%%[![:space:]]*}"}"
+loopback_origin="${loopback_origin%"${loopback_origin##*[![:space:]]}"}"
+if [[ -z "$loopback_origin" ]] && docker compose -f "$COMPOSE_FILE" config --services 2>/dev/null | grep -qx 'ui'; then
+    echo "ERROR: LOOPBACK_AGENT_ORIGIN is unset or empty, and this deployment serves the UI."
+    echo "  The page would ship an empty agent origin and a Content-Security-Policy"
+    echo "  that forbids the agent, so every visitor gets a page that loads and cannot"
+    echo "  connect to anything. Set it to the name you published for the visitor's own"
+    echo "  agent -- one that resolves to 127.0.0.1 and that you hold a certificate for:"
+    echo "    LOOPBACK_AGENT_ORIGIN=wss://local.yourdomain.com:12345"
+    exit 1
+fi
+
 # jq is required by the readiness probe below. Check up front rather than
 # letting the probe loop forever against `state=""` parsed from a missing
 # `jq` binary.
