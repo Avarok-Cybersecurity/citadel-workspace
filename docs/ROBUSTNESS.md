@@ -7935,9 +7935,10 @@ upstream would leave one gate reading one of the two repos that can break it.
 | nginx `proxy_pass https://` | RED |
 | Vite `target: wss://` | RED |
 
-The third passed GREEN on its first run. The control had mutated
-`wt-ustack/vite.config.ts` while the gate reads `citadel-workspaces/vite.config.ts`
-— a different file. Re-aimed at the gate's actual input it goes red. A control
+The third passed GREEN on its first run. The control had mutated a second
+checkout of the UI repository, while the gate reads the submodule copy under
+`citadel-workspaces/` — the same file in two working trees, and the gate never
+opened the one being edited. Re-aimed at the gate's actual input it goes red. A control
 that edits a file the check never opens is indistinguishable from a check that
 measures nothing, which is why the apply-step is verified and not assumed.
 
@@ -7947,6 +7948,21 @@ measures nothing, which is why the apply-step is verified and not assumed.
 and copy lines are now excluded explicitly. A gate that cries wolf on a correct
 line gets deleted rather than fixed.
 
+**The proof is now repeatable.** `scripts/prove-users-can-talk.mjs --origin
+<url> --server <host:port> [--users N]` drives N real browsers through the whole
+social path — create an account, request, see the request, accept, talk both
+ways, for every pair in both directions. Against the current production bundle
+and the live server it measures **21/21 with three users**: three pairs, six
+accepted registrations and six delivered messages.
+
+It is deliberately NOT named `check-*`. That prefix would have entered it in
+docs/GATES.md and in `check-every-gate-is-invoked`'s census, where a script that
+cannot run in CI can only satisfy the rule by sitting on a skip list — a gate
+counted as enforced because it was excused. It is an operator's proof, with the
+standing `scripts/smoke-agent.sh` has for the released agent. The first version
+of this round did name it `check-*` and did add the skip-list entry, and the
+census went green on a script nothing runs.
+
 **Still unproved:** work.avarok.net itself serves a UI image 138 commits behind,
-so the hosted page does not yet run any of this. The 8/8 above is the current
+so the hosted page does not yet run any of this. The 21/21 above is the current
 production bundle against the live server, not the deployed one.
