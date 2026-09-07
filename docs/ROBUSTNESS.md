@@ -8796,3 +8796,41 @@ that reads plausibly and does not match the string the other side actually
 sends — the local-account message blaming the server (round 689), the
 `getaddrinfo` dump (round 690), and this. All three were found by making the
 mistake, never by reading the mapping. Reading is what wrote them.
+
+## Round 692 — a proof for the failure states, and two gates that caught me
+
+`scripts/prove-mistakes-are-explained.mjs` runs the states a stranger actually
+lands in — a mistyped server address, a taken username, a wrong password — and
+fails if any answers with a raw dump. It carries a control: a correct
+registration must still succeed, so the suite cannot pass by failing everything.
+It also asserts the wrong-password message does not name which half was wrong.
+
+**A mechanical gate was considered and rejected**, and the reasoning matters
+more than the tool. The agent's own error literals are enumerable from its Rust
+source — eleven of them — so a gate could require each to map to something
+friendly. It would have caught NONE of this session's three: `Invalid username
+or password` and `Client does not exist` come from the SDK, and the resolver
+text arrives through a path outside that set. A gate covering a third of the
+surface while reporting "errors are handled" is worse than knowing they are
+not. So this asks the running system, and says plainly that it needs one.
+
+**Two gates caught me while doing it.**
+
+`check-file-length` fired at 265 lines, and its advice is specific: extract a
+cohesive unit rather than compress prose. The four credential branches are one
+unit — every one answers "is this person who they say they are, and does this
+machine know them", and every one has been wrong in the same way, matching a
+string the SDK does not send. Their comments are the record of that and moved
+with them. Piecewise copy, order and conditions unchanged, all 40 tests passing
+unmodified — which is the evidence the copy was exact.
+
+Then `no-module-is-shadowed-by-a-file` failed, because the first attempt put the
+extract in a new `error-messages/` directory beside `error-messages.ts`:
+
+> the file wins in module resolution and nothing reaches past it, so the
+> directory is dead code that still reads as live
+
+A directory beside a file of the same name. Precisely the class this document
+keeps recording — something that reads as live and is not — created by me, and
+caught mechanically within a minute of existing. It is a sibling file now, and
+the reason is written into it rather than into this entry alone.
