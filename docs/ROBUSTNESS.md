@@ -9028,10 +9028,9 @@ the deadline changed.
 
 `sync-wasm-clients.sh --no-restart` left the tree unbuildable:
 
-```
-Could not load node_modules/citadel-internal-service-wasm-client
-  (imported by ../citadel-workspace-client-ts/dist/index.js): EISDIR
-```
+> Could not load `node_modules/citadel-internal-service-wasm-client` — imported
+> by the built entry point of `citadel-workspace-client-ts` — `EISDIR: illegal
+> operation on a directory, read`
 
 Not the documented `node_modules` poisoning — a root `npm ci` did not fix it,
 and `typescript-client/package.json` was intact. The cause is that the sync
@@ -9039,3 +9038,53 @@ clears `typescript-client/dist/`, which `package.json` names as `main`, and a
 package whose `main` is missing resolves to its own directory: `EISDIR`. The
 message names neither the package that is unbuilt nor the file that is missing.
 Building `typescript-client` restores it.
+
+## Round 697 — the shard was green and the defect was still there
+
+The Playwright verdict on round 693's fixes, read from the markers rather than
+the summary:
+
+```
+✓  19 member-promotion.spec.ts — promoting a member to Owner gives them editing rights
+✘  17 member-list-loading.spec.ts — the sidebar never reports an empty member list while loading
+✓  18 member-list-loading.spec.ts — (retry #1)
+```
+
+`member-promotion` passed on its first attempt: the permission fail-open is
+genuinely fixed. `member-list-loading` did not. It went from failing all three
+retries to failing the FIRST attempt and passing on retry — a narrower race, not
+a fixed one. The shard reported **`42 passed`, `1 flaky`, exit 0**.
+
+**A retry-pass is reported as a pass.** Nothing but reading the ✘/✓ markers by
+hand distinguishes "this works" from "this works on the second try", and the
+summary line actively says the first.
+
+**The remaining window was a domain CHANGE**, which the previous fix did not
+cover. A stored flag is one render behind: `activeDomainId` becomes B while
+`isLoadingMembers` is still false from A's completed load, and the effect that
+would set it true does not run until after paint. For one frame the sidebar
+holds an empty list, believes nothing is loading, and says so. Initialising the
+flag from the prop fixed the FIRST render and left this one.
+
+The flag is gone. `loadedForDomain` is compared with `activeDomainId`, so the
+state is loading in the SAME render the domain changes, with no effect involved
+— closed by construction rather than by timing. The answer handler records
+which domain it answered for, so a response for A cannot end the load for B.
+
+Its test pins the ABSENCE of the stored flag as well as the presence of the
+comparison: a render test can produce the right output for the wrong reason, and
+a flag set early enough on a lucky run looks identical to a correct derivation.
+
+**And the general lesson got a tool.** `scripts/report-flaky-specs.mjs` reads the
+JSON report Playwright already writes and names every spec that passed only
+after a retry, as a GitHub warning annotation, `if: always()`.
+
+It WARNS rather than fails, deliberately. Retries absorb genuine infrastructure
+noise, and this repository already records that a gate going red on noise is
+worse than none — people learn to ignore it. Making a retry-pass fail is a
+policy change that wants more than one data point. Making it impossible to miss
+does not.
+
+Verified in both directions on fixtures — it names a flaky spec, stays silent on
+a clean run, and exits 1 with `::error::` if the report is absent, because "no
+flaky specs" must never be a sentence spoken by a missing file.

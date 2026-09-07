@@ -1656,6 +1656,22 @@ jobs:
           INTERNAL_SERVICE_PORT: '12345'
         run: npx playwright test --shard=${{ matrix.shard }}/3
         working-directory: citadel-workspaces/integration-tests
+
+      # `if: always()`, because a retry-pass EXITS ZERO. This step exists for the
+      # runs that look green: Playwright prints "42 passed" and "1 flaky", the
+      # job succeeds, and the one line that matters is buried. Immediately after
+      # this was written, that exact shape was hiding a one-frame render race in
+      # production code -- the spec failed its first attempt and passed on retry
+      # while the shard reported success.
+      #
+      # Warns rather than fails: retries absorb real infrastructure noise, and a
+      # gate that goes red on noise gets ignored. Making it impossible to MISS
+      # needs no such trade.
+      - name: Name any spec that only passed on a retry
+        if: always()
+        run: node ../../scripts/report-flaky-specs.mjs reports/results.json
+        working-directory: citadel-workspaces/integration-tests
+
       # AFTER the test, not only after startup.
       #
       # The pre-test dump has `if: failure()`, which reads as "dump on any
