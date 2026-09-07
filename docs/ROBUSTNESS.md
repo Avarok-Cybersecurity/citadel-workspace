@@ -10595,3 +10595,50 @@ checkout; my predicate fix was in the UI worktree and not yet committed, so the
 gate kept failing against the *old* file while I had the new one open. Every
 occurrence this session has the same shape — verify what the tool actually
 consumed, not what you edited.
+
+## Round 730 — half-fixed, inside one wave
+
+Round 729's sibling. The sweep named FOUR sites discarding a persistence
+boolean: two in `messenger-revision.ts` (outbound edit/delete) and two in
+`message-handler-routing.ts` (the peer's edit/delete arriving). I fixed the
+outbound pair, removed their two baseline entries, wrote the control, committed
+— and left the inbound pair baselined.
+
+Same mechanism, two files, half done, in a single wave, by someone who had just
+written the words "grep the mechanism, not the symptom" in a previous round.
+It is worth recording plainly: knowing the shape does not protect against it.
+
+### The inbound half needed a different answer, not the same one
+
+Outbound, a failed write **throws before** the emit and before the peer is told,
+so both sides keep the same message. Inbound, that would be wrong: the peer's
+revision is authoritative and `applyEdit`/`applyDelete` have already mutated the
+in-memory conversation, so refusing to emit would leave the screen disagreeing
+with memory — worse than either alternative.
+
+So the inbound fix keeps emitting and makes the failure **visible**:
+`errorLog`, which emits in production, rather than the `debugLog` that was
+compiled out of the build the user is actually running. A message returning
+after a reload had no trace anywhere a user or an operator could see.
+
+Applying the outbound answer here mechanically would have produced a second
+defect while closing the first.
+
+### Then the line gate asked for the right thing
+
+`message-handler-routing.ts` hit 261. The gate says extract a cohesive unit and
+warns that rewriting a comment at the same length does not reduce the count —
+which is exactly the temptation. `applyIncomingEdit`/`applyIncomingDelete` moved
+to `inbound-revision.ts`, the mirror of `messenger-revision.ts`. 261 → 224.
+
+The control was then re-run **against the new module**, not the old path:
+
+```
+src/lib/p2p/inbound-revision.ts::removeMessageFromPages  (0 allowed, 1 found)
+TRUE flags gate with control = 1
+TRUE flags gate reverted     = 0
+```
+
+That matters because a check can survive an extraction by continuing to watch a
+file that no longer contains the thing. Baseline 27 → 23; all four sites are now
+enforced rather than excused, and eslint caught two imports the move orphaned.
