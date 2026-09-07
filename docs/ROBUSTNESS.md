@@ -9295,3 +9295,40 @@ round 697's flaky reporter matters — without it, this run reads as three green
 shards and the defect stays invisible.
 
 No claim is made that anything here fixes the spec.
+
+## Round 704 — one run that covers every hop, instead of four that each cover one
+
+The evidence for "two strangers can talk" was real but scattered. Three users on
+one agent (21/21). Two users on two independent agents (8/8). Both onboarding
+doors (8/8). The published `agent-v0.3.0` binary rather than a local build.
+Each of those was a separate run, and a reader had to stitch four results
+together and trust that the combination holds — which is exactly the assumption
+that has been wrong here before.
+
+So the two-agent proof now also walks both doors. User A joins through the
+**administrator** door via agent A on `:12345`; user B joins through the
+**member** door via agent B on `:12346`. Separate processes, separate data
+directories, separate key material, both the published release binary, both
+reaching the server as `citadel.avarok.net:12400` — a hostname, resolved by the
+agent, not an IP written into a config.
+
+```
+PASS  ta… joins via its own agent, admin door   — https://work.test:4201
+PASS  tb… joins via its own agent, member door  — https://work.test:4208
+PASS  B (other agent) is shown the request
+PASS  B accepts across agents
+PASS  A lists B / B lists A
+PASS  tb… receives from ta…  /  ta… receives from tb…
+8/8 steps passed — two users, two agents
+```
+
+Before starting it, both bundles' `<meta name="citadel-loopback-agent">` were
+checked to name *their own* agent (`:12345` and `:12346`). That verification is
+not ceremony: a rebuild silently clears that meta tag, and it is the one thing
+nginx injects in production that the local harness has to reapply by hand. It
+has cost a wasted run three times. Checking the premise costs one command;
+discovering it mid-run costs ten minutes and a failure that means nothing.
+
+What this still does not prove: that the *hosted* deployment serves that meta
+tag and the matching CSP. That is a property of the container on avarok2, and
+it is the next thing to measure — on the deployment, not locally.
