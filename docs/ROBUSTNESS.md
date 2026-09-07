@@ -8834,3 +8834,60 @@ A directory beside a file of the same name. Precisely the class this document
 keeps recording — something that reads as live and is not — created by me, and
 caught mechanically within a minute of existing. It is a sibling file now, and
 the reason is written into it rather than into this entry alone.
+
+## Round 693 — the two Playwright failures were real, and neither was mine
+
+The run finished, the logs became readable, and shard 2/3 had been failing two
+specs on all three retries — so not flake. Both are genuine, both predate this
+session's work, and both are the same shape: **a state that means "we do not
+know yet" rendered as a definite answer.**
+
+**`member-promotion`: a plain member's Edit button is ENABLED**, where Member
+holds no `EditContent` or `EditMdx` by design. Reading up from the assertion:
+
+```ts
+const hasEditPermission = !domainId || permitsAndReport(..., domainId, edit);
+```
+
+A missing domain **skips the permission check and offers the action**. And
+`domainId` was `nodeId` alone, while the unsaved-changes guard one line below,
+`OfficeChatTabs`, and `WorkspaceAppearanceSection` all use
+`nodeId ?? WORKSPACE_ROOT_ID` — "no node" is the workspace root, a real
+permission domain, not the absence of one. Three neighbours had the idiom; this
+line was the outlier.
+
+`OfficeLayout` separately declared `canEdit = true` as a **default parameter**.
+A permission prop that defaults to granted hands the action to any caller who
+forgets it, and the omission is invisible at the call site. Both callers pass it;
+it is required now.
+
+**`member-list-loading`: the sidebar says "Nobody else is here yet"** about a
+workspace that has members. The empty and unavailable states have separate
+testids and the 15s load timeout cannot fire inside the spec's 10s window, so
+what it saw was the genuine empty state. `activeDomainId` is
+`params.get("nodeId")`: null before a node is chosen and across a route change.
+With no domain `isLoadingMembers` initialises FALSE — correctly, nothing is
+loading — and `members` is empty, so the empty branch fired.
+
+`use-domain-members.ts` states that rule already, in its own comment:
+*"Not-yet-loaded is not empty."* It applies it to the members array. Nobody
+applied it to the absence of a domain to ask about. The four outcomes are one
+decision, so they now live in `MemberListBody` with the rule written where the
+branches are.
+
+**What is NOT claimed.** Neither fix is asserted to make the specs pass.
+`permits()` returns true while an answer is outstanding — deliberately,
+documented in `permission-diagnostics.ts` — so if a member's permission answer
+never arrives, the button stays enabled regardless of the bypass being gone.
+That needs the compose stack to investigate. Recorded as open rather than
+assumed.
+
+**Three corrections to my own process this round**, all caught mechanically:
+`check-file-length` twice, because I wrote an eleven-line comment for a two-line
+change and then a twelve-line one for a one-line change; and
+`check-components-are-mounted`, which reported `MemberListItems` and
+`MembersEmptyState` as rendered by nothing. That last was my workflow, not the
+code: the gate reads `git ls-files`, and the component that renders them was
+still untracked in the checkout I had copied it into. Committing it properly
+made the gate correct again — a reminder that a gate reading tracked files
+cannot see work in progress, and that "the gate is wrong" is usually not.
