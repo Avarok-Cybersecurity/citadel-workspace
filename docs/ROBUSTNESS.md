@@ -8186,3 +8186,63 @@ The first is byte-for-byte what work.avarok.net serves today. And the
 `sub_filter` pattern was matched against the SHIPPED `dist/index.html` — exactly
 once — so the substitution nginx performs is known to have something to match,
 which a template read on its own cannot tell you.
+
+## Round 680 — the released agent could not read what the UI sends
+
+Joining with a hostname — `citadel.avarok.net:12400`, the address a person would
+actually be given — failed. Registration sat for thirty seconds and returned
+"Registration timed out". A raw IP worked.
+
+The cause was in none of the three places I looked first, and the record of that
+matters more than the fix:
+
+1. **The rig's WASM was stale.** Real, and it produced a real error
+   (`Deserialization error: invalid socket address syntax`, in the browser,
+   before the request was sent). Rebuilding it changed nothing.
+2. **My "current" agent binary was stale too** — built at 17:15, before the
+   change. I had been treating it as current for hours.
+3. Only the agent's own log settled it. Nothing else could: the browser shows a
+   timeout, the UI names no cause, and `debugLog` is a no-op in a production
+   bundle. The one line that identifies the fault is written where no user will
+   ever look.
+
+With a freshly built agent the same run measures **8/8 with the hostname** —
+two accounts created against `citadel.avarok.net:12400`, request, accept, and a
+message each way. So `Register.server_addr: SocketAddr → String` is correct and
+`tokio::net::lookup_host` in the agent does its job.
+
+**What is broken is the published artefact.** `agent-v0.2.0` — the binary the
+download links hand people — predates that change. It parses `server_addr` as a
+`SocketAddr` and rejects the first Register the UI sends. Every gate in this
+repository was green, because every one of them tests the source.
+
+**The gate now tests the artefact.** `scripts/smoke-agent.sh` already unpacks a
+release the way a user would and proves it runs, listens, completes a TLS
+handshake from the allowed origin and refuses a foreign one. `agent-v0.2.0`
+passes all of that. Speaking WebSocket is not speaking the protocol, so the
+smoke test now sends the request the UI actually sends — a `Register` carrying a
+hostname — and requires the agent to PARSE it. Not to succeed: registering
+against a server that is not there fails many ways, and only the parse is the
+claim.
+
+`scripts/lib/ws-send.py` exists because `curl` can perform the upgrade but
+cannot send a frame, and the frame is the entire point.
+
+**The control is inside the check.** Every assertion above is that a counter did
+NOT move, and a counter that cannot move proves nothing — if the frame never
+arrived, if the log were elsewhere, if the grep were wrong, it would pass
+against an agent that understands nothing. So the check then sends a `Register`
+whose `server_addr` is a number, which the agent MUST reject, and fails if that
+counter does not move.
+
+Verified three ways, by exit code rather than by output:
+
+| Artefact | Exit | Says |
+|---|---|---|
+| the real `agent-v0.2.0` archive | **1** | `invalid socket address syntax` — could not parse a hostname |
+| a build from this tree | 0 | understood, and the malformed one rejected |
+| this tree, with the frame sender stubbed to a no-op | **1** | "the check above proves nothing" |
+
+The first is the strongest negative control available anywhere in this document:
+not a mutation invented to make a check go red, but the actual artefact users
+downloaded, failing for the actual reason they could not join.
