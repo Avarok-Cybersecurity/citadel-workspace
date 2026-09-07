@@ -8593,3 +8593,50 @@ The lesson is not "don't fail loudly". It is that a guard placed where it cannot
 distinguish the case it is guarding will fire on cases it should not — here,
 every read of the file, forever, including by the tool that would have honoured
 it.
+
+## Round 688 — the gate that pinned the behaviour I had just replaced
+
+"Accessibility on the pre-auth screens" failed, and with it the whole
+Production Docker Build job — which is the job that builds and publishes the UI
+image. One assertion:
+
+```
+sign-in: stays shut while the agent is unreachable    FAIL
+```
+
+Round 674 wrote that. It was true then: with no agent, pressing Sign In did
+nothing at all, and the assertion recorded it as intended behaviour. Round 678
+established that it was not intended — after a visitor dismisses the connection
+dialog, the door had nothing left to point at, and a control that answers a
+click with silence reads as broken software. Pressing it now reopens the dialog
+that explains the state and carries the download link.
+
+So a gate was failing against the better behaviour, and blocking the publish.
+
+The property worth keeping is narrower than "no dialog opens" and stronger:
+
+- the login FORM must not open — a form on a connection that cannot complete is
+  the real hazard, and a regression that opened one would still fail;
+- and what opens instead must be the surface that explains why.
+
+"Nothing happened" and "the right thing happened" were indistinguishable to the
+old assertion. They are not to the new one.
+
+**The negative control was performed before the fix existed**, which is the
+strongest form available: round 678 measured this exact state on a rebuilt
+production bundle with the defect present —
+
+```
+dialog dismissed
+after click, dialogs: 0
+```
+
+— so `pressing it explains why, instead of doing nothing` was demonstrably false
+against the old behaviour and is true against the new. Not a mutation invented
+to make a check go red; the defect itself, measured.
+
+**Repeatability, separately.** "Flawlessly" is not a claim one run can support,
+so the three-user proof was run twice against the live server through the
+published agent, and both were `21/21`. All four platform downloads under
+`releases/latest` return 200, so the first step of joining works on any machine
+a visitor is likely to have.
