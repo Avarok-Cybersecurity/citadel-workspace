@@ -216,6 +216,42 @@ brand-new room has nobody to call until members are added.
 
 ## Existing Remote Deployment
 
+> **The UI on `avarok2` does not run under Compose.** `docker compose config
+> --services` there lists only `server`; the UI is a hand-started container
+> named `citadel-ui`. So `deploy.sh` does not touch it, and its configuration
+> exists nowhere in this repository -- it was reconstructed with
+> `docker inspect` and is written down below so the next person does not have
+> to. Recreate it EXACTLY, or the loopback origin and the disabled `/ws` proxy
+> silently change:
+>
+> ```bash
+> TAG=sha-<12 hex>            # from the Publish Images run you are deploying
+> docker pull ghcr.io/avarok-cybersecurity/citadel-workspace-ui:$TAG
+> docker rm -f citadel-ui
+> docker run -d --name citadel-ui --restart unless-stopped \
+>   -p 127.0.0.1:8099:8080 \
+>   -e LOOPBACK_AGENT_ORIGIN=wss://local.avarok.net:12345 \
+>   -e WS_PROXY_ENABLED=0 \
+>   -e AGENT_UPSTREAM=127.0.0.1:12345 \
+>   -e LISTEN_ADDR=0.0.0.0 \
+>   ghcr.io/avarok-cybersecurity/citadel-workspace-ui:$TAG
+> ```
+>
+> `-p 127.0.0.1:8099` is not decorative: nginx on the host proxies :443 to it,
+> and binding the wildcard would publish the UI -- and behind it the `/ws`
+> route -- to the whole network. `WS_PROXY_ENABLED=0` keeps that route off
+> entirely; the browser reaches the agent on the user's own machine, never
+> through the server. See [agent-is-loopback-only].
+>
+> Why it is separate at all: all three services in
+> `docker-compose.production.yml` share one `${IMAGE_TAG}`, and the server has
+> been stable on `sha-aeafb7ecad6c` for days while the UI needs to move. Moving
+> the shared tag to deploy a UI fix would carry the server forward ~140 commits
+> in the same step. Running the UI on its own tag is the smaller risk, but it
+> costs this divergence, and the two tags must be reconciled deliberately rather
+> than left to drift.
+
+
 The deployment on `avarok2` lives at **`/srv/citadel-tenants/avarok`** — compose
 project `avarok`, holding `deploy.sh`, `docker-compose.production.yml`, `.env`,
 the loopback certificate pair, and the tenant provisioning scripts.
