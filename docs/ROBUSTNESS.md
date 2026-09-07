@@ -9977,3 +9977,30 @@ It is also why the accounts created by these runs are real accounts on the real
 server. They are harmless (`u1x…`, `ta…`, `dbg…`, `mx…`) and the server volume
 is backed up, but a proof script pointed at production leaves state, and that is
 a property to know about rather than discover.
+
+## Round 718 — will anyone actually SEE the deploy?
+
+A deploy that lands correctly and is invisible to visitors is a real failure
+mode, and work.avarok.net sits behind Cloudflare. Measured before deploying
+rather than discovered after:
+
+```
+GET /                     cache-control: public, no-cache     cf-cache-status: DYNAMIC
+GET /assets/index-*.js    cache-control: public, max-age=31536000, immutable
+                          cf-cache-status: HIT   age: 146934
+```
+
+This is exactly right, and it is worth saying why rather than just noting it is
+green. `index.html` is never served from cache, so the moment the container is
+replaced the next visitor gets HTML naming the new content-hashed bundles. The
+bundles themselves are immutable for a year, which is safe **because** their
+names change with their content — the old names stay cached and simply stop
+being referenced.
+
+So no purge is needed and none should be run: purging the immutable assets would
+throw away a year of edge cache to no purpose, and purging nothing is the correct
+action for a `no-cache` document.
+
+The failure this rules out is the one where the deploy succeeds, `docker ps`
+shows the new image, the operator reloads and sees the old site, and half an hour
+goes into the container before anybody looks at `cf-cache-status`.
