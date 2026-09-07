@@ -28,6 +28,16 @@
 # The certificate is therefore committed in the clear, which is also what
 # `include_bytes!` needs and what makes it auditable in review.
 #
+# HOW THE RESULT LANDS
+#
+# Through a pull request with auto-merge, never a direct push. master requires
+# changes to go through a PR, and github-actions[bot] gets no admin bypass, so
+# a direct push is rejected with GH006 *after* the certificate has already been
+# issued -- burning duplicate-certificate quota and throwing the result away.
+# The first forced run of this workflow did exactly that. Because
+# required_approving_review_count is 0, the PR needs no human; auto-merge lands
+# it as soon as the required status check reports.
+#
 # WHY NOT AT RELEASE TIME
 #
 # Let's Encrypt allows 5 duplicate certificates per week for an identical name
@@ -51,7 +61,10 @@ on:
         default: false
 
 permissions:
+  # contents: to push the renewal branch. pull-requests: to open the PR that
+  # carries it -- master is protected and refuses a direct push, even from CI.
   contents: write
+  pull-requests: write
 
 concurrency:
   # Two renewals racing would burn duplicate-certificate quota and could commit
@@ -137,8 +150,20 @@ jobs:
           echo "verified: name, validity, and key match"
           openssl x509 -in "$live/fullchain.pem" -noout -dates
 
-      - name: Commit if it changed
+      - name: Open a pull request if it changed
+        # NOT a direct push. master requires changes to go through a pull
+        # request, and github-actions[bot] has no admin bypass -- the first
+        # forced run of this workflow issued a valid certificate, verified it,
+        # committed it, and then died on
+        #   GH006: Protected branch update failed ... Changes must be made
+        #   through a pull request.
+        # losing the certificate with the runner. Auto-merge lands the PR once
+        # the required check passes, so this stays unattended; if the check
+        # never reports, the PR stays OPEN and visible rather than failing
+        # silently at 4am on a Monday.
         if: steps.due.outputs.renew == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -151,8 +176,10 @@ jobs:
             exit 0
           fi
           end="$(openssl x509 -in "$dest/local.avarok.net.crt.pem" -noout -enddate | cut -d= -f2)"
+          branch="tls-renewal/${GITHUB_RUN_ID}"
           git config user.name  'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$branch"
           git add "$dest"
           # `git commit -F -` with printf: a multi-line -m argument would need
           # continuation lines at column 0, which ends the YAML block scalar and
@@ -168,5 +195,26 @@ jobs:
             "Committed in the clear on purpose: the key is published in the binary, so" \
             "storing it as a secret would protect nothing and hide what is shipped." \
             | git commit -F -
-          git push
-          echo "Committed. A release cut from a branch containing this commit ships the new certificate."
+          git push origin "$branch"
+          printf '%s\n' \
+            "Renews the certificate compiled into every downloaded agent by" \
+            "\`include_bytes!\` in \`citadel-workspace-internal-service/src/main.rs\`." \
+            "" \
+            "Valid until **${end}**." \
+            "" \
+            "Issued by DNS-01 in CI and verified before commit: the SAN covers" \
+            "\`local.avarok.net\`, it is not already expired, and the public key in the" \
+            "certificate matches the private key beside it. A mismatch there would" \
+            "produce an agent that starts and then fails every TLS handshake." \
+            "" \
+            "The key is committed in the clear on purpose -- it is published inside a" \
+            "binary anyone can download, so storing it as a secret would protect" \
+            "nothing and hide what is shipped." \
+            > "$RUNNER_TEMP/pr-body.md"
+          gh pr create --base master --head "$branch" \
+            --title "chore(tls): renew the agent's built-in certificate" \
+            --body-file "$RUNNER_TEMP/pr-body.md"
+          # Auto-merge rather than merging here: it waits for the required
+          # status check instead of racing it.
+          gh pr merge "$branch" --squash --auto --delete-branch
+          echo "PR opened and set to auto-merge. A release cut after it lands ships the new certificate."
