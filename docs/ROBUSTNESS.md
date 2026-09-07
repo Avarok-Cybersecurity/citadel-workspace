@@ -9252,3 +9252,46 @@ Recorded because "no gap found" is a result, and because the near-miss is the
 point: the absence of an npm script is not the absence of coverage, and a probe
 built on that inference would have duplicated a passing spec while feeling like
 progress.
+
+## Round 703 — two fixes, both wrong, and the honest response
+
+The Production Docker Build passed for the first time tonight, with every
+gating step green including two that had never executed: "The agent-down first
+run" and "Persistence — restarting the server must not duplicate the workspace
+tree". The production image builds.
+
+And `member-list-loading` still fails its first attempt and passes on retry.
+
+```
+shard 1: 53 passed
+shard 2: 42 passed, 1 flaky   ✘ 17 ... ✓ 18 (retry #1)
+shard 3: 45 passed
+```
+
+**Both fixes aimed at this spec have missed.** Round 693 initialised the loading
+flag from the prop. Round 697 removed the flag entirely and derived the state by
+comparing `loadedForDomain` with `activeDomainId`, which closes the domain-change
+window by construction. The fix is in this run's UI pointer. The spec fails the
+same way it did before.
+
+So the diagnosis was wrong, or incomplete, twice — and both times it was reasoned
+from reading the code, which is exactly the move that has failed all night for
+everything else too.
+
+**It does not reproduce without the compose stack**, which is not available
+here. A third guess would be worth what the first two were worth.
+
+The spec now captures the DOM at the moment it FIRST sees the empty state — the
+URL, which of `members-loading` / `members-empty` / `members-unavailable` is on
+screen, and how many member and peer rows exist — and carries it in the failure
+message. `MemberListBody`'s loading item gained a testid for the same reason:
+without one, "loading was absent" and "loading has no testid" are the same
+observation, and the diagnostic would have reported a false negative about
+itself.
+
+This is the ILM stress-test move again: when you cannot reproduce it, stop
+guessing and make the next occurrence carry its own diagnosis. It is also why
+round 697's flaky reporter matters — without it, this run reads as three green
+shards and the defect stays invisible.
+
+No claim is made that anything here fixes the spec.
