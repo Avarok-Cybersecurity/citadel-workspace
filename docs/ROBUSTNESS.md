@@ -10991,3 +10991,49 @@ a change to the default.
 **Not attempted here.** It cannot be validated without running the 47-job matrix,
 which shares a backend and cannot run concurrently. Recorded with the evidence
 and the corrected lever so the next attempt starts from the right end.
+
+## Round 738 — the instrumentation answered, and the answer was not the hypothesis
+
+`member-list-loading` flaked again, and this time it carried the evidence added
+in round 724:
+
+```
+At the first sighting the DOM held:
+  {"loading":"Loading members...", "empty":"(absent)", "unavailable":"(absent)",
+   "memberRows":0, "url":".../workspace?nodeId=workspace-root"}
+
+members:loaded events, in order:
+  [useDomainMembers] members:loaded {payloadDomainId: workspace-root,
+                                     activeDomainId: workspace-root, count: 3}
+```
+
+**Round 724's hypothesis is dead.** It supposed an event with no domain id, or an
+empty list, ending the load — via `isForDomain` accepting a payload whose domain
+is `undefined`. There was exactly ONE event, its domain matched, and it carried
+**3 members**. Nothing was mis-routed and nothing was empty. Had I "fixed"
+`isForDomain` on the strength of that reading, I would have changed correct code
+and the spec would have kept flaking — the third such fix on this spec.
+
+**What the capture actually shows is an ordering.** `atFirstSighting` is recorded
+the moment `emptyState.isVisible()` first returns true, and by the time the
+`evaluate` runs one tick later the empty state is GONE and the loading state is
+on screen. So the sequence is:
+
+```
+empty ("no members")  ->  loading ("Loading members...")  ->  3 members
+```
+
+The empty state renders BEFORE the loading state, not after it. Every previous
+attempt reasoned about the load ending too early. It does not end too early; it
+has not visibly begun when the empty state is already on screen.
+
+That reframes the question from "what cleared the loading flag" to "what
+rendered the empty branch while the flag was still false, before the effect that
+sets it ran" — a first-render ordering question, in the window between a node
+click and the effect keyed on the new domain.
+
+**Deliberately not fixed here.** Three fixes have been aimed at this spec from
+reading the code and all three missed; the discipline that finally produced a
+fact was measuring, so the next step is one more measurement — capture
+`activeDomainId` and `loadedForDomain` alongside the DOM at the sighting — not a
+fourth guess. Recorded so the reframing is not lost.
