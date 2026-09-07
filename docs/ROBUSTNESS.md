@@ -11188,3 +11188,89 @@ The first version was unparseable YAML: a multi-line `git commit -m` put
 continuation lines at column 0, which ends a block scalar. Round 732 added that
 gate after finding nothing checked workflow syntax; this is the first thing it
 caught, and GitHub would have reported it as an absent run rather than an error.
+
+## Round 741 — the renewal issued a certificate, then threw it away
+
+The previous round built the renewal workflow and reasoned about it carefully.
+It was never run. Forcing a run was the whole finding.
+
+`master` was fast-forwarded from `stack/one-pass` (240 commits, 0 lost, 74/75
+checks SUCCESS and one NEUTRAL), which is what made the workflow exist on the
+default branch at all — GitHub registers `schedule` and `workflow_dispatch`
+only from there, so until the merge the job could not have fired in any month.
+
+### What the forced run proved
+
+Run `34159950725`, dispatched with `force=true`:
+
+| Step | Result |
+|---|---|
+| Is renewal due? | success |
+| Obtain a certificate (DNS-01) | success |
+| Verify before committing | success |
+| **Commit if it changed** | **failure** |
+
+The hard half worked. The easy half did not:
+
+```
+remote: error: GH006: Protected branch update failed for refs/heads/master.
+remote: - Changes must be made through a pull request.
+```
+
+`master` requires a pull request, and `github-actions[bot]` has no admin
+bypass — my own direct pushes succeed only because `enforce_admins` is false
+*for me*. So the job issued a real certificate, validated it, committed it, and
+lost it with the runner, having spent one of the five duplicate certificates
+Let's Encrypt allows per week.
+
+Left alone this fails at 04:17 on a Monday in November, unattended, with the
+expiry it exists to prevent still approaching. A workflow whose first real
+execution is the one that matters is not a safeguard; it is an assumption.
+
+### The fix
+
+Push a branch, open a PR, enable auto-merge. `required_approving_review_count`
+is 0, so nothing waits on a human. `allow_auto_merge` was false repo-wide and
+had to be enabled, or the bot's PR would have sat open forever — a quieter
+version of the same failure.
+
+Auto-merge rather than merging inline: it waits for the required check instead
+of racing it. And if that check never reports, the PR stays **open and visible**
+rather than the job failing silently.
+
+### Proven, not argued
+
+Re-dispatched as run `34160348499`: all eight steps green, PR #127 opened and
+auto-merged within seconds, `master` at `8c024872`. The committed bytes were
+then verified independently of the workflow's own pre-commit check —
+`CN=local.avarok.net`, issuer Let's Encrypt, `notAfter=Dec 6 19:44:03 2026`,
+SAN correct, certificate public key equal to the private key's. 89 days, well
+above the 30-day floor `scripts/smoke-agent.sh` enforces.
+
+### Two vacuous checks caught in the course of this round
+
+Both were mine, both would have reported safety:
+
+1. The first PR poll used `.conclusion // "RUNNING"` and declared all 23 checks
+   settled while 16 were still running. jq's `//` substitutes on `null`; a
+   pending check's conclusion is `""`, which is present. The corrected
+   predicate tests `$1==""` and immediately showed the 16. It also showed the
+   total climbing 23 → 75 later, because the integration matrix is gated behind
+   the unit jobs and only enqueues once they pass — "2 pending" was never the
+   finish line.
+2. The independent certificate check printed `MATCH` for a certificate and key
+   that had both failed to download: `d41d8cd98f00b204e9800998ecf8427e` is the
+   md5 of empty input, so both sides agreed on nothing. It now refuses that
+   digest explicitly and requires both files to be non-empty first.
+
+The workflow-parse gate was given a two-sided control on this file — red on a
+continuation line at column 0, green on revert, with the diff confirming the
+revert left only the intended change.
+
+### Still open
+
+- `member-list-loading` flake; the instrumentation refuted the standing
+  hypothesis rather than confirming it, so no fourth speculative fix was made.
+- `both-c2s-reconnect` intermittent hang.
+- 22 Dependabot advisories on the default branch (5 high, 12 moderate, 5 low),
+  surfaced by the push and not yet triaged.
