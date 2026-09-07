@@ -9398,3 +9398,67 @@ taken somewhere other than where the claim applied.
 
 The first two are what I expected to have to deploy. They are already right. The
 one thing that is wrong is the one nothing had measured.
+
+## Round 706 — the local harness could not express the failure
+
+Round 705's defect had survived every local proof. Not because the proofs were
+weak — they drive real browsers through the real social path — but because of
+one line:
+
+```
+node .../serve dist -l 4201 --ssl-cert /tmp/work.test.crt --ssl-key /tmp/work.test.key
+```
+
+`npx serve` sends **no Content-Security-Policy at all**. Production sends
+`connect-src 'self' wss://local.avarok.net:12345`. So every local run happened
+under a strictly more permissive policy than the one users get, and a page that
+fetched `https://dns.google/resolve` was fine locally and refused in production.
+A harness more permissive than production cannot falsify a production-only
+defect, however many times it is run. Twenty-one green steps meant exactly as
+much as they could mean, which was less than I read into them.
+
+Two things came out of it.
+
+**`scripts/lib/serve-like-production.mjs`** serves a built `dist/` with the real
+policy — *read out of `docker/ui/nginx.conf.template`*, not copied into the file.
+The extracted string matches the live site's header byte for byte. If the map
+block is restructured the reader throws, because a stale copy here would quietly
+restore the blind spot it exists to remove.
+
+**`scripts/lib/hostname-costs-no-violation.mjs`** walks registration to submit
+with a hostname in the address field and reports every CSP violation raised on
+the way. `check-production-image.mjs` already asserted "no unexpected CSP
+violations" — but attached its collector to one page and looked only at the
+landing view, three screens short of the defect. It was not wrong; its reach
+was.
+
+### The negative control was not fabricated
+
+The deployed site *is* the defect, so it serves as the control directly:
+
+```
+RED   live deployment    reached=submitted  violations=2
+        script-src-elem:https://static.cloudflareinsights.com/beacon.min.js
+        connect-src:https://dns.google/resolve?name=citadel.example.net&type=A
+```
+
+It catches the registration-blocking violation and the Cloudflare beacon in the
+same pass. A control taken from the real broken artefact beats one I write
+myself, because it cannot be accidentally shaped to the check.
+
+The walk also reports `reached`, and that earned its place immediately: a run
+against an unreachable origin returned `reached=nothing, violations=0`. Without
+that field it would have read as a clean pass. **A walk that never ran sees no
+violations either** — the same shape as [waiting for absence passes instantly].
+
+### Open, not explained
+
+Serving the fixed `dist/` locally under the production policy raised one
+violation I cannot yet account for: `connect-src:wss://127.0.0.1:4202/?token=…`,
+a WebSocket to the page's own port. The bundles contain no Vite HMR client, no
+`?token=`, no `createHotContext`. It does not appear against the real container
+on the live site. My present belief is that it is an artefact of this ad-hoc
+harness rather than the app, but that is a belief, not a measurement, and it is
+written here as such rather than dismissed as environmental. The GREEN half of
+this control is therefore **not yet established**; it is left to CI, which
+builds a real image and runs the check the way it is meant to run.
