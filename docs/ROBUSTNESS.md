@@ -9607,3 +9607,30 @@ they were run over and over. They simply could not express the failure, and no
 amount of repetition fixes that. Verifying that the environment can represent
 the defect belongs with verifying that the check can fail; they are the same
 question asked at two levels.
+
+## Round 710 — the same fact, established without a browser
+
+Rounds 705–709 established the registration defect by driving browsers. Before
+deploying, the same claim was checked at the artefact level, where no timing,
+no agent and no policy can confuse it:
+
+```
+$ docker run --rm --entrypoint sh <deployed image> -c \
+    "grep -rl dns.google /usr/share/nginx/html/assets/*.js"
+/usr/share/nginx/html/assets/app-services-BFALT6z0.js      # loopback-3078d2f1
+
+$ docker run --rm --entrypoint sh <image built from this branch> -c \
+    "grep -rl dns.google /usr/share/nginx/html/assets/*.js"
+(nothing)
+```
+
+The bytes users are served today contain the call. The bytes about to replace
+them do not. That is worth having alongside the browser proofs precisely because
+it shares none of their machinery: no CSP, no agent, no wizard, no wait. If the
+two kinds of evidence had disagreed, one of them would have been measuring
+something other than what it claimed — and the browser runs are the ones with
+more places to go wrong.
+
+Also confirms the deploy is UI-only. The defect is in a UI chunk, so replacing
+the UI container is sufficient; the server keeps the tag it has run on for days
+rather than moving ~140 commits to carry an unrelated fix.
