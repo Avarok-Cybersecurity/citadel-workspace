@@ -106,7 +106,13 @@ sys.exit(0 if s.connect_ex(('127.0.0.1',$PORT))==0 else 1)
         echo "::error::$ARCHIVE contains a binary whose signature does not verify." >&2
         exit 1
       fi
-      AUTHORITY="$(codesign -dv --verbose=4 "$BIN" 2>&1 | awk -F= '/^Authority=/ {print $2; exit}')"
+      # No `exit` in the awk: it closes the pipe while codesign is still
+      # writing, codesign dies on SIGPIPE, and `set -o pipefail` turns that into
+      # exit 141 -- which reads as a FAILED CHECK on a correctly signed binary.
+      # The first run of this gate against a signed, notarised build did exactly
+      # that. `head -1` takes the first line without shutting the writer down.
+      CODESIGN_OUT="$(codesign -dv --verbose=4 "$BIN" 2>&1 || true)"
+      AUTHORITY="$(printf '%s\n' "$CODESIGN_OUT" | grep '^Authority=' | head -1 | cut -d= -f2-)"
       case "$AUTHORITY" in
         "Developer ID Application"*) echo "  signed by: $AUTHORITY" ;;
         *)
@@ -116,7 +122,7 @@ sys.exit(0 if s.connect_ex(('127.0.0.1',$PORT))==0 else 1)
           exit 1 ;;
       esac
       # Hardened runtime, without which notarisation is refused outright.
-      if ! codesign -dv --verbose=4 "$BIN" 2>&1 | grep -q "flags=.*runtime"; then
+      if ! printf '%s\n' "$CODESIGN_OUT" | grep -q "flags=.*runtime"; then
         echo "::error::$ARCHIVE is signed WITHOUT the hardened runtime (--options runtime)." >&2
         echo "  Apple rejects notarisation for this, so the binary would ship signed and" >&2
         echo "  still be refused." >&2

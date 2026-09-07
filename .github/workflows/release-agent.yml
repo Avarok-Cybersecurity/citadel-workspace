@@ -200,8 +200,13 @@ jobs:
           # .app/.pkg/.dmg only -- so Gatekeeper validates online on first run.
           # That is acceptable here specifically: the agent exists to reach a
           # workspace server, so it is useless without a network anyway.
-          echo "Notarised. Gatekeeper assessment (online check):"
-          spctl -a -t exec -vv "$bin" || echo "  (spctl assessment is informational; the ticket may take a moment to propagate)"
+          # NOT asserted, and not a failure when it complains: `spctl -a -t exec`
+          # rejects EVERY bare command-line tool with "the code is valid but does
+          # not seem to be an app", signed and notarised or not. It assesses app
+          # bundles. Printed for the record; `codesign --verify` above is what
+          # actually judges the signature.
+          echo "Gatekeeper assessment (informational -- CLI tools are never 'apps'):"
+          spctl -a -t exec -vv "$bin" 2>&1 | sed 's/^/  /' || true
 
       # Packaged with the run instructions beside the binary. `--bind` has no
       # default in the agent's CLI, so a downloaded binary run bare exits with a

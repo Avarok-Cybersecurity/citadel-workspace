@@ -11085,3 +11085,52 @@ half-applied. All six moved together.
 Control: removing the `ServerConnect` call turns the wiring test red — a
 normaliser nothing calls is the inert-feature shape, and the function's own
 tests cannot see it.
+
+## Round 740 — signed and notarised, proven before a release was cut
+
+Five organisation secrets, the workflow, the gate, and both controls. The whole
+chain was exercised locally against the real certificate before tagging
+anything, because a release is a bad place to discover a signing pipeline.
+
+```
+codesign --force --options runtime --timestamp --sign "Developer ID Application: …"
+  -> flags=0x10000(runtime)   Authority=Developer ID Application: Thomas Braun (4YRD59969U)
+  -> Timestamp=Sep 7, 2026 at 2:48:54 PM
+
+xcrun notarytool submit … --wait
+  -> status: Accepted
+```
+
+### Three things that would have been wrong in the release
+
+**My own gate failed the signed binary.** Its first run against a correctly
+signed, notarised build exited **141** — SIGPIPE. `codesign … | awk '…{exit}'`
+closes the pipe while codesign is still writing; codesign dies on SIGPIPE, and
+`set -o pipefail` turns that into a failed check. It read exactly like "this
+binary is not signed". Now the codesign output is captured once and reused, and
+`head -1` takes the first line without shutting the writer down. Both controls
+hold: signed+notarised → 0, the currently shipped release → 1.
+
+**`spctl` is not a signing check for a CLI tool.** It rejects a properly signed,
+notarised binary with *"the code is valid but does not seem to be an app"* —
+the same verdict word as for an unsigned one, for a completely different reason.
+Earlier in this session I read `spctl: rejected` on the shipped agent and nearly
+reported Gatekeeper as a blocker on that basis. It assesses app bundles.
+`codesign --verify` is what judges a signature; `spctl` is now printed as
+information and asserted on by nothing.
+
+**A ticket cannot be stapled to a bare executable.** `stapler` handles
+.app/.pkg/.dmg, so Gatekeeper validates online on first run. Acceptable here in
+particular: the agent exists to reach a workspace server, so a machine that
+cannot reach Apple cannot use it either.
+
+### The certificate expires 2027-02-01, and that is fine
+
+Five months, not the usual five years — it tracks the membership term. It does
+not become a cliff, because the signature is **timestamped**: a binary signed
+today stays valid after the certificate expires. Only NEW signatures need a
+current certificate.
+
+That is a different deadline from the agent's embedded TLS certificate
+(2026-12-05, round 722), which does stop working for everyone at once. Two
+dates, two mechanisms, and only one of them is a cliff.
