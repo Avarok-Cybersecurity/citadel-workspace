@@ -8640,3 +8640,70 @@ so the three-user proof was run twice against the live server through the
 published agent, and both were `21/21`. All four platform downloads under
 `releases/latest` return 200, so the first step of joining works on any machine
 a visitor is likely to have.
+
+## Round 689 — "signing in works" was a session being claimed
+
+Every proof in this document creates a NEW account. Nobody had shown that the
+same person can come back and sign in, which is what everyone does from their
+second visit onward — and registration and login are different paths, so two
+consecutive `21/21` runs say nothing about the second.
+
+The first attempt reported success and was wrong. A fresh browser context, the
+same credentials, and:
+
+```
+RETURNING USER SIGNED IN: true
+what it asks for: Active Sessions  A adm...  U u1x...  R ret1788748536031 ...
+```
+
+That account was listed under **Active Sessions** — its session was still alive
+on the agent from the creation step, because the agent is shared across browser
+contexts on one machine. What the test proved is that a live session can be
+claimed. Authentication was never exercised.
+
+Redone with a fresh agent `--data-dir` as well — a new machine, or a reinstall —
+and it FAILS:
+
+```
+any active session offered to claim: false
+form fields: {"server":false,"user":true,"pass":true}
+SIGNED IN ON A FRESH MACHINE: false
+```
+
+The agent's own answer, off the socket:
+
+```
+{"Response":{"ConnectFailure":{"cid":0,"message":"Client does not exist", ...}}}
+```
+
+**That is design, not a defect.** "Client does not exist" comes from the SDK's
+account manager, decided before the server is consulted. A Citadel account is
+not a row on a server: the client holds its CID and key material, and the agent
+keeps them under `--data-dir`. Lose that directory and the account cannot be
+signed into from that machine, however healthy it is on the server.
+
+**The defect is what the UI said about it.**
+
+> No account found with that username **on this server**. Please check your
+> username or register a new account.
+
+Both halves are wrong where it matters. The account is intact on the server,
+and registering again is not a retry: it mints a NEW CID while every peer's
+registration still points at the old one. A user following that instruction
+splits their identity in two, irreversibly, and the app told them to.
+
+The message now names the machine and the data directory, and states what
+registering again would cost rather than recommending it. Three tests pin it —
+including one asserting the generic server-side branch still fires for a
+genuinely unknown username, so the fix cannot swallow a different failure — with
+a control that deletes the new branch and turns them red.
+
+Verified against what runs, not only in tests: the bundle was rebuilt and the
+real failure reproduced in a browser against the live server, which now shows
+the corrected text.
+
+**What this says about the product**, and it belongs in front of anybody
+inviting other people: the agent's data directory IS the account. Someone who
+runs the agent from a temporary directory, or reinstalls without keeping it,
+loses access to their identity. The message no longer misdirects them, but the
+underlying fact is a first-class thing to document before strangers arrive.
