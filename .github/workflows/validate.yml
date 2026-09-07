@@ -513,6 +513,11 @@ jobs:
         run: node scripts/check-workflows-parse.mjs
       - name: The UI recognises the agent's duplicate-connect refusal
         run: node scripts/check-connect-in-progress-matches-the-agent.mjs
+      - name: Submodule work is committed, not just pointed at
+        # In CI this is trivially true -- checkout produces clean submodules --
+        # so it is here as documentation and as a canary: if it ever fails on a
+        # runner, something wrote into a submodule during the run.
+        run: node scripts/check-submodule-work-is-committed.mjs
       - name: Every generated binding has a type, and every type a binding
         run: node scripts/check-bindings-match-exported-types.mjs
       - name: Instructions name the port the UI actually serves

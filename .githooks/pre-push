@@ -17,4 +17,16 @@
 # doing that by hand; nobody had, so this hook -- written for this exact failure,
 # naming this exact cost -- had never run once. Run 33376013146 then lost all 74
 # jobs to precisely it.
+# Two questions, and only the first had a guard.
+#
+#   1. Is the pointer fetchable?          check-submodule-pointers-pushed.mjs
+#   2. Does the pointer name YOUR work?   check-submodule-work-is-committed.mjs
+#
+# The second is what a `git add -A && git commit` in the parent silently gets
+# wrong: it records a pointer, not the edits sitting in the submodule's working
+# tree. Preflight then passes -- it reads that working tree -- and CI checks out
+# the commit the pointer names, without them. A Rust fix and the gate enforcing
+# it landed in one wave that way; CI failed on the gate, naming the very fields
+# the fix had changed.
+node scripts/check-submodule-work-is-committed.mjs || exit 1
 exec node scripts/check-submodule-pointers-pushed.mjs

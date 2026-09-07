@@ -10848,3 +10848,63 @@ an unfixed predicate, a proof against a dev server from another worktree, and
 now a fix that CI could not see. Every one had the same shape — **verify what
 the tool actually consumed, not what you edited** — and every one cost a full
 cycle to notice.
+
+## Round 735 — a guard for the mistake round 734 recorded, which found another one immediately
+
+Round 734 ended with a fix that had existed only in a working tree. Nothing
+guarded that, so:
+
+`scripts/check-submodule-work-is-committed.mjs` asserts no submodule carries
+uncommitted changes to **tracked** files. Untracked files are ordinary during
+development and a parent commit does not silently ship them; tracked
+modifications are exactly what it does ship past.
+
+It found one on its first run:
+
+```
+  These submodules have uncommitted changes to tracked files:
+    citadel-workspaces
+      M docs/ROBUSTNESS.md
+```
+
+That is round 731's UI-side header — the note saying which of the two records
+you are reading. I wrote it into the parent's submodule **checkout** and never
+committed it there, so it would have been reverted by the next
+`git checkout FETCH_HEAD` with nothing said. The same mistake, still live, one
+round after recording it.
+
+### Two questions, and only one had a guard
+
+```
+1. Is the pointer fetchable?         check-submodule-pointers-pushed.mjs
+2. Does the pointer name YOUR work?  check-submodule-work-is-committed.mjs   (new)
+```
+
+Both now run in `.githooks/pre-push`, the first ahead of the second, because a
+pointer that names the wrong commit and a pointer nobody can fetch fail in
+different places — the first in CI three minutes later, the second at checkout
+before anything compiles.
+
+Control: dirtying a tracked file in `citadel-internal-service` turns it red and
+names the submodule; reverting returns it to 0.
+
+### And a third gate caught the consequence
+
+Committing the Rust change moved a tree the WASM client is built from, so
+`check-wasm-matches-its-source.mjs` failed: the committed binary predated the
+source.
+
+```
+stamped:  … f8c6ee6265aab08caf1222c901be94ad2e5d187b …
+current:  … 58fa98df78ae0c0dc960ed364ca515d5964fec99 …
+```
+
+That gate is why the change is not merely inert. CI runs `SKIP_WASM_BUILD=1`, so
+without it the browser would keep the older binary and a Rust edit would sit in
+the repository doing nothing, with every check green. Rebuilt with
+`./sync-wasm-clients.sh --no-restart`; preflight 150.
+
+Three independent guards fired on one wave of my own work: the submodule-work
+gate (a doc left uncommitted), the WASM staleness gate (a binary predating its
+source), and, before them, the pre-push hook (a parent pointing at an unpushed
+UI commit). None of the three would have been caught by reading the diff.
