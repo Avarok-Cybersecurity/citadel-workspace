@@ -8758,3 +8758,41 @@ same defect class as everything else in this document. It asked
 answered YES — from a word somewhere in the workspace chrome, not from anything
 the user had been told. The rewrite reads the dialog by testid and the banner by
 testid, and adds the restart, which the first version never tested at all.
+
+## Round 691 — the most common error in the product, still a raw dump
+
+Continuing to try what people actually do wrong, against the live server:
+
+| mistake | what they were told |
+|---|---|
+| username already taken | "Username Taken — An account with that username already exists. Please choose a different username." |
+| **wrong password** | "Authentication Error — **Something went wrong: Invalid username or password**" |
+
+The password branch matches
+`/invalid password|wrong password|password mismatch|incorrect password/`. The
+SDK emits **`Invalid username or password`**, which contains none of them.
+
+What makes this worth reading twice is the comment that was already sitting
+above that branch. It records that the needles had once been lowercase
+`.includes()` while the SDK emits a capital `I`, so "the product's single most
+common error could never fire". Somebody found that, fixed the CASE, and did not
+check the WORDING. The same bug survived a fix aimed directly at it, and stayed
+invisible for the same reason both times: the app still says *something*, so
+nothing looks broken.
+
+The replacement deliberately does **not** name which half was wrong. The SDK
+conflates them on purpose — telling a caller which half was right turns a login
+form into a username oracle — so a friendlier message there would be a security
+regression. One test pins that it stays vague; another pins that a genuine
+password-only error (`Invalid password`) still says "password", so the new
+branch cannot swallow the old one.
+
+Verified in a browser against the live deployment, registering an account and
+then signing in with the wrong password: *"That username and password did not
+match. Check both and try again."*
+
+**Three of this session's user-facing defects are the same shape**: a mapping
+that reads plausibly and does not match the string the other side actually
+sends — the local-account message blaming the server (round 689), the
+`getaddrinfo` dump (round 690), and this. All three were found by making the
+mistake, never by reading the mapping. Reading is what wrote them.
