@@ -10109,3 +10109,34 @@ committed and waiting on the publish; `.env` on the host already carries
 
 That last row is the honest limit of "ready". Everything else needed to join is
 on the page.
+
+## Round 721 — a before, taken on purpose
+
+The deployed image predates rounds 713-714, so the live site still shows the
+invented sentence. Measured rather than assumed, so the next deploy has a
+before to be compared against:
+
+```
+5/7 states explained against https://work.avarok.net
+FAIL  a server that never answers is explained
+      ErrorSomething went wrong: Socket deadline has elapsed
+FAIL  and points at the server address, the thing to check
+```
+
+The five that pass are the ones that already worked: a mistyped address, a
+correct registration, a taken username, a wrong password, and the assertion that
+the login form does not reveal WHICH half was wrong. The two that fail are
+precisely the two rounds 713-714 fixed and verified against an image — so if
+they do not become PASS after the next deploy, the deploy did not carry what it
+was supposed to, and that will be visible immediately rather than inferred.
+
+A user who mistypes the workspace address on work.avarok.net right now is told
+"Something went wrong: Socket deadline has elapsed" — a sentence emitted by
+nothing in this system, assembled by the display cleaner stripping `error:` out
+of the middle of the SDK's actual words. That is what the pending image
+replaces with a message naming the address and what a valid one looks like.
+
+Taking the before is cheap and it is the difference between "the deploy worked"
+and "the deploy carried what I thought it carried". Round 712 is the reason:
+a fix can be present in the bundle, loaded by the browser, and still not reach
+the screen.
