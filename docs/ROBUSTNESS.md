@@ -9634,3 +9634,55 @@ more places to go wrong.
 Also confirms the deploy is UI-only. The defect is in a UI chunk, so replacing
 the UI container is sufficient; the server keeps the tag it has run on for days
 rather than moving ~140 commits to carry an unrelated fix.
+
+## Round 711 — rehearsing the deploy, and the two ways the rehearsal lied first
+
+The production change is one `docker run`. It was rehearsed locally against the
+image built from this branch, with the exact flags recorded in
+PRODUCTION_DEPLOYMENT.md, before touching avarok2.
+
+The first rehearsal failed, and both reasons were the rehearsal's, not the
+build's — which is the value of running it.
+
+**1. A modal blocked the landing page.**
+
+```
+<div data-state="open" ... class="fixed inset-0 z-50 bg-black/80"> intercepts pointer events
+"Connection Failed — Unable to reach the Citadel agent on this machine…"
+```
+
+The page had dialled `ws://localhost:8099/ws` and got 404. Not the meta tag's
+`wss://local.avarok.net:12345`. `resolve-url.ts` says why, deliberately: a page
+on a **loopback host** reaches its agent through the same-origin `/ws` proxy,
+and only a non-loopback page uses the published loopback origin. Serving the
+container on `localhost` while also setting `WS_PROXY_ENABLED=0` combines two
+settings that never occur together in production. The dialog was correct — it
+named the problem and offered the agent downloads for this platform.
+
+Worth noting because this is the third time the `<html>/overlay intercepts
+pointer events` signature has appeared in this record, and it has meant
+something different every time: once a stale log matched across two scripts,
+once a Vite dev server on a colliding port, and now a legitimate error dialog
+under a misconfigured rehearsal. The signature says "something is on top", never
+what or why.
+
+**2. The rehearsal then needed to stop being on loopback.** An https front on a
+non-loopback name (`work.test:8443` → the container's :8099), the way nginx
+fronts it on avarok2, put the page on the meta-tag branch.
+
+Then, against the real image:
+
+```
+  policy in force: default-src 'self'; …; connect-src 'self' wss://local.avarok.net:12345
+PASS  u1… creates an account via the admin door
+PASS  u2… creates an account via the member door
+PASS  … request shown / accepted / both list each other / both directions received
+PASS  the app makes no request its own policy forbids
+9/9 steps passed against https://work.test:8443 (server citadel.avarok.net:12400)
+```
+
+Everything the deploy will exercise, exercised: the production **image** (not a
+dist), its nginx CSP and meta injection, TLS, a non-loopback origin, the
+loopback-agent branch, the published agent binary, both onboarding doors, a real
+server by hostname, and the CSP-violation assertion that is red on the live site.
+The remaining difference between this and production is the machine it runs on.
