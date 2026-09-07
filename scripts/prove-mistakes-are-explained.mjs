@@ -35,6 +35,7 @@
  * knowing they are not — so this asks the running system instead.
  */
 import { chromium } from 'playwright';
+import { createServer } from 'node:net';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -188,6 +189,41 @@ const user = `mx${stamp}`;
   // login form cannot be used to enumerate usernames.
   record('and does not reveal which half was wrong',
     Boolean(msg) && !/incorrect password|no account found/i.test(msg), msg);
+}
+
+// 5. A server that accepts the connection and then says nothing.
+//
+// The other address mistakes fail FAST -- a name that does not resolve, a port
+// with nothing behind it. This is the slow one: the TCP connect succeeds, the
+// protocol never starts, and thirty seconds later registration gives up. It is
+// what a wrong-but-live port looks like, and what a hung or half-started server
+// looks like.
+//
+// It earns its place because the message used to be "The connection request
+// timed out. Please check your network and try again." The network is the one
+// place the fault is not: the page reached the agent on this machine perfectly
+// well, and it is the agent's connection to the WORKSPACE SERVER that timed
+// out. work.avarok.net showed that sentence to every new user for weeks.
+{
+  const sink = createServer((socket) => { /* accept, then never speak */ socket.on('error', () => {}); });
+  await new Promise((resolve) => sink.listen(0, '127.0.0.1', resolve));
+  const port = sink.address().port;
+  try {
+    const page = await (await browser.newContext({ ignoreHTTPSErrors: true })).newPage();
+    const { message } = await join(page, `${user}s`, `127.0.0.1:${port}`);
+    record('a server that never answers is explained', Boolean(message) && !RAW.test(message), message);
+    // NOT merely "does not say network". The raw SDK string
+    // "Something went wrong: Socket deadline has elapsed" contains no such
+    // word either, so that weaker form passed against a message that explained
+    // nothing at all -- a check green for the wrong reason. Require it to NAME
+    // the thing to go and look at.
+    record('and points at the server address, the thing to check',
+      Boolean(message) && /server did not answer/i.test(message)
+        && /host name or IP address/i.test(message)
+        && !/your network/i.test(message), message);
+  } finally {
+    sink.close();
+  }
 }
 
 await browser.close();

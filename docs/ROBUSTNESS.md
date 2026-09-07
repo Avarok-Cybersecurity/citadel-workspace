@@ -9686,3 +9686,131 @@ dist), its nginx CSP and meta injection, TLS, a non-loopback origin, the
 loopback-agent branch, the published agent binary, both onboarding doors, a real
 server by hostname, and the CSP-violation assertion that is red on the live site.
 The remaining difference between this and production is the machine it runs on.
+
+## Round 712 — a message fixed in the mapper that the screen still does not show
+
+The registration failure message was "The connection request timed out. Please
+check your network and try again." The network is the one place the fault is
+not: the page reached the agent on this machine, and what timed out is the
+AGENT's connection to the workspace server at the address just typed.
+
+Adding a branch was easy. Everything after it is the record.
+
+**The browser disagreed with the assumption, twice.**
+
+First: the string. The client's own guard rejects with "Registration timed out
+after 30 seconds", so that is what the unit tests were written against, and they
+passed. Pointing a real browser at a TCP listener that accepts and never speaks
+produced something else entirely:
+
+```
+FAIL  a server that never answers is explained
+      ErrorSomething went wrong: Socket deadline has elapsed
+```
+
+The SDK's own words, raw, under a bare "Error" title. Mapped that too.
+
+Second, and unresolved: **after the fix, the toast is unchanged.** The branches
+are in the shipped bundle (`grep` finds both in `index-C2Jz6O9O.js`), the
+container serves that exact asset, the browser loads it, and calling the mapper
+directly with the precise string `rejectWith` produces returns the new sentence:
+
+```
+MESSAGE -> The workspace server did not answer within 30 seconds. Check the address…
+TITLE   -> Server Did Not Answer
+```
+
+Yet the screen still shows the fallback. Both facts are measured, and they
+cannot both be true of the same code path, so **some other path renders this
+toast** and I have not yet found it. Recorded as open rather than closed: the
+mapper is fixed and unit-tested, the user-visible message is NOT yet fixed, and
+saying otherwise would be the exact "verified by unit tests, call site never
+exercised" claim this document exists to prevent. One lead: the failing run
+loads two index chunks (`index-C2Jz6O9O.js` and `index-DQWPR74B.js`).
+
+**A check that passed for the wrong reason.** The first version asserted the
+message does not say "your network". The raw string
+`Something went wrong: Socket deadline has elapsed` contains no such word, so it
+passed against a message that explained nothing. It now requires the message to
+NAME what to look at. That is the difference between asserting an absence and
+asserting the thing you actually want.
+
+**And two self-inflicted detours.** `npx vite build` produced a dist whose JS
+glue did not match the `.wasm` binary — `LinkError: Import #101
+__wbindgen_cast_…` — because the WASM pipeline is not part of a plain Vite
+build. The Docker build runs it properly; the ad-hoc one does not. And the
+publish run failed on:
+
+```
+the registration walk reaches submit    FAIL  security — TimeoutError
+```
+
+which is round 706's gate, on the commit it was dispatched against, removed one
+commit later in 7ba97dd. I had checked whether the publish runs that job and
+concluded it does not, reading a job-name filter that did not match how the
+reusable workflow names it. It does run it. Forty minutes of runner time spent
+proving something already known and already fixed.
+
+## Round 713 — the UI invented a sentence, and I spent two rounds matching it
+
+Round 712 ended open: the new branch was in the shipped bundle, the container
+served that exact asset, the browser loaded it, calling the mapper directly with
+the string returned the new message — and the toast was unchanged. Those facts
+cannot all be true of one code path, so one of them was not what it looked like.
+
+It was the string. The SDK sends
+
+```
+Socket error: deadline has elapsed
+```
+
+and `error-messages.ts` cleaned it for display with
+
+```js
+.replace(/Error:\s*/i, '')     // UNANCHORED
+```
+
+which removes `error:` from **anywhere** in the message. What reached the screen
+was
+
+```
+Something went wrong: Socket deadline has elapsed
+```
+
+a sentence that exists nowhere in this system, the SDK, or any log. I read it
+off the screen, wrote a matcher for it, and the matcher could never fire — the
+value being tested still contained the four characters the display had removed.
+Twice.
+
+That is the real defect, and it is worse than an ugly message. **A mangled
+message is unsearchable.** A user reporting it, or an engineer grepping for it,
+is looking for a string that was never emitted. Anchored to `/^Error:/`: the
+leading `Error:` of a stringified `Error` is noise, an `error:` inside the
+sentence is the message.
+
+### How it was found, including the control that lied
+
+The bundle was rewritten in flight (Playwright `route.fulfill`) rather than
+rebuilt, so each experiment cost seconds:
+
+1. Replace the branch's phrase with `socket` → the new message appeared.
+   **False positive**: `socket` also matches `WebSocket connection failed`, an
+   entirely different error. A control whose mutation is broader than the thing
+   under test proves nothing.
+2. Replace it with `deadline` → still fired, and `deadline` collides with
+   nothing. Now the input was known to contain `deadline` but not the phrase.
+3. Replace the fallback template `${n}` with `${JSON.stringify(t)}` → printed
+   `RAW "Socket error: deadline has elapsed" END`. Answer, in one run.
+
+Printing the value under test beat three rounds of reasoning about why it should
+have matched.
+
+### And a control that silently did not apply
+
+The first negative control used `sed -i ''` with a pattern containing `^` and
+`\s*`; it matched nothing, changed nothing, and the tests passed. **A green
+control from an unapplied mutation is indistinguishable from a green control
+from a working fix.** It was caught only because the verification greps for the
+mutation and the anchor separately — applied (`^Error` count 0), red (exactly
+one test), reverted (count 1), green. This is the second time in this record
+that a shell-quoting failure has faked a control; see [bsd-grep-dollar-never-matches].
