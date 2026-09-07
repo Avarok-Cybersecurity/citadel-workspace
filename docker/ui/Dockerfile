@@ -247,7 +247,20 @@ ENV LISTEN_ADDR=0.0.0.0
 # That makes this an injection guard: whoever can set env vars on the container could
 # otherwise alter the proxy's behaviour, including the headers it forwards. The smoke
 # test asserts the property directly by starting the image with a colliding variable.
-ENV NGINX_ENVSUBST_FILTER=^(AGENT_UPSTREAM|WS_PROXY_ENABLED|LISTEN_ADDR)$
+ENV NGINX_ENVSUBST_FILTER=^(AGENT_UPSTREAM|WS_PROXY_ENABLED|LISTEN_ADDR|LOOPBACK_AGENT_ORIGIN)$
+
+# The one off-origin socket a hosted page may open: the agent on the VISITOR'S own
+# machine, at a name the operator points at 127.0.0.1 and holds a certificate for.
+#
+# Empty is the default and it is a real configuration, not an absence: the page then
+# reaches the agent through same-origin `/ws`, which is what the compose stack does.
+# Declared here rather than left unset so that `docker inspect` shows the knob exists
+# -- the loopback design was documented in index.html's comment and implemented in no
+# file in this repository, so the only image that could serve work.avarok.net was one
+# built by hand from a branch. Anything built from this tree replaced it with a page
+# whose meta tag was empty and whose CSP forbade the agent origin, which is a silent,
+# total outage for every user.
+ENV LOOPBACK_AGENT_ORIGIN=
 
 # The entrypoint renders templates into /etc/nginx/conf.d at start-up, and we run as
 # the unprivileged `nginx` user - so that directory must be writable by it. Without

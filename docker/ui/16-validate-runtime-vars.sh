@@ -62,4 +62,20 @@ listen_addr="${LISTEN_ADDR:-}"
 echo "$listen_addr" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$|^\[[0-9A-Fa-f:]+\]$' \
   || die "LISTEN_ADDR='$listen_addr' must be an IPv4 address (e.g. 0.0.0.0 or 127.0.0.1) or a bracketed IPv6 address."
 
-echo "[validate-runtime-vars] ok: upstream=$upstream ws_proxy=$enabled listen=$listen_addr"
+# The loopback agent origin, or empty. Empty is a real configuration -- the page reaches the agent
+# through same-origin /ws -- so it is accepted, but ANYTHING else must be a bare wss://host:port.
+#
+# This value lands in two places that must agree: the CSP's connect-src, and the page's
+# <meta name="citadel-loopback-agent">. A `;` or a quote in either would close the directive or the
+# attribute, so the same reasoning as AGENT_UPSTREAM applies -- and here a mangled CSP is not merely
+# a broken proxy, it is a policy that silently permits more than intended.
+#
+# wss:// only. A hosted page is https, and a browser refuses ws:// from a secure context regardless
+# of policy, so accepting it would produce a container that starts and a UI that cannot connect.
+loopback="${LOOPBACK_AGENT_ORIGIN:-}"
+if [ -n "$loopback" ]; then
+  echo "$loopback" | grep -Eq '^wss://[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?:[0-9]{1,5}$' \
+    || die "LOOPBACK_AGENT_ORIGIN='$loopback' must be a bare wss://host:port (e.g. wss://local.example.com:12345), or empty to reach the agent through same-origin /ws."
+fi
+
+echo "[validate-runtime-vars] ok: upstream=$upstream ws_proxy=$enabled listen=$listen_addr loopback=${loopback:-<none>}"

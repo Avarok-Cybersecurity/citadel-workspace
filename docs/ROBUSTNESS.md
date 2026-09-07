@@ -8081,3 +8081,86 @@ the artefact that actually runs.
 production-only onboarding step and waited 20s for `#serverAddress` on a screen
 that legitimately shows the intent question first — a check reporting its own
 staleness as a product defect, two steps past where anything went wrong.
+
+## Round 679 — the hosted design existed in a comment and in no file
+
+`citadel-workspaces/index.html` carries this, next to an empty meta tag:
+
+```html
+<!-- Filled in by the hosting nginx when the operator publishes a loopback agent origin
+     (LOOPBACK_AGENT_ORIGIN); empty means "reach the agent through same-origin /ws". -->
+```
+
+`LOOPBACK_AGENT_ORIGIN` appeared **exactly once in the entire repository**: in
+that comment. No template substituted it, no Content-Security-Policy admitted
+it, no entrypoint validated it, and `NGINX_ENVSUBST_FILTER` — an allowlist —
+did not list it.
+
+work.avarok.net works anyway, because it runs `citadel-workspace-ui:loopback-3078d2f1`,
+an image built by hand from a branch that was never merged. Which means the tree
+could not build an image that serves its own production deployment. Publishing
+from `master` would have shipped a page whose meta tag is empty and whose
+`connect-src 'self'` forbids the agent origin — the page loads, looks correct,
+and cannot open a socket to the agent for anybody. I was one successful publish
+away from doing exactly that, having already planned the deploy.
+
+Found by asking a question with no connection to the work in hand: *does the
+deployed CSP actually permit `wss://local.avarok.net:12345`?* It does —
+
+```
+connect-src 'self' wss://local.avarok.net:12345
+```
+
+— and the repository's template says `connect-src 'self'`, in six places.
+
+**Recovered rather than reinvented.** The running container still holds the
+template it was rendered from, so the implementation was read out of it
+(`docker exec citadel-ui cat /etc/nginx/templates/default.conf.template`) and
+diffed against the tree. The two had genuinely diverged — the deployed side had
+the loopback work, the tree had newer gzip tuning — so the loopback half was
+ported across rather than the file replaced:
+
+- a `map $host $csp` defining the policy ONCE, with `${LOOPBACK_AGENT_ORIGIN}`
+  in `connect-src`, replacing six byte-identical literals;
+- a `sub_filter` writing the same variable into the meta tag, so what the app
+  dials and what the policy permits cannot disagree;
+- `NGINX_ENVSUBST_FILTER` extended, without which nginx serves the literal
+  `${LOOPBACK_AGENT_ORIGIN}` to browsers;
+- validation in `16-validate-runtime-vars.sh`: empty, or a bare `wss://host:port`.
+  Empty is a real configuration, not an absence. `ws://` is refused because a
+  secure context cannot open it regardless of policy, so accepting it would
+  produce a container that starts and a UI that cannot connect.
+
+**`check-preview-csp-matches-production.mjs` then failed correctly**, which is
+worth recording on its own: it looks for `add_header Content-Security-Policy "…"`
+literals, the policy had become a `map`, and it reported *"Found no
+Content-Security-Policy in the nginx template — this check verified nothing"*
+rather than passing over an empty set. It now reads the map, strips
+`${LOOPBACK_AGENT_ORIGIN}` before comparing (empty in preview and in compose,
+which is the deployment the parity is about), and additionally asserts that all
+six locations use the shared `$csp` — without which a location could carry its
+own literal while the map alone matched vite.
+
+**The new gate**, `check-the-loopback-agent-origin-is-wired.mjs`, requires all
+five parts to name the variable. Negative controls, each verified applied and
+reverted:
+
+| Control | Gate |
+|---|---|
+| drop it from `NGINX_ENVSUBST_FILTER` | RED |
+| remove the `sub_filter` | RED |
+| `connect-src` stops admitting it | RED |
+| remove its validation | **GREEN** → then RED |
+
+The fourth is the one worth reading. The control renamed the variable to
+`LOOPBACK_AGENT_ORIGINX` throughout the validator and the gate stayed green,
+because the check was `validator.includes(VAR)` — a substring match, satisfied
+by any longer name that starts the same way. A gate that accepts a differently
+named variable as proof of validation is measuring nothing in exactly the case
+it exists for. It is a word-boundary match now, and the comment beside it says
+which control found that.
+
+Two other things this round corrected, both mine: a regex that read the phrase
+"add_header Content-Security-Policy $csp" out of a COMMENT and reported it as a
+rogue location, and a success line that said "1 location(s)" while counting
+policy definitions rather than the six locations it had actually checked.

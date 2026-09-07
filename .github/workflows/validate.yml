@@ -501,6 +501,8 @@ jobs:
         run: node scripts/check-agent-binds-loopback.mjs
       - name: The agent's TLS mode matches every proxy that fronts it
         run: node scripts/check-agent-tls-matches-its-proxies.mjs
+      - name: The loopback agent origin is wired end to end
+        run: node scripts/check-the-loopback-agent-origin-is-wired.mjs
       - name: Every generated binding has a type, and every type a binding
         run: node scripts/check-bindings-match-exported-types.mjs
       - name: Instructions name the port the UI actually serves
