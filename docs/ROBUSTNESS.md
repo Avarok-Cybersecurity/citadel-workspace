@@ -8246,3 +8246,35 @@ Verified three ways, by exit code rather than by output:
 The first is the strongest negative control available anywhere in this document:
 not a mutation invented to make a check go red, but the actual artefact users
 downloaded, failing for the actual reason they could not join.
+
+## Round 681 — the four names that are the whole contract
+
+A new user's first step is a download button. The hosted page detects their
+platform and links to
+`releases/latest/download/citadel-agent-<platform>.tar.gz`; GitHub resolves that
+against the newest release. The NAME is the entire contract, and it is written
+in two files that nothing held together:
+
+- `citadel-workspaces/src/lib/agent-download.ts` — `AGENT_ASSETS`, four names;
+- `.github/workflows/release-agent.yml` — the build matrix's `asset:` entries.
+
+They agree today. The comment above `AgentPlatform` even says "matching the
+release workflow's matrix" — a claim, in prose, that nothing verified. A rename
+on either side 404s the download for every new user, on the first step of
+joining, with nothing in the app able to explain it.
+
+`check-agent-downloads-exist.mjs` compares the two sets in both directions: a
+name the UI offers that the release never builds is a dead download, and a name
+the release builds that the UI never offers is unreachable. Negative controls,
+each verified applied and reverted:
+
+| Control | Gate |
+|---|---|
+| UI renames `linux-x64` → `linux-amd64` | RED |
+| release renames `windows-x64` → `win64` | RED |
+
+Found while checking something else: whether the UI pins a version. It does not
+— it uses `releases/latest`, so publishing `agent-v0.3.0` is enough for every
+new visitor to get the fixed binary without touching the UI. That was the
+question worth asking, because if the links HAD been pinned, round 680's release
+would have fixed nothing for anybody.
