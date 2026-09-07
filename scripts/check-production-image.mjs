@@ -155,6 +155,69 @@ async function main() {
     record('it comes before the wizard, not beside it', onboarding.beforeWizard);
     await onboardingContext.close();
 
+    // ---- Both branches are WALKED, on the artefact users get. ----
+    //
+    // Everything above asserts the two buttons EXIST. A button that exists and
+    // does nothing satisfies all of it -- and this repository has shipped
+    // exactly that more than once, most recently the landing doors that
+    // answered a click with no dialog, no message and no navigation.
+    //
+    // So each branch is clicked and required to reach the wizard, and the two
+    // are required to DIFFER. The difference is the dialog's own promise:
+    // "joining a workspace someone else set up" means the visitor does not hold
+    // WORKSPACE_MASTER_PASSWORD, and the copy tells them they should not be
+    // asked for it. That answer is recorded in sessionStorage; the
+    // administrator's is not, because an administrator SHOULD be prompted.
+    //
+    // Without the difference assertion, both buttons wired to the same handler
+    // would pass -- and the member would be asked for a secret they cannot have,
+    // which is the failure the whole dialog exists to prevent.
+    const INIT_PROMPT_SUPPRESSED_KEY = 'workspace-init-modal-dismissed';
+    const walkOnboarding = async (branch) => {
+      const context = await browser.newContext();
+      const walkPage = await context.newPage();
+      const result = { wizard: false, recorded: null, detail: '' };
+      try {
+        await walkPage.goto(ORIGIN, { waitUntil: 'domcontentloaded' });
+        await walkPage.click('[data-testid="create-account-button"]', { timeout: 30_000 });
+        await walkPage.waitForSelector('[data-testid="onboarding-intent"]', { timeout: 15_000 });
+        await walkPage.click(`[data-testid="onboarding-intent-${branch}"]`, { timeout: 15_000 });
+        // The wizard's first step, not the dialog's absence: absence is also
+        // what a click that did nothing at all looks like.
+        await walkPage.waitForSelector('[data-testid="wizard-next"]', { timeout: 15_000 });
+        result.wizard = true;
+        result.recorded = await walkPage.evaluate((key) => {
+          try {
+            return window.sessionStorage.getItem(key);
+          } catch {
+            // Storage can throw under strict privacy settings. Distinguished
+            // from `null` because "refused" and "not written" send a support
+            // conversation in different directions.
+            return 'storage-threw';
+          }
+        }, INIT_PROMPT_SUPPRESSED_KEY);
+      } catch (error) {
+        result.detail = String(error).split('\n')[0];
+      }
+      await context.close();
+      return result;
+    };
+
+    const asMember = await walkOnboarding('member');
+    const asAdmin = await walkOnboarding('admin');
+    record('a new member reaches the wizard', asMember.wizard, asMember.detail);
+    record('a new administrator reaches the wizard', asAdmin.wizard, asAdmin.detail);
+    record(
+      'choosing "joining" is recorded, so the member is not asked for the master password',
+      asMember.recorded === 'true',
+      `sessionStorage=${asMember.recorded}`,
+    );
+    record(
+      'choosing "setting up" is NOT recorded, so the administrator still is',
+      asAdmin.recorded !== 'true',
+      `sessionStorage=${asAdmin.recorded}`,
+    );
+
     // The control. Without it, a dialog hard-wired to render unconditionally
     // satisfies every assertion above — and would then cost the integration
     // suite the ~180 interactions this switch exists to avoid. So this asserts

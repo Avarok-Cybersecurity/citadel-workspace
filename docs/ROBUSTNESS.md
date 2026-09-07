@@ -8278,3 +8278,49 @@ Found while checking something else: whether the UI pins a version. It does not
 new visitor to get the fixed binary without touching the UI. That was the
 question worth asking, because if the links HAD been pinned, round 680's release
 would have fixed nothing for anybody.
+
+## Round 682 — onboarding's two branches were offered, never walked
+
+The requirement is a first-run experience that runs in production and NOT in
+development, so the integration suite's ~90 account creations do not each pay
+two extra interactions for it. Coverage looked complete:
+
+- `onboarding.spec.ts` — eight Playwright tests, both branches, running in the
+  CI shards (`testDir: ./src/tests-pw`, so `--shard=N/3` includes it);
+- `check-production-image.mjs` — asserts the dialog appears in the real image
+  with no query override, offers both branches, comes before the wizard, and
+  that `?onboarding=0` still suppresses it.
+
+Every one of those assertions is satisfied by two buttons that do nothing.
+
+They assert the branches are OFFERED. Neither clicked one on the production
+artefact. A button that exists and is inert is not a hypothetical here — round
+678 is exactly that defect, on the two landing doors, which answered a click
+with no dialog, no message and no navigation while every check stayed green.
+
+So both branches are now walked on the image, and required to DIFFER. The
+difference is the dialog's own promise: "joining a workspace someone else set
+up" says the visitor does not hold `WORKSPACE_MASTER_PASSWORD`, and the copy
+tells them they will not be asked for it. That answer is recorded in
+sessionStorage; the administrator's is not, because an administrator SHOULD be
+prompted. Without asserting the difference, both buttons wired to one handler
+would pass — and the member would be asked for a secret they cannot have, which
+is the entire failure the dialog exists to prevent.
+
+Verified against the production BUNDLE before being placed in the image check,
+because docker was not running locally and an unverifiable assertion is how a
+gate ships broken or vacuous:
+
+```
+member -> {"wizard":true,"suppressed":"true"}
+admin  -> {"wizard":true,"suppressed":null}
+```
+
+Both reach the wizard; only the member's answer is recorded. The assertion
+discriminates, which is the property that matters — `asMember.recorded === 'true'`
+and `asAdmin.recorded !== 'true'` cannot both hold if the two buttons share a
+handler.
+
+`storage-threw` is distinguished from `null` in the readout, because "storage
+refused" and "nothing was written" send a support conversation in different
+directions.
