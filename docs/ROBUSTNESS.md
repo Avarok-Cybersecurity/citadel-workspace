@@ -9229,3 +9229,26 @@ test passed, and "the production image in a real browser" passed — which is th
 step that walks both onboarding doors added in round 682. Each failure this
 session has been later in the pipeline than the last, because a pipeline that
 stops at the first failure only ever shows you one.
+
+## Round 702 — checking a headline feature was covered, before assuming it was not
+
+Audio and video calling is a headline feature and nothing in this document had
+touched it. Rather than build a probe, the first question was whether the suite
+already does — and it does. `call-audio-video.spec.ts` and `call-group.spec.ts`
+live in `tests-pw`, which the sharded Playwright run executes; they simply have
+no `test:*` npm script of their own, so grepping the workflow for one finds
+nothing and suggests a gap that is not there.
+
+From shard 1 of the last complete run:
+
+```
+✓ call-audio-video.spec.ts › the two peers connect
+✓ … › the call buttons are offered once a peer is connected
+✓ … › calling rings the other side
+✓ … › accepting puts both sides in the call
+```
+
+Recorded because "no gap found" is a result, and because the near-miss is the
+point: the absence of an npm script is not the absence of coverage, and a probe
+built on that inference would have duplicated a passing spec while feeling like
+progress.
