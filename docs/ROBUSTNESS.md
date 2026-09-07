@@ -9911,3 +9911,42 @@ And the happy path is NOT verified here: published images are amd64-only
 (`no matching manifest for linux/arm64/v8`), so this host cannot run one. It
 will be exercised on avarok2 by the deploy itself, which is the real test
 anyway.
+
+## Round 716 — the rollback did not exist until it was made
+
+Round 715 found that the image serving work.avarok.net is absent from GHCR. The
+consequence only became concrete while checking the host's health:
+
+```
+Images   68   ACTIVE 6   25.05GB   RECLAIMABLE 8.496GB
+Build Cache                63.15GB  RECLAIMABLE 52.52GB
+```
+
+A running container pins its image, so `loopback-3078d2f1` is safe from
+`docker image prune` **only while that container runs**. The moment the deploy
+replaces it, the sole copy of the currently-working UI becomes an unreferenced
+image on a host carrying 61 GB of reclaimable junk — one routine cleanup away
+from gone. The rollback for this deploy would have quietly stopped existing at
+the moment the deploy created the need for one.
+
+Saved first, and verified as an archive rather than assumed:
+
+```
+/srv/citadel-tenants/avarok/backups/citadel-ui-loopback-3078d2f1.tar.gz   39M
+gzip integrity ok
+blobs/ blobs/sha256/ …   40 entries
+```
+
+`docker save | gzip` writes a valid archive for any exit status of the pipeline,
+so `gzip -t` and listing the entries is the difference between having a rollback
+and having a file. This is the same reason the server-volume backup in an
+earlier round was verified by entry count rather than by the command's exit code.
+
+Host health at the same time, since a server people are invited to test can fail
+for reasons that have nothing to do with the UI: disk 60% (178 G free), 110 G of
+125 G memory available, `avarok-server-1` up 2 days and healthy.
+
+**Not pruned.** 61 GB is reclaimable and the disk is at 60%, so there is no
+pressure, and running a prune during a deploy window is how the only copy of a
+working image gets collected. It is recorded here as available if the disk ever
+matters, which is different from doing it.
