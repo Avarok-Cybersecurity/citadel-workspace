@@ -10805,3 +10805,46 @@ reverted   -> exit 0
 Sibling of `check-already-registered-predicate-matches-the-agent.mjs`. Two gates
 now exist because this stack couples behaviour to prose across a language
 boundary in at least two places, and prose is not a contract.
+
+## Round 734 — a fix that existed only in my working tree, caught by its own gate
+
+Round 728 changed two Rust attributes and added a gate to enforce the rule.
+Preflight passed. CI failed — on that gate, naming those two fields:
+
+```
+::error::…/lib.rs:1428: `message` uses bytes_debug_fmt, which prints its opening word
+::error::…/lib.rs:1704: `message` uses bytes_debug_fmt, which prints its opening word
+```
+
+The fix was never committed. I edited the file **inside the submodule checkout**
+and then ran `git add -A && git commit` in the **parent**, which records a
+submodule *pointer*, not file contents. The working tree had the fix; the commit
+did not; the pointer still named code without it.
+
+Local preflight cannot see this. It reads the working tree, where the change is
+present and the gate is satisfied. CI reads what the pointer names. The two
+disagree exactly when a submodule edit is uncommitted, which is precisely the
+state a `git add -A` in the parent leaves untouched and unreported.
+
+`check-submodule-pointers-pushed.mjs` does not cover it either, and correctly so
+by its own terms: the pointer *was* pushed and *is* fetchable. It simply pointed
+at the wrong commit. "Pointer is pushed" and "pointer names your work" are
+different claims.
+
+**The gate caught its own subject.** Round 728 added a rule and the change it
+was written for; the change went missing and the rule found it, in the only
+place that could have. That is the argument for writing the gate in the same
+wave as the fix rather than afterwards — had it been added later, CI would have
+been green over a fix that was not there.
+
+Committed in the submodule (`0529d8f`), pointer bumped, gate green against the
+committed tree.
+
+### The narrower lesson
+
+Six times this session a stale or uncommitted submodule checkout has produced a
+confusing result: a Docker build without an `index.html` change, a gate reading
+an unfixed predicate, a proof against a dev server from another worktree, and
+now a fix that CI could not see. Every one had the same shape — **verify what
+the tool actually consumed, not what you edited** — and every one cost a full
+cycle to notice.
