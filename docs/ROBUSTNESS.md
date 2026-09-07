@@ -11134,3 +11134,57 @@ current certificate.
 That is a different deadline from the agent's embedded TLS certificate
 (2026-12-05, round 722), which does stop working for everyone at once. Two
 dates, two mechanisms, and only one of them is a cliff.
+
+## Round 741 — the certificate renews itself, in the repo, in the clear
+
+`include_bytes!("../tls/local.avarok.net.crt.pem")` means whatever is committed
+at that path is what every downloaded agent serves. Nothing kept it current:
+v0.3.0 and v0.4.0 shipped the same certificate, and round 740 had to correct a
+claim that cutting a release would refresh it.
+
+`.github/workflows/renew-agent-tls.yml` runs weekly, renews when under 35 days
+remain, verifies, and commits.
+
+### Two designs rejected, for reasons worth keeping
+
+**Have avarok2 push its renewed certificate into a GitHub secret.** The obvious
+one, since certbot already renews this exact name there. Rejected twice over:
+
+1. **This private key is not secret.** It is compiled into a binary anyone can
+   download, on purpose. Storing it as a secret protects nothing and hides what
+   is actually published. Committed in the clear, it is reviewable in a diff.
+2. It needs a GitHub write-token **on a public-facing server**, so compromising
+   avarok2 becomes a path into CI. Issuing in CI inverts that: CI gets no access
+   to production, production gets none to CI.
+
+**Renew during the release.** Let's Encrypt allows five duplicate certificates
+per week for an identical name set, so six releases in a week would break the
+sixth — and it puts an ACME round-trip with DNS propagation on the critical path
+of every release. Renewal is its own schedule; the release consumes what is
+committed, and `smoke-agent.sh` already refuses to publish under 30 days.
+
+Those two floors are deliberately spaced: renewal fires at 35 days, the release
+gate blocks at 30, so there are **59 days** of margin between the renewal
+becoming due and a release being refused.
+
+### DNS-01 is not a preference here
+
+`local.avarok.net` resolves to `127.0.0.1`. An HTTP-01 challenge would send
+Let's Encrypt to *its own* loopback, so it cannot ever succeed. DNS-01 is the
+only challenge that can validate this name — which is why the missing-token
+error says so rather than just naming the variable.
+
+### It verifies what will be compiled in, not what was asked for
+
+Before committing: the SAN really is `local.avarok.net`, the certificate is not
+already expired, and the public key in the certificate matches the private key.
+A mismatched pair produces an agent that starts and then fails every handshake —
+silent until a user tries it, and indistinguishable from the DoH bug of round
+705 from the outside.
+
+### The workflow-parse gate caught this file
+
+The first version was unparseable YAML: a multi-line `git commit -m` put
+continuation lines at column 0, which ends a block scalar. Round 732 added that
+gate after finding nothing checked workflow syntax; this is the first thing it
+caught, and GitHub would have reported it as an absent run rather than an error.

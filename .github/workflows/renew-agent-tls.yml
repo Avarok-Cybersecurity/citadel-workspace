@@ -1,0 +1,172 @@
+# Keep the agent's built-in TLS certificate fresh, automatically.
+#
+# WHY THIS EXISTS
+#
+# citadel-workspace-internal-service/src/main.rs does
+#
+#   const BUILTIN_TLS_CERT: &[u8] = include_bytes!("../tls/local.avarok.net.crt.pem");
+#
+# so whatever is committed at those paths is what every downloaded agent serves
+# for `wss://local.avarok.net:12345`. When it expires, EVERY copy in the world
+# stops working at the same moment: the browser refuses the socket, the hosted
+# page cannot reach the user's own agent, and no server-side change helps --
+# each user needs a new binary. agent-v0.3.0 and v0.4.0 both shipped the same
+# certificate, and nothing was keeping it current.
+#
+# WHY CI ISSUES ITS OWN, RATHER THAN COPYING avarok2's
+#
+# The obvious design is to have certbot on avarok2 push its renewed certificate
+# into a GitHub secret. That was rejected for two reasons:
+#
+#   1. This private key is NOT secret. It is compiled into a binary anyone can
+#      download, deliberately. Storing it as a secret protects nothing and
+#      obscures what is actually published.
+#   2. It would require a GitHub write-token ON a public-facing server, giving
+#      anyone who compromises avarok2 a path into CI. Issuing here inverts that:
+#      CI gains no access to production, and production gains none to CI.
+#
+# The certificate is therefore committed in the clear, which is also what
+# `include_bytes!` needs and what makes it auditable in review.
+#
+# WHY NOT AT RELEASE TIME
+#
+# Let's Encrypt allows 5 duplicate certificates per week for an identical name
+# set. Issuing on every release would break the moment somebody cuts six in a
+# week -- and it would put an ACME round-trip, with DNS propagation, on the
+# critical path of every release. Renewal is its own scheduled job; the release
+# just consumes what is committed, and scripts/smoke-agent.sh refuses to publish
+# an agent whose built-in certificate has under 30 days left.
+name: Renew agent TLS certificate
+
+on:
+  schedule:
+    # Weekly. The job itself decides whether renewal is due, so this only has to
+    # be often enough to catch the window, not to match the certificate's term.
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Renew even if the committed certificate is not near expiry'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  # Two renewals racing would burn duplicate-certificate quota and could commit
+  # conflicting files.
+  group: renew-agent-tls
+  cancel-in-progress: false
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Is renewal due?
+        id: due
+        shell: bash
+        run: |
+          set -euo pipefail
+          cert=citadel-workspace-internal-service/tls/local.avarok.net.crt.pem
+          [ -f "$cert" ] || { echo "::error::$cert is missing; include_bytes! would not compile."; exit 1; }
+          end="$(openssl x509 -in "$cert" -noout -enddate | cut -d= -f2)"
+          end_s="$(date -u -d "$end" +%s)"
+          days=$(( (end_s - $(date -u +%s)) / 86400 ))
+          echo "committed certificate expires in ${days} day(s)"
+          # 35 days: renews roughly two months into a 90-day term, which leaves
+          # a wide margin above the 30-day floor smoke-agent.sh enforces without
+          # issuing more often than the duplicate-certificate limit allows.
+          if [ "${{ inputs.force }}" = "true" ] || [ "$days" -lt 35 ]; then
+            echo "renew=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "renew=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing to do."
+          fi
+
+      - name: Obtain a certificate (DNS-01)
+        if: steps.due.outputs.renew == 'true'
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CF_TOKEN:-}" ]; then
+            echo "::error::CLOUDFLARE_DNS_API_TOKEN is not set."
+            echo "  DNS-01 is the only challenge that can work for this name: local.avarok.net"
+            echo "  resolves to 127.0.0.1, so an HTTP-01 challenge would send Let's Encrypt to"
+            echo "  its OWN loopback. The token needs Zone:DNS:Edit on avarok.net."
+            exit 1
+          fi
+          python3 -m pip install --quiet --upgrade certbot certbot-dns-cloudflare
+          umask 077
+          printf 'dns_cloudflare_api_token = %s\n' "$CF_TOKEN" > "$RUNNER_TEMP/cf.ini"
+          # No email on purpose: the only thing an ACME account address buys is
+          # expiry warnings, and this repository already enforces expiry
+          # mechanically -- this job renews, and smoke-agent.sh refuses to
+          # publish a stale one. That is a stronger guarantee than an email
+          # nobody may read, and it keeps a personal address out of a third-party
+          # registration.
+          certbot certonly \
+            --dns-cloudflare \
+            --dns-cloudflare-credentials "$RUNNER_TEMP/cf.ini" \
+            --dns-cloudflare-propagation-seconds 60 \
+            -d local.avarok.net \
+            --non-interactive --agree-tos --register-unsafely-without-email \
+            --config-dir "$RUNNER_TEMP/le" --work-dir "$RUNNER_TEMP/le-work" \
+            --logs-dir "$RUNNER_TEMP/le-logs"
+          rm -f "$RUNNER_TEMP/cf.ini"
+
+      - name: Verify before committing
+        if: steps.due.outputs.renew == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          live="$RUNNER_TEMP/le/live/local.avarok.net"
+          # Assert what will be compiled in, not what was asked for. A cert for
+          # the wrong name, or an unmatched key, produces an agent that starts
+          # and then fails every TLS handshake -- silent until a user tries it.
+          openssl x509 -in "$live/fullchain.pem" -noout -ext subjectAltName | grep -q 'DNS:local.avarok.net'
+          openssl x509 -in "$live/fullchain.pem" -noout -checkend 0
+          c="$(openssl x509 -in "$live/fullchain.pem" -noout -pubkey | openssl md5)"
+          k="$(openssl pkey -in "$live/privkey.pem" -pubout | openssl md5)"
+          [ "$c" = "$k" ] || { echo "::error::the certificate and key do not match."; exit 1; }
+          echo "verified: name, validity, and key match"
+          openssl x509 -in "$live/fullchain.pem" -noout -dates
+
+      - name: Commit if it changed
+        if: steps.due.outputs.renew == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          live="$RUNNER_TEMP/le/live/local.avarok.net"
+          dest=citadel-workspace-internal-service/tls
+          cp "$live/fullchain.pem" "$dest/local.avarok.net.crt.pem"
+          cp "$live/privkey.pem"   "$dest/local.avarok.net.key.pem"
+          if git diff --quiet -- "$dest"; then
+            echo "Issued certificate is identical to the committed one; nothing to commit."
+            exit 0
+          fi
+          end="$(openssl x509 -in "$dest/local.avarok.net.crt.pem" -noout -enddate | cut -d= -f2)"
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add "$dest"
+          # `git commit -F -` with printf: a multi-line -m argument would need
+          # continuation lines at column 0, which ends the YAML block scalar and
+          # makes the whole workflow unparseable. (It did; the workflow-parse
+          # gate caught it before this was pushed.)
+          printf '%s\n' \
+            "chore(tls): renew the agent's built-in certificate" \
+            "" \
+            "Valid until ${end}. Compiled into every downloaded agent by" \
+            "include_bytes! in citadel-workspace-internal-service/src/main.rs, so this" \
+            "is what each user's agent serves for wss://local.avarok.net:12345." \
+            "" \
+            "Committed in the clear on purpose: the key is published in the binary, so" \
+            "storing it as a secret would protect nothing and hide what is shipped." \
+            | git commit -F -
+          git push
+          echo "Committed. A release cut from a branch containing this commit ships the new certificate."
