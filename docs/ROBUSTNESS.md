@@ -7966,3 +7966,55 @@ census went green on a script nothing runs.
 **Still unproved:** work.avarok.net itself serves a UI image 138 commits behind,
 so the hosted page does not yet run any of this. The 21/21 above is the current
 production bundle against the live server, not the deployed one.
+
+## Round 677 — the gate that read one of the two places its rule applies
+
+Round 676 added `scripts/prove-users-can-talk.mjs`, which presses eight
+`data-testid`s on its way to declaring a deployment fit for other people. The
+UI repository already has a gate for exactly that hazard —
+`check-testids-exist.mjs`, whose own header says a selector that cannot match
+reads exactly like a broken feature — and it scanned
+`citadel-workspaces/integration-tests/src` and nothing else.
+
+So neither of the parent's browser-driving scripts was covered:
+`check-production-image.mjs`, which presses `create-account-button` and
+`onboarding-intent-admin` in CI, and the new proof. A testid rename in the UI
+repository broke either one silently, in the failure mode the gate exists to
+prevent. This is the tree's most common defect class — one rule, enforced in
+one of the two places its mechanism appears — and it appeared here in the gate
+written to stop it.
+
+**Widening it found a live instance immediately.** `scripts/lib/app-mounted.mjs`
+decides whether the app rendered or the error boundary did:
+
+```js
+const app = Boolean(
+  document.querySelector('[data-testid="sign-in-button"]') ||
+    document.querySelector('[data-testid="create-account-button"]') ||
+    document.querySelector('[data-testid="app-shell"]'),
+);
+```
+
+Nothing rendered `app-shell`. The first two arms exist only on the landing page,
+which is the only page the helper was ever pointed at, so the union matched and
+the dead arm was invisible — the same fallback-hides-the-corpse shape the gate's
+own doc comment describes, sitting inside the checker rather than a spec. Past
+login, only the third arm applies, and it could never match: "the app mounted"
+was unanswerable there. `AppLayout` now carries the testid, which is the arm
+that was always meant to answer.
+
+The success line now names the roots it read
+(`115 addressed across 2 root(s) (integration-tests/src, ../scripts)`). A
+standalone clone of the UI repository has no parent beside it and legitimately
+scans one root; without saying so, that narrowing is indistinguishable from
+full coverage.
+
+**Negative controls**, both verified applied and reverted:
+
+| Control | Gate |
+|---|---|
+| remove `data-testid="app-shell"` from `AppLayout` | RED |
+| point a parent script at a testid nothing renders | RED |
+
+The first is the one that matters: it proves the parent root is genuinely being
+read, rather than the gate passing because it never opened those files.
