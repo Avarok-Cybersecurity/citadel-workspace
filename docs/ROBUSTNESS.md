@@ -9462,3 +9462,42 @@ harness rather than the app, but that is a belief, not a measurement, and it is
 written here as such rather than dismissed as environmental. The GREEN half of
 this control is therefore **not yet established**; it is left to CI, which
 builds a real image and runs the check the way it is meant to run.
+
+## Round 707 — "cancelled" was two different things, and one of them is a hang
+
+Run 34087908398 finished 73 green and one job `cancelled`, and the four runs
+before it were `cancelled` too. The easy reading is CI flakiness. It is two
+unrelated things, and only one is benign.
+
+**Supersession (benign).** In runs 34084634961, 34084043688 and 34081888174 a
+dozen jobs end at the *same instant* — 05:43:5x, 04:51:1x, 04:41:3x. That is
+`validate.yml`'s `concurrency: cancel-in-progress: true` killing a run when a
+newer push arrives. Expected, and the reason pushes are held while a diagnostic
+run is in flight.
+
+**A hang (not benign).** In 34087908398 exactly ONE job was cancelled:
+
+```
+Integration Test - test:reconnect-both-c2s
+started 06:34:11  ->  completed 07:34:11      (timeout-minutes: 55)
+```
+
+One job, the full budget, nothing else touched. That is not supersession; the
+job was killed for running too long. The same job succeeded four hours earlier
+in 22 minutes (run 34074767401, 03:11→03:33). So
+`reconnection/both-c2s-reconnect.test.ts` intermittently *hangs* rather than
+failing — it stopped making progress and sat there for at least another
+33 minutes past its normal completion.
+
+A hang is worse than a failure for the same reason a green negative control is
+worse than a red one: it produces no assertion, no diff, and no error text. The
+run reports `cancelled`, which reads as infrastructure noise, and the defect is
+invisible unless someone compares the job's own duration against its history.
+It cost this branch an hour of held pushes on the belief that CI was misbehaving.
+
+Not fixed here, and deliberately not guessed at: the C2S-reconnect path is the
+one place where both peers drop and re-establish, and picking a cause from the
+code without a captured hang would be the same mistake rounds 693 and 697 made
+on `member-list-loading` — two fixes to code that was not on the failing path.
+What is recorded is the signature to look for: **one job, full budget, run reads
+`cancelled`.** Recurrence now has a name and a discriminator.
