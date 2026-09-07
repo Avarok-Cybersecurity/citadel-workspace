@@ -9950,3 +9950,30 @@ for reasons that have nothing to do with the UI: disk 60% (178 G free), 110 G of
 pressure, and running a prune during a deploy window is how the only copy of a
 working image gets collected. It is recorded here as available if the disk ever
 matters, which is different from doing it.
+
+## Round 717 — the proofs were already running against production
+
+Worth stating plainly before the deploy, because it changes what the evidence
+means:
+
+```
+citadel.avarok.net  ->  51.81.107.44
+avarok2 public IP   ->  51.81.107.44      (avarok-server-1, up 2 days, healthy)
+```
+
+Every proof in rounds 704–714 used `--server citadel.avarok.net:12400`. That is
+not a stand-in for production; it **is** production. So the new UI bundle,
+driven by the published `agent-v0.3.0` binary, has already registered accounts,
+exchanged peer requests and passed messages both ways through the exact server
+the deployment runs — including the server being ~140 commits behind the UI,
+which is the compatibility question a UI-only deploy raises.
+
+That leaves exactly one untested variable: the new UI container running on that
+host rather than this one. Round 711 rehearsed that with the identical image and
+the identical flags, over TLS, on a non-loopback name — 9/9. The remaining
+difference is the machine.
+
+It is also why the accounts created by these runs are real accounts on the real
+server. They are harmless (`u1x…`, `ta…`, `dbg…`, `mx…`) and the server volume
+is backed up, but a proof script pointed at production leaves state, and that is
+a property to know about rather than discover.
