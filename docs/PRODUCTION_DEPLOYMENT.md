@@ -395,3 +395,44 @@ Then the behaviour, not just the headers:
 node scripts/prove-users-can-talk.mjs --origin https://work.avarok.net \
                                       --server citadel.avarok.net:12400 --users 3
 ```
+
+## The Cloudflare beacon, and why it is left blocked
+
+Every page load on work.avarok.net produces this, in every visitor's console:
+
+```
+Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/…'
+violates the following Content Security Policy directive:
+  "script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'"
+```
+
+It is injected by Cloudflare at the edge, not by this build — nothing in the
+repository asks for it, and `grep` will not find it. The site's own policy then
+refuses it, so it never executes.
+
+**The operator has two options, and they are not equivalent.**
+
+1. **Turn it off at Cloudflare** (Web Analytics / Browser Insights → off for
+   this hostname). The injection stops, the console is clean, and no
+   third-party script is offered the page at all.
+
+2. **Allow it**, by adding `https://static.cloudflareinsights.com` to
+   `script-src` in `docker/ui/nginx.conf.template`. The analytics start
+   working, at the cost of admitting a third-party script to a page that
+   otherwise loads nothing it did not ship.
+
+Option 1 is the recommendation for this product specifically. The whole premise
+is that the operator cannot read users' traffic — the `/ws` proxy is disabled
+and each visitor runs their own agent for exactly that reason — and a
+third-party analytics beacon on the same page is in tension with that, whether
+or not it is currently blocked.
+
+**What must NOT happen is drift into option 2 by accident.** Adding the origin
+to `script-src` is a two-word change that looks like fixing a console error.
+`scripts/prove-users-can-talk.mjs` prints CDN-injected refusals as notes rather
+than failures precisely so this stays a decision rather than an irritation, and
+so a *genuine* violation — one the app itself causes, like the DNS-over-HTTPS
+lookup that made registration impossible for weeks — is not lost among them.
+
+Blocked-and-noisy is the safe state. It is recorded here so the next person
+seeing that console line knows it was chosen, not overlooked.
