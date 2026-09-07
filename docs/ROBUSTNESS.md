@@ -10330,3 +10330,57 @@ stopped fixing and started measuring.
 the failure message beside the DOM. Then the next occurrence names the event
 that ended the load, and the question becomes which emitter sent it — answerable
 rather than arguable.
+
+## Round 725 — the link is now enough
+
+Second deploy, `sha-50c3cd82014a`. The baseline taken in round 721 flipped
+exactly where it was predicted to and nowhere else:
+
+```
+BEFORE  5/7 states explained   (the two message steps failing)
+AFTER   7/7 states explained
+```
+
+The sentence a user gets for a live-but-wrong address went from
+
+```
+Error — Something went wrong: Socket deadline has elapsed
+```
+
+which the display cleaner had assembled by stripping `error:` out of the SDK's
+actual words, to
+
+```
+Server Did Not Answer — The workspace server did not answer within 30 seconds.
+Check the address you entered — it should be a host name or IP address, then a
+colon and the port, like citadel.example.com:12400. If that is right, the server
+may be down or unreachable from this machine.
+```
+
+And the address is now published by the deployment:
+
+```
+served HTML:  <meta name="citadel-default-server" content="citadel.avarok.net:12400">
+new visitor's field: "citadel.avarok.net:12400"
+after typing:        "elsewhere.example.org:12500"     (still editable)
+```
+
+Three users, all pairs, both directions, on the live site: **22/22**.
+
+Taking the before was worth it. "7/7 after a deploy" alone would not have shown
+that the two steps which changed are the two that were supposed to, and that the
+other five — mistyped address, correct registration, taken username, wrong
+password, no username oracle — were untouched. That is the difference between
+"the deploy worked" and "the deploy carried what it was supposed to carry", and
+round 712 is why the distinction is not academic.
+
+### The last out-of-band step is gone
+
+| To join work.avarok.net | Before today | Now |
+|---|---|---|
+| Know the site URL | told | told |
+| Install the agent | page names it, links the right build, gives the exact command | same |
+| Know the server address | **told out of band** | **pre-filled** |
+| Understand a failure | "check your network" / an invented sentence | names the address and its shape |
+
+The link is enough.
