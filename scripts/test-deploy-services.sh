@@ -183,6 +183,11 @@ run_deploy() { # <name> <service>...
   {
     [ -n "${NO_MASTER_PW:-}" ] || printf 'WORKSPACE_MASTER_PASSWORD=test-password-not-a-placeholder\n'
     [ -n "${NO_ORIGINS:-}" ] || printf 'INTERNAL_SERVICE_ALLOWED_ORIGINS=https://tenant.example\n'
+    # Required whenever a `ui` service is deployed, for the same reason as the
+    # origins above: with the /ws proxy off, an empty value ships a page that
+    # loads and can reach no agent. NO_LOOPBACK=1 for the case that proves
+    # deploy.sh refuses without it.
+    [ -n "${NO_LOOPBACK:-}" ] || printf 'LOOPBACK_AGENT_ORIGIN=wss://local.tenant.example:12345\n'
     [ -z "${BIND_PORT:-}" ] || printf 'WORKSPACE_BIND_ADDR=0.0.0.0:%s\n' "$BIND_PORT"
   } > "$dir/.env"
   export CALLS="$dir/calls.txt"
@@ -334,6 +339,23 @@ assert_failed "$d"
 grep -q "WORKSPACE_MASTER_PASSWORD is unset" "$d/out.txt" \
   || fail "a .env without the master password was refused without saying why (see $d/out.txt)"
 echo "  no-master   -> refused, and says so (was a silent exit)"; pass_count=$((pass_count+1))
+
+# A deployment that serves the UI must not go out without a loopback agent origin.
+# With the /ws proxy off -- which is what a publicly-served UI does, deliberately --
+# an empty value ships an empty agent meta tag and a `connect-src 'self'` that
+# forbids the agent: the page loads, looks entirely correct, and can open no socket
+# at all. Nothing in the image can catch it, because empty is RIGHT for a local
+# deployment where the proxy is on.
+d=$(NO_LOOPBACK=1 run_deploy no-loopback-origin server ui)
+assert_failed "$d"
+grep -q "LOOPBACK_AGENT_ORIGIN is unset" "$d/out.txt" \
+  || fail "a ui deployment without LOOPBACK_AGENT_ORIGIN was not refused with a reason (see $d/out.txt)"
+echo "  no-loopback -> a ui deploy without an agent origin is refused"; pass_count=$((pass_count+1))
+
+# ...and a server-only tenant is never interrogated about a UI it does not serve.
+d=$(NO_LOOPBACK=1 run_deploy no-loopback-server-only server)
+assert_succeeded "$d"
+echo "  no-loopback -> server-only is not asked for one"; pass_count=$((pass_count+1))
 
 # The health wait names the port the .env binds, not a literal 12349. A tenant on any
 # other port was told to look at the wrong socket when the server did not come up.

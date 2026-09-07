@@ -8930,3 +8930,57 @@ and `test:offline` both passed in the 47/47, so file transfer and offline
 delivery are covered. The gap worth filling was the one the suite structurally
 cannot reach — CI runs a single compose stack, and a single stack has a single
 agent.
+
+## Round 695 — my own guard failed the harness that should have proved it
+
+Round 687 moved the loopback-origin requirement into `deploy.sh`. The next run
+failed a DIFFERENT deploy-gate step: "Deploy restart guards - run deploy.sh end
+to end". Reproduced locally in one command:
+
+```
+ERROR: LOOPBACK_AGENT_ORIGIN is unset or empty, and this deployment serves the UI.
+```
+
+The harness builds a fixture `.env` and runs the real `deploy.sh` against
+fixture compose files. Its `.env` carries a master password and an origins list;
+it did not carry a loopback origin, because until now nothing required one. The
+guard is right and the fixture was incomplete.
+
+The fix is not to loosen the guard. The fixture now carries the variable — as a
+real tenant's `.env` must — and, more usefully, the harness gained two
+assertions it did not have:
+
+```
+no-loopback -> a ui deploy without an agent origin is refused
+no-loopback -> server-only is not asked for one
+```
+
+The second matters as much as the first: a server-only tenant deploys no UI and
+must never be interrogated about one, which is the same shape the origins check
+already has for `internal-service`. So the guard is now PROVED by the harness
+rather than merely tolerated by it. Control: delete the guard from `deploy.sh`
+and the first case reports *"deploy.sh exited 0 on a compose file it must
+reject"*.
+
+### The ILM stress test — recorded, not explained
+
+`intersession-layer-messaging::testing::tests::test_bidirectional_messaging_stress`
+failed in CI, 1 of 337, panicking on `Timeout waiting for messages at peer 2`
+(a 5-second per-message receive deadline). The same submodule commit passed the
+same job on the previous run.
+
+Measured rather than assumed: **12 runs locally, 12 passes.**
+
+The first attempt at that measurement was worthless and said so loudly —
+`0 passed, 12 failed`, every one of them a COMPILE error (`unresolved import
+crate::testing`), because the module is behind `--features testing` and I had
+omitted it. A measurement that cannot distinguish "the test failed" from "the
+test did not build" is not a measurement. With the feature enabled it passes
+every time.
+
+So: not reproducible locally, intermittent in CI, one test of 337, and a
+per-message timeout under a loaded runner is the shape that produces exactly
+this. It is left as an open flake with the evidence attached. Widening the
+timeout would make the symptom go away without anyone learning whether the
+product can drop a message under load, which is the one thing worth knowing
+about a messenger.
