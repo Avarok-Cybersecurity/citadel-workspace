@@ -1,3 +1,24 @@
+# The robustness record — PARENT repo (rounds 477–730)
+
+> **There are TWO files with this name, and their round numbers overlap.**
+>
+> | File | Rounds | Size | Covers |
+> |---|---|---|---|
+> | `docs/ROBUSTNESS.md` (this one) | **477–730** | ~10,600 lines | the whole stack: deploy, agent, gates, CI, the live site |
+> | `citadel-workspaces/docs/ROBUSTNESS.md` | **136–550** | ~25,000 lines | the UI submodule's own audit history |
+>
+> Rounds 477–550 exist in BOTH with different content. "Round 500" is two
+> different findings depending on which file you are in. A round number alone
+> does not identify anything; say which record.
+>
+> This matters most to the thing people do first: grepping "the record" to check
+> whether a finding is already known. Grepping only this file reads under a third
+> of what has been written, and the missing part is the older two thirds.
+>
+> Gates are indexed separately in [GATES.md](GATES.md) — **read that before
+> writing a new guard.** Four guards in one campaign were written that already
+> existed, better, elsewhere.
+
 
 ## Rounds 608-620 — the reconnection wedge, root-caused
 
@@ -10642,3 +10663,43 @@ TRUE flags gate reverted     = 0
 That matters because a check can survive an extraction by continuing to watch a
 file that no longer contains the thing. Baseline 27 → 23; all four sites are now
 enforced rather than excused, and eslint caught two imports the move orphaned.
+
+## Round 731 — the two documents people are told to read first were unfindable
+
+The DX sweep's top finding, and it explains a cost this record has been paying
+for months.
+
+```
+docs/ROBUSTNESS.md                        10,644 lines   rounds 477–730
+citadel-workspaces/docs/ROBUSTNESS.md     25,051 lines   rounds 136–550
+
+$ grep -m1 '^## Round 500' docs/ROBUSTNESS.md
+## Round 500 — the same review, applied to the bigger PR
+$ grep -m1 '^## Round 500' citadel-workspaces/docs/ROBUSTNESS.md
+## Round 500 — the rule was written down, next to the code that ignored it
+```
+
+**Two files, one name, overlapping numbering.** Rounds 477–550 exist in both
+with different content, so "Round 500" identifies nothing on its own. And
+`docs/README.md` listed twenty documents while omitting three — including both
+`GATES.md`, whose opening line is *"Read this before writing a new guard"*, and
+`ROBUSTNESS.md` itself.
+
+So the first thing anybody does — grep the record to see whether a finding is
+already known — reads under a third of what has been written, and the missing
+part is the older two thirds. That is the mechanism behind the two costs this
+record keeps naming: guards written that already existed, and findings
+re-reported that were already recorded. It is structural, not carelessness.
+
+Both files now open by naming their own range and pointing at the other, the
+index lists all 21 documents, and
+`check-docs-are-listed-in-the-index.mjs` asserts nothing in `docs/` is
+unreachable from it. `check-doc-file-refs.mjs` already validates that a
+referenced path exists; this is the converse, which is the direction that
+failed.
+
+Control: removing the `GATES.md` line names it and exits 1; restoring it exits 0.
+
+Not attempted: merging or renumbering the records. That is hours of work, would
+rewrite two long histories, and the ambiguity is removed by saying which record
+you mean — which the headers now force.
