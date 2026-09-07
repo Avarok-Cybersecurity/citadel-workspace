@@ -11274,3 +11274,103 @@ revert left only the intended change.
 - `both-c2s-reconnect` intermittent hang.
 - 22 Dependabot advisories on the default branch (5 high, 12 moderate, 5 low),
   surfaced by the push and not yet triaged.
+
+## Round 742 — the empty room that blocked every deploy
+
+`member-list-loading` had been "an intermittent flake" for three rounds. It was
+not intermittent this time: it failed all three attempts on master, and because
+`publish` needs `validate`, **no image had been built since 2026-09-02**.
+
+That is the part worth stating plainly. The production server on avarok2 runs
+`sha-aeafb7ecad6c`, and the commits it is missing include:
+
+| Commit | Missing from production |
+|---|---|
+| `d48a2ff` | the master password was an oracle for every enrolled account |
+| `c6dd798` | the master password was compared one byte at a time |
+| `320730a` | the master password was written to the log |
+| `b046e0a` | `ListMembers` handed every member's permission map to any member |
+| `2fafb7c` | a workspace's member list was broadcast to every session on the server |
+| `57f1321` | four workspace broadcasts were not scoped to their workspace |
+| `0f74513` | the permission map was a fourth door onto a member's standing |
+| `eb695b5` | decrypted message bodies were not redacted from logs |
+
+Each verified as NOT an ancestor of the deployed build. A red spec in a suite
+nobody was watching held eight security fixes off the server for five days.
+
+### The instrumentation refuted the hypothesis it was added to confirm
+
+Round 724 predicted an empty `members:loaded`. All three attempts logged exactly
+one event:
+
+```
+members:loaded {payloadDomainId: workspace-root, activeDomainId: workspace-root, count: 3}
+```
+
+`count: 3`, domain matching. The load never ended empty — so the theory two
+earlier fixes were built on is simply wrong, and a third fix aimed at it would
+have been the third miss.
+
+### The cause: two values for one fact
+
+`loadedForDomain` was set to A when A's members arrived and nothing ever unset
+it. The domain-change effect cleared `members`. On A → B → A the hook therefore
+reported "loaded, for A" while holding an empty list — and that pair is exactly
+what `MemberListBody` renders as "Nobody else is here yet", about a workspace
+with three people in it.
+
+Fixed by making the state unrepresentable rather than by adding a third flag:
+the list and the domain it belongs to are now ONE value. Nothing is cleared on a
+domain change — the clearing was a stored-state workaround for a stored-state
+problem, and it was the half that ran while the marker stayed behind.
+
+### The diagnostic was describing the wrong frame
+
+The spec captures the DOM in a single `evaluate` AFTER it sees the empty state,
+so it reported `loading: "Loading members..."` for a frame that had shown
+`empty`. It was describing the state that REPLACED the defect. That reading cost
+a wrong inference on the way through — I concluded two component instances were
+on screen, and there is only one.
+
+### Why three prior assertions could not catch it
+
+The existing guard, `loading-is-derived-not-stored.test.ts`, was correct and
+useless here. Re-introducing the real defect:
+
+| Assertion | With the defect |
+|---|---|
+| loading is derived from the domain | still green |
+| loading is not a flag an effect flips | still green |
+| an answer records which domain it is for | still green |
+| **the list is not a second, separately-settable value** | RED |
+| **the list is derived from the loaded domain** | RED |
+| **behavioural A → B → A** | RED |
+
+Three green assertions against a live defect is the whole reason this survived
+two fixes. The new ones are the property that actually holds. The repro is now a
+unit test that runs in 11ms with no compose stack, instead of a 17-second
+integration spec that needed CI to fail three times to say anything.
+
+### Dependabot triage (22 open, previously unexamined)
+
+Most are dev tooling. Two groups are not:
+
+- **`ml-dsa 0.0.4`**, reached through `citadel_pqcrypto 0.14.0` — a git
+  dependency on Avarok-Cybersecurity/Citadel-Protocol@master. Three advisories:
+  CVE-2026-24850 (signature verification accepts signatures with repeated hint
+  indices), CVE-2026-22705 (timing side-channel in ML-DSA decomposition), and
+  GHSA-h37v-hp6w-2pp8 (`UseHint` off-by-two when r0 is zero). Patched in
+  0.1.0-rc.4 / rc.3 / rc.5 respectively. This is post-quantum signature code in
+  the protocol itself, and 0.0.4 → 0.1.0-rc.5 crosses a breaking boundary, so it
+  cannot be a lockfile bump here: it has to be done in Citadel-Protocol and the
+  git pin advanced. NOT ATTEMPTED — recorded, not silently carried.
+- `uuid ^13` is the only flagged runtime npm dependency of the UI; `vite`,
+  `extract-zip`, `minimatch` and `flatted` are dev-only and do not ship.
+
+### Still open
+
+- Whether the fix makes the SPEC green: proven at the hook, not yet at the call
+  site. The validate run on `8bf1622` is what settles it, and until it does this
+  is a fix with a passing unit test, which is not the same claim.
+- The eight security fixes above are still not on the server.
+- `both-c2s-reconnect` intermittent hang.
