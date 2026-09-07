@@ -10063,3 +10063,49 @@ it. It is the operator's to remove.
 The deployed image predates the message fix (round 713) and the published server
 address (this session's last wave). Both are committed and will ship on the next
 publish; neither blocks anyone from joining today.
+
+## Round 720 — what an invited stranger actually gets
+
+The deploy is proven for users who already have an agent. This is the other
+first run: the live site, opened by somebody with nothing installed.
+
+```
+Connection Failed
+Unable to reach the Citadel agent on this machine. It may not be running yet,
+or may be restarting — try again in a moment.
+
+Don't have the agent running?
+Citadel needs a small program on this machine to hold your connections.
+  [macOS (Apple Silicon)]  [macOS (Intel)]
+Once unpacked, run it with:
+  ./citadel-agent --bind 127.0.0.1:12345 --backend filesystem \
+      --allowed-origins https://work.avarok.net
+Both flags matter: there is no default bind address, and the default account
+store is in-memory.
+  All releases and checksums
+Attempt 3 failed. Waiting to retry... Next retry in: 4s
+```
+
+The command carries **`https://work.avarok.net`** — the origin the visitor is
+actually on, injected, not a placeholder to adapt. The downloads match the
+platform the browser reports, the retry is automatic and visible, and the
+Create Account button stays reachable behind the dialog.
+
+What it still cannot tell them is the workspace address to type once the agent
+is running. That is the feature built this session (`DEFAULT_WORKSPACE_SERVER`),
+committed and waiting on the publish; `.env` on the host already carries
+`citadel.avarok.net:12400` so the next deploy activates it.
+
+### Readiness, stated precisely
+
+| Claim | Evidence |
+|---|---|
+| Two strangers can register and talk | 9/9 on work.avarok.net |
+| Three can, across all pairs, both directions | 22/22 on work.avarok.net |
+| Both onboarding doors work in production | admin and member walked in every run |
+| Someone with no agent is told what to do | the dialog above, on the live site |
+| The page asks for nothing its own policy forbids | asserted every run |
+| A newcomer needs the address told to them | **still true until the next deploy** |
+
+That last row is the honest limit of "ready". Everything else needed to join is
+on the page.
