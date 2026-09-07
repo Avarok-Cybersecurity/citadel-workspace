@@ -10703,3 +10703,55 @@ Control: removing the `GATES.md` line names it and exits 1; restoring it exits 0
 Not attempted: merging or renumbering the records. That is hours of work, would
 rewrite two long histories, and the ambiguity is removed by saying which record
 you mean — which the headers now force.
+
+## Round 732 — nothing checked that the workflows parse
+
+Adding a Playwright browser cache to `validate.yml` raised a question worth more
+than the change: what verifies a workflow edit before it is pushed?
+
+Nothing did. Malforming the file on purpose and running the full gate set:
+
+```
+control applied: YAML deliberately malformed
+TRUE workflow-parsing gate = 0        ← check-expensive-jobs-wait-for-cheap-ones
+All 147 checks passed                 ← preflight
+```
+
+`check-expensive-jobs-wait-for-cheap-ones.mjs` reads both workflows with regexes
+and says so in its header — it avoids a YAML dependency on purpose, because it
+runs in a job that (it believed) installs nothing. So a syntax error passes every
+one of 147 checks.
+
+**GitHub does not report this in the run.** It queues nothing, or answers a
+re-run request with *"this run cannot be rerun; its workflow file may be
+broken"* — a message this session already hit for an unrelated reason and read
+past. The push looks fine and CI looks idle.
+
+`check-workflows-parse.mjs` parses all four workflow files and asserts each has
+a `jobs` map. It asserts nothing about content; the semantic checks exist
+already and are better placed.
+
+It **fails rather than skips** when `js-yaml` is missing. A check that quietly
+does nothing when its parser is absent reports safety on precisely the runs
+where it verified least — the same shape as the baselined success-flag gate in
+round 730, which was green because its findings had been excused rather than
+fixed.
+
+Control, using the exact malformation that had slipped through:
+
+```
+::error::.github/workflows/validate.yml: YAMLException: missed comma between
+         flow collection entries (1373:9)
+TRUE exit with control = 1
+TRUE exit reverted     = 0
+```
+
+### The change that prompted it
+
+Every leg of a 47-job matrix downloaded chromium and headless-shell (~170 MB)
+because nothing cached `~/.cache/ms-playwright`. Cached now, keyed on the locked
+version — a property of the playwright version and nothing else, so it is
+correct across unrelated dependency changes and cannot serve a browser from a
+different version. The install step is unchanged, retry and 600s bound included:
+`playwright install` returns in seconds when the browsers are present, and a
+cache miss costs exactly what today costs. It cannot be wrong, only absent.

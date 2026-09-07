@@ -509,6 +509,8 @@ jobs:
         run: node scripts/check-already-registered-predicate-matches-the-agent.mjs
       - name: Every document in docs/ is reachable from its index
         run: node scripts/check-docs-are-listed-in-the-index.mjs
+      - name: The workflows GitHub reads are parseable
+        run: node scripts/check-workflows-parse.mjs
       - name: Every generated binding has a type, and every type a binding
         run: node scripts/check-bindings-match-exported-types.mjs
       - name: Instructions name the port the UI actually serves
@@ -1357,6 +1359,24 @@ jobs:
         # because the installed binary version doesn't match the one
         # playwright@locked-version expects.
         run: npm ci
+      - name: Cache Playwright browsers
+        # Every leg of a 47-job matrix downloaded chromium + headless-shell
+        # (~170 MB) from scratch, because nothing cached ~/.cache/ms-playwright.
+        # `playwright install` is idempotent and returns in seconds when the
+        # browsers are already there, so the step below stays exactly as it is --
+        # including its retry and its 600s bound, which a cache miss still needs.
+        #
+        # Keyed on the LOCKED version, not on a date or a lockfile hash: the
+        # browser build is a property of the playwright version and nothing else,
+        # so this is correct across unrelated dependency changes and cannot serve
+        # a browser from a different version. A miss costs exactly what today
+        # costs; it cannot be wrong, only absent.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ms-playwright-${{ runner.os }}-
       - name: Install Playwright Browsers
         # Now that deps are installed, this resolves to the locked
         # version's `playwright install` and downloads the matching
@@ -1571,6 +1591,24 @@ jobs:
         # the integration-tests job: two copies of playwright make tsc see two
         # distinct playwright-core type identities.
         run: npm ci
+      - name: Cache Playwright browsers
+        # Every leg of a 47-job matrix downloaded chromium + headless-shell
+        # (~170 MB) from scratch, because nothing cached ~/.cache/ms-playwright.
+        # `playwright install` is idempotent and returns in seconds when the
+        # browsers are already there, so the step below stays exactly as it is --
+        # including its retry and its 600s bound, which a cache miss still needs.
+        #
+        # Keyed on the LOCKED version, not on a date or a lockfile hash: the
+        # browser build is a property of the playwright version and nothing else,
+        # so this is correct across unrelated dependency changes and cannot serve
+        # a browser from a different version. A miss costs exactly what today
+        # costs; it cannot be wrong, only absent.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ms-playwright-${{ runner.os }}-
       - name: Install Playwright Browsers
         # Retried, and each attempt bounded.
         #
