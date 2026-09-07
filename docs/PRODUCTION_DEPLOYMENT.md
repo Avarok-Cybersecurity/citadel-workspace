@@ -219,23 +219,29 @@ brand-new room has nobody to call until members are added.
 > **The UI on `avarok2` does not run under Compose.** `docker compose config
 > --services` there lists only `server`; the UI is a hand-started container
 > named `citadel-ui`. So `deploy.sh` does not touch it, and its configuration
-> exists nowhere in this repository -- it was reconstructed with
-> `docker inspect` and is written down below so the next person does not have
-> to. Recreate it EXACTLY, or the loopback origin and the disabled `/ws` proxy
-> silently change:
+> existed nowhere in this repository -- it was reconstructed with
+> `docker inspect`, and the running image's tag turned out to be absent from
+> GHCR entirely, so that container could not have been recreated at all.
+> Deploy it with **`scripts/deploy-ui.sh`**, which is that `docker run`
+> written down, with the flags that have no safe default checked before
+> anything is destroyed:
 >
 > ```bash
-> TAG=sha-<12 hex>            # from the Publish Images run you are deploying
-> docker pull ghcr.io/avarok-cybersecurity/citadel-workspace-ui:$TAG
-> docker rm -f citadel-ui
-> docker run -d --name citadel-ui --restart unless-stopped \
->   -p 127.0.0.1:8099:8080 \
->   -e LOOPBACK_AGENT_ORIGIN=wss://local.avarok.net:12345 \
->   -e WS_PROXY_ENABLED=0 \
->   -e AGENT_UPSTREAM=127.0.0.1:12345 \
->   -e LISTEN_ADDR=0.0.0.0 \
->   ghcr.io/avarok-cybersecurity/citadel-workspace-ui:$TAG
+> cd /srv/citadel-tenants/avarok
+> set -a && . ./.env && set +a            # UI_PORT, LOOPBACK_AGENT_ORIGIN
+> bash scripts/deploy-ui.sh sha-<12 hex>  # tag from the Publish Images run
 > ```
+>
+> It refuses an empty or malformed `LOOPBACK_AGENT_ORIGIN` (exit 1) and a
+> missing tag (exit 2), and it **pulls before it removes**, so a mistyped tag
+> fails with the old container still serving. On success it asserts that the
+> served CSP and the `citadel-loopback-agent` meta tag both name that origin --
+> the two things that let a visitor's browser reach their own agent, and the
+> two a silently-wrong deploy breaks while still returning 200.
+>
+> The flags live in the script rather than being repeated here on purpose: a
+> document and a script disagreeing is how the running container came to have
+> settings nobody could review.
 >
 > `-p 127.0.0.1:8099` is not decorative: nginx on the host proxies :443 to it,
 > and binding the wildcard would publish the UI -- and behind it the `/ws`
