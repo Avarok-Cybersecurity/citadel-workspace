@@ -300,6 +300,21 @@ services:
       # P2P traffic. Users run their own agent locally instead - see docker-compose.local.yml,
       # which is where /ws is both safe and enabled.
       - WS_PROXY_ENABLED=0
+      # ...which is exactly why THIS must be set.
+      #
+      # With the proxy off and no loopback origin the page has nothing to dial:
+      # the meta tag ships empty, `connect-src 'self'` forbids the agent, and
+      # every visitor gets a page that loads, looks correct, and cannot open a
+      # socket to anything. The image defaults it to empty because a LOCAL
+      # deployment reaches its agent through the proxy; a hosted one must name
+      # the visitor's own agent, and only the operator knows the name they
+      # published and hold a certificate for.
+      #
+      # `:?` rather than a default, deliberately: empty here is a deploy-time
+      # outage, not a configuration. See docs/ROBUSTNESS.md round 679, where
+      # this mechanism was described in a comment and implemented in no file,
+      # and the live site ran an image somebody had built by hand as a result.
+      - LOOPBACK_AGENT_ORIGIN=${LOOPBACK_AGENT_ORIGIN:?set this in .env, e.g. wss://local.example.com:12345 -- a hosted UI cannot reach any agent without it}
     deploy:
       resources:
         limits:

@@ -8444,3 +8444,46 @@ visitor, with the container reporting ok"*.
 Found by reading the hosted-only code paths after round 683, on the theory that
 "only fires when a loopback origin is published" is where the defects are. It
 was: three of the last six rounds came from that one conditional.
+
+## Round 685 — the compose that would deploy the outage
+
+Round 679 made the image capable of serving a hosted loopback agent origin.
+Round 685 is what would have happened on the next `deploy.sh`.
+
+`docker-compose.production.yml` has a `ui:` service. It sets `WS_PROXY_ENABLED=0`
+— correct, and argued at length in the file: a hosted UI backed by one shared
+agent would hold every user's ratchet keys. It did not set
+`LOOPBACK_AGENT_ORIGIN` at all.
+
+Those two facts together are an outage. With the proxy off and no loopback
+origin the page has nothing to dial: the meta tag ships empty, `connect-src
+'self'` forbids the agent, and every visitor gets a page that loads, looks
+correct, and can open no socket. The image defaults the variable to empty
+CORRECTLY — a local deployment reaches its agent through the proxy and needs
+none — so nothing in the image can catch this. It is only wrong in the one
+deployment that turns the proxy off.
+
+`${LOOPBACK_AGENT_ORIGIN:?...}` rather than a default, because empty here is a
+deploy-time outage and not a configuration. The message names what to put in
+`.env`.
+
+The gate now requires the `ui` service to mention the variable. Negative
+control: delete the line; it goes RED saying every visitor gets a page that
+loads and cannot connect.
+
+**Two divergences found and NOT changed, deliberately**, because I cannot test a
+compose-driven UI deploy without docker running here, and an untested change to
+production is how the site goes down while nobody is watching:
+
+- the repo's `ui` service says `network_mode: host` with no port mapping; the
+  container actually serving work.avarok.net is on the bridge network with
+  `127.0.0.1:8099->8080`, which is what the Cloudflare tunnel points at.
+  Deploying the repo's version as-is would move the port out from under the
+  tunnel.
+- the HOST's `docker-compose.production.yml` has only a `server:` service. That
+  is why `deploy.sh` prints "Skipping ui" and why the hand-built
+  `loopback-3078d2f1` image has survived: the host's compose cannot deploy a UI
+  at all. Accidentally protective, and not a state to leave in place.
+
+Both are recorded here rather than fixed blind. The deploy that follows must
+reconcile them in one deliberate step, with the site checked after.

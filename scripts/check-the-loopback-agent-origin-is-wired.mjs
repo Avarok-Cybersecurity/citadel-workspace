@@ -145,7 +145,31 @@ for (const [label, conf] of [['hosted', hosted], ['compose', compose]]) {
   }
 }
 
-// 6. And the container REFUSES what the page will ignore.
+// 6. The hosted deployment actually PASSES it in.
+//
+// Everything above makes the image capable of serving a loopback origin. The
+// image defaults it to EMPTY, correctly -- a local deployment reaches its agent
+// through the same-origin proxy and needs none. A hosted one has that proxy
+// off, deliberately, so an empty value there is not a default but an outage:
+// the page loads, looks right, and can open no socket at all.
+const COMPOSE = 'docker-compose.production.yml';
+if (!existsSync(COMPOSE)) {
+  problems.push(`${COMPOSE} does not exist — the hosted deployment could not be checked.`);
+} else {
+  const compose = readFileSync(COMPOSE, 'utf8');
+  const ui = compose.slice(compose.indexOf('\n  ui:'));
+  const uiBlock = ui.slice(0, ui.indexOf('\n  cloudflared:') + 1 || undefined);
+  if (!/\n  ui:/.test(compose)) {
+    problems.push(`${COMPOSE}: no \`ui:\` service — this check has lost its subject.`);
+  } else if (!new RegExp(`\\b${VAR}\\b`).test(uiBlock)) {
+    problems.push(
+      `${COMPOSE}: the \`ui\` service never mentions ${VAR}, so a deploy from this file serves ` +
+      `the page with an empty agent origin and a policy that forbids the agent. Every visitor gets ` +
+      `a page that loads and cannot connect.`);
+  }
+}
+
+// 7. And the container REFUSES what the page will ignore.
 //
 // The page has its own shape check -- LOOPBACK_ORIGIN_SHAPE in
 // resolve-url.ts -- and an origin it rejects is not an error there: it falls
