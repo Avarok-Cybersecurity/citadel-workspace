@@ -9569,3 +9569,41 @@ the phantom violation was Vite's own HMR client. Every "green" attempt in round
 706 was measuring a dev server. Binding a port that something already holds does
 not fail loudly when the families differ — it silently splits traffic by address
 family, and everything downstream measures the wrong process.
+
+## Round 709 — the proof now refuses a harness that cannot falsify
+
+Rounds 705–708 fixed the measurement. This closes the hole that made the wrong
+measurement possible, because nothing yet stopped the next person — or me next
+week — from pointing the proof at `npx serve` again and collecting another
+meaningless green.
+
+`prove-users-can-talk.mjs` now reads the CSP header off its first response and
+refuses to run without one:
+
+```
+  https://work.test:4201 sends no Content-Security-Policy.
+
+  Production does, so a pass here could not detect a request the policy
+  forbids -- which is exactly how work.avarok.net shipped a registration
+  path that no new user could complete.
+```
+
+Exit 2, a precondition rather than a failure, matching the agent-reachable check
+in `prove-mistakes-are-explained.mjs`. On a faithful harness it prints the policy
+actually in force before doing anything, so the run's own output records the
+conditions it was measured under.
+
+Both controls:
+
+| Harness | Sends CSP | Result |
+|---|---|---|
+| `npx serve dist -l 4201` — what every prior local proof used | no | **refuses**, exit 2 |
+| `serve-like-production.mjs` on 4299 | yes | proceeds, prints the policy, 9/9 |
+
+The general shape, which is the part worth carrying: **a harness weaker than
+production turns every green into a statement about the harness.** The proofs
+were not sloppy — they drove real browsers, real agents and a real server, and
+they were run over and over. They simply could not express the failure, and no
+amount of repetition fixes that. Verifying that the environment can represent
+the defect belongs with verifying that the check can fail; they are the same
+question asked at two levels.

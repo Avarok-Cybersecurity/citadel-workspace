@@ -101,6 +101,41 @@ async function join(page, user, branch) {
 const launchArgs = RESOLVER ? [`--host-resolver-rules=${RESOLVER}`] : [];
 const browser = await chromium.launch({ args: launchArgs });
 
+// PRECONDITION: the origin must send a Content-Security-Policy.
+//
+// Not a formality. For months the local harness was `npx serve dist`, which
+// sends no CSP at all, while production sends `connect-src 'self' wss://...`.
+// Every local run therefore happened under a strictly more permissive policy
+// than real users get, and a build that fetched `https://dns.google/resolve`
+// to turn the typed hostname into an IP passed here every single time while
+// being refused in production -- where it left every new user waiting thirty
+// seconds for "Registration timed out". Twenty-one green steps meant exactly
+// as much as they could mean, which was less than they appeared to.
+//
+// So this refuses to run rather than produce a pass that cannot see that class
+// of defect. Exit 2 (a precondition, not a failure) mirrors the agent-reachable
+// check in prove-mistakes-are-explained.mjs. scripts/lib/serve-like-production.mjs
+// serves a built dist/ with the real policy, read out of the nginx template.
+{
+  const probeContext = await browser.newContext({ ignoreHTTPSErrors: true });
+  const probe = await probeContext.newPage();
+  const response = await probe.goto(ORIGIN, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  const policy = response?.headers()['content-security-policy'];
+  await probeContext.close();
+  if (!policy) {
+    console.error(
+      `\n  ${ORIGIN} sends no Content-Security-Policy.\n\n` +
+      `  Production does, so a pass here could not detect a request the policy\n` +
+      `  forbids -- which is exactly how work.avarok.net shipped a registration\n` +
+      `  path that no new user could complete. Serve the bundle with\n` +
+      `  scripts/lib/serve-like-production.mjs, which applies the real policy.\n`,
+    );
+    await browser.close();
+    process.exit(2);
+  }
+  console.log(`  policy in force: ${policy.slice(0, 96)}…\n`);
+}
+
 const stamp = Date.now();
 const people = [];
 for (let i = 0; i < USERS; i++) {
