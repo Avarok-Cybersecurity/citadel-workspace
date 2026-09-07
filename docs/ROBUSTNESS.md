@@ -9814,3 +9814,100 @@ from a working fix.** It was caught only because the verification greps for the
 mutation and the anchor separately — applied (`^Error` count 0), red (exactly
 one test), reverted (count 1), green. This is the second time in this record
 that a shell-quoting failure has faked a control; see [bsd-grep-dollar-never-matches].
+
+## Round 714 — closing round 712's open item the way it should have been opened
+
+Round 712 recorded the message fix as **open**, because unit tests passed while
+the screen did not change. Round 713 found why. This closes it with the evidence
+that was missing, against the production image rather than a dist:
+
+```
+PASS  a server that never answers is explained
+      Server Did Not Answer — The workspace server did not answer within 30
+      seconds. Check the address you entered — it should be a host name or IP
+      address, then a colon and the port, like citadel.example.com:12400. If
+      that is right, the server may be down or unreachable from this machine.
+PASS  and points at the server address, the thing to check
+7/7 states explained against https://work.test:8443
+```
+
+and the main path, on the same image, unchanged:
+
+```
+9/9 steps passed  (2 users, both onboarding doors, real agent, real server)
+```
+
+Both failure states that previously read `Error / Something went wrong: <raw>`
+now name what happened and what to check. The other five states — mistyped
+address, correct registration, taken username, wrong password, and the
+no-username-oracle assertion — are unaffected, which is what the control in the
+middle of that script is for.
+
+The sequence is the point. Round 712 could have claimed a fix: the branch was
+written, the unit tests were green, and the commit message would have read
+fine. It said open instead, and the thing that was actually broken —
+`error-messages.ts` inventing sentences by stripping `error:` from the middle
+of every message — was found the next round. A green unit test on a mapper says
+the mapper maps; it says nothing about whether the value ever arrives.
+
+## Round 715 — the running UI image does not exist anywhere but that host
+
+Round 711 recorded that the UI on avarok2 is hand-started and its configuration
+lived nowhere in this repository. Writing `scripts/deploy-ui.sh` to fix that
+turned up something worse:
+
+```
+$ docker manifest inspect ghcr.io/…/citadel-workspace-ui:loopback-3078d2f1
+ABSENT — the running UI image is not in GHCR
+```
+
+**The image serving work.avarok.net exists only as a layer cache on that
+machine.** `docker rm` on that container, or a disk failure, and it cannot be
+recreated — not from the registry, and not from this repo, because nobody knows
+which commit it was built from. That is consistent with round 679's note that
+the live site was running "an image somebody had built by hand". It is not a
+theoretical exposure; it is the current state of the deployment people are being
+invited to test.
+
+The pending deploy fixes this incidentally, because it replaces that container
+with a published, sha-tagged image built by CI from a known commit.
+
+### scripts/deploy-ui.sh
+
+The UI is deployed alone, and now that act is written down and reviewable. Two
+reasons it cannot go through Compose, both real:
+
+1. All three services in `docker-compose.production.yml` share one
+   `${IMAGE_TAG}`, so a UI-only fix would carry the server ~140 commits forward.
+2. That file's `ui` service declares
+   `depends_on: {internal-service: service_healthy, server: service_healthy}`,
+   and the hosted stack runs neither beside the UI — deliberately. A hosted UI
+   backed by ONE shared agent would put every user's ratchet keys in the
+   operator's process, which is the reason `WS_PROXY_ENABLED=0` and the reason
+   each visitor runs their own agent.
+
+Verified guards — each refuses, with the exit code it documents:
+
+| Input | Result |
+|---|---|
+| `LOOPBACK_AGENT_ORIGIN` empty | refuses, exit 1 — a blank meta tag ships a page that can dial nothing |
+| `https://Local.Example.com` (wrong scheme, uppercase, no port) | refuses, exit 1 |
+| no tag argument | usage, exit 2 |
+| tag absent from the registry | exit 1, **before** the running container is touched |
+
+That last one matters most and was built in on purpose: the pull happens before
+the `docker rm -f`, so a typo in a tag cannot take the site down. Confirmed by
+running it with a tag that does not exist and watching it fail with the old
+container still serving.
+
+### Two measurement notes
+
+`bash scripts/deploy-ui.sh … | tail` reported `exit=0` while the script had
+failed — the pipeline's status is `tail`'s. Re-run without the pipe: exit 1.
+A wrapper that swallows the status of the thing under test is the shell
+equivalent of a check that cannot fail.
+
+And the happy path is NOT verified here: published images are amd64-only
+(`no matching manifest for linux/arm64/v8`), so this host cannot run one. It
+will be exercised on avarok2 by the deploy itself, which is the real test
+anyway.
