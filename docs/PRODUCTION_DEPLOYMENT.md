@@ -300,6 +300,25 @@ Three divergences to reconcile deliberately, not one at a time:
    was verified equal to the one the live container is running, and a timestamped
    backup of the previous file sits beside it.
 
+**What a deploy would pull, measured on the host.** `IMAGE_TAG` in its `.env` is
+**`sha-aeafb7ecad6c`** — pinned to a commit, not `latest`. The running server
+matches it. The running UI does not: it is `citadel-workspace-ui:loopback-3078d2f1`,
+a tag from the hand-built branch image, which is how the UI came to be both
+outside compose AND off the tag every other service shares.
+
+Two consequences for the deploy that follows:
+
+- **Adding the `ui` service without changing `IMAGE_TAG` would pull the UI built
+  from `sha-aeafb7ecad6c`** — older than the one now serving, and without any of
+  the loopback work. `deploy.sh` verifies every image came from the SAME commit,
+  which is the right rule; satisfying it means moving `IMAGE_TAG` forward, not
+  exempting the UI.
+- **Moving `IMAGE_TAG` forward also moves the SERVER**, from `sha-aeafb7ecad6c`
+  to the new commit — roughly 140 commits. That is a bigger change than "deploy
+  the UI fix", and it is the honest cost of having one tag for the stack. The
+  server data volumes persist across it; the persistence smoke test in CI exists
+  precisely to prove a restart does not re-seed the workspace tree.
+
 After any UI deploy, check the two things that fail silently:
 
 ```bash
