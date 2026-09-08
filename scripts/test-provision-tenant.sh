@@ -127,6 +127,25 @@ if python3 scripts/trim-compose.py docker-compose.production.yml server \
   echo "  ok: server healthcheck derives its port from WORKSPACE_BIND_ADDR"
 else
   echo "  FAIL: server healthcheck does not derive its port from WORKSPACE_BIND_ADDR"; fails=$((fails+1))
+  # Say what was actually seen, because this assertion passes on macOS, in a
+  # Linux container, and against the exact file CI checks out -- and still fails
+  # on the runner. Every hypothesis available without this output has been
+  # tested and refuted: file contents (byte-identical to the API copy), grep
+  # implementation (matches under ugrep, BSD grep and GNU grep 3.11), the
+  # working directory (the script cd's to the repo root on line 15), and the
+  # file being mutated mid-run (unchanged, verified by diff). A guard that only
+  # says "no" cannot end that, so it now shows its input.
+  echo "  ---- diagnostic ----" >&2
+  echo "  pwd: $(pwd)" >&2
+  echo "  compose: $(ls -l docker-compose.production.yml 2>&1)" >&2
+  echo "  sha256: $(sha256sum docker-compose.production.yml 2>/dev/null || shasum -a 256 docker-compose.production.yml 2>&1)" >&2
+  echo "  healthcheck lines in the SOURCE file:" >&2
+  grep -n "nc -z" docker-compose.production.yml >&2 || echo "    (none in source)" >&2
+  echo "  trim exit: $(python3 scripts/trim-compose.py docker-compose.production.yml server >/dev/null 2>&1; echo $?)" >&2
+  echo "  healthcheck lines AFTER trim+awk:" >&2
+  python3 scripts/trim-compose.py docker-compose.production.yml server 2>&1 \
+    | awk '/^  server:/{f=1} f' | grep -n "nc -z" >&2 || echo "    (none after trim+awk)" >&2
+  echo "  --------------------" >&2
 fi
 if [ "$fails" -ne 0 ]; then echo "FAIL: $fails assertion(s)"; exit 1; fi
 echo "provision-tenant: all guards refuse, all valid inputs accepted."
