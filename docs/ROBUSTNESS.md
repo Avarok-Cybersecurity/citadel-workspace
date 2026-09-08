@@ -11474,3 +11474,91 @@ once against copy the sidebar has never rendered.
   workspace still builds against the old pin.
 - `both-c2s-reconnect` intermittent hang.
 - Six test accounts now exist on production from the three proof runs.
+
+## Round 744 — a byte map key was write-once, and it locked the owner out
+
+Switching production to SQLite (round 743) locked the operator out of his own
+deployment. He entered the master password, the screen "flickered", and the same
+prompt returned. That was my change, and this is what it exposed.
+
+### The claim succeeded. Twice. Nothing could read it.
+
+The server logged `No owner set - assigning tbraun96 as workspace owner` three
+separate times, which is only reachable when `workspace.owner_id.is_empty()`.
+So every attempt found the workspace unowned, wrote an owner, and the next
+request found it unowned again.
+
+Reading the database settled it. Twelve rows for ONE key:
+
+| rowid | `owner_id` | members |
+|---|---|---|
+| 4 | `""` | `[]` |
+| 33 | `""` | `["tbraun96"]` |
+| **37** | **`"tbraun96"`** | + `initialized` metadata |
+| **49** | **`"tbraun96"`** | |
+| 57 | `""` | `["nologik"]` |
+| 75 | `""` | `["friend…"]` |
+
+The ownership writes were in the database the whole time, at rowids 37 and 49.
+
+`citadel_user/src/backend/sql_backend.rs` stored byte map values with a plain
+`INSERT`, and `bytemap` declares no unique constraint on
+`(cid, peer_cid, id, sub_id)`. Both readers are `SELECT … LIMIT 1` with no
+`ORDER BY`, which in SQLite returns the earliest row. **A key was write-once:**
+the first value stuck, every later update was invisible, and the table grew a
+row per write. It affects every SQL backend, for everything stored through the
+byte map — not only workspace ownership. `user_ids` had 11 duplicates.
+
+Fixed in Citadel-Protocol#305: `UPDATE` first, `INSERT` only if it matched
+nothing. Not `DELETE`-then-`INSERT` — `UPDATE` is one statement, so no crash can
+leave a key holding nothing, and it rewrites EVERY duplicate row an affected
+store already holds, so they become identical and `LIMIT 1` starts answering
+correctly. **A damaged store heals on its next write**, with no migration.
+
+### Why it survived: the test that could not fail
+
+`citadel_user/tests/primary.rs:593` stores a second value under a key
+specifically to check overwriting. It passes, because every byte-map test in
+that file constructs `BackendType::Filesystem`. The SQL implementation of those
+same trait methods had never been executed by a test. The new test is the first
+in that crate to drive the byte map through `SqlBackend`, and it asserts the ROW
+COUNT as well as the value — the value alone does not discriminate, because a
+read that happened to return the newest row would satisfy it while the table
+grew without bound. Control: `left: 2, right: 1`.
+
+### The second half: the error branch that could not match
+
+`error-messages.ts` matched `/invalid workspace password|workspace master
+password/i`. The server says `"Invalid workspace master access password"` —
+*master ACCESS password*. The case looked handled and never fired, so what
+reached the operator was `Something went wrong: Failed to update workspace:
+Invalid workspace master access password`. He did not read that as an error at
+all; he described it as a flicker.
+
+Also reproduced deterministically: `Join` paints its own full-screen
+`fixed inset-0 backdrop-blur-sm` scrim carrying `role="dialog"`, and renders two
+further dialogs inside itself that each paint an identical scrim. The wizard
+stayed on screen, dimmed twice and blurred, under the notice being read, with
+two focus traps and two Escape handlers live at once. `use-dialog-overlay.ts:56`
+documents that a nesting parent must stand down, and `Login.tsx:50` does it;
+`Join` never did.
+
+### What I got wrong
+
+Two prior guesses, both refuted by evidence rather than by argument. I suspected
+a Radix dialog unmounting with a closing dropdown — swept for, zero instances.
+And I read the reported symptom as a wrong password, because a deliberately
+wrong one produced a clean rejection; the correct one hung instead, which is the
+opposite of what a credential check normally does and should have pointed here
+sooner.
+
+### Still open — needs the operator
+
+Production is on SQLite with an unowned workspace and is NOT usable. The harness
+blocks me from writing to that host, so restoring it needs one command from him:
+set `WORKSPACE_BACKEND=filesystem` in the tenant `.env` and recreate the server.
+The filesystem store is intact, has an owner, and passed 22/22 today.
+
+The durable fix is #305 merged, the git pin advanced, and the server image
+rebuilt — after which the SQLite path is correct and the damaged store heals on
+the next claim.
