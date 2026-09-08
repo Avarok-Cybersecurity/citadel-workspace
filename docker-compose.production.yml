@@ -127,7 +127,26 @@ services:
       # Slow and correct beats fast and wrong. Moving to sqlite needs the SDK
       # fixed first: a unique index on those four columns and an upsert, which
       # is a change in citadel-protocol, not here.
-      - WORKSPACE_BACKEND=filesystem
+      # SQLite, not the filesystem backend.
+      #
+      # Both persist to the same `server_data` volume, so this is a choice about
+      # HOW state is written, not whether it survives. The filesystem backend
+      # writes a tree of individual files -- the deployment had accumulated 138
+      # of them under `accounts/impersonal` from ordinary use -- with no
+      # transactional boundary, so a crash mid-write can leave a partially
+      # written record and nothing notices. SQLite gives atomic commits and a
+      # single file to back up.
+      #
+      # THE TWO STORES DO NOT SHARE DATA. Switching backends does not migrate;
+      # it starts an empty store, and accounts registered under the previous
+      # backend are not visible to the new one. The filesystem tree is left on
+      # the volume untouched rather than deleted, and a tarball of it is kept
+      # under `backups/`, so the switch is reversible by putting this value back.
+      #
+      # Overridable so a deployment can pin the old behaviour without editing
+      # this file, but the default is the one we intend to run.
+      - WORKSPACE_BACKEND=${WORKSPACE_BACKEND:-sqlite}
+      # Read by both backends: the filesystem tree and `kernel.db` both live here.
       - WORKSPACE_DATA_DIR=/data/server
       # Which interface the Citadel listener binds to.
       #
