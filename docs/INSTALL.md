@@ -39,6 +39,16 @@ with the `read:packages` scope and nothing else
 (<https://github.com/settings/tokens>, classic). A token scoped that way can pull
 these images and do nothing else.
 
+**The same images are also published to Docker Hub**, under `avarok/` — same
+repository names, same `sha-` and `latest` tags, same bits (one build, two
+destinations; see [UPGRADING.md](UPGRADING.md#two-registries)). The compose files
+name GHCR, so the `docker login ghcr.io` above is still the documented path. If
+you would rather not hold a GitHub token, pull
+`avarok/citadel-workspace-{server,internal-service,ui}` instead and override the
+`image:` lines. Whether those repositories are public is a Docker Hub account
+setting, not something this repo controls — if a pull is refused, `docker login`
+to Docker Hub.
+
 **The agent runs on your machine on purpose.** It holds your ratchet keys and
 does the crypto; a browser cannot. That is what makes messages and file
 transfers end-to-end encrypted — nobody else's machine ever holds your keys.

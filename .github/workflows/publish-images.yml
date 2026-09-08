@@ -1,5 +1,5 @@
 # =============================================================================
-# Publish container images to GHCR.
+# Publish container images to GHCR and to Docker Hub.
 #
 # WHY THIS EXISTS
 #
@@ -32,6 +32,28 @@
 #      together. `promote-latest` needs the whole matrix to succeed, so `latest`
 #      only ever advances as a complete set.
 #
+# TWO REGISTRIES, ONE BUILD
+#
+# Every image is published to BOTH `ghcr.io` and Docker Hub. The name mapping is
+# mechanical - the repository NAME never changes, only the namespace in front of
+# it, because Docker Hub permits exactly one namespace segment where GHCR
+# permits a path:
+#
+#   ghcr.io/avarok-cybersecurity/citadel-workspace-server
+#        -> docker.io/avarok/citadel-workspace-server
+#   ghcr.io/avarok-cybersecurity/citadel-workspace-internal-service
+#        -> docker.io/avarok/citadel-workspace-internal-service
+#   ghcr.io/avarok-cybersecurity/citadel-workspace-ui
+#        -> docker.io/avarok/citadel-workspace-ui
+#
+# Both destinations get the SAME tags (`sha-<12>`, and `latest` via the promote
+# job) off ONE build: buildx `--load` accepts several tags and loads the same
+# image under each name, so the Docker Hub reference is a second name for the
+# exact bits the smoke test exercised, not a second build that could differ.
+#
+# A missing Docker Hub credential FAILS the run; it never skips the push. See
+# "Require the Docker Hub credentials" below for why a soft-skip was rejected.
+#
 # ONE-TIME MANUAL SETUP
 #
 # GHCR packages are created PRIVATE and stay that way. Pulling them therefore
@@ -39,6 +61,15 @@
 # step for anyone deploying or running the local client. (Public would remove that
 # step, but these images are an internal artifact and there is no reason to publish
 # the org's build output to the world for the sake of one login.)
+#
+# Docker Hub needs the org-wide secrets `DOCKERHUB_USERNAME` and
+# `DOCKERHUB_TOKEN` (an access token, not the account password). The first push
+# to `avarok/citadel-workspace-*` CREATES each repository at whatever default
+# visibility the account is configured for; if they are to be public - which is
+# the only reason to mirror to Docker Hub at all, since GHCR already serves the
+# org - that has to be set once, per repository, in the Docker Hub UI. Nothing
+# in this workflow can set it, and a private Docker Hub repository is not an
+# error it can detect.
 # =============================================================================
 name: Publish Images
 
@@ -56,6 +87,18 @@ concurrency:
 permissions:
   contents: read
   packages: write
+
+env:
+  # The Docker Hub half of the name mapping, defined ONCE and read by both jobs.
+  #
+  # A literal, deliberately NOT `${{ secrets.DOCKERHUB_USERNAME }}`, even though
+  # the two hold the same string. GitHub redacts a secret's value everywhere it
+  # appears in a log, so deriving the namespace from the secret would print every
+  # image reference this workflow touches as `docker.io/***/citadel-workspace-ui`
+  # - turning the one line an operator needs when a push fails into a redaction.
+  # The namespace is public by construction (it is in the pull command in the
+  # docs); the token is the secret.
+  DOCKERHUB_NAMESPACE: avarok
 
 jobs:
   # Nothing gated publication. `validate.yml` declares `workflow_call:` at its
@@ -142,6 +185,45 @@ jobs:
               -e INTERNAL_SERVICE_ALLOWED_ORIGINS=http://localhost:5291
 
     steps:
+      # FIRST, before the checkout and before ~8 minutes of build. A missing
+      # credential discovered after the build wastes that three times over, once
+      # per matrix leg.
+      - name: Require the Docker Hub credentials
+        # This FAILS the run. It does not skip the Docker Hub push and report
+        # green, and the distinction matters more here than anywhere else in the
+        # file: this workflow produces the artefact production pulls. A run that
+        # published to one of its two registries and finished green would leave
+        # Docker Hub frozen at whatever it last received, with `latest` there
+        # pointing at an older release than `latest` on GHCR - and nothing would
+        # say so until somebody pulled a tag that was never pushed. The two
+        # registries would then diverge silently and indefinitely. A red run is
+        # recoverable in one click; a green one that published half a release is
+        # not even visible.
+        #
+        # A soft-skip for forks was considered and rejected. This workflow has no
+        # `pull_request:` trigger, so an outside contributor cannot reach it at
+        # all; the only way to run it without the organisation secrets is to push
+        # to a fork's own `master`, which nothing in this release process does.
+        # Guarding against that hypothetical would cost the guarantee above.
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "${DOCKERHUB_USERNAME:-}" ] || missing="$missing DOCKERHUB_USERNAME"
+          [ -n "${DOCKERHUB_TOKEN:-}" ] || missing="$missing DOCKERHUB_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "::error::Docker Hub credentials are missing:$missing"
+            echo "  This workflow publishes to GHCR *and* Docker Hub, and fails rather than"
+            echo "  publishing to one of them: a half-published release that reports success"
+            echo "  is how the two registries drift apart without anyone noticing."
+            echo "  Set both as organisation secrets under"
+            echo "  Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          echo "Docker Hub credentials are present (values not printed)."
+
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -179,13 +261,18 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Compute image reference
+      - name: Compute image references
         # Docker image references MUST be lowercase, but the org is spelled
         # `Avarok-Cybersecurity`. Passing ${{ github.repository_owner }} straight
         # into a tag produces `ghcr.io/Avarok-Cybersecurity/...`, which the daemon
         # rejects with "repository name must be lowercase".
+        #
+        # The Docker Hub reference differs from the GHCR one in the namespace and
+        # nothing else - same repository name, same tag - so a `sha-` tag read off
+        # one registry is the same release on the other, with no lookup table.
         run: |
           echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/citadel-workspace-${{ matrix.image }}" >> "$GITHUB_ENV"
+          echo "DOCKERHUB_IMAGE=docker.io/${DOCKERHUB_NAMESPACE}/citadel-workspace-${{ matrix.image }}" >> "$GITHUB_ENV"
           echo "SHA_TAG=sha-${GITHUB_SHA:0:12}" >> "$GITHUB_ENV"
 
       - name: Log in to GHCR
@@ -194,6 +281,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          # No `registry:` - the action's documented default is Docker Hub.
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build production image (load locally, do NOT push yet)
         uses: docker/build-push-action@v6
@@ -212,14 +306,28 @@ jobs:
           load: true
           push: false
           build-args: ${{ matrix.build_args }}
-          tags: ${{ env.IMAGE }}:${{ env.SHA_TAG }}
-          # Stamp the commit into the image itself. `latest` is a MUTABLE tag on two
-          # INDEPENDENT registry repositories, and no registry offers an atomic
-          # multi-repository tag update -- so a promotion that succeeds for `server` and
-          # then fails for `internal-service` would leave `latest` pointing at a mismatched
-          # pair. This label is what lets `deploy.sh` detect that and refuse to deploy the
-          # mixed set, rather than silently restarting production on two images that never
-          # shipped together. The check is the safety net; the promote job is the happy path.
+          # ONE build, TWO destinations. buildx `--load` accepts several tags and
+          # loads the SAME image under each name, so the Docker Hub reference is a
+          # second name for the exact bits the smoke test below exercises -- not a
+          # second build that could differ from the one that was tested, and not a
+          # second trip through the ~8-minute Rust compile.
+          #
+          # The smoke test and `verify-image-revisions.sh` therefore cover both
+          # registries by construction: there is only one artefact to cover.
+          tags: |
+            ${{ env.IMAGE }}:${{ env.SHA_TAG }}
+            ${{ env.DOCKERHUB_IMAGE }}:${{ env.SHA_TAG }}
+          # Stamp the commit into the image itself. `latest` is a MUTABLE tag on
+          # INDEPENDENT registry repositories -- now six of them, three images across
+          # two registries -- and no registry offers an atomic multi-repository tag
+          # update, let alone a cross-registry one. So a promotion that succeeds for
+          # `server` and then fails for `internal-service` would leave `latest`
+          # pointing at a mismatched pair. This label is what lets `deploy.sh` detect
+          # that and refuse to deploy the mixed set, rather than silently restarting
+          # production on two images that never shipped together. It is registry-
+          # agnostic -- `verify-image-revisions.sh` inspects whatever was pulled --
+          # so mirroring to Docker Hub widens the window without weakening the net.
+          # The check is the safety net; the promote job is the happy path.
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
@@ -271,11 +379,29 @@ jobs:
             ./scripts/smoke-ui-ws.sh "$IMAGE:$SHA_TAG" 18080
           fi
 
-      - name: Push immutable SHA tag
+      - name: Push immutable SHA tag to both registries
         # Only the immutable tag is pushed here. `latest` is advanced by the
         # `promote-latest` job below, and only when the whole matrix succeeded on
         # master - see the header comment.
-        run: docker push "$IMAGE:$SHA_TAG"
+        #
+        # Both references name the SAME local image, so this uploads one artefact
+        # to each registry; nothing is rebuilt between the two pushes.
+        #
+        # `set -e` is what makes the Docker Hub push non-optional. A Docker Hub
+        # outage fails this leg, which fails `promote-latest`, so NEITHER
+        # registry's `latest` advances on a release that did not fully publish --
+        # the same all-or-nothing rule the job already had, extended to cover the
+        # second registry. A `|| true` here would be the silent half-publish this
+        # workflow must never report as success.
+        #
+        # GHCR first, deliberately. If Docker Hub fails, GHCR holds a `sha-` tag
+        # that Docker Hub lacks; `sha-` tags are immutable and additive, so a
+        # re-run pushes the missing one and converges. The reverse order would
+        # leave the same state with no ordering benefit.
+        run: |
+          set -euo pipefail
+          docker push "$IMAGE:$SHA_TAG"
+          docker push "$DOCKERHUB_IMAGE:$SHA_TAG"
 
   promote-latest:
     name: Promote latest
@@ -289,6 +415,29 @@ jobs:
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
+      # Checked again here, and first. This job runs on a fresh runner, so the
+      # publish job's check proves nothing about this one - and a credential
+      # revoked between the two would otherwise surface as a half-promoted
+      # `latest`: advanced on GHCR, stale on Docker Hub. That is precisely the
+      # mismatched state the `promote-latest` job exists to make impossible.
+      - name: Require the Docker Hub credentials
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "${DOCKERHUB_USERNAME:-}" ] || missing="$missing DOCKERHUB_USERNAME"
+          [ -n "${DOCKERHUB_TOKEN:-}" ] || missing="$missing DOCKERHUB_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "::error::Docker Hub credentials are missing:$missing"
+            echo '  The `latest` tag is promoted on BOTH registries or on neither. This'
+            echo '  fails rather than advancing GHCR alone, which would leave the two'
+            echo "  registries' default tag pointing at different releases."
+            exit 1
+          fi
+          echo "Docker Hub credentials are present (values not printed)."
+
       - uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
@@ -298,16 +447,57 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          # No `registry:` - the action's documented default is Docker Hub.
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Point latest at this release
         # `imagetools create` retags in the registry by manifest reference - it
         # does not pull or rebuild the image, so the bits under `latest` are
         # byte-identical to the SHA tag that just passed its smoke test.
+        #
+        # Source and target are in the SAME registry on both passes, so each is a
+        # registry-side manifest copy. Promoting the Docker Hub tag from its own
+        # `sha-` tag (rather than cross-registry from GHCR) keeps it that way and
+        # keeps the two registries' `latest` derived from a tag already verified
+        # present in the registry it is being promoted within.
+        #
+        # This job still runs only after EVERY matrix leg succeeded and only on
+        # master, so `latest` on either registry advances only for a release where
+        # all three images built, smoked, and reached both registries.
+        #
+        # REGISTRY IS THE OUTER LOOP, AND GHCR GOES FIRST. This is the whole
+        # reason the loop is nested this way round rather than image-outer, and
+        # it is not cosmetic.
+        #
+        # Promotion is not atomic across repositories (see the label comment in
+        # the build step). Image-outer would interleave the two registries, so a
+        # Docker Hub failure on the FIRST image would abort with GHCR's `latest`
+        # advanced for `server` and stale for the other two -- a mismatched set
+        # in the registry production actually pulls from. Adding a mirror would
+        # then have made GHCR's promotion *less* reliable than before, which is a
+        # guarantee this change must not spend.
+        #
+        # Registry-outer confines the blast radius to the registry that failed:
+        # GHCR is either fully promoted before Docker Hub is touched at all, or
+        # GHCR failed on its own and Docker Hub was never reached. A Docker Hub
+        # outage therefore leaves Docker Hub wholly stale (consistent, just
+        # behind) and GHCR wholly current, and the run is RED so somebody
+        # re-runs it. `verify-image-revisions.sh` remains the net for a failure
+        # partway through a single registry's pass, exactly as it was before.
         run: |
           set -euo pipefail
           sha_tag="sha-${GITHUB_SHA:0:12}"
-          for img in server internal-service ui; do
-            image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/citadel-workspace-${img}"
-            echo "Promoting ${image}:${sha_tag} -> ${image}:latest"
-            docker buildx imagetools create -t "${image}:latest" "${image}:${sha_tag}"
+          for prefix in \
+            "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" \
+            "docker.io/${DOCKERHUB_NAMESPACE}"; do
+            for img in server internal-service ui; do
+              image="${prefix}/citadel-workspace-${img}"
+              echo "Promoting ${image}:${sha_tag} -> ${image}:latest"
+              docker buildx imagetools create -t "${image}:latest" "${image}:${sha_tag}"
+            done
           done
           echo "Rollback handle for this release: IMAGE_TAG=${sha_tag}"

@@ -270,7 +270,12 @@ otherwise correct.
 `deploy.sh` on the host is the deploy. It reads `.env`, refuses a
 `__CHANGE_ME__` master password before touching anything, pulls prebuilt images
 from GHCR, verifies every image came from the same commit, and restarts
-services sequentially without touching the data volumes. It deploys the whole
+services sequentially without touching the data volumes. (CI publishes the same
+images to Docker Hub as `avarok/citadel-workspace-*` as well, but
+`docker-compose.production.yml` names GHCR, so that is what a deploy pulls — see
+[UPGRADING.md](UPGRADING.md#two-registries). `verify-image-revisions.sh` reads
+the `org.opencontainers.image.revision` label off whatever was pulled, so the
+consistency gate is registry-agnostic and covers either.) It deploys the whole
 stack, not just the workspace server, and the data volumes persist across
 deploys.
 

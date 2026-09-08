@@ -59,6 +59,34 @@ So `latest` cannot point at a half-published release or at a manually
 dispatched branch build. A `sha-` tag is immutable and is what you pin to when a
 deploy has to be reproducible.
 
+### Two registries
+
+Every image goes to **both** GHCR and Docker Hub, from one build, under the same
+tags. The name mapping is mechanical — the repository name never changes, only
+the namespace, because Docker Hub allows one namespace segment where GHCR allows
+a path:
+
+| GHCR | Docker Hub |
+|---|---|
+| `ghcr.io/avarok-cybersecurity/citadel-workspace-server` | `avarok/citadel-workspace-server` |
+| `ghcr.io/avarok-cybersecurity/citadel-workspace-internal-service` | `avarok/citadel-workspace-internal-service` |
+| `ghcr.io/avarok-cybersecurity/citadel-workspace-ui` | `avarok/citadel-workspace-ui` |
+
+So `avarok/citadel-workspace-ui:sha-abc123456789` and
+`ghcr.io/avarok-cybersecurity/citadel-workspace-ui:sha-abc123456789` are the same
+release, and — because buildx tags one build with both names — the same bits.
+
+Both destinations are mandatory. If Docker Hub is unreachable, or its
+credentials are missing, the run goes **red**; it does not publish to GHCR alone
+and report success. `latest` likewise advances on both registries or on neither,
+so the two cannot silently drift apart. GHCR is promoted first and completely
+before Docker Hub is touched, so a Docker Hub failure leaves Docker Hub wholly
+behind rather than leaving GHCR half-promoted.
+
+`docker-compose.production.yml` and `docker-compose.local.yml` still pull from
+**GHCR**; Docker Hub is a mirror for anyone who would rather not hold a GitHub
+token. To use it, override the image references or `docker pull` by hand.
+
 ## Upgrading
 
 ```bash
@@ -80,7 +108,9 @@ IMAGE_TAG=sha-abc123456789 ./deploy.sh --no-pull
 
 `--no-pull` skips the `git pull`, so the compose file stays as checked out while
 the images come from the tag you named. To find a tag, list the published
-versions of any of the three packages under the org's GHCR packages.
+versions of any of the three packages under the org's GHCR packages — or read
+the Tags list of the matching `avarok/citadel-workspace-*` repository on Docker
+Hub, which carries the same `sha-` tags.
 
 Rolling back is exactly the same operation as upgrading, pointed at an older
 tag. There is no separate rollback path to get wrong — **on the server side**.
