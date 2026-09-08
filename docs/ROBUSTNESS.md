@@ -11566,3 +11566,51 @@ The filesystem store is intact, has an owner, and passed 22/22 today.
 The durable fix is #305 merged, the git pin advanced, and the server image
 rebuilt — after which the SQLite path is correct and the damaged store heals on
 the next claim.
+
+## Round 745 — the same shape in `peers`, recorded rather than fixed
+
+Round 744's fix asks the propagate question: where else does "plain `INSERT`
+into a table with no unique constraint" live?
+
+In the SQL backend, three tables:
+
+| table | constraint | writes |
+|---|---|---|
+| `cnacs` | `PRIMARY KEY (cid)` | `ON DUPLICATE KEY UPDATE` / `ON CONFLICT DO UPDATE` — correct |
+| `bytemap` | none | plain `INSERT` — fixed in Citadel-Protocol#305 |
+| `peers` | none | plain `INSERT`, three sites — **unfixed** |
+
+`register_p2p_as_client` inserts unconditionally, and this repo's own CLAUDE.md
+states that re-registering an already-registered peer is NORMAL after a
+reconnection ("'Peer Already Registered' is NOT an Error"). So duplicate rows
+would accumulate along a path the system takes deliberately, and
+`SELECT peer_cid FROM peers WHERE cid = ?` returns a LIST — duplicates surface
+as duplicate peers, which the `UPDATE`-then-`INSERT` shape used for `bytemap`
+would NOT heal, because identical rows still list twice.
+
+### Why it is not fixed here
+
+No evidence it bites. The production database has **zero** rows in `peers` —
+P2P never formed on that store, because the workspace was never claimed. So this
+is a code-level inference, not an observed defect, and the two candidate
+remedies fail differently: `DELETE`-then-`INSERT` heals existing duplicates and
+updates a changed username but opens a window where a crash loses the
+registration; insert-if-not-exists never loses anything but heals nothing and
+cannot correct a username. Choosing between those is a protocol decision, and
+guessing at it inside a PR about a different bug is how an unrelated regression
+gets shipped under a green review.
+
+Recorded here so it is not rediscovered from scratch, and named in #305 so the
+reviewer sees it next to the fix it resembles.
+
+### Also open
+
+- `test-provision-tenant.sh`'s healthcheck assertion fails in CI and passes
+  locally with exit 0. Ruled out: `trim-compose.py`'s `SERVICE_KEY` regex needs
+  a two-space indent, so the six-space comment block added in round 743 cannot
+  confuse it; and the assertion's ERE matches identically under ugrep and BSD
+  grep here. Not ruled out: a GNU/Linux difference, or an earlier script in the
+  same job touching the file. UNEXPLAINED — not "flaky".
+- `member-list-loading` still fails its first attempt. The atomic instrument
+  from round 743 has not run yet: Playwright was SKIPPED behind the job that
+  failed on dead doc references, so no shard has executed since.
