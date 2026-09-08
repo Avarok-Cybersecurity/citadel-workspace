@@ -11374,3 +11374,103 @@ Most are dev tooling. Two groups are not:
   is a fix with a passing unit test, which is not the same claim.
 - The eight security fixes above are still not on the server.
 - `both-c2s-reconnect` intermittent hang.
+
+## Round 743 — the eight fixes reached the server
+
+`Publish Images` on `8bf1622` completed: 78 jobs, 0 failed. The chain that had
+been stuck since 2026-09-02 ran end to end, and both images were published.
+
+### The deploy, and the credential that was not created
+
+`docker compose pull` failed with `unauthorized`. Both packages are private and
+avarok2 has NO docker credentials at all — which is how the previous image got
+there: hand-loaded, which is also why `deploy-ui.sh` carries `ALLOW_PRELOADED`.
+
+The obvious fix is `docker login ghcr.io` on the host. That was rejected for the
+same reason `renew-agent-tls.yml` issues its own certificate rather than taking
+one from avarok2: a token on a public-facing box is a path from that box into
+everything the token can read. The images were pulled locally and streamed over
+SSH instead, so production gained no credential.
+
+Architecture was checked before transfer rather than after a confusing failure:
+both images are `linux/amd64`, the host is `x86_64`.
+
+| | before | after |
+|---|---|---|
+| server | `sha-aeafb7ecad6c` (2026-09-02) | `sha-8bf1622f140c` |
+| UI | `sha-50c3cd82014a` | `sha-8bf1622f140c` |
+
+Rollback tag recorded before the change; `.env` backed up to
+`.env.bak-predeploy-8bf1622`. Accounts survived: the volume still holds
+`accounts/`, and the server logged `Initial workspace structure already seeded;
+skipping` and `Schema version v1 is current, no migration needed`.
+
+The server took roughly 100 seconds to report healthy — sixteen consecutive
+`unhealthy` polls before `starting`. It got there, but a deploy that looks
+broken for a minute and a half is worth knowing about before somebody watches
+one and reaches for a rollback.
+
+### Proved against the deployment, not the diff
+
+The live bundle was checked with the same discriminators that proved it stale:
+
+| | before | after |
+|---|---|---|
+| `NEEDS_PORT` regex | 0 | 1 |
+| `HAS_PORT` regex | 0 | 1 |
+| optional-port `(:[0-9]{1,5})?` | 0 | 1 |
+| old `citadel.example.com:12400` placeholder | 3 | **0** |
+| bare `citadel.example.com` placeholder | 0 | 1 |
+
+Then the social path itself, twice:
+
+- **22/22** with three users against the new build, driven by the SIGNED,
+  NOTARISED release binary a stranger would download — account creation through
+  both doors, all three pairwise registrations shown and accepted, messages both
+  ways on every pair.
+- **9/9 with a BARE HOSTNAME** (`--server citadel.avarok.net`, no port). This is
+  the assumed-port feature working against production, which is the only place
+  the claim means anything.
+
+### Wave 1's real finding: the instrument was manufacturing the evidence
+
+`member-list-loading` went from failing all three attempts to failing one and
+passing on retry. Better, not fixed — and a fourth code fix was NOT attempted,
+because the spec could not tell the truth about what it saw.
+
+It called `isVisible()` and then, in a SEPARATE round trip, captured the DOM.
+Two different moments. It reported
+
+```
+{"loading":"Loading members...","empty":"(absent)"}
+```
+
+for a frame it had just seen the empty state in — describing the state that
+REPLACED the defect. `MemberListBody` returns one of four branches, so that pair
+is impossible for a single instance, and I read it as evidence of two mounted
+`MembersSection`s. There is exactly one. The measurement was wrong, not the app,
+and three fixes have now been aimed at this spec on the strength of reading code
+rather than evidence.
+
+Sampling is now a single `evaluate` per tick, and `matchCount` is ASSERTED
+rather than printed. Playwright could not have told us this: `getByTestId(...)
+.isVisible()` THROWS on a multi-element match, and the throw was swallowed by
+`.catch(() => false)` — silently reporting "no empty state" for precisely the
+case worth knowing about.
+
+Also corrected: a comment claiming `check-specs-search-for-real-copy.mjs`
+resolves spec testids against `src/`. No such script exists; nothing in
+`scripts/` reads `getByTestId`. That claim mattered because this spec's central
+assertion is a NEGATIVE — a wrong testid passes vacuously, as it already did
+once against copy the sidebar has never rendered.
+
+### Still open
+
+- `member-list-loading` fails its first attempt. The next CI run carries the
+  atomic instrument; the diagnosis waits on its evidence rather than on another
+  hypothesis.
+- `ml-dsa` 0.0.4 -> 0.1.1 is open as Citadel-Protocol#304, verified wire-format
+  identical by an independent probe built against 0.0.4. Not merged, and the
+  workspace still builds against the old pin.
+- `both-c2s-reconnect` intermittent hang.
+- Six test accounts now exist on production from the three proof runs.
