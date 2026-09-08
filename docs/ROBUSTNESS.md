@@ -11501,7 +11501,10 @@ Reading the database settled it. Twelve rows for ONE key:
 
 The ownership writes were in the database the whole time, at rowids 37 and 49.
 
-`citadel_user/src/backend/sql_backend.rs` stored byte map values with a plain
+The SQL backend's `store_byte_map_value`
+(https://github.com/Avarok-Cybersecurity/Citadel-Protocol/blob/master/citadel_user/src/backend/sql_backend.rs
+— a different repository, which is why it is named by URL here) stored byte map
+values with a plain
 `INSERT`, and `bytemap` declares no unique constraint on
 `(cid, peer_cid, id, sub_id)`. Both readers are `SELECT … LIMIT 1` with no
 `ORDER BY`, which in SQLite returns the earliest row. **A key was write-once:**
@@ -11517,8 +11520,9 @@ correctly. **A damaged store heals on its next write**, with no migration.
 
 ### Why it survived: the test that could not fail
 
-`citadel_user/tests/primary.rs:593` stores a second value under a key
-specifically to check overwriting. It passes, because every byte-map test in
+The byte-map test at line 593 of
+https://github.com/Avarok-Cybersecurity/Citadel-Protocol/blob/master/citadel_user/tests/primary.rs
+stores a second value under a key specifically to check overwriting. It passes, because every byte-map test in
 that file constructs `BackendType::Filesystem`. The SQL implementation of those
 same trait methods had never been executed by a test. The new test is the first
 in that crate to drive the byte map through `SqlBackend`, and it asserts the ROW
