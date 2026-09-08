@@ -112,7 +112,11 @@ fi
 rm -rf "$FROOT"
 
 # The public vhost must carry HSTS: only the :80 redirect protects a first request otherwise.
-if bash scripts/render-nginx-vhost.sh w.example 12402 t | grep -q "Strict-Transport-Security"; then
+# Captured, not piped into `grep -q`. See the note on the healthcheck assertion
+# below: under `pipefail`, a `grep -q` that matches early kills its upstream with
+# SIGPIPE and the pipeline reports failure on a successful match.
+VHOST="$(bash scripts/render-nginx-vhost.sh w.example 12402 t)"
+if grep -q "Strict-Transport-Security" <<<"$VHOST"; then
   echo "  ok: the TLS vhost sends HSTS"
 else
   echo "  FAIL: the TLS vhost sends no Strict-Transport-Security"; fails=$((fails+1))
@@ -122,8 +126,20 @@ fi
 # A literal port in the server healthcheck made every tenant on a non-default port run
 # "unhealthy" forever while answering registrations, and deploy.sh's health wait timed
 # out on a working server. Asserted on the trimmed file, which is what a tenant gets.
-if python3 scripts/trim-compose.py docker-compose.production.yml server \
-     | awk '/^  server:/{f=1} f' | grep -qE 'nc -z 127\.0\.0\.1 \$\$\{WORKSPACE_BIND_ADDR##\*:\}'; then
+# `grep -q` EXITS THE INSTANT IT MATCHES. This script sets `pipefail` (line 14),
+# so that early exit sends SIGPIPE to `python3` upstream, the pipeline inherits
+# its non-zero status, and the `if` takes the FAIL branch ON A SUCCESSFUL MATCH.
+#
+# It is a race, which is why it passed here, in a Linux container, and against
+# the exact file the runner checks out -- and failed on the runner three times.
+# The diagnostic below is what settled it: the line was present in the source,
+# survived the trim, and was found by a plain `grep -n`, while the `grep -qE`
+# in this condition still reported no match.
+#
+# Capturing first removes the upstream process, so there is nothing to signal.
+TRIMMED="$(python3 scripts/trim-compose.py docker-compose.production.yml server \
+             | awk '/^  server:/{f=1} f')"
+if grep -qE 'nc -z 127\.0\.0\.1 \$\$\{WORKSPACE_BIND_ADDR##\*:\}' <<<"$TRIMMED"; then
   echo "  ok: server healthcheck derives its port from WORKSPACE_BIND_ADDR"
 else
   echo "  FAIL: server healthcheck does not derive its port from WORKSPACE_BIND_ADDR"; fails=$((fails+1))

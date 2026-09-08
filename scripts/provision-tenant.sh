@@ -100,7 +100,10 @@ fi
 # REFUSE if none does. Caught by a control: --base-port 443 was accepted on a
 # host with no `ss`.
 if command -v ss >/dev/null 2>&1; then
-  port_busy() { ss -tlnH 2>/dev/null | awk '{print $4}' | grep -qE "[:.]$1\$"; }
+  # Captured, not piped: `grep -q` exits on its first match, and under `pipefail`
+  # that SIGPIPEs `ss` and makes the pipeline non-zero -- reporting a BUSY port as
+  # free, which provisions a tenant onto a port already in use.
+  port_busy() { local listening; listening="$(ss -tlnH 2>/dev/null | awk '{print $4}')"; grep -qE "[:.]$1\$" <<<"$listening"; }
 elif command -v lsof >/dev/null 2>&1; then
   port_busy() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
 elif command -v netstat >/dev/null 2>&1; then
