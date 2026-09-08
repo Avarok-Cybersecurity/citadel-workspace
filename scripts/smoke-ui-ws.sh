@@ -89,7 +89,13 @@ echo "== UI /ws smoke test: $IMAGE =="
 # ---------------------------------------------------------------------------
 start 1
 
-curl -sf "$BASE/" | grep -q '<div id="root"' \
+# Captured, not piped into `grep -q`. `grep -q` exits on its first match, and
+# under `pipefail` (line 23) that SIGPIPEs `curl`, so the pipeline reports
+# failure on a SUCCESSFUL match -- a smoke test that fails a healthy server. It
+# is a race, so it fails only sometimes and only under load; the same shape cost
+# five rounds of CI archaeology in test-provision-tenant.sh.
+SHELL_HTML="$(curl -sf "$BASE/" || true)"
+grep -q '<div id="root"' <<<"$SHELL_HTML" \
   || fail "the UI did not serve the SPA shell. nginx binds even when it serves nothing, so this is the real liveness check."
 
 # The render must contain the proxy and keep nginx's own variables. This catches a
@@ -137,7 +143,8 @@ docker exec "$CTR" grep -q 'proxy_set_header Upgrade \$http_upgrade' /etc/nginx/
 # Error pages must still carry the CSP. This holds only because the /ws block declares no
 # add_header of its own and so inherits the server-level set; adding one there silently
 # replaces them all.
-curl -s -D - -o /dev/null -H "Origin: http://evil.example" "$BASE/ws" | grep -qi '^content-security-policy' \
+WS_HDRS="$(curl -s -D - -o /dev/null -H "Origin: http://evil.example" "$BASE/ws" || true)"
+grep -qi '^content-security-policy' <<<"$WS_HDRS" \
   || fail "/ws error responses lost the Content-Security-Policy header."
 
 # Media capture must be PERMITTED for this origin.
