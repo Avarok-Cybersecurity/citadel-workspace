@@ -11680,3 +11680,43 @@ passes again on revert.
   before the fixed image lands would restore the lockout.
 - `member-list-loading` still fails its first attempt, and the atomic instrument
   from round 743 has STILL not run — Playwright is skipped behind this gate.
+
+## Round 747 — the member-list instrument finally ran, and killed a hypothesis
+
+Round 743 replaced `member-list-loading`'s two-round-trip sampling with a single
+atomic `evaluate`. It had never executed: Playwright is skipped behind the lint
+job, which failed on every run from round 743 until 746 fixed the SIGPIPE.
+
+Its first run, on `1adae18`:
+
+```
+{"emptyVisible":true,"matchCount":1,"loading":"(absent)",
+ "empty":"Nobody else is here yet. Invite someone with the share butto",
+ "unavailable":"(absent)","memberRows":0,"peerRows":0,"usernameVisible":false}
+```
+
+Two things this settles, neither of which the old instrument could:
+
+1. **`matchCount: 1`.** One element carries the testid. The two-mounted-
+   `MembersSection` theory — which the old diagnostic's impossible
+   "loading AND empty" reading had suggested, and which I believed for a
+   while — is dead.
+2. **The reading is self-consistent.** Empty visible, loading absent, at the
+   same instant. Every previous capture reported the state that had REPLACED
+   the one it caught, because visibility and DOM were read in separate round
+   trips.
+
+Still failing its first attempt and passing on retry, so the defect is real and
+untouched by the measurement fix. What the sample does NOT show is which hook
+state produced it: `MemberListBody` renders the empty branch only when
+`isLoading` is false, `activeDomainId` is non-null and both lists are empty, and
+after round 742 `isLoading === false` should imply `members === loaded.members`
+for the active domain — which the single logged event says holds three members.
+
+That contradiction is the whole remaining question, and the DOM cannot answer
+it. The next datum has to come from the hook: surface `loaded?.domain` and the
+derived `isLoadingMembers` where the sample can read them. NOT ATTEMPTED YET —
+recorded so the next round starts from evidence rather than from the fifth
+hypothesis about a spec that has already absorbed four.
+
+Not blocking: it is flaky-passing, so `publish` proceeds.
