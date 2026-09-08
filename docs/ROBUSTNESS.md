@@ -11614,3 +11614,69 @@ reviewer sees it next to the fix it resembles.
 - `member-list-loading` still fails its first attempt. The atomic instrument
   from round 743 has not run yet: Playwright was SKIPPED behind the job that
   failed on dead doc references, so no shard has executed since.
+
+## Round 746 — the guard failed the assertion it had just satisfied
+
+`test-provision-tenant.sh` failed on the runner three times and could not be
+reproduced anywhere. It passed on macOS, passed under GNU grep 3.11 in a
+`python:3.12-slim` container, and passed against the compose fetched from the
+API at the failing run's own headSha — byte-identical, verified by `diff`.
+
+Four rounds went into hypotheses about the regex and the file. All wrong.
+
+### The instrument, again
+
+Round 745 stopped guessing and made the guard print what it saw. One run:
+
+```
+healthcheck lines in the SOURCE file:  177: ... nc -z 127.0.0.1 $${WORKSPACE_BIND_ADDR##*:} ...
+trim exit: 0
+healthcheck lines AFTER trim+awk:      125: ... nc -z 127.0.0.1 $${WORKSPACE_BIND_ADDR##*:} ...
+```
+
+The line was present, survived the trim, and a plain `grep -n` found it — while
+the `grep -qE` in the condition reported no match. That is not a pattern
+problem, and no further reading of the regex could have found it.
+
+### The cause
+
+`grep -q` exits the instant it matches. The script sets `pipefail` on line 14.
+So the early exit sends SIGPIPE to `python3` upstream, the pipeline inherits its
+non-zero status, and the `if` takes the FAIL branch **on a successful match**.
+
+It is a race between the writer finishing and the reader exiting, which is
+exactly why it reproduced only on the runner: locally `PIPESTATUS` was `0 0 0`
+because python finished first.
+
+This is the third appearance of this family here — `codesign | awk` exited 141
+under `pipefail` on a correctly signed binary, and the recorded lesson
+"pipelines hide the exit status" is the same mechanism seen from the other side.
+The rule those cost is now concrete: **`grep -q` at the end of a pipeline is
+unsafe under `pipefail`.** Capture first; match with a herestring, which has no
+upstream process to signal.
+
+### Propagated
+
+| site | upstream | consequence |
+|---|---|---|
+| `test-provision-tenant.sh:126` | `python3` | the failure above — **fixed** |
+| `test-provision-tenant.sh:115` | `bash render-nginx-vhost.sh` | same shape, had not lost the race yet — **fixed** |
+| `provision-tenant.sh:103` `port_busy` | `ss` | reports a BUSY port as FREE, provisioning a tenant onto a live port — **fixed** |
+| `smoke-ui-ws.sh:92,140` | `curl` | fails CLOSED — a false alarm, not a false pass — recorded, not changed |
+
+`port_busy` is the one worth noting: it had never fired, and nobody would have
+gone looking. It came out of asking where else the mechanism lived rather than
+only fixing the instance that hurt.
+
+Controlled: with the healthcheck rewritten to a literal port the gate fails, and
+passes again on revert.
+
+### Still open
+
+- The image carrying the byte-map fix has not been published yet; the pin is
+  advanced in both repos and `cargo check` passes, but every publish attempt so
+  far died on the gate above. That is what this round unblocks.
+- Production remains on the filesystem backend, deliberately: flipping to SQLite
+  before the fixed image lands would restore the lockout.
+- `member-list-loading` still fails its first attempt, and the atomic instrument
+  from round 743 has STILL not run — Playwright is skipped behind this gate.
