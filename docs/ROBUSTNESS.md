@@ -11720,3 +11720,62 @@ recorded so the next round starts from evidence rather than from the fifth
 hypothesis about a spec that has already absorbed four.
 
 Not blocking: it is flaky-passing, so `publish` proceeds.
+
+## Round 748 — proven in production: the store healed itself
+
+The chain closed. `sha-1adae18e5b72` carries the byte-map fix; the deployment
+runs it on SQLite.
+
+### The claim, before and after
+
+| | before | after |
+|---|---|---|
+| admin claim | `timed out with no error and no progress` | **`CLAIMED (prompt closed, no error)`** |
+| modal after submit | still on screen | gone — `dialogs after: []` |
+| member door | also shown the master-password prompt | `masterPrompt: false`, lands in the workspace |
+
+### The self-heal, measured
+
+The damaged store was left in place deliberately, to see whether the fix
+recovers one rather than only preventing the next. Before, twelve rows for
+`citadel_workspace.workspace.workspace-root` disagreed, four carrying an owner
+nothing would read. After one claim:
+
+```
+select count(*) total, count(distinct cast(bin as text)) from bytemap
+  where sub_id='citadel_workspace.workspace.workspace-root';
+12|1
+```
+
+Twelve rows, ONE distinct value. The `UPDATE` rewrote every duplicate, so the
+`LIMIT 1` readers now return the right answer. That is the property chosen over
+`DELETE`-then-`INSERT` at the time, and it held: no migration, no data loss
+window, and an already-broken deployment recovers on its next write.
+
+Then **22/22** with three users against the SQLite deployment — both onboarding
+doors, all three pairwise registrations, messages both ways on every pair.
+
+### Registries
+
+First run of the Docker Hub mirror. Both images resolved from the host by
+`docker manifest inspect avarok/…:sha-1adae18e5b72`, so the deploy pulled
+directly instead of streaming 150 MB over SSH as the previous one had to. The
+credential preflight would have failed the run loudly if the org secrets were
+wrong; it did not fire.
+
+### Left for the operator
+
+The store was reset afterwards and now reads `awaiting first admin`, so the
+first administrator is the person who deployed it rather than a test account of
+mine. The proof runs' accounts went with it, which is the clearing that was
+asked for. `kernel.db.testdata-1788892680` and a tarball are kept beside it.
+
+### Still open
+
+- `member-list-loading` fails its first attempt. Round 747's atomic sample
+  killed the two-instance theory and was self-consistent; the hook now logs the
+  four values the branch reads, so the next failure carries them.
+- `peers` has the same unconstrained-`INSERT` shape as `bytemap` had. No
+  evidence it bites, and the remedy is a protocol decision — round 745.
+- `smoke-ui-ws.sh` retains `echo "$VAR" | grep -q` sites. Bounded writers below
+  the pipe buffer never block, so they cannot take the SIGPIPE path.
