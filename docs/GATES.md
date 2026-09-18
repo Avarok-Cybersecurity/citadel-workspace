@@ -86,7 +86,7 @@ what was already here.
 | `check-preconditions-precede-the-branch.mjs` | A step every path needs must run before the path is chosen. |
 | `check-preflight-runs-what-ci-runs.mjs` | Preflight must invoke each gate the way CI invokes it — arguments included. |
 | `check-preview-csp-matches-production.mjs` | The CSP `npm run preview` serves must be the one nginx serves. |
-| `check-production-backend-is-safe.mjs` | Production must not select a backend that loses writes. |
+| `check-production-backend-is-safe.mjs` | Production must select a persistent backend the server actually accepts. |
 | `check-production-image.mjs` | Drives a real browser against the real production image. |
 | `check-readiness-markers-are-printed.mjs` | A "wait until you see this line" marker must be a line something prints. |
 | `check-remote-checks-read-the-deployment.mjs` | A script that reaches the production host must read that host's configuration, not a literal it was written next to. |

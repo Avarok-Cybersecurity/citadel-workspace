@@ -523,6 +523,8 @@ jobs:
 
       - name: Tenant provisioning refuses what it must
         run: bash scripts/test-provision-tenant.sh
+      - name: A deploy's own environment beats its .env
+        run: bash scripts/test-load-dotenv.sh
 
 
       - name: Every administrator promotion sits behind a gate
