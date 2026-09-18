@@ -106,8 +106,11 @@ fi
 if [ "$TOPOLOGY" != "full" ] && [ -n "$LOOPBACK_ORIGIN" ]; then
   die "--loopback-origin applies only to --topology full: a server-only tenant serves no UI"
 fi
-if [ -n "$LOOPBACK_ORIGIN" ] && ! echo "$LOOPBACK_ORIGIN" | grep -Eq '^wss://[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{1,5})?$'; then
-  die "--loopback-origin '$LOOPBACK_ORIGIN' must be wss://<lowercase host>[:port], with no path"
+# The shape deploy-ui.sh and the image's own validator require: lowercase host,
+# explicit port, no path. Checked here so a tenant is never provisioned with an
+# origin the UI would then refuse.
+if [ -n "$LOOPBACK_ORIGIN" ] && ! echo "$LOOPBACK_ORIGIN" | grep -Eq '^wss://[a-z0-9]([a-z0-9.-]*[a-z0-9])?:[0-9]{1,5}$'; then
+  die "--loopback-origin '$LOOPBACK_ORIGIN' must be wss://<lowercase host>:<port>, with no path"
 fi
 
 # --- port allocation ---------------------------------------------------------

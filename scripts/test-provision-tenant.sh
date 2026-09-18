@@ -89,6 +89,7 @@ refuses "uppercase domain"            $S --tenant a --topology full --loopback-o
 refuses "full without --loopback-origin"      $S --tenant a --topology full --ingress nginx --domain w.example --dry-run
 refuses "a loopback origin that is not wss"   $S --tenant a --topology full --loopback-origin https://local.avarok.net:12345 --ingress nginx --domain w.example --dry-run
 refuses "a loopback origin with a path"       $S --tenant a --topology full --loopback-origin wss://local.avarok.net:12345/x --ingress nginx --domain w.example --dry-run
+refuses "a loopback origin with no port"        $S --tenant a --topology full --loopback-origin wss://local.avarok.net --ingress nginx --domain w.example --dry-run
 refuses "--loopback-origin on server-only"    $S --tenant a --loopback-origin wss://local.avarok.net:12345 --dry-run
 out=$($S --tenant ok8 --topology full --loopback-origin wss://local.avarok.net:12345 --ingress nginx --domain w.example --base-port 21500 --dry-run 2>/dev/null || true)
 env_ui_port=$(sed -n 's/^UI_PORT=//p' <<<"$out")

@@ -6,7 +6,7 @@ most common way to lose an afternoon. Start here.
 | You want to… | Use | What you get |
 |---|---|---|
 | **Use** the workspace | `docker-compose.local.yml` | The agent that holds your keys, plus the UI. Point it at someone's server. |
-| **Host** a workspace others join | `docker-compose.production.yml` | The shared server, an agent, and the UI. Persistent data. |
+| **Host** a workspace others join | `scripts/provision-tenant.sh`, then `deploy.sh` (see [Hosting](#hosting-a-workspace)) | The shared server. Each person runs their own agent. Persistent data. |
 | **Develop** on it | `docker-compose.yml` (the README quickstart) | Everything built from source, in-memory, **ephemeral**. |
 
 The development stack is the one the README documents, and it is deliberately
@@ -55,6 +55,41 @@ transfers end-to-end encrypted — nobody else's machine ever holds your keys.
 It is also why `agent_data` matters: see the backup note below.
 
 ## Hosting a workspace
+
+A public server hosts the **server only**. Each person who joins runs their own
+agent on their own machine (see `docs/AGENT_README.md`, shipped in every agent
+release), because the agent holds that person's keys and decrypted messages; an
+agent run for other people would put their plaintext on your host. So the path
+for a real deployment is:
+
+1. **Provision** a server-only tenant. This writes the tenant directory, its
+   `.env` (with a generated master password), and a compose file trimmed to the
+   `server` service, and picks a free block of ports:
+
+   ```bash
+   ./scripts/provision-tenant.sh --tenant acme            # server-only (default)
+   ./scripts/provision-tenant.sh --tenant acme --dry-run  # see what it would write
+   ```
+
+2. **Deploy** it. The images are pulled from GHCR, so `docker login ghcr.io`
+   first with an account that can read them (see "Using" above):
+
+   ```bash
+   cd /srv/citadel-tenants/acme && ./deploy.sh --no-pull
+   ```
+
+   `--no-pull` skips the `git pull` of the source tree: a tenant directory is
+   not a checkout. The images are still pulled.
+
+3. **Serve the UI** (optional; people can also run it locally) with
+   `scripts/deploy-ui.sh <image-tag>`, which needs `LOOPBACK_AGENT_ORIGIN` (see
+   below) and a `UI_PORT`, and put your TLS ingress in front of it.
+
+4. **Claim** the workspace (below), then give people the server's `host:port`.
+
+The rest of this section describes the single compose file that runs server,
+agent and UI together. That is for a host whose agent serves its own operator
+(`--topology full`), not for a public server.
 
 ```bash
 cp .env.example .env          # then edit it
