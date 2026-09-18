@@ -61,8 +61,9 @@ cp .env.example .env          # then edit it
 docker compose -f docker-compose.production.yml up -d --wait
 ```
 
-`.env` must set **two** variables. Both have no default, and the stack will not
-come up without them — `--wait` fails while you look for a reason.
+`.env` must set **two** variables, and a deployment that serves the UI a
+**third**. None has a default, and the stack will not come up without them —
+`--wait` fails while you look for a reason.
 
 `WORKSPACE_MASTER_PASSWORD`. The server refuses to start if it is missing or
 still the `__CHANGE_ME__` placeholder — two independent checks, in `deploy.sh`
@@ -73,8 +74,20 @@ is served from, e.g. `https://work.example.com`. The agent exits at startup
 without it, because an agent that accepts any origin can be driven by any page
 the user happens to visit. Pass `*` on a development box only.
 
-`./deploy.sh` checks both before it starts anything, and reports which one is
-missing. `docker compose … up -d --wait` does not.
+`LOOPBACK_AGENT_ORIGIN` — required by `./deploy.sh` whenever the deployment
+serves the UI (a server-only tenant does not). A publicly served UI has no
+agent of its own: each visitor's page dials the agent on the visitor's own
+machine at this `wss://` origin, and the page's Content-Security-Policy allows
+nothing else. Left empty, the page loads, looks correct, and can connect to
+nothing. With the agent as released, the value is
+`wss://local.avarok.net:12345`: the agent carries a certificate for
+`local.avarok.net`, a public name whose A record is 127.0.0.1, and for no other
+name. Using your own name needs an A record for it pointing at 127.0.0.1, a
+certificate for it (DNS-01, since the name never resolves to a server), and
+every tester starting the agent with `--tls-cert` and `--tls-key`.
+
+`./deploy.sh` checks all three before it starts anything, and reports which one
+is missing. `docker compose … up -d --wait` does not.
 
 Optional: `IMAGE_TAG` (defaults to `latest`; pin it to `sha-<commit>` to control
 exactly what runs), `WORKSPACE_BIND_ADDR`, `INTERNAL_SERVICE_PORT`, and

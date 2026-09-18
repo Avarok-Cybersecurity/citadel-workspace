@@ -209,9 +209,11 @@ if [[ -z "$loopback_origin" ]] && docker compose -f "$COMPOSE_FILE" config --ser
     echo "ERROR: LOOPBACK_AGENT_ORIGIN is unset or empty, and this deployment serves the UI."
     echo "  The page would ship an empty agent origin and a Content-Security-Policy"
     echo "  that forbids the agent, so every visitor gets a page that loads and cannot"
-    echo "  connect to anything. Set it to the name you published for the visitor's own"
-    echo "  agent -- one that resolves to 127.0.0.1 and that you hold a certificate for:"
-    echo "    LOOPBACK_AGENT_ORIGIN=wss://local.yourdomain.com:12345"
+    echo "  connect to anything. Set it to the origin of the visitor's own agent. The"
+    echo "  released agent has a certificate for local.avarok.net only, so:"
+    echo "    LOOPBACK_AGENT_ORIGIN=wss://local.avarok.net:12345"
+    echo "  (a name of your own needs testers to run the agent with --tls-cert/--tls-key;"
+    echo "  see docs/INSTALL.md)"
     exit 1
 fi
 
