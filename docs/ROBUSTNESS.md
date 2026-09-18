@@ -12546,6 +12546,25 @@ The stress test also passed 15 of 15 locally. That is weak evidence against a
 1-in-10 flake — a 10% failure rate passes fifteen straight about 20% of the
 time — and it is not what the fix rests on. The reproducer is.
 
+### The browser would have kept the bug
+
+The first push of this round's pointer bump failed
+`check-wasm-matches-its-source`: *the committed WASM predates the current
+wasm-client source*. The gate was right. The browser runs a COMMITTED
+wasm-client binary that CI never rebuilds (it sets `SKIP_WASM_BUILD`), and
+that binary is built from intersession-layer-messaging among others. Bumping
+ILM alone would have fixed the native agent and left every browser on the
+stranded-message code — the exact outcome the gate names: a fix present in the
+source, reviewed, merged, and not running where the users are.
+
+Rebuilt with `sync-wasm-clients.sh --no-restart`, the only writer of the stamp,
+so the stamp records a real rebuild. Of its four source trees only ILM moved
+(`3c8674b` → `db5917d`, without the fix → with it); the binary changed; the
+gate passes. Worth recording against myself: verifying the bump earlier, a
+`cargo check` had rebuilt that binary as a side effect and I discarded it as an
+unwanted change. Discarding it was right — only the script may write the stamp
+— but I did not ask why a rebuild of the browser client had happened at all.
+
 ### How cause 1 reached master: nothing required the tests
 
 master's only required status check was **GitGuardian**, a seconds-long secrets
