@@ -151,6 +151,12 @@ fn main() {
         .env_remove("CARGO_MAKEFLAGS")
         .env_remove("CARGO_ENCODED_RUSTFLAGS")
         .env_remove("RUSTFLAGS")
+        // See nested_target_dir(): a nested cargo that shares the outer build's
+        // target directory waits forever on the lock the outer build holds.
+        .env(
+            "CARGO_TARGET_DIR",
+            nested_target_dir(&citadel_internal_service_root),
+        )
         .output()
         .expect("Failed to execute wasm-pack");
 
@@ -295,6 +301,11 @@ fn generate_typescript_types(citadel_internal_service_root: &Path, workspace_roo
     let output = Command::new("bash")
         .arg(&generate_script)
         .current_dir(citadel_internal_service_root)
+        // generate_types.sh runs `cargo build`. See nested_target_dir().
+        .env(
+            "CARGO_TARGET_DIR",
+            nested_target_dir(citadel_internal_service_root),
+        )
         .output()
         .expect("Failed to execute generate_types.sh");
 
@@ -329,4 +340,24 @@ fn generate_typescript_types(citadel_internal_service_root: &Path, workspace_roo
             }
         }
     }
+}
+
+/// The target directory for a cargo this build script spawns.
+///
+/// A nested cargo inherits the outer build's CARGO_TARGET_DIR. When that is set
+/// — a shared target directory, an sccache setup, some IDEs — the nested
+/// `cargo build` resolves to the SAME directory whose `.cargo-lock` the outer
+/// build holds while it waits for this script. The outer waits for the script,
+/// the script waits for the lock, and `cargo check` hangs forever with no error.
+/// Observed: 22 minutes, 0.09s of CPU in the nested cargo.
+///
+/// Setting it explicitly, rather than removing it, also beats a `build.target-dir`
+/// in a user's global ~/.cargo/config.toml, which a nested cargo would otherwise
+/// read on its own. The value is the one both nested builds use when nothing is
+/// overridden — they are members of the citadel-internal-service workspace — so
+/// a default checkout builds exactly where it always did.
+///
+/// CI never reaches this: it sets SKIP_WASM_BUILD, which returns first.
+fn nested_target_dir(citadel_internal_service_root: &Path) -> std::path::PathBuf {
+    citadel_internal_service_root.join("target")
 }
