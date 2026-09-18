@@ -577,6 +577,11 @@ jobs:
         # and says nothing for six hours. The slowest job here is 41 minutes.
         # Budgets are roughly twice the observed maximum, recorded beside each.
         run: node scripts/check-ci-job-timeouts.mjs
+      - name: The required validation check covers every job
+        # Branch protection requires 'Validation passed' by name. A job left out
+        # of its needs is silently not required, and without if: always() a
+        # failure upstream makes it skipped, which counts as passing.
+        run: node scripts/check-validation-aggregate-is-complete.mjs
       - name: Every Rust file is actually compiled
         # `handlers/permissions.rs` sat in the tree behind a commented-out
         # `// pub mod permissions;`, carrying a role table that granted
@@ -2535,3 +2540,64 @@ jobs:
   #     contains(fromJSON('["tbraun96", "Raduc4", "Tjemmmic"]'), github.actor)
   #   steps:
   #     - run: echo "No heavy tests configured"
+
+  # ONE check that means "every job above passed", so branch protection can
+  # require validation by a single stable name instead of ~75 matrix names that
+  # change whenever a matrix does.
+  #
+  # Why this exists: master's only required check was GitGuardian, a seconds-
+  # long secrets scan. Auto-merge therefore landed a PR as soon as it passed —
+  # #129 merged six seconds after its validation run was CREATED — so every
+  # auto-merged PR reached master untested, and failures surfaced only on
+  # master's Publish Images. That is how the Landing.tsx length-ratchet break
+  # arrived there.
+  #
+  # `if: always()` is load-bearing, not decoration. Without it, a failed
+  # dependency makes THIS job skipped, and GitHub counts a skipped required
+  # check as PASSING — the exact hole this job exists to close, reopened.
+  #
+  # Every result must be `success`, not merely "not failure": no job above has
+  # an `if:`, so none is legitimately skippable, and a skip can only mean
+  # something upstream did not pass.
+  all-green:
+    name: Validation passed
+    if: always()
+    needs:
+      - fmt
+      - clippy
+      - crate-coverage
+      - internal-service-rust-lint
+      - internal-service-rust-tests
+      - rust-tests
+      - unit-tests
+      - typecheck
+      - lint
+      - integration-tests
+      - playwright-tests
+      - deploy-gate-tests
+      - production-build
+    # It only reads a JSON blob; the timeout is the house rule, not a need.
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every validation job succeeded
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          # Name every job that did not succeed, so a red check says which one
+          # without anybody opening thirteen logs.
+          bad=$(printf '%s' "$RESULTS" | jq -r 'to_entries[] | select(.value.result != "success") | "\(.key)=\(.value.result)"')
+          total=$(printf '%s' "$RESULTS" | jq 'length')
+          # Zero needs is not "everything passed", it is "nothing was checked".
+          # A guard that finds nothing must fail, or deleting the list above
+          # would turn this into an unconditional green.
+          if [ "$total" -eq 0 ]; then
+            echo "::error title=Validation aggregate checked nothing::needs is empty"
+            exit 1
+          fi
+          if [ -n "$bad" ]; then
+            echo "::error title=Validation did not pass::$(echo "$bad" | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "all $total validation jobs succeeded"
