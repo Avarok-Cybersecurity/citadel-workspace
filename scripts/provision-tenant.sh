@@ -39,6 +39,9 @@
 #   --ingress MODE  nginx | tunnel | none        (default: none)
 #   --topology MODE server-only | full           (default: server-only)
 #   --domain FQDN   Required unless --ingress none.
+#   --loopback-origin URL  Required with --topology full: the wss:// origin of
+#                   each visitor's OWN agent (LOOPBACK_AGENT_ORIGIN). The released
+#                   agent answers on wss://local.avarok.net:12345; see docs/INSTALL.md.
 #   --base-port N   First port of this tenant's block (default: auto).
 #   --root DIR      Where tenants live (default: /srv/citadel-tenants).
 #   --dry-run       Print what would be written; touch nothing.
@@ -46,7 +49,7 @@
 # =============================================================================
 set -euo pipefail
 
-TENANT="" ; INGRESS="none" ; TOPOLOGY="server-only" ; DOMAIN=""
+TENANT="" ; INGRESS="none" ; TOPOLOGY="server-only" ; DOMAIN="" ; LOOPBACK_ORIGIN=""
 BASE_PORT="" ; ROOT="/srv/citadel-tenants" ; DRY_RUN=false ; FORCE=false
 
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -58,6 +61,7 @@ while [ $# -gt 0 ]; do
     --ingress)   INGRESS="${2:?--ingress needs a value}"; shift 2 ;;
     --topology)  TOPOLOGY="${2:?--topology needs a value}"; shift 2 ;;
     --domain)    DOMAIN="${2:?--domain needs a value}"; shift 2 ;;
+    --loopback-origin) LOOPBACK_ORIGIN="${2:?--loopback-origin needs a value}"; shift 2 ;;
     --base-port) BASE_PORT="${2:?--base-port needs a value}"; shift 2 ;;
     --root)      ROOT="${2:?--root needs a value}"; shift 2 ;;
     --dry-run)   DRY_RUN=true; shift ;;
@@ -89,6 +93,21 @@ fi
 # capitalised warning exists to prevent.
 if [ "$INGRESS" != "none" ] && [ "$TOPOLOGY" = "server-only" ]; then
   die "--ingress $INGRESS needs --topology full: a server-only tenant serves no UI to route to"
+fi
+
+# A full tenant serves the UI, and a served UI has no agent of its own: each
+# visitor's page dials the agent on the visitor's machine at this origin, and its
+# CSP allows nothing else. deploy.sh refuses a UI deployment without it, so a
+# full tenant provisioned without it could never be deployed. Required, not
+# defaulted: it names a certificate the operator must actually be able to serve.
+if [ "$TOPOLOGY" = "full" ] && [ -z "$LOOPBACK_ORIGIN" ]; then
+  die "--topology full needs --loopback-origin (the visitors' own agent; the released agent answers on wss://local.avarok.net:12345)"
+fi
+if [ "$TOPOLOGY" != "full" ] && [ -n "$LOOPBACK_ORIGIN" ]; then
+  die "--loopback-origin applies only to --topology full: a server-only tenant serves no UI"
+fi
+if [ -n "$LOOPBACK_ORIGIN" ] && ! echo "$LOOPBACK_ORIGIN" | grep -Eq '^wss://[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{1,5})?$'; then
+  die "--loopback-origin '$LOOPBACK_ORIGIN' must be wss://<lowercase host>[:port], with no path"
 fi
 
 # --- port allocation ---------------------------------------------------------
@@ -172,6 +191,12 @@ INTERNAL_SERVICE_BIND_HOST=$AGENT_BIND_HOST
 INTERNAL_SERVICE_ALLOWED_ORIGINS=$ORIGINS
 IMAGE_TAG=${IMAGE_TAG:-latest}
 EOF
+  # The UI's published port must be the one the vhost proxies to: without it
+  # compose publishes its own default and every request through the vhost is a 502.
+  if [ "$TOPOLOGY" = "full" ]; then
+    echo "UI_PORT=$UI_PORT"
+    echo "LOOPBACK_AGENT_ORIGIN=$LOOPBACK_ORIGIN"
+  fi
   # Redacted on a dry run for the same reason the master password is: a dry run is what an
   # operator pastes where others can see it, and TUNNEL_TOKEN is a live credential.
   if [ "$INGRESS" = "tunnel" ]; then
