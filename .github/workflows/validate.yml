@@ -527,6 +527,8 @@ jobs:
         run: bash scripts/test-load-dotenv.sh
       - name: The agent README names the directory that holds the account
         run: node scripts/check-agent-readme-names-the-data-dir.mjs
+      - name: Advice to publish the server names the port the app assumes
+        run: node scripts/check-public-bind-port-is-the-assumed-one.mjs
 
 
       - name: Every administrator promotion sits behind a gate
