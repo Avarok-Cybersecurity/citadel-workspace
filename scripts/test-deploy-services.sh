@@ -173,7 +173,9 @@ run_deploy() { # <name> <service>...
   local dir="$WORK/$name"
   mkdir -p "$dir/scripts"
   write_fixture "$dir/docker-compose.production.yml" "$@"
-  cp "$REPO_ROOT/scripts/select-deploy-services.sh" "$REPO_ROOT/scripts/verify-image-revisions.sh" "$dir/scripts/"
+  # The whole scripts/ directory, as provision-tenant.sh gives a real tenant. A hand-picked
+  # list broke the day deploy.sh gained a helper (scripts/load-dotenv.sh) the list did not name.
+  cp -R "$REPO_ROOT/scripts/." "$dir/scripts/"
   cp "$REPO_ROOT/deploy.sh" "$dir/deploy.sh"
   # deploy.sh requires a .env with a real master password.
   # The .env a real tenant has. Origins are required whenever internal-service is
