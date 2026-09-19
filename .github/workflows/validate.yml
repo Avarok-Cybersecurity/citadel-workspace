@@ -529,6 +529,8 @@ jobs:
         run: node scripts/check-agent-readme-names-the-data-dir.mjs
       - name: Advice to publish the server names the port the app assumes
         run: node scripts/check-public-bind-port-is-the-assumed-one.mjs
+      - name: The UI deploy refuses bad input before it touches Docker
+        run: bash scripts/test-deploy-ui.sh
 
 
       - name: Every administrator promotion sits behind a gate
