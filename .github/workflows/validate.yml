@@ -523,6 +523,10 @@ jobs:
 
       - name: Tenant provisioning refuses what it must
         run: bash scripts/test-provision-tenant.sh
+      - name: A deploy's own environment beats its .env
+        run: bash scripts/test-load-dotenv.sh
+      - name: The agent README names the directory that holds the account
+        run: node scripts/check-agent-readme-names-the-data-dir.mjs
       - name: Advice to publish the server names the port the app assumes
         run: node scripts/check-public-bind-port-is-the-assumed-one.mjs
 

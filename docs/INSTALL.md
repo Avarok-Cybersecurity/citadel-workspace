@@ -6,7 +6,7 @@ most common way to lose an afternoon. Start here.
 | You want to… | Use | What you get |
 |---|---|---|
 | **Use** the workspace | `docker-compose.local.yml` | The agent that holds your keys, plus the UI. Point it at someone's server. |
-| **Host** a workspace others join | `docker-compose.production.yml` | The shared server, an agent, and the UI. Persistent data. |
+| **Host** a workspace others join | `scripts/provision-tenant.sh`, then `deploy.sh` (see [Hosting](#hosting-a-workspace)) | The shared server. Each person runs their own agent. Persistent data. |
 | **Develop** on it | `docker-compose.yml` (the README quickstart) | Everything built from source, in-memory, **ephemeral**. |
 
 The development stack is the one the README documents, and it is deliberately
@@ -56,13 +56,49 @@ It is also why `agent_data` matters: see the backup note below.
 
 ## Hosting a workspace
 
+A public server hosts the **server only**. Each person who joins runs their own
+agent on their own machine (see `docs/AGENT_README.md`, shipped in every agent
+release), because the agent holds that person's keys and decrypted messages; an
+agent run for other people would put their plaintext on your host. So the path
+for a real deployment is:
+
+1. **Provision** a server-only tenant. This writes the tenant directory, its
+   `.env` (with a generated master password), and a compose file trimmed to the
+   `server` service, and picks a free block of ports:
+
+   ```bash
+   ./scripts/provision-tenant.sh --tenant acme            # server-only (default)
+   ./scripts/provision-tenant.sh --tenant acme --dry-run  # see what it would write
+   ```
+
+2. **Deploy** it. The images are pulled from GHCR, so `docker login ghcr.io`
+   first with an account that can read them (see "Using" above):
+
+   ```bash
+   cd /srv/citadel-tenants/acme && ./deploy.sh --no-pull
+   ```
+
+   `--no-pull` skips the `git pull` of the source tree: a tenant directory is
+   not a checkout. The images are still pulled.
+
+3. **Serve the UI** (optional; people can also run it locally) with
+   `scripts/deploy-ui.sh <image-tag>`, which needs `LOOPBACK_AGENT_ORIGIN` (see
+   below) and a `UI_PORT`, and put your TLS ingress in front of it.
+
+4. **Claim** the workspace (below), then give people the server's `host:port`.
+
+The rest of this section describes the single compose file that runs server,
+agent and UI together. That is for a host whose agent serves its own operator
+(`--topology full`), not for a public server.
+
 ```bash
 cp .env.example .env          # then edit it
 docker compose -f docker-compose.production.yml up -d --wait
 ```
 
-`.env` must set **two** variables. Both have no default, and the stack will not
-come up without them — `--wait` fails while you look for a reason.
+`.env` must set **two** variables, and a deployment that serves the UI a
+**third**. None has a default, and the stack will not come up without them —
+`--wait` fails while you look for a reason.
 
 `WORKSPACE_MASTER_PASSWORD`. The server refuses to start if it is missing or
 still the `__CHANGE_ME__` placeholder — two independent checks, in `deploy.sh`
@@ -73,8 +109,20 @@ is served from, e.g. `https://work.example.com`. The agent exits at startup
 without it, because an agent that accepts any origin can be driven by any page
 the user happens to visit. Pass `*` on a development box only.
 
-`./deploy.sh` checks both before it starts anything, and reports which one is
-missing. `docker compose … up -d --wait` does not.
+`LOOPBACK_AGENT_ORIGIN` — required by `./deploy.sh` whenever the deployment
+serves the UI (a server-only tenant does not). A publicly served UI has no
+agent of its own: each visitor's page dials the agent on the visitor's own
+machine at this `wss://` origin, and the page's Content-Security-Policy allows
+nothing else. Left empty, the page loads, looks correct, and can connect to
+nothing. With the agent as released, the value is
+`wss://local.avarok.net:12345`: the agent carries a certificate for
+`local.avarok.net`, a public name whose A record is 127.0.0.1, and for no other
+name. Using your own name needs an A record for it pointing at 127.0.0.1, a
+certificate for it (DNS-01, since the name never resolves to a server), and
+every tester starting the agent with `--tls-cert` and `--tls-key`.
+
+`./deploy.sh` checks all three before it starts anything, and reports which one
+is missing. `docker compose … up -d --wait` does not.
 
 Optional: `IMAGE_TAG` (defaults to `latest`; pin it to `sha-<commit>` to control
 exactly what runs), `WORKSPACE_BIND_ADDR`, `INTERNAL_SERVICE_PORT`, and

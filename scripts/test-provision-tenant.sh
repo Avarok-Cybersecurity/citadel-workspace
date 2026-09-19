@@ -32,14 +32,14 @@ refuses "path traversal in name"      $S --tenant ../etc --dry-run
 refuses "uppercase/underscore name"   $S --tenant Bad_Name --dry-run
 refuses "unknown ingress"             $S --tenant a --ingress ftp --dry-run
 refuses "unknown topology"            $S --tenant a --topology weird --dry-run
-refuses "ingress without domain"      $S --tenant a --topology full --ingress nginx --dry-run
+refuses "ingress without domain"      $S --tenant a --topology full --loopback-origin wss://local.avarok.net:12345 --ingress nginx --dry-run
 refuses "ingress on server-only"      $S --tenant a --ingress nginx --domain x.io --dry-run
 refuses "unknown flag"                $S --tenant a --nope --dry-run
 refuses "no port tool available"      env PATH=/nonexistent bash $S --tenant a --dry-run
 
 accepts "server-only, no ingress"     $S --tenant ok1 --dry-run
-accepts "full + tunnel"               $S --tenant ok2 --topology full --ingress tunnel --domain w.example --dry-run
-accepts "full + nginx"                $S --tenant ok3 --topology full --ingress nginx --domain w.example --dry-run
+accepts "full + tunnel"               $S --tenant ok2 --topology full --loopback-origin wss://local.avarok.net:12345 --ingress tunnel --domain w.example --dry-run
+accepts "full + nginx"                $S --tenant ok3 --topology full --loopback-origin wss://local.avarok.net:12345 --ingress nginx --domain w.example --dry-run
 
 # An occupied port must be rejected. Bind one here rather than trusting that
 # some well-known port happens to be busy on the runner -- a port that is free
@@ -68,7 +68,7 @@ rm -f "$PORTFILE"
 # output, not on the source text: a comment saying 127.0.0.1 is not the same as
 # an .env that carries it.
 for topo in server-only full; do
-  out=$($S --tenant a --topology "$topo" --dry-run 2>/dev/null || true)
+  out=$($S --tenant a --topology "$topo" $([ "$topo" = full ] && echo "--loopback-origin wss://local.avarok.net:12345") --dry-run 2>/dev/null || true)
   if echo "$out" | grep -q "^INTERNAL_SERVICE_BIND_HOST=127.0.0.1$"; then
     echo "  ok: agent binds loopback ($topo)"
   else
@@ -77,14 +77,37 @@ for topo in server-only full; do
   fi
 done
 
-refuses "domain with a scheme"        $S --tenant a --topology full --ingress nginx --domain https://w.example --dry-run
-refuses "domain with a trailing slash" $S --tenant a --topology full --ingress nginx --domain w.example/ --dry-run
-refuses "domain with a semicolon"     $S --tenant a --topology full --ingress nginx --domain "w.example;return 200" --dry-run
-refuses "uppercase domain"            $S --tenant a --topology full --ingress nginx --domain W.example --dry-run
+refuses "domain with a scheme"        $S --tenant a --topology full --loopback-origin wss://local.avarok.net:12345 --ingress nginx --domain https://w.example --dry-run
+refuses "domain with a trailing slash" $S --tenant a --topology full --loopback-origin wss://local.avarok.net:12345 --ingress nginx --domain w.example/ --dry-run
+refuses "domain with a semicolon"     $S --tenant a --topology full --loopback-origin wss://local.avarok.net:12345 --ingress nginx --domain "w.example;return 200" --dry-run
+refuses "uppercase domain"            $S --tenant a --topology full --loopback-origin wss://local.avarok.net:12345 --ingress nginx --domain W.example --dry-run
+
+# A full tenant must be deployable as provisioned. It shipped with neither UI_PORT
+# nor LOOPBACK_AGENT_ORIGIN: deploy.sh refused it (no origin), and with the origin
+# added by hand, compose published the UI on its own default while the vhost
+# proxied to the tenant's port -- a 502 on every request.
+refuses "full without --loopback-origin"      $S --tenant a --topology full --ingress nginx --domain w.example --dry-run
+refuses "a loopback origin that is not wss"   $S --tenant a --topology full --loopback-origin https://local.avarok.net:12345 --ingress nginx --domain w.example --dry-run
+refuses "a loopback origin with a path"       $S --tenant a --topology full --loopback-origin wss://local.avarok.net:12345/x --ingress nginx --domain w.example --dry-run
+refuses "a loopback origin with no port"        $S --tenant a --topology full --loopback-origin wss://local.avarok.net --ingress nginx --domain w.example --dry-run
+refuses "--loopback-origin on server-only"    $S --tenant a --loopback-origin wss://local.avarok.net:12345 --dry-run
+out=$($S --tenant ok8 --topology full --loopback-origin wss://local.avarok.net:12345 --ingress nginx --domain w.example --base-port 21500 --dry-run 2>/dev/null || true)
+env_ui_port=$(sed -n 's/^UI_PORT=//p' <<<"$out")
+vhost_port=$(sed -n 's|.*proxy_pass http://127\.0\.0\.1:\([0-9]*\);.*|\1|p' <<<"$out" | sort -u)
+if [ -n "$env_ui_port" ] && [ "$env_ui_port" = "$vhost_port" ]; then
+  echo "  ok: the UI is published on the port the vhost proxies to ($env_ui_port)"
+else
+  echo "  FAIL: .env UI_PORT=[$env_ui_port] but the vhost proxies to [$vhost_port]"; fails=$((fails+1))
+fi
+if grep -qx "LOOPBACK_AGENT_ORIGIN=wss://local.avarok.net:12345" <<<"$out"; then
+  echo "  ok: a full tenant carries the loopback agent origin deploy.sh requires"
+else
+  echo "  FAIL: a full tenant's .env has no LOOPBACK_AGENT_ORIGIN"; fails=$((fails+1))
+fi
 
 # A dry run is what an operator pastes where others can see it. The master password has always
 # been redacted there; the tunnel token was printed in full.
-out=$(TUNNEL_TOKEN=tunnel-token-not-a-placeholder $S --tenant ok9 --topology full --ingress tunnel --domain w.example --dry-run 2>/dev/null || true)
+out=$(TUNNEL_TOKEN=tunnel-token-not-a-placeholder $S --tenant ok9 --topology full --loopback-origin wss://local.avarok.net:12345 --ingress tunnel --domain w.example --dry-run 2>/dev/null || true)
 if echo "$out" | grep -q "tunnel-token-not-a-placeholder"; then
   echo "  FAIL: --dry-run printed the live TUNNEL_TOKEN"; fails=$((fails+1))
 else

@@ -21,16 +21,14 @@
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requiredEnv } from './lib/required-env.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const COMPOSE = join(ROOT, 'docker-compose.production.yml');
 const EXAMPLE = join(ROOT, '.env.example');
-
-const compose = readFileSync(COMPOSE, 'utf8');
 const example = readFileSync(EXAMPLE, 'utf8');
-
-// `${VAR}` only. `${VAR:-default}` supplies its own value and is not required.
-const required = [...new Set([...compose.matchAll(/\$\{([A-Z_][A-Z0-9_]*)\}/g)].map((m) => m[1]))];
+// Compose's `${VAR}` with no default, and deploy.sh's refusals: scripts/lib/required-env.mjs.
+const requiredBy = requiredEnv(ROOT);
+const required = [...requiredBy.keys()];
 
 if (required.length === 0) {
   console.error(
@@ -49,16 +47,16 @@ const documented = new Set(
 const missing = required.filter((name) => !documented.has(name));
 
 if (missing.length > 0) {
-  console.error('These are REQUIRED by docker-compose.production.yml but absent from .env.example:\n');
-  for (const name of missing) console.error(`  - ${name}`);
+  console.error('These are REQUIRED for a production deploy but absent from .env.example:\n');
+  for (const name of missing) console.error(`  - ${name}  (required by ${requiredBy.get(name)})`);
   console.error(
-    '\nEach is `${NAME}` with no default, so an operator who does not set it gets\n' +
-      'an empty value. Document it in .env.example, with what happens if it is\n' +
+    '\nAn operator who does not set one gets an empty value or a refused deploy.\n' +
+      'Document it in .env.example, with what happens if it is\n' +
       'wrong — a value the deployment cannot start without deserves a sentence.',
   );
   process.exit(1);
 }
 
 console.log(
-  `Required env OK: ${required.length} value(s) required by production compose, all documented.`,
+  `Required env OK: ${required.length} value(s) required for a production deploy, all documented.`,
 );

@@ -106,27 +106,12 @@ services:
       # `tilt`-driven dev. Production sets both vars below to mount
       # workspace state on the `server_data` volume defined above.
       #
-      # filesystem, NOT sqlite -- and this is a correctness decision, not a
-      # performance one.
+      # An earlier revision of this comment said "filesystem, NOT sqlite": the
+      # SDK's SQL `bytemap` appended on every save and read back an arbitrary
+      # row, so updates were invisible. Citadel-Protocol #305 fixed that (unique
+      # key, upsert, tested); the lock pins its merge commit, and the deployment
+      # has run sqlite since (ROBUSTNESS round 748).
       #
-      # `filesystem` is slow in a way that matters: the SDK's FileIOBackend
-      # rewrites the WHOLE account file on every write, and for this server
-      # that file is the entire store, so one chat message costs one to three
-      # serialisations of every document and every message page. That is a real
-      # ceiling on how large a workspace can get.
-      #
-      # `sqlite` is worse. The SDK's SQL backend has no unique constraint on
-      # bytemap(cid, peer_cid, id, sub_id), `store_byte_map_value` is a bare
-      # INSERT with no ON CONFLICT, and `get_byte_map_value` is
-      # `SELECT ... LIMIT 1` with NO ORDER BY. So every save appends a row and
-      # every read returns an arbitrary one -- in practice the first ever
-      # written. Verified against the pinned SDK and reproduced directly: three
-      # writes leave three rows and read back the FIRST. Every update would be
-      # silently invisible.
-      #
-      # Slow and correct beats fast and wrong. Moving to sqlite needs the SDK
-      # fixed first: a unique index on those four columns and an upsert, which
-      # is a change in citadel-protocol, not here.
       # SQLite, not the filesystem backend.
       #
       # Both persist to the same `server_data` volume, so this is a choice about

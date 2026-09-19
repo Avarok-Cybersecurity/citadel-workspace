@@ -17,11 +17,11 @@ production compose runs them on the `Filesystem` backend.
 ## Backend Selection (now implemented)
 
 Both services choose their backend at startup; in-memory remains the dev
-default (ephemeral `tilt` runs) and `filesystem` is selected in production:
+default (ephemeral `tilt` runs). Production selects:
 
 | Service | Env vars | Production value |
 |---------|----------|------------------|
-| Workspace Server | `WORKSPACE_BACKEND` / `WORKSPACE_DATA_DIR` | `filesystem` → `/data/server` |
+| Workspace Server | `WORKSPACE_BACKEND` / `WORKSPACE_DATA_DIR` | `sqlite` → `/data/server/kernel.db` (override with `WORKSPACE_BACKEND=filesystem`) |
 | Internal Service | `INTERNAL_SERVICE_BACKEND` / `INTERNAL_SERVICE_DATA_DIR` | `filesystem` → `/data/internal-service` |
 
 `docker-compose.production.yml` sets these, and both services persist to named

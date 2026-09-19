@@ -1,34 +1,26 @@
 /**
- * Production must not select a backend that loses writes.
+ * Production must select a persistent backend the server actually accepts.
  *
- * This gate previously required the opposite of what it requires now, and the
- * reversal is the point.
+ * History, because this gate has now been wrong twice:
  *
- * `filesystem` is the SDK's FileIOBackend. Every write serialises and rewrites
- * the WHOLE account file, and for this server that file is the entire store —
- * every document body, every user, every message page. One chat message costs
- * one to three writes of the whole database. That is a genuine ceiling, and
- * this gate was written to push production off it.
+ *   1. It once pushed production OFF `filesystem` (every write rewrites the
+ *      whole store) and then, finding sqlite's `bytemap` appended instead of
+ *      updating, reversed itself and refused sqlite.
+ *   2. Citadel-Protocol #305 fixed `bytemap` (upsert, unique key, tested), the
+ *      lock pins its merge commit `4c1ba46`, and production has run sqlite
+ *      since (ROBUSTNESS round 748: 22/22 on the sqlite deployment). But this
+ *      gate never noticed, because it could not see the value. Compose says
+ *      `WORKSPACE_BACKEND=${WORKSPACE_BACKEND:-sqlite}`, the old regex took the
+ *      whole `${...}` string as the value, found it on no list, and passed —
+ *      printing `${WORKSPACE_BACKEND:-sqlite}` as the backend it had checked.
  *
- * `sqlite` was the obvious answer and is WRONG, in a way that reading the
- * compose comment would not tell you. In the pinned SDK:
- *
- *   - `bytemap` is created with no PRIMARY KEY, no UNIQUE, and no index on
- *     (cid, peer_cid, id, sub_id);
- *   - `store_byte_map_value` is a bare INSERT with no ON CONFLICT — it never
- *     updates or deletes;
- *   - `get_byte_map_value` is `SELECT bin ... LIMIT 1` with NO ORDER BY.
- *
- * So every save appends a row and every read returns an arbitrary one.
- * Reproduced directly: three writes to one key leave three rows and read back
- * the FIRST. On sqlite an update is silently invisible.
- *
- * Slow and correct beats fast and wrong, so this now REFUSES sqlite and
- * accepts filesystem. Lifting it needs a fix in citadel-protocol — a unique
- * index on those four columns and an upsert — not a change here.
- *
- * It also refuses the setting being absent, which selects the in-memory
- * backend and loses everything on restart.
+ * So it now resolves what actually runs: a literal value as written; for
+ * `${VAR:-default}` the default, which is what a deployment gets when the
+ * operator sets nothing. A reference with no default is refused, because
+ * nothing here can say what it resolves to. The resolved value must be one the
+ * server accepts — read from the server's own match, not listed here — and an
+ * absent or empty setting is refused: the server then runs IN-MEMORY and loses
+ * every account, document and message on restart.
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -36,52 +28,61 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const FILE = 'docker-compose.production.yml';
-const path = join(ROOT, FILE);
+const SERVER = 'citadel-workspace-server-kernel/src/lib.rs';
 
-if (!existsSync(path)) {
-  console.error(`FAIL: ${FILE} not found — nothing to check.`);
+function fail(message) {
+  console.error(`FAIL: ${message}`);
   process.exit(1);
 }
 
-/** Backends that lose data, with what each loses. */
-const UNSAFE = new Map([
-  ['sqlite', 'appends instead of updating; reads return an arbitrary row, so updates are invisible'],
-  ['postgres', 'same SDK SQL backend as sqlite: no unique constraint, bare INSERT, unordered read'],
-  ['mysql', 'same SDK SQL backend as sqlite: no unique constraint, bare INSERT, unordered read'],
-]);
+for (const f of [FILE, SERVER]) {
+  if (!existsSync(join(ROOT, f))) fail(`${f} not found — nothing to check.`);
+}
 
-const lines = readFileSync(path, 'utf8').split('\n');
+// The backends the server accepts are the `Some("<name>") =>` arms of the
+// function that raises "Unknown backend type". Read them rather than list them,
+// and only from that function, so an unrelated match elsewhere cannot widen them.
+const server = readFileSync(join(ROOT, SERVER), 'utf8');
+const unknown = server.indexOf('Unknown backend type');
+if (unknown < 0) fail(`${SERVER} no longer raises "Unknown backend type"; find where backends are chosen.`);
+const backendFn = server.slice(server.lastIndexOf('fn ', unknown), unknown);
+const accepted = new Set([...backendFn.matchAll(/Some\("([a-z]+)"\)\s*=>/g)].map((m) => m[1]));
+if (accepted.size === 0) fail(`found no backend arms before "Unknown backend type" in ${SERVER}.`);
+
 const settings = [];
-lines.forEach((line, i) => {
-  const match = line.match(/^\s*-?\s*WORKSPACE_BACKEND\s*=\s*(\S+)/);
-  if (match) settings.push({ line: i + 1, value: match[1] });
-});
+readFileSync(join(ROOT, FILE), 'utf8')
+  .split('\n')
+  .forEach((line, i) => {
+    const match = line.match(/^\s*-?\s*WORKSPACE_BACKEND\s*=\s*(\S*)/);
+    if (match) settings.push({ line: i + 1, raw: match[1] });
+  });
 
 if (settings.length === 0) {
-  console.error(
-    `FAIL: ${FILE} sets no WORKSPACE_BACKEND. Without it the server runs the\n` +
-      'IN-MEMORY backend and every account, document and message is lost on restart.',
-  );
-  process.exit(1);
+  fail(`${FILE} sets no WORKSPACE_BACKEND, so the server runs IN-MEMORY and loses everything on restart.`);
 }
 
-const bad = settings.filter((s) => UNSAFE.has(s.value));
-if (bad.length > 0) {
-  for (const s of bad) {
-    console.error(`::error file=${FILE},line=${s.line}::WORKSPACE_BACKEND=${s.value} — ${UNSAFE.get(s.value)}`);
-  }
-  console.error(`\nFAIL: production selects a backend that loses writes.\n`);
-  for (const s of bad) console.error(`  ${FILE}:${s.line}  ${s.value} — ${UNSAFE.get(s.value)}`);
-  console.error(
-    '\nUse `filesystem` until the SDK gains a unique index on\n' +
-      'bytemap(cid, peer_cid, id, sub_id) and an upsert. It is slow — every write\n' +
-      'rewrites the whole store — but it does not lose data, and that is the\n' +
-      'trade to make.',
-  );
-  process.exit(1);
+function resolve(raw) {
+  const ref = raw.match(/^\$\{([A-Z_][A-Z0-9_]*)(?::?-([^}]*))?\}$/);
+  if (!ref) return { value: raw };
+  if (ref[2] === undefined) return { error: `${raw} has no default; nothing here can say what it resolves to` };
+  return { value: ref[2] };
+}
+
+const problems = [];
+for (const s of settings) {
+  const { value, error } = resolve(s.raw);
+  s.value = value;
+  if (error) problems.push({ ...s, why: error });
+  else if (value === '') problems.push({ ...s, why: 'resolves to empty: the server runs IN-MEMORY and loses everything on restart' });
+  else if (!accepted.has(value)) problems.push({ ...s, why: `'${value}' is not a backend the server accepts (${[...accepted].join(', ')}); it would refuse to start` });
+}
+
+if (problems.length > 0) {
+  for (const p of problems) console.error(`::error file=${FILE},line=${p.line}::WORKSPACE_BACKEND=${p.raw} — ${p.why}`);
+  fail(`production's backend setting does not resolve to a persistent backend the server accepts.`);
 }
 
 console.log(
-  `check-production-backend-is-safe: ${settings.length} WORKSPACE_BACKEND setting(s) in ` +
-    `${FILE}, none on a backend that loses writes (${settings.map((s) => s.value).join(', ')}).`,
+  `check-production-backend-is-safe: ${settings.map((s) => `${s.raw} resolves to '${s.value}'`).join('; ')} ` +
+    `— accepted by the server (${[...accepted].join(', ')}).`,
 );

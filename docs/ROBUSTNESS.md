@@ -12766,3 +12766,308 @@ refuses when the two name different commits.
 - The watchdog in atlas reported success for five days while failing to release
   two runs (atlas #1138 makes it fail loudly). The two runs cannot be cancelled
   — GitHub: "has not been queued yet" — and need deleting by hand.
+
+## Round 750 — the removed peer that stayed
+
+### The same defect, on the in-memory and filesystem stores
+
+Round 749's peers fix (Citadel-Protocol #306) was on the SQL backend. I first
+wrote here that production does not run SQL. **That was wrong.** It rested on
+`publish-images.yml`'s smoke test and a stale compose comment, both of which say
+filesystem. The deployment has run SQLite since round 748, and the compose
+default is `sqlite`. So #306 is on the production path. The agent's own store
+is the filesystem backend, which wraps the in-memory store, so the propagation
+question still applied there.
+
+The in-memory store had it too, and worse. It keeps hyperlan peers in a `MultiMap` and
+recorded them with `insert`, which appends. The server records a pair on every
+accepted PostRegister without asking whether it already holds it
+(`post_register.rs:76`). Registered twice, the pair was stored twice.
+`remove_hyperlan_peer` then removed only the first copy. A new test in
+Citadel's own suite, registering a pair twice and deregistering once, read
+before the fix:
+
+    server listed the pair as [1975965787663642166, 1975965787663642166] (want [1975965787663642166]);
+    after one deregister it is still registered on: ["server, from my side",
+    "server, from their side", "my client", "their client"]
+
+Every call returned Ok. From the user's side, removing a peer succeeds and the
+peer is still there.
+
+### The fix (Citadel-Protocol #307)
+
+- **Recording is idempotent.** One record per peer; the latest name wins. This
+  is what the redis backend's `hset` already did, which made the in-memory store
+  the odd one out. Both registration paths go through `record_hyperlan_peer`.
+- **Removal forgets every record** (`forget_hyperlan_peer`). Accounts saved to
+  disk with duplicates before the fix are cleaned up by their next removal.
+  That half needs its own test: once inserts are idempotent, no new duplicates
+  form, so the integration test cannot see it.
+
+Controls:
+
+- Recording by appending again failed the idempotence unit test and the
+  integration test.
+- Removing only the first copy failed the saved-duplicates unit test ("a second
+  record of the removed peer survived").
+
+Each control turned exactly its own test red, and each was reverted
+byte-identically. The full `citadel_user` suite (31 + 18) passes on the
+in-memory and filesystem backends, and clippy `-D warnings` is clean.
+
+### What is not proven
+
+The storage defect is proven. Whether a live deployment reaches it is argued,
+not shown. The agent refuses to re-register only against its *local* peer list
+(`requests/peer/register.rs`), so two cases get through to a server that
+already holds the pair:
+
+- an agent with a fresh or lost local store — a second device, or an in-memory
+  agent after a restart;
+- two peers who invite each other at the same time.
+
+An end-to-end reproduction needs the stack.
+
+The other two backends were checked for the same shape. SQL removal is a single
+`DELETE … WHERE (peer_cid = ? AND cid = ?) OR (…)`, which takes every duplicate
+row with it. Redis records with `hset`, which overwrites. With #307, no backend
+keeps a removed pair.
+
+### Also this round
+
+- **The lost-wakeup fix reached master, for the agent and the browser.** #132
+  merged as `293cd39` (75 of 75 jobs green), and #131, the nested-cargo
+  deadlock, merged as `0b32342`. #89 was closed as superseded. UI #45 (the
+  member-list domain discriminator) merged as `1284ea8`, and its pointer bump
+  rides in this round's PR.
+- **#306 merged** (`0ba3b7f`). Its one Windows failure (`citadel_sdk`, a rekey
+  hang) passed on re-run. That job does not build the `sql` feature, so it
+  could not have exercised the change.
+- **Master Publish failed on the bug #132 fixes.** It failed on
+  `test_bidirectional_messaging_stress`: "received 254 of 255 from peer 1 (waited
+  5s for message 254)". That is the lost-wakeup signature, on master's ILM
+  (`3c8674b`), which lacks the fix. This is a third independent sighting in CI.
+  The run tested a commit whose only changes from the previous one were CI
+  files, and it held the org's runners for about 40 minutes ahead of the fix.
+  Cancelling it was refused by my permission policy and left to the operator.
+- **A measurement I got wrong.** I reported "5 of 20 org jobs running, room to
+  spare" from a query over *in-progress* runs only. A run whose jobs are all
+  queued is not in progress, so the query missed 76 queued jobs. Queues are
+  measured over both statuses now.
+- **A watcher that watched nothing.** The first PR monitor split
+  `"repo number"` with `set -- $spec`, which zsh does not word-split, so every
+  poll errored. I had recorded that gotcha earlier in this same session. The
+  replacement splits with parameter expansion and was dry-run once, showing real
+  status for all four PRs, before it was armed.
+
+
+### Closed from earlier "still open" lists
+
+- `ml-dsa` 0.0.4 -> 0.1.1 (Citadel-Protocol #304), listed as unmerged in round
+  743, merged on 2026-09-08. Both lockfiles now resolve `ml-dsa` 0.1.1. The
+  record was stale, not the tree.
+
+### The Windows rekey hang, read from its log
+
+The #306 failure was `stress_test_c2s_messaging_kyber` (case 1, enx 1), killed at
+631 s. The 306 MB log shows two defects, not one:
+
+1. **A rekey that never completes.** Version 3 is declared while the current
+   version stays 2, and the pending rekey's age climbs past 5 s.
+2. **Callers that spin on it.** An entry with `wait_for_completion=false` is
+   told "rekey already pending … returning payload" and immediately re-enters:
+   about 33,000 entries per 200,000 lines, with the role flipping Leader/Idle
+   roughly every 0.5 ms.
+
+That reading was half wrong. The log is **truncated**: it ends 25 s into a
+631 s test, in the middle of the captured-output dump, with no nextest summary.
+Using the `age=` values as a clock, rekey 0->1 took ~3 s and 1->2 ~10 s, and both
+completed. Rekey 2->3 was 5 s old when the log stops, waiting on the
+initiator's own `stage0_bob` computation, not on a lost message. "Declared=3
+never completes" is not in the evidence. The Leader/Idle "flipping" is two
+managers, client and server, sharing one C2S CID, not a role conflict.
+
+What is real:
+
+- **The busy loop** (Citadel-Protocol #308). Both "already pending" early
+  returns sent `None` on the rekey-finished channel. The messenger's queue
+  drainer (`messaging.rs:89-123`) treats any notification as "retry now", so it
+  woke itself straight back into the same return. Locally that was about
+  864,000 re-entries in one 34 s run, 83% of all log lines. The notification was
+  never needed: the pending rekey sends one when it concludes.
+- **What the busy loop was hiding.** `trigger_rekey` declares a version without
+  leaving Idle, and the Idle wait had no deadline. An unanswered declaration was
+  cleared only by the staleness check at `trigger_rekey`'s entry, which needs a
+  caller that keeps calling. The busy loop was that caller. Removing it alone
+  would have turned "recovers after 60 s" into "hangs forever", so #308 also
+  makes the Idle wait abandon a declaration that is unchanged a full tick later.
+  It does so with the same non-fatal error the Leader/Loser timeout already
+  returns; the manager keeps running.
+
+Controls: restoring the notification failed the drainer test; disabling the
+abandon failed the unanswered-rekey test (paused clock, milliseconds). Both
+reverts were byte-identical. `citadel_crypt`: 78 pass, clippy clean.
+
+**Not claimed:** that the loop made Windows slow. The same test passes on
+Windows in 291–347 s against a 600 s budget (Linux 122–130 s, macOS 70–72 s),
+and removing the loop did not change local wall time. The failure was the slow
+tail of about 100 Perfect-mode ML-KEM rekeys. Repeated Windows timings on #308
+will show whether it moved; if not, the lever is the test's budget.
+
+Open, not tied to this failure: in Perfect mode `send()` queues a message after
+a not-ready return without waking the drainer (`messaging.rs:272-280`). If the
+rekey concludes inside that window, the message waits for the next one.
+
+### A stranded-message race: real by reading, not reproduced
+
+`send()` in Perfect mode (`messaging.rs:260-280`) calls `trigger_rekey`, gets
+"not ready", then takes the queue lock and `push_back`s. If the pending rekey
+concludes inside that gap, the drainer consumes the completion notice, finds
+the queue empty, and waits again (`messaging.rs:137`, `break`). The message then
+sits queued with no rekey pending and nothing left to wake the drainer. It
+leaves only when a later `send()` starts a new rekey; if it was the last
+message, it never does. It is the same symptom class as ILM's lost wakeup.
+
+It was not reproduced. A probe of 2,000 rounds (two back-to-back sends, so the
+second is queued behind the first rekey; the receiver allows 3 s each) queued
+the second message in every round it counted (500 of 500) and stranded none.
+The gap is an uncontended lock acquisition, and the rekey must conclude on
+another thread inside it. Hitting it deliberately would need a test hook in the
+production path.
+
+Candidate fix, by construction rather than by timing: hold the queue lock
+across the `trigger_rekey` call in `send()`. The drainer never holds that lock
+while waiting for a notification, and the ratchet manager never takes it, so
+this cannot deadlock. A completion notice that lands mid-`send()` then finds the
+message already queued. Not shipped: a fix without a failing test is a guess
+with a commit message.
+
+### Could a new operator bring a server up from the docs? No.
+
+A read-only audit walked `INSTALL.md` and `PRODUCTION_DEPLOYMENT.md` against the
+code. The first place a new operator gets stuck is claiming the workspace: the
+UI the documented stack serves can reach no agent, by design, and the path
+that works (`provision-tenant.sh`, then `deploy.sh`, then `deploy-ui.sh`) is in
+no document. Four blockers and a set of avarok couplings are listed at the end
+of this round. Two of the findings were silent, and a third was a documentation gap that two gates certified as complete. All three are fixed here.
+
+**The rollback deployed the wrong tag.** The documented pin/rollback is
+`IMAGE_TAG=sha-... ./deploy.sh --no-pull`. deploy.sh's `.env` loader exported
+every key over the caller's environment, the reverse of compose's own
+precedence, and `provision-tenant.sh` writes `IMAGE_TAG` into every tenant
+`.env`. So the rollback redeployed the `.env` tag. The revision gate passed,
+because the images it pulled agreed with each other. The loader now lives in
+`scripts/load-dotenv.sh` and leaves a caller-exported variable alone. It uses
+`printenv`, so deploy.sh's own unexported `COMPOSE_FILE` does not shadow
+`.env`, and a key repeated in `.env` keeps its last value.
+
+Controls:
+- Exporting over the caller again failed the rollback check.
+- Dropping the repeat tracking failed the last-wins check.
+- Using `${!key+x}` instead of `printenv` failed the unexported-variable check.
+
+Writing that test also caught a defect in the test itself: under `set -e`, a
+failing check command ended the run without naming the check. It now reports
+`<exit N>` as that check's output.
+
+**The backend gate could not see the backend.**
+`check-production-backend-is-safe` took `${WORKSPACE_BACKEND:-sqlite}` as the
+literal value, found it on no list, and passed. It printed that string as the
+backend it had checked, on every run. It was also out of date: it refused
+sqlite for the byte-map bug that #305 fixed. It now resolves the default,
+refuses a missing or empty default (in-memory), and accepts only the backends
+the server's own `match` accepts. The old gate passed an empty default, no
+default, an unknown default, and a typo; the new one fails all four. The stale
+"filesystem, NOT sqlite" compose paragraph and the docs table are corrected.
+
+Still open from the audit (recorded, not fixed):
+
+- **B2.** The released agent serves a built-in certificate for
+  `local.avarok.net` only. Any other domain's loopback origin fails TLS for
+  every tester, and the DNS and certificate setup for another domain is
+  documented nowhere. This is a product decision: either operators use
+  `local.avarok.net`, or the agent and UI grow per-domain certificates.
+- **U3.** The agent's built-in certificate expires **2026-12-06**. Renewal
+  opens a PR but cuts no release, and agents already downloaded keep the old
+  certificate.
+- Smaller items: ports disagree between the UI (12400), `INSTALL.md` (12349)
+  and provisioning; `.env.example` still documents `VITE_WS_URL`;
+  `PRODUCTION_DEPLOYMENT.md` describes an architecture that has since been
+  replaced.
+
+**The variable deploy.sh refused to run without was documented nowhere (B1).**
+`deploy.sh` aborts when a deployment that serves the UI has no
+`LOOPBACK_AGENT_ORIGIN`. `INSTALL.md` said two variables, and `.env.example`
+did not name it. Both documentation gates passed, because each derived
+"required" from compose alone, and compose defaults the origin to empty
+(correct for a local deployment). The required set now comes from one module,
+reading compose's defaultless `${VAR}`s and deploy.sh's
+`ERROR: VAR is unset or empty` refusals. Before the docs change, both gates
+failed naming the variable. If the refusal wording drifts, the module throws
+rather than finding nothing (controlled).
+
+The docs also stop suggesting a value that cannot work. deploy.sh's own error
+suggested `wss://local.yourdomain.com:12345`, but the released agent has a
+certificate for `local.avarok.net` only. They now name
+`wss://local.avarok.net:12345` and what a name of your own requires.
+
+**Testers were told to back up a directory the agent never writes (W5).**
+`AGENT_README`, which ships inside every agent release, said the account lives
+in `./internal-service-data`. The agent's default is `./data`. That directory
+*is* the account, with no server-side copy. The README also never said the
+default is relative to the folder the agent is started from, so starting it
+elsewhere silently begins a new account. Both are fixed. A new gate reads the
+default from the agent's own code. Controls: the old README fails, and changing
+the binary's default without the README fails too.
+
+Whether the default should be a fixed per-user location instead of a relative
+one is a product question: existing testers' `./data` would be orphaned by a
+silent change.
+
+**A full tenant could not be deployed as provisioned (B3).**
+`provision-tenant.sh --topology full` wrote neither `LOOPBACK_AGENT_ORIGIN` nor
+`UI_PORT`. deploy.sh therefore refused the tenant. With the origin added by
+hand, compose published the UI on its default 8080 while the generated vhost
+proxied to the tenant's port, so every request returned 502. A full tenant now
+takes a required, validated `--loopback-origin`, and its `.env` carries both
+values. The test asserts that the `.env`'s `UI_PORT` equals the port the
+rendered vhost proxies to. Controls: dropping `UI_PORT` failed with
+"UI_PORT=[] but the vhost proxies to [21502]", and accepting a full tenant
+without an origin failed its refusal.
+
+**The path for a public server was in no document (W2).** `INSTALL.md` told a
+new operator to run the full production compose. That compose file's own
+header says its UI cannot reach an agent, by design. The intended topology
+(server-only, with each person running their own agent) existed only in
+`provision-tenant.sh`, which no document named. Hosting now opens with that
+path: provision, deploy, optionally serve the UI, claim. Provisioning also now
+requires a port in `--loopback-origin`, the shape `deploy-ui.sh` and the UI
+image already demand.
+
+### An experiment I designed badly
+
+To test whether a live `tar` of a SQLite volume yields a restorable backup
+(audit item U4), I ran a writer against a WAL database and meant to copy it 400
+times, live and frozen. The writer inserted without bound. It reached 6 GB in
+three hours, each copy-and-check took minutes, and the run produced no answer.
+A zsh "no matches found" on a cleanup glob also hid that it was still going.
+Nothing was concluded from it and the file is deleted. U4 stays open; the
+re-run uses a fixed-size table.
+
+### Still open
+
+- **Agent TLS on other domains (B2).** The released agent serves
+  `local.avarok.net` only. Whether operators use that name or bring their own
+  certificate is a product decision. The docs now describe what works today.
+- **The agent certificate expires 2026-12-06 (U3).** Renewal opens a PR but cuts
+  no release, and downloaded agents keep the old certificate.
+- **Live backups of a SQLite volume (U4)** are unverified.
+- **The Perfect-mode queue race** is real by reading, not reproduced, and its
+  fix is not shipped.
+- **Citadel-Protocol #307 and #308** are in CI. Once they merge, both lockfiles
+  (the parent's and citadel-agent's) need the bump that also carries #306.
+- **The agent's default data directory** is relative to the folder it is
+  started from. Whether to move it is the operator's call.
+- **Two master Publish runs** were queued back to back (`0b32342`, then
+  `293cd39`, which contains it). With `cancel-in-progress: false`, both run the
+  full suite.

@@ -209,9 +209,11 @@ if [[ -z "$loopback_origin" ]] && docker compose -f "$COMPOSE_FILE" config --ser
     echo "ERROR: LOOPBACK_AGENT_ORIGIN is unset or empty, and this deployment serves the UI."
     echo "  The page would ship an empty agent origin and a Content-Security-Policy"
     echo "  that forbids the agent, so every visitor gets a page that loads and cannot"
-    echo "  connect to anything. Set it to the name you published for the visitor's own"
-    echo "  agent -- one that resolves to 127.0.0.1 and that you hold a certificate for:"
-    echo "    LOOPBACK_AGENT_ORIGIN=wss://local.yourdomain.com:12345"
+    echo "  connect to anything. Set it to the origin of the visitor's own agent. The"
+    echo "  released agent has a certificate for local.avarok.net only, so:"
+    echo "    LOOPBACK_AGENT_ORIGIN=wss://local.avarok.net:12345"
+    echo "  (a name of your own needs testers to run the agent with --tls-cert/--tls-key;"
+    echo "  see docs/INSTALL.md)"
     exit 1
 fi
 
@@ -241,50 +243,10 @@ fi
 # otherwise have the probe target 12345 (the literal default) while the
 # service is bound elsewhere.
 #
-# We parse `.env` line-by-line rather than `source .env`. `source` runs the
-# file as a shell script, so backticks, `$()`, unquoted spaces, etc. in a
-# value get evaluated by the shell — convenient for advanced users but a
-# silent-misconfiguration footgun for the common case where an operator
-# pasted `WORKSPACE_MASTER_PASSWORD=$(date +%s)` expecting docker-compose
-# to receive that literal string. This loop skips comments and blank lines,
-# strips matching surrounding quotes, and exports verbatim — matching what
-# docker-compose itself does with `.env`.
-set -a
-while IFS='=' read -r key value; do
-    # Strip trailing CR so a `.env` created on Windows / transferred via
-    # FTP doesn't bake a literal "\r" into every value — that's a
-    # very-hard-to-diagnose auth failure for WORKSPACE_MASTER_PASSWORD
-    # (server gets "secret\r", operator types "secret"). docker-compose
-    # handles CRLF natively; this parser now matches.
-    key="${key%$'\r'}"
-    value="${value%$'\r'}"
-    [[ "$key" =~ ^[[:space:]]*# ]] && continue
-    [[ -z "${key// /}" ]] && continue
-    # Trim leading/trailing whitespace on the value. If the operator
-    # wrote `KEY = value` (with spaces around `=`), `IFS='='` gives
-    # value=" value", and the unquoted-export below would bake the
-    # leading space into the env var. Any shell consumer probing
-    # `${VAR}` then sees " value" (with leading space) — a `nc -z`
-    # against ` 12346` rather than `12346` would time out with a
-    # confusing "port not bound" error. Trim BEFORE the quote-strip
-    # so `KEY = "value"` lands the same as `KEY="value"`.
-    value="${value#"${value%%[![:space:]]*}"}"
-    value="${value%"${value##*[![:space:]]}"}"
-    # Strip matching outer quotes (single OR double) — docker-compose's
-    # env-file loader does the same so wrapped values land identically.
-    if [[ "$value" =~ ^\"(.*)\"$ ]] || [[ "$value" =~ ^\'(.*)\'$ ]]; then
-        value="${BASH_REMATCH[1]}"
-    fi
-    # `export "K=$value"` does NOT re-evaluate `$()` or backticks inside
-    # `$value` — parameter expansion happens once and the resulting
-    # characters become the literal exported value. Verified with
-    # `value='$(date +%s)' export "K=$value" && echo "$K"` → prints
-    # `$(date +%s)` literally, not the timestamp. A previous review
-    # flagged this as a re-evaluation risk; it isn't, but the test
-    # above is worth keeping in mind for any future refactor.
-    export "${key// /}=$value"
-done < .env
-set +a
+# The parsing lives in scripts/load-dotenv.sh so it can be tested directly.
+# shellcheck source=scripts/load-dotenv.sh
+. ./scripts/load-dotenv.sh
+load_dotenv .env
 
 # When the tunnel profile is requested, TUNNEL_TOKEN must be set — otherwise
 # cloudflared starts with an empty token and dies with a confusing error.
