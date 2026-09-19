@@ -13071,3 +13071,294 @@ re-run uses a fixed-size table.
 - **Two master Publish runs** were queued back to back (`0b32342`, then
   `293cd39`, which contains it). With `cancel-in-progress: false`, both run the
   full suite.
+
+## Round 751 — a backup risk that did not reproduce
+
+### Live SQLite backups (audit U4): not reproduced, not changed
+
+`scripts/backup-volumes.sh` tars each volume while the server runs, and
+production runs SQLite in WAL mode. The concern was that the database file and
+its `-wal` are copied at different moments, so a checkpoint landing in between
+could leave an archive whose two halves disagree.
+
+Round 750's attempt at this produced nothing (an unbounded writer). The re-run
+used a fixed-size table: 200 rows, each transaction rewriting both columns of
+one row, with the invariant `a = b` in every committed row. Snapshots were
+copied file by file, as `tar` does. Each was checked with
+`PRAGMA integrity_check` and the invariant:
+
+| Snapshot | Copy order | Unusable |
+|---|---|---|
+| live | db, wal, shm | 0 / 150 |
+| writer frozen (SIGSTOP) | db, wal, shm | 0 / 150 |
+| live | wal, shm, db | 0 / 150 |
+
+The WAL was ~4 MB (about 1,000 pages), so automatic checkpoints did run during
+the copies. The risk stays a hypothesis. Pausing the writer during the archive
+would be a guess until a snapshot actually fails, and the script is unchanged.
+What this does not cover: a server under real load, and an archive that is
+never test-restored. The script's closing advice, to read a backup back before
+relying on it, stands.
+
+### A server set up by the book was unreachable by hostname (W4)
+
+A user who joins by typing only a hostname is sent to port 12400, the app's
+`DEFAULT_WORKSPACE_PORT` (deliberate: it is what `citadel.avarok.net` serves).
+`INSTALL.md`, `PRODUCTION_DEPLOYMENT.md` and the production compose told
+operators to publish on `0.0.0.0:12349`. A server set up by the book therefore
+answered on a port no bare hostname reaches; only people who knew to type the
+port got in. All three now say 12400, and say why.
+
+A new gate reads the assumed port from the UI and fails any publish instruction
+on another port. It found the third site, which I had missed. Controls: the old
+docs fail at all three sites, and changing the UI's port fails all three too.
+
+### The UI came up on avarok2's port on every other host (W6)
+
+`deploy-ui.sh` defaulted `UI_PORT` to 8099, avarok2's own value. On any other
+host the container started healthy on a port nothing proxies to. A tenant from
+`provision-tenant.sh` points its vhost at its own block, so every request
+returned 502. `UI_PORT` is now required and validated, before the script's
+first Docker call, whose next act is `docker rm -f` on the running UI.
+
+A new test runs the script against a stand-in `docker` that only records being
+reached. Seven bad inputs must be refused before it, and valid input must
+reach it. Control: the old script lets all four `UI_PORT` cases through to
+Docker.
+
+### Advice for a build nobody runs (W3)
+
+`.env.example` told operators to set `VITE_WS_URL` before building the UI with
+the production compose, pointing it at a same-origin `wss://…/ws`. The
+production `ui` service has no build block, the publish workflow deliberately
+passes no `VITE_WS_URL`, the compose file forbids proxying the agent at a public
+`/ws`, and nothing in the UI source reads the variable. The block is removed.
+There is no gate: a "documented but unread" check would count the Dockerfile's
+leftover `ARG`/`ENV` as a reader and pass, a check that cannot fail.
+
+### Every tester re-downloads the agent every ~60 days, forever (U3, for the operator)
+
+The agent's built-in certificate for `local.avarok.net` is a 90-day Let's
+Encrypt certificate compiled into the binary. The committed one expires
+2026-12-06. `renew-agent-tls.yml` runs weekly and renews once fewer than 35
+days remain, around 2026-11-01. It opens a PR set to auto-merge, and nothing
+more. `release-agent.yml` publishes only on an `agent-v*` tag push, and refuses
+an agent with fewer than 30 days left. The latest release, `agent-v0.4.0`
+(2026-09-07), carries the current certificate.
+
+So the certificate reaches nobody until someone cuts a release, and then only
+the people who re-download. On a schedule of roughly 60 days, every running
+agent's certificate expires. The browser refuses the page's `wss://` to the
+visitor's own agent, and nothing on screen says why.
+
+The automation is correct as far as it goes, and I have not changed it. What
+to do is a product decision:
+
+- cut a release after every renewal and ask testers to re-download;
+- have the agent fetch its current certificate at start;
+- or add an update check.
+
+Recorded here so the first expiry is not the way anyone finds out.
+
+### The lost wakeup, a fourth time, as predicted
+
+The master Publish run for `0b32342` (#131's merge, which predates #132)
+failed on the same test with the same signature: `Timeout at peer 2: received
+254 of 255 from peer 1 (waited 5s for message 254)`. That was predicted before
+it ran, from the commit it tested: its ILM is `3c8674b`, which lacks the fix.
+The run for `293cd39`, which carries the fix, is the one that counts. It runs
+the same stress test on master with the fix in place.
+
+### What I got wrong: a deploy.sh change pushed without its own integration test
+
+#133's Deploy Gate failed: `./scripts/load-dotenv.sh: No such file or
+directory`. `test-deploy-services.sh` stages deploy.sh in a fixture with a
+hand-picked list of two helpers, and moving the `.env` loader out of deploy.sh
+added a third. A real tenant was never affected, since `provision-tenant.sh`
+copies `scripts/` whole. The fixture now does the same, so the next helper
+cannot break it this way. All 23 assertions pass, and the old staging list
+fails with the same error CI saw.
+
+The suite uses a stand-in `docker` and runs locally in a few seconds. I ran the
+new loader test and the provisioning test, but not the one suite that runs
+deploy.sh end to end, which is the one a deploy.sh change most needed. All
+three shell suites CI runs now pass locally on the branch.
+
+### What a stranger can do to a public server
+
+The docs now tell operators to publish the server, and registration is open.
+A read-only audit asked what an unauthenticated party, or a freshly registered
+stranger, can do to it. Ranked by how quickly one person could knock over a
+small test server:
+
+- **Registration flood (unauthenticated).** There is no per-IP limit, no
+  account cap, and no cleanup. Each registration costs the server a 64 MiB
+  Argon2id hash plus a KEM, and leaves a row forever.
+- **The rate limiter does not cover the expensive work.** Its only call site is
+  inside the post-login loop. Handshake SYNs (a KEM each) and registrations
+  (Argon each) bypass it.
+- **TLS accept concurrency is unbounded** (`try_for_each_concurrent(None, …)`),
+  on a single-threaded runtime.
+- **Every registered stranger is auto-enrolled as a Member** of the root
+  workspace: read the tree, post, upload and download.
+- **Profile fields were unbounded.** Fixed below.
+- **Group messages have no per-room or per-sender storage cap.**
+- **The container has a 2 GB memory limit and `restart: unless-stopped`, but no
+  `pids_limit` or `ulimits`.** Memory exhaustion becomes a restart loop.
+- **Medium and low:** sessions accumulate; transient (password-less) accounts
+  are allowed by default; `GetRegisteredPeers` enumerates every user;
+  PostRegister spam persists to victims' mailboxes for an hour; master-password
+  guessing on the claim path is bounded only by the per-CID limit.
+
+Already bounded, so not to re-audit: frame size, per-group allocation, KEM
+layers per packet, inbound per-session concurrency, the outbound queue, the
+post-login per-CID rate, page limits, broadcast audiences, file-transfer
+authorization, and the loopback default bind.
+
+The registration and enrolment items are product decisions (invite or approval,
+Member or Guest by default) and are raised with the operator. The rest are
+fixes, taken one at a time.
+
+**Profile fields (fixed).** `UpdateUserProfile` stored `name` and
+`avatar_data` as sent. `update_user_profile` now refuses a name outside the
+server's own registration rule, read from `ServerMiscSettings` (2 to 77 bytes),
+and an avatar over 512 KiB of base64. The largest the UI can produce is about
+351 KB. The tests assert what is stored.
+
+The first control applied nothing: `cargo fmt` had split the line it removed,
+and the script ran the tests anyway. Its count check caught that. The re-run
+gated the tests on the edit applying: without the check, a 78-byte name and a
+512 KiB+1 avatar were both stored, while the acceptance test still passed.
+Kernel suite: 389 passed.
+
+**Transient (password-less) accounts (fixed).** The SDK allows them by
+default, and the server never overrode that. Nothing in the workspace uses one;
+the agent authenticates only with credentials. `production_server_misc_settings()`
+now refuses them, and the production builder passes it to the node.
+
+The test is the first to run the production entry point itself. A credentialed
+registration must connect first, because a server that is not listening
+refuses everything too. Then a transient client must be refused, for being
+transient. Control: without the builder call, the transient client got
+`Connected`.
+
+Writing the test caught two flaws in it. It first waited for the client node to
+exit, which it never does after the callback, so nothing was measured. And the
+SDK client's default backend wrote an account under `~/.citadel`. The same run
+also showed audit finding #4 directly: the freshly registered `realuser` was
+auto-enrolled into the workspace.
+
+### 27,041 directories under ~/.citadel
+
+The transient test's first run wrote an account under `~/.citadel`: the SDK's
+default backend for a node built without one is a filesystem store in the
+user's home. Looking there found 27,041 such directories, accumulated since
+October 2025, one per node per test run, never removed.
+
+In citadel-agent the sources were three shared test helpers that set no
+backend: the one that builds an agent per simulated user, and both server
+helpers. Measured on one test file (`group_stale_membership`, two tests):
+
+| Run | New directories | Tests |
+|---|---|---|
+| Unfixed | +6 | 2 pass |
+| Per-user agents in memory | +2 | 2 pass |
+| Server helpers too | +0 | 2 pass |
+
+The server helpers default to in-memory before applying the caller's `opts`,
+so a test that genuinely needs persistence can still ask for it. The SDK's own
+`server_test_node_inner` has the same default and is a separate
+Citadel-Protocol change. Deleting the existing directories is the operator's
+call.
+
+**What I got wrong, caught before it shipped.** The first fix made the helpers'
+nodes in-memory. One test file passed with +0 directories, and I had nearly
+opened the PR. The full agent suite then hung in `file_transfer`. RE-VFS
+transfers need a filesystem backend, and with an in-memory one they hang
+rather than fail: `test_internal_service_standard_file_transfer_c2s` hit the
+3-minute cap with the change, and passed in 2.1 s without it. The helpers now
+use a filesystem store in a fresh directory under the OS temp dir: the same
+kind of store, somewhere the OS cleans up. That file-transfer test passes, and
+both test files add +0 to `~/.citadel`.
+
+**Open: an in-memory transfer hangs instead of failing.** In that run both the
+agent and the server were in-memory. Production servers use SQLite or the
+filesystem, so the case that matters is a tester's agent left on its default
+in-memory backend. The docs say that "disables file transfer". Whether it then
+refuses cleanly or spins forever in the UI has not been tested yet.
+
+### A refused file transfer reported success, then silence
+
+The open question above was answered by reproduction. With either end on the
+in-memory backend (the agent's default without `--backend filesystem`), a
+`SendFile` got `SendFileRequestSuccess` ("queued") and then nothing, ever.
+This held for C2S, P2P in both directions, and RE-VFS. The SDK does refuse, with
+the right words ("File transfer is not enabled for this session. Both nodes
+must use a filesystem backend"), but as a node result for the request's ticket.
+SendFile used a plain `send`, so nothing was listening for that ticket. The
+refusal fell into the agent's catch-all at `responses/mod.rs:36` and was
+logged as "Unhandled node result". The UI spun forever.
+
+The fix subscribes to the ticket, the way `delete_virtual_file` already does.
+An `InternalServerError` becomes `SendFileRequestFailure` carrying the SDK's
+message, and cancels the RE-VFS correlation. Any other first event is handed on
+unchanged. "Queued" is sent before the watcher starts, so a refusal can never
+arrive ahead of it.
+
+Two tests cover the tester-facing cases: an in-memory agent uploading to a real
+server, and a peer sending to an in-memory agent. Both pass with the fix in
+2.3 s. Control: with the original `upload.rs`, both fail with "SendFile went
+silent: no SendFileRequestFailure within 20 s, so the client waits forever".
+
+Left open: the subscription is held until the first event, so a P2P offer the
+peer never answers keeps one task alive; and `requests/file/download.rs` uses
+the same plain `send`, so a refused pull is likely dropped the same way
+(not yet tested).
+
+**Propagation: downloads had the same shape (fixed with the upload, citadel-agent
+#69).** PullObject also went out with a plain `send`. The server's refusal
+arrived as a RE-VFS result carrying the error (for example "No such file or
+directory" for a path it does not hold), a kind of node result the agent had no
+arm for at all. The client had been told `DownloadFileSuccess`, and the pull's
+correlation stayed queued, where it would claim the next pull's ticks.
+
+`requests/file/mod.rs::refusal()` now recognises both forms of refusal, and
+SendFile and DownloadFile both watch their ticket for either. Controls:
+
+- The original `download.rs` goes silent.
+- `refusal()` without its RE-VFS arm goes silent again, while the upload test
+  still passes.
+
+Agent suite: 184 passed, `~/.citadel` +0.
+
+The first run of the new download test failed for a reason I had not predicted:
+I expected an in-memory refusal and got a missing-file one. The test was
+rewritten around what the server actually does, rather than loosened to pass.
+
+### PRODUCTION_DEPLOYMENT.md drew the forbidden topology (W7)
+
+Its "Current Architecture" diagram showed a reverse proxy terminating WSS in
+front of the internal service on :12345. That is the one topology the
+production compose forbids: the agent holds a user's keys and decrypted
+messages behind an unauthenticated WebSocket. Its network section described
+host networking throughout, with a centralized agent. Both are replaced from
+what the compose file actually declares. The avarok2 runbook is untouched.
+
+### Still open
+
+- **Registration on a public server** (audit #1 to #4). There is no rate limit
+  before login, unbounded TLS accept, and auto-enrolment as Member. Invite or
+  approval, and the default role, are the operator's call. Rate limiting belongs
+  in the SDK.
+- **The agent certificate expires 2026-12-06,** and only a release plus a
+  re-download reaches testers (U3).
+- **The container has no `pids_limit` or `ulimits`,** and group-message storage
+  has no cap (audit #6, #7).
+- **Agent TLS for another domain (B2):** `local.avarok.net` only, today.
+- **27,052 leftover directories under `~/.citadel`,** and the SDK's own
+  `server_test_node_inner` still defaults to one.
+- **Two download cases untested:** whether an in-memory agent pulling a file
+  that exists is told why, and a P2P offer nobody answers, which keeps its
+  watcher alive.
+- **The Perfect-mode queue race:** real by reading, not reproduced.
+- **Live SQLite backups (U4):** not reproduced, unchanged.
