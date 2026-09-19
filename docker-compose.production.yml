@@ -158,7 +158,8 @@ services:
       # It is now overridable because the local-agent topology needs the
       # opposite: each user runs their own agent on their own machine and dials
       # this server DIRECTLY over the internet, so it must bind 0.0.0.0. Set
-      # `WORKSPACE_BIND_ADDR=0.0.0.0:12349` in .env for that deployment, and put
+      # `WORKSPACE_BIND_ADDR=0.0.0.0:12400` in .env for that deployment (12400 is
+      # the port the app assumes for a bare hostname), and put
       # a host firewall in front of the port. The Citadel protocol is E2E
       # encrypted, so a public bind is by design in that mode.
       - WORKSPACE_BIND_ADDR=${WORKSPACE_BIND_ADDR:-127.0.0.1:12349}

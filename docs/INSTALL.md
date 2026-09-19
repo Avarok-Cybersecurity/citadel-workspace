@@ -94,15 +94,17 @@ invite gate, so if the first account to connect were promoted automatically —
 as it is on the dev stack, where the same variable is `1` — a stranger who found
 the port before you did would own your workspace.
 
-**If remote people will use this workspace, set `WORKSPACE_BIND_ADDR=0.0.0.0:12349`
-in `.env` and open that port on your firewall.**
+**If remote people will use this workspace, set `WORKSPACE_BIND_ADDR=0.0.0.0:12400`
+in `.env` and open that port on your firewall.** 12400 is the port the app
+assumes when someone types only your hostname; any other port works, but then
+everyone has to type it (`host:port`).
 
 The server binds `127.0.0.1` by default, which is correct only when everyone
 using it is on the same machine. Each user runs their own local agent, and that
 agent dials your server directly over the Citadel protocol — so unlike an
 ordinary web app, there is nothing a tunnel or HTTP reverse proxy can do here.
 The tunnel profile publishes the **UI** on `:8080`; it carries no route to
-`:12349` and could not carry the raw protocol if it did.
+the server's port and could not carry the raw protocol if it did.
 
 This paragraph used to say to put a tunnel or proxy in front "not widening the
 bind address", which left every remote user with connection refused and pointed
