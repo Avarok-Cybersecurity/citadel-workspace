@@ -120,7 +120,7 @@ Cloudflare TLS/Access boundary entirely (an attacker can hit
   falls back to `kernel.toml`'s `bind_addr` — still `0.0.0.0:12349`, which is
   what dev wants and why the file is shared.
 
-  Set `WORKSPACE_BIND_ADDR=0.0.0.0:12349` only for a deployment where remote
+  Set `WORKSPACE_BIND_ADDR=0.0.0.0:12400` only for a deployment where remote
   clients reach this server directly rather than through the co-located
   ingress; the Citadel protocol is end-to-end encrypted, so a public bind is
   by design in that mode, but pair it with a host firewall.
