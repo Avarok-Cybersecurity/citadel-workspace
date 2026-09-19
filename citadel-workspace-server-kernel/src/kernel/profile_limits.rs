@@ -5,7 +5,7 @@
 //! where registration is open, one request with a multi-megabyte string grew
 //! the store by that much, and every later write of that user rewrote it.
 
-use citadel_sdk::prelude::{NetworkError, ServerMiscSettings};
+use citadel_sdk::prelude::NetworkError;
 
 /// The longest base64 avatar accepted, in bytes.
 ///
@@ -19,11 +19,12 @@ pub const MAX_AVATAR_BASE64_LEN: usize = 512 * 1024;
 /// Refuse a profile update the server should not store.
 ///
 /// A display name follows the rule the server applies to the full name at
-/// registration, read from the live `ServerMiscSettings` rather than restated,
-/// so the two cannot drift apart.
+/// registration, read from the settings the server actually runs with
+/// (`production_server_misc_settings`) rather than restated, so the two cannot
+/// drift apart.
 pub fn check_profile_update(name: Option<&str>, avatar: Option<&str>) -> Result<(), NetworkError> {
     if let Some(name) = name {
-        let reqs = ServerMiscSettings::default().credential_requirements;
+        let reqs = crate::production_server_misc_settings().credential_requirements;
         let (min, max) = (reqs.min_name_length as usize, reqs.max_name_length as usize);
         if name.len() < min || name.len() > max {
             return Err(NetworkError::msg(format!(
