@@ -9,7 +9,10 @@ import ServiceManagement
 /// the image is ejected.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var agent: AgentProcess?
-    private var menu: StatusMenu?
+    private var tray: Tray?
+    private let model = PanelModel()
+    private var client: AgentClient?
+    private var poll: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if Installer.offerToMoveIfNeeded() { return }
@@ -20,15 +23,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 throw SettingsError.missing("the bundled citadel-agent executable")
             }
             let agent = AgentProcess(executable: executable, settings: settings, log: log)
-            let menu = StatusMenu(settings: settings, log: log, agent: agent)
-            agent.onChange = { [weak menu] state in menu?.show(state) }
+            let tray = Tray(model: model)
+            agent.onChange = { [weak self, weak tray] state in
+                tray?.show(state)
+                if state == .running || state == .external { self?.refresh() }
+            }
+            model.perform = { [weak agent] action in
+                Actions.perform(action, settings: settings, log: log, agent: agent)
+            }
             self.agent = agent
-            self.menu = menu
+            self.tray = tray
+            let client = AgentClient(port: settings.bindPort)
+            self.client = client
+            model.onOpen = { [weak self] in self?.refresh() }
+            // Only while the panel is open: nothing else shows the list.
+            poll = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+                guard let self, self.tray?.isPanelShown == true else { return }
+                self.refresh()
+            }
             LoginItem.registerOnFirstLaunch(log: log)
             agent.start()
-            menu.show(agent.state)
+            tray.show(agent.state)
         } catch {
             fatal("Citadel Agent cannot start", "\(error)")
+        }
+    }
+
+    private func refresh() {
+        guard model.agent == .running || model.agent == .external else { return }
+        client?.fetch { [weak self] accounts in
+            guard let self else { return }
+            // A failed read keeps what was shown rather than claiming there are no accounts.
+            if let accounts {
+                self.model.accounts = accounts
+                self.model.loaded = true
+            }
         }
     }
 
@@ -38,6 +67,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         agent.stop { NSApp.reply(toApplicationShouldTerminate: true) }
         return .terminateLater
     }
+}
+
+enum Actions {
+    static func perform(_ action: PanelAction, settings: AgentSettings, log: LogFile, agent: AgentProcess?) {
+        switch action {
+        case .openWorkspace: NSWorkspace.shared.open(settings.workspaceURL)
+        case .createWorkspace: NSWorkspace.shared.open(settings.workspaceURL.appendingPathComponent("create"))
+        case .openAccount(let account), .logIn(let account):
+            guard let url = WorkspaceLink.forAccount(account, origin: settings.workspaceURL) else {
+                log.write("no workspace link for \(account.id)")
+                return
+            }
+            NSWorkspace.shared.open(url)
+        case .restartAgent: agent?.restart()
+        case .toggleLogin: LoginItem.toggle(log: log)
+        case .showLog: NSWorkspace.shared.open(log.url)
+        }
+    }
+}
+
+enum WorkspaceLink {
+    /// The site, for now. The page does not yet read an account from its URL, so a parameter here
+    /// would only look like it selected one; `?account=` arrives with the page that honours it.
+    static func forAccount(_ account: Account, origin: URL) -> URL? { origin }
 }
 
 enum LoginItem {

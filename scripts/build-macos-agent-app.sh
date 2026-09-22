@@ -41,7 +41,7 @@ lipo -create "$ARM" "$X64" -output "$APP/Contents/MacOS/citadel-agent"
 # which Swift 6's strict concurrency checking cannot see through NSApplication's run loop.
 for arch in arm64 x86_64; do
   swiftc -swift-version 5 -O -target "$arch-apple-macos13" \
-    -framework AppKit -framework ServiceManagement \
+    -framework AppKit -framework SwiftUI -framework ServiceManagement \
     "$SRC"/*.swift -o "$work/launcher-$arch"
 done
 lipo -create "$work/launcher-arm64" "$work/launcher-x86_64" -output "$APP/Contents/MacOS/Citadel Agent"
@@ -61,6 +61,9 @@ iconutil -c icns "$iconset" -o "$APP/Contents/Resources/AppIcon.icns"
 # The menu-bar glyph: the brand kit's template, 16 pt at 1x and 2x.
 cp "$BRAND/tray/tray-template-16.png" "$APP/Contents/Resources/tray-template.png"
 cp "$BRAND/tray/tray-template-32.png" "$APP/Contents/Resources/tray-template@2x.png"
+# The panel's title mark: the on-dark mark, sized for a 22 pt header at 2x.
+sips -z 44 44 "$BRAND/transparent/mark-1024-ondark.png" --out "$APP/Contents/Resources/mark@2x.png" >/dev/null
+sips -z 22 22 "$BRAND/transparent/mark-1024-ondark.png" --out "$APP/Contents/Resources/mark.png" >/dev/null
 
 # Inside out: the nested executable first, then the bundle, whose signature seals it. Not --deep,
 # which signs nested code with the bundle's options and hides which piece a failure belongs to.
