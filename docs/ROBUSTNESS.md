@@ -13071,3 +13071,38 @@ re-run uses a fixed-size table.
 - **Two master Publish runs** were queued back to back (`0b32342`, then
   `293cd39`, which contains it). With `cancel-in-progress: false`, both run the
   full suite.
+
+## Round 752 — work.avarok.net is live (test mode), and two defects the first real deploy found
+
+**Deployed.** `citadel-tenant` (version `c5596118`) on `work.avarok.net/*` and `*.work.avarok.net/*`.
+Its pieces:
+- DNS: `work` and `*.work` are proxied `AAAA 100::` records. The old `work` CNAME pointed at the dead box.
+- Certificate: the ACM advanced certificate covers `work.avarok.net` and `*.work.avarok.net`, checked by SNI against `x1.work.avarok.net`.
+- D1: `citadel-control`, with migrations 0001 and 0002 applied remotely.
+- Secrets: `TURNSTILE_SECRET`, `STRIPE_SECRET_KEY` (rk_test) and `STRIPE_WEBHOOK_SECRET`. Stripe is in TEST mode only.
+
+Checked live:
+
+| Check | Result |
+|---|---|
+| `/create` carries the control-plane meta tag | yes |
+| The CSP allows Turnstile | yes |
+| A tenant host answers a plain GET | 426 |
+| `/api/slug/{acme,www,a}` | available, reserved, invalid |
+| `POST /api/tenants` with unknown fields | 400 `malformed-request` |
+| Unsigned `POST /api/stripe/webhook` | 400 `signature-header` |
+
+**Defect 1: the billing portal would have opened another product's portal.** The Stripe sandbox is shared, and its default portal configuration belongs to CertifiedCopy. `openPortal` sent no `configuration`, so Stripe used the default and showed Citadel customers the wrong plans.
+- Fix: a Citadel-only configuration, `bpc_1UIbClCgLMkhvcEsvf9lxARd`. It allows switching between the Team and Business prices, changing the seat count, cancelling at period end, and managing payment methods and invoices. The Worker now requires `STRIPE_PORTAL_CONFIGURATION`; while it is unset, the route answers 503.
+- Proof: the test Stripe stub refuses a portal session without that configuration.
+- Control: deleting the `configuration` line turned `webhook.test.mjs › activation` red (52/53). Restored: 53/53.
+- Limit: Stripe's portal cannot update a subscription that has more than one item. A customer with the storage add-on can therefore not change plan in the portal. Open.
+
+**Defect 2: a successful deploy reported failure.** The smoke test ran one second after the routes attached, while the proxied placeholder record still answered 522 (three requests seconds later: 200).
+- Fix: the smoke test retries for up to 60 seconds and fails after that.
+- Control: an unresolvable host is still refused.
+
+**Open:**
+- A real-browser creation behind Turnstile, and the paid 4242 checkout. These need the operator's hand.
+- The claim-code E2E against a live `wss://<slug>.work.avarok.net`.
+- Agent release v0.4.0 predates the wss transport, so it cannot reach tenants. An agent release is needed after Citadel-Protocol #310 merges.
