@@ -39,11 +39,16 @@ function workerdCpuMs() {
 }
 
 const phases = [];
+const clientPhases = [];
 let last = workerdCpuMs();
+let lastClient = process.cpuUsage();
 const onPhase = (name) => {
+  const client = process.cpuUsage(lastClient);
+  clientPhases.push([name, Math.round((client.user + client.system) / 1000)]);
   const now = workerdCpuMs();
   phases.push([name, now - last]);
   last = now;
+  lastClient = process.cpuUsage();
 };
 
 const t0 = performance.now();
@@ -53,6 +58,7 @@ try {
   );
   report.total_ms = performance.now() - t0;
   report.server_cpu_ms_by_phase = Object.fromEntries(phases);
+  report.client_cpu_ms_by_phase = Object.fromEntries(clientPhases);
   const statsUrl = endpoint.replace(/^ws/, "http");
   report.object = await (await fetch(statsUrl)).json();
   const { responses, ...timings } = report;

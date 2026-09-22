@@ -25,4 +25,4 @@ new_sqlite_classes = ["WorkspaceServer"]
 ARGON_LANES = "1"
 ARGON_MEM_KIB = "4096"
 ARGON_TIME_COST = "1"
-LOG_FILTER = "citadel=debug"
+LOG_FILTER = "citadel=warn"
