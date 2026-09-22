@@ -1168,6 +1168,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         name: Option<String>,
         avatar_data: Option<String>,
     ) -> Result<User, NetworkError> {
+        crate::kernel::profile_limits::check_profile_update(
+            name.as_deref(),
+            avatar_data.as_deref(),
+        )?;
         // Get the user
         // The user record is read, modified and written back across awaits, so
         // it needs the same lock every other user writer takes. Two updates

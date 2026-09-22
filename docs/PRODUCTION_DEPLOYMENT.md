@@ -92,42 +92,39 @@ server:
 
 ### P1 — Should Fix
 
-| Item | Difficulty | Details |
-|------|-----------|---------|
-| Add restart policies to compose | Trivial | Add `restart: unless-stopped` to server and internal-service. The standalone deployment scripts already do this. |
-| Production UI build stage | Medium | UI Dockerfile only has a `dev` stage running Vite dev server. Add `prod` stage: `npm run build` → serve with nginx. |
+Both earlier items are done: every service in `docker-compose.production.yml`
+has `restart: unless-stopped`, and the UI image is a production nginx build
+(`docker/ui/Dockerfile`), pulled from GHCR rather than built on the host.
 
-### Network Exposure (host networking) — IMPORTANT
+### Network exposure
 
-Every service runs with `network_mode: host`, which is required so the
-co-located `cloudflared` process can reach the origins over loopback. The
-catch: a service that binds `0.0.0.0` under host networking is reachable on
-**all** host interfaces — including any public IP — which bypasses the
-Cloudflare TLS/Access boundary entirely (an attacker can hit
-`ws://<host-ip>:12345` and `http://<host-ip>:8080` directly).
+What runs where in `docker-compose.production.yml`:
 
-- **internal-service (WebSocket control plane, :12345)** — now binds
-  `127.0.0.1` in production via `INTERNAL_SERVICE_BIND_HOST=127.0.0.1`
-  (`docker-compose.production.yml`). cloudflared/nginx still reach it over
-  loopback; the public interface no longer exposes it. Override only if your
-  ingress reaches it over a non-loopback interface, and add a host firewall.
-- **nginx UI (:8080)** — intentionally reachable by cloudflared over
-  loopback; serves only the static SPA with a restrictive CSP. Low risk, but
-  a host firewall blocking :8080 publicly is still recommended.
-- **workspace-server (Citadel C2S, :12349)** — binds `127.0.0.1` in
-  production via `WORKSPACE_BIND_ADDR` (`docker-compose.production.yml`, and
-  the same value in `publish-images.yml`). The kernel reads that env var and
-  falls back to `kernel.toml`'s `bind_addr` — still `0.0.0.0:12349`, which is
-  what dev wants and why the file is shared.
+| Service | Networking | Binds |
+|---|---|---|
+| `server` | host | `WORKSPACE_BIND_ADDR`, default `127.0.0.1:12349` |
+| `internal-service` (agent) | host | `127.0.0.1` only (`INTERNAL_SERVICE_BIND_HOST`), always |
+| `ui` | bridge | published on `127.0.0.1:${UI_PORT}` |
+| `cloudflared` | host | outbound only |
 
-  Set `WORKSPACE_BIND_ADDR=0.0.0.0:12400` only for a deployment where remote
-  clients reach this server directly rather than through the co-located
-  ingress; the Citadel protocol is end-to-end encrypted, so a public bind is
-  by design in that mode, but pair it with a host firewall.
-- **Mandatory regardless:** run a host firewall (ufw / cloud security group)
-  that allows only Cloudflare ingress and blocks `8080`/`12345`/`12349` from
-  the public internet. Host networking means Docker's own port mapping does
-  not isolate these.
+- **The server is the public service.** Each person runs their own agent,
+  and that agent dials the server directly over the Citadel protocol, which a
+  tunnel or HTTP proxy cannot carry. So a server others use binds
+  `WORKSPACE_BIND_ADDR=0.0.0.0:12400` (12400 is the port the app assumes for
+  a bare hostname), with a host firewall that opens that port and nothing
+  else. The protocol is end-to-end encrypted, so a public bind is by design.
+- **The agent is never public, and never proxied.** It holds a user's keys
+  and decrypted messages behind an unauthenticated WebSocket, so it binds
+  loopback in every topology, and the UI's same-origin `/ws` proxy is off
+  (`WS_PROXY_ENABLED=0`). A public server should not run one at all:
+  `provision-tenant.sh` defaults to server-only.
+- **The UI is static.** It is published on loopback for the TLS ingress
+  (nginx or cloudflared) in front of it, and each visitor's page dials the
+  visitor's own agent at `LOOPBACK_AGENT_ORIGIN`.
+- **Firewall, regardless:** allow the server's port and your ingress (443);
+  block `8080`/`${UI_PORT}` and `12345` from the public internet. Host
+  networking means Docker's port mapping does not isolate the host-networked
+  services.
 
 ### P2 — Investigate
 
@@ -140,7 +137,6 @@ Cloudflare TLS/Access boundary entirely (an attacker can hit
 
 | Item | Why |
 |------|-----|
-| `network_mode: host` | Required so cloudflared can reach origins over loopback; avoids NAT issues for citadel protocol. **But** see "Network Exposure" above — services must bind loopback and/or sit behind a host firewall, not rely on host networking for isolation. |
 | Resource limits (2G/2CPU) | Reasonable defaults, tune after deployment |
 | Logging (stdout) | Standard for Docker; pipe to aggregator as needed |
 | `.env` security | Already gitignored; env vars are standard Docker secrets approach |
@@ -150,30 +146,26 @@ Cloudflare TLS/Access boundary entirely (an attacker can hit
 
 ## Current Architecture
 
+Each person runs their own agent. The public host runs the server, and
+optionally serves the static UI.
+
 ```
-                    ┌─────────────────┐
-                    │  Reverse Proxy   │  (needed for production)
-                    │ (nginx/caddy)    │
-                    │  TLS termination │
-                    └────┬───────┬────┘
-                         │       │
-              HTTPS/WSS  │       │  HTTPS
-                    ┌────▼───┐ ┌─▼──────────┐
-                    │ Int.   │ │   Static    │
-                    │Service │ │   UI        │
-                    │:12345  │ │(nginx/CDN)  │
-                    └────┬───┘ └────────────┘
-                         │
-                    ┌────▼───────┐
-                    │  Workspace  │
-                    │  Server     │
-                    │  :12349     │
-                    │  ┌────────┐ │
-                    │  │ Data   │ │ ◄── Persistent volume
-                    │  │ Volume │ │
-                    │  └────────┘ │
-                    └─────────────┘
+  Each person's machine                        Public host
+ ┌───────────────────────────────────┐        ┌──────────────────────────┐
+ │ Browser ── wss://local.avarok.net │        │ TLS ingress (443)        │
+ │   │        :12345 (loopback)      │        │   └─► static UI          │
+ │   ▼                               │        │       (127.0.0.1:UI_PORT)│
+ │ Agent (internal service)          │        │                          │
+ │   holds keys, decrypts messages   │ Citadel│ Workspace server         │
+ │   binds 127.0.0.1 only ───────────┼───────►│   0.0.0.0:12400          │
+ └───────────────────────────────────┘ E2E    │   persistent volume      │
+                                               └──────────────────────────┘
 ```
+
+The page is loaded from the public host but talks only to the visitor's own
+agent. Nothing on the public host can see a user's keys or decrypted
+messages. That is why the agent is never hosted for other people, and never
+proxied.
 
 ## Audio and video calls
 

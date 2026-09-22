@@ -1,0 +1,81 @@
+{
+  "mark": {
+    "ink": {
+      "onLight": "#1C1D28",
+      "onDark": "#FFFFFF"
+    },
+    "arrow": {
+      "onLight": "#6E59A5",
+      "onDark": "#9B87F5"
+    }
+  },
+  "wordmark": {
+    "onLight": "#1C1D28",
+    "onDark": "#FFFFFF"
+  },
+  "tagline": {
+    "onLight": "#555766",
+    "onDark": "#B5A6C9"
+  },
+  "ground": {
+    "light": "#FFFFFF",
+    "dark": "#1C1D28"
+  },
+  "brand": {
+    "purple": "#6E59A5",
+    "purpleAccent": "#9B87F5",
+    "purpleFillLight": "#5C3FA7"
+  },
+  "geometry": {
+    "stroke": 62,
+    "strokeCompact": 92,
+    "vertices": {
+      "leftTop": [
+        31,
+        175
+      ],
+      "valleyOne": [
+        200,
+        735
+      ],
+      "apex": [
+        360,
+        275
+      ],
+      "valleyTwo": [
+        520,
+        735
+      ],
+      "arrowTip": [
+        732,
+        31
+      ]
+    },
+    "barbs": [
+      [
+        594,
+        112
+      ],
+      [
+        803,
+        175
+      ]
+    ],
+    "barbLength": 160,
+    "barbAngleDeg": 43,
+    "shaftAngleFromVerticalDeg": 16.8,
+    "markBox": [
+      834,
+      766
+    ],
+    "clearSpaceUnit": 144,
+    "barbAxis": "symmetric about the shaft"
+  },
+  "minimumSize": {
+    "markPx": 20,
+    "markCompactBelowPx": 48,
+    "horizontalLockupPx": 130,
+    "wordmarkPx": 130,
+    "fullLockupPx": 240
+  }
+}
