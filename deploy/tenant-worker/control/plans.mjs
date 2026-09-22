@@ -43,6 +43,13 @@ export const intervalsOf = (tier) => (tiers.get(tier)?.prices ?? []).map((p) => 
 export const maxSeats = (tier) => tiers.get(tier)?.limits.members ?? 0;
 export const storageOfferedOn = (tier) => storage.available_on.includes(tier);
 export const overageBilledOn = (tier) => overage.available_on.includes(tier);
+export const overageKey = () => meteredLookupKey(table.lookup_prefix, overage.id);
+/**
+ * Whether a Checkout for `tier` on `interval` carries the metered overage price. A Stripe
+ * subscription bills all its items on one interval and the overage price is monthly, so a yearly
+ * plan cannot hold it: yearly overage awaits an owner decision (DEPLOY.md step 6).
+ */
+export const overageSoldWith = (tier, interval) => overageBilledOn(tier) && interval === overage.prices[0].interval;
 
 /**
  * What a tenant may use, from its plan. Paid members are capped by the seats bought (and the
@@ -81,6 +88,18 @@ export function entitlements({ tier, interval, seats, storage_blocks, status, pe
  * The plan a subscription's items describe, by the lookup keys of their prices:
  * `{tier, interval, seats, storage_blocks}`, or `{error}` for items this catalogue did not sell.
  */
+/**
+ * The entitlements a tenant's object enforces: what the control plane stored, with any limit it
+ * lacks derived from the same stored plan (tier, interval, seats, blocks) through this table. An
+ * object provisioned before a limit existed so enforces the limit its plan grants, with no
+ * refusal while the monitor's drift repair catches up; a value it does hold is never overridden.
+ * A stored record with no billing period had none: `null`, which meters by calendar month.
+ */
+export function enforcedEntitlements(stored) {
+  const period = { period_start: stored.period_start ?? null, period_end: stored.period_end ?? null };
+  return { ...entitlements({ ...stored, ...period }), ...stored };
+}
+
 export function planOfItems(items) {
   let plan = null;
   let blocks = 0;

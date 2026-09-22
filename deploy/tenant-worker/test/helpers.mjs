@@ -22,6 +22,7 @@ export const PRICES = {
   "citadel-business-year": "price_business_y",
   "citadel-storage-month": "price_storage_m",
   "citadel-storage-year": "price_storage_y",
+  "citadel-relay-overage": "price_relay_overage",
 };
 
 /**

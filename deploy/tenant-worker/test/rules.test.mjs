@@ -1,7 +1,7 @@
 /** The pure rules: slugs, lookup keys and entitlements, Turnstile's verdict, Stripe's signature. */
 import { describe, expect, it } from "vitest";
 import { checkSlug } from "../control/slug.mjs";
-import { entitlements, planOfItems, PRICES, storageKey, tierKey } from "../control/plans.mjs";
+import { enforcedEntitlements, entitlements, planOfItems, PRICES, storageKey, tierKey } from "../control/plans.mjs";
 import { verdict } from "../control/turnstile.mjs";
 import { TOLERANCE_SECONDS, verifyWebhook } from "../control/stripe.mjs";
 import { signLikeStripe } from "./stripe-sign.mjs";
@@ -69,6 +69,11 @@ describe("lookup keys and plans", () => {
     });
     const period = { period_start: 1000, period_end: 2000 };
     expect(entitlements({ tier: "team", interval: "month", seats: 1, storage_blocks: 0, status: "active", ...period })).toMatchObject(period);
+  });
+  it("an object enforces its stored entitlements, deriving from its plan only the limits they lack", () => {
+    const old = { status: "active", tier: "business", interval: "year", seats: 4, storage_blocks: 1, members_max: 4 };
+    expect(enforcedEntitlements(old)).toMatchObject({ connections_max: 12, relay_gb_included: 400, max_frame_bytes: 4194304, period_start: null, period_end: null, members_max: 4 });
+    expect(enforcedEntitlements({ ...old, connections_max: 2, period_start: 10, period_end: 20 })).toMatchObject({ connections_max: 2, period_start: 10, period_end: 20 });
   });
   it("refuses entitlements whose billing period was not stated, even as none", () => {
     expect(() => entitlements({ tier: "team", interval: "month", seats: 1, storage_blocks: 0, status: "active" })).toThrow(/billing period/);

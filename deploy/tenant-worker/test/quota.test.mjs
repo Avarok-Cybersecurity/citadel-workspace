@@ -37,14 +37,18 @@ describe("connection cap", () => {
     d.ws.close(1000, "done");
   });
 
-  it("an object provisioned before limits existed refuses sockets until it is given them", async () => {
+  it("an object provisioned before limits existed enforces what its plan grants, with no monitor run", async () => {
+    // Old-shape entitlements (before connections_max, relay, frame cap and period), for 1 Team seat.
     const { slug, object } = await freeTenant("old");
-    const { entitlements } = await objectStats(slug);
-    const { connections_max: _c, max_frame_bytes: _f, ...before } = entitlements;
-    await object.setEntitlements(before);
-    const r = await openSocket(slug);
-    expect(r.refused.status).toBe(503);
-    expect(await r.refused.json()).toMatchObject({ error: "entitlements-outdated" });
+    const old = { status: "active", tier: "team", interval: "month", seats: 1, storage_blocks: 0, members_max: 1, storage_gb: 10, workspaces_max: 1, priority_support: false };
+    await object.setEntitlements(old);
+    const open = [];
+    for (let i = 0; i < 3; i++) open.push(await openSocket(slug)); // 3 per Team seat
+    expect(open.every((s) => s.ws)).toBe(true);
+    const fourth = await openSocket(slug);
+    expect(fourth.refused.status).toBe(503);
+    expect(await fourth.refused.json()).toMatchObject({ error: "connection-limit", detail: "this workspace allows 3 connections at once" });
+    for (const s of open) s.ws.close(1000, "done");
   });
 });
 

@@ -120,13 +120,20 @@ missing, and `deploy.sh` stops there -- deliberately. Once approved:
    A restricted key needs write on Billing Meters and Meter Events besides what it has.
 2. `deploy.sh` then applies D1 migration `0003_usage.sql` (billing period on `tenants`,
    `tenant_usage`) and deploys the Cron trigger (`*/15 * * * *`, the usage monitor).
-3. Objects provisioned before this deploy hold entitlements without `connections_max` /
-   `max_frame_bytes` and answer upgrades with `503 entitlements-outdated` until the monitor's first
-   run (at most 15 minutes) pushes current ones. Run nothing by hand for it.
+3. Objects provisioned before this deploy keep serving: a limit their stored entitlements lack
+   is derived from their stored plan (tier, seats) through `billing/tiers.json`
+   (`control/plans.mjs` `enforcedEntitlements`). The monitor's first run then pushes the full
+   entitlements as drift repair. Nothing is refused and nothing needs doing by hand.
 
-Not yet done: Checkout does not add the metered price to new subscriptions, so meter events are
-accepted but bill nothing until it does (`control/tenants.mjs` `openCheckout`; yearly subscriptions
-need a decision, the metered price is monthly).
+Monthly Team and Business Checkouts carry the metered `citadel-relay-overage` price as a second
+line item (no quantity), so their overage is billed on the monthly invoice.
+
+**Yearly overage needs an owner decision.** A Stripe subscription bills every item on one
+interval, so a yearly subscription cannot hold the monthly metered price, and yearly Checkouts
+do not carry it: yearly overage is recorded in `tenant_usage` but not billed. Options: (a) Stripe's
+flexible billing mode, which allows mixed intervals on one subscription; (b) a separate monthly
+subscription holding only the overage price; (c) yearly plans are included-relay only. Until then,
+the monitor sends no meter event for a yearly tenant and logs its overage as unbilled.
 
 ## Deploying
 

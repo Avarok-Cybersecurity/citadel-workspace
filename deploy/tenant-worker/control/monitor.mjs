@@ -10,7 +10,7 @@
  *      only then is the report recorded (the webhook's rule: record AFTER the write it guards).
  * The object is authoritative for its own limits; a missed run delays a report, nothing more.
  */
-import { entitlements, METERING, OVERAGE_EVENT, overageBilledOn } from "./plans.mjs";
+import { entitlements, METERING, OVERAGE_EVENT, overageSoldWith } from "./plans.mjs";
 import { stripe } from "./stripe.mjs";
 
 /** Whole GB of metered usage beyond what the tier includes. */
@@ -41,8 +41,9 @@ async function monitorTenant(io, cfg, row) {
     const overage = overageGb(period.bytes_in, want.relay_gb_included);
     const sent = await io.usage.record(row.tenant_id, period, want.relay_gb_included, overage, io.now());
     if (sent.pending === null && overage <= sent.reported) continue;
-    if (!overageBilledOn(row.tier)) {
-      console.warn(`[monitor] ${row.slug}: ${overage} GB over the ${row.tier} tier's relay, which is not billed`);
+    if (!overageSoldWith(row.tier, row.interval)) {
+      // Free, or a yearly plan whose subscription holds no metered item (DEPLOY.md step 6).
+      console.warn(`[monitor] ${row.slug}: ${overage} GB over the ${row.tier}/${row.interval} relay, which is not billed`);
       continue;
     }
     await report(io, cfg, row, period.period_start, overage);

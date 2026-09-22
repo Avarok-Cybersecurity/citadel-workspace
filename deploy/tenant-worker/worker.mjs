@@ -21,7 +21,7 @@ import { Provisioning } from "./control/provisioning.mjs";
 import { Meter, periodAt } from "./control/meter.mjs";
 import { UsageTable } from "./control/usage-table.mjs";
 import { meterSocket } from "./control/sockets.mjs";
-import { METERING } from "./control/plans.mjs";
+import { enforcedEntitlements, METERING } from "./control/plans.mjs";
 import { runMonitor } from "./control/monitor.mjs";
 
 const FLUSH_MS = METERING.flush_seconds * 1000;
@@ -190,11 +190,7 @@ export class WorkspaceServer extends DurableObject {
     if (!this.provisioning.ready()) {
       return new Response("this workspace has not been provisioned", { status: 503 });
     }
-    const limits = this.provisioning.summary().entitlements;
-    if (!Number.isInteger(limits.connections_max) || !Number.isInteger(limits.max_frame_bytes)) {
-      // Provisioned before quotas existed: the monitor's next run pushes current entitlements.
-      return json({ error: "entitlements-outdated", detail: "this workspace's limits are being updated" }, 503, { "retry-after": "900" });
-    }
+    const limits = enforcedEntitlements(this.provisioning.summary().entitlements);
     this.#roll(Date.now());
     if (!this.meter.admits(limits.connections_max)) {
       return json({ error: "connection-limit", detail: `this workspace allows ${limits.connections_max} connections at once` }, 503, {

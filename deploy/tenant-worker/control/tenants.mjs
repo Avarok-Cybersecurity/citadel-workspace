@@ -2,7 +2,9 @@
  * Creating a tenant, reporting its status, and opening its billing portal.
  */
 import { checkSlug } from "./slug.mjs";
-import { entitlements, intervalsOf, isPaid, maxSeats, MAX_STORAGE_BLOCKS, storageKey, storageOfferedOn, tierIds, tierKey } from "./plans.mjs";
+import {
+  entitlements, intervalsOf, isPaid, maxSeats, MAX_STORAGE_BLOCKS, overageKey, overageSoldWith, storageKey, storageOfferedOn, tierIds, tierKey,
+} from "./plans.mjs";
 import { CLAIM_SEAL, digestsEqual, randomHex, RESERVATION_SEAL, seal, sha256Hex, unseal } from "./secrets.mjs";
 import { CREATE_ACTION, verifyTurnstile } from "./turnstile.mjs";
 import { priceIds, stripe, StripeError } from "./stripe.mjs";
@@ -153,7 +155,8 @@ async function expireCheckout(io, cfg, sessionId) {
 
 async function openCheckout(io, cfg, row, now) {
   const tierLookup = tierKey(row.tier, row.interval);
-  const keys = row.storage_blocks > 0 ? [tierLookup, storageKey(row.interval)] : [tierLookup];
+  const withOverage = overageSoldWith(row.tier, row.interval);
+  const keys = [tierLookup, ...(row.storage_blocks > 0 ? [storageKey(row.interval)] : []), ...(withOverage ? [overageKey()] : [])];
   const ids = await priceIds(io, cfg.stripeKey, keys);
   const back = (path) => `${cfg.publicOrigin}${path}?tenant=${encodeURIComponent(row.slug)}`;
   const form = {
@@ -170,10 +173,14 @@ async function openCheckout(io, cfg, row, now) {
     cancel_url: `${back("/create")}&canceled=1`,
     expires_at: String(now + cfg.checkoutTtl),
   };
+  let next = 1;
   if (row.storage_blocks > 0) {
-    form["line_items[1][price]"] = ids.get(storageKey(row.interval));
-    form["line_items[1][quantity]"] = String(row.storage_blocks);
+    form[`line_items[${next}][price]`] = ids.get(storageKey(row.interval));
+    form[`line_items[${next}][quantity]`] = String(row.storage_blocks);
+    next += 1;
   }
+  // Metered: billed by what the meter records, so Stripe refuses a quantity on it.
+  if (withOverage) form[`line_items[${next}][price]`] = ids.get(overageKey());
   return stripe(io, cfg.stripeKey, "POST", "/checkout/sessions", form, `checkout-${row.tenant_id}`);
 }
 

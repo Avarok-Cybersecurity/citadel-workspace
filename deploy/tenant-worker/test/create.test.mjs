@@ -103,7 +103,7 @@ describe("paid tier: Checkout", () => {
     expect(body.claim_code).toBeUndefined();
 
     const prices = calls.find((c) => c.url.endsWith("/v1/prices"));
-    expect(prices.form.getAll("lookup_keys[]")).toEqual(["citadel-team-month", "citadel-storage-month"]);
+    expect(prices.form.getAll("lookup_keys[]")).toEqual(["citadel-team-month", "citadel-storage-month", "citadel-relay-overage"]);
     const session = calls.find((c) => c.url.endsWith("/v1/checkout/sessions")).form;
     const row = await tenantRow(slug);
     expect(Object.fromEntries(session)).toMatchObject({
@@ -112,10 +112,13 @@ describe("paid tier: Checkout", () => {
       "line_items[0][quantity]": "3",
       "line_items[1][price]": "price_storage_m",
       "line_items[1][quantity]": "2",
+      "line_items[2][price]": "price_relay_overage",
       "subscription_data[metadata][tenant]": slug,
       "subscription_data[metadata][tenant_id]": row.tenant_id,
       client_reference_id: row.tenant_id,
     });
+    // The metered overage price bills by usage: no quantity, and no line item beyond it.
+    expect([...session.keys()].filter((k) => k.startsWith("line_items[2]") || k.startsWith("line_items[3]"))).toEqual(["line_items[2][price]"]);
     expect(session.get("success_url")).toBe(`${ORIGIN}/create/done?tenant=${slug}&session_id={CHECKOUT_SESSION_ID}`);
     expect(row).toMatchObject({ status: "pending", tier: "team", interval: "month", seats: 3, storage_blocks: 2 });
     expect(row.claim_sealed).toMatch(/^[0-9a-f]+:[0-9a-f]+$/);
@@ -123,6 +126,25 @@ describe("paid tier: Checkout", () => {
     // Pending: the tenant's host is not served yet.
     expect((await SELF.fetch(`https://${slug}.work.avarok.net/`)).status).toBe(404);
     expect(await (await get(`/api/tenants/${slug}/status`)).json()).toMatchObject({ status: "pending" });
+  });
+  it("monthly without storage: the overage price is the second item; yearly carries none", async () => {
+    const lineItems = (form) => Object.fromEntries([...form].filter(([k]) => k.startsWith("line_items")));
+    const monthly = outbound();
+    expect((await post("/api/tenants", createBody(freshSlug("om"), { tier: "business", interval: "month", seats: 2 }))).status).toBe(201);
+    expect(lineItems(monthly.calls.find((c) => c.url.endsWith("/v1/checkout/sessions")).form)).toEqual({
+      "line_items[0][price]": "price_business_m",
+      "line_items[0][quantity]": "2",
+      "line_items[1][price]": "price_relay_overage",
+    });
+    const yearly = outbound();
+    expect((await post("/api/tenants", createBody(freshSlug("oy"), { tier: "team", interval: "year", seats: 2, storage_blocks: 1 }))).status).toBe(201);
+    expect(yearly.calls.find((c) => c.url.endsWith("/v1/prices")).form.getAll("lookup_keys[]")).toEqual(["citadel-team-year", "citadel-storage-year"]);
+    expect(lineItems(yearly.calls.find((c) => c.url.endsWith("/v1/checkout/sessions")).form)).toEqual({
+      "line_items[0][price]": "price_team_y",
+      "line_items[0][quantity]": "2",
+      "line_items[1][price]": "price_storage_y",
+      "line_items[1][quantity]": "1",
+    });
   });
   it("a Stripe failure releases the slug and reports nothing charged", async () => {
     const slug = freshSlug("sf");

@@ -126,6 +126,19 @@ describe("the monitor", () => {
     expect(sampled.results.map((r) => [r.bytes_in, r.relay_gb_included, r.overage_gb, r.overage_gb_reported])).toEqual([[7e9, 5, 2, 0]]);
   });
 
+  it("records a yearly tenant's overage without billing it: its subscription holds no metered price", async () => {
+    const { row, period } = await activeTeam();
+    const year = subscriptionEvent("customer.subscription.updated", row, {
+      id: `evt_${crypto.randomUUID()}`, created: now() + 1, items: [item("citadel-team-year", 3)], period,
+    });
+    expect((await deliver(year)).status).toBe(200);
+    await relay(row.slug, 160e9);
+    const { calls } = outbound();
+    await monitorOf(row.slug)();
+    expect(meterEvents(calls, row.tenant_id)).toEqual([]);
+    expect(await usageRow(row.tenant_id, period.start)).toMatchObject({ overage_gb: 10, overage_gb_reported: 0, overage_gb_pending: null });
+  });
+
   it("gives an object whose entitlements drifted what the registry says", async () => {
     const { row } = await activeTeam();
     const object = tenantObject(row.slug);
