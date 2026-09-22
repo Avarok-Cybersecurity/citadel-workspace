@@ -75,22 +75,12 @@ enum Actions {
         case .openWorkspace: NSWorkspace.shared.open(settings.workspaceURL)
         case .createWorkspace: NSWorkspace.shared.open(settings.workspaceURL.appendingPathComponent("create"))
         case .openAccount(let account), .logIn(let account):
-            guard let url = WorkspaceLink.forAccount(account, origin: settings.workspaceURL) else {
-                log.write("no workspace link for \(account.id)")
-                return
-            }
-            NSWorkspace.shared.open(url)
+            WorkspaceLink.open(account, origin: settings.workspaceURL, log: log)
         case .restartAgent: agent?.restart()
         case .toggleLogin: LoginItem.toggle(log: log)
         case .showLog: NSWorkspace.shared.open(log.url)
         }
     }
-}
-
-enum WorkspaceLink {
-    /// The site, for now. The page does not yet read an account from its URL, so a parameter here
-    /// would only look like it selected one; `?account=` arrives with the page that honours it.
-    static func forAccount(_ account: Account, origin: URL) -> URL? { origin }
 }
 
 enum LoginItem {
