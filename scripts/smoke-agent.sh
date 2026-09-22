@@ -61,7 +61,7 @@ fi
 # which fails only after the download and reads as a broken release.
 case "$ARCHIVE" in
   # One app for every Mac: both architectures, not merely "universal".
-  *.dmg)        { lipo -verify_arch arm64 "$BIN" && lipo -verify_arch x86_64 "$BIN"; } || { echo "::error::the app's agent is not arm64 + x86_64: $(lipo -archs "$BIN")" >&2; exit 1; }
+  *.dmg)        { lipo "$BIN" -verify_arch arm64 && lipo "$BIN" -verify_arch x86_64; } || { echo "::error::the app's agent is not arm64 + x86_64: $(lipo -archs "$BIN")" >&2; exit 1; }
                 echo "  architectures: $(lipo -archs "$BIN")"; WANT="" ;;
   *macos-arm64*) WANT="arm64" ;;
   *macos-x64*)   WANT="x86_64" ;;

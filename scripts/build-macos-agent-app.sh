@@ -25,8 +25,8 @@ case "$VERSION" in
 esac
 for f in "$ARM" "$X64"; do [ -f "$f" ] || { echo "build-macos-agent-app: no binary at $f" >&2; exit 1; }; done
 # The architecture each argument claims, checked: swapped arguments would still lipo.
-lipo -verify_arch arm64 "$ARM" || { echo "build-macos-agent-app: $ARM is not arm64" >&2; exit 1; }
-lipo -verify_arch x86_64 "$X64" || { echo "build-macos-agent-app: $X64 is not x86_64" >&2; exit 1; }
+lipo "$ARM" -verify_arch arm64 || { echo "build-macos-agent-app: $ARM is not arm64" >&2; exit 1; }
+lipo "$X64" -verify_arch x86_64 || { echo "build-macos-agent-app: $X64 is not x86_64" >&2; exit 1; }
 
 APP="$OUT/Citadel Agent.app"
 work="$(mktemp -d)"
