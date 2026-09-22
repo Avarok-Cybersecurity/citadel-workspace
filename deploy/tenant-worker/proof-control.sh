@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Runs the Phase 4a proof end to end under `wrangler dev` on :8817 (nothing is deployed):
+# Runs the Phase 4a proof end to end under `wrangler dev` on :${PROOF_PORT:-8817} (nothing is deployed):
 #   1. free tenant + wasm client, 2. real Stripe TEST-mode Checkout + signed webhooks,
 #   3. negative control: the always-fail Turnstile secret.
 # Reads the Stripe restricted key from ~/stripe.citadel.test.rk.txt into .dev.vars (gitignored);
 # prints no secret. The webhook secret is generated per run: no Stripe endpoint is involved.
 set -euo pipefail
 cd "$(dirname "$0")"
-PORT=8817
+PORT="${PROOF_PORT:-8817}"
 BASE="http://127.0.0.1:$PORT"
 PERSIST=.wrangler-proof
 KEYFILE="${STRIPE_KEY_FILE:-$HOME/stripe.citadel.test.rk.txt}"

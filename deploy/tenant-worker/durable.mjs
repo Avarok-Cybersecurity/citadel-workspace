@@ -4,14 +4,15 @@
  *
  *   node durable.mjs <persist-dir>
  *
- * Starts `wrangler dev --persist-to <persist-dir>` itself, registers an account on /acme, writes
- * a profile name through the kernel and reads it back, then stops wrangler — every workerd
+ * Starts `wrangler dev --persist-to <persist-dir>` itself (a fresh directory: the tenant is
+ * created in it), creates tenant acme through the control plane, registers an account on /acme,
+ * writes a profile name through the kernel and reads it back, then stops wrangler — every workerd
  * process, so nothing in memory survives — starts it again on the same directory, logs in with
  * the same account (no registration) and reads the name back. The client node stays up across
  * the restart; its account store is in memory, which is fine: it is the server's that is on trial.
  */
 import {
-  check, client, request, requestOnceEnrolled, secret, short, startWrangler, stats, stopWrangler, verdict,
+  check, client, provision, request, requestOnceEnrolled, secret, short, startWrangler, stats, stopWrangler, verdict,
 } from "./proof-lib.mjs";
 
 const persistTo = process.argv[2];
@@ -29,6 +30,7 @@ let c = null;
 
 try {
   wrangler = await startWrangler(persistTo);
+  await provision(tenant);
   c = await client(tenant);
   await c.register(username, password);
   const cid = await c.connect(username, password);
