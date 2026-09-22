@@ -1,0 +1,28 @@
+# A workspace server per tenant, as a Durable Object.
+#
+# SPIKE (Phase 1): exercised only under `wrangler dev`; there is no route and nothing here is
+# deployed. The wasm is built by `build.sh` (cargo + wasm-pack), not by wrangler.
+name = "citadel-tenant"
+main = "worker.mjs"
+compatibility_date = "2026-09-01"
+
+[build]
+command = ""
+
+[[durable_objects.bindings]]
+name = "WORKSPACE"
+class_name = "WorkspaceServer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WorkspaceServer"]
+
+# Argon2 cost of the server's password hashing (see server-wasm `ArgonCost`). The release default
+# is 64 MiB x 10 passes x 8 lanes, sized for a server box; a Worker isolate has 128 MB in all and
+# meters CPU per event. The workspace master password is NOT here: it comes from `.dev.vars`
+# (local) or a secret, and the object refuses to start without it.
+[vars]
+ARGON_LANES = "1"
+ARGON_MEM_KIB = "4096"
+ARGON_TIME_COST = "1"
+LOG_FILTER = "citadel=debug"

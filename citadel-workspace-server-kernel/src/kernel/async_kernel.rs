@@ -24,7 +24,7 @@ pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 /// Reject a path segment supplied by an authenticated client before it
 /// is joined onto the content base directory. Without this check, a
 /// node/office/room name like `"../../etc/evil"` would let
-/// `tokio::fs::write` escape the configured content tree and clobber
+/// `crate::platform::fs::write` escape the configured content tree and clobber
 /// arbitrary files as the server process user.
 ///
 /// Rules: a content segment is rejected if it
@@ -41,7 +41,7 @@ pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 /// that the UI should already prevent from containing these
 /// characters — this is a belt-and-suspenders check at the persistence
 /// boundary so a compromised or misbehaving client can't reach a
-/// `tokio::fs::write` outside the content directory.
+/// `crate::platform::fs::write` outside the content directory.
 pub(crate) fn validate_content_segment(segment: &str) -> Result<(), NetworkError> {
     if segment.is_empty() {
         return Err(NetworkError::msg("Content segment cannot be empty"));
@@ -744,12 +744,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         info!(target: "citadel", "[ASYNC_KERNEL] Persisting node content to {:?}", content_path);
 
         if let Some(parent) = content_path.parent() {
-            tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                NetworkError::msg(format!("Failed to create directory {:?}: {}", parent, e))
-            })?;
+            crate::platform::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| {
+                    NetworkError::msg(format!("Failed to create directory {:?}: {}", parent, e))
+                })?;
         }
 
-        tokio::fs::write(&content_path, mdx_content)
+        crate::platform::fs::write(&content_path, mdx_content)
             .await
             .map_err(|e| {
                 NetworkError::msg(format!(
@@ -774,12 +776,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
         // Ensure parent directory exists
         if let Some(parent) = content_path.parent() {
-            tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                NetworkError::msg(format!("Failed to create directory {:?}: {}", parent, e))
-            })?;
+            crate::platform::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| {
+                    NetworkError::msg(format!("Failed to create directory {:?}: {}", parent, e))
+                })?;
         }
 
-        tokio::fs::write(&content_path, mdx_content)
+        crate::platform::fs::write(&content_path, mdx_content)
             .await
             .map_err(|e| {
                 NetworkError::msg(format!(
@@ -807,7 +811,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         let office_content_path = base_path.join(office_name).join("CONTENT.md");
         info!(target: "citadel", "[ASYNC_KERNEL] Persisting office content to {:?}", office_content_path);
 
-        tokio::fs::write(&office_content_path, mdx_content)
+        crate::platform::fs::write(&office_content_path, mdx_content)
             .await
             .map_err(|e| {
                 NetworkError::msg(format!(
@@ -841,7 +845,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .join("CONTENT.md");
         info!(target: "citadel", "[ASYNC_KERNEL] Persisting room content to {:?}", room_content_path);
 
-        tokio::fs::write(&room_content_path, mdx_content)
+        crate::platform::fs::write(&room_content_path, mdx_content)
             .await
             .map_err(|e| {
                 NetworkError::msg(format!(
@@ -1068,8 +1072,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             return Ok(());
         }
 
-        let current_time = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
+        let current_time = crate::platform::SystemTime::now()
+            .duration_since(crate::platform::UNIX_EPOCH)
             .expect("system clock before unix epoch")
             .as_secs();
 
@@ -1437,7 +1441,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
         match event {
             NodeResult::ConnectSuccess(connect_success) => {
                 let this = self.clone();
-                tokio::spawn(async move {
+                crate::platform::spawn(async move {
                     let _cid = connect_success.session_cid;
                     let user_cid = connect_success.channel.get_session_cid();
 
@@ -1711,7 +1715,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                     break;
                                 };
 
-                                if !rate_limiter.try_consume(current_cid, std::time::Instant::now()) {
+                                if !rate_limiter.try_consume(current_cid, crate::platform::Instant::now()) {
                                     warn!(target: "citadel", "[ASYNC_KERNEL] Rate limit exceeded for CID {}", current_cid);
                                     let response = WorkspaceProtocolPayload::Response(Box::new(
                                         WorkspaceProtocolResponse::Error("Rate limit exceeded. Please slow down.".to_string())
@@ -1923,7 +1927,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     return Ok(());
                 }
 
-                tokio::spawn(async move {
+                crate::platform::spawn(async move {
                     use tokio_stream::StreamExt;
 
                     let mut handle = object_transfer_handle.handle;
@@ -1994,7 +1998,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
 
         // Allow brief drain period for in-flight requests
         info!(target: "citadel", "Allowing {DRAIN_SECONDS}s drain period for in-flight requests");
-        tokio::time::sleep(std::time::Duration::from_secs(DRAIN_SECONDS)).await;
+        crate::platform::sleep(std::time::Duration::from_secs(DRAIN_SECONDS)).await;
 
         info!(target: "citadel", "NetKernel stopped");
         Ok(())

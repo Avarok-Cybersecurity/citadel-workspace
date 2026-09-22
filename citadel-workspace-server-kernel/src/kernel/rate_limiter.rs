@@ -48,10 +48,11 @@
 //! the public surface (`try_consume`) is small enough to swap the
 //! backing store without changing call sites when that day comes.
 
+use crate::platform::Instant;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Default budget the kernel applies if it doesn't override.
 pub const DEFAULT_RATE_LIMIT_MAX: u32 = 100;

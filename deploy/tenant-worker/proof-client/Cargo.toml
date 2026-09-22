@@ -1,0 +1,21 @@
+[package]
+name = "citadel-tenant-proof-client"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+citadel_sdk = { workspace = true }
+citadel-workspace-types = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true }
+web-sys = { workspace = true }
+tenant-console-log = { path = "../console-log" }
+serde_json = { workspace = true }
+futures = "0.3"
+log = "0.4"
+citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }

@@ -15,8 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 structopt = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt", "signal"] }
-citadel_sdk = { workspace = true, features = ["sql"] }
+citadel_io = { workspace = true }
 citadel_types = { workspace = true }
 citadel-workspace-types = { workspace = true }
 citadel_logging = { workspace = true }
@@ -40,6 +39,19 @@ bcrypt = "0.17.0"
 sha2 = "0.10"
 subtle = "2.6"
 chrono = { workspace = true }
+
+# Native: the production server — SQLite backend, SIGTERM drain.
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "signal"] }
+citadel_sdk = { workspace = true, features = ["sql"] }
+
+# wasm32: a server hosted by a JS runtime (a Workers Durable Object). No sqlx, no signals, no
+# threads; tokio contributes only its runtime-free sync primitives and macros, and every spawn,
+# timer and clock goes through `citadel_io`, which drives them from the host's event loop.
+# `citadel_sdk` without its default `std`/`filesystem` features, as its own wasm tests build it.
+[target.'cfg(target_family = "wasm")'.dependencies]
+tokio = { version = "1.44.1", default-features = false, features = ["macros", "sync"] }
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
 
 [dev-dependencies]
 citadel_sdk = { workspace = true, features = ["localhost-testing", "multi-threaded"] }

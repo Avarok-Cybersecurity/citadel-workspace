@@ -46,6 +46,8 @@ citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protoco
 # directly, so a client-side mirror cannot drift from the SDK unnoticed.
 citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
+# The SDK's runtime shim: `spawn`, timers and clocks that work on native and on wasm32 alike.
+citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
 
 # Avarok deps (for dev purposes, use the local path at ../Citadel-Protocol)
 #citadel_sdk = { path = "../Citadel-Protocol/citadel_sdk" }
@@ -73,3 +75,13 @@ async-recursion = { version = "1.0" }
 rstest = { version = "0.25.0" }
 bincode = "2.0.1"
 chrono = { version = "0.4.34", features = ["serde"] }
+
+# SPIKE ONLY (feat/kernel-on-wasm): build against the local Citadel-Protocol branch
+# feat/wasm-server-in-worker. Not for merge.
+[patch."https://github.com/Avarok-Cybersecurity/Citadel-Protocol"]
+citadel_sdk = { path = "../citadel-protocol/citadel_sdk" }
+citadel_types = { path = "../citadel-protocol/citadel_types" }
+citadel_user = { path = "../citadel-protocol/citadel_user" }
+citadel_logging = { path = "../citadel-protocol/citadel_logging" }
+citadel_crypt = { path = "../citadel-protocol/citadel_crypt" }
+citadel_io = { path = "../citadel-protocol/citadel_io" }

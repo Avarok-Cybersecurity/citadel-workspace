@@ -1,0 +1,4 @@
+# getrandom 0.3 draws entropy from `crypto.getRandomValues` only when told to; Workers and Node
+# both provide it.
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
