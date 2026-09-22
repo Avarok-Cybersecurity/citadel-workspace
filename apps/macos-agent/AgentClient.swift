@@ -30,7 +30,7 @@ final class AgentClient {
     func fetch(_ done: @escaping ([Account]?) -> Void) {
         let task = session.webSocketTask(with: url)
         task.maximumMessageSize = 4 * 1024 * 1024
-        var accounts: [UInt64: (username: String, fullName: String)]?
+        var accounts: [UInt64: (username: String, fullName: String, host: String?)]?
         var connected: Set<UInt64>?
         var finished = false
         func finish(_ result: [Account]?) {
@@ -54,7 +54,7 @@ final class AgentClient {
                 }
                 if let accounts, let connected {
                     finish(accounts.map { cid, a in
-                        Account(cid: cid, username: a.username, fullName: a.fullName, workspaceHost: nil, connected: connected.contains(cid))
+                        Account(cid: cid, username: a.username, fullName: a.fullName, workspaceHost: a.host, connected: connected.contains(cid))
                     })
                 } else {
                     receive()
@@ -68,9 +68,16 @@ final class AgentClient {
         queue.asyncAfter(deadline: .now() + 5) { finish(nil) }
     }
 
+    /// server_host, from agents that record it (citadel-agent #70); absent or null from older ones.
+    /// Shown as text and passed only as the link's `server`, which the page validates again.
+    private static func host(_ value: Any?) -> String? {
+        guard let h = value as? String, !h.isEmpty, h.count <= 259 else { return nil }
+        return h
+    }
+
     private enum Reply {
         case accepted
-        case accounts([UInt64: (username: String, fullName: String)])
+        case accounts([UInt64: (username: String, fullName: String, host: String?)])
         case sessions(Set<UInt64>)
         case other
     }
@@ -101,10 +108,10 @@ final class AgentClient {
             return .accepted
         case "GetAccountInformationResponse":
             let map = body["accounts"] as? [String: Any] ?? [:]
-            var out: [UInt64: (username: String, fullName: String)] = [:]
+            var out: [UInt64: (username: String, fullName: String, host: String?)] = [:]
             for (key, entry) in map {
                 guard let cid = UInt64(key), let e = entry as? [String: Any], let name = e["username"] as? String else { continue }
-                out[cid] = (name, e["full_name"] as? String ?? "")
+                out[cid] = (name, e["full_name"] as? String ?? "", AgentClient.host(e["server_host"]))
             }
             return .accounts(out)
         case "GetSessionsResponse":
