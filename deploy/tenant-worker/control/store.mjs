@@ -4,7 +4,7 @@
 
 const COLUMNS =
   "slug, tenant_id, display_name, status, tier, interval, seats, storage_blocks, stripe_customer, " +
-  "stripe_subscription, created_at, expires_at, claim_hash, checkout_hash, sub_event_created";
+  "stripe_subscription, created_at, expires_at, claim_hash, checkout_hash, sub_event_created, reservation_hash, checkout_sealed";
 
 export class Store {
   constructor(db) {
@@ -27,17 +27,44 @@ export class Store {
    * the same batch. False when someone holds it.
    */
   async reserve(row, now) {
+    return this.#insertAfter(
+      this.db
+        .prepare("DELETE FROM tenants WHERE slug = ? AND status = 'pending' AND expires_at IS NOT NULL AND expires_at <= ?")
+        .bind(row.slug, now),
+      row,
+      now,
+    );
+  }
+
+  /**
+   * Replaces the pending reservation `held` with `row`, in one batch: only while `held` is still
+   * that pending row with that reservation hash. False when it has changed since it was read (a
+   * webhook activated it, another retry replaced it): the insert then meets the slug and the
+   * whole batch rolls back.
+   */
+  async supersede(held, row, now) {
+    return this.#insertAfter(
+      this.db
+        .prepare("DELETE FROM tenants WHERE slug = ? AND tenant_id = ? AND status = 'pending' AND reservation_hash = ?")
+        .bind(held.slug, held.tenant_id, held.reservation_hash),
+      row,
+      now,
+    );
+  }
+
+  async #insertAfter(clear, row, now) {
     try {
       await this.db.batch([
-        this.db
-          .prepare("DELETE FROM tenants WHERE slug = ? AND status = 'pending' AND expires_at IS NOT NULL AND expires_at <= ?")
-          .bind(row.slug, now),
+        clear,
         this.db
           .prepare(
             "INSERT INTO tenants (slug, tenant_id, display_name, status, tier, interval, seats, storage_blocks, " +
-              "created_at, expires_at, claim_hash) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)",
+              "created_at, expires_at, claim_hash, reservation_hash) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)",
           )
-          .bind(row.slug, row.tenant_id, row.display_name, row.tier, row.interval, row.seats, row.storage_blocks, now, row.expires_at, row.claim_hash),
+          .bind(
+            row.slug, row.tenant_id, row.display_name, row.tier, row.interval, row.seats, row.storage_blocks, now,
+            row.expires_at, row.claim_hash, row.reservation_hash,
+          ),
       ]);
       return true;
     } catch (e) {
@@ -58,10 +85,10 @@ export class Store {
       .run();
   }
 
-  async attachCheckout(slug, tenantId, checkoutHash, sealed) {
+  async attachCheckout(slug, tenantId, checkoutHash, claimSealed, checkoutSealed) {
     await this.db
-      .prepare("UPDATE tenants SET checkout_hash = ?, claim_sealed = ? WHERE slug = ? AND tenant_id = ?")
-      .bind(checkoutHash, sealed, slug, tenantId)
+      .prepare("UPDATE tenants SET checkout_hash = ?, claim_sealed = ?, checkout_sealed = ? WHERE slug = ? AND tenant_id = ?")
+      .bind(checkoutHash, claimSealed, checkoutSealed, slug, tenantId)
       .run();
   }
 

@@ -28,7 +28,12 @@ export const PRICES = {
  * Answers siteverify (with `turnstile`, an answer object) and Stripe. Records every call as
  * `{url, method, form}` so a test can assert what was sent.
  */
-export function outbound({ turnstile = { success: true, hostname: "example.com" }, checkout } = {}) {
+/**
+ * `expire` is how Stripe answers `POST /v1/checkout/sessions/<id>/expire`: open sessions expire
+ * (200) unless `expire.refuse` names the state the session is really in ("complete", "expired"),
+ * in which case the expire is a 400 and a GET of the session reports that state.
+ */
+export function outbound({ turnstile = { success: true, hostname: "example.com" }, checkout, expire = {} } = {}) {
   const calls = [];
   const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init = {}) => {
     const url = new URL(typeof input === "string" ? input : input.url);
@@ -41,6 +46,13 @@ export function outbound({ turnstile = { success: true, hostname: "example.com" 
         const data = form.getAll("lookup_keys[]").filter((k) => PRICES[k]).map((k) => ({ id: PRICES[k], lookup_key: k }));
         return Response.json({ data });
       }
+      const expiring = url.pathname.match(/^\/v1\/checkout\/sessions\/(cs_[A-Za-z0-9_]+)\/expire$/);
+      if (expiring) {
+        if (expire.refuse) return Response.json({ error: { message: "Only Checkout Sessions with a status in [open] can be expired." } }, { status: 400 });
+        return Response.json({ id: expiring[1], status: "expired" });
+      }
+      const reading = url.pathname.match(/^\/v1\/checkout\/sessions\/(cs_[A-Za-z0-9_]+)$/);
+      if (reading && method === "GET") return Response.json({ id: reading[1], status: expire.refuse ?? "open" });
       if (url.pathname === "/v1/checkout/sessions") {
         const id = checkout?.id ?? `cs_test_${crypto.randomUUID().replaceAll("-", "")}`;
         return Response.json({ id, url: `https://checkout.stripe.com/c/pay/${id}` });

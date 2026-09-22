@@ -4,7 +4,9 @@
  *   node proof-control.mjs free   <base>   free tenant -> claim code -> the object holds it -> a wasm
  *                                          client registers, connects and round-trips at /<slug>
  *   node proof-control.mjs paid   <base>   a REAL Stripe test-mode Checkout (Team monthly x 3 + 2
- *                                          storage blocks), retrieved back from Stripe; then locally
+ *                                          storage blocks), cancelled and retried with the reservation
+ *                                          token (the old session is expired AT Stripe; a wrong token
+ *                                          is 409), the new one retrieved back from Stripe; then locally
  *                                          signed checkout.session.completed + subscription.created
  *                                          -> active with those entitlements; claim code once
  *   node proof-control.mjs denied <base>   (run with the always-fail Turnstile secret) 403, no row
@@ -96,9 +98,22 @@ if (mode === "free") {
 }
 
 if (mode === "paid") {
-  const r = await create({ tier: "team", interval: "month", seats: 3, storage_blocks: 2 });
-  say("create", r);
-  if (r.status !== 201) fail("paid creation failed");
+  const plan = { tier: "team", interval: "month", seats: 3, storage_blocks: 2 };
+  const initial = await create(plan);
+  const redactToken = (b) => ({ ...b, reservation_token: b?.reservation_token ? `${b.reservation_token.slice(0, 4)}…` : b?.reservation_token });
+  say("create", { status: initial.status, body: redactToken(initial.body) });
+  if (initial.status !== 201 || !/^[0-9a-f]{64}$/.test(initial.body.reservation_token ?? "")) fail("paid creation failed or returned no reservation token");
+  const firstSession = new URL(initial.body.checkout_url).pathname.match(/(cs_test_[A-Za-z0-9]+)/)?.[1];
+  // The visitor cancels at Stripe and comes back to the same slug: without their token, 409.
+  const stranger = await create({ ...plan, reservation_token: "0".repeat(64) });
+  say("retry with a wrong token", stranger);
+  if (stranger.status !== 409 || stranger.body?.error !== "slug-taken") fail("a wrong reservation token was not refused");
+  const r = await create({ ...plan, reservation_token: initial.body.reservation_token });
+  say("retry with the reservation token", { status: r.status, body: redactToken(r.body) });
+  if (r.status !== 201) fail("the creator could not retry their own reservation");
+  const old = await stripeGet(`/checkout/sessions/${firstSession}`);
+  say("the first session at Stripe after the retry", { id: `${firstSession.slice(0, 14)}…`, status: old.status, livemode: old.livemode });
+  if (old.status !== "expired") fail("the superseded Checkout Session is still payable");
   const url = new URL(r.body.checkout_url);
   say("checkout host", url.host);
   if (url.host !== "checkout.stripe.com") fail("not a Stripe Checkout URL");
@@ -126,6 +141,15 @@ if (mode === "paid") {
   const afterForged = await api("GET", `/api/tenants/${slug}/status`);
   say("forged signature", { webhook: forged, status_after: afterForged.body.status });
   if (forged.status !== 400 || afterForged.body.status !== "pending") fail("a forged webhook changed state");
+
+  // The superseded session completing late (correctly signed) activates nothing: its tenant_id is gone.
+  const lateOld = await webhook({
+    id: `evt_proof_${now}_old`, type: "checkout.session.completed", created: now,
+    data: { object: { id: firstSession, object: "checkout.session", customer: "cus_proof_old", subscription: "sub_proof_old", payment_status: "paid", metadata: old.metadata } },
+  });
+  const afterLate = await api("GET", `/api/tenants/${slug}/status`);
+  say("the superseded session's completion", { webhook: lateOld, status_after: afterLate.body.status });
+  if (lateOld.body?.applied !== false || afterLate.body.status !== "pending") fail("the superseded session activated the tenant");
 
   const completed = {
     id: `evt_proof_${now}_cs`, type: "checkout.session.completed", created: now,
