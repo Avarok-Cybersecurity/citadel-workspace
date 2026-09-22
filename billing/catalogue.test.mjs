@@ -12,11 +12,13 @@ test('the approved prices are what the table says', () => {
     'citadel-team-year': 6000,
     'citadel-business-month': 1200,
     'citadel-business-year': 12000,
+    'citadel-storage-month': 200,
+    'citadel-storage-year': 2000,
   });
 });
 
 test('Free sells nothing, so it creates no Stripe product', () => {
-  assert.deepEqual(deriveCatalogue(table).map((p) => p.tier), ['team', 'business']);
+  assert.deepEqual(deriveCatalogue(table).map((p) => p.tier), ['team', 'business', 'storage']);
 });
 
 test('every paid price is per seat', () => {
@@ -49,4 +51,13 @@ test('a bad amount or a duplicate lookup key is refused, not written', () => {
   const dup = structuredClone(table);
   dup.tiers[1].prices.push({ interval: 'month', unit_amount: 700 });
   assert.throws(() => deriveCatalogue(dup), /duplicate lookup key citadel-team-month/);
+});
+
+test('extra storage is its own product, per 10 GB block, on paid tiers only', () => {
+  const storage = deriveCatalogue(table).find((p) => p.tier === 'storage');
+  assert.equal(storage.product.description, '10 GB per block, on team and business');
+  assert.ok(storage.prices.every((p) => p.usage_type === 'licensed'));
+  const bad = structuredClone(table);
+  bad.addons[0].available_on.push('enterprise');
+  assert.throws(() => deriveCatalogue(bad), /unknown tier enterprise/);
 });

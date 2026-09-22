@@ -1,30 +1,79 @@
 {
-  "$comment": "The one source of the paid tiers. scripts/stripe-catalogue.mjs makes Stripe match this file and audits it; the tenant control plane reads the same limits. Amounts are in cents; a paid price is per seat (quantity = seats). Approved 2026-09-22.",
+  "$comment": "The one source of the paid tiers. scripts/stripe-catalogue.mjs makes Stripe match this file and audits it; the tenant control plane reads the same limits. Amounts are in cents; a paid price is per seat (quantity = seats). Tiers approved 2026-09-22; the storage add-on (per 10 GB block, quantity = blocks) proposed the same day.",
   "currency": "usd",
   "lookup_prefix": "citadel",
   "tiers": [
     {
       "id": "free",
       "name": "Citadel Workspace Free",
-      "limits": { "workspaces": 1, "members": 5, "storage_gb_total": 1 },
+      "limits": {
+        "workspaces": 1,
+        "members": 5,
+        "storage_gb_total": 1
+      },
       "prices": []
     },
     {
       "id": "team",
       "name": "Citadel Workspace Team",
-      "limits": { "workspaces": 1, "members": 100, "storage_gb_per_seat": 10 },
+      "limits": {
+        "workspaces": 1,
+        "members": 100,
+        "storage_gb_per_seat": 10
+      },
       "prices": [
-        { "interval": "month", "unit_amount": 600 },
-        { "interval": "year", "unit_amount": 6000 }
+        {
+          "interval": "month",
+          "unit_amount": 600
+        },
+        {
+          "interval": "year",
+          "unit_amount": 6000
+        }
       ]
     },
     {
       "id": "business",
       "name": "Citadel Workspace Business",
-      "limits": { "workspaces": 1, "members": 1000, "storage_gb_per_seat": 25, "priority_support": true },
+      "limits": {
+        "workspaces": 1,
+        "members": 1000,
+        "storage_gb_per_seat": 25,
+        "priority_support": true
+      },
       "prices": [
-        { "interval": "month", "unit_amount": 1200 },
-        { "interval": "year", "unit_amount": 12000 }
+        {
+          "interval": "month",
+          "unit_amount": 1200
+        },
+        {
+          "interval": "year",
+          "unit_amount": 12000
+        }
+      ]
+    }
+  ],
+  "addons": [
+    {
+      "id": "storage",
+      "name": "Citadel Workspace Extra Storage",
+      "unit": "10 GB block",
+      "available_on": [
+        "team",
+        "business"
+      ],
+      "grants": {
+        "storage_gb": 10
+      },
+      "prices": [
+        {
+          "interval": "month",
+          "unit_amount": 200
+        },
+        {
+          "interval": "year",
+          "unit_amount": 2000
+        }
       ]
     }
   ]

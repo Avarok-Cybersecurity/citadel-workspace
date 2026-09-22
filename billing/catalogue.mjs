@@ -24,14 +24,33 @@ export function deriveCatalogue(table) {
   if (!table.currency || !table.lookup_prefix || !Array.isArray(table.tiers)) {
     throw new Error('tiers.json needs currency, lookup_prefix and tiers');
   }
+  const tierIds = new Set(table.tiers.map((t) => t.id));
+  // Add-ons are sold the same way as tiers -- one product, per-unit licensed prices,
+  // quantity = units -- so they go through the same derivation. An add-on's key is
+  // its own id; `available_on` must name real tiers.
+  const addons = (table.addons ?? []).map((addon) => {
+    for (const t of addon.available_on) {
+      if (!tierIds.has(t)) throw new Error(`add-on ${addon.id} is offered on unknown tier ${t}`);
+    }
+    if (tierIds.has(addon.id)) throw new Error(`add-on id ${addon.id} collides with a tier`);
+    return {
+      id: addon.id,
+      name: addon.name,
+      description: `${addon.grants.storage_gb} GB per ${addon.unit.replace(/^\d+ GB /, '')}, on ${addon.available_on.join(' and ')}`,
+      prices: addon.prices,
+    };
+  });
   const seen = new Set();
-  return table.tiers
-    .filter((tier) => tier.prices.length > 0)
+  const products = [
+    ...table.tiers.filter((tier) => tier.prices.length > 0).map((tier) => ({ ...tier, description: describeLimits(tier.limits) })),
+    ...addons,
+  ];
+  return products
     .map((tier) => ({
       tier: tier.id,
       product: {
         name: tier.name,
-        description: describeLimits(tier.limits),
+        description: tier.description,
         metadata: { citadel_tier: tier.id },
       },
       prices: tier.prices.map((price) => {
