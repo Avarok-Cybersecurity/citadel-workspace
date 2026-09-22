@@ -1,7 +1,9 @@
 # A workspace server per tenant, as a Durable Object.
 #
-# SPIKE (Phase 1): exercised only under `wrangler dev`; there is no route and nothing here is
-# deployed. The wasm is built by `build.sh` (cargo + wasm-pack), not by wrangler.
+# One Worker, two faces (control/dispatch.mjs): work.avarok.net is the control plane (/api/*,
+# then the static UI); <slug>.work.avarok.net is that tenant's Durable Object.
+# Exercised only under `wrangler dev` so far; there is no route and nothing here is deployed.
+# The wasm is built by `build.sh` (cargo + wasm-pack), not by wrangler.
 name = "citadel-tenant"
 main = "worker.mjs"
 compatibility_date = "2026-09-01"
@@ -19,10 +21,31 @@ new_sqlite_classes = ["WorkspaceServer"]
 
 # Argon2 cost of the server's password hashing (see server-wasm `ArgonCost`). The release default
 # is 64 MiB x 10 passes x 8 lanes, sized for a server box; a Worker isolate has 128 MB in all and
-# meters CPU per event. The workspace master password is NOT here: it comes from `.dev.vars`
-# (local) or a secret, and the object refuses to start without it.
+# meters CPU per event. A tenant's master password is NOT here: the control plane generates one
+# per tenant and hands it to that tenant's object (control/provisioning.mjs).
 [vars]
 ARGON_LANES = "1"
 ARGON_MEM_KIB = "4096"
 ARGON_TIME_COST = "1"
 LOG_FILTER = "citadel=warn"
+
+# The control plane. Secrets, each of which leaves its routes answering 503 until it is set:
+#   TURNSTILE_SECRET       workspace creation
+#   STRIPE_SECRET_KEY      paid creation, the billing portal
+#   STRIPE_WEBHOOK_SECRET  the Stripe webhook
+CONTROL_HOST = "work.avarok.net"
+PUBLIC_ORIGIN = "https://work.avarok.net"
+ALLOWED_ORIGINS = "https://work.avarok.net"
+TURNSTILE_HOSTNAMES = "work.avarok.net"
+# `/<slug>` routes to a tenant only where there are no subdomains (`wrangler dev --var`).
+TENANT_PATH_ROUTING = "off"
+# How long a Stripe Checkout stays open (Stripe allows 1800..86400).
+CHECKOUT_TTL_SECONDS = "7200"
+
+[[d1_databases]]
+binding = "CONTROL_DB"
+database_name = "citadel-control"
+# Set to the id `wrangler d1 create citadel-control` prints before any deploy; local dev and the
+# tests use a local database whatever this says.
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "control/migrations"

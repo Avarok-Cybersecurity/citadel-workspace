@@ -12,8 +12,11 @@
  * make-instance-factory.mjs): objects can share an isolate, and a shared instance would share
  * every Rust global and the async task queue between tenants.
  */
+import { DurableObject } from "cloudflare:workers";
 import { instantiate } from "./server-wasm/pkg/instance.mjs";
 import wasm from "./server-wasm/pkg/citadel_tenant_server_wasm_bg.wasm";
+import { dispatch } from "./control/dispatch.mjs";
+import { Provisioning } from "./control/provisioning.mjs";
 
 // Wasm instances this isolate has created. Module state is per isolate, so objects that see the
 // same count ran in one isolate.
@@ -24,28 +27,21 @@ function newInstance() {
   return instantiate(wasm);
 }
 
-/** The tenant a request is for: the first path segment, else the hostname's first label. */
-function tenantOf(url) {
-  const segment = url.pathname.split("/").filter(Boolean)[0];
-  return segment ?? url.hostname.split(".")[0];
-}
-
 function required(env, name) {
   const value = env[name];
   if (value === undefined || value === "") throw new Error(`${name} is not set`);
   return value;
 }
 
+// Which face a request is for -- the control plane or a tenant's object -- is decided in
+// `control/dispatch.mjs`; a tenant's object is reached only while the registry says it is active.
 export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    const object = env.WORKSPACE.get(env.WORKSPACE.idFromName(tenantOf(url)));
-    return object.fetch(request);
-  },
+  fetch: (request, env) => dispatch(request, env),
 };
 
-export class WorkspaceServer {
+export class WorkspaceServer extends DurableObject {
   constructor(ctx, env) {
+    super(ctx, env);
     this.ctx = ctx;
     this.env = env;
     this.wasm = null;
@@ -53,6 +49,21 @@ export class WorkspaceServer {
     this.exit = null;
     this.accepted = 0;
     this.connections = [];
+    // What the control plane gave this tenant (its master password, its entitlements), read
+    // before any request is delivered. One key-value entry, apart from the node's `citadel_*`
+    // SQL tables.
+    this.provisioning = new Provisioning(ctx.storage);
+    ctx.blockConcurrencyWhile(() => this.provisioning.load());
+  }
+
+  /** RPC from the control plane: this tenant's master password and entitlements. */
+  provision(data) {
+    return this.provisioning.provision(data, this.server !== null);
+  }
+
+  /** RPC from the control plane: the tenant's plan changed. */
+  setEntitlements(entitlements) {
+    return this.provisioning.setEntitlements(entitlements);
   }
 
   start() {
@@ -60,7 +71,7 @@ export class WorkspaceServer {
     // `bind_addr` is recorded as the node's address and never bound: the object owns no socket.
     const config = [
       `bind_addr = "127.0.0.1:0"`,
-      `workspace_master_password = ${JSON.stringify(required(env, "WORKSPACE_MASTER_PASSWORD"))}`,
+      `workspace_master_password = ${JSON.stringify(this.provisioning.masterPassword())}`,
     ].join("\n");
     const t0 = Date.now();
     this.wasm = newInstance();
@@ -111,6 +122,7 @@ export class WorkspaceServer {
       wasm_memory_bytes: this.wasm === null ? 0 : this.wasm.memory().buffer.byteLength,
       stored: this.storedRows(),
       connections: this.connections,
+      ...this.provisioning.summary(),
     };
   }
 
@@ -121,7 +133,13 @@ export class WorkspaceServer {
     if (this.exit !== null) {
       return new Response(`node exited: ${this.exit}`, { status: 503 });
     }
-    if (this.server === null) this.start();
+    if (!this.provisioning.ready()) {
+      return new Response("this workspace has not been provisioned", { status: 503 });
+    }
+    if (this.server === null) {
+      await this.provisioning.markStarted();
+      if (this.server === null) this.start();
+    }
 
     const [client, server] = Object.values(new WebSocketPair());
     server.accept();
