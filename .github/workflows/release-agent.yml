@@ -172,46 +172,14 @@ jobs:
       # the page work at all -- but that is Apple's tolerance, not a guarantee,
       # and it has been narrowing for several releases.
       #
-      # The identity is READ FROM THE CERTIFICATE rather than carried in a
-      # secret. A hand-typed "Developer ID Application: Name (TEAM)" is a second
-      # copy of something the .p12 already states, and the failure when it drifts
-      # is `codesign: no identity found`, which names neither copy.
+      # scripts/import-macos-signing-cert.sh says where the identity comes from.
       - name: Import the signing certificate
         if: runner.os == 'macOS'
         env:
           CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
           CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
         shell: bash
-        run: |
-          set -euo pipefail
-          if [ -z "${CERT_P12_BASE64:-}" ] || [ -z "${CERT_PASSWORD:-}" ]; then
-            echo "::error::MACOS_CERT_P12_BASE64 and MACOS_CERT_PASSWORD must both be set."
-            echo "  A release must not ship an unsigned macOS binary, so this fails rather"
-            echo "  than falling back to the ad-hoc signature Rust's linker produces."
-            exit 1
-          fi
-          keychain="$RUNNER_TEMP/signing.keychain-db"
-          kcpass="$(uuidgen)"
-          security create-keychain -p "$kcpass" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$kcpass" "$keychain"
-          printf '%s' "$CERT_P12_BASE64" | base64 -d > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PASSWORD" \
-            -T /usr/bin/codesign -T /usr/bin/security
-          rm -f "$RUNNER_TEMP/cert.p12"
-          # Without this, codesign blocks on a GUI prompt no runner can answer.
-          security set-key-partition-list -S apple-tool:,apple: -k "$kcpass" "$keychain" >/dev/null 2>&1
-          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-          identity="$(security find-identity -v -p codesigning "$keychain" \
-            | awk -F'"' '/Developer ID Application/ {print $2; exit}')"
-          if [ -z "$identity" ]; then
-            echo "::error::the .p12 contains no 'Developer ID Application' identity."
-            echo "  A 'Mac App Distribution' or 'Apple Development' certificate cannot sign"
-            echo "  software distributed outside the App Store. Export the Developer ID one."
-            exit 1
-          fi
-          echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
-          echo "Signing identity: $identity"
+        run: ./scripts/import-macos-signing-cert.sh
 
       - name: Sign
         if: runner.os == 'macOS'
@@ -242,38 +210,16 @@ jobs:
           tar -czf "${{ matrix.asset }}" -C "$staging" .
           shasum -a 256 "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"
 
-      # The macOS download people are offered. A ticket cannot be stapled to a
-      # bare executable, so the .tar.gz alone is judged online on first run and
-      # a quarantined copy reads as unverified; a stapled disk image is cleared
-      # offline (scripts/package-macos-dmg.sh says why in full).
-      - name: Package (macOS disk image)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./scripts/package-macos-dmg.sh \
-            "target/${{ matrix.target }}/release/citadel-workspace-internal-service" \
-            docs/AGENT_README.md "${ASSET%.tar.gz}.dmg"
-        env:
-          ASSET: ${{ matrix.asset }}
-
-      # One submission: Apple notarises the binary inside the image along with
-      # it, and the script checks the bare binary (the one in the .tar.gz) too.
-      - name: Notarise and staple
+      # The bare binary, for the .tar.gz. The download people are offered is the
+      # app in the macos-app job; this archive is for terminal and script use.
+      - name: Notarise
         if: runner.os == 'macOS'
         env:
-          ASSET: ${{ matrix.asset }}
           NOTARY_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_KEY_P8_BASE64 }}
           NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
         shell: bash
-        run: |
-          set -euo pipefail
-          dmg="${ASSET%.tar.gz}.dmg"
-          ./scripts/notarise-macos.sh "$dmg" \
-            "target/${{ matrix.target }}/release/citadel-workspace-internal-service"
-          # After stapling: the ticket changes the file, so the checksum must be of the stapled image.
-          shasum -a 256 "$dmg" > "$dmg.sha256"
+        run: ./scripts/notarise-macos.sh "target/${{ matrix.target }}/release/citadel-workspace-internal-service"
 
       - name: Package (windows)
         if: runner.os == 'Windows'
@@ -294,29 +240,101 @@ jobs:
         shell: bash
         run: ./scripts/smoke-agent.sh "${{ matrix.asset }}"
 
-      - name: Smoke-test the disk image
-        if: runner.os == 'macOS'
-        shell: bash
-        env:
-          ASSET: ${{ matrix.asset }}
-        run: ./scripts/smoke-agent.sh "${ASSET%.tar.gz}.dmg"
-
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
           path: |
             ${{ matrix.asset }}
             ${{ matrix.asset }}.sha256
-            # Only the macOS legs make one; elsewhere the pattern matches nothing.
-            citadel-agent-*.dmg
-            citadel-agent-*.dmg.sha256
+          if-no-files-found: error
+
+      # For the macos-app job, which joins both into one universal app. Named so
+      # that publish's pattern does not pick it up: it is not a release asset.
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'macOS'
+        with:
+          name: bin-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/citadel-workspace-internal-service
+          if-no-files-found: error
+
+  # Citadel-Agent.dmg: the download the page offers on a Mac. One universal app
+  # (no "which processor?"), in a disk image that opens as the usual window with
+  # Applications beside it. The app and the image are each notarised and
+  # stapled, so neither needs the network to be trusted.
+  macos-app:
+    timeout-minutes: 60
+    name: Citadel-Agent.dmg
+    needs: build
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bin-*
+          path: bins
+      - name: Import the signing certificate
+        env:
+          CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: ./scripts/import-macos-signing-cert.sh
+      # Pinned: the window layout is this tool's output, and an unpinned upgrade
+      # would change what ships without a change here.
+      - name: Install dmgbuild
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet dmgbuild==1.6.7
+          echo "DMGBUILD=$RUNNER_TEMP/venv/bin/dmgbuild" >> "$GITHUB_ENV"
+      # The tag names the version; a dispatched build is not a release and says so.
+      - name: Version
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/agent-v*) v="${GITHUB_REF_NAME#agent-v}" ;;
+            *) v="0.0.0" ;;
+          esac
+          echo "AGENT_VERSION=$v" >> "$GITHUB_ENV"
+      - name: Build the app
+        run: |
+          set -euo pipefail
+          chmod +x bins/*/citadel-workspace-internal-service
+          ./scripts/build-macos-agent-app.sh \
+            bins/bin-aarch64-apple-darwin/citadel-workspace-internal-service \
+            bins/bin-x86_64-apple-darwin/citadel-workspace-internal-service \
+            "$AGENT_VERSION" "$RUNNER_TEMP/app"
+      - name: Notarise and staple the app
+        env:
+          NOTARY_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: ./scripts/notarise-macos.sh "$RUNNER_TEMP/app/Citadel Agent.app"
+      - name: Package the disk image
+        run: ./scripts/package-macos-dmg.sh "$RUNNER_TEMP/app/Citadel Agent.app" Citadel-Agent.dmg
+      - name: Notarise and staple the disk image
+        env:
+          NOTARY_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          ./scripts/notarise-macos.sh Citadel-Agent.dmg
+          # After stapling: the ticket changes the file, so this is the published file's sum.
+          shasum -a 256 Citadel-Agent.dmg > Citadel-Agent.dmg.sha256
+      - name: Smoke-test the disk image
+        run: ./scripts/smoke-agent.sh Citadel-Agent.dmg
+      - name: Smoke-test the app as a user runs it
+        run: ./scripts/smoke-macos-app.sh Citadel-Agent.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: citadel-agent-macos-dmg
+          path: |
+            Citadel-Agent.dmg
+            Citadel-Agent.dmg.sha256
           if-no-files-found: error
 
   publish:
     # Observed under a minute; this bounds a hang, not performance.
     timeout-minutes: 15
     name: Publish release
-    needs: build
+    needs: [build, macos-app]
     runs-on: ubuntu-latest
     # Only a real tag push publishes. workflow_dispatch builds and smoke-tests
     # every platform without creating a release, so the pipeline is exercisable
@@ -325,6 +343,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          # Release assets only: agent-tls and the bin-* intermediates are not.
+          pattern: citadel-agent-*
           merge-multiple: true
           path: dist
       - name: Publish

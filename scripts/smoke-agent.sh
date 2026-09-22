@@ -33,14 +33,16 @@ case "$ARCHIVE" in
   *.tar.gz) tar -xzf "$ARCHIVE" -C "$WORK"; BIN="$WORK/citadel-agent" ;;
   # Mounted and copied out, as a user drags it out of the window; run from the image it would work
   # even if the copy lost its mode bit, which is the thing being checked.
+  # The agent inside the app, which is what the app runs; the app itself is smoke-macos-app.sh's.
   *.dmg)    hdiutil attach -quiet -nobrowse -readonly -mountpoint "$WORK/mnt" "$ARCHIVE"
-            ditto "$WORK/mnt/citadel-agent" "$WORK/citadel-agent"; cp "$WORK/mnt/README.md" "$WORK/" 2>/dev/null || true
+            ditto "$WORK/mnt/Citadel Agent.app/Contents/MacOS/citadel-agent" "$WORK/citadel-agent"
             hdiutil detach -quiet "$WORK/mnt"; BIN="$WORK/citadel-agent" ;;
   *)        echo "::error::unknown archive type: $ARCHIVE" >&2; exit 1 ;;
 esac
 
 [ -f "$BIN" ]            || { echo "::error::archive has no $(basename "$BIN")" >&2; ls -la "$WORK" >&2; exit 1; }
-[ -f "$WORK/README.md" ] || { echo "::error::archive ships no README; a user gets a bare binary with a required flag and no way to know it" >&2; exit 1; }
+# The app needs no README: it passes the flags itself. Every archive does.
+[ -f "$WORK/README.md" ] || [[ "$ARCHIVE" == *.dmg ]] || { echo "::error::archive ships no README; a user gets a bare binary with a required flag and no way to know it" >&2; exit 1; }
 # Windows has no executable bit; the check is meaningful only where it exists.
 case "$ARCHIVE" in
   *.tar.gz|*.dmg) [ -x "$BIN" ] || { echo "::error::citadel-agent is not executable — packaging dropped the mode bit" >&2; exit 1; } ;;
@@ -58,14 +60,19 @@ fi
 # wrong target at the wrong asset name would hand an Intel binary to an ARM Mac,
 # which fails only after the download and reads as a broken release.
 case "$ARCHIVE" in
+  # One app for every Mac: both architectures, not merely "universal".
+  *.dmg)        { lipo -verify_arch arm64 "$BIN" && lipo -verify_arch x86_64 "$BIN"; } || { echo "::error::the app's agent is not arm64 + x86_64: $(lipo -archs "$BIN")" >&2; exit 1; }
+                echo "  architectures: $(lipo -archs "$BIN")"; WANT="" ;;
   *macos-arm64*) WANT="arm64" ;;
   *macos-x64*)   WANT="x86_64" ;;
   *linux-x64*)   WANT="x86-64" ;;
   *windows-x64*) WANT="x86-64" ;;
   *)             WANT="" ;;
 esac
+# Read for every artefact: the signature check below keys on it, and an unset DESC there under
+# `set -u` does not fail the run -- it skips the check.
+DESC="$(file -b "$BIN")"
 if [ -n "$WANT" ]; then
-  DESC="$(file -b "$BIN")"
   case "$DESC" in
     *"$WANT"*) echo "  architecture matches the asset name ($WANT)" ;;
     *) echo "::error::$ARCHIVE claims $WANT but the binary is: $DESC" >&2; exit 1 ;;

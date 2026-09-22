@@ -1,46 +1,36 @@
 #!/usr/bin/env bash
-# Packages a signed agent binary as a signed disk image, for notarise-macos.sh to notarise and staple.
+# Packages "Citadel Agent.app" as the disk image people download: open it, and the window shows
+# the app beside Applications over the branded background, to be dragged across.
 #
-#   SIGN_IDENTITY="Developer ID Application: ..." \
-#     scripts/package-macos-dmg.sh <signed-binary> <readme> <out.dmg>
+#   SIGN_IDENTITY="Developer ID Application: ..." DMGBUILD=<path to dmgbuild> \
+#     scripts/package-macos-dmg.sh "<dir>/Citadel Agent.app" <out.dmg>
 #
-# Why a disk image and not only the .tar.gz: a notarisation ticket can be stapled to a .dmg, never
-# to a bare executable. A bare binary is judged online on first run, and a quarantined one that
-# Gatekeeper cannot vouch for offline is presented as software from an unidentified developer --
-# which is exactly how a signed, notarised download read to its first user. The stapled image is
-# cleared on first open with no network and no warning beyond the ordinary "downloaded from the
-# Internet" confirmation.
+# The app is expected notarised and stapled already (notarise-macos.sh), so that once dragged out
+# of the image it carries its own ticket; the image is notarised and stapled after this, as well.
 #
-# SIGN_IDENTITY has no default: an image signed ad hoc would look packaged and be refused.
+# SIGN_IDENTITY and DMGBUILD have no defaults: an unsigned image would be refused on every Mac but
+# this one, and a guessed dmgbuild is how a window ships without its layout.
 set -euo pipefail
 
-BIN="${1:?usage: package-macos-dmg.sh <signed-binary> <readme> <out.dmg>}"
-README="${2:?usage: package-macos-dmg.sh <signed-binary> <readme> <out.dmg>}"
-OUT="${3:?usage: package-macos-dmg.sh <signed-binary> <readme> <out.dmg>}"
+APP="${1:?usage: package-macos-dmg.sh <app> <out.dmg>}"
+OUT="${2:?usage: package-macos-dmg.sh <app> <out.dmg>}"
 : "${SIGN_IDENTITY:?SIGN_IDENTITY must name the Developer ID Application identity}"
+: "${DMGBUILD:?DMGBUILD must name the dmgbuild executable}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SRC="$ROOT/apps/macos-agent"
 
-[ -f "$BIN" ] || { echo "package-macos-dmg: no binary at $BIN" >&2; exit 1; }
-[ -f "$README" ] || { echo "package-macos-dmg: no README at $README" >&2; exit 1; }
-
-# The binary must already carry the distribution signature; the image vouches for what it holds.
-# Captured before matching: piping codesign into an early-exiting filter can SIGPIPE it.
-sig="$(codesign -dv --verbose=2 "$BIN" 2>&1)"
+[ -d "$APP" ] || { echo "package-macos-dmg: no app at $APP" >&2; exit 1; }
+# The image vouches for what it holds, so what it holds must already be signed for distribution.
+codesign --verify --deep --strict "$APP" || { echo "package-macos-dmg: $APP is not validly signed" >&2; exit 1; }
+sig="$(codesign -dv --verbose=2 "$APP" 2>&1)"
 case "$sig" in
   *"Authority=Developer ID Application"*) ;;
-  *) echo "package-macos-dmg: $BIN is not signed with a Developer ID Application identity" >&2; exit 1 ;;
+  *) echo "package-macos-dmg: $APP is not signed with a Developer ID Application identity" >&2; exit 1 ;;
 esac
-case "$sig" in
-  *"(runtime)"*) ;;
-  *) echo "package-macos-dmg: $BIN lacks the hardened runtime; notarisation would reject it" >&2; exit 1 ;;
-esac
-
-staging="$(mktemp -d)"
-trap 'rm -rf "$staging"' EXIT
-# ditto, not cp: it preserves the signature's extended attributes and the mode bit.
-ditto "$BIN" "$staging/citadel-agent"
-cp "$README" "$staging/README.md"
 
 rm -f "$OUT"
-hdiutil create -quiet -volname "Citadel Agent" -srcfolder "$staging" -fs HFS+ -format UDZO "$OUT"
+"$DMGBUILD" -s "$SRC/dmg-settings.py" -D app="$APP" -D background="$SRC/dmg-background.tiff" \
+  "Citadel Agent" "$OUT"
+# No hardened runtime: a disk image is not code.
 codesign --force --timestamp --sign "$SIGN_IDENTITY" "$OUT"
 codesign --verify --strict --verbose=2 "$OUT"

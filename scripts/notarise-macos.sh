@@ -2,7 +2,7 @@
 # Notarises a macOS artefact, staples the ticket where one can be stapled, and proves both.
 #
 #   NOTARY_KEY_ID=... NOTARY_ISSUER_ID=... NOTARY_KEY_P8_BASE64=... \
-#     scripts/notarise-macos.sh <artefact.dmg|binary> [covered-binary ...]
+#     scripts/notarise-macos.sh <artefact.dmg|.app|binary> [covered-binary ...]
 #
 # The key comes from exactly one of NOTARY_KEY_P8_BASE64 (CI, the org secret) or NOTARY_KEY_FILE
 # (an operator's machine). There is no fallback that quietly skips: signed but un-notarised is
@@ -35,6 +35,8 @@ fi
 # notarytool takes .zip, .pkg or .dmg -- never a bare binary -- so a binary is zipped for submission.
 case "$ARTEFACT" in
   *.dmg|*.pkg) upload="$ARTEFACT"; staple=1 ;;
+  # A bundle goes zipped with its folder name kept, and takes a staple like an image does.
+  *.app) upload="$work/notarize.zip"; ditto -c -k --keepParent "$ARTEFACT" "$upload"; staple=1 ;;
   *) upload="$work/notarize.zip"; ditto -c -k "$ARTEFACT" "$upload"; staple=0 ;;
 esac
 
