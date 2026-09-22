@@ -116,3 +116,12 @@ export const item = (lookupKey, quantity) => ({ price: { id: PRICES[lookupKey], 
 export const objectStats = async (slug) => (await SELF.fetch(`http://127.0.0.1/${slug}`)).json();
 
 export { sha256Hex } from "../control/secrets.mjs";
+
+/** wrangler.toml as `wrangler deploy` reads it (vitest.config.mjs), without the tests' overrides. */
+export const production = () => JSON.parse(env.PRODUCTION_CONFIG);
+
+/**
+ * The bindings with wrangler.toml's own vars on top: the Worker as deployed, but for the secrets,
+ * which a deployment sets with `wrangler secret put` (and the tests set to test values).
+ */
+export const productionEnv = (overrides = {}) => ({ ...env, ...production().vars, ...overrides });

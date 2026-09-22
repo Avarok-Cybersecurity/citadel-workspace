@@ -23,9 +23,13 @@ write_vars() {  # $1 = Turnstile secret (Cloudflare's public testing secrets onl
   } > .dev.vars
 }
 
+# The dev overrides of wrangler.toml (see its header), and this edge as its own host: with routes
+# configured, wrangler dev otherwise rewrites Host and Origin to work.avarok.net.
 serve() {
   npx wrangler dev --port "$PORT" --ip 127.0.0.1 --persist-to "$PERSIST" \
-    --var TENANT_PATH_ROUTING:on --var TURNSTILE_HOSTNAMES:example.com --var "ALLOWED_ORIGINS:$BASE" \
+    --local-upstream "127.0.0.1:$PORT" \
+    --var TENANT_PATH_ROUTING:on --var TENANT_DIAGNOSTICS:on --assets test/fixture-ui \
+    --var TURNSTILE_HOSTNAMES:example.com --var "ALLOWED_ORIGINS:$BASE" \
     > "$PERSIST.log" 2>&1 &
   PID=$!
   for _ in $(seq 1 60); do

@@ -1,20 +1,53 @@
-# A workspace server per tenant, as a Durable Object.
+# A workspace server per tenant, as a Durable Object, and the site that creates them.
 #
 # One Worker, two faces (control/dispatch.mjs): work.avarok.net is the control plane (/api/*,
-# then the static UI); <slug>.work.avarok.net is that tenant's Durable Object.
-# Exercised only under `wrangler dev` so far; there is no route and nothing here is deployed.
-# The wasm is built by `build.sh` (cargo + wasm-pack), not by wrangler.
+# then the static UI from [assets]); <slug>.work.avarok.net is that tenant's Durable Object.
+#
+# THIS FILE IS THE PRODUCTION CONFIGURATION. `deploy.sh` deploys exactly this; DEPLOY.md is the
+# operator's runbook. Local runs (`wrangler dev`, the proofs, vitest) use it too and override
+# only what a machine without subdomains needs, with `--var` on the command line (see
+# proof-lib.mjs, proof-control.sh, vitest.config.mjs and DEPLOY.md "Local runs"):
+#   --local-upstream 127.0.0.1:<port>   with routes set, wrangler dev otherwise answers every
+#                            request as work.avarok.net (Host and Origin rewritten)
+#   TENANT_PATH_ROUTING:on   /<slug> reaches a tenant, since localhost has no <slug>.work.avarok.net
+#   TENANT_DIAGNOSTICS:on    a plain GET on a tenant answers its stats, which the proofs read
+#   --assets test/fixture-ui  the site is shadowed by tenant paths there; no UI build needed
+#   ALLOWED_ORIGINS, TURNSTILE_HOSTNAMES   the local origin and Turnstile's testing hostname
+# proof-production.mjs overrides only Turnstile. Nothing here is a dev value.
+#
+# Two build outputs, neither committed, both made by `deploy.sh` (or by hand):
+#   server-wasm/pkg/   build.sh     (cargo + wasm-pack)
+#   ui-dist/           build-ui.sh  (the UI's production bundle)
 name = "citadel-tenant"
+# Avarok's Cloudflare account (zone avarok.net). Not a secret: it names the account, it grants nothing.
+account_id = "91406fa25a69f484d7e0524644f13ce8"
 main = "worker.mjs"
 compatibility_date = "2026-09-01"
+workers_dev = false
+preview_urls = false
+
+routes = [
+  { pattern = "work.avarok.net/*", zone_name = "avarok.net" },
+  { pattern = "*.work.avarok.net/*", zone_name = "avarok.net" },
+]
 
 [build]
 command = ""
+
+# The UI. Every request reaches the Worker first (run_worker_first): a tenant host must never be
+# answered with the site, and the Worker adds the headers and the meta tags nginx used to
+# (control/ui.mjs). Unknown paths fall back to index.html, so /create and /create/done load the app.
+[assets]
+directory = "./ui-dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
 
 [[durable_objects.bindings]]
 name = "WORKSPACE"
 class_name = "WorkspaceServer"
 
+# Append-only: a deployed tag is never edited or removed.
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["WorkspaceServer"]
@@ -29,7 +62,8 @@ ARGON_MEM_KIB = "4096"
 ARGON_TIME_COST = "1"
 LOG_FILTER = "citadel=warn"
 
-# The control plane. Secrets, each of which leaves its routes answering 503 until it is set:
+# The control plane. Secrets (`wrangler secret put`), each of which leaves its routes answering
+# 503 until it is set; deploy.sh refuses to deploy while any is missing:
 #   TURNSTILE_SECRET       workspace creation
 #   STRIPE_SECRET_KEY      paid creation, the billing portal
 #   STRIPE_WEBHOOK_SECRET  the Stripe webhook
@@ -37,15 +71,26 @@ CONTROL_HOST = "work.avarok.net"
 PUBLIC_ORIGIN = "https://work.avarok.net"
 ALLOWED_ORIGINS = "https://work.avarok.net"
 TURNSTILE_HOSTNAMES = "work.avarok.net"
-# `/<slug>` routes to a tenant only where there are no subdomains (`wrangler dev --var`).
+# Tenants are reached by subdomain only. `/<slug>` routing exists for machines without subdomains.
 TENANT_PATH_ROUTING = "off"
+# A tenant host answers WebSocket upgrades and nothing else (426). "on" makes a plain GET answer
+# the object's stats -- connections, row counts, entitlements, a claim-code fingerprint -- for
+# the local proofs; it must never be on in a deployment (test/production-config.test.mjs).
+TENANT_DIAGNOSTICS = "off"
 # How long a Stripe Checkout stays open (Stripe allows 1800..86400).
 CHECKOUT_TTL_SECONDS = "7200"
+
+# The UI's meta tags (control/ui.mjs), as nginx's LOOPBACK_AGENT_ORIGIN / DEFAULT_WORKSPACE_SERVER.
+# The agent on the visitor's own machine; also the one off-origin socket the CSP allows.
+LOOPBACK_AGENT_ORIGIN = "wss://local.avarok.net:12345"
+# Empty: a visitor is not pre-filled with a server; tenants are created, not joined, here.
+DEFAULT_WORKSPACE_SERVER = ""
 
 [[d1_databases]]
 binding = "CONTROL_DB"
 database_name = "citadel-control"
-# Set to the id `wrangler d1 create citadel-control` prints before any deploy; local dev and the
+# PLACEHOLDER. Replace with the id `wrangler d1 create citadel-control` prints (DEPLOY.md step 2)
+# before the first deploy; deploy.sh refuses to deploy while it is all zeros. Local dev and the
 # tests use a local database whatever this says.
 database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "control/migrations"

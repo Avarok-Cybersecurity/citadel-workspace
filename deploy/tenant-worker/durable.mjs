@@ -12,7 +12,7 @@
  * the restart; its account store is in memory, which is fine: it is the server's that is on trial.
  */
 import {
-  check, client, provision, request, requestOnceEnrolled, secret, short, startWrangler, stats, stopWrangler, verdict,
+  check, client, DEV_OVERRIDES, provision, request, requestOnceEnrolled, secret, short, startWrangler, stats, stopWrangler, verdict,
 } from "./proof-lib.mjs";
 
 const persistTo = process.argv[2];
@@ -29,7 +29,7 @@ let wrangler = null;
 let c = null;
 
 try {
-  wrangler = await startWrangler(persistTo);
+  wrangler = await startWrangler(persistTo, DEV_OVERRIDES);
   await provision(tenant);
   c = await client(tenant);
   await c.register(username, password);
@@ -45,7 +45,7 @@ try {
   console.log(`stored before restart: ${JSON.stringify(statsBefore.stored)}`);
 
   await stopWrangler(wrangler);
-  wrangler = await startWrangler(persistTo);
+  wrangler = await startWrangler(persistTo, DEV_OVERRIDES);
   const statsAfter = await stats(tenant);
   console.log(`stored after restart (object not yet started): ${JSON.stringify(statsAfter.stored)}`);
   check(

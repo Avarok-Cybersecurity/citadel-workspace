@@ -16,6 +16,46 @@ function required(env, name) {
   return value;
 }
 
+/** A var that is exactly "on" or "off": anything else is a misconfiguration, not a default. */
+function onOff(env, name) {
+  const value = required(env, name);
+  if (value !== "on" && value !== "off") throw new Error(`${name} is on or off`);
+  return value === "on";
+}
+
+/** Whether `request` asks to become a WebSocket (the only thing a tenant host answers). */
+export const isWebSocketUpgrade = (request) => (request.headers.get("upgrade") ?? "").toLowerCase() === "websocket";
+
+/** A tenant host serves one thing, the workspace's WebSocket; anything else is told only that. */
+export const upgradeRequired = () =>
+  new Response("a workspace is reached over a WebSocket", {
+    status: 426,
+    headers: { upgrade: "websocket", "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+  });
+
+/** A var that must be declared but may be empty (an empty meta tag is a real setting). */
+function declared(env, name) {
+  const value = env[name];
+  if (typeof value !== "string") throw new Error(`${name} is not set (it may be empty)`);
+  return value;
+}
+
+/** The page's own shape check (citadel-workspaces resolve-url.ts LOOPBACK_ORIGIN_SHAPE). */
+const LOOPBACK_ORIGIN_SHAPE = /^wss:\/\/[a-z0-9]([a-z0-9.-]*[a-z0-9])?:[0-9]{1,5}$/;
+/** docker/ui/16-validate-runtime-vars.sh: a host or IP, optionally :port. */
+const SERVER_ADDRESS_SHAPE = /^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?(:[0-9]{1,5})?$/;
+
+function uiConfig(env) {
+  const loopbackAgent = required(env, "LOOPBACK_AGENT_ORIGIN");
+  // It goes into the CSP and a meta tag verbatim; a value the page rejects is silently ignored.
+  if (!LOOPBACK_ORIGIN_SHAPE.test(loopbackAgent)) throw new Error("LOOPBACK_AGENT_ORIGIN is a bare wss://host:port");
+  const defaultServer = declared(env, "DEFAULT_WORKSPACE_SERVER");
+  if (defaultServer !== "" && !SERVER_ADDRESS_SHAPE.test(defaultServer)) {
+    throw new Error("DEFAULT_WORKSPACE_SERVER is a host[:port] or empty");
+  }
+  return { loopbackAgent, defaultServer };
+}
+
 const optional = (env, name) => (env[name] === undefined || env[name] === "" ? null : env[name]);
 
 /**
@@ -23,8 +63,6 @@ const optional = (env, name) => (env[name] === undefined || env[name] === "" ? n
  * run without them. Secrets are optional: a route whose secret is missing answers 503.
  */
 export function config(env) {
-  const routing = required(env, "TENANT_PATH_ROUTING");
-  if (routing !== "on" && routing !== "off") throw new Error("TENANT_PATH_ROUTING is on or off");
   const pendingTtl = Number(required(env, "CHECKOUT_TTL_SECONDS"));
   // Stripe accepts a Checkout expiry between 30 minutes and 24 hours from creation.
   if (!Number.isInteger(pendingTtl) || pendingTtl < 1800 || pendingTtl > 86400) {
@@ -34,7 +72,12 @@ export function config(env) {
     controlHost: required(env, "CONTROL_HOST"),
     publicOrigin: required(env, "PUBLIC_ORIGIN"),
     allowedOrigins: required(env, "ALLOWED_ORIGINS").split(",").map((o) => o.trim()).filter(Boolean),
-    pathRouting: routing === "on",
+    pathRouting: onOff(env, "TENANT_PATH_ROUTING"),
+    // A tenant's object answers a plain GET with its stats (connections, row counts,
+    // entitlements, a claim-code fingerprint) only when this is on: for the local proofs, never
+    // in production, where a tenant host answers WebSocket upgrades and nothing else.
+    diagnostics: onOff(env, "TENANT_DIAGNOSTICS"),
+    ui: uiConfig(env),
     checkoutTtl: pendingTtl,
     turnstile: optional(env, "TURNSTILE_SECRET")
       ? { secret: env.TURNSTILE_SECRET, hostnames: required(env, "TURNSTILE_HOSTNAMES") }

@@ -17,17 +17,23 @@
  * and the violation appears after deploy. So the property is enforced here
  * rather than restated.
  *
+ * The hosted deployment serves the UI from a Cloudflare Worker instead of nginx
+ * (deploy/tenant-worker/control/ui.mjs builds its policy). That is a third copy
+ * of the same policy, so it is held to the same one here: the Worker's policy,
+ * with no loopback agent, must be vite's PRODUCTION_CSP too.
+ *
  * check-nginx-headers-are-complete covers a neighbouring rule — that every
  * nginx location repeats the headers, since add_header does not inherit. It
  * compares nginx to itself and never opens vite.config.ts.
  */
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const VITE = join(ROOT, 'citadel-workspaces', 'vite.config.ts');
 const NGINX = join(ROOT, 'docker', 'ui', 'nginx.conf.template');
+const WORKER_UI = join(ROOT, 'deploy', 'tenant-worker', 'control', 'ui.mjs');
 
 const vite = readFileSync(VITE, 'utf8');
 const nginx = readFileSync(NGINX, 'utf8');
@@ -95,17 +101,35 @@ for (const raw of unique) {
   }
 }
 
+// The Worker's policy is built by a function, not written as a literal, so it is
+// called rather than parsed: an empty loopback agent is the same removal applied
+// to nginx's `${LOOPBACK_AGENT_ORIGIN}` above.
+const { contentSecurityPolicy } = await import(pathToFileURL(WORKER_UI).href);
+if (typeof contentSecurityPolicy !== 'function') {
+  console.error(`${WORKER_UI} exports no contentSecurityPolicy — this check verified nothing about the Worker.`);
+  process.exit(1);
+}
+const workerPolicy = contentSecurityPolicy('');
+if (workerPolicy !== declared[1]) {
+  problems.push(
+    'PRODUCTION_CSP does not match the policy the tenant Worker serves.\n' +
+      `      preview: ${declared[1]}\n` +
+      `      worker:  ${workerPolicy}`,
+  );
+}
+
 if (problems.length > 0) {
   console.error('The preview CSP and the production CSP have drifted:\n');
   for (const p of problems) console.error(`  - ${p}`);
   console.error(
     '\nA preview more permissive than production passes while the violation ships.\n' +
-      'Make them identical, in vite.config.ts and docker/ui/nginx.conf.template.',
+      'Make them identical, in vite.config.ts, docker/ui/nginx.conf.template and\n' +
+      'deploy/tenant-worker/control/ui.mjs.',
   );
   process.exit(1);
 }
 
 console.log(
   `Preview CSP OK: one policy, matching vite's PRODUCTION_CSP, used by all `
-  + `${usesMap.length} location(s) that set it.`,
+  + `${usesMap.length} location(s) that set it, and served by the tenant Worker.`,
 );

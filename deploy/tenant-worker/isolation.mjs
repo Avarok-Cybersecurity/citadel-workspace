@@ -15,7 +15,7 @@
  * isolate, and each still ran on its own instance, with its own Rust globals.
  */
 import {
-  check, client, endpoint, provision, redirect, request, requestOnceEnrolled, secret, short, startWrangler, stats,
+  check, client, DEV_OVERRIDES, endpoint, provision, redirect, request, requestOnceEnrolled, secret, short, startWrangler, stats,
   stopWrangler, verdict,
 } from "./proof-lib.mjs";
 
@@ -34,7 +34,7 @@ const clients = [];
 const nameOf = async (c) => (await request(c, { GetMember: { user_id: username } })).Member?.name;
 
 try {
-  wrangler = await startWrangler(persistTo);
+  wrangler = await startWrangler(persistTo, DEV_OVERRIDES);
   // Both created through the control plane, as customers would; neither is reachable before.
   await provision("acme");
   await provision("globex");

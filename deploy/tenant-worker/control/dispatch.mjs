@@ -1,14 +1,15 @@
 /**
  * One Worker, two faces. `work.avarok.net` (and any host that is not a tenant's) is the control
- * plane: `/api/*` here, the static UI otherwise. `<slug>.work.avarok.net` -- and, when
+ * plane: `/api/*` here, the static UI (ui.mjs, the Worker's assets) otherwise. `<slug>.work.avarok.net` -- and, when
  * TENANT_PATH_ROUTING is on (`wrangler dev`, where there are no subdomains), the path `/<slug>` --
  * is that tenant's Durable Object, reached only while the registry says the tenant is active.
  */
 import { checkSlug } from "./slug.mjs";
 import { Store } from "./store.mjs";
-import { config, json, readJson, refuse } from "./http.mjs";
+import { config, isWebSocketUpgrade, json, upgradeRequired, readJson, refuse } from "./http.mjs";
 import { createTenant, openPortal, slugAvailability, tenantStatus } from "./tenants.mjs";
 import { handleWebhook } from "./webhook.mjs";
+import { serveUi } from "./ui.mjs";
 
 /** Creation and portal bodies are a handful of short fields. */
 const API_BODY_LIMIT = 4096;
@@ -42,18 +43,22 @@ export async function dispatch(request, env) {
   const url = new URL(request.url);
   const io = ioFor(env);
   const tenant = tenantFor(url, cfg);
-  if (tenant !== null) return toTenant(io, tenant, request);
+  if (tenant !== null) return toTenant(io, cfg, tenant, request);
   if (url.pathname.startsWith("/api/")) return api(io, cfg, request, url);
-  // The UI's static assets are bound here once they are built into this Worker.
-  return refuse("not-found", "nothing is served here yet", 404);
+  return serveUi(env.ASSETS, cfg.ui, request);
 }
 
-async function toTenant(io, slug, request) {
+async function toTenant(io, cfg, slug, request) {
+  const upgrade = isWebSocketUpgrade(request);
+  // Refused before the registry is read, so a plain request learns nothing, not even existence.
+  if (!upgrade && !cfg.diagnostics) return upgradeRequired();
   if (!checkSlug(slug).ok) return refuse("not-found", "no such workspace", 404);
   const row = await io.store.holder(slug, io.now());
   if (!row || row.status === "pending") return refuse("not-found", "no such workspace", 404);
   if (row.status === "suspended") return refuse("suspended", "this workspace is suspended", 403);
-  return io.tenant(slug).fetch(request);
+  const object = io.tenant(slug);
+  if (!upgrade) return json(await object.stats());
+  return object.fetch(request);
 }
 
 async function api(io, cfg, request, url) {

@@ -16,6 +16,7 @@
 - [WASM_BUILD.md](WASM_BUILD.md) — building the WASM client
 - [WASM_SYNC.md](WASM_SYNC.md) — syncing WASM bindings across packages
 - [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) — production deployment
+- [deploy/tenant-worker/DEPLOY.md](../deploy/tenant-worker/DEPLOY.md) — the hosted deployment on Cloudflare: work.avarok.net (UI, control plane) and one Durable Object per tenant at `<slug>.work.avarok.net`; its runbook and rollback
 - [COMMIT_PUSH_SCRIPTS.md](COMMIT_PUSH_SCRIPTS.md) — submodule commit/push ordering
 
 ## Testing

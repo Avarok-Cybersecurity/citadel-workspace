@@ -11,7 +11,7 @@
  * and stops wrangler's whole process group. <persist-dir> must be fresh: the slugs are created in it.
  */
 import { writeFileSync } from "node:fs";
-import { HTTP_BASE, provision, startWrangler, stopWrangler } from "./proof-lib.mjs";
+import { DEV_OVERRIDES, HTTP_BASE, provision, startWrangler, stopWrangler } from "./proof-lib.mjs";
 
 const [persistTo, claimsFile, ...slugs] = process.argv.slice(2);
 if (!persistTo || !claimsFile || slugs.length === 0) {
@@ -19,7 +19,7 @@ if (!persistTo || !claimsFile || slugs.length === 0) {
   process.exit(2);
 }
 
-const wrangler = await startWrangler(persistTo);
+const wrangler = await startWrangler(persistTo, DEV_OVERRIDES);
 let stopping = false;
 const stop = async (code) => {
   if (stopping) return;

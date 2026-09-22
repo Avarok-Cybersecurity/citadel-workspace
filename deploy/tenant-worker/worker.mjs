@@ -16,6 +16,7 @@ import { DurableObject } from "cloudflare:workers";
 import { instantiate } from "./server-wasm/pkg/instance.mjs";
 import wasm from "./server-wasm/pkg/citadel_tenant_server_wasm_bg.wasm";
 import { dispatch } from "./control/dispatch.mjs";
+import { isWebSocketUpgrade, upgradeRequired } from "./control/http.mjs";
 import { Provisioning } from "./control/provisioning.mjs";
 
 // Wasm instances this isolate has created. Module state is per isolate, so objects that see the
@@ -112,6 +113,7 @@ export class WorkspaceServer extends DurableObject {
     );
   }
 
+  /** RPC, for the local proofs only: the Worker calls it when TENANT_DIAGNOSTICS is on (dispatch.mjs). */
   stats() {
     return {
       accepted: this.accepted,
@@ -127,8 +129,9 @@ export class WorkspaceServer extends DurableObject {
   }
 
   async fetch(request) {
-    if (request.headers.get("Upgrade") !== "websocket") {
-      return Response.json(this.stats());
+    // Stats are an RPC the Worker gates (dispatch.mjs); a request is served only as a socket.
+    if (!isWebSocketUpgrade(request)) {
+      return upgradeRequired();
     }
     if (this.exit !== null) {
       return new Response(`node exited: ${this.exit}`, { status: 503 });

@@ -1,7 +1,7 @@
 /**
  * Shared plumbing for the proofs (durable.mjs, isolation.mjs, serve-tenants.mjs): run `wrangler
  * dev` as a child, create tenants through the control plane, drive the wasm proof client
- * (`proof-client` `ProofClient`), read an object's stats.
+ * (`proof-client` `ProofClient`), read an object's stats (TENANT_DIAGNOSTICS on: dev only).
  * Requires Node >= 22 (a global WebSocket, which the wasm client dials with).
  *
  * A tenant's object is reached only once the control plane has created the tenant
@@ -97,10 +97,39 @@ export async function provision(slug) {
 }
 
 /**
- * `wrangler dev` on PORT with local state persisted under `persistTo`, the control plane's D1
- * migrated there and tenants routed by path; resolves once serving.
+ * The local overrides of wrangler.toml (its header says why each exists): this edge as its own
+ * host, tenants by path, their
+ * stats readable, the fixture UI (tenant paths shadow the site here anyway), the local origin,
+ * and Turnstile's always-pass testing secret, whose answers name example.com.
  */
-export async function startWrangler(persistTo) {
+export const DEV_OVERRIDES = [
+  // wrangler dev otherwise answers as the first route's host (work.avarok.net), rewriting Host
+  // and Origin to it; the local proofs address the edge as itself.
+  "--local-upstream", BASE,
+  "--var", "TENANT_PATH_ROUTING:on",
+  "--var", "TENANT_DIAGNOSTICS:on",
+  "--assets", "test/fixture-ui",
+  "--var", `ALLOWED_ORIGINS:${HTTP_BASE}`,
+  "--var", "TURNSTILE_HOSTNAMES:example.com",
+  "--var", `TURNSTILE_SECRET:${TURNSTILE_TESTING_SECRET}`,
+];
+
+/**
+ * Production's configuration but for Turnstile, which a machine cannot pass for real: its
+ * testing secret, and the hostname that secret's answers carry. Everything else -- host routing,
+ * no stats, the built UI (ui-dist), the origins -- is wrangler.toml as deployed.
+ */
+export const PRODUCTION_LIKE_OVERRIDES = [
+  "--var", "TURNSTILE_HOSTNAMES:example.com",
+  "--var", `TURNSTILE_SECRET:${TURNSTILE_TESTING_SECRET}`,
+];
+
+/**
+ * `wrangler dev` on PORT with local state persisted under `persistTo` and the control plane's D1
+ * migrated there, with `overrides` on top of wrangler.toml; resolves once serving.
+ */
+export async function startWrangler(persistTo, overrides) {
+  if (!Array.isArray(overrides)) throw new Error("startWrangler: pass DEV_OVERRIDES or PRODUCTION_LIKE_OVERRIDES");
   const migrate = spawnSync(
     "npx",
     ["wrangler@4", "d1", "migrations", "apply", "citadel-control", "--local", "--persist-to", persistTo],
@@ -112,10 +141,7 @@ export async function startWrangler(persistTo) {
     [
       "wrangler@4", "dev", "--port", String(PORT), "--ip", "127.0.0.1", "--persist-to", persistTo,
       "--local-protocol", LOCAL_PROTOCOL,
-      "--var", "TENANT_PATH_ROUTING:on",
-      "--var", `ALLOWED_ORIGINS:${HTTP_BASE}`,
-      "--var", "TURNSTILE_HOSTNAMES:example.com",
-      "--var", `TURNSTILE_SECRET:${TURNSTILE_TESTING_SECRET}`,
+      ...overrides,
     ],
     { detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, CI: "1" } },
   );
