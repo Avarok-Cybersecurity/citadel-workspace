@@ -7,18 +7,15 @@
  * node lives as long as the object does: its sessions and ratchets are in memory, so an evicted
  * object drops its clients and they reconnect.
  */
+import { DurableObject } from "cloudflare:workers";
 import { initSync, TenantServer, ArgonCost } from "./server-wasm/pkg/citadel_tenant_server_wasm.js";
 import wasm from "./server-wasm/pkg/citadel_tenant_server_wasm_bg.wasm";
+import { dispatch } from "./control/dispatch.mjs";
+import { Provisioning } from "./control/provisioning.mjs";
 
 // `--target web`, instantiated by hand from the module the runtime hands over (the rMazing
 // notary-worker pattern): a `.wasm` import arrives as an uninstantiated `WebAssembly.Module`.
 const exports = initSync({ module: wasm });
-
-/** The tenant a request is for: the first path segment, else the hostname's first label. */
-function tenantOf(url) {
-  const segment = url.pathname.split("/").filter(Boolean)[0];
-  return segment ?? url.hostname.split(".")[0];
-}
 
 function required(env, name) {
   const value = env[name];
@@ -26,22 +23,35 @@ function required(env, name) {
   return value;
 }
 
+// Which face a request is for -- the control plane or a tenant's object -- is decided in
+// `control/dispatch.mjs`; a tenant's object is reached only while the registry says it is active.
 export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    const object = env.WORKSPACE.get(env.WORKSPACE.idFromName(tenantOf(url)));
-    return object.fetch(request);
-  },
+  fetch: (request, env) => dispatch(request, env),
 };
 
-export class WorkspaceServer {
+export class WorkspaceServer extends DurableObject {
   constructor(ctx, env) {
+    super(ctx, env);
     this.ctx = ctx;
     this.env = env;
     this.server = null;
     this.exit = null;
     this.accepted = 0;
     this.connections = [];
+    // What the control plane gave this tenant (its master password, its entitlements), read
+    // before any request is delivered.
+    this.provisioning = new Provisioning(ctx.storage);
+    ctx.blockConcurrencyWhile(() => this.provisioning.load());
+  }
+
+  /** RPC from the control plane: this tenant's master password and entitlements. */
+  provision(data) {
+    return this.provisioning.provision(data, this.server !== null);
+  }
+
+  /** RPC from the control plane: the tenant's plan changed. */
+  setEntitlements(entitlements) {
+    return this.provisioning.setEntitlements(entitlements);
   }
 
   start() {
@@ -49,7 +59,7 @@ export class WorkspaceServer {
     // `bind_addr` is recorded as the node's address and never bound: the object owns no socket.
     const config = [
       `bind_addr = "127.0.0.1:0"`,
-      `workspace_master_password = ${JSON.stringify(required(env, "WORKSPACE_MASTER_PASSWORD"))}`,
+      `workspace_master_password = ${JSON.stringify(this.provisioning.masterPassword())}`,
     ].join("\n");
     const argon = new ArgonCost(
       Number(required(env, "ARGON_LANES")),
@@ -71,6 +81,7 @@ export class WorkspaceServer {
       exit: this.exit,
       wasm_memory_bytes: exports.memory.buffer.byteLength,
       connections: this.connections,
+      ...this.provisioning.summary(),
     };
   }
 
@@ -81,7 +92,13 @@ export class WorkspaceServer {
     if (this.exit !== null) {
       return new Response(`node exited: ${this.exit}`, { status: 503 });
     }
-    if (this.server === null) this.start();
+    if (!this.provisioning.ready()) {
+      return new Response("this workspace has not been provisioned", { status: 503 });
+    }
+    if (this.server === null) {
+      await this.provisioning.markStarted();
+      if (this.server === null) this.start();
+    }
 
     const [client, server] = Object.values(new WebSocketPair());
     server.accept();
