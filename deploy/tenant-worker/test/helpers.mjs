@@ -33,7 +33,12 @@ export const PRICES = {
  * (200) unless `expire.refuse` names the state the session is really in ("complete", "expired"),
  * in which case the expire is a 400 and a GET of the session reports that state.
  */
-export function outbound({ turnstile = { success: true, hostname: "example.com" }, checkout, expire = {} } = {}) {
+/**
+ * `meterEvents.failures` is how many `POST /v1/billing/meter_events` Stripe refuses (500) before
+ * it accepts them.
+ */
+export function outbound({ turnstile = { success: true, hostname: "example.com" }, checkout, expire = {}, meterEvents = { failures: 0 } } = {}) {
+  let meterFailures = meterEvents.failures;
   const calls = [];
   const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init = {}) => {
     const url = new URL(typeof input === "string" ? input : input.url);
@@ -56,6 +61,13 @@ export function outbound({ turnstile = { success: true, hostname: "example.com" 
       if (url.pathname === "/v1/checkout/sessions") {
         const id = checkout?.id ?? `cs_test_${crypto.randomUUID().replaceAll("-", "")}`;
         return Response.json({ id, url: `https://checkout.stripe.com/c/pay/${id}` });
+      }
+      if (url.pathname === "/v1/billing/meter_events" && method === "POST") {
+        if (meterFailures > 0) {
+          meterFailures -= 1;
+          return Response.json({ error: { message: "test: meter event refused" } }, { status: 500 });
+        }
+        return Response.json({ object: "billing.meter_event", event_name: form.get("event_name"), identifier: form.get("identifier") });
       }
       if (url.pathname === "/v1/billing_portal/sessions") {
         // Never the account's default portal: it belongs to another product on the same account.
@@ -96,7 +108,14 @@ export async function deliver(event, { secret = WEBHOOK_SECRET, timestamp = Math
   });
 }
 
-export function subscriptionEvent(type, row, { id, created, status = "active", items, subId = "sub_test_1" }) {
+/**
+ * `period` ({start, end}, seconds) is put on the items, where Stripe's current API version keeps
+ * the billing period; `periodOnSubscription` puts it on the subscription, as older versions did.
+ */
+export function subscriptionEvent(type, row, { id, created, status = "active", items, subId = "sub_test_1", period, periodOnSubscription = false }) {
+  const onItems = period && !periodOnSubscription;
+  const withPeriod = onItems ? items.map((i) => ({ ...i, current_period_start: period.start, current_period_end: period.end })) : items;
+  const topLevel = period && periodOnSubscription ? { current_period_start: period.start, current_period_end: period.end } : {};
   return {
     id,
     type,
@@ -108,7 +127,8 @@ export function subscriptionEvent(type, row, { id, created, status = "active", i
         customer: "cus_test_1",
         status,
         metadata: { tenant: row.slug, tenant_id: row.tenant_id },
-        items: { data: items },
+        ...topLevel,
+        items: { data: withPeriod },
       },
     },
   };
@@ -120,6 +140,49 @@ export const item = (lookupKey, quantity) => ({ price: { id: PRICES[lookupKey], 
 export const objectStats = async (slug) => (await SELF.fetch(`http://127.0.0.1/${slug}`)).json();
 
 export { sha256Hex } from "../control/secrets.mjs";
+
+export const tenantObject = (slug) => env.WORKSPACE.get(env.WORKSPACE.idFromName(slug));
+
+/** A free tenant created through the control plane, and its object. */
+export async function freeTenant(stem) {
+  const slug = freshSlug(stem);
+  outbound();
+  const r = await post("/api/tenants", createBody(slug));
+  if (r.status !== 201) throw new Error(`creating ${slug}: ${r.status}`);
+  vi.restoreAllMocks();
+  return { slug, object: tenantObject(slug) };
+}
+
+/** Upgrades to the tenant's socket through the Worker: the accepted client end, or the refusal. */
+export async function openSocket(slug) {
+  const r = await SELF.fetch(`http://127.0.0.1/${slug}`, { headers: { upgrade: "websocket" } });
+  if (!r.webSocket) return { refused: r };
+  const ws = r.webSocket;
+  const closed = new Promise((resolve) => ws.addEventListener("close", (e) => resolve({ code: e.code, reason: e.reason })));
+  ws.accept();
+  return { ws, closed };
+}
+
+/**
+ * `bytes` bytes that open a Citadel frame and never finish it: the node waits for the rest, so the
+ * socket stays open (a complete frame of nonsense would have the node close it).
+ */
+export function unfinishedFrame(bytes) {
+  const b = new Uint8Array(bytes);
+  new DataView(b.buffer).setUint32(0, 1024 * 1024);
+  return b;
+}
+
+/** Polls `probe` until it returns a truthy value, or fails naming `what`. */
+export async function until(what, probe, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await probe();
+    if (value) return value;
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((r) => setTimeout(r, 25));
+  }
+}
 
 /** wrangler.toml as `wrangler deploy` reads it (vitest.config.mjs), without the tests' overrides. */
 export const production = () => JSON.parse(env.PRODUCTION_CONFIG);

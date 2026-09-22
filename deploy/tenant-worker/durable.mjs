@@ -43,11 +43,21 @@ try {
   await c.disconnect();
   const statsBefore = await stats(tenant);
   console.log(`stored before restart: ${JSON.stringify(statsBefore.stored)}`);
+  // The meter (control/meter.mjs) sees the node's replies through the send wrapper
+  // (control/sockets.mjs), which only a real Citadel session exercises.
+  const usageBefore = statsBefore.usage;
+  check(results, "the meter counted bytes in and out", usageBefore.bytes_in > 0 && usageBefore.bytes_out > 0, short(usageBefore));
 
   await stopWrangler(wrangler);
   wrangler = await startWrangler(persistTo, DEV_OVERRIDES);
   const statsAfter = await stats(tenant);
   console.log(`stored after restart (object not yet started): ${JSON.stringify(statsAfter.stored)}`);
+  check(
+    results,
+    "the period's usage survived the restart",
+    statsAfter.usage.bytes_in >= usageBefore.bytes_in && statsAfter.usage.bytes_out >= usageBefore.bytes_out,
+    `before ${short(usageBefore)} after ${short(statsAfter.usage)}`,
+  );
   check(
     results,
     "the object came back as a fresh instance",

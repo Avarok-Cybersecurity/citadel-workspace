@@ -4,7 +4,8 @@
 
 const COLUMNS =
   "slug, tenant_id, display_name, status, tier, interval, seats, storage_blocks, stripe_customer, " +
-  "stripe_subscription, created_at, expires_at, claim_hash, checkout_hash, sub_event_created, reservation_hash, checkout_sealed";
+  "stripe_subscription, created_at, expires_at, claim_hash, checkout_hash, sub_event_created, reservation_hash, checkout_sealed, " +
+  "period_start, period_end";
 
 export class Store {
   constructor(db) {
@@ -16,6 +17,11 @@ export class Store {
     const row = await this.db.prepare(`SELECT ${COLUMNS} FROM tenants WHERE slug = ?`).bind(slug).first();
     if (row && row.status === "pending" && row.expires_at !== null && row.expires_at <= now) return null;
     return row;
+  }
+
+  /** Every active tenant, for the usage monitor. */
+  async active() {
+    return (await this.db.prepare(`SELECT ${COLUMNS} FROM tenants WHERE status = 'active'`).all()).results;
   }
 
   async byTenantId(tenantId) {
@@ -140,5 +146,5 @@ export class Store {
 /** The columns an event may change, so `applyEvent` never builds SQL from anything else. */
 export const EVENT_FIELDS = new Set([
   "status", "tier", "interval", "seats", "storage_blocks", "stripe_customer", "stripe_subscription",
-  "sub_event_created", "expires_at",
+  "sub_event_created", "expires_at", "period_start", "period_end",
 ]);

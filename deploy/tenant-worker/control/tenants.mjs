@@ -89,7 +89,7 @@ export async function createTenant(io, cfg, body, ip) {
     await io.tenant(plan.slug).provision({
       tenant_id: row.tenant_id,
       master_password: claim,
-      entitlements: entitlements({ ...plan, status: paid ? "pending" : "active" }),
+      entitlements: entitlements({ ...plan, status: paid ? "pending" : "active", period_start: null, period_end: null }),
     });
     if (!paid) {
       await io.store.activateFree(plan.slug, row.tenant_id);

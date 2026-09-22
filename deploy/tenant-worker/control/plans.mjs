@@ -4,7 +4,7 @@
  * a key renamed there is renamed here without a line changing. Pure.
  */
 import table from "../../../billing/tiers.json";
-import { lookupKey } from "../../../billing/catalogue.mjs";
+import { lookupKey, meteredLookupKey } from "../../../billing/catalogue.mjs";
 
 /** Input bound, not a business rule: no tier grants more blocks than a request may ask for. */
 export const MAX_STORAGE_BLOCKS = 1000;
@@ -12,6 +12,15 @@ export const MAX_STORAGE_BLOCKS = 1000;
 const tiers = new Map(table.tiers.map((t) => [t.id, t]));
 const storage = table.addons.find((a) => a.id === "storage");
 if (!storage) throw new Error("tiers.json has no storage add-on");
+const overage = (table.metered ?? []).find((m) => m.id === "relay-overage");
+if (!overage) throw new Error("tiers.json has no relay-overage metered price");
+/** How usage is metered (tiers.json `metering`): GB size, frame cap, flush interval. */
+export const METERING = table.metering;
+for (const k of ["gb_bytes", "max_frame_bytes", "flush_seconds"]) {
+  if (!Number.isInteger(METERING?.[k]) || METERING[k] <= 0) throw new Error(`tiers.json metering.${k} is a positive integer`);
+}
+/** The Billing Meter relay overage is reported to. */
+export const OVERAGE_EVENT = overage.meter.event_name;
 
 /** Every price this Worker may sell or read back, by lookup key. */
 export const PRICES = new Map([
@@ -22,6 +31,7 @@ export const PRICES = new Map([
     lookupKey(table.lookup_prefix, storage.id, p.interval),
     { kind: "storage", id: storage.id, interval: p.interval },
   ]),
+  [meteredLookupKey(table.lookup_prefix, overage.id), { kind: "metered", id: overage.id, interval: overage.prices[0].interval }],
 ]);
 
 export const tierKey = (tier, interval) => lookupKey(table.lookup_prefix, tier, interval);
@@ -32,14 +42,18 @@ export const isPaid = (tier) => (tiers.get(tier)?.prices.length ?? 0) > 0;
 export const intervalsOf = (tier) => (tiers.get(tier)?.prices ?? []).map((p) => p.interval);
 export const maxSeats = (tier) => tiers.get(tier)?.limits.members ?? 0;
 export const storageOfferedOn = (tier) => storage.available_on.includes(tier);
+export const overageBilledOn = (tier) => overage.available_on.includes(tier);
 
 /**
  * What a tenant may use, from its plan. Paid members are capped by the seats bought (and the
- * tier's ceiling); storage is the tier's per-seat grant times seats plus the add-on blocks.
+ * tier's ceiling); storage is the tier's per-seat grant times seats plus the add-on blocks;
+ * connections and included relay scale with seats the same way. The billing period is Stripe's
+ * (null until a subscription event names it: the object then meters by calendar month).
  */
-export function entitlements({ tier, interval, seats, storage_blocks, status }) {
+export function entitlements({ tier, interval, seats, storage_blocks, status, period_start, period_end }) {
   const t = tiers.get(tier);
   if (!t) throw new Error(`unknown tier ${tier}`);
+  if (period_start === undefined || period_end === undefined) throw new Error("entitlements need the billing period (null when none)");
   const limits = t.limits;
   const paid = t.prices.length > 0;
   const storageGb = paid
@@ -55,6 +69,11 @@ export function entitlements({ tier, interval, seats, storage_blocks, status }) 
     storage_gb: storageGb,
     workspaces_max: limits.workspaces,
     priority_support: Boolean(limits.priority_support),
+    connections_max: paid ? Math.min(limits.connections_per_seat * seats, limits.connections) : limits.connections,
+    relay_gb_included: paid ? limits.relay_gb_per_seat * seats : limits.relay_gb_total,
+    max_frame_bytes: METERING.max_frame_bytes,
+    period_start,
+    period_end,
   };
 }
 
@@ -72,6 +91,7 @@ export function planOfItems(items) {
     if (!sold) return { error: `price ${item?.price?.id ?? "?"} (lookup key ${key ?? "none"}) is not in the catalogue` };
     const quantity = Number(item.quantity ?? 0);
     if (!Number.isInteger(quantity) || quantity < 0) return { error: `bad quantity on ${key}` };
+    if (sold.kind === "metered") continue; // billed by usage: it carries no plan
     if (sold.kind === "tier") {
       if (plan) return { error: "a subscription holds more than one tier" };
       plan = { tier: sold.id, interval: sold.interval, seats: quantity };

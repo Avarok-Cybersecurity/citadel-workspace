@@ -108,6 +108,26 @@ Nothing here reaches live mode: `deploy.sh`'s catalogue audit refuses a live key
    - Business information: the default redirect link `https://work.avarok.net/`.
    - Save.
 
+### 6. Usage metering and relay overage (PROPOSED, awaiting owner approval)
+
+The quota numbers and the overage price in `billing/tiers.json` (`metering`, `metered`, and each
+tier's `connections*` / `relay_gb_*`) are proposals. Until they are approved and applied, the
+catalogue audit reports the relay-overage meter, product and price (`citadel-relay-overage`) as
+missing, and `deploy.sh` stops there -- deliberately. Once approved:
+
+1. `node scripts/stripe-catalogue.mjs <key file> --apply` creates the Billing Meter
+   (`citadel_relay_gb`, sum of `value`, customer by `stripe_customer_id`) and the metered price.
+   A restricted key needs write on Billing Meters and Meter Events besides what it has.
+2. `deploy.sh` then applies D1 migration `0003_usage.sql` (billing period on `tenants`,
+   `tenant_usage`) and deploys the Cron trigger (`*/15 * * * *`, the usage monitor).
+3. Objects provisioned before this deploy hold entitlements without `connections_max` /
+   `max_frame_bytes` and answer upgrades with `503 entitlements-outdated` until the monitor's first
+   run (at most 15 minutes) pushes current ones. Run nothing by hand for it.
+
+Not yet done: Checkout does not add the metered price to new subscriptions, so meter events are
+accepted but bill nothing until it does (`control/tenants.mjs` `openCheckout`; yearly subscriptions
+need a decision, the metered price is monthly).
+
 ## Deploying
 
 ```sh

@@ -6,6 +6,7 @@
  */
 import { checkSlug } from "./slug.mjs";
 import { Store } from "./store.mjs";
+import { UsageStore } from "./usage-store.mjs";
 import { config, isWebSocketUpgrade, json, upgradeRequired, readJson, refuse } from "./http.mjs";
 import { createTenant, openPortal, slugAvailability, tenantStatus } from "./tenants.mjs";
 import { handleWebhook } from "./webhook.mjs";
@@ -17,11 +18,12 @@ const API_BODY_LIMIT = 4096;
 export const objectFor = (env, slug) => env.WORKSPACE.get(env.WORKSPACE.idFromName(slug));
 
 /** The I/O the control plane performs, in one place. */
-function ioFor(env) {
+export function ioFor(env) {
   return {
     fetch: (url, init) => fetch(url, init),
     now: () => Math.floor(Date.now() / 1000),
     store: new Store(env.CONTROL_DB),
+    usage: new UsageStore(env.CONTROL_DB),
     tenant: (slug) => objectFor(env, slug),
   };
 }

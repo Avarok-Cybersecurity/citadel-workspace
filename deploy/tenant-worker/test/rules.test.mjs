@@ -29,7 +29,7 @@ describe("slug", () => {
 describe("lookup keys and plans", () => {
   it("derives every key from tiers.json through the catalogue", () => {
     expect([...PRICES.keys()].sort()).toEqual([
-      "citadel-business-month", "citadel-business-year", "citadel-storage-month", "citadel-storage-year",
+      "citadel-business-month", "citadel-business-year", "citadel-relay-overage", "citadel-storage-month", "citadel-storage-year",
       "citadel-team-month", "citadel-team-year",
     ]);
     expect(tierKey("team", "month")).toBe("citadel-team-month");
@@ -40,6 +40,12 @@ describe("lookup keys and plans", () => {
       tier: "team", interval: "month", seats: 3, storage_blocks: 2,
     });
     expect(planOfItems([item("citadel-business-year", 10)])).toEqual({ tier: "business", interval: "year", seats: 10, storage_blocks: 0 });
+    // The metered relay-overage item carries no quantity and no plan: the plan is the tier's.
+    const metered = { price: { id: "price_relay", lookup_key: "citadel-relay-overage" } };
+    expect(planOfItems([item("citadel-team-month", 3), metered])).toEqual({ tier: "team", interval: "month", seats: 3, storage_blocks: 0 });
+    expect(planOfItems([item("citadel-team-year", 3), item("citadel-storage-year", 1), metered])).toEqual({
+      tier: "team", interval: "year", seats: 3, storage_blocks: 1,
+    });
   });
   it("refuses items this catalogue did not sell, or that do not make one plan", () => {
     expect(planOfItems([{ price: { id: "price_x", lookup_key: "other-thing" }, quantity: 1 }]).error).toMatch(/not in the catalogue/);
@@ -49,15 +55,23 @@ describe("lookup keys and plans", () => {
     expect(planOfItems([item("citadel-team-month", 1), item("citadel-storage-year", 1)]).error).toMatch(/different intervals/);
   });
   it("grants storage per seat plus 10 GB per block, and members up to the seats bought", () => {
-    expect(entitlements({ tier: "team", interval: "month", seats: 3, storage_blocks: 2, status: "active" })).toEqual({
+    const noPeriod = { period_start: null, period_end: null };
+    expect(entitlements({ tier: "team", interval: "month", seats: 3, storage_blocks: 2, status: "active", ...noPeriod })).toEqual({
       status: "active", tier: "team", interval: "month", seats: 3, storage_blocks: 2,
       members_max: 3, storage_gb: 50, workspaces_max: 1, priority_support: false,
+      connections_max: 9, relay_gb_included: 150, max_frame_bytes: 4194304, ...noPeriod,
     });
-    const business = entitlements({ tier: "business", interval: "year", seats: 2000, storage_blocks: 0, status: "active" });
+    const business = entitlements({ tier: "business", interval: "year", seats: 2000, storage_blocks: 0, status: "active", ...noPeriod });
     expect([business.members_max, business.storage_gb, business.priority_support]).toEqual([1000, 50000, true]);
-    expect(entitlements({ tier: "free", interval: null, seats: 0, storage_blocks: 0, status: "active" })).toMatchObject({
-      members_max: 5, storage_gb: 1, seats: 0, storage_blocks: 0,
+    expect([business.connections_max, business.relay_gb_included]).toEqual([500, 200000]);
+    expect(entitlements({ tier: "free", interval: null, seats: 0, storage_blocks: 0, status: "active", ...noPeriod })).toMatchObject({
+      members_max: 5, storage_gb: 1, seats: 0, storage_blocks: 0, connections_max: 15, relay_gb_included: 5,
     });
+    const period = { period_start: 1000, period_end: 2000 };
+    expect(entitlements({ tier: "team", interval: "month", seats: 1, storage_blocks: 0, status: "active", ...period })).toMatchObject(period);
+  });
+  it("refuses entitlements whose billing period was not stated, even as none", () => {
+    expect(() => entitlements({ tier: "team", interval: "month", seats: 1, storage_blocks: 0, status: "active" })).toThrow(/billing period/);
   });
 });
 

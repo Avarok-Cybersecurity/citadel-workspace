@@ -16,6 +16,58 @@ export function lookupKey(prefix, tierId, interval) {
   return `${prefix}-${tierId}-${interval}`;
 }
 
+/** `citadel-relay-overage`: a metered price has one interval, so its key names none. */
+export function meteredLookupKey(prefix, id) {
+  return `${prefix}-${id}`;
+}
+
+/**
+ * The metered products (billed by usage through a Stripe Billing Meter, never by quantity): one
+ * meter, one product and one price each. A subscription item on such a price carries no quantity.
+ */
+export function deriveMetered(table) {
+  const tierIds = new Set(table.tiers.map((t) => t.id));
+  return (table.metered ?? []).map((m) => {
+    for (const t of m.available_on) {
+      if (!tierIds.has(t)) throw new Error(`metered ${m.id} is offered on unknown tier ${t}`);
+    }
+    if (!/^[a-z0-9_]{1,100}$/.test(m.meter?.event_name ?? '')) throw new Error(`metered ${m.id}: meter.event_name is [a-z0-9_]`);
+    if (m.prices.length !== 1) throw new Error(`metered ${m.id} has exactly one price`);
+    const [price] = m.prices;
+    if (!Number.isInteger(price.unit_amount) || price.unit_amount <= 0) {
+      throw new Error(`${m.id}: unit_amount must be a positive integer of cents`);
+    }
+    return {
+      tier: m.id,
+      meter: { event_name: m.meter.event_name, display_name: m.meter.display_name },
+      product: {
+        name: m.name,
+        description: `Per ${m.unit} beyond the plan, on ${m.available_on.join(' and ')}`,
+        metadata: { citadel_tier: m.id },
+      },
+      prices: [{
+        lookup_key: meteredLookupKey(table.lookup_prefix, m.id),
+        unit_amount: price.unit_amount,
+        currency: table.currency,
+        interval: price.interval,
+        usage_type: 'metered',
+        metadata: { citadel_tier: m.id },
+      }],
+    };
+  });
+}
+
+/** Differences between a wanted meter and the one Stripe holds under its event name. */
+export function meterDiffs(want, have) {
+  if (!have) return ['missing'];
+  const diffs = [];
+  if (have.status !== 'active') diffs.push(`status ${have.status}`);
+  if (have.default_aggregation?.formula !== 'sum') diffs.push('aggregation is not sum');
+  if (have.customer_mapping?.event_payload_key !== 'stripe_customer_id') diffs.push('customer mapping');
+  if (have.value_settings?.event_payload_key !== 'value') diffs.push('value key');
+  return diffs;
+}
+
 /**
  * The products and prices Stripe must hold. A tier with no prices (Free) is not a
  * Stripe product: nothing is sold, so nothing is created.
@@ -74,7 +126,7 @@ export function deriveCatalogue(table) {
 }
 
 /** Differences between a wanted price and the one Stripe holds under its lookup key. */
-export function priceDiffs(want, have, productId) {
+export function priceDiffs(want, have, productId, meterId) {
   if (!have) return ['missing'];
   const diffs = [];
   if (have.unit_amount !== want.unit_amount) diffs.push(`unit_amount ${have.unit_amount} ≠ ${want.unit_amount}`);
@@ -83,6 +135,7 @@ export function priceDiffs(want, have, productId) {
   if (have.recurring?.usage_type !== want.usage_type) diffs.push(`usage_type ${have.recurring?.usage_type} ≠ ${want.usage_type}`);
   const haveProduct = typeof have.product === 'string' ? have.product : have.product?.id;
   if (productId && haveProduct !== productId) diffs.push(`product ${haveProduct} ≠ ${productId}`);
+  if (want.usage_type === 'metered' && have.recurring?.meter !== meterId) diffs.push(`meter ${have.recurring?.meter} ≠ ${meterId}`);
   if (have.metadata?.citadel_tier !== want.metadata.citadel_tier) diffs.push('metadata.citadel_tier');
   if (!have.active) diffs.push('archived');
   return diffs;

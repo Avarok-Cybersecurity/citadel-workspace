@@ -15,9 +15,18 @@
 import { DurableObject } from "cloudflare:workers";
 import { instantiate } from "./server-wasm/pkg/instance.mjs";
 import wasm from "./server-wasm/pkg/citadel_tenant_server_wasm_bg.wasm";
-import { dispatch } from "./control/dispatch.mjs";
-import { isWebSocketUpgrade, upgradeRequired } from "./control/http.mjs";
+import { dispatch, ioFor } from "./control/dispatch.mjs";
+import { config, isWebSocketUpgrade, json, upgradeRequired } from "./control/http.mjs";
 import { Provisioning } from "./control/provisioning.mjs";
+import { Meter, periodAt } from "./control/meter.mjs";
+import { UsageTable } from "./control/usage-table.mjs";
+import { meterSocket } from "./control/sockets.mjs";
+import { METERING } from "./control/plans.mjs";
+import { runMonitor } from "./control/monitor.mjs";
+
+const FLUSH_MS = METERING.flush_seconds * 1000;
+/** Periods `usage()` reports: the current one and the one before, whose final totals the monitor may not have seen. */
+const REPORTED_PERIODS = 2;
 
 // Wasm instances this isolate has created. Module state is per isolate, so objects that see the
 // same count ran in one isolate.
@@ -36,8 +45,10 @@ function required(env, name) {
 
 // Which face a request is for -- the control plane or a tenant's object -- is decided in
 // `control/dispatch.mjs`; a tenant's object is reached only while the registry says it is active.
+// The Cron trigger (wrangler.toml [triggers]) runs the usage monitor (control/monitor.mjs).
 export default {
   fetch: (request, env) => dispatch(request, env),
+  scheduled: (_controller, env) => runMonitor(ioFor(env), config(env)),
 };
 
 export class WorkspaceServer extends DurableObject {
@@ -49,22 +60,61 @@ export class WorkspaceServer extends DurableObject {
     this.server = null;
     this.exit = null;
     this.accepted = 0;
-    this.connections = [];
     // What the control plane gave this tenant (its master password, its entitlements), read
     // before any request is delivered. One key-value entry, apart from the node's `citadel_*`
     // SQL tables.
     this.provisioning = new Provisioning(ctx.storage);
-    ctx.blockConcurrencyWhile(() => this.provisioning.load());
+    // Metered usage (control/meter.mjs), resumed from this period's persisted totals.
+    this.usageTable = new UsageTable(ctx.storage.sql);
+    this.meter = null;
+    ctx.blockConcurrencyWhile(async () => {
+      await this.provisioning.load();
+      const now = Date.now();
+      const period = periodAt(this.provisioning.summary().entitlements, now);
+      this.meter = new Meter(period, this.usageTable.load(period.start), now);
+    });
   }
 
   /** RPC from the control plane: this tenant's master password and entitlements. */
-  provision(data) {
-    return this.provisioning.provision(data, this.server !== null);
+  async provision(data) {
+    await this.provisioning.provision(data, this.server !== null);
+    this.#roll(Date.now());
   }
 
-  /** RPC from the control plane: the tenant's plan changed. */
-  setEntitlements(entitlements) {
-    return this.provisioning.setEntitlements(entitlements);
+  /** RPC from the control plane: the tenant's plan changed (a new billing period among it). */
+  async setEntitlements(entitlements) {
+    await this.provisioning.setEntitlements(entitlements);
+    this.#roll(Date.now());
+  }
+
+  /** RPC for the monitor: the entitlements this object enforces and its recent periods' totals, flushed now. */
+  usage() {
+    const now = Date.now();
+    this.#roll(now);
+    this.#flush(now);
+    return { entitlements: this.provisioning.summary().entitlements, periods: this.usageTable.recent(REPORTED_PERIODS) };
+  }
+
+  /** The flush alarm: armed while any socket is open. Its own errors are logged, and it re-arms. */
+  async alarm() {
+    try {
+      const now = Date.now();
+      this.#roll(now);
+      this.#flush(now);
+    } catch (e) {
+      console.error(`[tenant] usage flush failed: ${e?.stack ?? e}`);
+    }
+    if (this.meter.openCount > 0) await this.ctx.storage.setAlarm(Date.now() + FLUSH_MS);
+  }
+
+  /** Closes the metered period when the billing period has moved on, persisting its final totals. */
+  #roll(now) {
+    const closed = this.meter.adopt(periodAt(this.provisioning.summary().entitlements, now), now);
+    if (closed) this.usageTable.save(closed, now);
+  }
+
+  #flush(now) {
+    this.usageTable.save(this.meter.snapshot(now), now);
   }
 
   start() {
@@ -123,7 +173,8 @@ export class WorkspaceServer extends DurableObject {
       wasm_instances_in_isolate: instancesInIsolate,
       wasm_memory_bytes: this.wasm === null ? 0 : this.wasm.memory().buffer.byteLength,
       stored: this.storedRows(),
-      connections: this.connections,
+      connections: this.meter.connections(),
+      usage: this.meter.snapshot(Date.now()),
       ...this.provisioning.summary(),
     };
   }
@@ -139,6 +190,17 @@ export class WorkspaceServer extends DurableObject {
     if (!this.provisioning.ready()) {
       return new Response("this workspace has not been provisioned", { status: 503 });
     }
+    const limits = this.provisioning.summary().entitlements;
+    if (!Number.isInteger(limits.connections_max) || !Number.isInteger(limits.max_frame_bytes)) {
+      // Provisioned before quotas existed: the monitor's next run pushes current entitlements.
+      return json({ error: "entitlements-outdated", detail: "this workspace's limits are being updated" }, 503, { "retry-after": "900" });
+    }
+    this.#roll(Date.now());
+    if (!this.meter.admits(limits.connections_max)) {
+      return json({ error: "connection-limit", detail: `this workspace allows ${limits.connections_max} connections at once` }, 503, {
+        "retry-after": "30",
+      });
+    }
     if (this.server === null) {
       await this.provisioning.markStarted();
       if (this.server === null) this.start();
@@ -146,22 +208,23 @@ export class WorkspaceServer extends DurableObject {
 
     const [client, server] = Object.values(new WebSocketPair());
     server.accept();
-    this.server.accept(server);
     this.accepted += 1;
     const n = this.accepted;
-    const opened = Date.now();
-    // Frames and bytes per connection, for the proof's report. CPU is measured outside the
-    // isolate (proof.mjs samples workerd's process CPU at each phase boundary): inside it the
-    // clocks cannot separate this object's work from the event loop's scheduling.
-    const conn = { n, frames: 0, bytes_in: 0 };
-    this.connections.push(conn);
-    server.addEventListener("message", (e) => {
-      conn.frames += 1;
-      conn.bytes_in += e.data.byteLength ?? 0;
+    // Frames and bytes per connection and per period (control/meter.mjs). CPU is measured outside
+    // the isolate (proof.mjs samples workerd's process CPU at each phase boundary).
+    this.meter.connect(n, Date.now());
+    meterSocket(server, {
+      meter: this.meter,
+      id: n,
+      maxFrameBytes: limits.max_frame_bytes,
+      now: Date.now,
+      onRelease: (record) => {
+        console.log(`[tenant] connection ${n} closed after ${record.open_ms} ms; ${JSON.stringify(record)}`);
+        if (this.meter.openCount === 0) this.#flush(Date.now());
+      },
     });
-    server.addEventListener("close", () => {
-      console.log(`[tenant] connection ${n} closed after ${Date.now() - opened} ms; ${JSON.stringify(conn)}`);
-    });
+    this.server.accept(server);
+    if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + FLUSH_MS);
     return new Response(null, { status: 101, webSocket: client });
   }
 }

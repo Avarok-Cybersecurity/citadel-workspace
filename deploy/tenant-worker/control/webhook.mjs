@@ -16,7 +16,8 @@ import { json, readText, refuse } from "./http.mjs";
 const WEBHOOK_BODY_LIMIT = 512 * 1024;
 const LIVE = new Set(["active", "trialing", "past_due"]);
 const ENDED = new Set(["canceled", "unpaid", "incomplete_expired"]);
-const FREE_PLAN = { tier: "free", interval: null, seats: 0, storage_blocks: 0 };
+// Free meters by calendar month: no Stripe period.
+const FREE_PLAN = { tier: "free", interval: null, seats: 0, storage_blocks: 0, period_start: null, period_end: null };
 
 export async function handleWebhook(io, cfg, request) {
   if (!cfg.webhookSecret) return refuse("billing-not-configured", "billing is not available yet", 503);
@@ -96,7 +97,19 @@ async function subscriptionChanged(io, event, sub) {
   if (!LIVE.has(status)) return change(row, fields); // incomplete: nothing is granted yet
   const plan = planOfItems(sub.items?.data ?? []);
   if (plan.error) return { error: plan.error };
-  return change(row, { ...fields, ...plan, status: "active", expires_at: null });
+  return change(row, { ...fields, ...plan, ...periodOf(sub), status: "active", expires_at: null });
+}
+
+/**
+ * The subscription's current billing period, in seconds, which the tenant's object meters usage
+ * by. Stripe moved it from the subscription onto its items (API 2025-03-31.basil); either is read.
+ * Nothing when neither names one, so the period already stored stands.
+ */
+export function periodOf(sub) {
+  const holders = [sub, ...(sub.items?.data ?? [])];
+  const holder = holders.find((h) => Number.isInteger(h?.current_period_start) && Number.isInteger(h?.current_period_end));
+  if (!holder || holder.current_period_end <= holder.current_period_start) return {};
+  return { period_start: holder.current_period_start, period_end: holder.current_period_end };
 }
 
 function change(row, fields) {

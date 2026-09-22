@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { deriveCatalogue, priceDiffs, productDiffs, describeLimits } from './catalogue.mjs';
+import { deriveCatalogue, deriveMetered, meterDiffs, priceDiffs, productDiffs, describeLimits } from './catalogue.mjs';
 
 const table = JSON.parse(readFileSync(new URL('./tiers.json', import.meta.url), 'utf8'));
 
@@ -60,4 +60,24 @@ test('extra storage is its own product, per 10 GB block, on paid tiers only', ()
   const bad = structuredClone(table);
   bad.addons[0].available_on.push('enterprise');
   assert.throws(() => deriveCatalogue(bad), /unknown tier enterprise/);
+});
+
+test('relay overage is one metered price under citadel-relay-overage, on its own meter', () => {
+  const [overage, ...rest] = deriveMetered(table);
+  assert.equal(rest.length, 0);
+  assert.equal(overage.meter.event_name, 'citadel_relay_gb');
+  assert.deepEqual(overage.prices.map((p) => [p.lookup_key, p.usage_type, p.interval]), [['citadel-relay-overage', 'metered', 'month']]);
+  // Not a tier's product: the licensed catalogue is untouched by it.
+  assert.ok(!deriveCatalogue(table).some((p) => p.tier === overage.tier));
+});
+
+test('a metered price on another meter, or a meter that does not sum, differs', () => {
+  const [want] = deriveMetered(table)[0].prices;
+  const have = { active: true, unit_amount: want.unit_amount, currency: 'usd', product: 'prod_o', recurring: { interval: 'month', usage_type: 'metered', meter: 'mtr_1' }, metadata: { citadel_tier: 'relay-overage' } };
+  assert.deepEqual(priceDiffs(want, have, 'prod_o', 'mtr_1'), []);
+  assert.deepEqual(priceDiffs(want, have, 'prod_o', 'mtr_2'), ['meter mtr_1 ≠ mtr_2']);
+  const meter = { status: 'active', default_aggregation: { formula: 'sum' }, customer_mapping: { event_payload_key: 'stripe_customer_id' }, value_settings: { event_payload_key: 'value' } };
+  assert.deepEqual(meterDiffs({}, meter), []);
+  assert.deepEqual(meterDiffs({}, { ...meter, default_aggregation: { formula: 'count' } }), ['aggregation is not sum']);
+  assert.deepEqual(meterDiffs({}, undefined), ['missing']);
 });

@@ -13,9 +13,14 @@
  * found by lookup key; Stripe prices cannot be edited, so a price that differs is replaced:
  * the new one takes the lookup key (transfer_lookup_key) and the old one is archived.
  * Existing subscriptions keep the price they were created with.
+ *
+ * Metered products (tiers.json `metered`, e.g. relay overage) are billed through a Stripe Billing
+ * Meter: the meter is found by its event name and created when missing; one it holds with other
+ * settings is reported, never edited (Stripe allows almost no edits to a meter). Its price is a
+ * `usage_type=metered` price on that meter, found and replaced by lookup key like any other.
  */
 import { readFileSync } from 'node:fs';
-import { deriveCatalogue, priceDiffs, productDiffs } from '../billing/catalogue.mjs';
+import { deriveCatalogue, deriveMetered, meterDiffs, priceDiffs, productDiffs } from '../billing/catalogue.mjs';
 
 const [keyFile, ...flags] = process.argv.slice(2);
 const APPLY = flags.includes('--apply');
@@ -58,14 +63,40 @@ async function listAll(path) {
 }
 
 const table = JSON.parse(readFileSync(new URL('../billing/tiers.json', import.meta.url), 'utf8'));
-const wanted = deriveCatalogue(table);
+const wanted = [...deriveCatalogue(table), ...deriveMetered(table)];
 const products = await listAll('products?active=true');
+const meters = await listAll('billing/meters?status=active');
 const keys = wanted.flatMap((w) => w.prices.map((p) => p.lookup_key));
 const priceQuery = keys.map((k) => `lookup_keys[]=${encodeURIComponent(k)}`).join('&');
 const pricesByKey = Object.fromEntries((await stripe('GET', `prices?${priceQuery}&limit=100`)).data.map((p) => [p.lookup_key, p]));
 
 let drift = 0;
+/** The id of the meter `w` bills through (created under --apply when missing), or null. */
+async function meterFor(w) {
+  let meter = meters.find((m) => m.event_name === w.meter.event_name);
+  const md = meterDiffs(w.meter, meter);
+  if (!md.length) {
+    console.log(`ok   ${mode} meter ${w.meter.event_name} ${meter.id}`);
+    return meter.id;
+  }
+  drift += 1;
+  console.log(`DIFF ${mode} meter ${w.meter.event_name}: ${md.join(', ')}`);
+  if (meter) return meter.id; // settings a script must not rewrite under live usage: the operator decides
+  if (!APPLY) return null;
+  meter = await stripe('POST', 'billing/meters', {
+    display_name: w.meter.display_name,
+    event_name: w.meter.event_name,
+    'default_aggregation[formula]': 'sum',
+    'customer_mapping[type]': 'by_id',
+    'customer_mapping[event_payload_key]': 'stripe_customer_id',
+    'value_settings[event_payload_key]': 'value',
+  });
+  console.log(`  ${meter.id} created`);
+  return meter.id;
+}
+
 for (const w of wanted) {
+  const meterId = w.meter ? await meterFor(w) : undefined;
   let product = products.find((p) => p.metadata?.citadel_tier === w.tier);
   const pd = productDiffs(w.product, product);
   if (pd.length) {
@@ -81,15 +112,16 @@ for (const w of wanted) {
   }
   for (const p of w.prices) {
     const have = pricesByKey[p.lookup_key];
-    const d = priceDiffs(p, have, product?.id);
+    const d = priceDiffs(p, have, product?.id, meterId);
     if (!d.length) {
       console.log(`ok   ${mode} price ${p.lookup_key} ${have.id} ${p.unit_amount} ${p.currency}/${p.interval}`);
       continue;
     }
     drift += 1;
     console.log(`DIFF ${mode} price ${p.lookup_key}: ${d.join(', ')}`);
-    if (APPLY && product) {
+    if (APPLY && product && meterId !== null) {
       const created = await stripe('POST', 'prices', {
+        ...(meterId ? { 'recurring[meter]': meterId } : {}),
         product: product.id,
         currency: p.currency,
         unit_amount: String(p.unit_amount),

@@ -90,6 +90,11 @@ LOOPBACK_AGENT_ORIGIN = "wss://local.avarok.net:12345"
 # Empty: a visitor is not pre-filled with a server; tenants are created, not joined, here.
 DEFAULT_WORKSPACE_SERVER = ""
 
+# The usage monitor (control/monitor.mjs): samples every active tenant's metered usage into D1,
+# repairs entitlement drift and reports relay overage to Stripe's meter. Every 15 minutes, UTC.
+[triggers]
+crons = ["*/15 * * * *"]
+
 [[d1_databases]]
 binding = "CONTROL_DB"
 database_name = "citadel-control"
