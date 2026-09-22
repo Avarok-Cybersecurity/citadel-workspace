@@ -100,7 +100,14 @@ say "deploy"
 wr deploy
 
 say "smoke: the deployed site and a tenant host"
-page="$(curl -fsS https://work.avarok.net/create)" || fail "https://work.avarok.net/create did not answer"
+# Newly attached routes take seconds to reach the edge; until then the proxied placeholder record
+# answers 522. Wait for them, but only that long: a site still failing after 60s is a failed deploy.
+page=""
+for _ in $(seq 1 12); do
+  page="$(curl -fsS https://work.avarok.net/create 2>/dev/null)" && break
+  page=""; sleep 5
+done
+[ -n "$page" ] || fail "https://work.avarok.net/create did not answer within 60s"
 printf '%s' "$page" | grep -q 'name="citadel-control-plane" content="/api"' || fail "the page does not carry the control-plane meta tag"
 curl -fsSI https://work.avarok.net/ | grep -qi '^content-security-policy:.*challenges.cloudflare.com' || fail "the page's CSP does not allow Turnstile"
 status="$(curl -s -o /dev/null -w '%{http_code}' https://smoke-probe.work.avarok.net/)"
