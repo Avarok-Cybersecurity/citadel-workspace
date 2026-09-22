@@ -210,10 +210,8 @@ if [[ -z "$loopback_origin" ]] && docker compose -f "$COMPOSE_FILE" config --ser
     echo "  The page would ship an empty agent origin and a Content-Security-Policy"
     echo "  that forbids the agent, so every visitor gets a page that loads and cannot"
     echo "  connect to anything. Set it to the origin of the visitor's own agent. The"
-    echo "  released agent has a certificate for local.avarok.net only, so:"
+    echo "  agent serves a certificate for local.avarok.net and no other, so:"
     echo "    LOOPBACK_AGENT_ORIGIN=wss://local.avarok.net:12345"
-    echo "  (a name of your own needs testers to run the agent with --tls-cert/--tls-key;"
-    echo "  see docs/INSTALL.md)"
     exit 1
 fi
 

@@ -822,6 +822,7 @@ dependencies = [
  "citadel_logging",
  "citadel_sdk",
  "citadel_types",
+ "dirs2",
  "lazy_static",
  "parking_lot",
  "structopt",

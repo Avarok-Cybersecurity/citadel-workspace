@@ -25,7 +25,10 @@
  * The rule is deliberately about AGREEMENT, not about a preferred mode. Moving
  * the proxy hop to TLS is a legitimate choice; making it silently is not. So:
  *
- *   1. Every launch site must STATE its mode -- `--no-tls` or `--tls-cert`.
+ *   1. Every launch site must STATE its mode. Plaintext is `--no-tls`; TLS has
+ *      exactly one form, the built-in local.avarok.net certificate, so a launch
+ *      without `--no-tls` serves TLS. (`--tls-cert`/`--tls-key` were removed: the
+ *      agent now refuses them, so a launch line naming them is an error here too.)
  *      Inheriting the default is what broke, and a default that is right for
  *      one topology is wrong for the other, so neither may be assumed.
  *   2. Every proxy that fronts the agent must dial the mode its agent serves.
@@ -68,17 +71,12 @@ if (launchLines.length === 0) {
 const agentServesTls = [];
 for (const { line, n } of launchLines) {
   const noTls = /--no-tls\b/.test(line);
-  const withCert = /--tls-cert\b/.test(line);
-  if (noTls && withCert) {
-    failures.push(`${DOCKERFILE}:${n}: states both --no-tls and --tls-cert`);
-  } else if (!noTls && !withCert) {
+  if (/--tls-(cert|key)\b/.test(line)) {
     failures.push(
-      `${DOCKERFILE}:${n}: launches the agent without stating a TLS mode. ` +
-      `Add --no-tls (plaintext behind the proxy) or --tls-cert/--tls-key. ` +
-      `The default is TLS, chosen for the direct-dial topology, and inheriting ` +
-      `it here is what silently broke every proxied path.`);
+      `${DOCKERFILE}:${n}: passes --tls-cert/--tls-key, which the agent no longer accepts ` +
+      `(it serves only its built-in local.avarok.net certificate) and would refuse to start with.`);
   } else {
-    agentServesTls.push({ n, tls: withCert });
+    agentServesTls.push({ n, tls: !noTls });
   }
 }
 
