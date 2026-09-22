@@ -27,9 +27,9 @@ codegen-units = 1
 # SPIKE ONLY (feat/kernel-on-wasm): the local Citadel-Protocol branch feat/wasm-server-in-worker,
 # mirrored from the root workspace's patch. Not for merge.
 [patch."https://github.com/Avarok-Cybersecurity/Citadel-Protocol"]
-citadel_sdk = { path = "../../../citadel-protocol/citadel_sdk" }
-citadel_types = { path = "../../../citadel-protocol/citadel_types" }
-citadel_user = { path = "../../../citadel-protocol/citadel_user" }
-citadel_logging = { path = "../../../citadel-protocol/citadel_logging" }
-citadel_crypt = { path = "../../../citadel-protocol/citadel_crypt" }
-citadel_io = { path = "../../../citadel-protocol/citadel_io" }
+citadel_sdk = { path = "../../../cp-wss/citadel_sdk" }
+citadel_types = { path = "../../../cp-wss/citadel_types" }
+citadel_user = { path = "../../../cp-wss/citadel_user" }
+citadel_logging = { path = "../../../cp-wss/citadel_logging" }
+citadel_crypt = { path = "../../../cp-wss/citadel_crypt" }
+citadel_io = { path = "../../../cp-wss/citadel_io" }
