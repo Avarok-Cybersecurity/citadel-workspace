@@ -4,6 +4,8 @@
 //! It is the SDK's own browser client (the WebSocket transport in `wasm_io`), not a stand-in:
 //! every byte it sends crosses the Durable Object's WebSocket into the Citadel node there.
 
+mod session;
+
 use citadel_sdk::prelude::*;
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,

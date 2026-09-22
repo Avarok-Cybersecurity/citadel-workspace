@@ -79,9 +79,9 @@ chrono = { version = "0.4.34", features = ["serde"] }
 # SPIKE ONLY (feat/kernel-on-wasm): build against the local Citadel-Protocol branch
 # feat/wasm-server-in-worker. Not for merge.
 [patch."https://github.com/Avarok-Cybersecurity/Citadel-Protocol"]
-citadel_sdk = { path = "../citadel-protocol/citadel_sdk" }
-citadel_types = { path = "../citadel-protocol/citadel_types" }
-citadel_user = { path = "../citadel-protocol/citadel_user" }
-citadel_logging = { path = "../citadel-protocol/citadel_logging" }
-citadel_crypt = { path = "../citadel-protocol/citadel_crypt" }
-citadel_io = { path = "../citadel-protocol/citadel_io" }
+citadel_sdk = { path = "../cp-store/citadel_sdk" }
+citadel_types = { path = "../cp-store/citadel_types" }
+citadel_user = { path = "../cp-store/citadel_user" }
+citadel_logging = { path = "../cp-store/citadel_logging" }
+citadel_crypt = { path = "../cp-store/citadel_crypt" }
+citadel_io = { path = "../cp-store/citadel_io" }

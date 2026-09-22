@@ -1,18 +1,28 @@
 /**
  * The tenant worker: one workspace server per tenant, each a Durable Object.
  *
- * This file does sockets and nothing else. The Worker routes a WebSocket upgrade to the tenant's
- * object; the object accepts the server half of a `WebSocketPair` and hands it to the Citadel
- * node running inside it (`server-wasm`, the same workspace kernel the native server runs). The
- * node lives as long as the object does: its sessions and ratchets are in memory, so an evicted
- * object drops its clients and they reconnect.
+ * This file does sockets and storage plumbing and nothing else. The Worker routes a WebSocket
+ * upgrade to the tenant's object; the object accepts the server half of a `WebSocketPair` and
+ * hands it to the Citadel node running inside it (`server-wasm`, the same workspace kernel the
+ * native server runs). The node's sessions and ratchets are in memory, so an evicted object drops
+ * its clients and they reconnect; its accounts and workspace data are in the object's SQLite
+ * storage, so they are there when they do.
+ *
+ * Each object instantiates the wasm module for itself (`instantiate`, see
+ * make-instance-factory.mjs): objects can share an isolate, and a shared instance would share
+ * every Rust global and the async task queue between tenants.
  */
-import { initSync, TenantServer, ArgonCost } from "./server-wasm/pkg/citadel_tenant_server_wasm.js";
+import { instantiate } from "./server-wasm/pkg/instance.mjs";
 import wasm from "./server-wasm/pkg/citadel_tenant_server_wasm_bg.wasm";
 
-// `--target web`, instantiated by hand from the module the runtime hands over (the rMazing
-// notary-worker pattern): a `.wasm` import arrives as an uninstantiated `WebAssembly.Module`.
-const exports = initSync({ module: wasm });
+// Wasm instances this isolate has created. Module state is per isolate, so objects that see the
+// same count ran in one isolate.
+let instancesInIsolate = 0;
+
+function newInstance() {
+  instancesInIsolate += 1;
+  return instantiate(wasm);
+}
 
 /** The tenant a request is for: the first path segment, else the hostname's first label. */
 function tenantOf(url) {
@@ -38,6 +48,7 @@ export class WorkspaceServer {
   constructor(ctx, env) {
     this.ctx = ctx;
     this.env = env;
+    this.wasm = null;
     this.server = null;
     this.exit = null;
     this.accepted = 0;
@@ -51,17 +62,43 @@ export class WorkspaceServer {
       `bind_addr = "127.0.0.1:0"`,
       `workspace_master_password = ${JSON.stringify(required(env, "WORKSPACE_MASTER_PASSWORD"))}`,
     ].join("\n");
-    const argon = new ArgonCost(
+    const t0 = Date.now();
+    this.wasm = newInstance();
+    const argon = new this.wasm.ArgonCost(
       Number(required(env, "ARGON_LANES")),
       Number(required(env, "ARGON_MEM_KIB")),
       Number(required(env, "ARGON_TIME_COST")),
     );
-    const t0 = Date.now();
-    this.server = new TenantServer(config, argon, required(env, "LOG_FILTER"), (outcome) => {
+    this.server = new this.wasm.TenantServer(config, this.storage(), argon, required(env, "LOG_FILTER"), (outcome) => {
       this.exit = outcome;
       console.error(`[tenant] node exited: ${outcome}`);
     });
     console.log(`[tenant] node started in ${Date.now() - t0} ms`);
+  }
+
+  /**
+   * The object's SQLite storage as the node's backend sees it (server-wasm `storage.rs`): run
+   * `[[sql, params], ...]` as one transaction and return each statement's rows as arrays.
+   */
+  storage() {
+    const storage = this.ctx.storage;
+    return {
+      run: (statements) =>
+        storage.transactionSync(() => statements.map(([sql, params]) => [...storage.sql.exec(sql, ...params).raw()])),
+    };
+  }
+
+  /** Row counts and the largest stored value per table, for the proofs and the limits report. */
+  storedRows() {
+    const sql = this.ctx.storage.sql;
+    const tables = [...sql.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'citadel_%'")].map((r) => r.name);
+    return Object.fromEntries(
+      tables.map((t) => {
+        const hasBin = [...sql.exec(`SELECT name FROM pragma_table_info('${t}') WHERE name = 'bin'`)].length > 0;
+        const size = hasBin ? "COALESCE(MAX(LENGTH(bin)), 0)" : "0";
+        return [t, sql.exec(`SELECT COUNT(*) AS rows, ${size} AS max_bin_bytes FROM ${t}`).one()];
+      }),
+    );
   }
 
   stats() {
@@ -69,7 +106,10 @@ export class WorkspaceServer {
       accepted: this.accepted,
       running: this.server !== null && this.exit === null,
       exit: this.exit,
-      wasm_memory_bytes: exports.memory.buffer.byteLength,
+      wasm_instance: this.wasm === null ? null : this.wasm.instance_id(),
+      wasm_instances_in_isolate: instancesInIsolate,
+      wasm_memory_bytes: this.wasm === null ? 0 : this.wasm.memory().buffer.byteLength,
+      stored: this.storedRows(),
       connections: this.connections,
     };
   }

@@ -2,7 +2,10 @@
 //!
 //! JS owns the sockets: the Durable Object accepts each WebSocket upgrade and hands the server
 //! half here. Rust owns everything else — the Citadel node, the workspace kernel, the sessions —
-//! running on the isolate's event loop for as long as the object lives.
+//! running on the isolate's event loop for as long as the object lives. Its accounts and
+//! workspace data live in the object's own SQLite storage (`storage`), so they outlive it.
+
+mod storage;
 
 use citadel_sdk::prelude::{
     ArgonDefaultServerSettings, BackendType, WasmConnectionInjector, WasmIO, WasmListener,
@@ -11,6 +14,7 @@ use citadel_sdk::prelude::{
 use citadel_workspace_server_kernel::config::ServerConfig;
 use citadel_workspace_server_kernel::run_server_on;
 use std::cell::Cell;
+use std::sync::OnceLock;
 use std::net::{Ipv4Addr, SocketAddr};
 use wasm_bindgen::prelude::*;
 
@@ -35,6 +39,15 @@ impl ArgonCost {
     }
 }
 
+/// A random identifier held in a Rust global, fixed at first call. Two objects reporting the same
+/// value share one wasm instance — and so every other Rust global too.
+#[wasm_bindgen]
+pub fn instance_id() -> String {
+    static ID: OnceLock<String> = OnceLock::new();
+    ID.get_or_init(|| format!("{:016x}", (js_sys::Math::random() * 2f64.powi(53)) as u64))
+        .clone()
+}
+
 #[wasm_bindgen]
 pub struct TenantServer {
     injector: WasmConnectionInjector,
@@ -43,11 +56,13 @@ pub struct TenantServer {
 
 #[wasm_bindgen]
 impl TenantServer {
-    /// Start the node. `config_toml` is a `kernel.toml`. `on_exit` is called with a description of
-    /// how the node ended, which for a server that should run until eviction is always a failure.
+    /// Start the node. `config_toml` is a `kernel.toml`; `storage` is the object's SQLite storage
+    /// (see `storage::TenantStorage`). `on_exit` is called with a description of how the node
+    /// ended, which for a server that should run until eviction is always a failure.
     #[wasm_bindgen(constructor)]
     pub fn start(
         config_toml: &str,
+        storage: storage::TenantStorage,
         argon: ArgonCost,
         log_filter: &str,
         on_exit: js_sys::Function,
@@ -61,10 +76,10 @@ impl TenantServer {
             time_cost: argon.time_cost,
             ..ArgonDefaultServerSettings::default()
         };
+        let backend = BackendType::HostSql(storage::backend_handle(storage));
         let (injector, listener) = WasmListener::injected();
         wasm_bindgen_futures::spawn_local(async move {
-            let outcome =
-                run_server_on::<WasmIO>(config, listener, BackendType::InMemory, argon).await;
+            let outcome = run_server_on::<WasmIO>(config, listener, backend, argon).await;
             let _ = on_exit.call1(&JsValue::NULL, &format!("{outcome:?}").into());
         });
         Ok(Self {
