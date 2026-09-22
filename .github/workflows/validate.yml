@@ -523,6 +523,8 @@ jobs:
 
       - name: Tenant provisioning refuses what it must
         run: bash scripts/test-provision-tenant.sh
+      - name: The Stripe catalogue is derived from the approved tier table
+        run: node --test billing/catalogue.test.mjs
       - name: A deploy's own environment beats its .env
         run: bash scripts/test-load-dotenv.sh
       - name: The agent README names the directory that holds the account
