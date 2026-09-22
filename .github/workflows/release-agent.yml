@@ -213,66 +213,18 @@ jobs:
           echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
           echo "Signing identity: $identity"
 
-      - name: Sign and notarise
+      - name: Sign
         if: runner.os == 'macOS'
-        env:
-          NOTARY_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_KEY_P8_BASE64 }}
-          NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
-          NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
         shell: bash
         run: |
           set -euo pipefail
           bin="target/${{ matrix.target }}/release/citadel-workspace-internal-service"
-
           # --options runtime is NOT optional: notarisation rejects anything
           # without the hardened runtime, and the rejection names the flag only
           # in the JSON log, not in the summary line.
           codesign --force --options runtime --timestamp \
             --sign "$SIGN_IDENTITY" "$bin"
           codesign --verify --strict --verbose=2 "$bin"
-
-          if [ -z "${NOTARY_KEY_P8_BASE64:-}" ] || [ -z "${NOTARY_KEY_ID:-}" ] || [ -z "${NOTARY_ISSUER_ID:-}" ]; then
-            echo "::error::MACOS_NOTARY_KEY_P8_BASE64, MACOS_NOTARY_KEY_ID and MACOS_NOTARY_ISSUER_ID must be set."
-            echo "  Signed but un-notarised is still refused by Gatekeeper, so shipping it"
-            echo "  would look fixed and behave the same. Failing instead."
-            exit 1
-          fi
-
-          printf '%s' "$NOTARY_KEY_P8_BASE64" | base64 -d > "$RUNNER_TEMP/notary.p8"
-          # notarytool takes .zip, .pkg or .dmg -- never a bare binary or a
-          # .tar.gz -- so the artefact is zipped purely for submission. The
-          # ticket is issued against the signature, so the tarball built from
-          # this binary afterwards carries a notarised one.
-          ditto -c -k "$bin" "$RUNNER_TEMP/notarize.zip"
-          set +e
-          out="$(xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
-            --key "$RUNNER_TEMP/notary.p8" \
-            --key-id "$NOTARY_KEY_ID" \
-            --issuer "$NOTARY_ISSUER_ID" \
-            --wait --timeout 30m 2>&1)"
-          rc=$?
-          set -e
-          rm -f "$RUNNER_TEMP/notary.p8"
-          echo "$out"
-          if [ "$rc" -ne 0 ] || ! echo "$out" | grep -q "status: Accepted"; then
-            id="$(echo "$out" | awk '/id:/ {print $2; exit}')"
-            echo "::error::notarisation did not return Accepted."
-            echo "  Fetch the reasons with:"
-            echo "    xcrun notarytool log $id --key-id <id> --issuer <issuer> --key <p8>"
-            exit 1
-          fi
-
-          # A ticket CANNOT be stapled to a bare executable -- stapler handles
-          # .app/.pkg/.dmg only -- so Gatekeeper validates online on first run.
-          # That is acceptable here specifically: the agent exists to reach a
-          # workspace server, so it is useless without a network anyway.
-          # NOT asserted, and not a failure when it complains: `spctl -a -t exec`
-          # rejects EVERY bare command-line tool with "the code is valid but does
-          # not seem to be an app", signed and notarised or not. It assesses app
-          # bundles. Printed for the record; `codesign --verify` above is what
-          # actually judges the signature.
-          echo "Gatekeeper assessment (informational -- CLI tools are never 'apps'):"
-          spctl -a -t exec -vv "$bin" 2>&1 | sed 's/^/  /' || true
 
       # Packaged with the run instructions beside the binary. `--bind` has no
       # default in the agent's CLI, so a downloaded binary run bare exits with a
@@ -289,6 +241,39 @@ jobs:
           cp docs/AGENT_README.md "$staging/README.md"
           tar -czf "${{ matrix.asset }}" -C "$staging" .
           shasum -a 256 "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"
+
+      # The macOS download people are offered. A ticket cannot be stapled to a
+      # bare executable, so the .tar.gz alone is judged online on first run and
+      # a quarantined copy reads as unverified; a stapled disk image is cleared
+      # offline (scripts/package-macos-dmg.sh says why in full).
+      - name: Package (macOS disk image)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/package-macos-dmg.sh \
+            "target/${{ matrix.target }}/release/citadel-workspace-internal-service" \
+            docs/AGENT_README.md "${ASSET%.tar.gz}.dmg"
+        env:
+          ASSET: ${{ matrix.asset }}
+
+      # One submission: Apple notarises the binary inside the image along with
+      # it, and the script checks the bare binary (the one in the .tar.gz) too.
+      - name: Notarise and staple
+        if: runner.os == 'macOS'
+        env:
+          ASSET: ${{ matrix.asset }}
+          NOTARY_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg="${ASSET%.tar.gz}.dmg"
+          ./scripts/notarise-macos.sh "$dmg" \
+            "target/${{ matrix.target }}/release/citadel-workspace-internal-service"
+          # After stapling: the ticket changes the file, so the checksum must be of the stapled image.
+          shasum -a 256 "$dmg" > "$dmg.sha256"
 
       - name: Package (windows)
         if: runner.os == 'Windows'
@@ -309,12 +294,22 @@ jobs:
         shell: bash
         run: ./scripts/smoke-agent.sh "${{ matrix.asset }}"
 
+      - name: Smoke-test the disk image
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          ASSET: ${{ matrix.asset }}
+        run: ./scripts/smoke-agent.sh "${ASSET%.tar.gz}.dmg"
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
           path: |
             ${{ matrix.asset }}
             ${{ matrix.asset }}.sha256
+            # Only the macOS legs make one; elsewhere the pattern matches nothing.
+            citadel-agent-*.dmg
+            citadel-agent-*.dmg.sha256
           if-no-files-found: error
 
   publish:

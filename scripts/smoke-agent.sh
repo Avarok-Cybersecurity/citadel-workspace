@@ -16,12 +16,14 @@
 # (3) is the one that matters. The others can pass on a binary that cannot serve.
 set -euo pipefail
 
-ARCHIVE="${1:?usage: smoke-agent.sh <archive.tar.gz>}"
+ARCHIVE="${1:?usage: smoke-agent.sh <archive.tar.gz|.zip|.dmg>}"
 [ -f "$ARCHIVE" ] || { echo "::error::no such archive: $ARCHIVE" >&2; exit 1; }
 
 WORK="$(mktemp -d)"
 cleanup() {
   [ -n "${AGENT_PID:-}" ] && kill "$AGENT_PID" 2>/dev/null || true
+  # A copy that fails under set -e exits before the detach below; a mounted image would outlive us.
+  [ -d "$WORK/mnt" ] && hdiutil detach -quiet -force "$WORK/mnt" 2>/dev/null || true
   rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -29,6 +31,11 @@ trap cleanup EXIT
 case "$ARCHIVE" in
   *.zip)    unzip -q "$ARCHIVE" -d "$WORK"; BIN="$WORK/citadel-agent.exe" ;;
   *.tar.gz) tar -xzf "$ARCHIVE" -C "$WORK"; BIN="$WORK/citadel-agent" ;;
+  # Mounted and copied out, as a user drags it out of the window; run from the image it would work
+  # even if the copy lost its mode bit, which is the thing being checked.
+  *.dmg)    hdiutil attach -quiet -nobrowse -readonly -mountpoint "$WORK/mnt" "$ARCHIVE"
+            ditto "$WORK/mnt/citadel-agent" "$WORK/citadel-agent"; cp "$WORK/mnt/README.md" "$WORK/" 2>/dev/null || true
+            hdiutil detach -quiet "$WORK/mnt"; BIN="$WORK/citadel-agent" ;;
   *)        echo "::error::unknown archive type: $ARCHIVE" >&2; exit 1 ;;
 esac
 
@@ -36,7 +43,7 @@ esac
 [ -f "$WORK/README.md" ] || { echo "::error::archive ships no README; a user gets a bare binary with a required flag and no way to know it" >&2; exit 1; }
 # Windows has no executable bit; the check is meaningful only where it exists.
 case "$ARCHIVE" in
-  *.tar.gz) [ -x "$BIN" ] || { echo "::error::citadel-agent is not executable — packaging dropped the mode bit" >&2; exit 1; } ;;
+  *.tar.gz|*.dmg) [ -x "$BIN" ] || { echo "::error::citadel-agent is not executable — packaging dropped the mode bit" >&2; exit 1; } ;;
 esac
 
 # No --bind must FAIL. A binary that exits 0 here is not our agent, or is a stub.

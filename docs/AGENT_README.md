@@ -9,6 +9,11 @@ Nothing here phones home on its own. The agent connects where you tell it to.
 
 ## Running it
 
+On macOS, open `citadel-agent-macos-<arch>.dmg` and copy `citadel-agent` out of
+it (to your home folder, say), then run it from Terminal in that folder. The
+disk image is notarised by Apple with the ticket stapled, so macOS verifies it
+without going online.
+
 ```bash
 ./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net
 ```
@@ -92,6 +97,7 @@ holding both files:
 
 ```bash
 # macOS
+shasum -a 256 -c citadel-agent-macos-<arch>.dmg.sha256
 shasum -a 256 -c citadel-agent-<platform>.tar.gz.sha256
 
 # Linux (shasum is Perl-based and not always installed)
