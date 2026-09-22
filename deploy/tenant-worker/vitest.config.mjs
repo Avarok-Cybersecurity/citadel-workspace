@@ -25,6 +25,7 @@ export default defineConfig({
           TURNSTILE_SECRET: "1x0000000000000000000000000000000AA",
           TURNSTILE_HOSTNAMES: "example.com",
           STRIPE_SECRET_KEY: "sk_test_not_a_real_key",
+          STRIPE_PORTAL_CONFIGURATION: "bpc_test_citadel",
           STRIPE_WEBHOOK_SECRET: "whsec_vitest_only",
           TENANT_PATH_ROUTING: "on",
           TENANT_DIAGNOSTICS: "on",

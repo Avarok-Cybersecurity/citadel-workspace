@@ -84,6 +84,10 @@ export function config(env) {
       : null,
     stripeKey: optional(env, "STRIPE_SECRET_KEY"),
     webhookSecret: optional(env, "STRIPE_WEBHOOK_SECRET"),
+    // The customer portal configuration (bpc_...) to open. Never Stripe's default: the Stripe
+    // account is shared with another product, whose default portal would then be shown to
+    // Citadel customers. Unset, the portal route answers 503.
+    portalConfiguration: optional(env, "STRIPE_PORTAL_CONFIGURATION"),
   };
 }
 

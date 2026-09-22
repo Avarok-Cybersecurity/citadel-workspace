@@ -206,8 +206,10 @@ export async function openPortal(io, cfg, slug, body) {
     return refuse("not-owner", "that claim code does not own this workspace", 403);
   }
   if (!row.stripe_customer) return refuse("no-subscription", "this workspace has no subscription to manage", 404);
+  if (!cfg.portalConfiguration) return refuse("portal-not-configured", "managing a subscription is not available yet", 503);
   const session = await stripe(io, cfg.stripeKey, "POST", "/billing_portal/sessions", {
     customer: row.stripe_customer,
+    configuration: cfg.portalConfiguration,
     return_url: `${cfg.publicOrigin}/`,
   });
   return json({ portal_url: session.url });

@@ -58,6 +58,10 @@ export function outbound({ turnstile = { success: true, hostname: "example.com" 
         return Response.json({ id, url: `https://checkout.stripe.com/c/pay/${id}` });
       }
       if (url.pathname === "/v1/billing_portal/sessions") {
+        // Never the account's default portal: it belongs to another product on the same account.
+        if (form.get("configuration") !== "bpc_test_citadel") {
+          return Response.json({ error: { message: "test: portal opened without Citadel's configuration" } }, { status: 400 });
+        }
         return Response.json({ id: "bps_1", url: "https://billing.stripe.com/p/session/test_1" });
       }
     }

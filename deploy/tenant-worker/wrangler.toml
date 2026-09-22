@@ -71,6 +71,10 @@ CONTROL_HOST = "work.avarok.net"
 PUBLIC_ORIGIN = "https://work.avarok.net"
 ALLOWED_ORIGINS = "https://work.avarok.net"
 TURNSTILE_HOSTNAMES = "work.avarok.net"
+# Citadel's own customer portal (test mode). Never the account default, which belongs to another
+# product on the same Stripe account. Created with features: plan/seat change between the Team and
+# Business prices, cancel at period end, payment method, invoices, return to PUBLIC_ORIGIN.
+STRIPE_PORTAL_CONFIGURATION = "bpc_1UIbClCgLMkhvcEsvf9lxARd"
 # Tenants are reached by subdomain only. `/<slug>` routing exists for machines without subdomains.
 TENANT_PATH_ROUTING = "off"
 # A tenant host answers WebSocket upgrades and nothing else (426). "on" makes a plain GET answer
