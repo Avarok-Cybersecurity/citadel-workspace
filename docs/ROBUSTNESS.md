@@ -13106,3 +13106,50 @@ Checked live:
 - A real-browser creation behind Turnstile, and the paid 4242 checkout. These need the operator's hand.
 - The claim-code E2E against a live `wss://<slug>.work.avarok.net`.
 - Agent release v0.4.0 predates the wss transport, so it cannot reach tenants. An agent release is needed after Citadel-Protocol #310 merges.
+
+## Round 753 — members get Cloudflare TURN credentials from their tenant
+
+**Deployed.** Worker version `9e7557c1`, from `feat/ice-servers`. The new secrets are `TURN_KEY_ID` and `TURN_KEY_API_TOKEN`. The long-lived token stays in the Worker and never reaches a client.
+
+**How it works:**
+- The request is `WorkspaceProtocolRequest::GetIceServers`, answered by the tenant's Durable Object through the kernel's `IceServerSource`.
+- The host minter (`control/ice.mjs`) calls Cloudflare's `generate-ice-servers`, caches the answer until 80% of its TTL, and allows 30 mints per member per hour.
+- Free tenants lose the relay once their included relay is used.
+- Guests, removed accounts and non-members get `IceServersUnavailable`.
+
+**Proof, live.** `tests/a_hosted_tenant_mints_relay_servers.rs` ran against `wss://bench.work.avarok.net/bench`. A freshly registered member got a `turns:…:443` server carrying a username and a credential, expiring in 3599 s. A second ask returned the same expiry, so it came from the cache and not a second mint. The test prints only whether a credential is present, never its value.
+
+**Open:** per-key TURN egress accounting. Cloudflare's analytics have not yet been shown to split usage per key.
+
+## Round 754 — the agent dials through TURN (agent #72, SDK #311)
+
+- `PeerConnect.turn` and `PeerConnectAccept.turn` carry `{policy: fallback|relay_only, ice_servers, expires_at}`.
+- `PeerConnectSuccess.path` reports `direct`, `turn` or `server_relay`.
+- The TURN client lives in `citadel_wire::udp_traversal::turn_relay` (UDP, TCP and TLS). QUIC runs over the allocation, with the relayed MTU at 1276.
+- No type uses `deny_unknown_fields`, so an older agent ignores `turn`.
+- **Proof:** coturn stands in for Cloudflare in `tests/peer_turn.rs` and `tests/peer_turn_accept.rs`. With `relay_only`, the path reports `turn`.
+- **Proof, live:** `relay_only_through_cloudflare_reports_turn` ran with a credential freshly minted from the production TURN key (10-minute TTL, never printed). Both agents reported `turn` and messages went each way, in 2.79 s.
+- **Control:** the same test with a bogus credential went red with `[ServerRelay, ServerRelay]`, so the passing `turn` was not the test's own assumption. That fallback is by design: `RelayOnly` promises only that the peers never learn each other's addresses, and the server relay keeps that promise.
+- **Open:** the same connection driven from the UI on bench, with the path shown on the peer row.
+
+## Round 755 — v0.6.0: four defects the release dry runs found before a user could
+
+| Defect | Cause | Fix |
+|---|---|---|
+| The Windows build failed in `openssl-sys` | the composite action ran under Git bash, whose perl cannot build OpenSSL | the Windows build step uses `shell: pwsh` |
+| Linux packaging found no binary | the tarball's member is `./citadel-agent` | extract that exact path |
+| The AppImage autostart check wrote to the runner's real home | `XDG_CONFIG_HOME` was unset | point it at the smoke's scratch home |
+| The MSI smoke passed msiexec's exit code through as its own | the script's last command was msiexec | explicit `exit 0` after the assertions |
+
+The uninstall check also plants a sentinel Run-key value belonging to "another app", and asserts that both the key and the sentinel survive uninstall. Final dry run `35925564973`: green on every platform.
+
+## Round 756 — two gates that went red for reasons outside the change
+
+**The Lighthouse gate hung after passing (UI #50).** It printed "All Lighthouse baselines met." at 23:26 and was cancelled at 23:33.
+- Cause: chrome-launcher kills only the instances it returns. When the first `launch()` threw (ECONNREFUSED on the DevTools port, which is retried), that attempt's Chrome stayed up and held node's event loop open.
+- Reproduction: `launch({maxConnectionRetries: 0})` hangs node (exit 124 at a 20 s timeout). With `killAll()` it exits in 0 s.
+- Fix: `killAll()` after each failed attempt and in the `finally` block. No other script launches Chrome.
+
+**The server image could not load its manifest (workspace #142, AGPL).** Members now inherit `license.workspace = true`, but the image builds against `docker/workspace-server/Cargo.docker.toml`, which declared no `[workspace.package]`.
+- The guard for exactly this substitution, `check-docker-workspace-manifest`, understood only inline `{ workspace = true }` dependencies. It now also checks `[package]` fields inherited from `[workspace.package]`.
+- Control: without the section, the check names both members and exits 1, and `cargo metadata` on the Docker layout fails with the CI error. With it, cargo gets past manifest loading.
