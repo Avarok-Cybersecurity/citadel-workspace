@@ -98,6 +98,7 @@ services:
       # instead arrives header-less, which this control does not police — see
       # io_interface/origin_policy.rs for why that limit is deliberate.
       - INTERNAL_SERVICE_ALLOWED_ORIGINS=http://localhost:8080,http://127.0.0.1:8080
+      - INTERNAL_SERVICE_STUN_SERVERS=stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302
     volumes:
       - agent_data:/data/internal-service
     # Deliberately NO `ports:`. Publishing the agent would expose an unauthenticated control plane

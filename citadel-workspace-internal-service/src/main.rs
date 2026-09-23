@@ -1,4 +1,5 @@
 use citadel_internal_service::kernel::CitadelWorkspaceService;
+use citadel_internal_service::stun::{StunServers, STUN_SERVERS_ENV};
 use citadel_internal_service::OriginPolicy;
 use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
 use std::error::Error;
@@ -33,6 +34,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .as_deref(),
         opts.allowed_origins.as_deref(),
     )?;
+    // The STUN servers this agent learns its public address from, required like --bind: the
+    // SDK would otherwise fall back to a built-in list nobody chose for this deployment.
+    let stun_servers = StunServers::resolve(
+        std::env::var(STUN_SERVERS_ENV).ok().as_deref(),
+        opts.stun_servers.as_deref(),
+    )?;
+
     if origins == OriginPolicy::Any {
         citadel_logging::warn!(
             target: "citadel",
@@ -82,7 +90,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Initialize the node builder with StackedRatchet, which is a concrete implementation of the Ratchet trait
     let mut node_builder = NodeBuilder::<StackedRatchet>::default();
-    let mut builder = node_builder
+    let mut builder = stun_servers
+        .apply(&mut node_builder)
         .with_backend(backend_type)
         .with_node_type(NodeType::Peer);
 
@@ -119,6 +128,10 @@ struct Options {
     /// INTERNAL_SERVICE_ALLOWED_ORIGINS, which takes precedence.
     #[structopt(long)]
     allowed_origins: Option<String>,
+    /// Exactly three STUN servers, `host:port,host:port,host:port`, that this agent learns
+    /// its public address from. Required; INTERNAL_SERVICE_STUN_SERVERS overrides it.
+    #[structopt(long)]
+    stun_servers: Option<String>,
     /// Serve plain `ws://` instead of `wss://`.
     ///
     /// Only correct when the page is itself on loopback and reaches the agent

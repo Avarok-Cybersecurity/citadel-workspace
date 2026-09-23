@@ -7,6 +7,8 @@ struct AgentSettings {
     let bindHost: String
     let bindPort: UInt16
     let dataDirectory: URL
+    /// Exactly three `host:port` STUN servers, as the agent's --stun-servers takes them.
+    let stunServers: String
 
     init(bundle: Bundle) throws {
         func string(_ key: String) throws -> String {
@@ -30,6 +32,7 @@ struct AgentSettings {
         bindPort = port
         dataDirectory = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(try string("CitadelAgentDataDirectoryName"), isDirectory: true)
+        stunServers = try string("CitadelAgentStunServers")
     }
 
     /// The same flags the README gives a terminal user, spelled out rather than left to defaults.
@@ -37,7 +40,8 @@ struct AgentSettings {
         ["--bind", "\(bindHost):\(bindPort)",
          "--backend", "filesystem",
          "--data-dir", dataDirectory.path,
-         "--allowed-origins", workspaceURL.absoluteString]
+         "--allowed-origins", workspaceURL.absoluteString,
+         "--stun-servers", stunServers]
     }
 }
 

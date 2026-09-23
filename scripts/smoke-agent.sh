@@ -86,6 +86,7 @@ PORT="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));prin
 # The allowlist is REQUIRED by the WebSocket agent (it refuses to start without one); the
 # handshake below presents this origin, and a foreign one, to prove the policy shipped.
 INTERNAL_SERVICE_ALLOWED_ORIGINS="http://localhost:5291" \
+INTERNAL_SERVICE_STUN_SERVERS="stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302" \
   "$BIN" --bind "127.0.0.1:$PORT" >"$WORK/agent.log" 2>&1 &
 AGENT_PID=$!
 

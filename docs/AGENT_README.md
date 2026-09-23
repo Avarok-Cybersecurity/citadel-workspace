@@ -15,7 +15,7 @@ flags below already set, and starts when you log in. This archive is for
 terminal use and scripts.
 
 ```bash
-./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net
+./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302
 ```
 
 Then reload Citadel Workspace in your browser.
@@ -33,6 +33,10 @@ Both flags matter:
   above; `http://localhost:5291` if you run the UI locally -- and nothing else.
   The agent refuses to start without it. `INTERNAL_SERVICE_ALLOWED_ORIGINS` in
   the environment does the same and takes precedence.
+- **`--stun-servers` names exactly three STUN servers** the agent asks for its
+  public address, which it needs to connect directly to other members. The agent
+  refuses to start without them; `INTERNAL_SERVICE_STUN_SERVERS` does the same
+  and takes precedence.
 - **`--backend filesystem` persists your account.** The default backend is
   in-memory, which is right for tests and wrong for you: without this flag your
   account and message history are gone the next time the agent restarts. Data
@@ -67,7 +71,7 @@ If you delete `~/.citadel-agent` (or, for an older setup, `./data`), or point
 ## Windows
 
 ```powershell
-.\citadel-agent.exe --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net
+.\citadel-agent.exe --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302
 ```
 
 ## Checking it is up

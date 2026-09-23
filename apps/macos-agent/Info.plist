@@ -36,5 +36,7 @@
 	<string>127.0.0.1:12345</string>
 	<key>CitadelAgentDataDirectoryName</key>
 	<string>.citadel-agent</string>
+	<key>CitadelAgentStunServers</key>
+	<string>stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302</string>
 </dict>
 </plist>
