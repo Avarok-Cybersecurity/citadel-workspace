@@ -101,9 +101,9 @@ echo "== $AI =="
 "$LIB/assert-agent-version.sh" "$EXPECTED_VERSION" "$AI" --appimage-extract-and-run
 drive appimage "$AI" --appimage-extract-and-run
 entry="$WORK/home-appimage/.config/autostart/citadel-agent-appimage.desktop"
-HOME="$WORK/home-appimage" "$AI" --appimage-extract-and-run --install-autostart >/dev/null
+HOME="$WORK/home-appimage" XDG_CONFIG_HOME="$WORK/home-appimage/.config" "$AI" --appimage-extract-and-run --install-autostart >/dev/null
 [ "$(exec_line "$entry")" = "\"$AI\"" ] || fail "the AppImage's login entry does not run it: $(exec_line "$entry")"
-HOME="$WORK/home-appimage" "$AI" --appimage-extract-and-run --remove-autostart >/dev/null
+HOME="$WORK/home-appimage" XDG_CONFIG_HOME="$WORK/home-appimage/.config" "$AI" --appimage-extract-and-run --remove-autostart >/dev/null
 [ ! -e "$entry" ] || fail "--remove-autostart left $entry"
 echo "  appimage: offers to start at login, and takes it back"
 echo "== the .deb and the AppImage run the agent =="

@@ -107,3 +107,6 @@ if ($null -eq $runAfter.GetValue($sentinel)) { Fail "uninstalling removed anothe
 Remove-ItemProperty -Path $runKey -Name $sentinel
 Write-Host "  uninstalling removed only its own login entry"
 Write-Host "== $Msi installs, runs the agent, and uninstalls =="
+# The last native command here (msiexec, reg) sets $LASTEXITCODE, which pwsh would return
+# as the step's result; every check above has passed or already failed the script.
+exit 0
