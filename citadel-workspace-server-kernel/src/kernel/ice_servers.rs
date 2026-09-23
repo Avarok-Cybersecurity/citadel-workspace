@@ -47,7 +47,10 @@ pub fn may_have_ice_servers(user: Option<&User>, enrolled: bool) -> bool {
     }
 }
 
-pub(crate) const REFUSED: &str = "Permission denied: relay servers are for workspace members";
+/// Said to a Guest, a removed account or a non-member. `IceServersUnavailable`, not `Error`: the
+/// UI shows every `Error` as a failed operation, and a guest connecting peer-to-peer without a
+/// relay has not failed at anything. It is still a refusal: nothing is minted.
+pub(crate) const REFUSED: &str = "relay servers are not available for your role";
 pub(crate) const NOT_CONFIGURED: &str = "this workspace server has no relay servers to offer";
 
 /// The answer, once eligibility is known.
@@ -57,7 +60,9 @@ pub async fn answer(
     user_id: &str,
 ) -> WorkspaceProtocolResponse {
     if !eligible {
-        return WorkspaceProtocolResponse::Error(REFUSED.to_string());
+        return WorkspaceProtocolResponse::IceServersUnavailable {
+            reason: REFUSED.to_string(),
+        };
     }
     let Some(source) = source else {
         return WorkspaceProtocolResponse::IceServersUnavailable {

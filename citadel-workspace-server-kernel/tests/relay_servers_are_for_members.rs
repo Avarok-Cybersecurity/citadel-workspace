@@ -17,6 +17,12 @@ use common::member_test_utils::{insert_user_with_role, join_root, GateKernel};
 use common::workspace_test_utils::{create_test_kernel, create_test_kernel_with_ice_servers};
 use std::sync::{Arc, Mutex};
 
+/// A refused account is told relay is unavailable, never given an `Error` (the UI shows every
+/// Error as a failed operation) and never given servers.
+fn refused(response: &WorkspaceProtocolResponse) -> bool {
+    matches!(response, WorkspaceProtocolResponse::IceServersUnavailable { reason } if reason.contains("not available for your role"))
+}
+
 const EXPIRES_AT: u64 = 1_900_000_000;
 
 /// Answers every mint with one fixed server, or declines with `decline`; records who asked.
@@ -108,10 +114,7 @@ async fn a_guest_is_refused_and_nothing_is_minted() {
     enrol(&kernel, "visitor", UserRole::Guest).await;
 
     let response = ask(&kernel, "visitor").await;
-    assert!(
-        matches!(&response, WorkspaceProtocolResponse::Error(e) if e.contains("Permission denied")),
-        "a guest must be refused: {response:?}",
-    );
+    assert!(refused(&response), "a guest must be refused: {response:?}",);
     assert!(source.asked().is_empty(), "nothing is minted for a guest");
 }
 
@@ -125,10 +128,7 @@ async fn a_removed_or_unenrolled_account_is_refused() {
 
     for user in ["removed", "stranger", "nobody-at-all"] {
         let response = ask(&kernel, user).await;
-        assert!(
-            matches!(&response, WorkspaceProtocolResponse::Error(_)),
-            "{user} must be refused: {response:?}",
-        );
+        assert!(refused(&response), "{user} must be refused: {response:?}",);
     }
     assert!(source.asked().is_empty());
 }

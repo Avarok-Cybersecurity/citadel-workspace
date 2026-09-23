@@ -213,9 +213,10 @@ pub enum WorkspaceProtocolRequest {
 
     /// Ask for short-lived relay (TURN) servers for this member's peer connections.
     ///
-    /// Answered with `IceServers` for an enrolled member, `Error` for anyone else (a Guest or
-    /// a removed account), and `IceServersUnavailable` when the server has no relay to offer
-    /// or its host declines to mint (not configured, the plan's relay is used up, too many
+    /// Answered with `IceServers` for an enrolled member, and otherwise with
+    /// `IceServersUnavailable`: for a Guest, a removed account or a non-member (never `Error`,
+    /// which a client shows as a failed operation), or when the server has no relay to offer or
+    /// its host declines to mint (not configured, the plan's relay is used up, too many
     /// requests). A client that gets no servers falls back to direct connections.
     GetIceServers,
 
