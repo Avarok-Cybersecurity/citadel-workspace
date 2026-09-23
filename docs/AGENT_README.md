@@ -31,9 +31,11 @@ Both flags matter:
 - **`--backend filesystem` persists your account.** The default backend is
   in-memory, which is right for tests and wrong for you: without this flag your
   account and message history are gone the next time the agent restarts. Data
-  is written to `./data` unless `--data-dir` says otherwise -- and `./data` is
-  relative to the folder you start the agent FROM, not to where the binary
-  lives. Start it from a different folder and it finds no account there.
+  is written to `~/.citadel-agent` in your home folder unless `--data-dir` says
+  otherwise, so it is the same account wherever you start the agent from.
+  Agents from before this default used `./data`, relative to the folder they
+  were started from; if that folder exists where you start the agent, it is
+  still used (never moved), and the agent says so in its log.
 
 ## That directory is your account
 
@@ -52,10 +54,10 @@ The consequences are worth knowing before you rely on it:
 - **Keep the directory if you move machines**, and back it up as you would an
   SSH key or a password manager's vault. It is the same kind of secret.
 
-If you run the agent from a temporary folder, start it from a different folder
-than last time, or delete `./data` between sessions, you are creating a new
-account every time. Pass `--data-dir` with an absolute path, e.g.
-`--data-dir ~/.citadel-agent`, and it no longer matters where you start it.
+If you delete `~/.citadel-agent` (or, for an older setup, `./data`), or point
+`--data-dir` somewhere new, you are creating a new account. To move an older
+`./data` to the default, stop the agent and move the folder to
+`~/.citadel-agent`.
 
 ## Windows
 

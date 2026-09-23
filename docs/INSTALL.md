@@ -114,12 +114,11 @@ serves the UI (a server-only tenant does not). A publicly served UI has no
 agent of its own: each visitor's page dials the agent on the visitor's own
 machine at this `wss://` origin, and the page's Content-Security-Policy allows
 nothing else. Left empty, the page loads, looks correct, and can connect to
-nothing. With the agent as released, the value is
+nothing. The value is always
 `wss://local.avarok.net:12345`: the agent carries a certificate for
-`local.avarok.net`, a public name whose A record is 127.0.0.1, and for no other
-name. Using your own name needs an A record for it pointing at 127.0.0.1, a
-certificate for it (DNS-01, since the name never resolves to a server), and
-every tester starting the agent with `--tls-cert` and `--tls-key`.
+`local.avarok.net`, a public name whose A record is 127.0.0.1, and serves no
+other. There is no option to supply your own; each release is built with a
+freshly issued certificate for that name.
 
 `./deploy.sh` checks all three before it starts anything, and reports which one
 is missing. `docker compose … up -d --wait` does not.
