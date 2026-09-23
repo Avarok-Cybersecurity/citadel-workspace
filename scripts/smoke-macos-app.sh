@@ -13,6 +13,7 @@
 set -euo pipefail
 
 DMG="${1:?usage: smoke-macos-app.sh <Citadel-Agent.dmg>}"
+: "${EXPECTED_VERSION:?EXPECTED_VERSION must name the version the app must carry}"
 [ -f "$DMG" ] || { echo "::error::no such image: $DMG" >&2; exit 1; }
 WORK="$(mktemp -d)"
 APP="$WORK/Citadel Agent.app"
@@ -41,6 +42,13 @@ fi
 BIND="$(plutil -extract CitadelAgentBind raw -o - "$APP/Contents/Info.plist")"
 ORIGIN="$(plutil -extract CitadelWorkspaceOrigin raw -o - "$APP/Contents/Info.plist")"
 PORT="${BIND##*:}"
+# The version Finder shows, and "About", is the release's: the agent inside is checked by smoke-agent.sh.
+for key in CFBundleShortVersionString CFBundleVersion; do
+  v="$(plutil -extract "$key" raw -o - "$APP/Contents/Info.plist")"
+  [ "$v" = "$EXPECTED_VERSION" ] || { echo "::error::the app's $key is '$v', expected $EXPECTED_VERSION" >&2; exit 1; }
+done
+"$(dirname "$0")/lib/assert-agent-version.sh" "$EXPECTED_VERSION" "$APP/Contents/MacOS/citadel-agent"
+echo "  the app and its agent are version $EXPECTED_VERSION"
 
 # A port already in use would let an agent that is not this app's answer every check below.
 if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
@@ -54,11 +62,7 @@ lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1 \
   || { echo "::error::the app did not start the agent on $BIND within 60s" >&2; tail -20 ~/Library/Logs/Citadel\ Agent/agent.log >&2 || true; exit 1; }
 echo "  the app started the agent on $BIND"
 
-handshake() {
-  curl -s -o /dev/null -w '%{http_code}' --max-time 5 --resolve "local.avarok.net:$PORT:127.0.0.1" \
-    -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
-    -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H "Origin: $1" "https://local.avarok.net:$PORT/" || true
-}
+handshake() { "$(dirname "$0")/lib/agent-handshake.sh" "$PORT" "$1"; }
 [ "$(handshake "$ORIGIN")" = 101 ] || { echo "::error::the agent refused the site's origin $ORIGIN" >&2; exit 1; }
 [ "$(handshake https://evil.example)" = 403 ] || { echo "::error::the agent accepted a foreign origin" >&2; exit 1; }
 echo "  it accepts $ORIGIN and refuses a foreign origin"

@@ -8,6 +8,23 @@
 # changes. It does mean the ASSET NAMES here are a contract with the UI —
 # citadel-workspaces/src/lib/agent-download.ts holds the same list, and a test
 # there reads this file and fails if the two drift apart.
+#
+# The release assets the UI links, one per `release-download:` line (the UI's contract test reads
+# these lines; publish fails if any of them is missing from the release). Each is published with a
+# `<name>.sha256` beside it. citadel-agent_<version>_amd64.deb is published too, under its Debian
+# name, but is not linked: its name changes every release.
+#   release-download: citadel-agent-macos-arm64.tar.gz
+#   release-download: citadel-agent-macos-x64.tar.gz
+#   release-download: citadel-agent-linux-x64.tar.gz
+#   release-download: citadel-agent-windows-x64.zip
+#   release-download: Citadel-Agent.dmg
+#   release-download: citadel-agent-linux-x64.deb
+#   release-download: Citadel-Agent-x86_64.AppImage
+#   release-download: Citadel-Agent-x64.msi
+#
+# THE VERSION has one source: citadel-workspace-internal-service/Cargo.toml. The `version` job
+# reads it and fails a tag push whose agent-vX.Y.Z says anything else; every artefact is then run
+# with --version and must print exactly that (scripts/lib/assert-agent-version.sh).
 name: Release agent
 
 on:
@@ -20,10 +37,28 @@ on:
         description: 'Tag to publish (e.g. agent-v0.1.0). Dry run if the tag does not exist.'
         required: false
 
+# Read-only by default; publish, the one job that writes, asks for what it needs.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  # The version every artefact is built as and checked against: Cargo.toml's, which a tag must
+  # repeat (a dispatch builds Cargo's). First, so a mismatched tag fails before anything builds.
+  version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        name: The version, and the tag agrees with it
+        run: |
+          set -euo pipefail
+          v="$(./scripts/release-version.sh citadel-workspace-internal-service/Cargo.toml "$GITHUB_REF")"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Building citadel-agent $v"
+
   # A fresh certificate for every release, issued ONCE here and handed to every
   # build leg. The certificate is compiled in (include_bytes!), so an agent
   # carries whatever tls/ held when it was built; issuing per release means no
@@ -84,7 +119,7 @@ jobs:
           retention-days: 1
 
   build:
-    needs: certificate
+    needs: [certificate, version]
     # Bounds a hang, not performance. Without it a stuck job holds a runner for
     # GitHub's 360-minute default, and the observed worst case is the Windows
     # target at about 16 minutes.
@@ -238,6 +273,8 @@ jobs:
       # "it runs" are least likely to coincide.
       - name: Smoke-test the packaged binary
         shell: bash
+        env:
+          EXPECTED_VERSION: ${{ needs.version.outputs.version }}
         run: ./scripts/smoke-agent.sh "${{ matrix.asset }}"
 
       - uses: actions/upload-artifact@v4
@@ -264,8 +301,12 @@ jobs:
   macos-app:
     timeout-minutes: 60
     name: Citadel-Agent.dmg
-    needs: build
+    needs: [version, build]
     runs-on: macos-14
+    env:
+      # The tag's version on a release (the version job holds it to Cargo's), Cargo's on a dispatch.
+      AGENT_VERSION: ${{ needs.version.outputs.version }}
+      EXPECTED_VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -284,14 +325,6 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install --quiet dmgbuild==1.6.7
           echo "DMGBUILD=$RUNNER_TEMP/venv/bin/dmgbuild" >> "$GITHUB_ENV"
-      # The tag names the version; a dispatched build is not a release and says so.
-      - name: Version
-        run: |
-          case "$GITHUB_REF" in
-            refs/tags/agent-v*) v="${GITHUB_REF_NAME#agent-v}" ;;
-            *) v="0.0.0" ;;
-          esac
-          echo "AGENT_VERSION=$v" >> "$GITHUB_ENV"
       - name: Build the app
         run: |
           set -euo pipefail
@@ -330,30 +363,224 @@ jobs:
             Citadel-Agent.dmg.sha256
           if-no-files-found: error
 
+  # The .deb and the AppImage, from the linux-x64 binary the build job already smoke-tested: the
+  # packages carry that exact file, so nothing here recompiles.
+  linux-packages:
+    name: Linux .deb and AppImage
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPECTED_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: citadel-agent-linux-x64.tar.gz
+          path: dl
+      - name: Unpack the smoke-tested agent
+        run: |
+          set -euo pipefail
+          cd dl
+          sha256sum -c citadel-agent-linux-x64.tar.gz.sha256
+          tar -xzf citadel-agent-linux-x64.tar.gz citadel-agent
+      # Pinned by checksum. appimagetool would otherwise fetch a runtime of its own choosing and
+      # put it at the front of every AppImage.
+      - name: Fetch the pinned AppImage tools
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 --max-time 120 -o appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          curl -fsSL --retry 3 --max-time 120 -o runtime-x86_64 \
+            https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
+          sha256sum -c - <<'EOF'
+          ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool
+          2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d  runtime-x86_64
+          EOF
+          chmod +x appimagetool
+      - name: Package
+        env:
+          APPIMAGETOOL: ${{ runner.temp }}/appimagetool
+          APPIMAGE_RUNTIME: ${{ runner.temp }}/runtime-x86_64
+          # appimagetool is itself an AppImage, and the runner has no FUSE to mount it with.
+          APPIMAGE_EXTRACT_AND_RUN: 1
+        run: ./scripts/package-linux-agent.sh dl/citadel-agent "$EXPECTED_VERSION" dist
+      - name: Smoke-test the .deb and the AppImage as a desktop starts them
+        run: ./scripts/smoke-linux-packages.sh "dist/citadel-agent_${EXPECTED_VERSION}_amd64.deb" dist/Citadel-Agent-x86_64.AppImage
+      - name: Stable names and checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          # The name the UI links; the Debian name changes every release.
+          cp "citadel-agent_${EXPECTED_VERSION}_amd64.deb" citadel-agent-linux-x64.deb
+          for f in *.deb *.AppImage; do sha256sum "$f" > "$f.sha256"; done
+          ls -la
+      - uses: actions/upload-artifact@v4
+        with:
+          name: citadel-agent-linux-packages
+          path: dist/
+          if-no-files-found: error
+
+  # Citadel-Agent-x64.msi, from the windows-x64 binary the build job already smoke-tested.
+  windows-msi:
+    name: Citadel-Agent-x64.msi
+    needs: [version, build]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      EXPECTED_VERSION: ${{ needs.version.outputs.version }}
+      # The switch for the two signing steps below: `disabled` until the secrets exist.
+      WINDOWS_SIGNING: disabled
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: citadel-agent-windows-x64.zip
+          path: dl
+      - name: Unpack the smoke-tested agent
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dl
+          sha256sum -c citadel-agent-windows-x64.zip.sha256
+          7z x -y -oagent citadel-agent-windows-x64.zip >/dev/null
+          test -f agent/citadel-agent.exe
+      # Pinned: the installer's tables are this tool's output.
+      - name: Install WiX
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          "$env:USERPROFILE\.dotnet\tools" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      # ---------------------------------------------------------------------------------------
+      # SIGNING: DISABLED. The MSI and the exe inside it ship UNSIGNED for now, so SmartScreen
+      # warns on first run. To enable, create an Azure Trusted Signing account and certificate
+      # profile, set these repository secrets, and set WINDOWS_SIGNING above to `enabled`:
+      #   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET,
+      #   AZURE_TRUSTED_SIGNING_ENDPOINT, AZURE_TRUSTED_SIGNING_ACCOUNT, AZURE_TRUSTED_SIGNING_PROFILE
+      # The exe is signed BEFORE the MSI is built (the MSI embeds it), the MSI after.
+      # ---------------------------------------------------------------------------------------
+      - name: Sign the agent exe (DISABLED -- see above)
+        if: env.WINDOWS_SIGNING == 'enabled'
+        uses: azure/trusted-signing-action@v0.5.1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_TRUSTED_SIGNING_PROFILE }}
+          files-folder: dl/agent
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Build the MSI
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The flags the Mac app and the Linux launcher use, from their one source.
+          s() { python3 scripts/lib/agent-settings.py apps/macos-agent/Info.plist get "$1"; }
+          wix build packaging/windows/citadel-agent.wxs -arch x64 \
+            -d Version="$EXPECTED_VERSION" \
+            -d AgentExe="$(cygpath -w "$PWD/dl/agent/citadel-agent.exe")" \
+            -d Icon="$(cygpath -w "$PWD/assets/brand/favicon.ico")" \
+            -d Bind="$(s CitadelAgentBind)" -d Origin="$(s CitadelWorkspaceOrigin)" \
+            -d Stun="$(s CitadelAgentStunServers)" -d DataDirName="$(s CitadelAgentDataDirectoryName)" \
+            -o Citadel-Agent-x64.msi
+      - name: Sign the MSI (DISABLED -- see above)
+        if: env.WINDOWS_SIGNING == 'enabled'
+        uses: azure/trusted-signing-action@v0.5.1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_TRUSTED_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}
+          files-folder-filter: msi
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Smoke-test the MSI (install, run, uninstall)
+        shell: pwsh
+        run: ./scripts/smoke-windows-msi.ps1 Citadel-Agent-x64.msi
+      - name: Checksum
+        shell: bash
+        run: sha256sum Citadel-Agent-x64.msi > Citadel-Agent-x64.msi.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: citadel-agent-windows-msi
+          path: |
+            Citadel-Agent-x64.msi
+            Citadel-Agent-x64.msi.sha256
+          if-no-files-found: error
+
   publish:
     # Observed under a minute; this bounds a hang, not performance.
     timeout-minutes: 15
     name: Publish release
-    needs: [build, macos-app]
+    needs: [build, macos-app, linux-packages, windows-msi]
     runs-on: ubuntu-latest
     # Only a real tag push publishes. workflow_dispatch builds and smoke-tests
     # every platform without creating a release, so the pipeline is exercisable
     # without minting a version.
     if: startsWith(github.ref, 'refs/tags/agent-v')
+    permissions:
+      contents: write      # the release
+      id-token: write      # the attestations' Sigstore certificate
+      attestations: write  # storing the attestations
     steps:
+      # Only this file: publish reads the asset list in its header.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/workflows/release-agent.yml
+          sparse-checkout-cone-mode: false
       - uses: actions/download-artifact@v4
         with:
           # Release assets only: agent-tls and the bin-* intermediates are not.
           pattern: citadel-agent-*
           merge-multiple: true
           path: dist
+      - name: Every asset the UI links is here with its checksum, and no key is
+        run: |
+          set -euo pipefail
+          ls -la dist
+          names="$(sed -n 's/^#   release-download: //p' .github/workflows/release-agent.yml)"
+          [ "$(printf '%s\n' "$names" | grep -c .)" -ge 8 ] \
+            || { echo "::error::the release-download list in the header was not read"; exit 1; }
+          for n in $names; do
+            [ -f "dist/$n" ] && [ -f "dist/$n.sha256" ] || { echo "::error::$n (or its .sha256) is missing"; exit 1; }
+          done
+          (cd dist && sha256sum -c ./*.sha256)
+          # The TLS key ships inside the binaries by design, never beside them.
+          keys="$(find dist -type f \( -iname '*.pem' -o -iname '*.key' -o -iname '*.p12' -o -iname '*.p8' \))"
+          [ -z "$keys" ] || { echo "::error::key files among the release assets: $keys"; exit 1; }
+      - name: Attest where every asset was built
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.dmg
+            dist/*.deb
+            dist/*.AppImage
+            dist/*.msi
+      - name: Verify the attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for f in dist/*.tar.gz dist/*.zip dist/*.dmg dist/*.deb dist/*.AppImage dist/*.msi; do
+            gh attestation verify "$f" --repo "${{ github.repository }}"
+          done
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          ls -la dist
           gh release create "${GITHUB_REF_NAME}" dist/* \
             --repo "${GITHUB_REPOSITORY}" \
             --title "Citadel agent ${GITHUB_REF_NAME#agent-}" \
-            --notes "The local agent that Citadel Workspace connects to. Download the build for your platform, unpack it, and run it as described in the bundled README."
+            --notes "The local agent that Citadel Workspace connects to. On a Mac open Citadel-Agent.dmg; on Windows run Citadel-Agent-x64.msi; on Debian or Ubuntu install citadel-agent-linux-x64.deb; on any other Linux run Citadel-Agent-x86_64.AppImage. Each starts the agent, and starts it again when you log in. The archives are for terminal use, as the bundled README describes. Verify a download with: gh attestation verify <file> --repo ${GITHUB_REPOSITORY}"

@@ -17,6 +17,9 @@
 set -euo pipefail
 
 ARCHIVE="${1:?usage: smoke-agent.sh <archive.tar.gz|.zip|.dmg>}"
+# The version this artefact must report: the tag's on a release, Cargo.toml's on a dispatch
+# (scripts/release-version.sh). No default: a smoke that skipped it would pass a stale binary.
+: "${EXPECTED_VERSION:?EXPECTED_VERSION must name the version the agent must print}"
 [ -f "$ARCHIVE" ] || { echo "::error::no such archive: $ARCHIVE" >&2; exit 1; }
 
 WORK="$(mktemp -d)"
@@ -53,6 +56,7 @@ if "$BIN" >/dev/null 2>&1; then
   echo "::error::agent exited 0 with no --bind; it should refuse to start" >&2
   exit 1
 fi
+"$(dirname "$0")/lib/assert-agent-version.sh" "$EXPECTED_VERSION" "$BIN"
 
 # The asset NAME is a promise about the architecture inside, and the UI relies on
 # it: macOS users are offered "Apple Silicon" and "Intel" as separate downloads
@@ -125,9 +129,10 @@ sys.exit(0 if s.connect_ex(('127.0.0.1',$PORT))==0 else 1)
       # writing, codesign dies on SIGPIPE, and `set -o pipefail` turns that into
       # exit 141 -- which reads as a FAILED CHECK on a correctly signed binary.
       # The first run of this gate against a signed, notarised build did exactly
-      # that. `head -1` takes the first line without shutting the writer down.
+      # that. `head -1` takes the first line without shutting the writer down. `|| true`: an
+      # ad-hoc binary has no Authority line, and grep's exit 1 killed the run before the error below.
       CODESIGN_OUT="$(codesign -dv --verbose=4 "$BIN" 2>&1 || true)"
-      AUTHORITY="$(printf '%s\n' "$CODESIGN_OUT" | grep '^Authority=' | head -1 | cut -d= -f2-)"
+      AUTHORITY="$(printf '%s\n' "$CODESIGN_OUT" | grep '^Authority=' | head -1 | cut -d= -f2- || true)"
       case "$AUTHORITY" in
         "Developer ID Application"*) echo "  signed by: $AUTHORITY" ;;
         *)
