@@ -593,12 +593,14 @@ pub fn connect_enrolment(
 }
 
 /// The workspace kernel both entry points serve: the configured structure, master password, file
-/// transfer policy and first-connect decision. One constructor, so a hosted server cannot drift
-/// from the native one in what it seeds or whom it promotes.
+/// transfer policy, first-connect decision and the host's relay-credential minter. One
+/// constructor, so a hosted server cannot drift from the native one in what it seeds or whom it
+/// promotes.
 async fn workspace_kernel(
     config: &ServerConfig,
     workspace_structure: Option<(WorkspaceStructureConfig, Option<std::path::PathBuf>)>,
     first_connect_admin: bool,
+    ice_servers: kernel::ice_servers::IceServerSourceHandle,
 ) -> Result<kernel::async_kernel::AsyncWorkspaceServerKernel<StackedRatchet>, NetworkError> {
     if first_connect_admin {
         citadel_logging::warn!(target: "citadel", "⚠️  WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN is on: the first account to connect becomes the workspace administrator. Intended for local development. On a reachable deployment this hands ownership to whoever registers first.");
@@ -624,6 +626,10 @@ async fn workspace_kernel(
         config.file_transfer.clone(),
     ).await?;
     kernel.set_first_connect_admin(first_connect_admin);
+    if ice_servers.is_none() {
+        info!(target: "citadel", "No relay-credential source: GetIceServers answers that no relay is available.");
+    }
+    kernel.set_ice_server_source(ice_servers);
     Ok(kernel)
 }
 
@@ -634,12 +640,14 @@ async fn workspace_kernel(
 /// Nothing is read from the environment and nothing is chosen by default — the host names the
 /// backend and the Argon2 cost, because both depend on where it runs (a Worker has a fraction of
 /// the memory and CPU the release Argon2 defaults assume). `config.bind_addr` is recorded as the
-/// node's address and never bound.
+/// node's address and never bound. `ice_servers` is the host's relay-credential minter
+/// (`GetIceServers`), or `None` for a host that has none.
 pub async fn run_server_on<T: PlatformOps>(
     config: ServerConfig,
     listener: T::Listener,
     backend: BackendType,
     server_argon_settings: ArgonDefaultServerSettings,
+    ice_servers: kernel::ice_servers::IceServerSourceHandle,
 ) -> Result<(), NetworkError> {
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel on an injected listener...");
     let bind_address: SocketAddr = config.bind_addr.parse().map_err(|e| {
@@ -650,7 +658,13 @@ pub async fn run_server_on<T: PlatformOps>(
     })?;
     let workspace_structure = resolve_workspace_structure(&config, None)?;
     let first_connect_admin = resolve_first_connect_admin(None, config.allow_first_connect_admin)?;
-    let kernel = workspace_kernel(&config, workspace_structure, first_connect_admin).await?;
+    let kernel = workspace_kernel(
+        &config,
+        workspace_structure,
+        first_connect_admin,
+        ice_servers,
+    )
+    .await?;
 
     let node_type =
         NodeType::server(bind_address).map_err(|e| NetworkError::generic(e.to_string()))?;
@@ -705,7 +719,9 @@ pub async fn run_server_with_base_path(
         config.data_dir.as_deref(),
     )?;
 
-    let kernel = workspace_kernel(&config, workspace_structure, first_connect_admin).await?;
+    // The native server has no relay-credential minter: nothing here holds a TURN provider's
+    // key, so GetIceServers answers "unavailable" rather than inventing a list.
+    let kernel = workspace_kernel(&config, workspace_structure, first_connect_admin, None).await?;
 
     // `NodeType::server` and `NodeBuilder::build` now return `anyhow::Error`
     // (newer citadel_sdk); map into this fn's `NetworkError`, which no longer

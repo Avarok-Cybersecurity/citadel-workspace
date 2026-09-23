@@ -27,6 +27,8 @@ case "${1:-}" in
 esac
 
 REQUIRED_SECRETS=(TURNSTILE_SECRET STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET)
+# Optional until the agent asks for relay servers: TURN_KEY_ID and TURN_KEY_API_TOKEN. Unset,
+# GetIceServers answers "no relay servers" (control/ice.mjs); DEPLOY.md step 4.
 say() { printf '\n== %s\n' "$*"; }
 fail() { echo "deploy: $*" >&2; exit 1; }
 

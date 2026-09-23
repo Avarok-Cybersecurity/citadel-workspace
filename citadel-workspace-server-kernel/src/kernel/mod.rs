@@ -11,6 +11,7 @@
 
 pub mod command_processor;
 pub mod group_access;
+pub mod ice_servers;
 pub mod rate_limiter;
 pub mod secret_eq;
 pub mod transaction;

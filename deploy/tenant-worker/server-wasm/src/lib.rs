@@ -5,6 +5,7 @@
 //! running on the isolate's event loop for as long as the object lives. Its accounts and
 //! workspace data live in the object's own SQLite storage (`storage`), so they outlive it.
 
+mod ice;
 mod storage;
 
 use citadel_sdk::prelude::{
@@ -14,8 +15,8 @@ use citadel_sdk::prelude::{
 use citadel_workspace_server_kernel::config::ServerConfig;
 use citadel_workspace_server_kernel::run_server_on;
 use std::cell::Cell;
-use std::sync::OnceLock;
 use std::net::{Ipv4Addr, SocketAddr};
+use std::sync::OnceLock;
 use wasm_bindgen::prelude::*;
 
 /// Argon2 cost for the server's password hashing, named by the host because the right value
@@ -57,13 +58,15 @@ pub struct TenantServer {
 #[wasm_bindgen]
 impl TenantServer {
     /// Start the node. `config_toml` is a `kernel.toml`; `storage` is the object's SQLite storage
-    /// (see `storage::TenantStorage`). `on_exit` is called with a description of how the node
-    /// ended, which for a server that should run until eviction is always a failure.
+    /// (see `storage::TenantStorage`); `ice` mints relay credentials for `GetIceServers` (see
+    /// `ice::IceHost`). `on_exit` is called with a description of how the node ended, which for a
+    /// server that should run until eviction is always a failure.
     #[wasm_bindgen(constructor)]
     pub fn start(
         config_toml: &str,
         storage: storage::TenantStorage,
         argon: ArgonCost,
+        ice: ice::IceHost,
         log_filter: &str,
         on_exit: js_sys::Function,
     ) -> Result<TenantServer, JsError> {
@@ -77,9 +80,11 @@ impl TenantServer {
             ..ArgonDefaultServerSettings::default()
         };
         let backend = BackendType::HostSql(storage::backend_handle(storage));
+        let ice_servers = Some(ice::source(ice));
         let (injector, listener) = WasmListener::injected();
         wasm_bindgen_futures::spawn_local(async move {
-            let outcome = run_server_on::<WasmIO>(config, listener, backend, argon).await;
+            let outcome =
+                run_server_on::<WasmIO>(config, listener, backend, argon, ice_servers).await;
             let _ = on_exit.call1(&JsValue::NULL, &format!("{outcome:?}").into());
         });
         Ok(Self {

@@ -59,6 +59,23 @@ function uiConfig(env) {
 const optional = (env, name) => (env[name] === undefined || env[name] === "" ? null : env[name]);
 
 /**
+ * Cloudflare Realtime TURN (control/ice.mjs): the key's id and API token are secrets, and
+ * without both no relay credentials are minted (members are told so); the credentials' lifetime
+ * is a var, required whether or not the secrets are set.
+ */
+export function turnConfig(env) {
+  const ttl = Number(required(env, "TURN_CREDENTIAL_TTL_SECONDS"));
+  if (!Number.isInteger(ttl) || ttl < 60 || ttl > 86400) throw new Error("TURN_CREDENTIAL_TTL_SECONDS is an integer from 60 to 86400");
+  const keyId = optional(env, "TURN_KEY_ID");
+  const token = optional(env, "TURN_KEY_API_TOKEN");
+  if (keyId === null || token === null) {
+    if (keyId !== token) console.warn("[tenant] only one of TURN_KEY_ID and TURN_KEY_API_TOKEN is set: no relay credentials are minted");
+    return null;
+  }
+  return { keyId, token, ttl };
+}
+
+/**
  * What this deployment is, from `env`. Vars (wrangler.toml) are required: the Worker refuses to
  * run without them. Secrets are optional: a route whose secret is missing answers 503.
  */

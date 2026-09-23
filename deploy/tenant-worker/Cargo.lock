@@ -687,8 +687,11 @@ name = "citadel-tenant-server-wasm"
 version = "0.1.0"
 dependencies = [
  "citadel-workspace-server-kernel",
+ "citadel-workspace-types",
  "citadel_sdk",
  "js-sys",
+ "serde",
+ "serde_json",
  "tenant-console-log",
  "toml",
  "wasm-bindgen",

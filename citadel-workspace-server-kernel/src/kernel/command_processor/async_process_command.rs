@@ -1015,6 +1015,8 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             })
         }
 
+        WorkspaceProtocolRequest::GetIceServers => Ok(kernel.ice_servers_for(actor_user_id).await),
+
         // ========== Tree Node Operations (Generalized Hierarchy) ==========
         // These handlers support the generalized workspace tree structure
         // where any node can have child nodes of any type

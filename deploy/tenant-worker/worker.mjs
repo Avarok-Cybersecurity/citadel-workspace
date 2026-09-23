@@ -16,7 +16,8 @@ import { DurableObject } from "cloudflare:workers";
 import { instantiate } from "./server-wasm/pkg/instance.mjs";
 import wasm from "./server-wasm/pkg/citadel_tenant_server_wasm_bg.wasm";
 import { dispatch, ioFor } from "./control/dispatch.mjs";
-import { config, isWebSocketUpgrade, json, upgradeRequired } from "./control/http.mjs";
+import { config, isWebSocketUpgrade, json, turnConfig, upgradeRequired } from "./control/http.mjs";
+import { IceMinter } from "./control/ice.mjs";
 import { Provisioning } from "./control/provisioning.mjs";
 import { Meter, periodAt } from "./control/meter.mjs";
 import { UsageTable } from "./control/usage-table.mjs";
@@ -67,6 +68,13 @@ export class WorkspaceServer extends DurableObject {
     // Metered usage (control/meter.mjs), resumed from this period's persisted totals.
     this.usageTable = new UsageTable(ctx.storage.sql);
     this.meter = null;
+    // Relay credentials for the kernel's GetIceServers (control/ice.mjs), gated on this tenant's
+    // plan and this period's metered relay.
+    this.ice = new IceMinter(turnConfig(env), { fetch: (url, init) => fetch(url, init), nowMs: Date.now }, () => {
+      const now = Date.now();
+      this.#roll(now);
+      return { limits: enforcedEntitlements(this.provisioning.summary().entitlements), bytesIn: this.meter.snapshot(now).bytes_in };
+    });
     ctx.blockConcurrencyWhile(async () => {
       await this.provisioning.load();
       const now = Date.now();
@@ -131,7 +139,8 @@ export class WorkspaceServer extends DurableObject {
       Number(required(env, "ARGON_MEM_KIB")),
       Number(required(env, "ARGON_TIME_COST")),
     );
-    this.server = new this.wasm.TenantServer(config, this.storage(), argon, required(env, "LOG_FILTER"), (outcome) => {
+    const iceHost = { mint: (memberId) => this.ice.mint(memberId) };
+    this.server = new this.wasm.TenantServer(config, this.storage(), argon, iceHost, required(env, "LOG_FILTER"), (outcome) => {
       this.exit = outcome;
       console.error(`[tenant] node exited: ${outcome}`);
     });

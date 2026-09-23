@@ -27,6 +27,9 @@ export default defineConfig({
           STRIPE_SECRET_KEY: "sk_test_not_a_real_key",
           STRIPE_PORTAL_CONFIGURATION: "bpc_test_citadel",
           STRIPE_WEBHOOK_SECRET: "whsec_vitest_only",
+          // Answered in-process by test/helpers.mjs outbound(); never sent to Cloudflare.
+          TURN_KEY_ID: "turn_key_vitest",
+          TURN_KEY_API_TOKEN: "turn_token_vitest",
           TENANT_PATH_ROUTING: "on",
           TENANT_DIAGNOSTICS: "on",
         },

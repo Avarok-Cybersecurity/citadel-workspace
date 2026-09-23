@@ -4,14 +4,14 @@
  * Usage is put into an object's own meter, the counter its sockets feed: relaying 60 GB through
  * a test socket is not a unit test.
  */
-import { createScheduledController, env, runInDurableObject } from "cloudflare:test";
+import { createScheduledController, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import worker from "../worker.mjs";
 import { ioFor } from "../control/dispatch.mjs";
 import { config } from "../control/http.mjs";
 import { runMonitor } from "../control/monitor.mjs";
 import {
-  createBody, deliver, freeTenant, freshSlug, item, objectStats, outbound, post, subscriptionEvent, tenantObject, tenantRow,
+  createBody, deliver, freeTenant, freshSlug, item, objectStats, outbound, post, relay, subscriptionEvent, tenantObject, tenantRow,
 } from "./helpers.mjs";
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -27,15 +27,6 @@ async function activeTeam() {
   expect((await deliver(event)).status).toBe(200);
   return { row: await tenantRow(slug), period };
 }
-
-/** `bytes` more inbound on the object's meter, through a connection opened and closed for it. */
-const relay = (slug, bytes) =>
-  runInDurableObject(tenantObject(slug), (instance) => {
-    const id = `injected-${crypto.randomUUID()}`;
-    instance.meter.connect(id, Date.now());
-    instance.meter.inbound(id, bytes);
-    instance.meter.disconnect(id, Date.now());
-  });
 
 /** The monitor over these tenants only: the suite's D1 holds every other test's tenants too. */
 function monitorOf(...slugs) {

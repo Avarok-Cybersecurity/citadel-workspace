@@ -67,6 +67,10 @@ LOG_FILTER = "citadel=warn"
 #   TURNSTILE_SECRET       workspace creation
 #   STRIPE_SECRET_KEY      paid creation, the billing portal
 #   STRIPE_WEBHOOK_SECRET  the Stripe webhook
+# and two OPTIONAL ones deploy.sh does not require yet (DEPLOY.md step 4): without both, a
+# member's GetIceServers is answered "no relay servers" (control/ice.mjs):
+#   TURN_KEY_ID            the Cloudflare Realtime TURN key relay credentials are minted from
+#   TURN_KEY_API_TOKEN     that key's API token; it never leaves the Worker
 CONTROL_HOST = "work.avarok.net"
 PUBLIC_ORIGIN = "https://work.avarok.net"
 ALLOWED_ORIGINS = "https://work.avarok.net"
@@ -83,6 +87,9 @@ TENANT_PATH_ROUTING = "off"
 TENANT_DIAGNOSTICS = "off"
 # How long a Stripe Checkout stays open (Stripe allows 1800..86400).
 CHECKOUT_TTL_SECONDS = "7200"
+# How long a member's minted TURN credentials work (60..86400). The object hands the same ones
+# back until 80% of this has passed, and mints at most 30 per member per hour.
+TURN_CREDENTIAL_TTL_SECONDS = "3600"
 
 # The UI's meta tags (control/ui.mjs), as nginx's LOOPBACK_AGENT_ORIGIN / DEFAULT_WORKSPACE_SERVER.
 # The agent on the visitor's own machine; also the one off-origin socket the CSP allows.

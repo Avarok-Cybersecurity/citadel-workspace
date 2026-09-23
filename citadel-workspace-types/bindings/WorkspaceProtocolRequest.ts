@@ -70,7 +70,7 @@ limit: number | null, } } | { "GetThreadMessages": { group_id: string,
 /**
  * The parent message ID
  */
-parent_message_id: string, } } | "GetServerCapabilities" | { "CreateNode": { parent_id: string | null, entity_type: NodeEntityType, name: string, description: string, } } | { "GetNode": { node_id: string, } } | { "UpdateWorkspaceTheme": { 
+parent_message_id: string, } } | "GetServerCapabilities" | "GetIceServers" | { "CreateNode": { parent_id: string | null, entity_type: NodeEntityType, name: string, description: string, } } | { "GetNode": { node_id: string, } } | { "UpdateWorkspaceTheme": { 
 /**
  * None targets the root workspace, matching UpdateWorkspace.
  */

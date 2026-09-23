@@ -170,6 +170,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     /// reachable deployment the promotion handed the workspace to whoever
     /// registered first.
     first_connect_admin: bool,
+    /// What mints relay credentials for `GetIceServers`: the host's, or none.
+    ice_servers: crate::kernel::ice_servers::IceServerSourceHandle,
 }
 
 /// Removes a CID's account attribution when its connection task ends.
@@ -203,6 +205,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             broadcast_tx: self.broadcast_tx.clone(),
             file_transfer_config: self.file_transfer_config.clone(),
             first_connect_admin: self.first_connect_admin,
+            ice_servers: self.ice_servers.clone(),
             // RateLimiter::Clone shares the same Arc<Mutex<HashMap>>,
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
@@ -244,7 +247,41 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             rate_limiter: RateLimiter::new(DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL),
             connected_users: Arc::new(RwLock::new(HashMap::new())),
             first_connect_admin: false,
+            ice_servers: None,
         }
+    }
+
+    /// Set by the server bootstrap: the host's relay-credential minter, or none, in which case
+    /// `GetIceServers` answers that no relay is available.
+    pub fn set_ice_server_source(
+        &mut self,
+        source: crate::kernel::ice_servers::IceServerSourceHandle,
+    ) {
+        self.ice_servers = source;
+    }
+
+    /// `GetIceServers` for `user_id`: an enrolled member's servers, from the host's source.
+    pub async fn ice_servers_for(&self, user_id: &str) -> WorkspaceProtocolResponse {
+        use crate::handlers::domain::async_ops::AsyncPermissionOperations;
+        use crate::kernel::ice_servers::{answer, may_have_ice_servers};
+        let user = match self.get_user(user_id).await {
+            Ok(user) => user,
+            Err(e) => return WorkspaceProtocolResponse::Error(e.to_string()),
+        };
+        let enrolled = match self
+            .domain_operations
+            .is_member_of_domain(user_id, crate::WORKSPACE_ROOT_ID)
+            .await
+        {
+            Ok(enrolled) => enrolled,
+            Err(e) => return WorkspaceProtocolResponse::Error(e.to_string()),
+        };
+        answer(
+            &self.ice_servers,
+            may_have_ice_servers(user.as_ref(), enrolled),
+            user_id,
+        )
+        .await
     }
 
     /// Set by the server bootstrap from configuration. Off unless asked for.

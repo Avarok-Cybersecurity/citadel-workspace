@@ -67,6 +67,17 @@ cfw secret put STRIPE_WEBHOOK_SECRET   # whsec_... from step 5
 cfw secret list                        # names only
 ```
 
+Two more are OPTIONAL, and `deploy.sh` does not require them until the agent asks for relay
+servers: the Cloudflare Realtime TURN key the tenant objects mint members' short-lived relay
+credentials from (`GetIceServers`, control/ice.mjs). Without both, a member asking for relay
+servers is told none are available; nothing fails. The token never leaves the Worker: members
+receive only credentials that expire after `TURN_CREDENTIAL_TTL_SECONDS` (wrangler.toml).
+
+```sh
+cfw secret put TURN_KEY_ID             # the TURN key's id (Realtime > TURN in the dashboard)
+cfw secret put TURN_KEY_API_TOKEN      # that key's API token
+```
+
 Turnstile: in the dashboard (Turnstile, the widget for that sitekey), the widget's hostnames must
 include `work.avarok.net`; the Worker also refuses a pass whose hostname is anything else
 (`TURNSTILE_HOSTNAMES`).

@@ -4,6 +4,7 @@
 /// files and shared git dependencies. Updating one and not the other compiles
 /// cleanly and fails at runtime.
 pub mod dependency_agreement;
+pub mod ice;
 pub mod structs;
 /// The build script's submodule-freshness rule, here so it can be tested.
 ///
@@ -13,6 +14,7 @@ pub mod structs;
 pub mod submodule_freshness;
 
 use custom_debug::Debug;
+use ice::IceServer;
 use serde::{Deserialize, Serialize};
 use structs::{
     CustomNodeType, DomainNode, NodeEntityType, Permission, TreeNode, TreeSchema, User, UserRole,
@@ -208,6 +210,14 @@ pub enum WorkspaceProtocolRequest {
     /// Query server file transfer and storage capabilities.
     /// Returns configuration limits for RE-VFS storage, file transfers, etc.
     GetServerCapabilities,
+
+    /// Ask for short-lived relay (TURN) servers for this member's peer connections.
+    ///
+    /// Answered with `IceServers` for an enrolled member, `Error` for anyone else (a Guest or
+    /// a removed account), and `IceServersUnavailable` when the server has no relay to offer
+    /// or its host declines to mint (not configured, the plan's relay is used up, too many
+    /// requests). A client that gets no servers falls back to direct connections.
+    GetIceServers,
 
     // ========== Generic Tree Node Operations ==========
     /// Create a new node in the workspace hierarchy tree.
@@ -448,6 +458,19 @@ pub enum WorkspaceProtocolResponse {
         /// RE-VFS storage quota per user (in megabytes)
         #[ts(type = "bigint")]
         revfs_storage_quota_mb: u64,
+    },
+
+    /// Relay servers for this member, valid until `expires_at` (unix seconds). Ask again
+    /// before then; the server may hand back the same credentials until they near expiry.
+    IceServers {
+        ice_servers: Vec<IceServer>,
+        #[ts(type = "bigint")]
+        expires_at: u64,
+    },
+
+    /// No relay servers are available to this member now, and why.
+    IceServersUnavailable {
+        reason: String,
     },
 
     // ========== Tree Node Responses ==========

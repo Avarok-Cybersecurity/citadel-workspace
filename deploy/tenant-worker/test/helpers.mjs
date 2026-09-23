@@ -4,7 +4,7 @@
  * must not charge), so `outbound()` answers them in-process. Everything on this side of `fetch` --
  * routing, validation, D1, the tenant's Durable Object and its wasm server -- is the real Worker.
  */
-import { env, SELF } from "cloudflare:test";
+import { env, runInDurableObject, SELF } from "cloudflare:test";
 import { vi } from "vitest";
 import { signLikeStripe } from "./stripe-sign.mjs";
 
@@ -38,7 +38,12 @@ export const PRICES = {
  * `meterEvents.failures` is how many `POST /v1/billing/meter_events` Stripe refuses (500) before
  * it accepts them.
  */
-export function outbound({ turnstile = { success: true, hostname: "example.com" }, checkout, expire = {}, meterEvents = { failures: 0 }, subscriptions = { failures: 0 } } = {}) {
+/**
+ * `turn` is how Cloudflare Realtime TURN answers `generate-ice-servers`: `{status, body}`, by
+ * default a 201 with a STUN and a TURN server whose credentials are numbered by call.
+ */
+export function outbound({ turnstile = { success: true, hostname: "example.com" }, checkout, expire = {}, meterEvents = { failures: 0 }, subscriptions = { failures: 0 }, turn } = {}) {
+  let turnCalls = 0;
   let meterFailures = meterEvents.failures;
   let subscriptionFailures = subscriptions.failures;
   let subscriptionCount = 0;
@@ -47,8 +52,25 @@ export function outbound({ turnstile = { success: true, hostname: "example.com" 
     const url = new URL(typeof input === "string" ? input : input.url);
     const method = init.method ?? "GET";
     const form = init.body instanceof URLSearchParams ? init.body : new URLSearchParams(url.search);
-    calls.push({ url: url.origin + url.pathname, method, form, headers: init.headers ?? {} });
+    calls.push({ url: url.origin + url.pathname, method, form, headers: init.headers ?? {}, body: init.body });
     if (url.hostname === "challenges.cloudflare.com") return Response.json(turnstile);
+    if (url.hostname === "rtc.live.cloudflare.com") {
+      turnCalls += 1;
+      if (turn) return Response.json(turn.body, { status: turn.status });
+      return Response.json(
+        {
+          iceServers: [
+            { urls: ["stun:stun.cloudflare.com:3478", "stun:stun.cloudflare.com:53"] },
+            {
+              urls: ["turn:turn.cloudflare.com:3478?transport=udp", "turns:turn.cloudflare.com:443?transport=tcp"],
+              username: `user-${turnCalls}`,
+              credential: `credential-${turnCalls}`,
+            },
+          ],
+        },
+        { status: 201 },
+      );
+    }
     if (url.hostname === "api.stripe.com") {
       if (url.pathname === "/v1/prices") {
         const data = form.getAll("lookup_keys[]").filter((k) => PRICES[k]).map((k) => ({ id: PRICES[k], lookup_key: k }));
@@ -206,3 +228,12 @@ export const production = () => JSON.parse(env.PRODUCTION_CONFIG);
  * which a deployment sets with `wrangler secret put` (and the tests set to test values).
  */
 export const productionEnv = (overrides = {}) => ({ ...env, ...production().vars, ...overrides });
+
+/** `bytes` more inbound on the tenant object's meter, through a connection opened and closed for it. */
+export const relay = (slug, bytes) =>
+  runInDurableObject(tenantObject(slug), (instance) => {
+    const id = `injected-${crypto.randomUUID()}`;
+    instance.meter.connect(id, Date.now());
+    instance.meter.inbound(id, bytes);
+    instance.meter.disconnect(id, Date.now());
+  });
