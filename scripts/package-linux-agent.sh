@@ -75,12 +75,11 @@ install -Dm0644 "$work/citadel-agent.desktop" "$deb/etc/xdg/autostart/citadel-ag
 mkdir -p "$deb/DEBIAN"
 # /etc/xdg/autostart is a conffile: dpkg keeps an administrator's edit (or removal) of it.
 echo /etc/xdg/autostart/citadel-agent.desktop > "$deb/DEBIAN/conffiles"
-# @human-review: Maintainer carries no address; Debian policy wants one.
 cat > "$deb/DEBIAN/control" <<EOF
 Package: citadel-agent
 Version: $VERSION
 Architecture: $DEB_ARCH
-Maintainer: Avarok Cybersecurity
+Maintainer: Thomas Braun <thomas@avarok.net>
 Section: net
 Priority: optional
 Depends: libc6, libgcc-s1

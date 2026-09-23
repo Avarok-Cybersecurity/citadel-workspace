@@ -1,0 +1,125 @@
+# The compile half of release-agent.yml's build job, for one matrix leg: the agent with this
+# release's certificate built in, and on macOS signed and notarised. The job packages the result.
+name: Build the agent
+description: Compiles the agent for one target and, on macOS, signs and notarises the bare binary.
+inputs:
+  target:
+    description: The Rust target triple to build.
+    required: true
+  cert-p12-base64:
+    description: MACOS_CERT_P12_BASE64; read on macOS only.
+    required: true
+  cert-password:
+    description: MACOS_CERT_PASSWORD; read on macOS only.
+    required: true
+  notary-key-p8-base64:
+    description: MACOS_NOTARY_KEY_P8_BASE64; read on macOS only.
+    required: true
+  notary-key-id:
+    description: MACOS_NOTARY_KEY_ID; read on macOS only.
+    required: true
+  notary-issuer-id:
+    description: MACOS_NOTARY_ISSUER_ID; read on macOS only.
+    required: true
+runs:
+  using: composite
+  steps:
+    # Intel Mac is CROSS-COMPILED from the Apple Silicon runner, not built
+    # on macos-13. Across three runs here, no runner was EVER assigned to
+    # that label (`runner=` stayed empty for 45+ minutes) while macos-14
+    # siblings were assigned within seconds. Retirement of the macOS 13
+    # image is the likely explanation, but the established fact is the
+    # unassigned runner — and either way a job whose label cannot be
+    # satisfied does not fail, it queues.
+    # In the first tagged release (run 32884394417) this leg sat queued
+    # while the other three finished, and since `publish` needs all four,
+    # the release could never have been cut.
+    #
+    # Apple's toolchain targets x86_64 from arm64 natively, so this needs
+    # only `rustup target add`. Verified locally: a full
+    # `cargo build --release --target x86_64-apple-darwin --features
+    # vendored` produces a Mach-O x86_64 binary, and smoke-agent.sh's
+    # architecture assertion checks the result matches the asset name.
+    #
+    # Caveat worth knowing: the smoke test runs this binary on an arm64
+    # runner, so it executes under Rosetta. That proves the binary runs and
+    # binds a port; it does not prove it runs on real Intel silicon, which
+    # nothing in this matrix can prove now that no Intel runner exists.
+    - name: Install Rust
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+      run: rustup target add "$TARGET"
+
+    - name: Use this release's certificate
+      uses: actions/download-artifact@v4
+      with:
+        name: agent-tls
+        path: citadel-workspace-internal-service/tls/
+
+    # --features vendored builds OpenSSL from source instead of linking the
+    # host's. Required on Windows, where openssl-sys finds no installation on
+    # the MSVC runner and the build dies in a `-sys` crate (observed: run
+    # 32880378921). Applied on every platform deliberately: this artifact is
+    # DOWNLOADED and run on someone else's machine, so linking against
+    # whatever OpenSSL the build agent happened to have is a runtime failure
+    # waiting to happen on a machine that has a different one, or none.
+    # THE BINARY THE BROWSER CAN TALK TO. citadel-workspace-internal-service (this repo)
+    # wraps the kernel in the WebSocket interface and the Origin allowlist; it is what the
+    # docker image runs. The submodule's citadel_service_bin starts the kernel on the raw
+    # TCP interface -- a browser cannot open that -- and agent-v0.1.0 shipped it: the
+    # binary bound its port, passed every smoke check, and closed the connection on the
+    # first WebSocket handshake. smoke-agent.sh now performs that handshake.
+    - name: Build the agent
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+      run: cargo build --release --target "$TARGET" -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features vendored
+
+    # Signed and notarised BEFORE packaging, so the tarball carries a binary
+    # macOS will run without argument.
+    #
+    # The binary Rust produces is "linker-signed" (ad-hoc): `spctl -a -t exec`
+    # rejects it, so a Finder double-click is refused with "the developer
+    # cannot be verified". Terminal execution of a quarantined ad-hoc binary
+    # happens to still work today, which is why the download instructions on
+    # the page work at all -- but that is Apple's tolerance, not a guarantee,
+    # and it has been narrowing for several releases.
+    #
+    # scripts/import-macos-signing-cert.sh says where the identity comes from.
+    - name: Import the signing certificate
+      if: runner.os == 'macOS'
+      env:
+        CERT_P12_BASE64: ${{ inputs.cert-p12-base64 }}
+        CERT_PASSWORD: ${{ inputs.cert-password }}
+      shell: bash
+      run: ./scripts/import-macos-signing-cert.sh
+
+    - name: Sign
+      if: runner.os == 'macOS'
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+      run: |
+        set -euo pipefail
+        bin="target/$TARGET/release/citadel-workspace-internal-service"
+        # --options runtime is NOT optional: notarisation rejects anything
+        # without the hardened runtime, and the rejection names the flag only
+        # in the JSON log, not in the summary line.
+        codesign --force --options runtime --timestamp \
+          --sign "$SIGN_IDENTITY" "$bin"
+        codesign --verify --strict --verbose=2 "$bin"
+
+    # The bare binary, for the .tar.gz. The download people are offered is the
+    # app in the macos-app job; this archive is for terminal and script use.
+    # Submitted zipped and never stapled (a bare Mach-O takes no ticket), so the
+    # file the job packages next is the one signed above.
+    - name: Notarise
+      if: runner.os == 'macOS'
+      env:
+        NOTARY_KEY_P8_BASE64: ${{ inputs.notary-key-p8-base64 }}
+        NOTARY_KEY_ID: ${{ inputs.notary-key-id }}
+        NOTARY_ISSUER_ID: ${{ inputs.notary-issuer-id }}
+        TARGET: ${{ inputs.target }}
+      shell: bash
+      run: ./scripts/notarise-macos.sh "target/$TARGET/release/citadel-workspace-internal-service"
