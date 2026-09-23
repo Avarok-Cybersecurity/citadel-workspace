@@ -11,8 +11,11 @@ Nothing here phones home on its own. The agent connects where you tell it to.
 
 On a Mac, use `Citadel-Agent.dmg` rather than this archive: open it, drag
 Citadel Agent into Applications, and open it. It runs in the menu bar with the
-flags below already set, and starts when you log in. This archive is for
-terminal use and scripts.
+flags below already set, and starts when you log in. On Windows,
+`Citadel-Agent-x64.msi` does the same; on Debian or Ubuntu,
+`citadel-agent-linux-x64.deb`; on any other Linux, `Citadel-Agent-x86_64.AppImage`
+(run it with `--install-autostart` to have it start when you log in). This
+archive is for terminal use and scripts.
 
 ```bash
 ./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302

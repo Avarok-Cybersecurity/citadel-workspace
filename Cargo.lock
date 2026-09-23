@@ -816,7 +816,7 @@ dependencies = [
 
 [[package]]
 name = "citadel-workspace-internal-service"
-version = "0.1.0"
+version = "0.6.0"
 dependencies = [
  "citadel-internal-service",
  "citadel_logging",

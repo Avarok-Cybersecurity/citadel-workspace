@@ -1,0 +1,57 @@
+# The steps of release-agent.yml's publish job, once it has downloaded every release asset into
+# dist/: check them against the header's release-download list, attest them, and publish. Runs
+# with the publish job's permissions, the only job granted id-token and attestations write.
+name: Publish the agent release
+description: Verifies, attests and publishes the release assets in dist/.
+inputs:
+  github-token:
+    description: The job's GITHUB_TOKEN, for gh.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Every asset the UI links is here with its checksum, and no key is
+      shell: bash
+      run: |
+        set -euo pipefail
+        ls -la dist
+        names="$(sed -n 's/^#   release-download: //p' .github/workflows/release-agent.yml)"
+        [ "$(printf '%s\n' "$names" | grep -c .)" -ge 8 ] \
+          || { echo "::error::the release-download list in the header was not read"; exit 1; }
+        for n in $names; do
+          [ -f "dist/$n" ] && [ -f "dist/$n.sha256" ] || { echo "::error::$n (or its .sha256) is missing"; exit 1; }
+        done
+        (cd dist && sha256sum -c ./*.sha256)
+        # The TLS key ships inside the binaries by design, never beside them.
+        keys="$(find dist -type f \( -iname '*.pem' -o -iname '*.key' -o -iname '*.p12' -o -iname '*.p8' \))"
+        [ -z "$keys" ] || { echo "::error::key files among the release assets: $keys"; exit 1; }
+    - name: Attest where every asset was built
+      uses: actions/attest-build-provenance@v2
+      with:
+        subject-path: |
+          dist/*.tar.gz
+          dist/*.zip
+          dist/*.dmg
+          dist/*.deb
+          dist/*.AppImage
+          dist/*.msi
+    - name: Verify the attestations
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        for f in dist/*.tar.gz dist/*.zip dist/*.dmg dist/*.deb dist/*.AppImage dist/*.msi; do
+          gh attestation verify "$f" --repo "$REPO"
+        done
+    - name: Publish
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        gh release create "${GITHUB_REF_NAME}" dist/* \
+          --repo "${GITHUB_REPOSITORY}" \
+          --title "Citadel agent ${GITHUB_REF_NAME#agent-}" \
+          --notes "The local agent that Citadel Workspace connects to. On a Mac open Citadel-Agent.dmg; on Windows run Citadel-Agent-x64.msi; on Debian or Ubuntu install citadel-agent-linux-x64.deb; on any other Linux run Citadel-Agent-x86_64.AppImage. Each starts the agent, and starts it again when you log in. The archives are for terminal use, as the bundled README describes. Verify a download with: gh attestation verify <file> --repo ${GITHUB_REPOSITORY}"

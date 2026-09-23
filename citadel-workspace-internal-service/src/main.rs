@@ -106,8 +106,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 #[derive(Debug, StructOpt)]
+// `--version` prints "citadel-agent <Cargo.toml version>", which the release gates compare
+// with the tag (scripts/release-version.sh, scripts/lib/assert-agent-version.sh).
 #[structopt(
-    name = "internal-service",
+    name = "citadel-agent",
+    version = env!("CARGO_PKG_VERSION"),
     about = "Used for running a local service for citadel applications"
 )]
 struct Options {
