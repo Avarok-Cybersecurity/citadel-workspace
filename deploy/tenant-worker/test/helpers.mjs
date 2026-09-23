@@ -38,8 +38,10 @@ export const PRICES = {
  * `meterEvents.failures` is how many `POST /v1/billing/meter_events` Stripe refuses (500) before
  * it accepts them.
  */
-export function outbound({ turnstile = { success: true, hostname: "example.com" }, checkout, expire = {}, meterEvents = { failures: 0 } } = {}) {
+export function outbound({ turnstile = { success: true, hostname: "example.com" }, checkout, expire = {}, meterEvents = { failures: 0 }, subscriptions = { failures: 0 } } = {}) {
   let meterFailures = meterEvents.failures;
+  let subscriptionFailures = subscriptions.failures;
+  let subscriptionCount = 0;
   const calls = [];
   const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init = {}) => {
     const url = new URL(typeof input === "string" ? input : input.url);
@@ -70,6 +72,17 @@ export function outbound({ turnstile = { success: true, hostname: "example.com" 
         }
         return Response.json({ object: "billing.meter_event", event_name: form.get("event_name"), identifier: form.get("identifier") });
       }
+      // The usage-only subscription (control/usage-subscription.mjs): created, and cancelled.
+      if (url.pathname === "/v1/subscriptions" && method === "POST") {
+        if (subscriptionFailures > 0) {
+          subscriptionFailures -= 1;
+          return Response.json({ error: { message: "test: subscription refused" } }, { status: 500 });
+        }
+        subscriptionCount += 1;
+        return Response.json({ id: `sub_usage_${subscriptionCount}`, object: "subscription", status: "active" });
+      }
+      const cancelling = url.pathname.match(/^\/v1\/subscriptions\/(sub_[A-Za-z0-9_]+)$/);
+      if (cancelling && method === "DELETE") return Response.json({ id: cancelling[1], object: "subscription", status: "canceled" });
       if (url.pathname === "/v1/billing_portal/sessions") {
         // Never the account's default portal: it belongs to another product on the same account.
         if (form.get("configuration") !== "bpc_test_citadel") {

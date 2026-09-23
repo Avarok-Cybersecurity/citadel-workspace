@@ -47,9 +47,14 @@ export const overageKey = () => meteredLookupKey(table.lookup_prefix, overage.id
 /**
  * Whether a Checkout for `tier` on `interval` carries the metered overage price. A Stripe
  * subscription bills all its items on one interval and the overage price is monthly, so a yearly
- * plan cannot hold it: yearly overage awaits an owner decision (DEPLOY.md step 6).
+ * plan cannot hold it; a yearly tenant gets a usage-only subscription instead (needsUsageSubscription).
  */
 export const overageSoldWith = (tier, interval) => overageBilledOn(tier) && interval === overage.prices[0].interval;
+/**
+ * Whether a paid tenant needs the separate usage-only subscription (usage-subscription.mjs): its
+ * tier bills overage but its plan's interval cannot carry the monthly metered price.
+ */
+export const needsUsageSubscription = (tier, interval) => overageBilledOn(tier) && interval !== null && interval !== overage.prices[0].interval;
 
 /**
  * What a tenant may use, from its plan. Paid members are capped by the seats bought (and the

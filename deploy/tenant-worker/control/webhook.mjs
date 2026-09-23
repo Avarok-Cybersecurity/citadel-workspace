@@ -10,6 +10,7 @@
  */
 import { entitlements, planOfItems } from "./plans.mjs";
 import { verifyWebhook } from "./stripe.mjs";
+import { reconcileUsageSubscription } from "./usage-subscription.mjs";
 import { json, readText, refuse } from "./http.mjs";
 
 /** Stripe's events are well under this; a larger body is not one of them. */
@@ -38,6 +39,8 @@ export async function handleWebhook(io, cfg, request) {
     return refuse("event-refused", outcome.error, 422);
   }
   if (outcome.change) {
+    // Before anything is recorded, so a Stripe failure here is retried with the event.
+    Object.assign(outcome.change.fields, await reconcileUsageSubscription(io, cfg, outcome.after, { cancelled: outcome.cancelledUsage }));
     await io.tenant(outcome.change.slug).setEntitlements(outcome.entitlements);
   }
   await io.store.applyEvent(event, io.now(), outcome.change);
@@ -81,6 +84,12 @@ async function checkoutCompleted(io, session) {
 async function subscriptionChanged(io, event, sub) {
   const row = await tenantOf(io, sub);
   if (!row || row.slug !== sub.metadata?.tenant) return { note: "no tenant for this subscription" };
+  if (sub.id && sub.id === row.usage_subscription) {
+    // The usage-only subscription: it carries no plan. Deleted (cancelled in the portal, say), it
+    // is replaced, so overage cannot go unbilled by cancelling it.
+    if (event.type !== "customer.subscription.deleted") return { note: "the usage subscription" };
+    return { ...change(row, {}), cancelledUsage: sub.id };
+  }
   if (row.stripe_subscription && sub.id && row.stripe_subscription !== sub.id) return { note: "a subscription the tenant no longer holds" };
   const created = Number(event.created ?? 0);
   if (created < row.sub_event_created) return { note: "older than the state already applied" };
@@ -117,5 +126,6 @@ function change(row, fields) {
   return {
     change: { slug: row.slug, tenant_id: row.tenant_id, fields },
     entitlements: entitlements(after),
+    after,
   };
 }

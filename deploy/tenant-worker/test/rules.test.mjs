@@ -59,20 +59,20 @@ describe("lookup keys and plans", () => {
     expect(entitlements({ tier: "team", interval: "month", seats: 3, storage_blocks: 2, status: "active", ...noPeriod })).toEqual({
       status: "active", tier: "team", interval: "month", seats: 3, storage_blocks: 2,
       members_max: 3, storage_gb: 50, workspaces_max: 1, priority_support: false,
-      connections_max: 9, relay_gb_included: 150, max_frame_bytes: 4194304, ...noPeriod,
+      connections_max: 9, relay_gb_included: 60, max_frame_bytes: 4194304, ...noPeriod,
     });
     const business = entitlements({ tier: "business", interval: "year", seats: 2000, storage_blocks: 0, status: "active", ...noPeriod });
     expect([business.members_max, business.storage_gb, business.priority_support]).toEqual([1000, 50000, true]);
-    expect([business.connections_max, business.relay_gb_included]).toEqual([500, 200000]);
+    expect([business.connections_max, business.relay_gb_included]).toEqual([500, 100000]);
     expect(entitlements({ tier: "free", interval: null, seats: 0, storage_blocks: 0, status: "active", ...noPeriod })).toMatchObject({
-      members_max: 5, storage_gb: 1, seats: 0, storage_blocks: 0, connections_max: 15, relay_gb_included: 5,
+      members_max: 5, storage_gb: 1, seats: 0, storage_blocks: 0, connections_max: 15, relay_gb_included: 2,
     });
     const period = { period_start: 1000, period_end: 2000 };
     expect(entitlements({ tier: "team", interval: "month", seats: 1, storage_blocks: 0, status: "active", ...period })).toMatchObject(period);
   });
   it("an object enforces its stored entitlements, deriving from its plan only the limits they lack", () => {
     const old = { status: "active", tier: "business", interval: "year", seats: 4, storage_blocks: 1, members_max: 4 };
-    expect(enforcedEntitlements(old)).toMatchObject({ connections_max: 12, relay_gb_included: 400, max_frame_bytes: 4194304, period_start: null, period_end: null, members_max: 4 });
+    expect(enforcedEntitlements(old)).toMatchObject({ connections_max: 12, relay_gb_included: 200, max_frame_bytes: 4194304, period_start: null, period_end: null, members_max: 4 });
     expect(enforcedEntitlements({ ...old, connections_max: 2, period_start: 10, period_end: 20 })).toMatchObject({ connections_max: 2, period_start: 10, period_end: 20 });
   });
   it("refuses entitlements whose billing period was not stated, even as none", () => {

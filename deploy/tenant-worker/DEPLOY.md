@@ -128,12 +128,13 @@ missing, and `deploy.sh` stops there -- deliberately. Once approved:
 Monthly Team and Business Checkouts carry the metered `citadel-relay-overage` price as a second
 line item (no quantity), so their overage is billed on the monthly invoice.
 
-**Yearly overage needs an owner decision.** A Stripe subscription bills every item on one
-interval, so a yearly subscription cannot hold the monthly metered price, and yearly Checkouts
-do not carry it: yearly overage is recorded in `tenant_usage` but not billed. Options: (a) Stripe's
-flexible billing mode, which allows mixed intervals on one subscription; (b) a separate monthly
-subscription holding only the overage price; (c) yearly plans are included-relay only. Until then,
-the monitor sends no meter event for a yearly tenant and logs its overage as unbilled.
+**Yearly overage: a usage-only subscription** (decided 2026-09-23, `control/usage-subscription.mjs`).
+A Stripe subscription bills every item on one interval, so a yearly plan cannot hold the monthly
+metered price. When a yearly Team or Business plan becomes active, the webhook creates a second
+subscription holding only the overage price (idempotency key `usage-sub-<tenant_id>`), records it
+in `tenants.usage_subscription` (migration 0004) in the same batch as the event, cancels it when
+the plan ends, and replaces it if the customer cancels it. The monitor bills a yearly tenant once
+it exists; until then its overage is recorded and logged as unbilled.
 
 ## Deploying
 

@@ -1,7 +1,7 @@
 /**
  * The usage monitor (control/monitor.mjs) against the real registry and real tenant objects. The
  * one mock is Stripe at the fetch boundary (helpers.mjs `outbound`), as everywhere in this suite.
- * Usage is put into an object's own meter, the counter its sockets feed: relaying 150 GB through
+ * Usage is put into an object's own meter, the counter its sockets feed: relaying 60 GB through
  * a test socket is not a unit test.
  */
 import { createScheduledController, env, runInDurableObject } from "cloudflare:test";
@@ -16,7 +16,7 @@ import {
 
 const now = () => Math.floor(Date.now() / 1000);
 
-/** An active Team tenant (3 seats: 150 GB of relay included) with a Stripe period holding now. */
+/** An active Team tenant (3 seats: 60 GB of relay included) with a Stripe period holding now. */
 async function activeTeam() {
   const slug = freshSlug("mon");
   outbound();
@@ -69,7 +69,7 @@ describe("the monitor", () => {
   it("reports whole GB over the included relay once, and only what is new on later runs", async () => {
     const { row, period } = await activeTeam();
     const run = monitorOf(row.slug);
-    await relay(row.slug, 152.5e9);
+    await relay(row.slug, 62.5e9);
     const { calls } = outbound();
     await run();
     const [first, ...more] = meterEvents(calls, row.tenant_id);
@@ -82,7 +82,7 @@ describe("the monitor", () => {
     });
     expect(first.headers["idempotency-key"]).toBe(first.form.get("identifier"));
     expect(await usageRow(row.tenant_id, period.start)).toMatchObject({
-      bytes_in: 152.5e9, relay_gb_included: 150, overage_gb: 2, overage_gb_reported: 2, overage_gb_pending: null, period_end: period.end,
+      bytes_in: 62.5e9, relay_gb_included: 60, overage_gb: 2, overage_gb_reported: 2, overage_gb_pending: null, period_end: period.end,
     });
 
     await run();
@@ -98,7 +98,7 @@ describe("the monitor", () => {
   it("a report Stripe refused is not recorded, and the next run sends the identical one", async () => {
     const { row, period } = await activeTeam();
     const run = monitorOf(row.slug);
-    await relay(row.slug, 151e9);
+    await relay(row.slug, 61e9);
     const { calls } = outbound({ meterEvents: { failures: 1 } });
     await expect(run()).rejects.toThrow(/1 tenant\(s\) failed/);
     expect(await usageRow(row.tenant_id, period.start)).toMatchObject({ overage_gb_reported: 0, overage_gb_pending: 1 });
@@ -118,21 +118,35 @@ describe("the monitor", () => {
   it("records a free tenant's overage without billing it", async () => {
     const { slug } = await freeTenant("monf");
     const row = await tenantRow(slug);
-    await relay(slug, 7e9);
+    await relay(slug, 4e9);
     const { calls } = outbound();
     await monitorOf(slug)();
     expect(meterEvents(calls, row.tenant_id)).toEqual([]);
     const sampled = await env.CONTROL_DB.prepare("SELECT * FROM tenant_usage WHERE tenant_id = ?").bind(row.tenant_id).all();
-    expect(sampled.results.map((r) => [r.bytes_in, r.relay_gb_included, r.overage_gb, r.overage_gb_reported])).toEqual([[7e9, 5, 2, 0]]);
+    expect(sampled.results.map((r) => [r.bytes_in, r.relay_gb_included, r.overage_gb, r.overage_gb_reported])).toEqual([[4e9, 2, 2, 0]]);
   });
 
-  it("records a yearly tenant's overage without billing it: its subscription holds no metered price", async () => {
+  it("bills a yearly tenant's overage once its usage-only subscription exists", async () => {
     const { row, period } = await activeTeam();
     const year = subscriptionEvent("customer.subscription.updated", row, {
       id: `evt_${crypto.randomUUID()}`, created: now() + 1, items: [item("citadel-team-year", 3)], period,
     });
     expect((await deliver(year)).status).toBe(200);
-    await relay(row.slug, 160e9);
+    expect((await tenantRow(row.slug)).usage_subscription).toMatch(/^sub_usage_/);
+    await relay(row.slug, 70e9);
+    const { calls } = outbound();
+    await monitorOf(row.slug)();
+    expect(meterEvents(calls, row.tenant_id).map((e) => e.form.get("payload[value]"))).toEqual(["10"]);
+  });
+
+  it("records a yearly tenant's overage without billing it while it has no usage subscription", async () => {
+    const { row, period } = await activeTeam();
+    const year = subscriptionEvent("customer.subscription.updated", row, {
+      id: `evt_${crypto.randomUUID()}`, created: now() + 1, items: [item("citadel-team-year", 3)], period,
+    });
+    expect((await deliver(year)).status).toBe(200);
+    await env.CONTROL_DB.prepare("UPDATE tenants SET usage_subscription = NULL WHERE slug = ?").bind(row.slug).run();
+    await relay(row.slug, 70e9);
     const { calls } = outbound();
     await monitorOf(row.slug)();
     expect(meterEvents(calls, row.tenant_id)).toEqual([]);
