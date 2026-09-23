@@ -71,10 +71,21 @@ runs:
     # binary bound its port, passed every smoke check, and closed the connection on the
     # first WebSocket handshake. smoke-agent.sh now performs that handshake.
     - name: Build the agent
+      if: runner.os != 'Windows'
       shell: bash
       env:
         TARGET: ${{ inputs.target }}
       run: cargo build --release --target "$TARGET" -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features vendored
+    # PowerShell, not bash, on Windows: vendored OpenSSL runs its Configure with the first
+    # perl on PATH, and under Git's bash that is Git's cut-down perl, which lacks the modules
+    # Configure needs ("Can't locate ... Params/Check.pm"). The runner's Strawberry perl is
+    # found under pwsh, as it was before this build moved into a composite action.
+    - name: Build the agent (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        TARGET: ${{ inputs.target }}
+      run: cargo build --release --target "$env:TARGET" -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features vendored
 
     # Signed and notarised BEFORE packaging, so the tarball carries a binary
     # macOS will run without argument.
