@@ -53,6 +53,12 @@ function Msiexec([string]$args_) {
 
 if (Listening) { Fail "port $port is already in use; that listener, not this install, would answer" }
 
+# Another program's login entry, which uninstalling must leave alone: the MSI owns one
+# value in the Run key, never the key.
+$sentinel = 'CitadelSmokeSentinel-OtherApp'
+New-Item -Path $runKey -Force | Out-Null
+New-ItemProperty -Path $runKey -Name $sentinel -Value 'C:\\Windows\\notepad.exe' -PropertyType String -Force | Out-Null
+
 Msiexec "/i `"$((Resolve-Path $Msi).Path)`" /qn /l*v `"$log`""
 if (-not (Test-Path $exe)) { Fail "the MSI did not install $exe" }
 $got = ((& $exe --version) -join "`n").Trim()
@@ -94,5 +100,10 @@ Write-Host "  the login entry runs the same command"
 
 Msiexec "/x `"$((Resolve-Path $Msi).Path)`" /qn /l*v `"$log`""
 foreach ($left in $exe, $lnk) { if (Test-Path $left) { Fail "uninstalling left $left" } }
-if ($null -ne (Get-Item $runKey).GetValue('Citadel Agent')) { Fail "uninstalling left the login entry" }
+$runAfter = Get-Item $runKey -ErrorAction SilentlyContinue
+if ($null -eq $runAfter) { Fail "uninstalling removed the whole Run key, and with it other programs' login entries" }
+if ($null -ne $runAfter.GetValue('Citadel Agent')) { Fail "uninstalling left the login entry" }
+if ($null -eq $runAfter.GetValue($sentinel)) { Fail "uninstalling removed another program's login entry" }
+Remove-ItemProperty -Path $runKey -Name $sentinel
+Write-Host "  uninstalling removed only its own login entry"
 Write-Host "== $Msi installs, runs the agent, and uninstalls =="
