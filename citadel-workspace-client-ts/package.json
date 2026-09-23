@@ -5,6 +5,7 @@
     "node": ">=20"
   },
   "description": "TypeScript client wrapper for Citadel Workspace with auto-generated types",
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

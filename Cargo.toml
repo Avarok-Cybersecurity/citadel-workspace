@@ -11,6 +11,9 @@ exclude = ["./citadel-internal-service"]
 
 resolver = "3"
 
+[workspace.package]
+license = "AGPL-3.0-or-later"
+
 # Release profile.
 #
 # `overflow-checks` is the point of this block. Cargo's default has it ON for
