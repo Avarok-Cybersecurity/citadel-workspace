@@ -16,12 +16,14 @@
 # (3) is the one that matters. The others can pass on a binary that cannot serve.
 set -euo pipefail
 
-ARCHIVE="${1:?usage: smoke-agent.sh <archive.tar.gz>}"
+ARCHIVE="${1:?usage: smoke-agent.sh <archive.tar.gz|.zip|.dmg>}"
 [ -f "$ARCHIVE" ] || { echo "::error::no such archive: $ARCHIVE" >&2; exit 1; }
 
 WORK="$(mktemp -d)"
 cleanup() {
   [ -n "${AGENT_PID:-}" ] && kill "$AGENT_PID" 2>/dev/null || true
+  # A copy that fails under set -e exits before the detach below; a mounted image would outlive us.
+  [ -d "$WORK/mnt" ] && hdiutil detach -quiet -force "$WORK/mnt" 2>/dev/null || true
   rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -29,14 +31,21 @@ trap cleanup EXIT
 case "$ARCHIVE" in
   *.zip)    unzip -q "$ARCHIVE" -d "$WORK"; BIN="$WORK/citadel-agent.exe" ;;
   *.tar.gz) tar -xzf "$ARCHIVE" -C "$WORK"; BIN="$WORK/citadel-agent" ;;
+  # Mounted and copied out, as a user drags it out of the window; run from the image it would work
+  # even if the copy lost its mode bit, which is the thing being checked.
+  # The agent inside the app, which is what the app runs; the app itself is smoke-macos-app.sh's.
+  *.dmg)    hdiutil attach -quiet -nobrowse -readonly -mountpoint "$WORK/mnt" "$ARCHIVE"
+            ditto "$WORK/mnt/Citadel Agent.app/Contents/MacOS/citadel-agent" "$WORK/citadel-agent"
+            hdiutil detach -quiet "$WORK/mnt"; BIN="$WORK/citadel-agent" ;;
   *)        echo "::error::unknown archive type: $ARCHIVE" >&2; exit 1 ;;
 esac
 
 [ -f "$BIN" ]            || { echo "::error::archive has no $(basename "$BIN")" >&2; ls -la "$WORK" >&2; exit 1; }
-[ -f "$WORK/README.md" ] || { echo "::error::archive ships no README; a user gets a bare binary with a required flag and no way to know it" >&2; exit 1; }
+# The app needs no README: it passes the flags itself. Every archive does.
+[ -f "$WORK/README.md" ] || [[ "$ARCHIVE" == *.dmg ]] || { echo "::error::archive ships no README; a user gets a bare binary with a required flag and no way to know it" >&2; exit 1; }
 # Windows has no executable bit; the check is meaningful only where it exists.
 case "$ARCHIVE" in
-  *.tar.gz) [ -x "$BIN" ] || { echo "::error::citadel-agent is not executable — packaging dropped the mode bit" >&2; exit 1; } ;;
+  *.tar.gz|*.dmg) [ -x "$BIN" ] || { echo "::error::citadel-agent is not executable — packaging dropped the mode bit" >&2; exit 1; } ;;
 esac
 
 # No --bind must FAIL. A binary that exits 0 here is not our agent, or is a stub.
@@ -51,14 +60,19 @@ fi
 # wrong target at the wrong asset name would hand an Intel binary to an ARM Mac,
 # which fails only after the download and reads as a broken release.
 case "$ARCHIVE" in
+  # One app for every Mac: both architectures, not merely "universal".
+  *.dmg)        { lipo "$BIN" -verify_arch arm64 && lipo "$BIN" -verify_arch x86_64; } || { echo "::error::the app's agent is not arm64 + x86_64: $(lipo -archs "$BIN")" >&2; exit 1; }
+                echo "  architectures: $(lipo -archs "$BIN")"; WANT="" ;;
   *macos-arm64*) WANT="arm64" ;;
   *macos-x64*)   WANT="x86_64" ;;
   *linux-x64*)   WANT="x86-64" ;;
   *windows-x64*) WANT="x86-64" ;;
   *)             WANT="" ;;
 esac
+# Read for every artefact: the signature check below keys on it, and an unset DESC there under
+# `set -u` does not fail the run -- it skips the check.
+DESC="$(file -b "$BIN")"
 if [ -n "$WANT" ]; then
-  DESC="$(file -b "$BIN")"
   case "$DESC" in
     *"$WANT"*) echo "  architecture matches the asset name ($WANT)" ;;
     *) echo "::error::$ARCHIVE claims $WANT but the binary is: $DESC" >&2; exit 1 ;;
@@ -72,6 +86,7 @@ PORT="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));prin
 # The allowlist is REQUIRED by the WebSocket agent (it refuses to start without one); the
 # handshake below presents this origin, and a foreign one, to prove the policy shipped.
 INTERNAL_SERVICE_ALLOWED_ORIGINS="http://localhost:5291" \
+INTERNAL_SERVICE_STUN_SERVERS="stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302" \
   "$BIN" --bind "127.0.0.1:$PORT" >"$WORK/agent.log" 2>&1 &
 AGENT_PID=$!
 

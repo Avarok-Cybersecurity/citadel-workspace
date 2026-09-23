@@ -199,6 +199,7 @@ services:
       # compared byte-for-byte. The integration suite uses 127.0.0.1:5291
       # (integration-tests/src/lib/config.ts); a human usually types localhost.
       - INTERNAL_SERVICE_ALLOWED_ORIGINS=http://localhost:5291,http://127.0.0.1:5291
+      - INTERNAL_SERVICE_STUN_SERVERS=stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302
     deploy:
       resources:
         limits:

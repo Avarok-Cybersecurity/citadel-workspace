@@ -109,6 +109,12 @@ is served from, e.g. `https://work.example.com`. The agent exits at startup
 without it, because an agent that accepts any origin can be driven by any page
 the user happens to visit. Pass `*` on a development box only.
 
+`INTERNAL_SERVICE_STUN_SERVERS`. Exactly three STUN servers, `host:port` separated by
+commas, that the agent learns its public address from for peer-to-peer connections, e.g.
+`stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302` (the value in
+`.env.example`). Three, because the agent classifies its NAT by comparing three answers. The
+agent exits at startup without it rather than falling back to a list nobody chose.
+
 `LOOPBACK_AGENT_ORIGIN` — required by `./deploy.sh` whenever the deployment
 serves the UI (a server-only tenant does not). A publicly served UI has no
 agent of its own: each visitor's page dials the agent on the visitor's own

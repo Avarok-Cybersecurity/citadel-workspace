@@ -183,6 +183,7 @@ jobs:
               -e INTERNAL_SERVICE_PORT=12345
               -e INTERNAL_SERVICE_BIND_HOST=127.0.0.1
               -e INTERNAL_SERVICE_ALLOWED_ORIGINS=http://localhost:5291
+              -e INTERNAL_SERVICE_STUN_SERVERS=stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302
 
     steps:
       # FIRST, before the checkout and before ~8 minutes of build. A missing
