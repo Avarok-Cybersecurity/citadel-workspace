@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Citadel-Agent-x64.msi: the Windows one-click install (WiX 5, built by release-agent.yml).
+
+    wix build -arch x64 -d Version=X.Y.Z -d AgentExe=path\citadel-agent.exe -d Icon=path\favicon.ico
+      -d Bind=... -d Origin=... -d Stun=... -d DataDirName=... -o Citadel-Agent-x64.msi citadel-agent.wxs
+
+  Bind, Origin, Stun and DataDirName come from apps/macos-agent/Info.plist through
+  scripts/lib/agent-settings.py: the flags the Mac app and the Linux launcher start the agent with.
+  Nothing here has a default; an undefined variable fails the build.
+
+  Installs citadel-agent.exe under Program Files, a Start-menu shortcut, a start-at-login entry for
+  the installing user (HKCU Run), and starts the agent when the install finishes.
+
+  The data directory is %USERPROFILE%\<DataDirName>. The shortcut and the Run value keep the
+  variable unexpanded, so each is expanded for whoever starts it (the shell expands a shortcut's
+  arguments; Explorer expands a REG_EXPAND_SZ Run value). The launch at install time is resolved
+  by the installer as [%USERPROFILE], the installing user's. smoke-windows-msi.ps1 checks all three.
+
+  The UpgradeCode is this product's identity across versions: never change it.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Citadel Agent" Manufacturer="Avarok Cybersecurity" Version="$(var.Version)"
+           UpgradeCode="4B92DDB9-E405-41C5-9387-20ACF51531E8" Scope="perMachine" Compressed="yes">
+    <MajorUpgrade DowngradeErrorMessage="A newer Citadel Agent is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="CitadelAgent.ico" SourceFile="$(var.Icon)" />
+    <Property Id="ARPPRODUCTICON" Value="CitadelAgent.ico" />
+
+    <!-- The flags on either side of the data directory, whose form differs by who expands it. -->
+    <?define Head = "--bind $(var.Bind) --backend filesystem --data-dir" ?>
+    <?define Tail = "--allowed-origins $(var.Origin) --stun-servers $(var.Stun)" ?>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Citadel Agent" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <Feature Id="Agent" Title="Citadel Agent" Level="1">
+      <Component Directory="INSTALLFOLDER" Id="AgentExe">
+        <File Id="CitadelAgentExe" Name="citadel-agent.exe" Source="$(var.AgentExe)" KeyPath="yes" />
+      </Component>
+      <!-- A shortcut's component keys on an HKCU value, as Windows Installer requires of shortcuts
+           that are not advertised. -->
+      <Component Directory="ProgramMenuFolder" Id="StartMenuShortcut">
+        <Shortcut Id="StartMenuShortcut" Name="Citadel Agent" Target="[#CitadelAgentExe]"
+                  Description="The local agent Citadel Workspace connects to"
+                  WorkingDirectory="INSTALLFOLDER" Icon="CitadelAgent.ico"
+                  Arguments="$(var.Head) &quot;%USERPROFILE%\$(var.DataDirName)&quot; $(var.Tail)" />
+        <RegistryValue Root="HKCU" Key="Software\Avarok\Citadel Agent" Name="StartMenuShortcut"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+      <!-- Per-user start at login: the registry value is its own key path. -->
+      <Component Directory="INSTALLFOLDER" Id="StartAtLogin">
+        <RegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                       Name="Citadel Agent" Type="expandable" KeyPath="yes"
+                       Value="&quot;[#CitadelAgentExe]&quot; $(var.Head) &quot;%USERPROFILE%\$(var.DataDirName)&quot; $(var.Tail)" />
+      </Component>
+    </Feature>
+
+    <!-- Starts the agent once the files are in place, as the user who installed it. Immediate and
+         after InstallFinalize, so it runs outside the elevated transaction and does not wait. -->
+    <CustomAction Id="LaunchAgent" Directory="INSTALLFOLDER" Return="asyncNoWait" Execute="immediate"
+                  ExeCommand="&quot;[#CitadelAgentExe]&quot; $(var.Head) &quot;[%USERPROFILE]\$(var.DataDirName)&quot; $(var.Tail)" />
+    <InstallExecuteSequence>
+      <Custom Action="LaunchAgent" After="InstallFinalize" Condition="NOT Installed AND NOT REMOVE" />
+    </InstallExecuteSequence>
+  </Package>
+</Wix>

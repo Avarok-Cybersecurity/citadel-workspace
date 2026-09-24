@@ -1,0 +1,65 @@
+# The certificate job of release-agent.yml: this release's certificate for local.avarok.net,
+# verified and handed to every build leg as the agent-tls artifact.
+#
+# A fresh certificate for every release, issued ONCE here and handed to every
+# build leg. The certificate is compiled in (include_bytes!), so an agent
+# carries whatever tls/ held when it was built; issuing per release means no
+# published binary ever starts life with a certificate older than its release.
+# Per release rather than per leg: five legs would be five duplicate
+# certificates, and Let's Encrypt allows five a week for one name. Only a real
+# tag push issues -- a dry run (workflow_dispatch without a tag) builds with the
+# committed certificate, so repeated dry runs cannot spend that allowance.
+name: Agent certificate
+description: Issues (on a tag push) and verifies the certificate compiled into every agent build.
+inputs:
+  cloudflare-dns-api-token:
+    description: CLOUDFLARE_DNS_API_TOKEN (Zone:DNS:Edit on avarok.net); read only on a tag push.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Obtain a certificate for local.avarok.net (DNS-01)
+      if: startsWith(github.ref, 'refs/tags/agent-v')
+      env:
+        CF_TOKEN: ${{ inputs.cloudflare-dns-api-token }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        [ -n "${CF_TOKEN:-}" ] || { echo "::error::CLOUDFLARE_DNS_API_TOKEN is not set (needs Zone:DNS:Edit on avarok.net)."; exit 1; }
+        python3 -m pip install --quiet --upgrade certbot certbot-dns-cloudflare
+        umask 077
+        printf 'dns_cloudflare_api_token = %s\n' "$CF_TOKEN" > "$RUNNER_TEMP/cf.ini"
+        certbot certonly \
+          --dns-cloudflare \
+          --dns-cloudflare-credentials "$RUNNER_TEMP/cf.ini" \
+          --dns-cloudflare-propagation-seconds 60 \
+          -d local.avarok.net \
+          --non-interactive --agree-tos --register-unsafely-without-email \
+          --config-dir "$RUNNER_TEMP/le" --work-dir "$RUNNER_TEMP/le-work" \
+          --logs-dir "$RUNNER_TEMP/le-logs"
+        rm -f "$RUNNER_TEMP/cf.ini"
+        live="$RUNNER_TEMP/le/live/local.avarok.net"
+        dest=citadel-workspace-internal-service/tls
+        cp "$live/fullchain.pem" "$dest/local.avarok.net.crt.pem"
+        cp "$live/privkey.pem"   "$dest/local.avarok.net.key.pem"
+    - name: Verify what will be compiled in
+      shell: bash
+      run: |
+        set -euo pipefail
+        dir=citadel-workspace-internal-service/tls
+        cert="$dir/local.avarok.net.crt.pem"; key="$dir/local.avarok.net.key.pem"
+        openssl x509 -in "$cert" -noout -ext subjectAltName | grep -q 'DNS:local.avarok.net'
+        # 30 days is the floor smoke-agent.sh enforces on the published binary.
+        openssl x509 -in "$cert" -noout -checkend $((30*86400)) \
+          || { echo "::error::the certificate expires within 30 days; renew it (renew-agent-tls.yml) or tag a release, which issues a fresh one."; exit 1; }
+        c="$(openssl x509 -in "$cert" -noout -pubkey | openssl md5)"
+        k="$(openssl pkey -in "$key" -pubout | openssl md5)"
+        [ "$c" = "$k" ] || { echo "::error::the certificate and key do not match."; exit 1; }
+        openssl x509 -in "$cert" -noout -enddate
+    # The key is not a secret -- it ships inside the binary by design (see
+    # BUILTIN_TLS_CERT in main.rs) -- so an artifact is the right carrier.
+    - uses: actions/upload-artifact@v4
+      with:
+        name: agent-tls
+        path: citadel-workspace-internal-service/tls/
+        retention-days: 1

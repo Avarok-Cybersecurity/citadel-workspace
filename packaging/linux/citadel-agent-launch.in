@@ -1,0 +1,36 @@
+#!/bin/sh
+# Starts the Citadel agent with the flags its README gives a terminal user. The agent keeps no
+# defaults, so this supplies every one; the values are rendered from apps/macos-agent/Info.plist
+# by scripts/package-linux-agent.sh, the same keys the Mac app starts the agent with.
+#
+#   citadel-agent-launch [extra agent flags, e.g. --version]
+#   citadel-agent-launch --install-autostart   (AppImage) start this AppImage when you log in
+#   citadel-agent-launch --remove-autostart    (AppImage) stop doing that
+#
+# The .deb installs its own login entry in /etc/xdg/autostart; the AppImage cannot, so it offers.
+set -eu
+: "${HOME:?HOME must be set: your account is kept in \$HOME/@CitadelAgentDataDirectoryName@}"
+here="$(dirname "$(readlink -f "$0")")"
+autostart="${XDG_CONFIG_HOME:-$HOME/.config}/autostart/citadel-agent-appimage.desktop"
+
+case "${1:-}" in
+  --install-autostart)
+    [ -n "${APPIMAGE:-}" ] || { echo "citadel-agent-launch: --install-autostart is for the AppImage; the .deb already starts at login" >&2; exit 2; }
+    case "$APPIMAGE" in *[\"\`\$\\]*) echo "citadel-agent-launch: cannot write a login entry for the path $APPIMAGE" >&2; exit 2 ;; esac
+    mkdir -p "$(dirname "$autostart")"
+    printf '[Desktop Entry]\nType=Application\nName=Citadel Agent\nExec="%s"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n' "$APPIMAGE" > "$autostart"
+    echo "Citadel Agent will start when you log in ($autostart)."
+    exit 0 ;;
+  --remove-autostart)
+    rm -f "$autostart"
+    echo "Citadel Agent will no longer start when you log in."
+    exit 0 ;;
+esac
+
+exec "$here/citadel-agent" \
+  --bind '@CitadelAgentBind@' \
+  --backend filesystem \
+  --data-dir "$HOME/@CitadelAgentDataDirectoryName@" \
+  --allowed-origins '@CitadelWorkspaceOrigin@' \
+  --stun-servers '@CitadelAgentStunServers@' \
+  "$@"

@@ -109,17 +109,22 @@ is served from, e.g. `https://work.example.com`. The agent exits at startup
 without it, because an agent that accepts any origin can be driven by any page
 the user happens to visit. Pass `*` on a development box only.
 
+`INTERNAL_SERVICE_STUN_SERVERS`. Exactly three STUN servers, `host:port` separated by
+commas, that the agent learns its public address from for peer-to-peer connections, e.g.
+`stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302` (the value in
+`.env.example`). Three, because the agent classifies its NAT by comparing three answers. The
+agent exits at startup without it rather than falling back to a list nobody chose.
+
 `LOOPBACK_AGENT_ORIGIN` — required by `./deploy.sh` whenever the deployment
 serves the UI (a server-only tenant does not). A publicly served UI has no
 agent of its own: each visitor's page dials the agent on the visitor's own
 machine at this `wss://` origin, and the page's Content-Security-Policy allows
 nothing else. Left empty, the page loads, looks correct, and can connect to
-nothing. With the agent as released, the value is
+nothing. The value is always
 `wss://local.avarok.net:12345`: the agent carries a certificate for
-`local.avarok.net`, a public name whose A record is 127.0.0.1, and for no other
-name. Using your own name needs an A record for it pointing at 127.0.0.1, a
-certificate for it (DNS-01, since the name never resolves to a server), and
-every tester starting the agent with `--tls-cert` and `--tls-key`.
+`local.avarok.net`, a public name whose A record is 127.0.0.1, and serves no
+other. There is no option to supply your own; each release is built with a
+freshly issued certificate for that name.
 
 `./deploy.sh` checks all three before it starts anything, and reports which one
 is missing. `docker compose … up -d --wait` does not.

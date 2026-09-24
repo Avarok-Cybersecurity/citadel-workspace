@@ -248,6 +248,8 @@ services:
       # anyone who has not exported it. The fail-fast belongs one layer down:
       # the binary refuses to start on an empty value and names the variable.
       - INTERNAL_SERVICE_ALLOWED_ORIGINS=${INTERNAL_SERVICE_ALLOWED_ORIGINS}
+      # Exactly three STUN servers, host:port; the binary refuses to start without them.
+      - INTERNAL_SERVICE_STUN_SERVERS=${INTERNAL_SERVICE_STUN_SERVERS}
     deploy:
       resources:
         limits:

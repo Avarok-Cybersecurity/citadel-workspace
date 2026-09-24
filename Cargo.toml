@@ -11,6 +11,9 @@ exclude = ["./citadel-internal-service"]
 
 resolver = "3"
 
+[workspace.package]
+license = "AGPL-3.0-or-later"
+
 # Release profile.
 #
 # `overflow-checks` is the point of this block. Cargo's default has it ON for
@@ -75,13 +78,3 @@ async-recursion = { version = "1.0" }
 rstest = { version = "0.25.0" }
 bincode = "2.0.1"
 chrono = { version = "0.4.34", features = ["serde"] }
-
-# NOT FOR MERGE: build against the local Citadel-Protocol integration branch
-# feat/cloudflare-tenants (../cp-int = wasm-server-in-worker + host-backend + native-wss-client).
-[patch."https://github.com/Avarok-Cybersecurity/Citadel-Protocol"]
-citadel_sdk = { path = "../cp-int/citadel_sdk" }
-citadel_types = { path = "../cp-int/citadel_types" }
-citadel_user = { path = "../cp-int/citadel_user" }
-citadel_logging = { path = "../cp-int/citadel_logging" }
-citadel_crypt = { path = "../cp-int/citadel_crypt" }
-citadel_io = { path = "../cp-int/citadel_io" }

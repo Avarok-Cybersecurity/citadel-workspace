@@ -4,7 +4,7 @@ use citadel_logging::info;
 use citadel_logging::{setup_log, warn};
 use citadel_sdk::prelude::{
     ArgonDefaultServerSettings, BackendType, NetworkError, NodeBuilder, NodeType, PlatformOps,
-    StackedRatchet,
+    ServerMiscSettings, StackedRatchet,
 };
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use std::net::SocketAddr;
@@ -672,11 +672,30 @@ pub async fn run_server_on<T: PlatformOps>(
         .with_node_type(node_type)
         .with_backend(backend)
         .with_server_argon_settings(server_argon_settings)
+        // The same refusal of password-less transient accounts as the native server: a
+        // hosted tenant has open registration too.
+        .with_server_misc_settings(production_server_misc_settings())
         .with_injected_listener(listener)
         .build(kernel)
         .map_err(|e| NetworkError::generic(e.to_string()))?
         .await?;
     Ok(())
+}
+
+/// The Citadel settings this server runs with.
+///
+/// Transient connections are refused. The SDK allows them by default: an account
+/// with no password, deleted when its session ends. Nothing in the workspace
+/// uses one -- the agent authenticates only with `AuthenticationRequest::
+/// credentialed` -- and on a server with open registration they are a cheaper
+/// way in than a real account: no password to hash, and an identity that
+/// vanishes with the session. The credential rules stay the SDK's defaults,
+/// which is what registration and profile updates both enforce.
+pub fn production_server_misc_settings() -> ServerMiscSettings {
+    ServerMiscSettings {
+        allow_transient_connections: false,
+        ..Default::default()
+    }
 }
 
 /// Run the workspace server with the given configuration and base path.
@@ -732,7 +751,8 @@ pub async fn run_server_with_base_path(
     let mut builder = NodeBuilder::default();
     builder
         .with_node_type(node_type)
-        .with_backend(backend_type_for_node_builder);
+        .with_backend(backend_type_for_node_builder)
+        .with_server_misc_settings(production_server_misc_settings());
 
     if config.dangerous_skip_cert_verification.unwrap_or(false) {
         citadel_logging::warn!(target: "citadel", "⚠️  SECURITY WARNING: TLS certificate verification is DISABLED. This should ONLY be used for local development with self-signed certificates. Never use in production!");

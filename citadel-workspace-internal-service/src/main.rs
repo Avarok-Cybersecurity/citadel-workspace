@@ -1,4 +1,5 @@
 use citadel_internal_service::kernel::CitadelWorkspaceService;
+use citadel_internal_service::stun::{StunServers, STUN_SERVERS_ENV};
 use citadel_internal_service::OriginPolicy;
 use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
 use std::error::Error;
@@ -33,6 +34,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .as_deref(),
         opts.allowed_origins.as_deref(),
     )?;
+    // The STUN servers this agent learns its public address from, required like --bind: the
+    // SDK would otherwise fall back to a built-in list nobody chose for this deployment.
+    let stun_servers = StunServers::resolve(
+        std::env::var(STUN_SERVERS_ENV).ok().as_deref(),
+        opts.stun_servers.as_deref(),
+    )?;
+
     if origins == OriginPolicy::Any {
         citadel_logging::warn!(
             target: "citadel",
@@ -49,8 +57,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
              socket; use this only behind a same-origin proxy on loopback.");
         CitadelWorkspaceService::new_websocket(opts.bind, origins).await?
     } else {
-        let (chain, key) = resolve_tls_material(opts.tls_cert.as_deref(), opts.tls_key.as_deref())?;
-        CitadelWorkspaceService::new_websocket_tls(opts.bind, origins, &chain, &key).await?
+        CitadelWorkspaceService::new_websocket_tls(
+            opts.bind,
+            origins,
+            BUILTIN_TLS_CERT,
+            BUILTIN_TLS_KEY,
+        )
+        .await?
     };
 
     // Backend selection precedence:
@@ -66,16 +79,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // sibling service for the same configuration. The unit tests below
     // mirror the kernel's backend_select_tests so a divergence loudly
     // fails CI in both crates.
+    let default_dir = default_data_dir(Path::new(LEGACY_DATA_DIR).is_dir(), dirs2::home_dir())?;
     let backend_type = select_backend_type(
         std::env::var("INTERNAL_SERVICE_BACKEND").ok().as_deref(),
         std::env::var("INTERNAL_SERVICE_DATA_DIR").ok().as_deref(),
         opts.backend.as_deref(),
         opts.data_dir.as_deref(),
+        &default_dir,
     )?;
 
     // Initialize the node builder with StackedRatchet, which is a concrete implementation of the Ratchet trait
     let mut node_builder = NodeBuilder::<StackedRatchet>::default();
-    let mut builder = node_builder
+    let mut builder = stun_servers
+        .apply(&mut node_builder)
         .with_backend(backend_type)
         .with_node_type(NodeType::Peer);
 
@@ -90,8 +106,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 #[derive(Debug, StructOpt)]
+// `--version` prints "citadel-agent <Cargo.toml version>", which the release gates compare
+// with the tag (scripts/release-version.sh, scripts/lib/assert-agent-version.sh).
 #[structopt(
-    name = "internal-service",
+    name = "citadel-agent",
+    version = env!("CARGO_PKG_VERSION"),
     about = "Used for running a local service for citadel applications"
 )]
 struct Options {
@@ -102,7 +121,8 @@ struct Options {
     /// Backend type: "filesystem" for persistent storage, omit for in-memory
     #[structopt(long)]
     backend: Option<String>,
-    /// Data directory for filesystem backend (defaults to "./data")
+    /// Data directory for the filesystem backend. Defaults to `.citadel-agent` in
+    /// the user's home directory (or `./data` where an existing one is found).
     #[structopt(long)]
     data_dir: Option<String>,
     /// Comma-separated list of browser origins allowed to open a control
@@ -111,13 +131,10 @@ struct Options {
     /// INTERNAL_SERVICE_ALLOWED_ORIGINS, which takes precedence.
     #[structopt(long)]
     allowed_origins: Option<String>,
-    /// PEM certificate chain to serve on the WebSocket, leaf first. Overrides
-    /// the built-in certificate. Requires --tls-key.
+    /// Exactly three STUN servers, `host:port,host:port,host:port`, that this agent learns
+    /// its public address from. Required; INTERNAL_SERVICE_STUN_SERVERS overrides it.
     #[structopt(long)]
-    tls_cert: Option<PathBuf>,
-    /// PEM private key for --tls-cert (PKCS#8 or RSA).
-    #[structopt(long)]
-    tls_key: Option<PathBuf>,
+    stun_servers: Option<String>,
     /// Serve plain `ws://` instead of `wss://`.
     ///
     /// Only correct when the page is itself on loopback and reaches the agent
@@ -128,7 +145,13 @@ struct Options {
     no_tls: bool,
 }
 
-/// The certificate the agent serves when none is supplied.
+/// The certificate the agent serves, and the only one.
+///
+/// There is no override. Every hosted page dials `wss://local.avarok.net:12345`, so
+/// a different certificate could only ever break that handshake. Release builds
+/// compile in a certificate issued at build time (release-agent.yml), so no
+/// published agent carries one older than its release.
+///
 ///
 /// `local.avarok.net` is a public name whose A record is 127.0.0.1, so a
 /// publicly-trusted certificate can be issued for it and every visitor's own
@@ -144,30 +167,6 @@ struct Options {
 /// and required.
 const BUILTIN_TLS_CERT: &[u8] = include_bytes!("../tls/local.avarok.net.crt.pem");
 const BUILTIN_TLS_KEY: &[u8] = include_bytes!("../tls/local.avarok.net.key.pem");
-
-/// The certificate and key to serve: the operator's if given, else the built-in.
-///
-/// Both flags or neither. One alone is always a mistake -- a chain with no key
-/// cannot serve and a key with no chain names nothing -- and silently falling
-/// back to the built-in certificate for a half-specified pair would present a
-/// certificate the operator did not choose.
-fn resolve_tls_material(
-    cert: Option<&Path>,
-    key: Option<&Path>,
-) -> Result<(Vec<u8>, Vec<u8>), Box<dyn Error>> {
-    match (cert, key) {
-        (None, None) => Ok((BUILTIN_TLS_CERT.to_vec(), BUILTIN_TLS_KEY.to_vec())),
-        (Some(cert), Some(key)) => {
-            let chain =
-                std::fs::read(cert).map_err(|e| format!("--tls-cert {}: {e}", cert.display()))?;
-            let key_bytes =
-                std::fs::read(key).map_err(|e| format!("--tls-key {}: {e}", key.display()))?;
-            Ok((chain, key_bytes))
-        }
-        (Some(_), None) => Err("--tls-cert was given without --tls-key".into()),
-        (None, Some(_)) => Err("--tls-key was given without --tls-cert".into()),
-    }
-}
 
 /// Resolve the origin allowlist from env + CLI, or explain what is missing.
 ///
@@ -206,6 +205,7 @@ fn select_backend_type(
     env_data_dir: Option<&str>,
     cli_backend: Option<&str>,
     cli_data_dir: Option<&str>,
+    default_data_dir: &str,
 ) -> Result<BackendType, Box<dyn Error>> {
     // Treat empty strings as unset. `std::env::var().ok()` returns
     // `Some("")` for `INTERNAL_SERVICE_DATA_DIR=""` from `.env`, which
@@ -221,7 +221,7 @@ fn select_backend_type(
 
     match backend_choice {
         Some("filesystem") => {
-            let data_dir = data_dir_choice.unwrap_or("./data").to_string();
+            let data_dir = data_dir_choice.unwrap_or(default_data_dir).to_string();
             citadel_logging::info!(target: "citadel", "Using filesystem backend with data directory: {}", data_dir);
             Ok(BackendType::Filesystem(data_dir))
         }
@@ -237,6 +237,62 @@ fn select_backend_type(
     }
 }
 
+/// Where an agent started before the per-user default kept its account.
+const LEGACY_DATA_DIR: &str = "./data";
+
+/// The data directory used when neither `--data-dir` nor the environment names one.
+///
+/// It was `./data`, relative to wherever the agent happened to be started, so
+/// starting it from another folder silently began a new account -- and that
+/// directory is the account: its keys, with no copy on any server. The default
+/// is now one place per user. An existing `./data` is still used, never moved:
+/// moving the only copy of someone's keys automatically is not a risk to take
+/// for them, and a half-finished move across filesystems loses them.
+fn default_data_dir(
+    legacy_dir_exists: bool,
+    home: Option<PathBuf>,
+) -> Result<String, Box<dyn Error>> {
+    if legacy_dir_exists {
+        citadel_logging::warn!(target: "citadel",
+            "Using the existing {LEGACY_DATA_DIR}, which is relative to the folder the agent was \
+             started from. To keep your account wherever you start it, move that folder to \
+             ~/.citadel-agent (with the agent stopped), or pass --data-dir.");
+        return Ok(LEGACY_DATA_DIR.to_string());
+    }
+    let home = home.ok_or(
+        "no home directory to keep the account in. Pass --data-dir, or set \
+         INTERNAL_SERVICE_DATA_DIR, to the folder that should hold it.",
+    )?;
+    Ok(home.join(".citadel-agent").to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod default_data_dir_tests {
+    use super::*;
+
+    #[test]
+    fn a_fresh_install_keeps_its_account_in_the_home_directory() {
+        let dir = default_data_dir(false, Some(PathBuf::from("/home/tester"))).unwrap();
+        assert_eq!(
+            PathBuf::from(dir),
+            PathBuf::from("/home/tester").join(".citadel-agent")
+        );
+    }
+
+    #[test]
+    fn an_existing_data_folder_keeps_being_used_and_is_not_moved() {
+        assert_eq!(
+            default_data_dir(true, Some(PathBuf::from("/home/tester"))).unwrap(),
+            "./data"
+        );
+    }
+
+    #[test]
+    fn no_home_directory_is_an_error_not_a_silent_cwd() {
+        assert!(default_data_dir(false, None).is_err());
+    }
+}
+
 #[cfg(test)]
 mod backend_select_tests {
     //! Boundary tests for `select_backend_type`. Mirrors the kernel's
@@ -247,15 +303,20 @@ mod backend_select_tests {
     use super::*;
     use citadel_sdk::prelude::BackendType;
 
+    // An explicit stand-in: the real default is computed from the host (home
+    // directory, legacy ./data), which default_data_dir_tests cover.
+    const DEFAULT: &str = "/home/tester/.citadel-agent";
+
     #[test]
     fn defaults_to_in_memory_when_nothing_is_set() {
-        let bt = select_backend_type(None, None, None, None).unwrap();
+        let bt = select_backend_type(None, None, None, None, DEFAULT).unwrap();
         assert!(matches!(bt, BackendType::InMemory));
     }
 
     #[test]
     fn cli_filesystem_uses_cli_data_dir() {
-        let bt = select_backend_type(None, None, Some("filesystem"), Some("/srv/data")).unwrap();
+        let bt = select_backend_type(None, None, Some("filesystem"), Some("/srv/data"), DEFAULT)
+            .unwrap();
         match bt {
             BackendType::Filesystem(d) => assert_eq!(d, "/srv/data"),
             other => panic!("expected Filesystem, got {other:?}"),
@@ -264,17 +325,23 @@ mod backend_select_tests {
 
     #[test]
     fn cli_filesystem_falls_back_to_default_data_dir() {
-        let bt = select_backend_type(None, None, Some("filesystem"), None).unwrap();
+        let bt = select_backend_type(None, None, Some("filesystem"), None, DEFAULT).unwrap();
         match bt {
-            BackendType::Filesystem(d) => assert_eq!(d, "./data"),
+            BackendType::Filesystem(d) => assert_eq!(d, DEFAULT),
             other => panic!("expected Filesystem, got {other:?}"),
         }
     }
 
     #[test]
     fn env_backend_overrides_cli_backend() {
-        let bt =
-            select_backend_type(Some("filesystem"), Some("/data/from-env"), None, None).unwrap();
+        let bt = select_backend_type(
+            Some("filesystem"),
+            Some("/data/from-env"),
+            None,
+            None,
+            DEFAULT,
+        )
+        .unwrap();
         match bt {
             BackendType::Filesystem(d) => assert_eq!(d, "/data/from-env"),
             other => panic!("expected Filesystem, got {other:?}"),
@@ -288,6 +355,7 @@ mod backend_select_tests {
             Some("/mnt/persistent"),
             Some("filesystem"),
             Some("/srv/data"),
+            DEFAULT,
         )
         .unwrap();
         match bt {
@@ -298,7 +366,7 @@ mod backend_select_tests {
 
     #[test]
     fn unknown_backend_string_returns_error() {
-        let err = select_backend_type(None, None, Some("redis"), None).unwrap_err();
+        let err = select_backend_type(None, None, Some("redis"), None, DEFAULT).unwrap_err();
         let msg = format!("{err}");
         assert!(
             msg.contains("Unknown backend type 'redis'"),
@@ -308,8 +376,14 @@ mod backend_select_tests {
 
     #[test]
     fn empty_env_backend_falls_through_to_cli() {
-        let bt =
-            select_backend_type(Some(""), None, Some("filesystem"), Some("/srv/data")).unwrap();
+        let bt = select_backend_type(
+            Some(""),
+            None,
+            Some("filesystem"),
+            Some("/srv/data"),
+            DEFAULT,
+        )
+        .unwrap();
         match bt {
             BackendType::Filesystem(d) => assert_eq!(d, "/srv/data"),
             other => panic!("expected Filesystem, got {other:?}"),
@@ -318,8 +392,14 @@ mod backend_select_tests {
 
     #[test]
     fn empty_env_data_dir_falls_through_to_cli() {
-        let bt =
-            select_backend_type(Some("filesystem"), Some(""), None, Some("/srv/data")).unwrap();
+        let bt = select_backend_type(
+            Some("filesystem"),
+            Some(""),
+            None,
+            Some("/srv/data"),
+            DEFAULT,
+        )
+        .unwrap();
         match bt {
             BackendType::Filesystem(d) => assert_eq!(d, "/srv/data"),
             other => panic!("expected Filesystem, got {other:?}"),
@@ -328,7 +408,8 @@ mod backend_select_tests {
 
     #[test]
     fn explicit_in_memory_ignores_data_dir() {
-        let bt = select_backend_type(None, Some("/should-be-ignored"), None, None).unwrap();
+        let bt =
+            select_backend_type(None, Some("/should-be-ignored"), None, None, DEFAULT).unwrap();
         assert!(matches!(bt, BackendType::InMemory));
     }
 }

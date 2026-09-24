@@ -23,13 +23,3 @@ overflow-checks = true
 opt-level = 3
 lto = true
 codegen-units = 1
-
-# NOT FOR MERGE: the local Citadel-Protocol integration branch feat/cloudflare-tenants (../cp-int),
-# mirrored from the root workspace's patch.
-[patch."https://github.com/Avarok-Cybersecurity/Citadel-Protocol"]
-citadel_sdk = { path = "../../../cp-int/citadel_sdk" }
-citadel_types = { path = "../../../cp-int/citadel_types" }
-citadel_user = { path = "../../../cp-int/citadel_user" }
-citadel_logging = { path = "../../../cp-int/citadel_logging" }
-citadel_crypt = { path = "../../../cp-int/citadel_crypt" }
-citadel_io = { path = "../../../cp-int/citadel_io" }

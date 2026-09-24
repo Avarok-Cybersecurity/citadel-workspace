@@ -9,8 +9,16 @@ Nothing here phones home on its own. The agent connects where you tell it to.
 
 ## Running it
 
+On a Mac, use `Citadel-Agent.dmg` rather than this archive: open it, drag
+Citadel Agent into Applications, and open it. It runs in the menu bar with the
+flags below already set, and starts when you log in. On Windows,
+`Citadel-Agent-x64.msi` does the same; on Debian or Ubuntu,
+`citadel-agent-linux-x64.deb`; on any other Linux, `Citadel-Agent-x86_64.AppImage`
+(run it with `--install-autostart` to have it start when you log in). This
+archive is for terminal use and scripts.
+
 ```bash
-./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net
+./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302
 ```
 
 Then reload Citadel Workspace in your browser.
@@ -28,12 +36,18 @@ Both flags matter:
   above; `http://localhost:5291` if you run the UI locally -- and nothing else.
   The agent refuses to start without it. `INTERNAL_SERVICE_ALLOWED_ORIGINS` in
   the environment does the same and takes precedence.
+- **`--stun-servers` names exactly three STUN servers** the agent asks for its
+  public address, which it needs to connect directly to other members. The agent
+  refuses to start without them; `INTERNAL_SERVICE_STUN_SERVERS` does the same
+  and takes precedence.
 - **`--backend filesystem` persists your account.** The default backend is
   in-memory, which is right for tests and wrong for you: without this flag your
   account and message history are gone the next time the agent restarts. Data
-  is written to `./data` unless `--data-dir` says otherwise -- and `./data` is
-  relative to the folder you start the agent FROM, not to where the binary
-  lives. Start it from a different folder and it finds no account there.
+  is written to `~/.citadel-agent` in your home folder unless `--data-dir` says
+  otherwise, so it is the same account wherever you start the agent from.
+  Agents from before this default used `./data`, relative to the folder they
+  were started from; if that folder exists where you start the agent, it is
+  still used (never moved), and the agent says so in its log.
 
 ## That directory is your account
 
@@ -52,15 +66,15 @@ The consequences are worth knowing before you rely on it:
 - **Keep the directory if you move machines**, and back it up as you would an
   SSH key or a password manager's vault. It is the same kind of secret.
 
-If you run the agent from a temporary folder, start it from a different folder
-than last time, or delete `./data` between sessions, you are creating a new
-account every time. Pass `--data-dir` with an absolute path, e.g.
-`--data-dir ~/.citadel-agent`, and it no longer matters where you start it.
+If you delete `~/.citadel-agent` (or, for an older setup, `./data`), or point
+`--data-dir` somewhere new, you are creating a new account. To move an older
+`./data` to the default, stop the agent and move the folder to
+`~/.citadel-agent`.
 
 ## Windows
 
 ```powershell
-.\citadel-agent.exe --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net
+.\citadel-agent.exe --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302
 ```
 
 ## Checking it is up
@@ -90,6 +104,7 @@ holding both files:
 
 ```bash
 # macOS
+shasum -a 256 -c Citadel-Agent.dmg.sha256
 shasum -a 256 -c citadel-agent-<platform>.tar.gz.sha256
 
 # Linux (shasum is Perl-based and not always installed)

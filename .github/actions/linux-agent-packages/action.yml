@@ -1,0 +1,65 @@
+# The steps of release-agent.yml's linux-packages job: the .deb and the AppImage, from the
+# linux-x64 binary the build job already smoke-tested, smoke-tested themselves and checksummed
+# in dist/. The job uploads them.
+name: Linux agent packages
+description: Packages the smoke-tested linux-x64 agent as a .deb and an AppImage, and proves both start.
+inputs:
+  version:
+    description: The version the packages are built as (the version job's output).
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: citadel-agent-linux-x64.tar.gz
+        path: dl
+    - name: Unpack the smoke-tested agent
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd dl
+        sha256sum -c citadel-agent-linux-x64.tar.gz.sha256
+        # The archive stores its entries as ./<name> (tar -C <staging> .), so the member is ./citadel-agent.
+        tar -xzf citadel-agent-linux-x64.tar.gz ./citadel-agent
+    # Pinned by checksum. appimagetool would otherwise fetch a runtime of its own choosing and
+    # put it at the front of every AppImage.
+    - name: Fetch the pinned AppImage tools
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd "$RUNNER_TEMP"
+        curl -fsSL --retry 3 --max-time 120 -o appimagetool \
+          https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+        curl -fsSL --retry 3 --max-time 120 -o runtime-x86_64 \
+          https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
+        sha256sum -c - <<'EOF'
+        ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool
+        2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d  runtime-x86_64
+        EOF
+        chmod +x appimagetool
+    - name: Package
+      shell: bash
+      env:
+        EXPECTED_VERSION: ${{ inputs.version }}
+        APPIMAGETOOL: ${{ runner.temp }}/appimagetool
+        APPIMAGE_RUNTIME: ${{ runner.temp }}/runtime-x86_64
+        # appimagetool is itself an AppImage, and the runner has no FUSE to mount it with.
+        APPIMAGE_EXTRACT_AND_RUN: 1
+      run: ./scripts/package-linux-agent.sh dl/citadel-agent "$EXPECTED_VERSION" dist
+    - name: Smoke-test the .deb and the AppImage as a desktop starts them
+      shell: bash
+      env:
+        EXPECTED_VERSION: ${{ inputs.version }}
+      run: ./scripts/smoke-linux-packages.sh "dist/citadel-agent_${EXPECTED_VERSION}_amd64.deb" dist/Citadel-Agent-x86_64.AppImage
+    - name: Stable names and checksums
+      shell: bash
+      env:
+        EXPECTED_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        cd dist
+        # The name the UI links; the Debian name changes every release.
+        cp "citadel-agent_${EXPECTED_VERSION}_amd64.deb" citadel-agent-linux-x64.deb
+        for f in *.deb *.AppImage; do sha256sum "$f" > "$f.sha256"; done
+        ls -la

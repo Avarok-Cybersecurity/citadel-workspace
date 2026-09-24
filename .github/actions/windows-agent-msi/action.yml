@@ -1,0 +1,112 @@
+# The steps of release-agent.yml's windows-msi job: Citadel-Agent-x64.msi, from the windows-x64
+# binary the build job already smoke-tested, installed, run, uninstalled and checksummed. The job
+# uploads it.
+name: Windows agent MSI
+description: Builds the Windows installer around the smoke-tested agent, proves it, and checksums it.
+inputs:
+  version:
+    description: The version the installer is built as (the version job's output).
+    required: true
+  signing:
+    description: "`enabled` signs the exe and the MSI with Azure Trusted Signing; `disabled` ships both unsigned."
+    required: true
+  azure-tenant-id:
+    description: AZURE_TENANT_ID; read only when signing is enabled.
+    required: true
+  azure-client-id:
+    description: AZURE_CLIENT_ID; read only when signing is enabled.
+    required: true
+  azure-client-secret:
+    description: AZURE_CLIENT_SECRET; read only when signing is enabled.
+    required: true
+  azure-trusted-signing-endpoint:
+    description: AZURE_TRUSTED_SIGNING_ENDPOINT; read only when signing is enabled.
+    required: true
+  azure-trusted-signing-account:
+    description: AZURE_TRUSTED_SIGNING_ACCOUNT; read only when signing is enabled.
+    required: true
+  azure-trusted-signing-profile:
+    description: AZURE_TRUSTED_SIGNING_PROFILE; read only when signing is enabled.
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: citadel-agent-windows-x64.zip
+        path: dl
+    - name: Unpack the smoke-tested agent
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd dl
+        sha256sum -c citadel-agent-windows-x64.zip.sha256
+        7z x -y -oagent citadel-agent-windows-x64.zip >/dev/null
+        test -f agent/citadel-agent.exe
+    # Pinned: the installer's tables are this tool's output.
+    - name: Install WiX
+      shell: pwsh
+      run: |
+        dotnet tool install --global wix --version 5.0.2
+        "$env:USERPROFILE\.dotnet\tools" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+    # ---------------------------------------------------------------------------------------
+    # SIGNING: DISABLED. The MSI and the exe inside it ship UNSIGNED for now, so SmartScreen
+    # warns on first run. To enable, create an Azure Trusted Signing account and certificate
+    # profile, set these repository secrets, and set `signing` in release-agent.yml to `enabled`:
+    #   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET,
+    #   AZURE_TRUSTED_SIGNING_ENDPOINT, AZURE_TRUSTED_SIGNING_ACCOUNT, AZURE_TRUSTED_SIGNING_PROFILE
+    # The exe is signed BEFORE the MSI is built (the MSI embeds it), the MSI after.
+    # ---------------------------------------------------------------------------------------
+    - name: Sign the agent exe (DISABLED -- see above)
+      if: inputs.signing == 'enabled'
+      uses: azure/trusted-signing-action@v0.5.1
+      with:
+        azure-tenant-id: ${{ inputs.azure-tenant-id }}
+        azure-client-id: ${{ inputs.azure-client-id }}
+        azure-client-secret: ${{ inputs.azure-client-secret }}
+        endpoint: ${{ inputs.azure-trusted-signing-endpoint }}
+        trusted-signing-account-name: ${{ inputs.azure-trusted-signing-account }}
+        certificate-profile-name: ${{ inputs.azure-trusted-signing-profile }}
+        files-folder: dl/agent
+        files-folder-filter: exe
+        file-digest: SHA256
+        timestamp-rfc3161: http://timestamp.acs.microsoft.com
+        timestamp-digest: SHA256
+    - name: Build the MSI
+      shell: bash
+      env:
+        EXPECTED_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        # The flags the Mac app and the Linux launcher use, from their one source.
+        s() { python3 scripts/lib/agent-settings.py apps/macos-agent/Info.plist get "$1"; }
+        wix build packaging/windows/citadel-agent.wxs -arch x64 \
+          -d Version="$EXPECTED_VERSION" \
+          -d AgentExe="$(cygpath -w "$PWD/dl/agent/citadel-agent.exe")" \
+          -d Icon="$(cygpath -w "$PWD/assets/brand/favicon.ico")" \
+          -d Bind="$(s CitadelAgentBind)" -d Origin="$(s CitadelWorkspaceOrigin)" \
+          -d Stun="$(s CitadelAgentStunServers)" -d DataDirName="$(s CitadelAgentDataDirectoryName)" \
+          -o Citadel-Agent-x64.msi
+    - name: Sign the MSI (DISABLED -- see above)
+      if: inputs.signing == 'enabled'
+      uses: azure/trusted-signing-action@v0.5.1
+      with:
+        azure-tenant-id: ${{ inputs.azure-tenant-id }}
+        azure-client-id: ${{ inputs.azure-client-id }}
+        azure-client-secret: ${{ inputs.azure-client-secret }}
+        endpoint: ${{ inputs.azure-trusted-signing-endpoint }}
+        trusted-signing-account-name: ${{ inputs.azure-trusted-signing-account }}
+        certificate-profile-name: ${{ inputs.azure-trusted-signing-profile }}
+        files-folder: ${{ github.workspace }}
+        files-folder-filter: msi
+        file-digest: SHA256
+        timestamp-rfc3161: http://timestamp.acs.microsoft.com
+        timestamp-digest: SHA256
+    - name: Smoke-test the MSI (install, run, uninstall)
+      shell: pwsh
+      env:
+        EXPECTED_VERSION: ${{ inputs.version }}
+      run: ./scripts/smoke-windows-msi.ps1 Citadel-Agent-x64.msi
+    - name: Checksum
+      shell: bash
+      run: sha256sum Citadel-Agent-x64.msi > Citadel-Agent-x64.msi.sha256

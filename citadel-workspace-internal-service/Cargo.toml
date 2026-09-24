@@ -1,7 +1,8 @@
 [package]
 name = "citadel-workspace-internal-service"
-version = "0.1.0"
+version = "0.7.0"
 edition = "2021"
+license.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -21,6 +22,7 @@ path = "src/main.rs"
 
 [dependencies]
 structopt = { workspace = true }
+dirs2 = "3"
 tokio = { workspace = true, features = ["macros", "rt"] }
 citadel-internal-service = { path = "../citadel-internal-service/citadel-internal-service", features = ["websockets"] }
 citadel_sdk = { workspace = true, features = ["sql"]}

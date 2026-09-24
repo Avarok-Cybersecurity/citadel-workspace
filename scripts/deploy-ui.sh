@@ -27,16 +27,26 @@
 set -euo pipefail
 
 TAG="${1:-}"
-UI_PORT="${UI_PORT:-8099}"
+UI_PORT="${UI_PORT:-}"
 LOOPBACK_AGENT_ORIGIN="${LOOPBACK_AGENT_ORIGIN:-}"
 DEFAULT_WORKSPACE_SERVER="${DEFAULT_WORKSPACE_SERVER:-}"
 IMAGE="ghcr.io/avarok-cybersecurity/citadel-workspace-ui"
 NAME="${UI_CONTAINER_NAME:-citadel-ui}"
 
 if [ -z "$TAG" ]; then
-  echo "usage: LOOPBACK_AGENT_ORIGIN=wss://local.example.com:12345 $0 <image-tag>" >&2
+  echo "usage: UI_PORT=<port> LOOPBACK_AGENT_ORIGIN=wss://local.example.com:12345 $0 <image-tag>" >&2
   echo "       e.g. $0 sha-81435e19c0be" >&2
   exit 2
+fi
+
+# No default either. This defaulted to 8099 -- avarok2's own value -- so on any
+# other host the UI came up on a port nothing proxies to: a tenant from
+# provision-tenant.sh has its vhost pointing at its own block (base+2), and the
+# result was a 502 on every request with a healthy container behind it.
+if ! printf '%s' "$UI_PORT" | grep -Eq '^[0-9]{1,5}$' || [ "$UI_PORT" -lt 1 ] || [ "$UI_PORT" -gt 65535 ]; then
+  echo "ERROR: UI_PORT must be the port your ingress proxies to (1-65535); got '${UI_PORT}'." >&2
+  echo "  For a tenant from provision-tenant.sh it is UI_PORT in the tenant's .env." >&2
+  exit 1
 fi
 
 # No default. An empty origin ships a page that loads, looks correct, and can

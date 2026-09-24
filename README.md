@@ -203,3 +203,10 @@ matters if anything else is working in the same tree.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — protocol layers, P2P message flow, multi-tab coordination
 - [docs/](docs/README.md) — deployment, testing, WASM build and sync, roadmap
 - [CLAUDE.md](CLAUDE.md) — conventions, commit order across submodules, and the rules agents follow
+
+## License
+
+Citadel Workspace is licensed under the GNU Affero General Public License v3.0
+or later (AGPL-3.0-or-later). See [LICENSE](LICENSE).
+
+The Citadel Protocol and the Citadel agent are licensed separately.

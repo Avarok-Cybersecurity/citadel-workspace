@@ -34,7 +34,7 @@
  * check is textual: the contiguous attribute block directly above the field must
  * carry a `#[debug(with = …)]`.
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -44,7 +44,6 @@ const TYPES = join(
   'citadel-internal-service',
   'citadel-internal-service-types',
   'src',
-  'lib.rs',
 );
 
 if (!existsSync(TYPES)) {
@@ -70,7 +69,11 @@ const BYTE_FIELD = /^\s*(?:pub\s+)?([A-Za-z_]\w*)\s*:\s*(Vec<u8>|HashMap<String,
 /** The redaction. Any `with =`, because choosing which one is a judgement. */
 const REDACTED = /#\[debug\(with\s*=\s*\w+\)\]/;
 
-const lines = readFileSync(TYPES, 'utf8').split('\n');
+// Every module, not `lib.rs`: a byte field declared in `turn.rs` or any later
+// module is logged by the same `{:?}` and was invisible to a lib.rs-only scan.
+const FILES = readdirSync(TYPES, { recursive: true })
+  .filter((f) => f.endsWith('.rs'))
+  .map((f) => join(TYPES, f));
 const bare = [];
 let fieldsSeen = 0;
 
@@ -88,6 +91,8 @@ function usesBytesFmt(all, i) {
 
 const wrongFormatter = [];
 
+for (const file of FILES) {
+const lines = readFileSync(file, 'utf8').split('\n');
 lines.forEach((line, i) => {
   const m = BYTE_FIELD.exec(line);
   if (!m) return;
@@ -104,11 +109,12 @@ lines.forEach((line, i) => {
     if (!above.startsWith('#[')) break; // end of this field's attributes
     if (REDACTED.test(above)) { redacted = true; break; }
   }
-  if (!redacted) bare.push(`${relative(ROOT, TYPES)}:${i + 1}: \`${m[1]}: ${m[2]}\` prints itself under {:?}`);
+  if (!redacted) bare.push(`${relative(ROOT, file)}:${i + 1}: \`${m[1]}: ${m[2]}\` prints itself under {:?}`);
   else if (m[1] === 'message' && !wrongFormatter.includes(i) && usesBytesFmt(lines, i)) {
-    wrongFormatter.push(`${relative(ROOT, TYPES)}:${i + 1}: \`message\` uses bytes_debug_fmt, which prints its opening word`);
+    wrongFormatter.push(`${relative(ROOT, file)}:${i + 1}: \`message\` uses bytes_debug_fmt, which prints its opening word`);
   }
 });
+}
 
 // Vacuity floor: this crate has a dozen byte fields. Finding none means the type
 // spellings changed and the gate is reporting a clean bill over nothing.

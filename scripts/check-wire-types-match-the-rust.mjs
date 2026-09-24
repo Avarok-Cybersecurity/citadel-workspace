@@ -30,9 +30,9 @@ import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const RUST = join(
-  ROOT, 'citadel-internal-service', 'citadel-internal-service-types', 'src', 'lib.rs',
-);
+// The whole `src/`, not `lib.rs`: the TURN types live in `turn.rs`, and a
+// lib.rs-only scan reported their generated files as orphans.
+const RUST = join(ROOT, 'citadel-internal-service', 'citadel-internal-service-types', 'src');
 const TYPES = join(ROOT, 'citadel-internal-service', 'typescript-client', 'src', 'types');
 
 /**
@@ -91,7 +91,12 @@ if (!existsSync(RUST) || !existsSync(TYPES)) {
   process.exit(1);
 }
 
-const exported = exportedTypes(readFileSync(RUST, 'utf8'));
+const exported = exportedTypes(
+  readdirSync(RUST, { recursive: true })
+    .filter((f) => f.endsWith('.rs'))
+    .map((f) => readFileSync(join(RUST, f), 'utf8'))
+    .join('\n'),
+);
 const generated = new Set(
   readdirSync(TYPES)
     .filter((f) => f.endsWith('.ts') && f !== 'index.ts')
