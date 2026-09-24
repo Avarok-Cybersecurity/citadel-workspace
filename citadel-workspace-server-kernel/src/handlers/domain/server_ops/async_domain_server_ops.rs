@@ -1165,13 +1165,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
     async fn update_user_profile(
         &self,
         user_id: &str,
-        name: Option<String>,
-        avatar_data: Option<String>,
+        update: crate::kernel::profile_update::ProfileUpdate,
     ) -> Result<User, NetworkError> {
-        crate::kernel::profile_limits::check_profile_update(
-            name.as_deref(),
-            avatar_data.as_deref(),
-        )?;
+        crate::kernel::profile_limits::check_profile_update(&update)?;
         // Get the user
         // The user record is read, modified and written back across awaits, so
         // it needs the same lock every other user writer takes. Two updates
@@ -1185,17 +1181,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             None => return Err(NetworkError::msg("User not found")),
         };
 
-        // Update name if provided
-        if let Some(new_name) = name {
-            user.name = new_name;
-        }
-
-        // Update avatar if provided (store in metadata)
-        if let Some(avatar) = avatar_data {
-            use citadel_workspace_types::structs::MetadataValue;
-            user.metadata
-                .insert("avatar".to_string(), MetadataValue::String(avatar));
-        }
+        crate::kernel::profile_update::apply_profile_update(&mut user, update);
 
         // Save the updated user
         self.backend_tx_manager

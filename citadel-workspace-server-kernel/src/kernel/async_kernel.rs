@@ -1545,6 +1545,28 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                         }
                     };
 
+                    // The full name the account registered with, kept by the SDK
+                    // on the server's account record. A failed read costs only the
+                    // display name (the username stands in), so it is logged and
+                    // the connection proceeds.
+                    let registered_full_name = match account_manager
+                        .get_full_name_by_cid(connect_success.session_cid)
+                        .await
+                    {
+                        Ok(name) => name,
+                        Err(e) => {
+                            warn!(target: "citadel", "[ASYNC_KERNEL] Could not read the registered full name of {}: {:?}", user_id, e);
+                            None
+                        }
+                    };
+                    // Before the enrolment block below, which takes the same lock.
+                    crate::kernel::display_name::repair_placeholder_name(
+                        &this.domain_operations.backend_tx_manager,
+                        &user_id,
+                        registered_full_name.as_deref(),
+                    )
+                    .await?;
+
                     // Add user to workspace domain if they aren't already a member
                     if !workspace.members().contains(&user_id) {
                         info!(target: "citadel", "[ASYNC_KERNEL] Adding user {} to workspace domain", user_id);
@@ -1602,7 +1624,10 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             // Create a basic user with Member role
                             let user = User::new(
                                 user_id.clone(),
-                                user_id.clone(), // Use user_id as display name initially
+                                crate::kernel::display_name::display_name_for(
+                                    &user_id,
+                                    registered_full_name.as_deref(),
+                                ),
                                 UserRole::Member,
                             );
                             this.domain_operations
