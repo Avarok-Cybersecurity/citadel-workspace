@@ -1,0 +1,11 @@
+pkg/
+.dev.vars
+.wrangler/
+node_modules/
+.wrangler-proof/
+.wrangler-proof.log
+.wrangler-proof.migrate.log
+ui-dist/
+.wrangler-prod-proof/
+.wrangler-prod-proof*.log
+.deploy-dry-run/

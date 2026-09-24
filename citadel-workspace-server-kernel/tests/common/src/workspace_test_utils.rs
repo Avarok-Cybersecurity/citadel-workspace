@@ -1,5 +1,6 @@
 use citadel_sdk::prelude::MonoRatchet;
 use citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorkspaceServerKernel;
+use citadel_workspace_server_kernel::kernel::ice_servers::IceServerSourceHandle;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::{Domain, User, UserRole};
 use std::collections::HashMap;
@@ -21,8 +22,16 @@ pub const TEST_ADMIN_PASSWORD: &str = "admin-password";
 ///
 /// Returns the kernel instance
 pub async fn create_test_kernel() -> Arc<AsyncWorkspaceServerKernel<MonoRatchet>> {
+    create_test_kernel_with_ice_servers(None).await
+}
+
+/// `create_test_kernel`, built with `ice_servers` as its relay-credential source.
+pub async fn create_test_kernel_with_ice_servers(
+    ice_servers: IceServerSourceHandle,
+) -> Arc<AsyncWorkspaceServerKernel<MonoRatchet>> {
     // Create kernel without node_remote
-    let kernel = AsyncWorkspaceServerKernel::<MonoRatchet>::new(None);
+    let mut kernel = AsyncWorkspaceServerKernel::<MonoRatchet>::new(None);
+    kernel.set_ice_server_source(ice_servers);
 
     // Initialize the backend without node_remote for testing
     // The backend will use a default in-memory storage

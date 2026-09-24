@@ -739,8 +739,8 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 sender_name,
                 message_type: message_type.clone(),
                 content: content.clone(),
-                timestamp: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
+                timestamp: crate::platform::SystemTime::now()
+                    .duration_since(crate::platform::UNIX_EPOCH)
                     .expect("system clock before unix epoch")
                     .as_millis() as u64,
                 reply_to: reply_to.clone(),
@@ -814,8 +814,8 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                         ));
                     }
 
-                    let edited_at = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
+                    let edited_at = crate::platform::SystemTime::now()
+                        .duration_since(crate::platform::UNIX_EPOCH)
                         .expect("system clock before unix epoch")
                         .as_millis() as u64;
 
@@ -1015,6 +1015,8 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             })
         }
 
+        WorkspaceProtocolRequest::GetIceServers => Ok(kernel.ice_servers_for(actor_user_id).await),
+
         // ========== Tree Node Operations (Generalized Hierarchy) ==========
         // These handlers support the generalized workspace tree structure
         // where any node can have child nodes of any type
@@ -1078,7 +1080,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             is_default,
         } => {
             use crate::handlers::domain::node_ops::AsyncNodeOperations;
-            use std::time::{SystemTime, UNIX_EPOCH};
+            use crate::platform::{SystemTime, UNIX_EPOCH};
             match kernel
                 .domain_ops()
                 .update_node(

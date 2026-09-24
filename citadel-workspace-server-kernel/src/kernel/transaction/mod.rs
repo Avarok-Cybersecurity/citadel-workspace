@@ -318,7 +318,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             if attempt > 0 {
                 let delay = std::time::Duration::from_millis(100 * (1 << (attempt - 1)));
                 citadel_logging::warn!(target: "citadel", "Retrying backend_save for key '{}' (attempt {}/3) after {:?}", key, attempt + 1, delay);
-                tokio::time::sleep(delay).await;
+                crate::platform::sleep(delay).await;
             }
 
             match self.try_backend_save(key, &data).await {

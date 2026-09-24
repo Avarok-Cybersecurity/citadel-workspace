@@ -1,0 +1,25 @@
+# The tenant worker's two wasm crates, built by wasm-pack and never by the parent workspace:
+# `server-wasm` is the workspace server a Durable Object hosts, `proof-client` is the Citadel
+# client the end-to-end proof dials it with. A workspace of their own so a native
+# `cargo build --workspace` at the repository root never tries to link a wasm-bindgen cdylib.
+[workspace]
+members = ["server-wasm", "proof-client", "console-log"]
+resolver = "3"
+
+[workspace.dependencies]
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
+citadel-workspace-server-kernel = { path = "../../citadel-workspace-server-kernel" }
+citadel-workspace-types = { path = "../../citadel-workspace-types" }
+wasm-bindgen = "0.2.108"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["WebSocket", "console"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["std", "registry", "fmt", "env-filter", "tracing-log"] }
+console_error_panic_hook = "0.1"
+serde_json = "1"
+
+[profile.release]
+overflow-checks = true
+opt-level = 3
+lto = true
+codegen-units = 1

@@ -1,0 +1,20 @@
+{
+  "name": "citadel-tenant-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.22.0",
+    "@vitest/runner": "4.1.0",
+    "@vitest/snapshot": "4.1.0",
+    "vitest": "4.1.0",
+    "wrangler": "4.136.3"
+  },
+  "overrides": {
+    "miniflare": "5.20260921.0-alpha",
+    "wrangler": "4.136.3"
+  },
+  "//": "overrides: vitest-pool-workers 0.22 pins a workerd older than wrangler.toml's compatibility_date; the tests run on the same workerd wrangler dev does."
+}

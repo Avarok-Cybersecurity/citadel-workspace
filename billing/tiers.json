@@ -9,7 +9,9 @@
       "limits": {
         "workspaces": 1,
         "members": 5,
-        "storage_gb_total": 1
+        "storage_gb_total": 1,
+        "connections": 15,
+        "relay_gb_total": 2
       },
       "prices": []
     },
@@ -19,7 +21,10 @@
       "limits": {
         "workspaces": 1,
         "members": 100,
-        "storage_gb_per_seat": 10
+        "storage_gb_per_seat": 10,
+        "connections": 300,
+        "connections_per_seat": 3,
+        "relay_gb_per_seat": 20
       },
       "prices": [
         {
@@ -39,7 +44,10 @@
         "workspaces": 1,
         "members": 1000,
         "storage_gb_per_seat": 25,
-        "priority_support": true
+        "priority_support": true,
+        "connections": 500,
+        "connections_per_seat": 3,
+        "relay_gb_per_seat": 50
       },
       "prices": [
         {
@@ -73,6 +81,37 @@
         {
           "interval": "year",
           "unit_amount": 2000
+        }
+      ]
+    }
+  ],
+  "metering": {
+    "$comment": "Approved 2026-09-23 (the owner asked for cost passed through plus a margin; docs/plans/tenant-quotas.md). Until the SDK RelayGate exists the metered quantity is every byte a tenant sends INTO its object (bytes_in): each relayed byte arrives once, and control traffic is small beside it. gb_bytes: a billed GB is 10^9 bytes. max_frame_bytes: one WebSocket message larger than this closes the socket (1009), to protect the 128 MB isolate. flush_seconds: how often an object with open sockets writes its counters to its own storage.",
+    "status": "approved",
+    "metered_quantity": "bytes_in",
+    "gb_bytes": 1000000000,
+    "max_frame_bytes": 4194304,
+    "flush_seconds": 60
+  },
+  "metered": [
+    {
+      "$comment": "Approved 2026-09-23. Relayed data beyond a tier's included relay_gb is billed per whole GB through a Stripe Billing Meter at 10 cents/GB: 2x Cloudflare Realtime TURN's list price ($0.05/GB) and at least 16x the tenant object's own relay cost (<= $0.006/GB). One price whichever path carried it, since customers do not choose the path. The margin covers Stripe's fees, the account-wide free TURN allowance running out, and support.",
+      "id": "relay-overage",
+      "name": "Citadel Workspace Relay Overage",
+      "unit": "GB",
+      "status": "approved",
+      "available_on": [
+        "team",
+        "business"
+      ],
+      "meter": {
+        "event_name": "citadel_relay_gb",
+        "display_name": "Citadel relay GB beyond the plan"
+      },
+      "prices": [
+        {
+          "interval": "month",
+          "unit_amount": 10
         }
       ]
     }

@@ -98,6 +98,8 @@ const UNSCOPED = new Map([
   ['GroupMessages', 'a response to a history query, already authorized'],
   ['GroupMessage', 'a response to a single-message query, already authorized'],
   ['Nodes', 'a response to a list query, filtered by the handler'],
+  ['IceServers', 'only ever the answer to the requesting member (never fanned out); it carries a TURN credential'],
+  ['IceServersUnavailable', 'the answer to the requesting member that it gets no relay, and why'],
   ['TreeStructure', 'a response to a tree query, filtered by the handler'],
   ['TreeSchema', 'schema, not content'],
   ['NodeTypes', 'schema, not content'],

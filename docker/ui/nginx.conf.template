@@ -98,8 +98,14 @@ map $http_host $ws_host_allowed {
 # the page's <meta name="citadel-loopback-agent"> below, so what the app dials and what the
 # policy permits cannot disagree. Empty (the default) leaves `connect-src 'self'` alone.
 # 16-validate-runtime-vars.sh admits only a bare wss://host:port here.
+#
+# https://challenges.cloudflare.com, in script-src and frame-src, is Cloudflare Turnstile: the
+# "Create new workspace" flow loads its script and renders its challenge in an iframe. The flow
+# is switched on only by <meta name="citadel-control-plane">, which this image leaves empty, so
+# here the origin is permitted and never used; it is in the policy so the hosted deployment
+# (deploy/tenant-worker/control/ui.mjs) and this one stay a single policy.
 map $host $csp {
-    default "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ${LOOPBACK_AGENT_ORIGIN}; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+    default "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ${LOOPBACK_AGENT_ORIGIN}; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
 }
 
 server {

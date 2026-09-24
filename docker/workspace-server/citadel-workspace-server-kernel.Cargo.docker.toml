@@ -17,8 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 structopt = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt"] }
-citadel_sdk = { workspace = true, features = ["sql"] }
+citadel_io = { workspace = true }
 citadel_types = { workspace = true }
 citadel-workspace-types = { workspace = true }
 citadel_logging = { workspace = true }
@@ -56,3 +55,9 @@ sha2 = "0.10"
 subtle = "2.6"
 
 # NOTE: dev-dependencies removed for Docker build to avoid localhost-testing feature
+
+# Mirrors the crate's native table: the image is the native server. tokio's `signal`
+# feature is the one the crate needs for shutdown; this copy used to omit it.
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "signal"] }
+citadel_sdk = { workspace = true, features = ["sql"] }

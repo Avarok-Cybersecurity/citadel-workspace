@@ -24,7 +24,7 @@ pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 /// Reject a path segment supplied by an authenticated client before it
 /// is joined onto the content base directory. Without this check, a
 /// node/office/room name like `"../../etc/evil"` would let
-/// `tokio::fs::write` escape the configured content tree and clobber
+/// `crate::platform::fs::write` escape the configured content tree and clobber
 /// arbitrary files as the server process user.
 ///
 /// Rules: a content segment is rejected if it
@@ -41,7 +41,7 @@ pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 /// that the UI should already prevent from containing these
 /// characters — this is a belt-and-suspenders check at the persistence
 /// boundary so a compromised or misbehaving client can't reach a
-/// `tokio::fs::write` outside the content directory.
+/// `crate::platform::fs::write` outside the content directory.
 pub(crate) fn validate_content_segment(segment: &str) -> Result<(), NetworkError> {
     if segment.is_empty() {
         return Err(NetworkError::msg("Content segment cannot be empty"));
@@ -170,6 +170,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     /// reachable deployment the promotion handed the workspace to whoever
     /// registered first.
     first_connect_admin: bool,
+    /// What mints relay credentials for `GetIceServers`: the host's, or none.
+    ice_servers: crate::kernel::ice_servers::IceServerSourceHandle,
 }
 
 /// Removes a CID's account attribution when its connection task ends.
@@ -203,6 +205,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             broadcast_tx: self.broadcast_tx.clone(),
             file_transfer_config: self.file_transfer_config.clone(),
             first_connect_admin: self.first_connect_admin,
+            ice_servers: self.ice_servers.clone(),
             // RateLimiter::Clone shares the same Arc<Mutex<HashMap>>,
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
@@ -244,7 +247,41 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             rate_limiter: RateLimiter::new(DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL),
             connected_users: Arc::new(RwLock::new(HashMap::new())),
             first_connect_admin: false,
+            ice_servers: None,
         }
+    }
+
+    /// Set by the server bootstrap: the host's relay-credential minter, or none, in which case
+    /// `GetIceServers` answers that no relay is available.
+    pub fn set_ice_server_source(
+        &mut self,
+        source: crate::kernel::ice_servers::IceServerSourceHandle,
+    ) {
+        self.ice_servers = source;
+    }
+
+    /// `GetIceServers` for `user_id`: an enrolled member's servers, from the host's source.
+    pub async fn ice_servers_for(&self, user_id: &str) -> WorkspaceProtocolResponse {
+        use crate::handlers::domain::async_ops::AsyncPermissionOperations;
+        use crate::kernel::ice_servers::{answer, may_have_ice_servers};
+        let user = match self.get_user(user_id).await {
+            Ok(user) => user,
+            Err(e) => return WorkspaceProtocolResponse::Error(e.to_string()),
+        };
+        let enrolled = match self
+            .domain_operations
+            .is_member_of_domain(user_id, crate::WORKSPACE_ROOT_ID)
+            .await
+        {
+            Ok(enrolled) => enrolled,
+            Err(e) => return WorkspaceProtocolResponse::Error(e.to_string()),
+        };
+        answer(
+            &self.ice_servers,
+            may_have_ice_servers(user.as_ref(), enrolled),
+            user_id,
+        )
+        .await
     }
 
     /// Set by the server bootstrap from configuration. Off unless asked for.
@@ -744,12 +781,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         info!(target: "citadel", "[ASYNC_KERNEL] Persisting node content to {:?}", content_path);
 
         if let Some(parent) = content_path.parent() {
-            tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                NetworkError::msg(format!("Failed to create directory {:?}: {}", parent, e))
-            })?;
+            crate::platform::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| {
+                    NetworkError::msg(format!("Failed to create directory {:?}: {}", parent, e))
+                })?;
         }
 
-        tokio::fs::write(&content_path, mdx_content)
+        crate::platform::fs::write(&content_path, mdx_content)
             .await
             .map_err(|e| {
                 NetworkError::msg(format!(
@@ -774,12 +813,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
         // Ensure parent directory exists
         if let Some(parent) = content_path.parent() {
-            tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                NetworkError::msg(format!("Failed to create directory {:?}: {}", parent, e))
-            })?;
+            crate::platform::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| {
+                    NetworkError::msg(format!("Failed to create directory {:?}: {}", parent, e))
+                })?;
         }
 
-        tokio::fs::write(&content_path, mdx_content)
+        crate::platform::fs::write(&content_path, mdx_content)
             .await
             .map_err(|e| {
                 NetworkError::msg(format!(
@@ -807,7 +848,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         let office_content_path = base_path.join(office_name).join("CONTENT.md");
         info!(target: "citadel", "[ASYNC_KERNEL] Persisting office content to {:?}", office_content_path);
 
-        tokio::fs::write(&office_content_path, mdx_content)
+        crate::platform::fs::write(&office_content_path, mdx_content)
             .await
             .map_err(|e| {
                 NetworkError::msg(format!(
@@ -841,7 +882,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .join("CONTENT.md");
         info!(target: "citadel", "[ASYNC_KERNEL] Persisting room content to {:?}", room_content_path);
 
-        tokio::fs::write(&room_content_path, mdx_content)
+        crate::platform::fs::write(&room_content_path, mdx_content)
             .await
             .map_err(|e| {
                 NetworkError::msg(format!(
@@ -1068,8 +1109,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             return Ok(());
         }
 
-        let current_time = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
+        let current_time = crate::platform::SystemTime::now()
+            .duration_since(crate::platform::UNIX_EPOCH)
             .expect("system clock before unix epoch")
             .as_secs();
 
@@ -1437,7 +1478,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
         match event {
             NodeResult::ConnectSuccess(connect_success) => {
                 let this = self.clone();
-                tokio::spawn(async move {
+                crate::platform::spawn(async move {
                     let _cid = connect_success.session_cid;
                     let user_cid = connect_success.channel.get_session_cid();
 
@@ -1711,7 +1752,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                     break;
                                 };
 
-                                if !rate_limiter.try_consume(current_cid, std::time::Instant::now()) {
+                                if !rate_limiter.try_consume(current_cid, crate::platform::Instant::now()) {
                                     warn!(target: "citadel", "[ASYNC_KERNEL] Rate limit exceeded for CID {}", current_cid);
                                     let response = WorkspaceProtocolPayload::Response(Box::new(
                                         WorkspaceProtocolResponse::Error("Rate limit exceeded. Please slow down.".to_string())
@@ -1923,7 +1964,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     return Ok(());
                 }
 
-                tokio::spawn(async move {
+                crate::platform::spawn(async move {
                     use tokio_stream::StreamExt;
 
                     let mut handle = object_transfer_handle.handle;
@@ -1994,7 +2035,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
 
         // Allow brief drain period for in-flight requests
         info!(target: "citadel", "Allowing {DRAIN_SECONDS}s drain period for in-flight requests");
-        tokio::time::sleep(std::time::Duration::from_secs(DRAIN_SECONDS)).await;
+        crate::platform::sleep(std::time::Duration::from_secs(DRAIN_SECONDS)).await;
 
         info!(target: "citadel", "NetKernel stopped");
         Ok(())

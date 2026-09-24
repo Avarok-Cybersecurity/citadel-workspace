@@ -13072,6 +13072,169 @@ re-run uses a fixed-size table.
   `293cd39`, which contains it). With `cancel-in-progress: false`, both run the
   full suite.
 
+## Round 752 — work.avarok.net is live (test mode), and two defects the first real deploy found
+
+**Deployed.** `citadel-tenant` (version `c5596118`) on `work.avarok.net/*` and `*.work.avarok.net/*`.
+Its pieces:
+- DNS: `work` and `*.work` are proxied `AAAA 100::` records. The old `work` CNAME pointed at the dead box.
+- Certificate: the ACM advanced certificate covers `work.avarok.net` and `*.work.avarok.net`, checked by SNI against `x1.work.avarok.net`.
+- D1: `citadel-control`, with migrations 0001 and 0002 applied remotely.
+- Secrets: `TURNSTILE_SECRET`, `STRIPE_SECRET_KEY` (rk_test) and `STRIPE_WEBHOOK_SECRET`. Stripe is in TEST mode only.
+
+Checked live:
+
+| Check | Result |
+|---|---|
+| `/create` carries the control-plane meta tag | yes |
+| The CSP allows Turnstile | yes |
+| A tenant host answers a plain GET | 426 |
+| `/api/slug/{acme,www,a}` | available, reserved, invalid |
+| `POST /api/tenants` with unknown fields | 400 `malformed-request` |
+| Unsigned `POST /api/stripe/webhook` | 400 `signature-header` |
+
+**Defect 1: the billing portal would have opened another product's portal.** The Stripe sandbox is shared, and its default portal configuration belongs to CertifiedCopy. `openPortal` sent no `configuration`, so Stripe used the default and showed Citadel customers the wrong plans.
+- Fix: a Citadel-only configuration, `bpc_1UIbClCgLMkhvcEsvf9lxARd`. It allows switching between the Team and Business prices, changing the seat count, cancelling at period end, and managing payment methods and invoices. The Worker now requires `STRIPE_PORTAL_CONFIGURATION`; while it is unset, the route answers 503.
+- Proof: the test Stripe stub refuses a portal session without that configuration.
+- Control: deleting the `configuration` line turned `webhook.test.mjs › activation` red (52/53). Restored: 53/53.
+- Limit: Stripe's portal cannot update a subscription that has more than one item. A customer with the storage add-on can therefore not change plan in the portal. Open.
+
+**Defect 2: a successful deploy reported failure.** The smoke test ran one second after the routes attached, while the proxied placeholder record still answered 522 (three requests seconds later: 200).
+- Fix: the smoke test retries for up to 60 seconds and fails after that.
+- Control: an unresolvable host is still refused.
+
+**Open:**
+- A real-browser creation behind Turnstile, and the paid 4242 checkout. These need the operator's hand.
+- The claim-code E2E against a live `wss://<slug>.work.avarok.net`.
+- Agent release v0.4.0 predates the wss transport, so it cannot reach tenants. An agent release is needed after Citadel-Protocol #310 merges.
+
+## Round 753 — members get Cloudflare TURN credentials from their tenant
+
+**Deployed.** Worker version `9e7557c1`, from `feat/ice-servers`. The new secrets are `TURN_KEY_ID` and `TURN_KEY_API_TOKEN`. The long-lived token stays in the Worker and never reaches a client.
+
+**How it works:**
+- The request is `WorkspaceProtocolRequest::GetIceServers`, answered by the tenant's Durable Object through the kernel's `IceServerSource`.
+- The host minter (`control/ice.mjs`) calls Cloudflare's `generate-ice-servers`, caches the answer until 80% of its TTL, and allows 30 mints per member per hour.
+- Free tenants lose the relay once their included relay is used.
+- Guests, removed accounts and non-members get `IceServersUnavailable`.
+
+**Proof, live.** `tests/a_hosted_tenant_mints_relay_servers.rs` ran against `wss://bench.work.avarok.net/bench`. A freshly registered member got a `turns:…:443` server carrying a username and a credential, expiring in 3599 s. A second ask returned the same expiry, so it came from the cache and not a second mint. The test prints only whether a credential is present, never its value.
+
+**Open:** per-key TURN egress accounting. Cloudflare's analytics have not yet been shown to split usage per key.
+
+## Round 754 — the agent dials through TURN (agent #72, SDK #311)
+
+- `PeerConnect.turn` and `PeerConnectAccept.turn` carry `{policy: fallback|relay_only, ice_servers, expires_at}`.
+- `PeerConnectSuccess.path` reports `direct`, `turn` or `server_relay`.
+- The TURN client lives in `citadel_wire::udp_traversal::turn_relay` (UDP, TCP and TLS). QUIC runs over the allocation, with the relayed MTU at 1276.
+- No type uses `deny_unknown_fields`, so an older agent ignores `turn`.
+- **Proof:** coturn stands in for Cloudflare in `tests/peer_turn.rs` and `tests/peer_turn_accept.rs`. With `relay_only`, the path reports `turn`.
+- **Proof, live:** `relay_only_through_cloudflare_reports_turn` ran with a credential freshly minted from the production TURN key (10-minute TTL, never printed). Both agents reported `turn` and messages went each way, in 2.79 s.
+- **Control:** the same test with a bogus credential went red with `[ServerRelay, ServerRelay]`, so the passing `turn` was not the test's own assumption. That fallback is by design: `RelayOnly` promises only that the peers never learn each other's addresses, and the server relay keeps that promise.
+- **Open:** the same connection driven from the UI on bench, with the path shown on the peer row.
+
+## Round 755 — v0.6.0: four defects the release dry runs found before a user could
+
+| Defect | Cause | Fix |
+|---|---|---|
+| The Windows build failed in `openssl-sys` | the composite action ran under Git bash, whose perl cannot build OpenSSL | the Windows build step uses `shell: pwsh` |
+| Linux packaging found no binary | the tarball's member is `./citadel-agent` | extract that exact path |
+| The AppImage autostart check wrote to the runner's real home | `XDG_CONFIG_HOME` was unset | point it at the smoke's scratch home |
+| The MSI smoke passed msiexec's exit code through as its own | the script's last command was msiexec | explicit `exit 0` after the assertions |
+
+The uninstall check also plants a sentinel Run-key value belonging to "another app", and asserts that both the key and the sentinel survive uninstall. Final dry run `35925564973`: green on every platform.
+
+## Round 756 — two gates that went red for reasons outside the change
+
+**The Lighthouse gate hung after passing (UI #50).** It printed "All Lighthouse baselines met." at 23:26 and was cancelled at 23:33.
+- Cause: chrome-launcher kills only the instances it returns. When the first `launch()` threw (ECONNREFUSED on the DevTools port, which is retried), that attempt's Chrome stayed up and held node's event loop open.
+- Reproduction: `launch({maxConnectionRetries: 0})` hangs node (exit 124 at a 20 s timeout). With `killAll()` it exits in 0 s.
+- Fix: `killAll()` after each failed attempt and in the `finally` block. No other script launches Chrome.
+
+**The server image could not load its manifest (workspace #142, AGPL).** Members now inherit `license.workspace = true`, but the image builds against `docker/workspace-server/Cargo.docker.toml`, which declared no `[workspace.package]`.
+- The guard for exactly this substitution, `check-docker-workspace-manifest`, understood only inline `{ workspace = true }` dependencies. It now also checks `[package]` fields inherited from `[workspace.package]`.
+- Control: without the section, the check names both members and exits 1, and `cargo metadata` on the Docker layout fails with the CI error. With it, cargo gets past manifest loading.
+
+## Round 757 — v0.6.0 released and verified from outside; the site serves the new UI; two more gates
+
+**v0.6.0 is published and marked Latest** (run `35934689826`).
+- All 18 assets are present.
+- From a clean download: the MSI, `.deb` and AppImage match their `.sha256` files and pass `gh attestation verify`.
+- The DMG is stapled, and `spctl` accepts it as "Notarized Developer ID". The mounted app's binary prints `citadel-agent 0.6.0`.
+- The four `releases/latest/download/<asset>` URLs the UI links to all answer 200.
+
+**Deployed:** Worker version `fb83be76`, with the UI at #50's head (4a4f85d5), and the smoke passed. The live entry's asset list equals the local build, the lazy chunk that names the installers is served, and the manifest carries the `web+citadel` protocol handler.
+
+**Gate: the wire-type checks read `lib.rs` only (#143).** The four TURN types in `turn.rs` read as orphaned generated files. `check-wire-types-match-the-rust` and `check-byte-fields-do-not-print-themselves` now scan every `.rs` file under `src/`.
+- Controls: renaming `TurnPolicy` reports 1 ungenerated and 1 orphaned. A bare `Vec<u8>` added to `turn.rs` is named by file and line. Both were restored and checked with `cmp`.
+
+**Gate: `Landing.tsx` outgrew its exemption (#50, 324 against 301).** The exemption was not raised. Three concerns moved out whole: `LazySettingsModal`, `useLinkedLogin` and `useHasOrphanSessions`.
+- Landing is now 271, and its entry follows it down on the parent's `feat/peer-turn`: the ratchet turns both ways.
+- The landing critical path is 321.8 KB with and without the change: **0.2 KB under the 322 KB budget.** The next feature on that path must first take something off it (for example, deferring app-services initialisation until after login).
+
+## Round 758 — landing critical path: 19 KB of headroom (local, UI branch `perf/landing-headroom`)
+
+**Found.** The landing critical path was 321.8 KB against its 322 KB budget, so the next feature on it would have gone red. Attributing the entry chunk by sourcemap showed four things on the path that are never on screen at landing:
+- the sign-in and registration steps (`Login`, `ServerConnect`, `Join`, `SecuritySettings`/`AdvancedSettings`);
+- `AccountManagementDialog`;
+- `WorkspaceInitializationModal`, which a seeded server never shows;
+- Settings, which #50 had already made lazy.
+
+**Fix.** One helper, `lazyDialog`, fetches a component on its first open and keeps it mounted afterwards, so closing keeps its exit animation. `LazySettingsModal` is now one use of it rather than its own copy. `Landing.tsx` stays at its 271-line entry, because the lazy steps live in `lazy-landing-steps.ts`.
+
+**Result: 321.8 KB → 303.0 KB.**
+- tsc and eslint are clean.
+- 3522 of 3525 unit tests pass. The three failures are in `agent-download.test.ts`, which reads the parent's release workflow; they fail identically without this change, on a parent that predates #141.
+
+**Proof and controls (`lazy-dialog.test.tsx`):**
+- Rendering while closed turns "fetches nothing until first opened" red.
+- Unmounting on close turns "stays mounted after closing" red.
+- Both controls were checked as applied (grep count) and as reverted (`cmp` against the committed helper).
+
+**Unproved:** the integration specs that click Sign in. They use waiting assertions, so they should tolerate the lazy step, but that is shown only when CI runs them. Not pushed: this was outside a push window.
+
+## Round 759 — the live site, driven in a real browser: seven defects, all fixed and redeployed
+
+Set-up: Playwright's Chrome 153 on https://work.avarok.net, against a v0.7.0 agent built from `rel-07` on 127.0.0.1:12345. Test members on bench: alice, bob, carol, dave and erin (`…2309d`). UI #50 merged; the fixes are in UI #52.
+
+| # | Defect, as measured | Fix | Proof |
+|---|---|---|---|
+| 1 | Chrome's loopback permission at its default made the page say "Download Citadel for Mac" to someone whose agent was running | `AgentSetup` reads `loopback-network`, then `local-network-access`, and explains denied or prompt; it reloads once access is granted | Live: the denied notice appeared; after granting, the page reloaded and the WebSocket opened in 2 ms. Controls: 4/7 and 1/7 red |
+| 2 | Joining `bench.work.avarok.net` sent `…:12349`; the agent dialled `104.21.48.73:12349` over TCP; registration timed out | `resolveServerAddress` passes tenant hosts and ws(s) URLs through | Live: Alice, Bob, Carol, Dave and Erin all joined through the UI. Control: 2/3 red |
+| 3 | After a leader-tab reload, follower sessions stayed bound to the dead connection ("Refusing … does not own it"); requests timed out | The leader claims every follower CID on each new connection | Live: "Updated 1 sessions from old TCP connection 06f9a88f… to new 56ee2915…". Controls: 6/8 and 3/8 red |
+| 4 | The leader's claim for a follower session was answered to the follower ("ClaimSession request timed out" on a success) | `sendRequest`'s leader branch registers its own request id | Control red; 201/201 related tests pass |
+| 5 | TURN lookups failed with no trace in production | A broken lookup warns; a policy answer stays quiet | Control red |
+| 6 | The relay answer for a follower session never reached the leader that asked: answer at 222 ms, timeout at 5000 ms, PeerConnect at 5002 ms without `turn` | The leader observes `LEADER_WIRE_EVENT` before routing | Live: the lookup resolves 1 ms after the answer. Control red |
+| 7 | The site's WASM, built from agent 43239d8, had no `PeerConnect.turn`, so serde dropped the relay the UI attached | Rebuilt from agent e6da74a (`sync-wasm-clients.sh`); parent commit e24e667 | Old binary: 0 TURN field names; new: `ice_servers`, `relay_only`, `expires_at`. Live: every PeerConnect frame carries `turn`; the agent logs `[TURN] relay … Some((Fallback, 6))`; the peer row reads "Connected · Direct" |
+
+**Also proven live:**
+- P2P messages both ways (Alice to Bob and back).
+- History survives a reload.
+- Peer discovery, request and accept.
+- `GetIceServers` against bench gives 6 TURN URLs and 3600 s, cached.
+
+**Found, not fixed (open):**
+- A Worker deploy resets every Durable Object WebSocket. All hosted sessions drop, and nothing reconnects them without saved credentials. Every deploy logs everyone out.
+- After a password sign-in, the header shows the username instead of the full name.
+- A stale CID left in the tab registry after a tab switches account makes the leader retry claims for a session that is gone.
+- The deploy gate logs "Uncaught (in promise): entitlements for a tenant that has not been provisioned" from a test path. The gates pass; which test emits it has not been found.
+
+## Round 760 — more of the live site, end to end: files, presence, account links, passkeys
+
+| Feature | Result, live on bench | Change |
+|---|---|---|
+| P2P file transfer (Carol to Erin, P2P-only) | Delivered and marked "Downloaded". SHA-256 `8359bc24e09cd587…`, 200 000 bytes, identical to the original | none needed |
+| Follower-tab presence | Erin's follower tab showed Carol "Offline" while linked. Now "Connected, Direct" on both sides | UI a2ca953f (fork, fix/follower-presence): the leader's state-sync is addressed to the session it is about; a reset no longer invents an empty poll |
+| Account links to hosted workspaces | `?account=erin2309d&server=bench.work.avarok.net` opened sign-in although Erin was signed in. It now switches | UI 7a9903be: `sessionIsOnServer` |
+| Session identity for hosted workspaces | Eight `stored.serverAddress === session.server_address` checks never matched a hosted session. The agent reports `server_address: "wss://bench.work.avarok.net/"` and `server_host: "bench.work.avarok.net"` (read directly from GetSessions) | UI 7a9903be: one helper at every site; 898/898; control 3/11 red |
+| Passkey enrol and sign-in (Chrome virtual authenticator, PRF) | Enrol: "Passkey on this Mac can now unlock carol2309d". Sign out, then "Use passkey or security key": "Login successful", no password typed, and the P2P link to Erin re-established | none needed |
+| Calls | Not exercised in the browser: this Chrome has no fake media devices, and `getUserMedia` waits on a macOS microphone prompt. Unverified | — |
+
+**Found, being fixed (fork, fix/reopen-after-close):** after a follower tab closes, reopening its account from a link reaches `/workspace` and then stalls at "Workspace data is taking longer than expected". The agent refused three `ClaimSession(only_if_orphaned)` requests with "not orphaned", because the session is still bound to the browser's single live connection.
+
+**Harness lessons (the harness, not the product):**
+- WebAuthn requires the focused tab ("The page does not have focus" surfaced as "cancelled").
+- Only one internal virtual authenticator is allowed per environment.
+- The CDP loopback permission resets when tabs close (memory: cdp-loopback-permission-resets).
 ## Round 751 — a backup risk that did not reproduce
 
 ### Live SQLite backups (audit U4): not reproduced, not changed
@@ -13362,3 +13525,69 @@ what the compose file actually declares. The avarok2 runbook is untouched.
   watcher alive.
 - **The Perfect-mode queue race:** real by reading, not reproduced.
 - **Live SQLite backups (U4):** not reproduced, unchanged.
+
+## Round 761 — releases, merges, and the Cloudflare stack onto master
+
+| Item | State |
+|---|---|
+| agent #72 (TURN from PeerConnect/Accept) | merged e6da74a (merge commit; 7b6fe2f reachable) |
+| workspace #143 (agent v0.7.0) | merged 40c0f513; tagged `agent-v0.7.0`; release run 35955444735 |
+| workspace #142 (AGPL-3.0-or-later) | merged 94e291c3 |
+| UI #50 (create workspace, account links, passkeys, one-click setup, TURN UI) | merged 075b1b27 |
+| UI #52 (live-bench fixes) | CI |
+| **#145: the Cloudflare-native stack onto master** | opened; supersedes #140 and #144 |
+
+**Merging master into the Cloudflare branch found two defects the separate branches hid:**
+- **Transient accounts.** #135 made self-hosted servers refuse password-less transient accounts (`production_server_misc_settings`), but only the native builder applied it. The Durable Object builder every hosted tenant runs did not, so hosted tenants, which have open registration, would have accepted them. It is now applied to both builders.
+- **The Docker manifest.** The Cloudflare branch moved the kernel's `citadel_sdk` and `tokio` into a native-only table and added `citadel_io`. The Docker copy of the manifest still had the old tables, so the production server image would not have compiled (`citadel_io` unresolved), and its `tokio` lacked the `signal` feature the crate uses. It is mirrored now, with `citadel_io` in the Docker root. Gate: check-docker-manifest-matches-the-crate.
+
+**Also:**
+- The local Citadel-Protocol `[patch]` is gone. Protocol master `1ff5e831` contains cp-int's work (`git diff` master→cp-int: +27 lines, all older versions of code master has since refined) plus TURN. Both lockfiles pin it.
+- #50's UI tripped two master gates, fixed in #52: a hand-rolled listener fan-out (`agent-optional.ts`, now `notifyEach`), and the string-CID baseline (74 → 73, committed).
+
+**Deployed from the merged branch:** Worker version `6a417271`, UI 7e85d09b. Live check: a fresh member on bench got TURN credentials, cached on the second ask.
+
+**Closed as expected behaviour:** the deploy gate's "Uncaught (in promise): entitlements for a tenant that has not been provisioned" comes from webhook.test.mjs "a failed push to the tenant's object is not recorded either". There the object is made to refuse, and the webhook answers 500 so Stripe retries. workerd logs the rejection in the object's isolate; the caller handles it.
+
+## Round 762 — #145's red jobs and two UI gates, fixed locally (push window closed)
+
+| Item | Cause | Fix (local commit) | Proof |
+|---|---|---|---|
+| Cargo Fmt (kernel) | hosted-tenant tests unformatted | b90dd57 | `cargo fmt --all -- --check` exits 0 |
+| ESLint ×3 (client-ts, citadel-workspaces, integration-tests) | all three run client-ts's test; `SSOT: WORKSPACE_BIGINT_FIELDS` failed because the Cloudflare branch added `expires_at` to the generated types | a95920e | client-ts `npm test`: 13 pass, 0 fail |
+| UI check-success-flags-are-checked | `makeForwardFallback`'s re-route dropped `routeByCid`'s delivered flag | UI 3116d664: read and logged; routeByCid already handles not-delivered, so behaviour is unchanged | gate ok (31 in the baseline) |
+| UI check-explicit-types | 11 untyped declarations in tests added on #52 | UI 3116d664 | gate ok, 1,608 files |
+
+The UI pointer moved to 3116d664 (c6a067d). Every UI `scripts/check-*.mjs` passes, including the browser gates after a Node 22 `vite build`. tsc is clean. 222 affected unit tests pass.
+
+**Caught in my own run:** the first explicit-types run piped the gate through `tail`, so it printed exit 0 while failing, and the cut-off output hid four of the eight files. This is [[pipelines-hide-the-exit-status]] again.
+
+**Open:** none of this is pushed; it waits for a push window. The agent reconnect and the deploy reload banner are in progress on their own branches.
+
+## Round 763 — deploys without disruption: agent reconnect, reload banner, proven end to end locally
+
+| Item | State |
+|---|---|
+| Agent: reconnect a session its server dropped (3fb9db1, branch feat/reconnect-after-server-drop) | 396/396 nextest; 10 policy tests with 6 mutations; 4 proxy-reset integration tests, each red with its defect |
+| UI: deploy banner, `/version.json` watch, drafts kept across reload, reconnect state (branch fix/non-disruptive-deploys, on #52) | 593 files / 3,625 tests; every `check-*.mjs`; tsc |
+| UI: five multi-tab and startup defects (stale claims, pagehide, late-follower snapshot, registered-peer-update owner, reopen toast) | fixed with controls (fork); unit-level only |
+| #51 "TypeScript Type Check" | parent `check-file-length` entry 301 → 271 (branch fix/landing-length-entry) |
+| Browser WASM | rebuilt from agent 3fb9db1; the old one had no `ServerConnectionLost` at all |
+
+**Three defects found by running the pieces together; each branch's own checks were green:**
+1. **The production build failed.** `version.json` looked for a `src/main.tsx` facade. Rollup names `index.html` as the facade, and main.tsx is bundled into it. The unit fixture had used a facade no build produces. Measured fix: the manifest names exactly the script `index.html` loads.
+2. **The reconnect banner never appeared.** The agent's frames arrived and were routed to the tab (captured). But the WASM client delivers `request_id: None` as `undefined`, and the reader accepted only `null`, so every event was dropped. The fixtures used `null`, and one asserted that an absent `request_id` must be refused. Control: the new test is red without the fix.
+3. **Two gates the fork could not run.** `startVersionWatch` had no caller in another file, so the browser wiring moved to its own module. `check-pwa-update` still looked for the old toast. Control: a no-op Reload turns "taking the offer activates the new version" red.
+
+**End to end, locally.** Setup: production UI build, agent 3fb9db1 on loopback, and a TCP proxy between the agent and the local server that resets every link, as a deploy does.
+- "Reconnecting to 127.0.0.1:12449…" appeared 4 ms after the reset and cleared 3.8 s later.
+- The page stayed in the workspace, and a reload loaded it again.
+- Without a service worker, the deploy banner stays hidden while `version.json` names the running build and appears once it names another.
+
+**Not proved:**
+- A real Cloudflare deploy. The Durable Object restart has not been exercised; only a TCP reset has.
+- A cleanly closed link (FIN) against a server that keeps the old session. The fork measured "Session Already Connected" for at least 60 s.
+- The reconnect-failed → sign-in path in a browser.
+- The five multi-tab fixes in a browser.
+
+**Open for the owner:** drafts sit in `sessionStorage` for one reload, and Chrome may write that to disk for session restore. Nothing is pushed.

@@ -1,14 +1,19 @@
 use crate::config::{ServerConfig, WorkspaceStructureConfig};
-use citadel_logging::{info, setup_log, warn};
+use citadel_logging::info;
+#[cfg(not(target_family = "wasm"))]
+use citadel_logging::{setup_log, warn};
 use citadel_sdk::prelude::{
-    BackendType, NetworkError, NodeBuilder, NodeType, ServerMiscSettings, StackedRatchet,
+    ArgonDefaultServerSettings, BackendType, NetworkError, NodeBuilder, NodeType, PlatformOps,
+    ServerMiscSettings, StackedRatchet,
 };
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use std::net::SocketAddr;
+#[cfg(not(target_family = "wasm"))]
 use std::path::Path;
 
 pub mod handlers;
 pub mod kernel;
+mod platform;
 
 pub const WORKSPACE_ROOT_ID: &str = "workspace-root";
 pub const WORKSPACE_MASTER_PASSWORD_KEY: &str = "workspace_master_password";
@@ -466,6 +471,7 @@ pub fn resolve_workspace_structure(
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 pub async fn run_server(config: ServerConfig) -> Result<(), NetworkError> {
     run_server_with_base_path(config, None).await
 }
@@ -586,7 +592,96 @@ pub fn connect_enrolment(
     }
 }
 
-/// Run the workspace server with the given configuration and base path.
+/// The workspace kernel both entry points serve: the configured structure, master password, file
+/// transfer policy, first-connect decision and the host's relay-credential minter. One
+/// constructor, so a hosted server cannot drift from the native one in what it seeds or whom it
+/// promotes.
+async fn workspace_kernel(
+    config: &ServerConfig,
+    workspace_structure: Option<(WorkspaceStructureConfig, Option<std::path::PathBuf>)>,
+    first_connect_admin: bool,
+    ice_servers: kernel::ice_servers::IceServerSourceHandle,
+) -> Result<kernel::async_kernel::AsyncWorkspaceServerKernel<StackedRatchet>, NetworkError> {
+    if first_connect_admin {
+        citadel_logging::warn!(target: "citadel", "⚠️  WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN is on: the first account to connect becomes the workspace administrator. Intended for local development. On a reachable deployment this hands ownership to whoever registers first.");
+    } else {
+        info!(target: "citadel", "First-connect admin promotion is off. The workspace awaits initialization with the master password.");
+    }
+
+    // Log file transfer config
+    if let Some(ref ft_config) = config.file_transfer {
+        info!(target: "citadel", "File transfer config: server_transfer={}, revfs_storage={}, max_size={}MB, quota={}MB",
+            ft_config.allow_server_file_transfer,
+            ft_config.allow_server_revfs_storage,
+            ft_config.max_file_transfer_size_mb,
+            ft_config.revfs_storage_quota_mb);
+    } else {
+        info!(target: "citadel", "No file transfer config specified, using defaults");
+    }
+
+    // Create AsyncWorkspaceServerKernel with admin user from config
+    let mut kernel = kernel::async_kernel::AsyncWorkspaceServerKernel::<StackedRatchet>::with_workspace_master_password_and_structure_and_file_transfer(
+        &config.workspace_master_password,
+        workspace_structure,
+        config.file_transfer.clone(),
+    ).await?;
+    kernel.set_first_connect_admin(first_connect_admin);
+    if ice_servers.is_none() {
+        info!(target: "citadel", "No relay-credential source: GetIceServers answers that no relay is available.");
+    }
+    kernel.set_ice_server_source(ice_servers);
+    Ok(kernel)
+}
+
+/// Serve the workspace from a listener the host feeds, on any transport.
+///
+/// This is the entry for a server that does not own a socket: a Workers Durable Object accepts
+/// each WebSocket itself and hands it to the node through the listener (`WasmListener::injected`).
+/// Nothing is read from the environment and nothing is chosen by default — the host names the
+/// backend and the Argon2 cost, because both depend on where it runs (a Worker has a fraction of
+/// the memory and CPU the release Argon2 defaults assume). `config.bind_addr` is recorded as the
+/// node's address and never bound. `ice_servers` is the host's relay-credential minter
+/// (`GetIceServers`), or `None` for a host that has none.
+pub async fn run_server_on<T: PlatformOps>(
+    config: ServerConfig,
+    listener: T::Listener,
+    backend: BackendType,
+    server_argon_settings: ArgonDefaultServerSettings,
+    ice_servers: kernel::ice_servers::IceServerSourceHandle,
+) -> Result<(), NetworkError> {
+    info!(target: "citadel", "Starting Citadel Workspace Server Kernel on an injected listener...");
+    let bind_address: SocketAddr = config.bind_addr.parse().map_err(|e| {
+        NetworkError::msg(format!(
+            "Invalid bind address '{}': {}",
+            config.bind_addr, e
+        ))
+    })?;
+    let workspace_structure = resolve_workspace_structure(&config, None)?;
+    let first_connect_admin = resolve_first_connect_admin(None, config.allow_first_connect_admin)?;
+    let kernel = workspace_kernel(
+        &config,
+        workspace_structure,
+        first_connect_admin,
+        ice_servers,
+    )
+    .await?;
+
+    let node_type =
+        NodeType::server(bind_address).map_err(|e| NetworkError::generic(e.to_string()))?;
+    NodeBuilder::<StackedRatchet, T>::default()
+        .with_node_type(node_type)
+        .with_backend(backend)
+        .with_server_argon_settings(server_argon_settings)
+        // The same refusal of password-less transient accounts as the native server: a
+        // hosted tenant has open registration too.
+        .with_server_misc_settings(production_server_misc_settings())
+        .with_injected_listener(listener)
+        .build(kernel)
+        .map_err(|e| NetworkError::generic(e.to_string()))?
+        .await?;
+    Ok(())
+}
+
 /// The Citadel settings this server runs with.
 ///
 /// Transient connections are refused. The SDK allows them by default: an account
@@ -603,6 +698,8 @@ pub fn production_server_misc_settings() -> ServerMiscSettings {
     }
 }
 
+/// Run the workspace server with the given configuration and base path.
+#[cfg(not(target_family = "wasm"))]
 pub async fn run_server_with_base_path(
     config: ServerConfig,
     config_base_path: Option<&Path>,
@@ -610,7 +707,6 @@ pub async fn run_server_with_base_path(
     setup_log();
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel...");
 
-    let workspace_password = config.workspace_master_password.clone();
     // Allow the bind address to be overridden via env so the same baked-in
     // kernel.toml (0.0.0.0 for dev bridge networking) can be pinned to
     // loopback in production under host networking (WORKSPACE_BIND_ADDR=
@@ -634,12 +730,6 @@ pub async fn run_server_with_base_path(
             .as_deref(),
         config.allow_first_connect_admin,
     )?;
-    if first_connect_admin {
-        citadel_logging::warn!(target: "citadel", "⚠️  WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN is on: the first account to connect becomes the workspace administrator. Intended for local development. On a reachable deployment this hands ownership to whoever registers first.");
-    } else {
-        info!(target: "citadel", "First-connect admin promotion is off. The workspace awaits initialization with the master password.");
-    }
-
     // Select backend type from env-var override (preferred) or config file.
     let backend_type_for_node_builder = select_backend_type(
         std::env::var("WORKSPACE_BACKEND").ok().as_deref(),
@@ -648,24 +738,9 @@ pub async fn run_server_with_base_path(
         config.data_dir.as_deref(),
     )?;
 
-    // Log file transfer config
-    if let Some(ref ft_config) = config.file_transfer {
-        info!(target: "citadel", "File transfer config: server_transfer={}, revfs_storage={}, max_size={}MB, quota={}MB",
-            ft_config.allow_server_file_transfer,
-            ft_config.allow_server_revfs_storage,
-            ft_config.max_file_transfer_size_mb,
-            ft_config.revfs_storage_quota_mb);
-    } else {
-        info!(target: "citadel", "No file transfer config specified, using defaults");
-    }
-
-    // Create AsyncWorkspaceServerKernel with admin user from config
-    let mut kernel = kernel::async_kernel::AsyncWorkspaceServerKernel::<StackedRatchet>::with_workspace_master_password_and_structure_and_file_transfer(
-        &workspace_password,
-        workspace_structure,
-        config.file_transfer.clone(),
-    ).await?;
-    kernel.set_first_connect_admin(first_connect_admin);
+    // The native server has no relay-credential minter: nothing here holds a TURN provider's
+    // key, so GetIceServers answers "unavailable" rather than inventing a list.
+    let kernel = workspace_kernel(&config, workspace_structure, first_connect_admin, None).await?;
 
     // `NodeType::server` and `NodeBuilder::build` now return `anyhow::Error`
     // (newer citadel_sdk); map into this fn's `NetworkError`, which no longer
@@ -734,7 +809,7 @@ pub async fn run_server_with_base_path(
 /// from a terminal. Returns false only if the handlers cannot be installed, in
 /// which case the default behaviour (immediate termination) stands and saying
 /// so is more useful than pretending a drain will happen.
-#[cfg(unix)]
+#[cfg(all(unix, not(target_family = "wasm")))]
 pub async fn await_termination_signal() -> bool {
     use tokio::signal::unix::{signal, SignalKind};
     let (mut term, mut interrupt) = match (
@@ -754,7 +829,7 @@ pub async fn await_termination_signal() -> bool {
     true
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, target_family = "wasm")))]
 pub async fn await_termination_signal() -> bool {
     tokio::signal::ctrl_c().await.is_ok()
 }
@@ -775,6 +850,7 @@ pub async fn await_termination_signal() -> bool {
 /// no filesystem or network I/O. Unit tests can drive every
 /// combination of env/config inputs through the public surface and
 /// the `info!` calls are no-ops without a configured subscriber.
+#[cfg(not(target_family = "wasm"))]
 pub fn select_backend_type(
     env_backend: Option<&str>,
     env_data_dir: Option<&str>,
