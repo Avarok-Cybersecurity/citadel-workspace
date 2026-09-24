@@ -22,7 +22,9 @@ BIN="${1:?$usage}"; VERSION="${2:?$usage}"; OUT="${3:?$usage}"
 : "${APPIMAGE_RUNTIME:?APPIMAGE_RUNTIME must name the pinned AppImage type2 runtime}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SETTINGS="$ROOT/apps/macos-agent/Info.plist"
-ICON="$ROOT/assets/brand/transparent/icon-512.png"
+# The brand kit's dark app icon, the guidelines' default. Linux has no tray here: the agent has no
+# panel indicator on Linux, so the kit's tray-color-* cuts have nothing to go into yet.
+ICON="$ROOT/assets/brand/dark/icon-512.png"
 
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "package-linux-agent: version must be MAJOR.MINOR.PATCH, got '$VERSION'" >&2; exit 1; }
 [ -f "$BIN" ] || { echo "package-linux-agent: no binary at $BIN" >&2; exit 1; }
@@ -48,7 +50,7 @@ desktop_entry() { # <Exec value>
 Type=Application
 Version=1.0
 Name=Citadel Agent
-Comment=The local agent Citadel Workspace connects to
+Comment=The local agent Citadel Workspaces connects to
 Exec=$1
 Icon=citadel-agent
 Terminal=false
@@ -85,7 +87,7 @@ Priority: optional
 Depends: libc6, libgcc-s1
 Homepage: https://github.com/Avarok-Cybersecurity/citadel-workspace
 Installed-Size: $(du -sk "$deb/usr" | cut -f1)
-Description: The local agent Citadel Workspace connects to
+Description: The local agent Citadel Workspaces connects to
  Runs on your own machine and holds your Citadel protocol connections. The
  browser talks to it over a WebSocket on 127.0.0.1; it starts when you log in.
 EOF
