@@ -36,7 +36,8 @@ domain_id: string | null, } } | { "GetUserPermissions": { user_id: string, domai
  */
 name: string | null, 
 /**
- * Base64-encoded avatar image data (WebP format, max 256x256)
+ * Base64-encoded avatar image data (WebP format, max 256x256).
+ * `Some("")` removes the stored avatar.
  */
 avatar_data: string | null, 
 /**

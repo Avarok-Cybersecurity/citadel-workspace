@@ -10,7 +10,7 @@ use common::workspace_test_utils::create_test_kernel;
 // The wizard tells a new user their email and job title are "visible to
 // members of this workspace". `ListMembers` strips every other member's
 // metadata for a non-admin caller, so without an allowance those two fields
-// would be stored and shown to nobody but admins. Read through the dispatcher,
+// would be stored and shown to nobody but admins. The avatar is kept too. Read through the dispatcher,
 // as a client would, and asserted on what is STORED for the refusals.
 
 const ALICE: &str = "alice_profile";
@@ -106,7 +106,7 @@ async fn alice_as_bob_sees_her(kernel: &Kernel) -> User {
 }
 
 #[tokio::test]
-async fn another_member_sees_email_and_title_but_not_the_avatar() {
+async fn another_member_sees_avatar_email_and_title() {
     let kernel = kernel_with_two_members().await;
     let response = update(
         &kernel,
@@ -124,9 +124,9 @@ async fn another_member_sees_email_and_title_but_not_the_avatar() {
     assert_eq!(text(&seen, "email").as_deref(), Some("alice@example.com"));
     assert_eq!(text(&seen, "title").as_deref(), Some("Engineer"));
     assert_eq!(
-        text(&seen, "avatar"),
-        None,
-        "the avatar stays out of list responses"
+        text(&seen, "avatar").as_deref(),
+        Some("AAAA"),
+        "other members must see the avatar"
     );
     assert!(
         seen.permissions.is_empty(),
@@ -181,4 +181,55 @@ async fn a_refused_update_stores_none_of_its_fields() {
         assert_eq!(text(&user, "email"), None, "{label}: email written anyway");
         assert_eq!(text(&user, "title"), None, "{label}: title written anyway");
     }
+}
+
+// # A placeholder display name is repaired from the registered full name
+//
+// Records created before the connect handler read the SDK's full name carry
+// the username as `name`. The repair runs on connect; asserted here on storage,
+// and the end-to-end path in the_display_name_is_the_registered_full_name.rs.
+
+#[tokio::test]
+async fn a_placeholder_name_is_repaired_and_a_chosen_one_is_kept() {
+    use citadel_workspace_server_kernel::kernel::display_name::repair_placeholder_name;
+    let kernel = kernel_with_two_members().await;
+    let backend = &kernel.domain_operations.backend_tx_manager;
+
+    assert!(
+        repair_placeholder_name(backend, ALICE, Some("Alice Anders"))
+            .await
+            .expect("repair")
+    );
+    assert_eq!(stored(&kernel).await.name, "Alice Anders");
+
+    let renamed = process_command_with_user(
+        &kernel,
+        &WorkspaceProtocolRequest::UpdateUserProfile {
+            name: Some("Ali".to_string()),
+            avatar_data: None,
+            email: None,
+            title: None,
+        },
+        ALICE,
+    )
+    .await
+    .expect("dispatch");
+    assert!(matches!(
+        renamed,
+        WorkspaceProtocolResponse::UserProfileUpdated(_)
+    ));
+    assert!(
+        !repair_placeholder_name(backend, ALICE, Some("Alice Anders"))
+            .await
+            .expect("repair")
+    );
+    assert_eq!(
+        stored(&kernel).await.name,
+        "Ali",
+        "a chosen name was replaced"
+    );
+
+    assert!(!repair_placeholder_name(backend, "nobody", Some("No One"))
+        .await
+        .expect("an absent record is not an error"));
 }

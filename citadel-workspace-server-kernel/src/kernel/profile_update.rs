@@ -17,18 +17,18 @@ pub const TITLE_KEY: &str = "title";
 
 /// Metadata a non-admin member may read on another member's record.
 ///
-/// The UI tells a user at sign-up that their email and job title are visible to
-/// members of this workspace, and `ListMembers` strips all metadata for
-/// non-admins, so these two keys are the ones it keeps. The avatar is NOT here:
-/// at up to 512 KiB each it was deliberately left out of list responses.
-pub const MEMBER_VISIBLE_KEYS: [&str; 2] = [EMAIL_KEY, TITLE_KEY];
+/// `ListMembers` strips all metadata for non-admins and keeps only these: the
+/// profile a user is told, at sign-up, that members of the workspace can see.
+/// The avatar is among them -- it is a picture the user chose to show, and
+/// without it every other member saw initials only.
+pub const MEMBER_VISIBLE_KEYS: [&str; 3] = [AVATAR_KEY, EMAIL_KEY, TITLE_KEY];
 
 /// One profile update as received. `None` leaves a field unchanged.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfileUpdate {
     pub name: Option<String>,
     pub avatar_data: Option<String>,
-    /// `Some("")` removes the stored email.
+    /// `Some("")` removes the stored email (and likewise for the avatar and title).
     pub email: Option<String>,
     /// `Some("")` removes the stored title.
     pub title: Option<String>,
@@ -39,10 +39,7 @@ pub fn apply_profile_update(user: &mut User, update: ProfileUpdate) {
     if let Some(name) = update.name {
         user.name = name;
     }
-    if let Some(avatar) = update.avatar_data {
-        user.metadata
-            .insert(AVATAR_KEY.to_string(), MetadataValue::String(avatar));
-    }
+    set_or_clear(&mut user.metadata, AVATAR_KEY, update.avatar_data);
     set_or_clear(&mut user.metadata, EMAIL_KEY, update.email);
     set_or_clear(&mut user.metadata, TITLE_KEY, update.title);
 }
@@ -112,6 +109,27 @@ mod tests {
     }
 
     #[test]
+    fn an_empty_avatar_clears_the_stored_one() {
+        let mut u = user();
+        let with_avatar = ProfileUpdate {
+            name: None,
+            avatar_data: Some("AAAA".into()),
+            email: None,
+            title: None,
+        };
+        apply_profile_update(&mut u, with_avatar.clone());
+        assert!(u.metadata.contains_key(AVATAR_KEY));
+        apply_profile_update(
+            &mut u,
+            ProfileUpdate {
+                avatar_data: Some(String::new()),
+                ..with_avatar
+            },
+        );
+        assert!(!u.metadata.contains_key(AVATAR_KEY));
+    }
+
+    #[test]
     fn an_empty_string_clears_the_field() {
         let mut u = user();
         apply_profile_update(&mut u, update(Some("a@b.c"), Some("Engineer")));
@@ -121,7 +139,7 @@ mod tests {
     }
 
     #[test]
-    fn members_see_email_and_title_but_not_the_avatar() {
+    fn members_see_the_avatar_email_and_title_and_nothing_else() {
         let mut u = user();
         apply_profile_update(
             &mut u,
@@ -137,6 +155,6 @@ mod tests {
         let visible = member_visible_metadata(&u.metadata);
         let mut keys: Vec<&str> = visible.keys().map(String::as_str).collect();
         keys.sort_unstable();
-        assert_eq!(keys, vec![EMAIL_KEY, TITLE_KEY]);
+        assert_eq!(keys, vec![AVATAR_KEY, EMAIL_KEY, TITLE_KEY]);
     }
 }

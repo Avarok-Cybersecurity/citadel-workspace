@@ -585,10 +585,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             //
             // The roster itself is not the secret: names and roles are what a
             // member list is for, and the UI renders both. The permissions map
-            // is the enforced authorization state of the whole workspace, and
-            // the metadata carries avatars. Neither belongs in a list call --
-            // except the metadata a member was told other members can see
-            // (email and job title; `profile_update::MEMBER_VISIBLE_KEYS`).
+            // is the enforced authorization state of the whole workspace and
+            // does not belong in a list call. Metadata is filtered to the
+            // profile a member was told other members can see (avatar, email,
+            // job title; `profile_update::MEMBER_VISIBLE_KEYS`).
             let mut users = Vec::new();
             for user_id in member_ids {
                 if let Ok(Some(user)) = kernel
