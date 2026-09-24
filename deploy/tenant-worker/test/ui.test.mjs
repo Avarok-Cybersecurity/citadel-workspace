@@ -5,11 +5,13 @@
  */
 import { describe, expect, it } from "vitest";
 import { dispatch } from "../control/dispatch.mjs";
-import { contentSecurityPolicy } from "../control/ui.mjs";
+import { contentSecurityPolicy, webAnalyticsBeacon } from "../control/ui.mjs";
 import { productionEnv } from "./helpers.mjs";
 
 const AGENT = "wss://local.avarok.net:12345";
-const at = (path, init) => dispatch(new Request(`https://work.avarok.net${path}`, init), productionEnv());
+// A stand-in site token: the real one is a Worker secret, set at deploy (wrangler secret put).
+const ANALYTICS_TOKEN = "0123456789abcdef0123456789abcdef";
+const at = (path, init) => dispatch(new Request(`https://work.avarok.net${path}`, init), productionEnv({ WEB_ANALYTICS_TOKEN: ANALYTICS_TOKEN }));
 
 function expectSecurityHeaders(r) {
   expect(r.headers.get("content-security-policy")).toBe(contentSecurityPolicy(AGENT));
@@ -25,11 +27,30 @@ const meta = (html, name) => new RegExp(`<meta name="${name}" content="([^"]*)"`
 describe("the CSP", () => {
   it("is nginx's, with Turnstile's script and frame allowed and the agent the one extra socket", () => {
     const csp = contentSecurityPolicy(AGENT);
-    expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' https://challenges.cloudflare.com;");
+    expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com;");
     expect(csp).toContain("frame-src https://challenges.cloudflare.com;");
-    expect(csp).toContain(`connect-src 'self' ${AGENT};`);
+    expect(csp).toContain(`connect-src 'self' ${AGENT} https://cloudflareinsights.com;`);
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).not.toMatch(/\bwss?:(?!\/\/local\.avarok\.net)/);
+  });
+});
+
+describe("Web Analytics", () => {
+  it("the page carries the beacon itself, so a page the service worker serves from cache counts too", async () => {
+    const html = await (await at("/")).text();
+    expect(html).toContain(webAnalyticsBeacon(ANALYTICS_TOKEN));
+    expect(html.match(/cloudflareinsights/g)).toHaveLength(1);
+  });
+
+  it("without the secret there is no beacon and the page may be transformed as before", async () => {
+    const r = await dispatch(new Request("https://work.avarok.net/"), productionEnv());
+    expect(r.headers.get("cache-control")).toBe("public, no-cache");
+    expect(await r.text()).not.toContain("cloudflareinsights");
+  });
+
+  it("a malformed token is refused, not written into the page", async () => {
+    await expect(dispatch(new Request("https://work.avarok.net/"), productionEnv({ WEB_ANALYTICS_TOKEN: "x' onload='alert(1)" })))
+      .rejects.toThrow(/WEB_ANALYTICS_TOKEN/);
   });
 });
 
@@ -39,7 +60,7 @@ describe("the SPA shell", () => {
       const r = await at(path);
       expect(r.status).toBe(200);
       expect(r.headers.get("content-type")).toMatch(/^text\/html/);
-      expect(r.headers.get("cache-control")).toBe("public, no-cache");
+      expect(r.headers.get("cache-control")).toBe("public, no-cache, no-transform");
       expectSecurityHeaders(r);
       const html = await r.text();
       expect(html).toContain("<title>Fixture shell</title>");
