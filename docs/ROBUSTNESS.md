@@ -13525,3 +13525,26 @@ what the compose file actually declares. The avarok2 runbook is untouched.
   watcher alive.
 - **The Perfect-mode queue race:** real by reading, not reproduced.
 - **Live SQLite backups (U4):** not reproduced, unchanged.
+
+## Round 761 — releases, merges, and the Cloudflare stack onto master
+
+| Item | State |
+|---|---|
+| agent #72 (TURN from PeerConnect/Accept) | merged e6da74a (merge commit; 7b6fe2f reachable) |
+| workspace #143 (agent v0.7.0) | merged 40c0f513; tagged `agent-v0.7.0`; release run 35955444735 |
+| workspace #142 (AGPL-3.0-or-later) | merged 94e291c3 |
+| UI #50 (create workspace, account links, passkeys, one-click setup, TURN UI) | merged 075b1b27 |
+| UI #52 (live-bench fixes) | CI |
+| **#145: the Cloudflare-native stack onto master** | opened; supersedes #140 and #144 |
+
+**Merging master into the Cloudflare branch found two defects the separate branches hid:**
+- **Transient accounts.** #135 made self-hosted servers refuse password-less transient accounts (`production_server_misc_settings`), but only the native builder applied it. The Durable Object builder every hosted tenant runs did not, so hosted tenants, which have open registration, would have accepted them. It is now applied to both builders.
+- **The Docker manifest.** The Cloudflare branch moved the kernel's `citadel_sdk` and `tokio` into a native-only table and added `citadel_io`. The Docker copy of the manifest still had the old tables, so the production server image would not have compiled (`citadel_io` unresolved), and its `tokio` lacked the `signal` feature the crate uses. It is mirrored now, with `citadel_io` in the Docker root. Gate: check-docker-manifest-matches-the-crate.
+
+**Also:**
+- The local Citadel-Protocol `[patch]` is gone. Protocol master `1ff5e831` contains cp-int's work (`git diff` master→cp-int: +27 lines, all older versions of code master has since refined) plus TURN. Both lockfiles pin it.
+- #50's UI tripped two master gates, fixed in #52: a hand-rolled listener fan-out (`agent-optional.ts`, now `notifyEach`), and the string-CID baseline (74 → 73, committed).
+
+**Deployed from the merged branch:** Worker version `6a417271`, UI 7e85d09b. Live check: a fresh member on bench got TURN credentials, cached on the second ask.
+
+**Closed as expected behaviour:** the deploy gate's "Uncaught (in promise): entitlements for a tenant that has not been provisioned" comes from webhook.test.mjs "a failed push to the tenant's object is not recorded either". There the object is made to refuse, and the webhook answers 500 so Stripe retries. workerd logs the rejection in the object's isolate; the caller handles it.
