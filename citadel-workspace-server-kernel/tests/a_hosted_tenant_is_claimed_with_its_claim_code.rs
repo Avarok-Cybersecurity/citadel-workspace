@@ -23,7 +23,6 @@
 //! plain member; they register with each other through the object and exchange a message.
 
 mod hosted_tenant;
-use hosted_tenant::*;
 use citadel_internal_service_test_common::{
     self as agent_common, connect_p2p, register_and_connect_to_server, register_p2p,
     RegisterAndConnectItems,
@@ -32,6 +31,7 @@ use citadel_sdk::prelude::*;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::WorkspaceProtocolResponse;
+use hosted_tenant::*;
 use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
@@ -40,7 +40,6 @@ use uuid::Uuid;
 const ENDPOINT_VAR: &str = "CITADEL_TENANT_PROOF_ENDPOINT";
 const CLAIMS_VAR: &str = "CITADEL_TENANT_PROOF_CLAIMS";
 const INSECURE_VAR: &str = "CITADEL_TENANT_PROOF_INSECURE";
-
 
 #[tokio::test]
 #[ignore = "needs a tenant served at CITADEL_TENANT_PROOF_ENDPOINT (serve-tenants.mjs)"]

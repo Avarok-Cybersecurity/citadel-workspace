@@ -39,8 +39,9 @@ fn relay_answer(r: &WorkspaceProtocolResponse) -> bool {
 #[ignore = "needs a hosted tenant at CITADEL_TENANT_PROOF_ENDPOINT"]
 async fn a_member_of_a_hosted_tenant_gets_turn_credentials() -> Result<(), Box<dyn Error>> {
     agent_common::setup_log();
-    let endpoint = std::env::var(ENDPOINT_VAR)
-        .map_err(|_| format!("{ENDPOINT_VAR} must name the tenant, e.g. wss://bench.work.avarok.net/bench"))?;
+    let endpoint = std::env::var(ENDPOINT_VAR).map_err(|_| {
+        format!("{ENDPOINT_VAR} must name the tenant, e.g. wss://bench.work.avarok.net/bench")
+    })?;
     let run = Uuid::new_v4().to_string();
     let member = format!("relay.{}", &run[..8]);
     let agent = spawn_agent(false).await?;
@@ -60,8 +61,19 @@ async fn a_member_of_a_hosted_tenant_gets_turn_credentials() -> Result<(), Box<d
     let role = role_of(&to, &mut from, cid, &member).await?;
     println!("CONNECTED {member} (cid {cid}) to {endpoint} as {role:?}");
 
-    let first = ask(&to, &mut from, cid, WorkspaceProtocolRequest::GetIceServers, relay_answer).await?;
-    let WorkspaceProtocolResponse::IceServers { ice_servers, expires_at } = first else {
+    let first = ask(
+        &to,
+        &mut from,
+        cid,
+        WorkspaceProtocolRequest::GetIceServers,
+        relay_answer,
+    )
+    .await?;
+    let WorkspaceProtocolResponse::IceServers {
+        ice_servers,
+        expires_at,
+    } = first
+    else {
         return Err(format!("the tenant gave no relay servers: {first:?}").into());
     };
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
@@ -75,19 +87,37 @@ async fn a_member_of_a_hosted_tenant_gets_turn_credentials() -> Result<(), Box<d
     }
     let urls: Vec<&String> = ice_servers.iter().flat_map(|s| s.urls.iter()).collect();
     assert!(
-        urls.iter().any(|u| u.starts_with("turns:") && u.contains(":443")),
+        urls.iter()
+            .any(|u| u.starts_with("turns:") && u.contains(":443")),
         "no TURN over TLS on 443 among {urls:?}"
     );
     assert!(
-        ice_servers.iter().any(|s| s.urls.iter().any(|u| u.starts_with("turn")) && s.username.is_some() && s.credential.is_some()),
+        ice_servers
+            .iter()
+            .any(|s| s.urls.iter().any(|u| u.starts_with("turn"))
+                && s.username.is_some()
+                && s.credential.is_some()),
         "no TURN server carries credentials"
     );
-    assert!(expires_at > now + 60 && expires_at <= now + 48 * 3600, "expires_at {expires_at} is not a short future lifetime (now {now})");
+    assert!(
+        expires_at > now + 60 && expires_at <= now + 48 * 3600,
+        "expires_at {expires_at} is not a short future lifetime (now {now})"
+    );
     println!("EXPIRES in {}s", expires_at - now);
 
     // Asked again at once: the Durable Object answers from its cache, not with a second mint.
-    let second = ask(&to, &mut from, cid, WorkspaceProtocolRequest::GetIceServers, relay_answer).await?;
-    let WorkspaceProtocolResponse::IceServers { expires_at: again, .. } = second else {
+    let second = ask(
+        &to,
+        &mut from,
+        cid,
+        WorkspaceProtocolRequest::GetIceServers,
+        relay_answer,
+    )
+    .await?;
+    let WorkspaceProtocolResponse::IceServers {
+        expires_at: again, ..
+    } = second
+    else {
         return Err(format!("the second ask gave no relay servers: {second:?}").into());
     };
     assert_eq!(again, expires_at, "a second mint within the cache window");

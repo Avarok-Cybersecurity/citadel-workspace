@@ -4,13 +4,17 @@
 #![allow(dead_code)] // each test file uses a different subset
 
 use citadel_internal_service::kernel::CitadelWorkspaceService;
-use citadel_internal_service_test_common::{get_free_port, spawn_services, InternalServicesFutures};
+use citadel_internal_service_test_common::{
+    get_free_port, spawn_services, InternalServicesFutures,
+};
 use citadel_internal_service_types::{
     InternalServiceRequest, InternalServiceResponse, MessageNotification, SecurityLevel,
 };
 use citadel_sdk::prelude::*;
 use citadel_workspace_types::structs::UserRole;
-use citadel_workspace_types::{WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse};
+use citadel_workspace_types::{
+    WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
+};
 use std::error::Error;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -172,4 +176,3 @@ pub async fn send_and_expect(
         }
     }
 }
-
