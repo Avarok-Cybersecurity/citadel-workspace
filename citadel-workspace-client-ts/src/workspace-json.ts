@@ -39,6 +39,7 @@ export const WORKSPACE_BIGINT_FIELDS: ReadonlySet<string> = new Set([
   'created_at',
   'drain_seconds',
   'edited_at',
+  'expires_at',
   'max_file_transfer_size_mb',
   'revfs_storage_quota_mb',
   'timestamp',
