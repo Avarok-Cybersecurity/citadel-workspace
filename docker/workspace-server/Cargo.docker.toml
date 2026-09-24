@@ -12,6 +12,10 @@ exclude = ["./citadel-internal-service"]
 
 resolver = "3"
 
+# MUST match the root Cargo.toml: members inherit `license.workspace = true`.
+[workspace.package]
+license = "AGPL-3.0-or-later"
+
 # Release profile — MUST match the root Cargo.toml this file replaces.
 #
 # `overflow-checks` is the point of this block. Cargo has it ON for `cargo test`

@@ -38,9 +38,10 @@ function workspaceMembers(manifestText) {
   return [...block[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
 }
 
-/** Names defined under [workspace.dependencies]. */
-function definedDeps(manifestText) {
-  const section = manifestText.split(/^\[workspace\.dependencies\]$/m)[1];
+/** Keys defined directly under a `[<table>]` header. */
+function definedKeys(manifestText, table) {
+  const header = new RegExp(`^\\[${table.replace(/\./g, '\\.')}\\]$`, 'm');
+  const section = manifestText.split(header)[1];
   if (!section) return new Set();
   const upToNextSection = section.split(/^\[/m)[0];
   return new Set(
@@ -50,6 +51,23 @@ function definedDeps(manifestText) {
       .filter((line) => line && !line.startsWith('#'))
       .map((line) => line.split(/\s*=/)[0].trim())
       .filter(Boolean)
+  );
+}
+
+/**
+ * Package fields a member inherits (`license.workspace = true`), which Cargo
+ * resolves from `[workspace.package]` — the same load-time failure:
+ *
+ *   error inheriting `license` from workspace root manifest's
+ *   `workspace.package.license`
+ */
+function inheritedPackageFields(manifestText) {
+  const section = manifestText.split(/^\[package\]$/m)[1];
+  if (!section) return new Set();
+  return new Set(
+    [...section.split(/^\[/m)[0].matchAll(/^\s*([A-Za-z0-9_-]+)\s*(?:\.\s*workspace\s*=\s*true|=\s*\{\s*workspace\s*=\s*true\s*\})/gm)].map(
+      (m) => m[1]
+    )
   );
 }
 
@@ -68,7 +86,8 @@ if (!existsSync(DOCKER_ROOT)) {
 }
 
 const dockerRootText = readFileSync(DOCKER_ROOT, 'utf8');
-const defined = definedDeps(dockerRootText);
+const defined = definedKeys(dockerRootText, 'workspace.dependencies');
+const definedPackage = definedKeys(dockerRootText, 'workspace.package');
 // Counted so a pass says what it examined; a fixed sentence cannot be told
 // apart from a scan that matched nothing. See
 // check-gates-say-what-they-examined.
@@ -84,7 +103,14 @@ for (const member of workspaceMembers(dockerRootText)) {
   const memberManifest = existsSync(substitute) ? substitute : join(member, 'Cargo.toml');
   if (!existsSync(memberManifest)) continue;
 
-  for (const dep of inheritedDeps(readFileSync(memberManifest, 'utf8'))) {
+  const memberText = readFileSync(memberManifest, 'utf8');
+  for (const field of inheritedPackageFields(memberText)) {
+    deps += 1;
+    if (!definedPackage.has(field)) {
+      problems.push(`${memberManifest} inherits package \`${field}\`, which ${DOCKER_ROOT} does not define under [workspace.package]`);
+    }
+  }
+  for (const dep of inheritedDeps(memberText)) {
     deps += 1;
     if (!defined.has(dep)) {
       problems.push(`${memberManifest} inherits \`${dep}\`, which ${DOCKER_ROOT} does not define`);
@@ -95,11 +121,11 @@ for (const member of workspaceMembers(dockerRootText)) {
 if (problems.length > 0) {
   console.error('The production server image would fail to load its manifest:\n');
   for (const p of problems) console.error(`  ${p}`);
-  console.error(`\nAdd each one to [workspace.dependencies] in ${DOCKER_ROOT}.`);
+  console.error(`\nAdd each one to [workspace.dependencies] or [workspace.package] in ${DOCKER_ROOT}.`);
   process.exit(1);
 }
 
 console.log(
-  `Docker manifest: ${deps} inherited dependenc(y|ies) across ${members} workspace member(s); ` +
+  `Docker manifest: ${deps} inherited dependenc(y|ies) and package field(s) across ${members} workspace member(s); ` +
     'every one is defined in the Docker root manifest.',
 );
