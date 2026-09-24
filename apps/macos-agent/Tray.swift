@@ -44,7 +44,7 @@ final class Tray: NSObject, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-        add(menu, "Open Citadel Workspace", .openWorkspace)
+        add(menu, "Open Citadel Workspaces", .openWorkspace)
         add(menu, "Create a Workspace…", .createWorkspace)
         menu.addItem(.separator())
         add(menu, "Start at Login", .toggleLogin).state = LoginItem.isEnabled ? .on : .off
