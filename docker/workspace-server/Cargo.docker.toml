@@ -56,6 +56,8 @@ citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol"
 citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
+# The SDK's runtime shim; MUST match the root Cargo.toml this file replaces.
+citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
 
 # Avarok deps (for dev purposes, use the local path at ../Citadel-Protocol)
 #citadel_sdk = { path = "../Citadel-Protocol/citadel_sdk" }
