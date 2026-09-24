@@ -13217,3 +13217,21 @@ Set-up: Playwright's Chrome 153 on https://work.avarok.net, against a v0.7.0 age
 - After a password sign-in, the header shows the username instead of the full name.
 - A stale CID left in the tab registry after a tab switches account makes the leader retry claims for a session that is gone.
 - The deploy gate logs "Uncaught (in promise): entitlements for a tenant that has not been provisioned" from a test path. The gates pass; which test emits it has not been found.
+
+## Round 760 — more of the live site, end to end: files, presence, account links, passkeys
+
+| Feature | Result, live on bench | Change |
+|---|---|---|
+| P2P file transfer (Carol to Erin, P2P-only) | Delivered and marked "Downloaded". SHA-256 `8359bc24e09cd587…`, 200 000 bytes, identical to the original | none needed |
+| Follower-tab presence | Erin's follower tab showed Carol "Offline" while linked. Now "Connected, Direct" on both sides | UI a2ca953f (fork, fix/follower-presence): the leader's state-sync is addressed to the session it is about; a reset no longer invents an empty poll |
+| Account links to hosted workspaces | `?account=erin2309d&server=bench.work.avarok.net` opened sign-in although Erin was signed in. It now switches | UI 7a9903be: `sessionIsOnServer` |
+| Session identity for hosted workspaces | Eight `stored.serverAddress === session.server_address` checks never matched a hosted session. The agent reports `server_address: "wss://bench.work.avarok.net/"` and `server_host: "bench.work.avarok.net"` (read directly from GetSessions) | UI 7a9903be: one helper at every site; 898/898; control 3/11 red |
+| Passkey enrol and sign-in (Chrome virtual authenticator, PRF) | Enrol: "Passkey on this Mac can now unlock carol2309d". Sign out, then "Use passkey or security key": "Login successful", no password typed, and the P2P link to Erin re-established | none needed |
+| Calls | Not exercised in the browser: this Chrome has no fake media devices, and `getUserMedia` waits on a macOS microphone prompt. Unverified | — |
+
+**Found, being fixed (fork, fix/reopen-after-close):** after a follower tab closes, reopening its account from a link reaches `/workspace` and then stalls at "Workspace data is taking longer than expected". The agent refused three `ClaimSession(only_if_orphaned)` requests with "not orphaned", because the session is still bound to the browser's single live connection.
+
+**Harness lessons (the harness, not the product):**
+- WebAuthn requires the focused tab ("The page does not have focus" surfaced as "cancelled").
+- Only one internal virtual authenticator is allowed per environment.
+- The CDP loopback permission resets when tabs close (memory: cdp-loopback-permission-resets).
