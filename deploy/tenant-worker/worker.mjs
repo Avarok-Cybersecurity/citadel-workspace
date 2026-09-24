@@ -156,6 +156,8 @@ export class WorkspaceServer extends DurableObject {
     return {
       run: (statements) =>
         storage.transactionSync(() => statements.map(([sql, params]) => [...storage.sql.exec(sql, ...params).raw()])),
+      // What RE-VFS uploads may hold in total: the plan's storage, in tiers.json's own GB.
+      quotaBytes: () => enforcedEntitlements(this.provisioning.summary().entitlements).storage_gb * METERING.gb_bytes,
     };
   }
 
