@@ -13153,3 +13153,20 @@ The uninstall check also plants a sentinel Run-key value belonging to "another a
 **The server image could not load its manifest (workspace #142, AGPL).** Members now inherit `license.workspace = true`, but the image builds against `docker/workspace-server/Cargo.docker.toml`, which declared no `[workspace.package]`.
 - The guard for exactly this substitution, `check-docker-workspace-manifest`, understood only inline `{ workspace = true }` dependencies. It now also checks `[package]` fields inherited from `[workspace.package]`.
 - Control: without the section, the check names both members and exits 1, and `cargo metadata` on the Docker layout fails with the CI error. With it, cargo gets past manifest loading.
+
+## Round 757 — v0.6.0 released and verified from outside; the site serves the new UI; two more gates
+
+**v0.6.0 is published and marked Latest** (run `35934689826`).
+- All 18 assets are present.
+- From a clean download: the MSI, `.deb` and AppImage match their `.sha256` files and pass `gh attestation verify`.
+- The DMG is stapled, and `spctl` accepts it as "Notarized Developer ID". The mounted app's binary prints `citadel-agent 0.6.0`.
+- The four `releases/latest/download/<asset>` URLs the UI links to all answer 200.
+
+**Deployed:** Worker version `fb83be76`, with the UI at #50's head (4a4f85d5), and the smoke passed. The live entry's asset list equals the local build, the lazy chunk that names the installers is served, and the manifest carries the `web+citadel` protocol handler.
+
+**Gate: the wire-type checks read `lib.rs` only (#143).** The four TURN types in `turn.rs` read as orphaned generated files. `check-wire-types-match-the-rust` and `check-byte-fields-do-not-print-themselves` now scan every `.rs` file under `src/`.
+- Controls: renaming `TurnPolicy` reports 1 ungenerated and 1 orphaned. A bare `Vec<u8>` added to `turn.rs` is named by file and line. Both were restored and checked with `cmp`.
+
+**Gate: `Landing.tsx` outgrew its exemption (#50, 324 against 301).** The exemption was not raised. Three concerns moved out whole: `LazySettingsModal`, `useLinkedLogin` and `useHasOrphanSessions`.
+- Landing is now 271, and its entry follows it down on the parent's `feat/peer-turn`: the ratchet turns both ways.
+- The landing critical path is 321.8 KB with and without the change: **0.2 KB under the 322 KB budget.** The next feature on that path must first take something off it (for example, deferring app-services initialisation until after login).
