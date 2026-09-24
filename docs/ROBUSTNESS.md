@@ -13191,3 +13191,29 @@ The uninstall check also plants a sentinel Run-key value belonging to "another a
 - Both controls were checked as applied (grep count) and as reverted (`cmp` against the committed helper).
 
 **Unproved:** the integration specs that click Sign in. They use waiting assertions, so they should tolerate the lazy step, but that is shown only when CI runs them. Not pushed: this was outside a push window.
+
+## Round 759 — the live site, driven in a real browser: seven defects, all fixed and redeployed
+
+Set-up: Playwright's Chrome 153 on https://work.avarok.net, against a v0.7.0 agent built from `rel-07` on 127.0.0.1:12345. Test members on bench: alice, bob, carol, dave and erin (`…2309d`). UI #50 merged; the fixes are in UI #52.
+
+| # | Defect, as measured | Fix | Proof |
+|---|---|---|---|
+| 1 | Chrome's loopback permission at its default made the page say "Download Citadel for Mac" to someone whose agent was running | `AgentSetup` reads `loopback-network`, then `local-network-access`, and explains denied or prompt; it reloads once access is granted | Live: the denied notice appeared; after granting, the page reloaded and the WebSocket opened in 2 ms. Controls: 4/7 and 1/7 red |
+| 2 | Joining `bench.work.avarok.net` sent `…:12349`; the agent dialled `104.21.48.73:12349` over TCP; registration timed out | `resolveServerAddress` passes tenant hosts and ws(s) URLs through | Live: Alice, Bob, Carol, Dave and Erin all joined through the UI. Control: 2/3 red |
+| 3 | After a leader-tab reload, follower sessions stayed bound to the dead connection ("Refusing … does not own it"); requests timed out | The leader claims every follower CID on each new connection | Live: "Updated 1 sessions from old TCP connection 06f9a88f… to new 56ee2915…". Controls: 6/8 and 3/8 red |
+| 4 | The leader's claim for a follower session was answered to the follower ("ClaimSession request timed out" on a success) | `sendRequest`'s leader branch registers its own request id | Control red; 201/201 related tests pass |
+| 5 | TURN lookups failed with no trace in production | A broken lookup warns; a policy answer stays quiet | Control red |
+| 6 | The relay answer for a follower session never reached the leader that asked: answer at 222 ms, timeout at 5000 ms, PeerConnect at 5002 ms without `turn` | The leader observes `LEADER_WIRE_EVENT` before routing | Live: the lookup resolves 1 ms after the answer. Control red |
+| 7 | The site's WASM, built from agent 43239d8, had no `PeerConnect.turn`, so serde dropped the relay the UI attached | Rebuilt from agent e6da74a (`sync-wasm-clients.sh`); parent commit e24e667 | Old binary: 0 TURN field names; new: `ice_servers`, `relay_only`, `expires_at`. Live: every PeerConnect frame carries `turn`; the agent logs `[TURN] relay … Some((Fallback, 6))`; the peer row reads "Connected · Direct" |
+
+**Also proven live:**
+- P2P messages both ways (Alice to Bob and back).
+- History survives a reload.
+- Peer discovery, request and accept.
+- `GetIceServers` against bench gives 6 TURN URLs and 3600 s, cached.
+
+**Found, not fixed (open):**
+- A Worker deploy resets every Durable Object WebSocket. All hosted sessions drop, and nothing reconnects them without saved credentials. Every deploy logs everyone out.
+- After a password sign-in, the header shows the username instead of the full name.
+- A stale CID left in the tab registry after a tab switches account makes the leader retry claims for a session that is gone.
+- The deploy gate logs "Uncaught (in promise): entitlements for a tenant that has not been provisioned" from a test path. The gates pass; which test emits it has not been found.
