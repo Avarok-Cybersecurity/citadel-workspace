@@ -13170,3 +13170,24 @@ The uninstall check also plants a sentinel Run-key value belonging to "another a
 **Gate: `Landing.tsx` outgrew its exemption (#50, 324 against 301).** The exemption was not raised. Three concerns moved out whole: `LazySettingsModal`, `useLinkedLogin` and `useHasOrphanSessions`.
 - Landing is now 271, and its entry follows it down on the parent's `feat/peer-turn`: the ratchet turns both ways.
 - The landing critical path is 321.8 KB with and without the change: **0.2 KB under the 322 KB budget.** The next feature on that path must first take something off it (for example, deferring app-services initialisation until after login).
+
+## Round 758 — landing critical path: 19 KB of headroom (local, UI branch `perf/landing-headroom`)
+
+**Found.** The landing critical path was 321.8 KB against its 322 KB budget, so the next feature on it would have gone red. Attributing the entry chunk by sourcemap showed four things on the path that are never on screen at landing:
+- the sign-in and registration steps (`Login`, `ServerConnect`, `Join`, `SecuritySettings`/`AdvancedSettings`);
+- `AccountManagementDialog`;
+- `WorkspaceInitializationModal`, which a seeded server never shows;
+- Settings, which #50 had already made lazy.
+
+**Fix.** One helper, `lazyDialog`, fetches a component on its first open and keeps it mounted afterwards, so closing keeps its exit animation. `LazySettingsModal` is now one use of it rather than its own copy. `Landing.tsx` stays at its 271-line entry, because the lazy steps live in `lazy-landing-steps.ts`.
+
+**Result: 321.8 KB → 303.0 KB.**
+- tsc and eslint are clean.
+- 3522 of 3525 unit tests pass. The three failures are in `agent-download.test.ts`, which reads the parent's release workflow; they fail identically without this change, on a parent that predates #141.
+
+**Proof and controls (`lazy-dialog.test.tsx`):**
+- Rendering while closed turns "fetches nothing until first opened" red.
+- Unmounting on close turns "stays mounted after closing" red.
+- Both controls were checked as applied (grep count) and as reverted (`cmp` against the committed helper).
+
+**Unproved:** the integration specs that click Sign in. They use waiting assertions, so they should tolerate the lazy step, but that is shown only when CI runs them. Not pushed: this was outside a push window.
