@@ -13563,3 +13563,31 @@ The UI pointer moved to 3116d664 (c6a067d). Every UI `scripts/check-*.mjs` passe
 **Caught in my own run:** the first explicit-types run piped the gate through `tail`, so it printed exit 0 while failing, and the cut-off output hid four of the eight files. This is [[pipelines-hide-the-exit-status]] again.
 
 **Open:** none of this is pushed; it waits for a push window. The agent reconnect and the deploy reload banner are in progress on their own branches.
+
+## Round 763 — deploys without disruption: agent reconnect, reload banner, proven end to end locally
+
+| Item | State |
+|---|---|
+| Agent: reconnect a session its server dropped (3fb9db1, branch feat/reconnect-after-server-drop) | 396/396 nextest; 10 policy tests with 6 mutations; 4 proxy-reset integration tests, each red with its defect |
+| UI: deploy banner, `/version.json` watch, drafts kept across reload, reconnect state (branch fix/non-disruptive-deploys, on #52) | 593 files / 3,625 tests; every `check-*.mjs`; tsc |
+| UI: five multi-tab and startup defects (stale claims, pagehide, late-follower snapshot, registered-peer-update owner, reopen toast) | fixed with controls (fork); unit-level only |
+| #51 "TypeScript Type Check" | parent `check-file-length` entry 301 → 271 (branch fix/landing-length-entry) |
+| Browser WASM | rebuilt from agent 3fb9db1; the old one had no `ServerConnectionLost` at all |
+
+**Three defects found by running the pieces together; each branch's own checks were green:**
+1. **The production build failed.** `version.json` looked for a `src/main.tsx` facade. Rollup names `index.html` as the facade, and main.tsx is bundled into it. The unit fixture had used a facade no build produces. Measured fix: the manifest names exactly the script `index.html` loads.
+2. **The reconnect banner never appeared.** The agent's frames arrived and were routed to the tab (captured). But the WASM client delivers `request_id: None` as `undefined`, and the reader accepted only `null`, so every event was dropped. The fixtures used `null`, and one asserted that an absent `request_id` must be refused. Control: the new test is red without the fix.
+3. **Two gates the fork could not run.** `startVersionWatch` had no caller in another file, so the browser wiring moved to its own module. `check-pwa-update` still looked for the old toast. Control: a no-op Reload turns "taking the offer activates the new version" red.
+
+**End to end, locally.** Setup: production UI build, agent 3fb9db1 on loopback, and a TCP proxy between the agent and the local server that resets every link, as a deploy does.
+- "Reconnecting to 127.0.0.1:12449…" appeared 4 ms after the reset and cleared 3.8 s later.
+- The page stayed in the workspace, and a reload loaded it again.
+- Without a service worker, the deploy banner stays hidden while `version.json` names the running build and appears once it names another.
+
+**Not proved:**
+- A real Cloudflare deploy. The Durable Object restart has not been exercised; only a TCP reset has.
+- A cleanly closed link (FIN) against a server that keeps the old session. The fork measured "Session Already Connected" for at least 60 s.
+- The reconnect-failed → sign-in path in a browser.
+- The five multi-tab fixes in a browser.
+
+**Open for the owner:** drafts sit in `sessionStorage` for one reload, and Chrome may write that to disk for session restore. Nothing is pushed.
