@@ -13548,3 +13548,18 @@ what the compose file actually declares. The avarok2 runbook is untouched.
 **Deployed from the merged branch:** Worker version `6a417271`, UI 7e85d09b. Live check: a fresh member on bench got TURN credentials, cached on the second ask.
 
 **Closed as expected behaviour:** the deploy gate's "Uncaught (in promise): entitlements for a tenant that has not been provisioned" comes from webhook.test.mjs "a failed push to the tenant's object is not recorded either". There the object is made to refuse, and the webhook answers 500 so Stripe retries. workerd logs the rejection in the object's isolate; the caller handles it.
+
+## Round 762 — #145's red jobs and two UI gates, fixed locally (push window closed)
+
+| Item | Cause | Fix (local commit) | Proof |
+|---|---|---|---|
+| Cargo Fmt (kernel) | hosted-tenant tests unformatted | b90dd57 | `cargo fmt --all -- --check` exits 0 |
+| ESLint ×3 (client-ts, citadel-workspaces, integration-tests) | all three run client-ts's test; `SSOT: WORKSPACE_BIGINT_FIELDS` failed because the Cloudflare branch added `expires_at` to the generated types | a95920e | client-ts `npm test`: 13 pass, 0 fail |
+| UI check-success-flags-are-checked | `makeForwardFallback`'s re-route dropped `routeByCid`'s delivered flag | UI 3116d664: read and logged; routeByCid already handles not-delivered, so behaviour is unchanged | gate ok (31 in the baseline) |
+| UI check-explicit-types | 11 untyped declarations in tests added on #52 | UI 3116d664 | gate ok, 1,608 files |
+
+The UI pointer moved to 3116d664 (c6a067d). Every UI `scripts/check-*.mjs` passes, including the browser gates after a Node 22 `vite build`. tsc is clean. 222 affected unit tests pass.
+
+**Caught in my own run:** the first explicit-types run piped the gate through `tail`, so it printed exit 0 while failing, and the cut-off output hid four of the eight files. This is [[pipelines-hide-the-exit-status]] again.
+
+**Open:** none of this is pushed; it waits for a push window. The agent reconnect and the deploy reload banner are in progress on their own branches.
