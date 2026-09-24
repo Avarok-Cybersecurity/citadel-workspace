@@ -730,6 +730,7 @@ dependencies = [
  "bytes",
  "citadel-internal-service-connector",
  "citadel-internal-service-types",
+ "citadel_io",
  "citadel_sdk",
  "futures",
  "libc",
