@@ -458,11 +458,22 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             }
         }
 
-        WorkspaceProtocolRequest::UpdateUserProfile { name, avatar_data } => {
+        WorkspaceProtocolRequest::UpdateUserProfile {
+            name,
+            avatar_data,
+            email,
+            title,
+        } => {
             use crate::handlers::domain::async_ops::AsyncUserManagementOperations;
+            let update = crate::kernel::profile_update::ProfileUpdate {
+                name: name.clone(),
+                avatar_data: avatar_data.clone(),
+                email: email.clone(),
+                title: title.clone(),
+            };
             match kernel
                 .domain_ops()
-                .update_user_profile(actor_user_id, name.clone(), avatar_data.clone())
+                .update_user_profile(actor_user_id, update)
                 .await
             {
                 Ok(user) => Ok(WorkspaceProtocolResponse::UserProfileUpdated(user)),
@@ -575,7 +586,9 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             // The roster itself is not the secret: names and roles are what a
             // member list is for, and the UI renders both. The permissions map
             // is the enforced authorization state of the whole workspace, and
-            // the metadata carries avatars. Neither belongs in a list call.
+            // the metadata carries avatars. Neither belongs in a list call --
+            // except the metadata a member was told other members can see
+            // (email and job title; `profile_update::MEMBER_VISIBLE_KEYS`).
             let mut users = Vec::new();
             for user_id in member_ids {
                 if let Ok(Some(user)) = kernel
@@ -592,7 +605,9 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                             name: user.name,
                             role: user.role,
                             permissions: Default::default(),
-                            metadata: Default::default(),
+                            metadata: crate::kernel::profile_update::member_visible_metadata(
+                                &user.metadata,
+                            ),
                         });
                     }
                 }

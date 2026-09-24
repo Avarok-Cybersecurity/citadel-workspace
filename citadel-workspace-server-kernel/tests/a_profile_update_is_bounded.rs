@@ -45,6 +45,8 @@ async fn update(
         &WorkspaceProtocolRequest::UpdateUserProfile {
             name,
             avatar_data: avatar,
+            email: None,
+            title: None,
         },
         USER,
     )

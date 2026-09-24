@@ -38,7 +38,17 @@ name: string | null,
 /**
  * Base64-encoded avatar image data (WebP format, max 256x256)
  */
-avatar_data: string | null, } } | { "Message": { contents: Array<number>, } } | { "SendGroupMessage": { 
+avatar_data: string | null, 
+/**
+ * Contact email shown to workspace members. `Some("")` clears it.
+ * Absent from clients that predate the field, which reads as `None`.
+ */
+email: string | null, 
+/**
+ * Job title shown to workspace members. `Some("")` clears it.
+ * Absent from clients that predate the field, which reads as `None`.
+ */
+title: string | null, } } | { "Message": { contents: Array<number>, } } | { "SendGroupMessage": { 
 /**
  * UUID of the group chat channel (office.chat_channel_id or room.chat_channel_id)
  */

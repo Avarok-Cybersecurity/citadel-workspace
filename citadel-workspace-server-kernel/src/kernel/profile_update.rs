@@ -1,0 +1,142 @@
+//! What `UpdateUserProfile` changes on a user record, and which of it other
+//! members may read.
+//!
+//! Pure functions over `User`, so the rules are tested without a kernel: the
+//! handler checks, locks, reads, calls `apply_profile_update`, and writes.
+
+use std::collections::HashMap;
+
+use citadel_workspace_types::structs::{MetadataValue, User};
+
+/// `User.metadata` key holding the base64 avatar.
+pub const AVATAR_KEY: &str = "avatar";
+/// `User.metadata` key holding the contact email.
+pub const EMAIL_KEY: &str = "email";
+/// `User.metadata` key holding the job title.
+pub const TITLE_KEY: &str = "title";
+
+/// Metadata a non-admin member may read on another member's record.
+///
+/// The UI tells a user at sign-up that their email and job title are visible to
+/// members of this workspace, and `ListMembers` strips all metadata for
+/// non-admins, so these two keys are the ones it keeps. The avatar is NOT here:
+/// at up to 512 KiB each it was deliberately left out of list responses.
+pub const MEMBER_VISIBLE_KEYS: [&str; 2] = [EMAIL_KEY, TITLE_KEY];
+
+/// One profile update as received. `None` leaves a field unchanged.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProfileUpdate {
+    pub name: Option<String>,
+    pub avatar_data: Option<String>,
+    /// `Some("")` removes the stored email.
+    pub email: Option<String>,
+    /// `Some("")` removes the stored title.
+    pub title: Option<String>,
+}
+
+/// Apply an already-checked update to `user`.
+pub fn apply_profile_update(user: &mut User, update: ProfileUpdate) {
+    if let Some(name) = update.name {
+        user.name = name;
+    }
+    if let Some(avatar) = update.avatar_data {
+        user.metadata
+            .insert(AVATAR_KEY.to_string(), MetadataValue::String(avatar));
+    }
+    set_or_clear(&mut user.metadata, EMAIL_KEY, update.email);
+    set_or_clear(&mut user.metadata, TITLE_KEY, update.title);
+}
+
+fn set_or_clear(metadata: &mut HashMap<String, MetadataValue>, key: &str, value: Option<String>) {
+    match value {
+        None => {}
+        Some(v) if v.is_empty() => {
+            metadata.remove(key);
+        }
+        Some(v) => {
+            metadata.insert(key.to_string(), MetadataValue::String(v));
+        }
+    }
+}
+
+/// The part of `metadata` a non-admin member may see on someone else's record.
+pub fn member_visible_metadata(
+    metadata: &HashMap<String, MetadataValue>,
+) -> HashMap<String, MetadataValue> {
+    MEMBER_VISIBLE_KEYS
+        .iter()
+        .filter_map(|key| metadata.get(*key).map(|v| (key.to_string(), v.clone())))
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use citadel_workspace_types::structs::UserRole;
+
+    fn user() -> User {
+        User::new("u".into(), "U".into(), UserRole::Member)
+    }
+
+    fn update(email: Option<&str>, title: Option<&str>) -> ProfileUpdate {
+        ProfileUpdate {
+            name: None,
+            avatar_data: None,
+            email: email.map(str::to_string),
+            title: title.map(str::to_string),
+        }
+    }
+
+    fn text(user: &User, key: &str) -> Option<String> {
+        match user.metadata.get(key) {
+            Some(MetadataValue::String(s)) => Some(s.clone()),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn email_and_title_are_stored() {
+        let mut u = user();
+        apply_profile_update(&mut u, update(Some("a@b.c"), Some("Engineer")));
+        assert_eq!(text(&u, EMAIL_KEY).as_deref(), Some("a@b.c"));
+        assert_eq!(text(&u, TITLE_KEY).as_deref(), Some("Engineer"));
+    }
+
+    #[test]
+    fn an_absent_field_leaves_the_stored_value() {
+        let mut u = user();
+        apply_profile_update(&mut u, update(Some("a@b.c"), Some("Engineer")));
+        apply_profile_update(&mut u, update(None, None));
+        assert_eq!(text(&u, EMAIL_KEY).as_deref(), Some("a@b.c"));
+        assert_eq!(text(&u, TITLE_KEY).as_deref(), Some("Engineer"));
+    }
+
+    #[test]
+    fn an_empty_string_clears_the_field() {
+        let mut u = user();
+        apply_profile_update(&mut u, update(Some("a@b.c"), Some("Engineer")));
+        apply_profile_update(&mut u, update(Some(""), Some("")));
+        assert!(!u.metadata.contains_key(EMAIL_KEY));
+        assert!(!u.metadata.contains_key(TITLE_KEY));
+    }
+
+    #[test]
+    fn members_see_email_and_title_but_not_the_avatar() {
+        let mut u = user();
+        apply_profile_update(
+            &mut u,
+            ProfileUpdate {
+                name: None,
+                avatar_data: Some("AAAA".into()),
+                email: Some("a@b.c".into()),
+                title: Some("Engineer".into()),
+            },
+        );
+        u.metadata
+            .insert("other".into(), MetadataValue::String("x".into()));
+        let visible = member_visible_metadata(&u.metadata);
+        let mut keys: Vec<&str> = visible.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(keys, vec![EMAIL_KEY, TITLE_KEY]);
+    }
+}
