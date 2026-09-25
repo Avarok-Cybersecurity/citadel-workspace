@@ -88,6 +88,8 @@ struct AccountRow: View {
                     .buttonStyle(.borderedProminent)
                     .tint(.panelAccent)
                     .controlSize(.small)
+                    // Each row's button otherwise reads the same "Log in"; name whose account it is.
+                    .accessibilityLabel("Log in as \(account.username)")
             }
         }
         .padding(.horizontal, PanelMetrics.padding)
