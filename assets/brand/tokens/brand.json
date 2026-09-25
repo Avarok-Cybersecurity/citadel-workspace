@@ -1,5 +1,5 @@
 {
-  "mark": {
+  "color": {
     "ink": {
       "onLight": "#1C1D28",
       "onDark": "#FFFFFF"
@@ -7,75 +7,50 @@
     "arrow": {
       "onLight": "#6E59A5",
       "onDark": "#9B87F5"
+    },
+    "ground": {
+      "light": "#FFFFFF",
+      "dark": "#1C1D28"
     }
   },
-  "wordmark": {
-    "onLight": "#1C1D28",
-    "onDark": "#FFFFFF"
-  },
-  "tagline": {
-    "onLight": "#555766",
-    "onDark": "#B5A6C9"
-  },
-  "ground": {
-    "light": "#FFFFFF",
-    "dark": "#1C1D28"
-  },
-  "brand": {
-    "purple": "#6E59A5",
-    "purpleAccent": "#9B87F5",
-    "purpleFillLight": "#5C3FA7"
+  "type": {
+    "family": "Geist",
+    "weight": 500,
+    "tracking": "-0.01em",
+    "licence": "SIL Open Font License 1.1"
   },
   "geometry": {
-    "stroke": 62,
-    "strokeCompact": 92,
-    "vertices": {
-      "leftTop": [
-        31,
-        175
-      ],
-      "valleyOne": [
-        200,
-        735
-      ],
-      "apex": [
-        360,
-        275
-      ],
-      "valleyTwo": [
-        520,
-        735
-      ],
-      "arrowTip": [
-        732,
-        31
-      ]
-    },
-    "barbs": [
-      [
-        594,
-        112
-      ],
-      [
-        803,
-        175
-      ]
-    ],
-    "barbLength": 160,
-    "barbAngleDeg": 43,
-    "shaftAngleFromVerticalDeg": 16.8,
     "markBox": [
-      834,
-      766
+      33,
+      17,
+      136,
+      150
     ],
-    "clearSpaceUnit": 144,
-    "barbAxis": "symmetric about the shaft"
+    "circle": {
+      "cx": 100,
+      "cy": 100,
+      "r": 60
+    },
+    "stroke": 14,
+    "arcStartDeg": 45,
+    "arrow": {
+      "tipX": 162,
+      "y": 40,
+      "barb": 16
+    },
+    "compact": {
+      "r": 58,
+      "stroke": 22,
+      "tipX": 158,
+      "barb": 16.24
+    },
+    "clearSpace": 46
   },
   "minimumSize": {
-    "markPx": 20,
-    "markCompactBelowPx": 48,
-    "horizontalLockupPx": 130,
-    "wordmarkPx": 130,
-    "fullLockupPx": 240
+    "markPx": 16,
+    "compactBelowPx": 32,
+    "horizontalPx": 120,
+    "wordmarkPx": 96,
+    "stackedPx": 96
   }
 }
