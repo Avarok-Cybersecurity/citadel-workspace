@@ -127,11 +127,7 @@ export class WorkspaceServer extends DurableObject {
 
   start() {
     const env = this.env;
-    // `bind_addr` is recorded as the node's address and never bound: the object owns no socket.
-    const config = [
-      `bind_addr = "127.0.0.1:0"`,
-      `workspace_master_password = ${JSON.stringify(this.provisioning.masterPassword())}`,
-    ].join("\n");
+    const config = this.provisioning.kernelConfig();
     const t0 = Date.now();
     this.wasm = newInstance();
     const argon = new this.wasm.ArgonCost(
