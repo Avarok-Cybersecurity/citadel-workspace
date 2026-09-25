@@ -85,7 +85,7 @@ const SKIP = new Map([
   // store AND its persistence).
   ['lib/live-document-store/service.ts', 279],
   ['lib/p2p/message-handler.ts', 262],
-  ['pages/UserDirectory.tsx', 257],
+  ['pages/UserDirectory.tsx', 256],
   ['lib/server-auto-connect-service/service.ts', 256],
   ['lib/p2p-registration-service/connection.ts', 255],
   ['lib/revfs/revfs-retry.ts', 254],
@@ -93,7 +93,7 @@ const SKIP = new Map([
 
   ['components/ui/sidebar.tsx', 487],
   ['components/layout/sidebar/TreeNodesSection.tsx', 319],
-  ['lib/file-transfer/service.ts', 293],
+  ['lib/file-transfer/service.ts', 291],
   // Two data-testid attributes, so the integration suite's readiness probe can
   // stop keying on button copy — see ROBUSTNESS round 168.
   ['pages/Landing.tsx', 271],
