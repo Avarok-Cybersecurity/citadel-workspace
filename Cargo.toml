@@ -43,14 +43,14 @@ citadel-workspace-executor = { path = "./citadel-workspace-executor" }
 # Secondary package (for dev purposes, use the local path at ./citadel-internal-service)
 
 # Avarok deps
-citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "fix/group-membership-survives-reconnect" }
-citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "fix/group-membership-survives-reconnect" }
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
+citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 # Dev-only: the credential-mirror test reads MIN/MAX_{PASSWORD,USERNAME,NAME}_LENGTH
 # directly, so a client-side mirror cannot drift from the SDK unnoticed.
-citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "fix/group-membership-survives-reconnect" }
-citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "fix/group-membership-survives-reconnect" }
+citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
+citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 # The SDK's runtime shim: `spawn`, timers and clocks that work on native and on wasm32 alike.
-citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "fix/group-membership-survives-reconnect", default-features = false }
+citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
 
 # Avarok deps (for dev purposes, use the local path at ../Citadel-Protocol)
 #citadel_sdk = { path = "../Citadel-Protocol/citadel_sdk" }
