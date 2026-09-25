@@ -11,6 +11,7 @@
 
 use super::BackendTransactionManager;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
+use std::collections::HashSet;
 
 impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// Whether `username` names an account registered on this server.
@@ -29,6 +30,41 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
                     NetworkError::msg(format!("Could not look up the account '{username}': {e}"))
                 }),
             None => Ok(self.get_user(username).await?.is_some()),
+        }
+    }
+
+    /// The CIDs `username` has a mutual P2P registration with.
+    ///
+    /// The Citadel server records a registration once both sides agree
+    /// (`register_hyperlan_p2p_as_server`); its account store is the source the
+    /// SDK's `GetMutuals` answers from. Without a `NodeRemote` there is no
+    /// account store and so no registration of any kind: the empty set is the
+    /// true answer there, not a stand-in.
+    pub async fn p2p_contacts_of(&self, username: &str) -> Result<HashSet<u64>, NetworkError> {
+        let node_remote = self.node_remote.read().clone();
+        let Some(remote) = node_remote else {
+            return Ok(HashSet::new());
+        };
+        let peers = remote
+            .account_manager()
+            .get_hyperlan_peer_list(citadel_types::user::username_to_cid(username))
+            .await
+            .map_err(|e| {
+                NetworkError::msg(format!("Could not read the contacts of '{username}': {e}"))
+            })?;
+        Ok(peers.unwrap_or_default().into_iter().collect())
+    }
+
+    /// `p2p_contacts_of` for deciding what to redact: a read that fails is
+    /// logged and answered with no contacts, so a lookup error withholds a
+    /// hidden profile rather than handing it to someone who may be a stranger.
+    pub async fn contacts_for_redaction(&self, viewer: &str) -> HashSet<u64> {
+        match self.p2p_contacts_of(viewer).await {
+            Ok(contacts) => contacts,
+            Err(e) => {
+                citadel_logging::warn!(target: "citadel", "{e}; treating every hidden profile as hidden from {viewer}");
+                HashSet::new()
+            }
         }
     }
 }

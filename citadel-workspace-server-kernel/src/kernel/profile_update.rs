@@ -14,14 +14,30 @@ pub const AVATAR_KEY: &str = "avatar";
 pub const EMAIL_KEY: &str = "email";
 /// `User.metadata` key holding the job title.
 pub const TITLE_KEY: &str = "title";
+/// `User.metadata` key holding whether non-contacts may see the profile fields.
+pub const SHOW_PROFILE_TO_STRANGERS_KEY: &str = "show_profile_to_strangers";
+/// `User.metadata` key holding whether the user takes requests from strangers.
+pub const ACCEPTS_REQUESTS_FROM_STRANGERS_KEY: &str = "accepts_requests_from_strangers";
+
+/// The fields `show_profile_to_strangers` governs.
+pub const PROFILE_DETAIL_KEYS: [&str; 3] = [AVATAR_KEY, EMAIL_KEY, TITLE_KEY];
 
 /// Metadata a non-admin member may read on another member's record.
 ///
 /// `ListMembers` strips all metadata for non-admins and keeps only these: the
 /// profile a user is told, at sign-up, that members of the workspace can see.
 /// The avatar is among them -- it is a picture the user chose to show, and
-/// without it every other member saw initials only.
-pub const MEMBER_VISIBLE_KEYS: [&str; 3] = [AVATAR_KEY, EMAIL_KEY, TITLE_KEY];
+/// without it every other member saw initials only. Those three are further
+/// subject to the owner's `show_profile_to_strangers` (`profile_visibility`).
+///
+/// `accepts_requests_from_strangers` is here because it exists to be read by
+/// others: it is how a refused requester learns the refusal was a policy.
+pub const MEMBER_VISIBLE_KEYS: [&str; 4] = [
+    AVATAR_KEY,
+    EMAIL_KEY,
+    TITLE_KEY,
+    ACCEPTS_REQUESTS_FROM_STRANGERS_KEY,
+];
 
 /// One profile update as received. `None` leaves a field unchanged.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,6 +48,10 @@ pub struct ProfileUpdate {
     pub email: Option<String>,
     /// `Some("")` removes the stored title.
     pub title: Option<String>,
+    /// Stored under `SHOW_PROFILE_TO_STRANGERS_KEY`; see `profile_visibility`.
+    pub show_profile_to_strangers: Option<bool>,
+    /// Stored under `ACCEPTS_REQUESTS_FROM_STRANGERS_KEY`.
+    pub accepts_requests_from_strangers: Option<bool>,
 }
 
 /// Apply an already-checked update to `user`.
@@ -42,6 +62,22 @@ pub fn apply_profile_update(user: &mut User, update: ProfileUpdate) {
     set_or_clear(&mut user.metadata, AVATAR_KEY, update.avatar_data);
     set_or_clear(&mut user.metadata, EMAIL_KEY, update.email);
     set_or_clear(&mut user.metadata, TITLE_KEY, update.title);
+    set_flag(
+        &mut user.metadata,
+        SHOW_PROFILE_TO_STRANGERS_KEY,
+        update.show_profile_to_strangers,
+    );
+    set_flag(
+        &mut user.metadata,
+        ACCEPTS_REQUESTS_FROM_STRANGERS_KEY,
+        update.accepts_requests_from_strangers,
+    );
+}
+
+fn set_flag(metadata: &mut HashMap<String, MetadataValue>, key: &str, value: Option<bool>) {
+    if let Some(v) = value {
+        metadata.insert(key.to_string(), MetadataValue::Boolean(v));
+    }
 }
 
 fn set_or_clear(metadata: &mut HashMap<String, MetadataValue>, key: &str, value: Option<String>) {
@@ -81,6 +117,8 @@ mod tests {
             avatar_data: None,
             email: email.map(str::to_string),
             title: title.map(str::to_string),
+            show_profile_to_strangers: None,
+            accepts_requests_from_strangers: None,
         }
     }
 
@@ -116,6 +154,8 @@ mod tests {
             avatar_data: Some("AAAA".into()),
             email: None,
             title: None,
+            show_profile_to_strangers: None,
+            accepts_requests_from_strangers: None,
         };
         apply_profile_update(&mut u, with_avatar.clone());
         assert!(u.metadata.contains_key(AVATAR_KEY));
@@ -148,6 +188,8 @@ mod tests {
                 avatar_data: Some("AAAA".into()),
                 email: Some("a@b.c".into()),
                 title: Some("Engineer".into()),
+                show_profile_to_strangers: None,
+                accepts_requests_from_strangers: None,
             },
         );
         u.metadata
