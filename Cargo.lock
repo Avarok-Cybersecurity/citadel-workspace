@@ -882,6 +882,7 @@ dependencies = [
  "citadel_sdk",
  "serde_json",
  "tokio 1.49.0",
+ "toml",
  "uuid",
 ]
 
