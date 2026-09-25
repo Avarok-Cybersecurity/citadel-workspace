@@ -2,6 +2,7 @@ use citadel_workspace_types::structs::UserRole;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 use common::async_test_helpers::*;
+use common::member_test_utils::insert_user_with_role;
 use common::workspace_test_utils::*;
 
 // # Membership visibility across the two workspace representations
@@ -39,6 +40,8 @@ async fn roster<R: citadel_sdk::prelude::Ratchet>(
 #[tokio::test]
 async fn added_member_appears_in_the_roster() {
     let kernel = create_test_kernel().await;
+    // A registered account: AddMember admits no other.
+    insert_user_with_role(&kernel, "roster_probe_user", UserRole::Member).await;
 
     let response = execute_command(
         &kernel,
@@ -80,6 +83,8 @@ async fn added_member_appears_in_the_roster() {
 #[tokio::test]
 async fn removed_member_leaves_the_roster() {
     let kernel = create_test_kernel().await;
+    // A registered account: AddMember admits no other.
+    insert_user_with_role(&kernel, "departing_user", UserRole::Member).await;
 
     execute_command(
         &kernel,

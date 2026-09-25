@@ -723,6 +723,20 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             ));
         }
 
+        // Only a registered account may be admitted. Everything below mints a
+        // `User` for a name it has never seen, so a typo in the dialog became a
+        // phantom member with a role. Asked after AddUsers, so the refusal does
+        // not tell an unprivileged caller which usernames exist.
+        if !self
+            .backend_tx_manager
+            .account_is_registered(user_id_to_add)
+            .await?
+        {
+            return Err(NetworkError::msg(format!(
+                "No account named '{user_id_to_add}' exists on this workspace"
+            )));
+        }
+
         // AddUsers says they may add somebody; it says nothing about the role
         // they may hand out, and `user_id_to_add` may be the caller.
         self.ensure_may_grant_role(admin_id, &role).await?;
