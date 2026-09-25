@@ -15,6 +15,7 @@ pub mod group_access;
 pub mod ice_servers;
 pub mod profile_limits;
 pub mod profile_update;
+pub mod profile_visibility;
 pub mod rate_limiter;
 pub mod secret_eq;
 pub mod transaction;

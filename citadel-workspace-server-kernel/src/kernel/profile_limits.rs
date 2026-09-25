@@ -101,6 +101,8 @@ mod tests {
             avatar_data: None,
             email: email.map(str::to_string),
             title: title.map(str::to_string),
+            show_profile_to_strangers: None,
+            accepts_requests_from_strangers: None,
         }
     }
 

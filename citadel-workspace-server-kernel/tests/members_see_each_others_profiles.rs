@@ -64,6 +64,8 @@ async fn update(
             avatar_data: avatar.map(str::to_string),
             email: email.map(str::to_string),
             title: title.map(str::to_string),
+            show_profile_to_strangers: None,
+            accepts_requests_from_strangers: None,
         },
         ALICE,
     )
@@ -209,6 +211,8 @@ async fn a_placeholder_name_is_repaired_and_a_chosen_one_is_kept() {
             avatar_data: None,
             email: None,
             title: None,
+            show_profile_to_strangers: None,
+            accepts_requests_from_strangers: None,
         },
         ALICE,
     )

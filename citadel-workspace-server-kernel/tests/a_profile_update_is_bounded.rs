@@ -47,6 +47,8 @@ async fn update(
             avatar_data: avatar,
             email: None,
             title: None,
+            show_profile_to_strangers: None,
+            accepts_requests_from_strangers: None,
         },
         USER,
     )

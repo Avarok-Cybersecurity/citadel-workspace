@@ -49,7 +49,18 @@ email: string | null,
  * Job title shown to workspace members. `Some("")` clears it.
  * Absent from clients that predate the field, which reads as `None`.
  */
-title: string | null, } } | { "Message": { contents: Array<number>, } } | { "SendGroupMessage": { 
+title: string | null, 
+/**
+ * Whether members who are not the user's P2P contacts may see the
+ * avatar, email and title. `None` leaves the stored choice alone.
+ */
+show_profile_to_strangers: boolean | null, 
+/**
+ * Whether the user accepts P2P registration requests from people they
+ * are not connected with. Enforced by the user's own client; stored
+ * here only so a refused requester can be told why. `None` leaves it.
+ */
+accepts_requests_from_strangers: boolean | null, } } | { "Message": { contents: Array<number>, } } | { "SendGroupMessage": { 
 /**
  * UUID of the group chat channel (office.chat_channel_id or room.chat_channel_id)
  */
