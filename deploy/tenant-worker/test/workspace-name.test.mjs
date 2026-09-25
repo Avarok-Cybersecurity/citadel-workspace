@@ -78,20 +78,30 @@ describe("the workspace's name", () => {
     s.ws.close(1000, "done");
   });
 
-  it("an object provisioned before names were passed still starts, under the default name", async () => {
-    const { slug, object } = await namedTenant("wo", "Never Sent");
-    // The record as the control plane wrote it before this change: no display_name.
+  // "An object provisioned before names were passed still starts, under the default name" was
+  // superseded by adoption below: routing any request to such an object now hands it its D1 name.
+  // That a kernel with no name configured starts exactly as before is the kernel's own None test
+  // (the_root_workspace_takes_the_configured_name.rs).
+
+  it("an object provisioned before names were passed adopts its D1 name when it is next reached", async () => {
+    // admin-lab and bench were provisioned before this: their objects hold no name, so their
+    // kernels keep "Root Workspace". Routing a connection to the object hands it the name D1
+    // has held all along; the kernel renames a still-default root on its next start.
+    const { slug, object } = await namedTenant("wa", "Admin Lab");
     await runInDurableObject(object, async (instance, state) => {
       const { display_name: _dropped, ...old } = await state.storage.get(PROVISIONING_KEY);
       await state.storage.put(PROVISIONING_KEY, old);
       await instance.provisioning.load();
     });
-    expect((await objectStats(slug)).display_name).toBeNull();
-    expect(await kernelConfig(object)).not.toContain("workspace_name");
+    // Read inside the object: any routed request, objectStats included, already adopts.
+    expect(await runInDurableObject(object, (i) => i.provisioning.displayName())).toBeNull();
     const s = await startNode(slug);
-    await until("the root workspace to be seeded", () => nodeStored(object, "Root Workspace"), 30000);
-    expect((await objectStats(slug)).exit).toBeNull();
+    expect((await objectStats(slug)).display_name).toBe("Admin Lab");
+    expect((await kernelConfig(object)).split("\n")).toContain('workspace_name = "Admin Lab"');
     s.ws.close(1000, "done");
+    // Adoption never overwrites a name the object already holds.
+    expect(await runInDurableObject(object, (i) => i.provisioning.adoptDisplayName("Something Else"))).toBe(false);
+    expect((await objectStats(slug)).display_name).toBe("Admin Lab");
   });
 
   it("a name the kernel would refuse is refused at creation and at provisioning", async () => {

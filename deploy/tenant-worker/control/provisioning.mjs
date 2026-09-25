@@ -77,6 +77,20 @@ export class Provisioning {
     return lines.join("\n");
   }
 
+  /**
+   * Records the name for an object provisioned before names were passed on, from the D1 row that
+   * has held it all along. Never overwrites a name the object holds; returns whether it recorded
+   * one. The kernel renames a root still under the default name on its next start.
+   */
+  async adoptDisplayName(display_name) {
+    if (this.record === null || this.record.display_name) return false;
+    const name = displayNameOf(display_name);
+    if (name === null) return false;
+    this.record = { ...this.record, display_name: name };
+    await this.storage.put(KEY, this.record);
+    return true;
+  }
+
   async setEntitlements(entitlements) {
     if (this.record === null) throw new Error("entitlements for a tenant that has not been provisioned");
     this.record = { ...this.record, entitlements };

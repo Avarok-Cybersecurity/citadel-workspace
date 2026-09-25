@@ -90,6 +90,11 @@ export class WorkspaceServer extends DurableObject {
   }
 
   /** RPC from the control plane: the tenant's plan changed (a new billing period among it). */
+  /** RPC from the control plane: the D1 name, for an object provisioned without one. */
+  async adoptDisplayName(display_name) {
+    return this.provisioning.adoptDisplayName(display_name);
+  }
+
   async setEntitlements(entitlements) {
     await this.provisioning.setEntitlements(entitlements);
     this.#roll(Date.now());
