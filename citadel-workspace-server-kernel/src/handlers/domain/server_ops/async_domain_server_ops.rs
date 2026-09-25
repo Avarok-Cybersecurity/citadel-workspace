@@ -125,7 +125,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
             // it to manufacture a confederate above them once an Owner exists,
             // which is the lateral escalation that would otherwise be the point
             // of allowing this at all.
-            if self.workspace_has_no_member_holding(role).await? {
+            //
+            // And only an Admin may fill it. The seat is vacant exactly when the
+            // workspace is as it began -- an Admin and no Owner -- and the Admin is
+            // who appoints the first Owner. Open to every caller, it let a Member
+            // an Admin had trusted with AddUsers (UpdateMemberPermissions grants it
+            // per domain) add anyone, themselves included, as the Owner.
+            if actor.role == UserRole::Admin && self.workspace_has_no_member_holding(role).await? {
                 return Ok(());
             }
             return Err(NetworkError::msg(format!(
