@@ -115,8 +115,11 @@ jobs:
           - os: macos-14
             target: x86_64-apple-darwin
             asset: citadel-agent-macos-x64.tar.gz
+          # Static musl, not gnu: a gnu build links the runner's glibc (2.38 on
+          # ubuntu-latest), and agent-v0.7.0 would not start on Ubuntu 22.04 LTS or
+          # Debian 12. scripts/smoke-linux-portability.sh holds the line.
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
+            target: x86_64-unknown-linux-musl
             asset: citadel-agent-linux-x64.tar.gz
           - os: windows-latest
             target: x86_64-pc-windows-msvc

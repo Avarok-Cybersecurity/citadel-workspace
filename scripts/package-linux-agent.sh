@@ -77,6 +77,8 @@ install -Dm0644 "$work/citadel-agent.desktop" "$deb/etc/xdg/autostart/citadel-ag
 mkdir -p "$deb/DEBIAN"
 # /etc/xdg/autostart is a conffile: dpkg keeps an administrator's edit (or removal) of it.
 echo /etc/xdg/autostart/citadel-agent.desktop > "$deb/DEBIAN/conffiles"
+# No Depends: the agent is a static musl binary (smoke-linux-portability.sh checks it is),
+# and a libc dependency would only let apt install it where it could not run.
 cat > "$deb/DEBIAN/control" <<EOF
 Package: citadel-agent
 Version: $VERSION
@@ -84,7 +86,6 @@ Architecture: $DEB_ARCH
 Maintainer: Thomas Braun <thomas@avarok.net>
 Section: net
 Priority: optional
-Depends: libc6, libgcc-s1
 Homepage: https://github.com/Avarok-Cybersecurity/citadel-workspace
 Installed-Size: $(du -sk "$deb/usr" | cut -f1)
 Description: The local agent Citadel Workspaces connects to
