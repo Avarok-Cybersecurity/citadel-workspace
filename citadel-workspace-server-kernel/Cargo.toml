@@ -52,7 +52,7 @@ citadel_sdk = { workspace = true, features = ["sql"] }
 # `citadel_sdk` without its default `std`/`filesystem` features, as its own wasm tests build it.
 [target.'cfg(target_family = "wasm")'.dependencies]
 tokio = { version = "1.44.1", default-features = false, features = ["macros", "sync"] }
-citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "integ/live-sdk", default-features = false }
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
 
 [dev-dependencies]
 citadel_sdk = { workspace = true, features = ["localhost-testing", "multi-threaded"] }

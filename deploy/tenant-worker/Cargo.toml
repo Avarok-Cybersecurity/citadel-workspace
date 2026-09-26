@@ -7,7 +7,7 @@ members = ["server-wasm", "proof-client", "console-log"]
 resolver = "3"
 
 [workspace.dependencies]
-citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "integ/live-sdk", default-features = false }
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
 citadel-workspace-server-kernel = { path = "../../citadel-workspace-server-kernel" }
 citadel-workspace-types = { path = "../../citadel-workspace-types" }
 wasm-bindgen = "0.2.108"
