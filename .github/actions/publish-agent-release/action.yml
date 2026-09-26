@@ -7,6 +7,9 @@ inputs:
   github-token:
     description: The job's GITHUB_TOKEN, for gh.
     required: true
+  tag:
+    description: The agent-vX.Y.Z tag this release is published under (it must already exist).
+    required: true
 runs:
   using: composite
   steps:
@@ -49,9 +52,12 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
+        TAG: ${{ inputs.tag }}
       run: |
         set -euo pipefail
-        gh release create "${GITHUB_REF_NAME}" dist/* \
+        [[ "$TAG" =~ ^agent-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::not an agent-vX.Y.Z tag: $TAG"; exit 1; }
+        gh release create "$TAG" dist/* \
           --repo "${GITHUB_REPOSITORY}" \
-          --title "Citadel agent ${GITHUB_REF_NAME#agent-}" \
+          --verify-tag \
+          --title "Citadel agent ${TAG#agent-}" \
           --notes "The local agent that Citadel Workspace connects to. On a Mac open Citadel-Agent.dmg; on Windows run Citadel-Agent-x64.msi; on Debian or Ubuntu install citadel-agent-linux-x64.deb; on any other Linux run Citadel-Agent-x86_64.AppImage. Each starts the agent, and starts it again when you log in. The archives are for terminal use, as the bundled README describes. Verify a download with: gh attestation verify <file> --repo ${GITHUB_REPOSITORY}"

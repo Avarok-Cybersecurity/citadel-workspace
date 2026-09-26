@@ -2,6 +2,7 @@
  * Creating a tenant, reporting its status, and opening its billing portal.
  */
 import { checkSlug } from "./slug.mjs";
+import { displayNameOf, MAX_DISPLAY_NAME } from "./display-name.mjs";
 import {
   entitlements, intervalsOf, isPaid, maxSeats, MAX_STORAGE_BLOCKS, overageKey, overageSoldWith, storageKey, storageOfferedOn, tierIds, tierKey,
 } from "./plans.mjs";
@@ -26,8 +27,8 @@ export function readCreate(body) {
   if (extra.length) return bad(`unknown fields: ${extra.join(", ")}`);
   const slug = checkSlug(body.slug);
   if (!slug.ok) return { error: refuse(`slug-${slug.reason}`, `that address is ${slug.reason}`, 400) };
-  const name = typeof body.display_name === "string" ? body.display_name.trim() : "";
-  if (name.length < 1 || name.length > 64 || /[\u0000-\u001f\u007f]/.test(name)) return bad("display_name is 1 to 64 printable characters");
+  const name = displayNameOf(body.display_name);
+  if (name === null) return bad(`display_name is 1 to ${MAX_DISPLAY_NAME} printable characters`);
   if (!tierIds().includes(body.tier)) return bad(`tier is one of ${tierIds().join(", ")}`);
   if (typeof body.turnstile_token !== "string" || body.turnstile_token.length < 1 || body.turnstile_token.length > 2048) {
     return bad("turnstile_token is required");
@@ -91,6 +92,7 @@ export async function createTenant(io, cfg, body, ip) {
     await io.tenant(plan.slug).provision({
       tenant_id: row.tenant_id,
       master_password: claim,
+      display_name: plan.display_name,
       entitlements: entitlements({ ...plan, status: paid ? "pending" : "active", period_start: null, period_end: null }),
     });
     if (!paid) {

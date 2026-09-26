@@ -47,11 +47,10 @@ pub trait AsyncUserManagementOperations<R: Ratchet + Send + Sync + 'static>: Sen
         operation: UpdateOperation,
     ) -> Result<(), NetworkError>;
 
-    /// Updates a user's profile (name and/or avatar)
+    /// Updates a user's own profile (name, avatar, email, title)
     async fn update_user_profile(
         &self,
         user_id: &str,
-        name: Option<String>,
-        avatar_data: Option<String>,
+        update: crate::kernel::profile_update::ProfileUpdate,
     ) -> Result<User, NetworkError>;
 }

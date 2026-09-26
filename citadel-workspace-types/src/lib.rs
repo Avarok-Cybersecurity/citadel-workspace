@@ -147,12 +147,31 @@ pub enum WorkspaceProtocolRequest {
         domain_id: String,
     },
 
-    /// Update the current user's profile (name and/or avatar)
+    /// Update the current user's profile. Every field is optional; an absent
+    /// field is left as it is.
     UpdateUserProfile {
         /// New display name (optional)
         name: Option<String>,
-        /// Base64-encoded avatar image data (WebP format, max 256x256)
+        /// Base64-encoded avatar image data (WebP format, max 256x256).
+        /// `Some("")` removes the stored avatar.
         avatar_data: Option<String>,
+        /// Contact email shown to workspace members. `Some("")` clears it.
+        /// Absent from clients that predate the field, which reads as `None`.
+        email: Option<String>,
+        /// Job title shown to workspace members. `Some("")` clears it.
+        /// Absent from clients that predate the field, which reads as `None`.
+        title: Option<String>,
+        /// Whether members who are not the user's P2P contacts may see the
+        /// avatar, email and title. `None` leaves the stored choice alone.
+        show_profile_to_strangers: Option<bool>,
+        /// Whether the user accepts P2P registration requests from people they
+        /// are not connected with. Enforced by the user's own client; stored
+        /// here only so a refused requester can be told why. `None` leaves it.
+        accepts_requests_from_strangers: Option<bool>,
+        /// Whether other members' clients may show this user's presence.
+        /// The server's peer list reports connection state to everyone, so
+        /// this is published for their clients to honour. `None` leaves it.
+        shows_online_status: Option<bool>,
     },
 
     Message {

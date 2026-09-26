@@ -216,6 +216,8 @@ async fn a_custom_role_may_still_add_ordinary_members() {
     insert_user_with_role(&kernel, "climber", elevated_custom()).await;
     join_root(&kernel, "climber").await;
 
+    // A registered account: AddMember admits no other.
+    insert_user_with_role(&kernel, "newcomer", UserRole::Member).await;
     let outcome = try_add_as(&kernel, "climber", "newcomer", UserRole::Member).await;
     assert!(
         outcome.is_ok(),
@@ -273,6 +275,8 @@ async fn a_custom_role_may_still_grant_a_role_it_fully_covers() {
     insert_user_with_role(&kernel, "overranked", outranks_owner_custom()).await;
     join_root(&kernel, "overranked").await;
 
+    // A registered account: AddMember admits no other.
+    insert_user_with_role(&kernel, "newcomer", UserRole::Guest).await;
     // Guest holds ViewContent alone, which this role has.
     let outcome = try_add_as(&kernel, "overranked", "newcomer", UserRole::Guest).await;
     assert!(

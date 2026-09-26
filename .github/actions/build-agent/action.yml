@@ -51,6 +51,13 @@ runs:
         TARGET: ${{ inputs.target }}
       run: rustup target add "$TARGET"
 
+    # A musl target links statically against musl, whose C compiler wrapper the vendored
+    # OpenSSL, ring and pqcrypto builds all need; the runner has only glibc's.
+    - name: Install the musl toolchain
+      if: contains(inputs.target, '-musl')
+      shell: bash
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq musl-tools
+
     - name: Use this release's certificate
       uses: actions/download-artifact@v4
       with:

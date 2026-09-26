@@ -5,6 +5,7 @@ use citadel_workspace_types::{
 
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
 use common::async_test_helpers::*;
+use common::member_test_utils::create_test_user;
 use common::workspace_test_utils::*;
 
 /// # Editing a document requires EditMdx, not the right to restructure the workspace
@@ -42,6 +43,14 @@ async fn office_with_editor<R: citadel_sdk::prelude::Ratchet>(
     let WorkspaceProtocolResponse::Node(office) = created else {
         panic!("expected Node, got {created:?}");
     };
+
+    // A registered account: AddMember admits no other.
+    kernel
+        .domain_operations
+        .backend_tx_manager
+        .insert_user(user.to_string(), create_test_user(user, UserRole::Member))
+        .await
+        .expect("insert user");
 
     execute_command(
         kernel,

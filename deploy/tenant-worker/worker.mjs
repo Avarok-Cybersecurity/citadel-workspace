@@ -90,6 +90,11 @@ export class WorkspaceServer extends DurableObject {
   }
 
   /** RPC from the control plane: the tenant's plan changed (a new billing period among it). */
+  /** RPC from the control plane: the D1 name, for an object provisioned without one. */
+  async adoptDisplayName(display_name) {
+    return this.provisioning.adoptDisplayName(display_name);
+  }
+
   async setEntitlements(entitlements) {
     await this.provisioning.setEntitlements(entitlements);
     this.#roll(Date.now());
@@ -127,11 +132,7 @@ export class WorkspaceServer extends DurableObject {
 
   start() {
     const env = this.env;
-    // `bind_addr` is recorded as the node's address and never bound: the object owns no socket.
-    const config = [
-      `bind_addr = "127.0.0.1:0"`,
-      `workspace_master_password = ${JSON.stringify(this.provisioning.masterPassword())}`,
-    ].join("\n");
+    const config = this.provisioning.kernelConfig();
     const t0 = Date.now();
     this.wasm = newInstance();
     const argon = new this.wasm.ArgonCost(
@@ -156,6 +157,8 @@ export class WorkspaceServer extends DurableObject {
     return {
       run: (statements) =>
         storage.transactionSync(() => statements.map(([sql, params]) => [...storage.sql.exec(sql, ...params).raw()])),
+      // What RE-VFS uploads may hold in total: the plan's storage, in tiers.json's own GB.
+      quotaBytes: () => enforcedEntitlements(this.provisioning.summary().entitlements).storage_gb * METERING.gb_bytes,
     };
   }
 

@@ -1,19 +1,14 @@
 :root {
   --citadel-ink: #1C1D28;
   --citadel-arrow: #6E59A5;
-  --citadel-wordmark: #1C1D28;
-  --citadel-tagline: #555766;
   --citadel-ground: #FFFFFF;
-  --citadel-purple: #6E59A5;
-  --citadel-purple-accent: #9B87F5;
+  --citadel-font: "Geist", ui-sans-serif, system-ui, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --citadel-ink: #FFFFFF;
     --citadel-arrow: #9B87F5;
-    --citadel-wordmark: #FFFFFF;
-    --citadel-tagline: #B5A6C9;
     --citadel-ground: #1C1D28;
   }
 }

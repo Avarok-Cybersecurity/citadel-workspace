@@ -39,7 +39,7 @@ const meta = (html, name) => new RegExp(`<meta name="${name}" content="([^"]*)"`
 function headersOk(name, r, cache) {
   const h = (k) => r.headers.get(k);
   check(results, `${name}: CSP is nginx's with Turnstile`, h("content-security-policy") === EXPECTED_CSP
-    && EXPECTED_CSP.includes("script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' https://challenges.cloudflare.com;")
+    && EXPECTED_CSP.includes("script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com;")
     && EXPECTED_CSP.includes("frame-src https://challenges.cloudflare.com;"), h("content-security-policy"));
   check(results, `${name}: HSTS, frame, type, referrer and permissions policies`,
     h("strict-transport-security") === "max-age=31536000; includeSubDomains" && h("x-frame-options") === "DENY"
@@ -61,7 +61,8 @@ try {
     check(results, `GET ${path} meta tags`, meta(html, "citadel-control-plane") === "/api" && meta(html, "citadel-loopback-agent") === AGENT
       && meta(html, "citadel-default-server") === "",
       JSON.stringify(["citadel-control-plane", "citadel-loopback-agent", "citadel-default-server"].map((n) => meta(html, n))));
-    headersOk(`GET ${path}`, r, "public, no-cache");
+    headersOk(`GET ${path}`, r, "public, no-cache, no-transform");
+    check(results, `GET ${path} carries the Web Analytics beacon once`, (html.match(/static\.cloudflareinsights\.com\/beacon\.min\.js/g) ?? []).length === 1, "");
   }
   const bundle = /src="(\/assets\/[^"]+\.js)"/.exec(shell)?.[1];
   const js = await fetch(`${HTTP_BASE}${bundle}`);

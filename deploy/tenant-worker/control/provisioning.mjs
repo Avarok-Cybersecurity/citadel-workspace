@@ -1,9 +1,10 @@
 /**
  * What a tenant's Durable Object holds from the control plane: its master password (the claim
- * code the creator was shown once) and its entitlements. Kept in the object's own storage under
- * one key, apart from the workspace's data.
+ * code the creator was shown once), its entitlements and the name it was created with. Kept in
+ * the object's own storage under one key, apart from the workspace's data.
  */
 
+import { displayNameOf } from "./display-name.mjs";
 import { sha256Hex } from "./secrets.mjs";
 
 const KEY = "control:provisioning";
@@ -31,21 +32,63 @@ export class Provisioning {
   }
 
   /**
-   * Sets the tenant's master password. A slug freed by an expired, never-used reservation is
-   * provisioned again for its new tenant; an object whose node has ever started belongs to its
-   * tenant for good and refuses another's password.
+   * The name the workspace was created with, or null for an object provisioned before the name
+   * was passed on -- its kernel keeps the default name, as it always has.
    */
-  async provision({ tenant_id, master_password, entitlements }, running) {
+  displayName() {
+    return this.record?.display_name ?? null;
+  }
+
+  /**
+   * Sets the tenant's master password and name. A slug freed by an expired, never-used
+   * reservation is provisioned again for its new tenant; an object whose node has ever started
+   * belongs to its tenant for good and refuses another's password.
+   */
+  async provision({ tenant_id, master_password, entitlements, display_name }, running) {
     if (typeof tenant_id !== "string" || !HEX64.test(master_password ?? "") || typeof entitlements !== "object") {
       throw new Error("provisioning needs a tenant id, a 32-byte hex master password and entitlements");
     }
+    const name = displayNameOf(display_name);
+    if (name === null) throw new Error("provisioning needs a display_name the workspace can be shown by");
     const current = this.record;
     if (current && current.tenant_id !== tenant_id && (current.started || running)) {
       throw new Error("this object already serves another tenant");
     }
-    this.record = { tenant_id, master_password, entitlements, started: current?.tenant_id === tenant_id && Boolean(current.started) };
+    this.record = {
+      tenant_id,
+      master_password,
+      entitlements,
+      display_name: name,
+      started: current?.tenant_id === tenant_id && Boolean(current.started),
+    };
     await this.storage.put(KEY, this.record);
     await this.#fingerprint();
+  }
+
+  /**
+   * The node's kernel.toml. `bind_addr` is recorded as its address and never bound: the object
+   * owns no socket. Strings are JSON-quoted, which is a TOML basic string for any name
+   * `displayNameOf` admits (no control characters, no lone surrogates).
+   */
+  kernelConfig() {
+    const lines = [`bind_addr = "127.0.0.1:0"`, `workspace_master_password = ${JSON.stringify(this.masterPassword())}`];
+    const name = this.displayName();
+    if (name !== null) lines.push(`workspace_name = ${JSON.stringify(name)}`);
+    return lines.join("\n");
+  }
+
+  /**
+   * Records the name for an object provisioned before names were passed on, from the D1 row that
+   * has held it all along. Never overwrites a name the object holds; returns whether it recorded
+   * one. The kernel renames a root still under the default name on its next start.
+   */
+  async adoptDisplayName(display_name) {
+    if (this.record === null || this.record.display_name) return false;
+    const name = displayNameOf(display_name);
+    if (name === null) return false;
+    this.record = { ...this.record, display_name: name };
+    await this.storage.put(KEY, this.record);
+    return true;
   }
 
   async setEntitlements(entitlements) {
@@ -69,6 +112,7 @@ export class Provisioning {
     return {
       provisioned: this.record !== null,
       entitlements: this.record?.entitlements ?? null,
+      display_name: this.displayName(),
       master_password_sha256_prefix: this.fingerprint,
     };
   }

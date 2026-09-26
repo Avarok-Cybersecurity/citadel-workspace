@@ -32,6 +32,7 @@ fn config_naming(structure_file: Option<&str>) -> ServerConfig {
         content_base_dir: None,
         file_transfer: None,
         allow_first_connect_admin: None,
+        workspace_name: None,
     }
 }
 

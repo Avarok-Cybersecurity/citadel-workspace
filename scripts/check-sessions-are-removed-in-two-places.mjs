@@ -29,7 +29,8 @@
  *     user-initiated logout; it signs out a session the user is looking at in
  *     the Previous Sessions list rather than the one in front of them. The
  *     single-session branch checks `may_disconnect` first.
- *   - `connection_management_claim.rs` and `connect.rs` — a map entry for a
+ *   - `connection_management_claim_sdk.rs` (ClaimSession's SDK half, split out
+ *     of `connection_management_claim.rs`) and `connect.rs` — a map entry for a
  *     session the SDK no longer holds. Neither ends a live session; both drop a
  *     record of one that is already gone, which is the documented reconnect
  *     path in CLAUDE.md.
@@ -69,9 +70,12 @@ const MAY_REMOVE = new Map([
       'one; the single-session branch checks `may_disconnect` first',
   ],
   [
-    'requests/connection_management_claim.rs',
+    // Was connection_management_claim.rs; the removal moved here verbatim when
+    // that file passed the line cap, and that file no longer removes anything.
+    'requests/connection_management_claim_sdk.rs',
     'ClaimSession found no SDK session behind the entry, so it drops a record of a ' +
-      'session that has already ended rather than ending one',
+      'session that has already ended rather than ending one; skipped for a session ' +
+      'the agent is reconnecting, which has no SDK session yet by design',
   ],
 ]);
 

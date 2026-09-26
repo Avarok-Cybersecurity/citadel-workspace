@@ -54,7 +54,7 @@ const SKIP = new Map([
   // A guard that refuses to sign out of a session with no CID, after the
   // decision itself was moved to orphan-session-disconnect.ts. The remaining
   // growth is the branch and its explanation.
-  ['lib/connection/service.ts', 252],
+  ['lib/connection/service.ts', 251],
   // 252, up one from 251: `openingSessions`, the map that stops two callers
   // opening the same peer's media session at once. `accept()` opens for every
   // peer that has answered and the CallAccept handler opens for the one that
@@ -84,21 +84,19 @@ const SKIP = new Map([
   // lazy), revfs-service.ts and live-document-store/service.ts (each holds a
   // store AND its persistence).
   ['lib/live-document-store/service.ts', 279],
-  ['lib/p2p/message-handler.ts', 262],
-  ['pages/UserDirectory.tsx', 257],
+  ['lib/p2p/message-handler.ts', 259],
   ['lib/server-auto-connect-service/service.ts', 256],
-  ['lib/p2p-registration-service/connection.ts', 255],
   ['lib/revfs/revfs-retry.ts', 254],
   ['lib/multi-instance/instance-channel.ts', 251],
 
   ['components/ui/sidebar.tsx', 487],
-  ['components/layout/sidebar/TreeNodesSection.tsx', 319],
-  ['lib/file-transfer/service.ts', 293],
+  ['components/layout/sidebar/TreeNodesSection.tsx', 279],
+  ['lib/file-transfer/service.ts', 283],
   // Two data-testid attributes, so the integration suite's readiness probe can
   // stop keying on button copy — see ROBUSTNESS round 168.
-  ['pages/Landing.tsx', 271],
+  ['pages/Landing.tsx', 261],
   ['types/messaging-layer.ts', 453],
-  ['types/workspace-protocol.ts', 355],
+  ['types/workspace-protocol.ts', 352],
 ]);
 
 if (!statSync(SRC, { throwIfNoEntry: false })) {

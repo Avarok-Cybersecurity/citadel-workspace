@@ -49,21 +49,17 @@ lipo -create "$work/launcher-arm64" "$work/launcher-x86_64" -output "$APP/Conten
 sed "s/__VERSION__/$VERSION/g" "$SRC/Info.plist" > "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
-# The icon, from the brand kit's app icon, at every size macOS asks an .icns for.
-iconset="$work/AppIcon.iconset"
-mkdir -p "$iconset"
-for size in 16 32 128 256 512; do
-  sips -z "$size" "$size" "$BRAND/transparent/app-icon-1024.png" --out "$iconset/icon_${size}x${size}.png" >/dev/null
-  double=$((size * 2))
-  sips -z "$double" "$double" "$BRAND/transparent/app-icon-1024.png" --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
-done
-iconutil -c icns "$iconset" -o "$APP/Contents/Resources/AppIcon.icns"
-# The menu-bar glyph: the brand kit's template, 16 pt at 1x and 2x.
+# The icon: the brand kit's dark app icon (the guidelines' default), at every size an .icns holds.
+"$ROOT/scripts/make-macos-icns.sh" "$BRAND" "$APP/Contents/Resources/AppIcon.icns"
+# The menu-bar glyph: the kit's template cut (compact, black on clear), 16 pt at 1x and 2x.
+# Tray.swift marks it isTemplate, so the system tints it for the menu bar's appearance.
 cp "$BRAND/tray/tray-template-16.png" "$APP/Contents/Resources/tray-template.png"
 cp "$BRAND/tray/tray-template-32.png" "$APP/Contents/Resources/tray-template@2x.png"
-# The panel's title mark: the on-dark mark, sized for a 22 pt header at 2x.
-sips -z 44 44 "$BRAND/transparent/mark-1024-ondark.png" --out "$APP/Contents/Resources/mark@2x.png" >/dev/null
-sips -z 22 22 "$BRAND/transparent/mark-1024-ondark.png" --out "$APP/Contents/Resources/mark.png" >/dev/null
+# The panel's title: the kit's -ondark horizontal lockup (the panel is the dark ground, #1C1D28).
+# The transparent PNG carries its clear space (83 of 2048 px a side), so 32 pt tall draws the
+# lockup itself 137 pt wide -- over its 120 px floor. The name is the kit's outlines, never retyped.
+sips --resampleHeight 32 "$BRAND/transparent/logo-horizontal-1024-ondark.png" --out "$APP/Contents/Resources/lockup.png" >/dev/null
+sips --resampleHeight 64 "$BRAND/transparent/logo-horizontal-2048-ondark.png" --out "$APP/Contents/Resources/lockup@2x.png" >/dev/null
 
 # Inside out: the nested executable first, then the bundle, whose signature seals it. Not --deep,
 # which signs nested code with the bundle's options and hides which piece a failure belongs to.

@@ -146,6 +146,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     workspace_password: Option<String>,
     /// Workspace structure config (stored temporarily for on_start)
     workspace_structure: Option<(WorkspaceStructureConfig, Option<PathBuf>)>,
+    /// The configured root workspace name (`ServerConfig::workspace_name`), or none for the default
+    workspace_name: Option<String>,
     /// Broadcast channel for sending updates to all connected clients
     broadcast_tx: broadcast::Sender<BroadcastMessage>,
     /// File transfer configuration
@@ -202,6 +204,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             domain_operations: self.domain_operations.clone(),
             workspace_password: self.workspace_password.clone(),
             workspace_structure: self.workspace_structure.clone(),
+            workspace_name: self.workspace_name.clone(),
             broadcast_tx: self.broadcast_tx.clone(),
             file_transfer_config: self.file_transfer_config.clone(),
             first_connect_admin: self.first_connect_admin,
@@ -242,6 +245,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             domain_operations,
             workspace_password: None,
             workspace_structure: None,
+            workspace_name: None,
             broadcast_tx,
             file_transfer_config: FileTransferConfig::default(),
             rate_limiter: RateLimiter::new(DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL),
@@ -282,6 +286,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             user_id,
         )
         .await
+    }
+
+    /// The root workspace's configured name, applied by `inject_admin_user`.
+    pub fn set_workspace_name(&mut self, name: Option<String>) {
+        self.workspace_name = name;
     }
 
     /// Set by the server bootstrap from configuration. Off unless asked for.
@@ -586,7 +595,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             }
         }
 
-        if !workspace_exists {
+        if workspace_exists {
+            self.apply_configured_workspace_name().await?;
+        } else {
             info!(target: "citadel", "Creating root workspace with no owner (first user with master password becomes admin)");
 
             // Record the seed obligation BEFORE any of the durable writes below.
@@ -629,7 +640,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             // Create root workspace object with no owner - first user with master password claims it
             let root_workspace_obj = citadel_workspace_types::structs::Workspace {
                 id: crate::WORKSPACE_ROOT_ID.to_string(),
-                name: "Root Workspace".to_string(),
+                name: self
+                    .workspace_name
+                    .clone()
+                    .unwrap_or_else(|| crate::DEFAULT_ROOT_WORKSPACE_NAME.to_string()),
                 description: "The main workspace for this instance.".to_string(),
                 owner_id: UNASSIGNED_OWNER.to_string(),
                 members: vec![],
@@ -666,6 +680,35 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         }
 
         Ok(())
+    }
+
+    /// Gives an existing root workspace the configured name, if it still has the default one.
+    ///
+    /// This is what names a workspace created before its name was configured -- every hosted
+    /// tenant created while the control plane dropped the name. Only the default is replaced: a
+    /// name an administrator chose is theirs, and the configuration never takes it back.
+    async fn apply_configured_workspace_name(&self) -> Result<(), NetworkError> {
+        let Some(name) = self.workspace_name.as_deref() else {
+            return Ok(());
+        };
+        let backend = &self.domain_operations.backend_tx_manager;
+        let Some(mut workspace) = backend.get_workspace(crate::WORKSPACE_ROOT_ID).await? else {
+            return Ok(());
+        };
+        if workspace.name != crate::DEFAULT_ROOT_WORKSPACE_NAME || workspace.name == name {
+            return Ok(());
+        }
+        info!(target: "citadel", "Naming the root workspace {name:?} (it had the default name)");
+        workspace.name = name.to_string();
+        backend
+            .insert_workspace(crate::WORKSPACE_ROOT_ID.to_string(), workspace.clone())
+            .await?;
+        backend
+            .insert_domain(
+                crate::WORKSPACE_ROOT_ID.to_string(),
+                citadel_workspace_types::structs::Domain::Workspace { workspace },
+            )
+            .await
     }
 
     /// Get a reference to the async domain operations
@@ -1545,6 +1588,28 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                         }
                     };
 
+                    // The full name the account registered with, kept by the SDK
+                    // on the server's account record. A failed read costs only the
+                    // display name (the username stands in), so it is logged and
+                    // the connection proceeds.
+                    let registered_full_name = match account_manager
+                        .get_full_name_by_cid(connect_success.session_cid)
+                        .await
+                    {
+                        Ok(name) => name,
+                        Err(e) => {
+                            warn!(target: "citadel", "[ASYNC_KERNEL] Could not read the registered full name of {}: {:?}", user_id, e);
+                            None
+                        }
+                    };
+                    // Before the enrolment block below, which takes the same lock.
+                    crate::kernel::display_name::repair_placeholder_name(
+                        &this.domain_operations.backend_tx_manager,
+                        &user_id,
+                        registered_full_name.as_deref(),
+                    )
+                    .await?;
+
                     // Add user to workspace domain if they aren't already a member
                     if !workspace.members().contains(&user_id) {
                         info!(target: "citadel", "[ASYNC_KERNEL] Adding user {} to workspace domain", user_id);
@@ -1602,7 +1667,10 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             // Create a basic user with Member role
                             let user = User::new(
                                 user_id.clone(),
-                                user_id.clone(), // Use user_id as display name initially
+                                crate::kernel::display_name::display_name_for(
+                                    &user_id,
+                                    registered_full_name.as_deref(),
+                                ),
                                 UserRole::Member,
                             );
                             this.domain_operations
@@ -2277,7 +2345,7 @@ mod structure_seed_idempotency_tests {
     async fn establish_pre_marker_workspace(kernel: &Kernel) {
         let workspace = citadel_workspace_types::structs::Workspace {
             id: crate::WORKSPACE_ROOT_ID.to_string(),
-            name: "Root Workspace".to_string(),
+            name: crate::DEFAULT_ROOT_WORKSPACE_NAME.to_string(),
             description: "An existing deployment".to_string(),
             owner_id: UNASSIGNED_OWNER.to_string(),
             members: vec![],
