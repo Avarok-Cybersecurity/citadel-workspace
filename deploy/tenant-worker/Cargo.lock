@@ -254,7 +254,7 @@ dependencies = [
 [[package]]
 name = "async_ip"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#539e416de7e7cadb9e1fd5a2e015bd0d0a323a85"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#de3aca85dfe2952f32bed51db20b2894a1db6770"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -747,7 +747,7 @@ dependencies = [
 [[package]]
 name = "citadel_crypt"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#539e416de7e7cadb9e1fd5a2e015bd0d0a323a85"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#de3aca85dfe2952f32bed51db20b2894a1db6770"
 dependencies = [
  "arrayvec",
  "async-trait",
@@ -780,7 +780,7 @@ dependencies = [
 [[package]]
 name = "citadel_io"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#539e416de7e7cadb9e1fd5a2e015bd0d0a323a85"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#de3aca85dfe2952f32bed51db20b2894a1db6770"
 dependencies = [
  "bytes",
  "citadel_io_macros",
@@ -802,7 +802,7 @@ dependencies = [
 [[package]]
 name = "citadel_io_macros"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#539e416de7e7cadb9e1fd5a2e015bd0d0a323a85"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#de3aca85dfe2952f32bed51db20b2894a1db6770"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -812,7 +812,7 @@ dependencies = [
 [[package]]
 name = "citadel_logging"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#539e416de7e7cadb9e1fd5a2e015bd0d0a323a85"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#de3aca85dfe2952f32bed51db20b2894a1db6770"
 dependencies = [
  "tracing",
  "tracing-subscriber",
@@ -821,7 +821,7 @@ dependencies = [
 [[package]]
 name = "citadel_media"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#539e416de7e7cadb9e1fd5a2e015bd0d0a323a85"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#de3aca85dfe2952f32bed51db20b2894a1db6770"
 dependencies = [
  "bytes",
 ]
@@ -829,7 +829,7 @@ dependencies = [
 [[package]]
 name = "citadel_pqcrypto"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#539e416de7e7cadb9e1fd5a2e015bd0d0a323a85"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#de3aca85dfe2952f32bed51db20b2894a1db6770"
 dependencies = [
  "aes-gcm",
  "ascon-aead",
@@ -857,7 +857,7 @@ dependencies = [
 [[package]]
 name = "citadel_proto"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#539e416de7e7cadb9e1fd5a2e015bd0d0a323a85"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#de3aca85dfe2952f32bed51db20b2894a1db6770"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -899,7 +899,7 @@ dependencies = [
 [[package]]
 name = "citadel_sdk"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#539e416de7e7cadb9e1fd5a2e015bd0d0a323a85"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#de3aca85dfe2952f32bed51db20b2894a1db6770"
 dependencies = [
  "anyhow",
  "bytes",
@@ -920,7 +920,7 @@ dependencies = [
 [[package]]
 name = "citadel_treekem"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#539e416de7e7cadb9e1fd5a2e015bd0d0a323a85"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#de3aca85dfe2952f32bed51db20b2894a1db6770"
 dependencies = [
  "arrayvec",
  "bincode",
@@ -938,7 +938,7 @@ dependencies = [
 [[package]]
 name = "citadel_types"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#539e416de7e7cadb9e1fd5a2e015bd0d0a323a85"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#de3aca85dfe2952f32bed51db20b2894a1db6770"
 dependencies = [
  "bincode",
  "bytes",
@@ -957,7 +957,7 @@ dependencies = [
 [[package]]
 name = "citadel_user"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#539e416de7e7cadb9e1fd5a2e015bd0d0a323a85"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#de3aca85dfe2952f32bed51db20b2894a1db6770"
 dependencies = [
  "async-trait",
  "bincode",
@@ -984,7 +984,7 @@ dependencies = [
 [[package]]
 name = "citadel_wire"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#539e416de7e7cadb9e1fd5a2e015bd0d0a323a85"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#de3aca85dfe2952f32bed51db20b2894a1db6770"
 dependencies = [
  "anyhow",
  "async-trait-with-sync",
@@ -2667,7 +2667,7 @@ dependencies = [
 [[package]]
 name = "netbeam"
 version = "0.14.0"
-source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#539e416de7e7cadb9e1fd5a2e015bd0d0a323a85"
+source = "git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?branch=integ%2Flive-sdk#de3aca85dfe2952f32bed51db20b2894a1db6770"
 dependencies = [
  "anyhow",
  "async-stream",
