@@ -50,7 +50,7 @@ sed "s/__VERSION__/$VERSION/g" "$SRC/Info.plist" > "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
 # The icon: the brand kit's dark app icon (the guidelines' default), at every size an .icns holds.
-"$ROOT/scripts/make-macos-icns.sh" "$BRAND/dark/app-icon-1024.png" "$APP/Contents/Resources/AppIcon.icns"
+"$ROOT/scripts/make-macos-icns.sh" "$BRAND" "$APP/Contents/Resources/AppIcon.icns"
 # The menu-bar glyph: the kit's template cut (compact, black on clear), 16 pt at 1x and 2x.
 # Tray.swift marks it isTemplate, so the system tints it for the menu bar's appearance.
 cp "$BRAND/tray/tray-template-16.png" "$APP/Contents/Resources/tray-template.png"

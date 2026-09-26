@@ -1,0 +1,176 @@
+# Deploys work.avarok.net -- the tenant Worker, its Durable Object server and the UI -- and makes
+# sure the agent people download is the one that deployment expects, in that order:
+#
+#   master passes Publish Images (which runs the whole Validate suite first)
+#     -> plan:    is the agent this commit builds already released? (scripts/agent-release-state.mjs)
+#     -> release: if not, tag agent-vX.Y.Z here and publish it (release-agent.yml), notarised,
+#                 attested, every asset the UI links present
+#     -> deploy:  deploy/tenant-worker/deploy.sh (its own gates, D1 migrations, smoke)
+#     -> verify:  the latest release IS this commit's agent, its downloads resolve, the site answers
+#
+# The site used to be deployed by hand from an integration branch while the agent download stayed
+# at whatever was last tagged: two days of agent fixes ran live on a locally built agent nobody
+# could download. Here the site cannot go out ahead of its agent: a changed agent with an unbumped
+# version fails `plan` (and fails the PR earlier, in Validate), and `deploy` waits on the release.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["Publish Images"]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+# One deploy at a time, and never cancelled halfway: a cancelled deploy can leave the Worker and
+# the release out of step, which is the state this workflow exists to prevent.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Plan (is the agent released?)
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      state: ${{ steps.state.outputs.state }}
+      version: ${{ steps.state.outputs.version }}
+      tag: ${{ steps.state.outputs.tag }}
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0 # the agent-v* tags and the history between them
+      - id: sha
+        name: The commit being deployed is still master's head
+        # A slower run for an older commit must not deploy over a newer one.
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse origin/master)"
+          if [ "$SHA" != "$head" ]; then
+            echo "::error::$SHA is no longer master's head ($head); the run for the newer commit deploys instead."
+            exit 1
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+      - id: state
+        run: node scripts/agent-release-state.mjs
+      - name: A changed agent carries a new version
+        if: steps.state.outputs.state == 'needs-bump'
+        run: |
+          echo "::error::The agent changed since its last release but its version did not. Bump citadel-workspace-internal-service/Cargo.toml; nothing was deployed."
+          exit 1
+
+  tag:
+    name: Tag the agent release
+    needs: plan
+    if: needs.plan.outputs.state == 'needs-release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Create ${{ needs.plan.outputs.tag }} at the deployed commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          SHA: ${{ needs.plan.outputs.sha }}
+        run: |
+          set -euo pipefail
+          # Idempotent for a re-run: the tag may exist already, but only at this commit.
+          if existing="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.sha 2>/dev/null)"; then
+            [ "$existing" = "$SHA" ] || { echo "::error::$TAG already exists at $existing, not $SHA"; exit 1; }
+            echo "$TAG already at $SHA"
+          else
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$TAG" -f "sha=$SHA" >/dev/null
+            echo "created $TAG at $SHA"
+          fi
+
+  release:
+    name: Release the agent
+    needs: [plan, tag]
+    if: needs.plan.outputs.state == 'needs-release'
+    uses: ./.github/workflows/release-agent.yml
+    with:
+      tag: ${{ needs.plan.outputs.tag }}
+      publish: true
+    secrets: inherit
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+  deploy:
+    name: Deploy the site
+    needs: [plan, release]
+    # After the release, or with no release needed; never after a failed or skipped-by-failure one.
+    if: >-
+      always() && needs.plan.result == 'success' &&
+      (needs.release.result == 'success' || (needs.release.result == 'skipped' && needs.plan.outputs.state == 'released'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            deploy/tenant-worker/package-lock.json
+      - name: Rust with the wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+      - name: wasm-pack
+        timeout-minutes: 10
+        run: cargo install wasm-pack --locked --version 0.13.1
+      - name: UI dependencies
+        timeout-minutes: 15
+        run: npm ci --no-audit --no-fund
+      - name: deploy.sh
+        env:
+          CF_TOKEN: ${{ secrets.CITADEL_CF_DEPLOY_TOKEN }}
+          STRIPE_KEY: ${{ secrets.STRIPE_TEST_RESTRICTED_KEY }}
+        run: |
+          set -euo pipefail
+          [ -n "$CF_TOKEN" ] || { echo "::error::the CITADEL_CF_DEPLOY_TOKEN secret is not set"; exit 1; }
+          [ -n "$STRIPE_KEY" ] || { echo "::error::the STRIPE_TEST_RESTRICTED_KEY secret is not set"; exit 1; }
+          umask 077
+          printf '%s' "$CF_TOKEN" > "$RUNNER_TEMP/cf-token"
+          printf '%s' "$STRIPE_KEY" > "$RUNNER_TEMP/stripe-key"
+          CITADEL_CF_TOKEN_FILE="$RUNNER_TEMP/cf-token" CITADEL_STRIPE_KEY_FILE="$RUNNER_TEMP/stripe-key" \
+            deploy/tenant-worker/deploy.sh
+          rm -f "$RUNNER_TEMP/cf-token" "$RUNNER_TEMP/stripe-key"
+
+  verify:
+    name: The site and the download agree
+    needs: [plan, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: The latest release is this commit's agent, and its downloads resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          latest="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          [ "$latest" = "$TAG" ] || { echo "::error::the latest release is $latest, not $TAG: the UI's download links would serve the wrong agent"; exit 1; }
+          for asset in Citadel-Agent.dmg Citadel-Agent-x64.msi citadel-agent-linux-x64.deb Citadel-Agent-x86_64.AppImage; do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -L "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/$asset")"
+            [ "$code" = 200 ] || { echo "::error::$asset answered $code"; exit 1; }
+            echo "ok $asset"
+          done
+      - name: The site answers
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://work.avarok.net/version.json

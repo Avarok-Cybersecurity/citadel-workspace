@@ -36,6 +36,20 @@ env:
   INTERNAL_SERVICE_STUN_SERVERS: "stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302"
 
 jobs:
+  agent-release-in-step:
+    name: The agent's version moves with the agent
+    # Deploy (deploy.yml) refuses a commit whose agent changed under an already-released version,
+    # because the site would then expect an agent nobody can download. Failing the PR says so
+    # before merge rather than at deploy.
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the agent-v* tags and the history between them
+      - run: node --test scripts/lib/agent-release-decision.test.mjs
+      - run: node scripts/agent-release-state.mjs --pr
+
   fmt:
     name: Cargo Fmt - ${{ matrix.crate }}
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
@@ -2579,6 +2593,7 @@ jobs:
     name: Validation passed
     if: always()
     needs:
+      - agent-release-in-step
       - fmt
       - clippy
       - crate-coverage

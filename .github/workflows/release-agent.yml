@@ -40,10 +40,28 @@ on:
       tag:
         description: 'Tag to publish (e.g. agent-v0.1.0). Dry run if the tag does not exist.'
         required: false
+  # The deploy pipeline (deploy.yml) releases the agent a commit builds before it deploys the site
+  # that expects it. A tag pushed by a workflow's own token triggers nothing, so it calls this.
+  workflow_call:
+    inputs:
+      tag:
+        description: 'The agent-vX.Y.Z tag to publish; it must already exist at the calling commit.'
+        type: string
+        required: true
+      publish:
+        description: 'Publish the release (true), or build and smoke-test only (false).'
+        type: boolean
+        required: true
 
 # Read-only by default; publish, the one job that writes, asks for what it needs.
 permissions:
   contents: read
+
+# The ref this run releases: the tag a caller asked to publish, else what triggered the run (a tag
+# push publishes; a dispatch is a dry run). One value, read by the version check, the certificate
+# and the publish job alike, so they cannot disagree about whether this is a real release.
+env:
+  RELEASE_REF: ${{ inputs.publish && format('refs/tags/{0}', inputs.tag) || github.ref }}
 
 jobs:
   # The version every artefact is built as and checked against: Cargo.toml's, which a tag must
@@ -59,7 +77,7 @@ jobs:
         name: The version, and the tag agrees with it
         run: |
           set -euo pipefail
-          v="$(./scripts/release-version.sh citadel-workspace-internal-service/Cargo.toml "$GITHUB_REF")"
+          v="$(./scripts/release-version.sh citadel-workspace-internal-service/Cargo.toml "$RELEASE_REF")"
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "Building citadel-agent $v"
 
@@ -72,6 +90,7 @@ jobs:
       - uses: ./.github/actions/agent-certificate
         with:
           cloudflare-dns-api-token: ${{ secrets.CLOUDFLARE_DNS_API_TOKEN }}
+          issue: ${{ startsWith(env.RELEASE_REF, 'refs/tags/agent-v') }}
 
   build:
     needs: [certificate, version]
@@ -265,7 +284,7 @@ jobs:
     # Only a real tag push publishes. workflow_dispatch builds and smoke-tests
     # every platform without creating a release, so the pipeline is exercisable
     # without minting a version.
-    if: startsWith(github.ref, 'refs/tags/agent-v')
+    if: startsWith(github.ref, 'refs/tags/agent-v') || inputs.publish
     permissions:
       contents: write      # the release
       id-token: write      # the attestations' Sigstore certificate
@@ -287,3 +306,4 @@ jobs:
       - uses: ./.github/actions/publish-agent-release
         with:
           github-token: ${{ github.token }}
+          tag: ${{ inputs.publish && inputs.tag || github.ref_name }}
