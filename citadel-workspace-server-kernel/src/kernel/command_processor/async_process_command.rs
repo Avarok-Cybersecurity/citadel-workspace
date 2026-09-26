@@ -485,6 +485,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             title,
             show_profile_to_strangers,
             accepts_requests_from_strangers,
+            shows_online_status,
         } => {
             use crate::handlers::domain::async_ops::AsyncUserManagementOperations;
             let update = crate::kernel::profile_update::ProfileUpdate {
@@ -494,6 +495,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 title: title.clone(),
                 show_profile_to_strangers: *show_profile_to_strangers,
                 accepts_requests_from_strangers: *accepts_requests_from_strangers,
+                shows_online_status: *shows_online_status,
             };
             match kernel
                 .domain_ops()

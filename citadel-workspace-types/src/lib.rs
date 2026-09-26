@@ -168,6 +168,10 @@ pub enum WorkspaceProtocolRequest {
         /// are not connected with. Enforced by the user's own client; stored
         /// here only so a refused requester can be told why. `None` leaves it.
         accepts_requests_from_strangers: Option<bool>,
+        /// Whether other members' clients may show this user's presence.
+        /// The server's peer list reports connection state to everyone, so
+        /// this is published for their clients to honour. `None` leaves it.
+        shows_online_status: Option<bool>,
     },
 
     Message {

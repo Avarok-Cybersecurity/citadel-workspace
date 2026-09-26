@@ -60,7 +60,13 @@ show_profile_to_strangers: boolean | null,
  * are not connected with. Enforced by the user's own client; stored
  * here only so a refused requester can be told why. `None` leaves it.
  */
-accepts_requests_from_strangers: boolean | null, } } | { "Message": { contents: Array<number>, } } | { "SendGroupMessage": { 
+accepts_requests_from_strangers: boolean | null, 
+/**
+ * Whether other members' clients may show this user's presence.
+ * The server's peer list reports connection state to everyone, so
+ * this is published for their clients to honour. `None` leaves it.
+ */
+shows_online_status: boolean | null, } } | { "Message": { contents: Array<number>, } } | { "SendGroupMessage": { 
 /**
  * UUID of the group chat channel (office.chat_channel_id or room.chat_channel_id)
  */

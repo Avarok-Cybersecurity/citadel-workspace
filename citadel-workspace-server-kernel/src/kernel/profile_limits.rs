@@ -103,6 +103,7 @@ mod tests {
             title: title.map(str::to_string),
             show_profile_to_strangers: None,
             accepts_requests_from_strangers: None,
+            shows_online_status: None,
         }
     }
 

@@ -18,6 +18,8 @@ pub const TITLE_KEY: &str = "title";
 pub const SHOW_PROFILE_TO_STRANGERS_KEY: &str = "show_profile_to_strangers";
 /// `User.metadata` key holding whether the user takes requests from strangers.
 pub const ACCEPTS_REQUESTS_FROM_STRANGERS_KEY: &str = "accepts_requests_from_strangers";
+/// `User.metadata` key holding whether other members may be shown the user's presence.
+pub const SHOWS_ONLINE_STATUS_KEY: &str = "shows_online_status";
 
 /// The fields `show_profile_to_strangers` governs.
 pub const PROFILE_DETAIL_KEYS: [&str; 3] = [AVATAR_KEY, EMAIL_KEY, TITLE_KEY];
@@ -32,11 +34,16 @@ pub const PROFILE_DETAIL_KEYS: [&str; 3] = [AVATAR_KEY, EMAIL_KEY, TITLE_KEY];
 ///
 /// `accepts_requests_from_strangers` is here because it exists to be read by
 /// others: it is how a refused requester learns the refusal was a policy.
-pub const MEMBER_VISIBLE_KEYS: [&str; 4] = [
+///
+/// `shows_online_status` likewise: presence comes from the Citadel server's
+/// peer list, which reports it to everyone, so the only party able to withhold
+/// it is the viewer's client -- and it can only do that if it can read this.
+pub const MEMBER_VISIBLE_KEYS: [&str; 5] = [
     AVATAR_KEY,
     EMAIL_KEY,
     TITLE_KEY,
     ACCEPTS_REQUESTS_FROM_STRANGERS_KEY,
+    SHOWS_ONLINE_STATUS_KEY,
 ];
 
 /// One profile update as received. `None` leaves a field unchanged.
@@ -52,6 +59,8 @@ pub struct ProfileUpdate {
     pub show_profile_to_strangers: Option<bool>,
     /// Stored under `ACCEPTS_REQUESTS_FROM_STRANGERS_KEY`.
     pub accepts_requests_from_strangers: Option<bool>,
+    /// Stored under `SHOWS_ONLINE_STATUS_KEY`.
+    pub shows_online_status: Option<bool>,
 }
 
 /// Apply an already-checked update to `user`.
@@ -71,6 +80,11 @@ pub fn apply_profile_update(user: &mut User, update: ProfileUpdate) {
         &mut user.metadata,
         ACCEPTS_REQUESTS_FROM_STRANGERS_KEY,
         update.accepts_requests_from_strangers,
+    );
+    set_flag(
+        &mut user.metadata,
+        SHOWS_ONLINE_STATUS_KEY,
+        update.shows_online_status,
     );
 }
 
@@ -119,6 +133,7 @@ mod tests {
             title: title.map(str::to_string),
             show_profile_to_strangers: None,
             accepts_requests_from_strangers: None,
+            shows_online_status: None,
         }
     }
 
@@ -156,6 +171,7 @@ mod tests {
             title: None,
             show_profile_to_strangers: None,
             accepts_requests_from_strangers: None,
+            shows_online_status: None,
         };
         apply_profile_update(&mut u, with_avatar.clone());
         assert!(u.metadata.contains_key(AVATAR_KEY));
@@ -190,6 +206,7 @@ mod tests {
                 title: Some("Engineer".into()),
                 show_profile_to_strangers: None,
                 accepts_requests_from_strangers: None,
+                shows_online_status: None,
             },
         );
         u.metadata
@@ -198,5 +215,22 @@ mod tests {
         let mut keys: Vec<&str> = visible.keys().map(String::as_str).collect();
         keys.sort_unstable();
         assert_eq!(keys, vec![AVATAR_KEY, EMAIL_KEY, TITLE_KEY]);
+    }
+
+    #[test]
+    fn the_presence_choice_is_stored_and_members_can_read_it() {
+        let mut u = user();
+        apply_profile_update(
+            &mut u,
+            ProfileUpdate {
+                shows_online_status: Some(false),
+                ..update(None, None)
+            },
+        );
+        let visible = member_visible_metadata(&u.metadata);
+        assert_eq!(
+            visible.get(SHOWS_ONLINE_STATUS_KEY),
+            Some(&MetadataValue::Boolean(false))
+        );
     }
 }

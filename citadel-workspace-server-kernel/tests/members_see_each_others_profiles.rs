@@ -66,6 +66,7 @@ async fn update(
             title: title.map(str::to_string),
             show_profile_to_strangers: None,
             accepts_requests_from_strangers: None,
+            shows_online_status: None,
         },
         ALICE,
     )
@@ -213,6 +214,7 @@ async fn a_placeholder_name_is_repaired_and_a_chosen_one_is_kept() {
             title: None,
             show_profile_to_strangers: None,
             accepts_requests_from_strangers: None,
+            shows_online_status: None,
         },
         ALICE,
     )

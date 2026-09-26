@@ -65,6 +65,7 @@ async fn alice_sets(kernel: &Kernel, show: Option<bool>, accepts: Option<bool>) 
             title: Some("Engineer".to_string()),
             show_profile_to_strangers: show,
             accepts_requests_from_strangers: accepts,
+            shows_online_status: None,
         },
         ALICE,
     )
@@ -172,5 +173,56 @@ async fn the_request_policy_is_readable_by_the_people_it_refuses() {
         seen.metadata.get("accepts_requests_from_strangers"),
         Some(&MetadataValue::Boolean(false)),
         "a refused requester could not be told why"
+    );
+}
+
+async fn alice_publishes_presence(kernel: &Kernel, shows: bool) {
+    let response = process_command_with_user(
+        kernel,
+        &WorkspaceProtocolRequest::UpdateUserProfile {
+            name: None,
+            avatar_data: None,
+            email: None,
+            title: None,
+            show_profile_to_strangers: None,
+            accepts_requests_from_strangers: None,
+            shows_online_status: Some(shows),
+        },
+        ALICE,
+    )
+    .await
+    .expect("dispatch");
+    assert!(
+        matches!(response, WorkspaceProtocolResponse::UserProfileUpdated(_)),
+        "refused: {response:?}"
+    );
+}
+
+// Presence is reported to everyone by the Citadel server's peer list, so the
+// only clients that can withhold it are the viewers'. They can only honour a
+// choice they are sent -- including by a stranger, and under a hidden profile.
+#[tokio::test]
+async fn the_presence_choice_reaches_strangers_and_can_be_reverted() {
+    let kernel = kernel_with_two_members().await;
+    alice_sets(&kernel, Some(false), None).await;
+
+    alice_publishes_presence(&kernel, false).await;
+    assert_eq!(
+        alice_as_listed_to(&kernel, BOB)
+            .await
+            .metadata
+            .get("shows_online_status"),
+        Some(&MetadataValue::Boolean(false)),
+        "a stranger's client could not know to hide alice's presence"
+    );
+
+    alice_publishes_presence(&kernel, true).await;
+    assert_eq!(
+        alice_as_listed_to(&kernel, BOB)
+            .await
+            .metadata
+            .get("shows_online_status"),
+        Some(&MetadataValue::Boolean(true)),
+        "turning presence back on did not reach other members"
     );
 }

@@ -24,6 +24,7 @@ fn a_request_from_an_older_client_reads_the_new_fields_as_absent() {
             title,
             show_profile_to_strangers,
             accepts_requests_from_strangers,
+            shows_online_status,
         } => {
             assert_eq!(name.as_deref(), Some("Ada"));
             assert_eq!(avatar_data, None);
@@ -32,6 +33,7 @@ fn a_request_from_an_older_client_reads_the_new_fields_as_absent() {
             // Absent means "leave the stored choice alone", never "false".
             assert_eq!(show_profile_to_strangers, None);
             assert_eq!(accepts_requests_from_strangers, None);
+            assert_eq!(shows_online_status, None);
         }
         other => panic!("wrong variant: {other:?}"),
     }

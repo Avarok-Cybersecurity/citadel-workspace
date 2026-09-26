@@ -88,6 +88,7 @@ async fn stored_name(settings: ServerConnectionSettings<StackedRatchet>, repair:
                     title: None,
                     show_profile_to_strangers: None,
                     accepts_requests_from_strangers: None,
+                    shows_online_status: None,
                 };
                 let renamed = ask(&mut tx, &mut rx, rename, |r| match r {
                     WorkspaceProtocolResponse::UserProfileUpdated(u) => Some(u),
