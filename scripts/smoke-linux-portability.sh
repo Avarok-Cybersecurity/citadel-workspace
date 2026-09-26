@@ -22,7 +22,11 @@ case "$(file -b "$BIN")" in
 esac
 
 for image in ubuntu:20.04 ubuntu:22.04 debian:11 debian:12 alpine:3.20; do
-  if out="$(docker run --rm --platform linux/amd64 -v "$BIN:/citadel-agent:ro" "$image" /citadel-agent --version 2>&1)"; then
+  # Pulled first and quietly, so what is captured below is the agent's own output, not
+  # docker's pull progress (which printed as the "version" on the first CI run).
+  docker pull -q --platform linux/amd64 "$image" >/dev/null
+  if out="$(docker run --rm --platform linux/amd64 -v "$BIN:/citadel-agent:ro" "$image" /citadel-agent --version 2>&1)" \
+      && [[ "$out" =~ ^citadel-agent\ [0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "ok $image: $out"
   else
     echo "::error::the agent does not start on $image: $out" >&2
