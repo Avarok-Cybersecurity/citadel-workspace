@@ -35,3 +35,12 @@ pub mod async_process_command;
 
 /// What a failed workspace lookup means, decided from facts rather than prose.
 pub mod workspace_lookup;
+
+/// UpdateWorkspaceProfile: name, description and icon.
+mod workspace_profile;
+
+/// What a workspace icon may be.
+pub mod workspace_logo;
+
+/// The one read-modify-write for a stored workspace record.
+mod workspace_record;
