@@ -155,6 +155,10 @@ jobs:
   verify:
     name: The site and the download agree
     needs: [plan, deploy]
+    # Explicit, like deploy's: a job with no `if` is skipped when ANY job upstream of it was, and
+    # `release` is skipped on every deploy whose agent is already out. Without this the run
+    # reported success while this check never ran (run 36304511815).
+    if: always() && needs.deploy.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
