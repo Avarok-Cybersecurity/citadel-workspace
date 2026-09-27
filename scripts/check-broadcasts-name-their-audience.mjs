@@ -72,6 +72,8 @@ const SCOPED = new Map([
   // connected session regardless of membership". They were not listed here, so
   // reverting any of them would have been silent.
   ['GroupMessageNotification', 'broadcast_to_group'],
+  // A live document's edits: to the members of the office or room chat it belongs to.
+  ['LiveDocUpdated', 'broadcast_to_group'],
   ['GroupMessageEdited', 'broadcast_to_group'],
   ['GroupMessageDeleted', 'broadcast_to_group'],
 ]);
@@ -103,6 +105,7 @@ const UNSCOPED = new Map([
   ['TreeStructure', 'a response to a tree query, filtered by the handler'],
   ['TreeSchema', 'schema, not content'],
   ['NodeTypes', 'schema, not content'],
+  ['LiveDocState', 'only ever the answer to the member who opened the document, after the channel read check'],
 ]);
 
 /**
