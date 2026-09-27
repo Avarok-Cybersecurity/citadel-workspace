@@ -96,7 +96,7 @@ const SKIP = new Map([
   // stop keying on button copy — see ROBUSTNESS round 168.
   ['pages/Landing.tsx', 261],
   ['types/messaging-layer.ts', 453],
-  ['types/workspace-protocol.ts', 352],
+  ['types/workspace-protocol.ts', 294],
 ]);
 
 if (!statSync(SRC, { throwIfNoEntry: false })) {
