@@ -104,8 +104,12 @@ map $http_host $ws_host_allowed {
 # is switched on only by <meta name="citadel-control-plane">, which this image leaves empty, so
 # here the origin is permitted and never used; it is in the policy so the hosted deployment
 # (deploy/tenant-worker/control/ui.mjs) and this one stay a single policy.
+#
+# https://static.cloudflareinsights.com (script-src) and https://cloudflareinsights.com
+# (connect-src) are Cloudflare Web Analytics, which the hosted edge injects into every page;
+# here too they are permitted for the single policy, and used only if a Cloudflare zone injects.
 map $host $csp {
-    default "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ${LOOPBACK_AGENT_ORIGIN}; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+    default "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ${LOOPBACK_AGENT_ORIGIN} https://cloudflareinsights.com; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
 }
 
 server {

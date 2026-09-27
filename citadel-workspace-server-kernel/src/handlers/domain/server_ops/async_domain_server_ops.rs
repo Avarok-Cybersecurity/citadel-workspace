@@ -125,7 +125,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
             // it to manufacture a confederate above them once an Owner exists,
             // which is the lateral escalation that would otherwise be the point
             // of allowing this at all.
-            if self.workspace_has_no_member_holding(role).await? {
+            //
+            // And only an Admin may fill it. The seat is vacant exactly when the
+            // workspace is as it began -- an Admin and no Owner -- and the Admin is
+            // who appoints the first Owner. Open to every caller, it let a Member
+            // an Admin had trusted with AddUsers (UpdateMemberPermissions grants it
+            // per domain) add anyone, themselves included, as the Owner.
+            if actor.role == UserRole::Admin && self.workspace_has_no_member_holding(role).await? {
                 return Ok(());
             }
             return Err(NetworkError::msg(format!(
@@ -723,6 +729,20 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             ));
         }
 
+        // Only a registered account may be admitted. Everything below mints a
+        // `User` for a name it has never seen, so a typo in the dialog became a
+        // phantom member with a role. Asked after AddUsers, so the refusal does
+        // not tell an unprivileged caller which usernames exist.
+        if !self
+            .backend_tx_manager
+            .account_is_registered(user_id_to_add)
+            .await?
+        {
+            return Err(NetworkError::msg(format!(
+                "No account named '{user_id_to_add}' exists on this workspace"
+            )));
+        }
+
         // AddUsers says they may add somebody; it says nothing about the role
         // they may hand out, and `user_id_to_add` may be the caller.
         self.ensure_may_grant_role(admin_id, &role).await?;
@@ -1165,13 +1185,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
     async fn update_user_profile(
         &self,
         user_id: &str,
-        name: Option<String>,
-        avatar_data: Option<String>,
+        update: crate::kernel::profile_update::ProfileUpdate,
     ) -> Result<User, NetworkError> {
-        crate::kernel::profile_limits::check_profile_update(
-            name.as_deref(),
-            avatar_data.as_deref(),
-        )?;
+        crate::kernel::profile_limits::check_profile_update(&update)?;
         // Get the user
         // The user record is read, modified and written back across awaits, so
         // it needs the same lock every other user writer takes. Two updates
@@ -1185,17 +1201,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             None => return Err(NetworkError::msg("User not found")),
         };
 
-        // Update name if provided
-        if let Some(new_name) = name {
-            user.name = new_name;
-        }
-
-        // Update avatar if provided (store in metadata)
-        if let Some(avatar) = avatar_data {
-            use citadel_workspace_types::structs::MetadataValue;
-            user.metadata
-                .insert("avatar".to_string(), MetadataValue::String(avatar));
-        }
+        crate::kernel::profile_update::apply_profile_update(&mut user, update);
 
         // Save the updated user
         self.backend_tx_manager

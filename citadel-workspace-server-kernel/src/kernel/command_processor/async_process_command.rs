@@ -346,7 +346,27 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 .get_user(user_id)
                 .await
             {
-                Ok(Some(user)) => Ok(WorkspaceProtocolResponse::Member(user)),
+                // Reached by the owner or an admin (checked above). An admin
+                // reading someone else's record is still not sent a profile
+                // that member hid from non-contacts.
+                Ok(Some(user)) => {
+                    use crate::kernel::profile_visibility::{hides_profile, user_for_viewer};
+                    let contacts = if user.id != actor_user_id && hides_profile(&user) {
+                        kernel
+                            .domain_operations
+                            .backend_tx_manager
+                            .contacts_for_redaction(actor_user_id)
+                            .await
+                    } else {
+                        Default::default()
+                    };
+                    Ok(WorkspaceProtocolResponse::Member(user_for_viewer(
+                        user,
+                        actor_user_id,
+                        true,
+                        &contacts,
+                    )))
+                }
                 Ok(None) => Ok(WorkspaceProtocolResponse::Error(
                     "Member not found".to_string(),
                 )),
@@ -458,11 +478,28 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             }
         }
 
-        WorkspaceProtocolRequest::UpdateUserProfile { name, avatar_data } => {
+        WorkspaceProtocolRequest::UpdateUserProfile {
+            name,
+            avatar_data,
+            email,
+            title,
+            show_profile_to_strangers,
+            accepts_requests_from_strangers,
+            shows_online_status,
+        } => {
             use crate::handlers::domain::async_ops::AsyncUserManagementOperations;
+            let update = crate::kernel::profile_update::ProfileUpdate {
+                name: name.clone(),
+                avatar_data: avatar_data.clone(),
+                email: email.clone(),
+                title: title.clone(),
+                show_profile_to_strangers: *show_profile_to_strangers,
+                accepts_requests_from_strangers: *accepts_requests_from_strangers,
+                shows_online_status: *shows_online_status,
+            };
             match kernel
                 .domain_ops()
-                .update_user_profile(actor_user_id, name.clone(), avatar_data.clone())
+                .update_user_profile(actor_user_id, update)
                 .await
             {
                 Ok(user) => Ok(WorkspaceProtocolResponse::UserProfileUpdated(user)),
@@ -574,9 +611,13 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             //
             // The roster itself is not the secret: names and roles are what a
             // member list is for, and the UI renders both. The permissions map
-            // is the enforced authorization state of the whole workspace, and
-            // the metadata carries avatars. Neither belongs in a list call.
-            let mut users = Vec::new();
+            // is the enforced authorization state of the whole workspace and
+            // does not belong in a list call. Metadata is filtered to the
+            // profile a member was told other members can see (avatar, email,
+            // job title; `profile_update::MEMBER_VISIBLE_KEYS`), and those three
+            // are withheld from non-contacts -- admins included -- of a member
+            // who hid them (`profile_visibility`).
+            let mut stored = Vec::new();
             for user_id in member_ids {
                 if let Ok(Some(user)) = kernel
                     .domain_operations
@@ -584,19 +625,23 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     .get_user(&user_id)
                     .await
                 {
-                    if is_admin || user.id == actor_user_id {
-                        users.push(user);
-                    } else {
-                        users.push(citadel_workspace_types::structs::User {
-                            id: user.id,
-                            name: user.name,
-                            role: user.role,
-                            permissions: Default::default(),
-                            metadata: Default::default(),
-                        });
-                    }
+                    stored.push(user);
                 }
             }
+            use crate::kernel::profile_visibility::{hides_profile, user_for_viewer};
+            let contacts = if stored.iter().any(hides_profile) {
+                kernel
+                    .domain_operations
+                    .backend_tx_manager
+                    .contacts_for_redaction(actor_user_id)
+                    .await
+            } else {
+                Default::default()
+            };
+            let users: Vec<citadel_workspace_types::structs::User> = stored
+                .into_iter()
+                .map(|user| user_for_viewer(user, actor_user_id, is_admin, &contacts))
+                .collect();
             Ok(WorkspaceProtocolResponse::Members {
                 // Echoed from the request, resolved the same way the lookup
                 // above resolved it, so the answer says what it is about.

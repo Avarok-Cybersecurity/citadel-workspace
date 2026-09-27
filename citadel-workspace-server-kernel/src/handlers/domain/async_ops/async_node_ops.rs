@@ -22,7 +22,7 @@ mod type_names {
 
 /// Default synthetic node values
 mod defaults {
-    pub const ROOT_NAME: &str = "Root Workspace";
+    pub const ROOT_NAME: &str = crate::DEFAULT_ROOT_WORKSPACE_NAME;
     pub const ROOT_DESC: &str = "Root workspace";
     pub const UNKNOWN_OWNER: &str = "unknown";
     pub const WORKSPACE_LABEL: &str = "Workspace";

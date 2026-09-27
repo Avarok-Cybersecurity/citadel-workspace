@@ -83,7 +83,7 @@ runs:
         wix build packaging/windows/citadel-agent.wxs -arch x64 \
           -d Version="$EXPECTED_VERSION" \
           -d AgentExe="$(cygpath -w "$PWD/dl/agent/citadel-agent.exe")" \
-          -d Icon="$(cygpath -w "$PWD/assets/brand/favicon.ico")" \
+          -d Icon="$(cygpath -w "$PWD/assets/brand/app.ico")" \
           -d Bind="$(s CitadelAgentBind)" -d Origin="$(s CitadelWorkspaceOrigin)" \
           -d Stun="$(s CitadelAgentStunServers)" -d DataDirName="$(s CitadelAgentDataDirectoryName)" \
           -o Citadel-Agent-x64.msi

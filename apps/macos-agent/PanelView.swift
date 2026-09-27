@@ -28,22 +28,21 @@ struct PanelView: View {
     }
 }
 
-/// "Citadel", light and centred, beside the mark; the overflow menu at the right.
+/// The brand kit's horizontal lockup, centred; the overflow menu at the right.
 struct TitleRow: View {
     @ObservedObject var model: PanelModel
 
     var body: some View {
         ZStack {
-            HStack(spacing: 8) {
-                if let mark = NSImage(named: "mark") {
-                    Image(nsImage: mark).resizable().interpolation(.high).frame(width: 22, height: 22)
-                }
-                Text("Citadel").font(.system(size: 22, weight: .light)).foregroundColor(.panelText)
+            // The artwork, not live text: the name is outlined in the kit and must not be retyped.
+            if let lockup = NSImage(named: "lockup") {
+                Image(nsImage: lockup).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
+                    .frame(height: 32).accessibilityLabel("Citadel Workspaces")
             }
             HStack {
                 Spacer()
                 Menu {
-                    Button("Open Citadel Workspace") { model.perform(.openWorkspace) }
+                    Button("Open Citadel Workspaces") { model.perform(.openWorkspace) }
                     Button("Create a Workspace…") { model.perform(.createWorkspace) }
                     Divider()
                     Button(LoginItem.isEnabled ? "Don't Start at Login" : "Start at Login") { model.perform(.toggleLogin) }
@@ -89,6 +88,8 @@ struct AccountRow: View {
                     .buttonStyle(.borderedProminent)
                     .tint(.panelAccent)
                     .controlSize(.small)
+                    // Each row's button otherwise reads the same "Log in"; name whose account it is.
+                    .accessibilityLabel("Log in as \(account.username)")
             }
         }
         .padding(.horizontal, PanelMetrics.padding)

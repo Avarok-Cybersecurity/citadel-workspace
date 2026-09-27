@@ -17,6 +17,11 @@ mod platform;
 
 pub const WORKSPACE_ROOT_ID: &str = "workspace-root";
 pub const WORKSPACE_MASTER_PASSWORD_KEY: &str = "workspace_master_password";
+/// The root workspace's name when the operator configured none (`ServerConfig::workspace_name`).
+pub const DEFAULT_ROOT_WORKSPACE_NAME: &str = "Root Workspace";
+/// The longest `workspace_name` a server accepts: the limit the hosted control plane applies to
+/// the name a workspace is created with.
+pub const MAX_WORKSPACE_NAME_CHARS: usize = 64;
 
 pub mod config {
     use citadel_workspace_types::structs::DomainPermissions;
@@ -55,6 +60,10 @@ pub mod config {
         /// false: see `resolve_first_connect_admin` for why the safe value is
         /// the default and why the unsafe one has to be asked for by name.
         pub allow_first_connect_admin: Option<bool>,
+        /// The root workspace's name. Seeded into a fresh store, and given to a stored root
+        /// workspace still named the default; never written over a name an administrator chose.
+        /// Unset keeps `DEFAULT_ROOT_WORKSPACE_NAME`. See `resolve_workspace_name`.
+        pub workspace_name: Option<String>,
     }
 
     impl std::fmt::Debug for ServerConfig {
@@ -82,6 +91,7 @@ pub mod config {
                 .field("content_base_dir", &self.content_base_dir)
                 .field("file_transfer", &self.file_transfer)
                 .field("allow_first_connect_admin", &self.allow_first_connect_admin)
+                .field("workspace_name", &self.workspace_name)
                 .finish()
         }
     }
@@ -471,6 +481,25 @@ pub fn resolve_workspace_structure(
     }
 }
 
+/// The root workspace name `config` asks for, trimmed; `None` when it names none.
+///
+/// A name that cannot be shown is a configuration error, not something to fall back from: a
+/// server that quietly reverted to the default would put back exactly the indistinguishable
+/// "Root Workspace" the setting exists to replace.
+pub fn resolve_workspace_name(config: &ServerConfig) -> Result<Option<String>, NetworkError> {
+    let Some(raw) = config.workspace_name.as_deref() else {
+        return Ok(None);
+    };
+    let name = raw.trim();
+    let chars = name.chars().count();
+    if chars == 0 || chars > MAX_WORKSPACE_NAME_CHARS || name.chars().any(char::is_control) {
+        return Err(NetworkError::msg(format!(
+            "workspace_name must be 1 to {MAX_WORKSPACE_NAME_CHARS} printable characters"
+        )));
+    }
+    Ok(Some(name.to_string()))
+}
+
 #[cfg(not(target_family = "wasm"))]
 pub async fn run_server(config: ServerConfig) -> Result<(), NetworkError> {
     run_server_with_base_path(config, None).await
@@ -626,6 +655,7 @@ async fn workspace_kernel(
         config.file_transfer.clone(),
     ).await?;
     kernel.set_first_connect_admin(first_connect_admin);
+    kernel.set_workspace_name(resolve_workspace_name(config)?);
     if ice_servers.is_none() {
         info!(target: "citadel", "No relay-credential source: GetIceServers answers that no relay is available.");
     }
@@ -1120,6 +1150,7 @@ mod server_config_debug_tests {
             content_base_dir: Some("/srv/content".to_string()),
             file_transfer: Some(FileTransferConfig::default()),
             allow_first_connect_admin: None,
+            workspace_name: Some("Admin Lab".to_string()),
         }
     }
 

@@ -5,7 +5,9 @@
 //! Everything above that — schema, statements, semantics — is the SDK's `host_sql` backend,
 //! the one its backend suite runs natively against SQLite.
 
-use citadel_sdk::prelude::{async_trait, HostSqlHandle, SqlHost, SqlRow, SqlStatement, SqlValue};
+use citadel_sdk::prelude::{
+    async_trait, HostSqlHandle, SqlHost, SqlRow, SqlStatement, SqlValue, StorageQuota,
+};
 use js_sys::{Array, ArrayBuffer, Uint8Array};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -17,6 +19,10 @@ extern "C" {
 
     #[wasm_bindgen(method, catch)]
     fn run(this: &TenantStorage, statements: Array) -> Result<Array, JsValue>;
+
+    /// The tenant's storage entitlement in bytes, as its plan grants it now.
+    #[wasm_bindgen(method, catch, js_name = quotaBytes)]
+    fn quota_bytes(this: &TenantStorage) -> Result<JsValue, JsValue>;
 }
 
 /// Largest integer a JS number carries exactly.
@@ -102,5 +108,17 @@ impl SqlHost for DurableObjectSql {
             .run(encode(&statements)?)
             .map_err(|e| format!("durable object storage: {e:?}"))?;
         decode(results)
+    }
+
+    /// A tenant always has a plan, and every plan names its storage: there is no unlimited case.
+    fn storage_quota(&self) -> Result<StorageQuota, String> {
+        let bytes = self
+            .0
+            .quota_bytes()
+            .map_err(|e| format!("durable object entitlements: {e:?}"))?;
+        match from_js(bytes)? {
+            SqlValue::Integer(n) if n >= 0 => Ok(StorageQuota::Bytes(n as u64)),
+            other => Err(format!("storage entitlement {other:?} is not a byte count")),
+        }
     }
 }

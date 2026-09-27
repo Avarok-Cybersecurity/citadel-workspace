@@ -134,8 +134,13 @@ if (!connectSrc(hosted).includes(SAMPLE)) {
 if (!metaFilter(hosted).includes(SAMPLE)) {
   problems.push(`rendered with ${VAR}=${SAMPLE}, the meta sub_filter does not write it in.`);
 }
-if (connectSrc(compose).includes('://')) {
-  problems.push(`rendered with ${VAR} empty, connect-src still names an origin: "${connectSrc(compose)}"`);
+// Empty must leave exactly the origins the policy names for everyone (Cloudflare
+// Web Analytics, #152) and no agent origin: the hosted render minus SAMPLE. Was
+// "names no origin at all", which the first fixed origin turned red.
+const sources = (directive) => directive.split(/\s+/).filter(Boolean);
+const expectedEmpty = sources(connectSrc(hosted)).filter((s) => s !== SAMPLE).join(' ');
+if (sources(connectSrc(compose)).join(' ') !== expectedEmpty) {
+  problems.push(`rendered with ${VAR} empty, connect-src is "${connectSrc(compose)}", not "${expectedEmpty}"`);
 }
 for (const [label, conf] of [['hosted', hosted], ['compose', compose]]) {
   const leftover = [...new Set((conf.match(/\$\{[A-Z_]+\}/g) ?? []))].filter((v) =>

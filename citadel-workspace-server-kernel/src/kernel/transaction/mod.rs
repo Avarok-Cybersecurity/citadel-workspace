@@ -16,6 +16,7 @@ use std::sync::Arc;
 // `TreeSchema::default()` instead of the stored schema — traps for whoever
 // resurrected it. The live paths are the handlers in `crate::handlers` over
 // `BackendTransactionManager` directly.
+mod accounts;
 pub mod backend_ops_simple;
 mod group_message_pages;
 // Note: TransactionManager has been removed. Use BackendTransactionManager instead.

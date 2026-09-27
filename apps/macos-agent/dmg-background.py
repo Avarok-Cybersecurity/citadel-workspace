@@ -24,7 +24,7 @@ layout = importlib.util.module_from_spec(spec)
 layout.defines = {"app": "", "background": ""}  # dmgbuild's globals, so the file imports alone
 spec.loader.exec_module(layout)
 
-# Brand guidelines: the light ground, the arrow purple for light grounds, ink and tagline.
+# The light ground, so the kit's plain (light-ground) lockup; ink and arrow purple are brand.json's onLight values.
 GROUND = "#F7F7FA"
 ARROW = "#6E59A5"
 INK = "#1C1D28"

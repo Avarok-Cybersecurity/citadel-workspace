@@ -59,6 +59,8 @@ async function toTenant(io, cfg, slug, request) {
   if (!row || row.status === "pending") return refuse("not-found", "no such workspace", 404);
   if (row.status === "suspended") return refuse("suspended", "this workspace is suspended", 403);
   const object = io.tenant(slug);
+  // Objects provisioned before names were passed on hold none; D1 has it (see adoptDisplayName).
+  if (row.display_name) await object.adoptDisplayName(row.display_name);
   if (!upgrade) return json(await object.stats());
   return object.fetch(request);
 }

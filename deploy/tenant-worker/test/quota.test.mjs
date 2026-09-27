@@ -6,6 +6,7 @@
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { freeTenant, objectStats, openSocket, unfinishedFrame, until } from "./helpers.mjs";
+import { METERING } from "../control/plans.mjs";
 
 async function limit(slug, object, overrides) {
   const { entitlements } = await objectStats(slug);
@@ -115,5 +116,25 @@ describe("flush and rollover", () => {
     expect(again[ending.period_start].bytes_in).toBe(300);
     expect(again[next.period_start].bytes_in).toBe(10);
     s.ws.close(1000, "done");
+  });
+});
+
+describe("storage quota", () => {
+  // What the object's node is told it may store (server-wasm storage.rs asks at every upload).
+  const quotaBytes = (object) => runInDurableObject(object, (instance) => instance.storage().quotaBytes());
+
+  it("is the plan's storage in tiers.json's own GB, and follows the entitlements when they change", async () => {
+    const { slug, object } = await freeTenant("stq");
+    expect(await quotaBytes(object)).toBe(1 * METERING.gb_bytes); // free: storage_gb_total 1
+    await limit(slug, object, { storage_gb: 25 });
+    expect(await quotaBytes(object)).toBe(25 * METERING.gb_bytes);
+  });
+
+  it("an object provisioned before storage was stored enforces what its plan grants", async () => {
+    const { slug, object } = await freeTenant("stold");
+    const { entitlements } = await objectStats(slug);
+    const { storage_gb: _dropped, ...old } = { ...entitlements, tier: "team", interval: "month", seats: 2, storage_blocks: 1 };
+    await object.setEntitlements(old);
+    expect(await quotaBytes(object)).toBe((10 * 2 + 10) * METERING.gb_bytes); // 10 GB/seat + one 10 GB block
   });
 });

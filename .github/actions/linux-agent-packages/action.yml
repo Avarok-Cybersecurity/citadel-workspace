@@ -22,6 +22,11 @@ runs:
         sha256sum -c citadel-agent-linux-x64.tar.gz.sha256
         # The archive stores its entries as ./<name> (tar -C <staging> .), so the member is ./citadel-agent.
         tar -xzf citadel-agent-linux-x64.tar.gz ./citadel-agent
+    # Before packaging: a binary that only starts on the runner's own distribution makes a
+    # .deb that installs everywhere and runs nowhere older (agent-v0.7.0 on Ubuntu 22.04).
+    - name: The agent starts on older distributions
+      shell: bash
+      run: ./scripts/smoke-linux-portability.sh dl/citadel-agent
     # Pinned by checksum. appimagetool would otherwise fetch a runtime of its own choosing and
     # put it at the front of every AppImage.
     - name: Fetch the pinned AppImage tools

@@ -12,6 +12,14 @@
 /** Cloudflare Turnstile: its script and its challenge iframe (the creation flow's widget). */
 export const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
 
+/**
+ * Cloudflare Web Analytics: the edge injects its beacon script from the first origin into every
+ * HTML page, and the beacon reports to the second. Cookie-less, page views and load timings only.
+ * Without these the policy blocked the injected script on every page load.
+ */
+export const WEB_ANALYTICS_SCRIPT_ORIGIN = "https://static.cloudflareinsights.com";
+export const WEB_ANALYTICS_REPORT_ORIGIN = "https://cloudflareinsights.com";
+
 /** Where the page finds the control plane (dispatch.mjs answers `/api/*` on this host). */
 export const CONTROL_PLANE_PATH = "/api";
 
@@ -22,10 +30,10 @@ export const CONTROL_PLANE_PATH = "/api";
  * and vite's PRODUCTION_CSP to one policy.
  */
 export function contentSecurityPolicy(loopbackAgent) {
-  const connect = ["'self'", loopbackAgent].filter(Boolean).join(" ");
+  const connect = ["'self'", loopbackAgent, WEB_ANALYTICS_REPORT_ORIGIN].filter(Boolean).join(" ");
   return [
     "default-src 'self'",
-    `script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' ${TURNSTILE_ORIGIN}`,
+    `script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' ${TURNSTILE_ORIGIN} ${WEB_ANALYTICS_SCRIPT_ORIGIN}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self' data:",
@@ -81,9 +89,25 @@ export function pageMeta(ui) {
 
 const isHtml = (response) => (response.headers.get("content-type") ?? "").toLowerCase().startsWith("text/html");
 
-/** Fills the page's meta tags in, as the page is streamed. */
-function withMeta(response, meta) {
+/**
+ * The Web Analytics beacon, placed in the page by this Worker rather than injected by the edge.
+ * The service worker serves every later visit from its own cache, which the edge never sees, so
+ * edge injection counted first visits only; a beacon in the page itself is cached with it.
+ */
+export function webAnalyticsBeacon(token) {
+  return `<script defer src="${WEB_ANALYTICS_SCRIPT_ORIGIN}/beacon.min.js" data-cf-beacon='{"token":"${token}"}'></script>`;
+}
+
+/** Fills the page's meta tags in, and adds the analytics beacon, as the page is streamed. */
+function withMeta(response, meta, analyticsToken) {
   let rewriter = new HTMLRewriter();
+  if (analyticsToken) {
+    rewriter = rewriter.on("head", {
+      element: (el) => {
+        el.append(webAnalyticsBeacon(analyticsToken), { html: true });
+      },
+    });
+  }
   for (const [name, content] of Object.entries(meta)) {
     rewriter = rewriter.on(`meta[name="${name}"]`, {
       element: (el) => {
@@ -114,5 +138,9 @@ export async function serveUi(assets, ui, request) {
   } else {
     response.headers.set("cache-control", "no-store");
   }
-  return !missing && isHtml(response) ? withMeta(response, pageMeta(ui)) : response;
+  if (missing || !isHtml(response)) return response;
+  // The page already carries the beacon (above), so the edge must not add a second one; no-transform
+  // is the header Cloudflare honours for that. Caching is unchanged.
+  if (ui.webAnalyticsToken) response.headers.set("cache-control", `${rule.cache}, no-transform`);
+  return withMeta(response, pageMeta(ui), ui.webAnalyticsToken);
 }

@@ -2,6 +2,7 @@ use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
 use citadel_workspace_types::WorkspaceProtocolRequest;
 
 use common::async_test_helpers::*;
+use common::member_test_utils::insert_user_with_role;
 use common::workspace_test_utils::*;
 
 /// # Basic Permission Test Suite
@@ -42,6 +43,8 @@ async fn test_permission_set() {
 
     let office = extract_node(create_office_response).expect("Failed to create office");
 
+    // A registered account: AddMember admits no other.
+    insert_user_with_role(&kernel, "test_user", UserRole::Member).await;
     // Add a member to the office
     let add_member_response = execute_command(
         &kernel,
@@ -115,6 +118,8 @@ async fn test_permission_inheritance() {
 
     let office = extract_node(create_office_response).expect("Failed to create office");
 
+    // A registered account: AddMember admits no other.
+    insert_user_with_role(&kernel, "admin_member", UserRole::Admin).await;
     // Add a member with Admin role to office
     let add_member_response = execute_command(
         &kernel,
@@ -171,6 +176,8 @@ async fn test_permission_denial() {
 
     let office = extract_node(create_office_response).expect("Failed to create office");
 
+    // A registered account: AddMember admits no other.
+    insert_user_with_role(&kernel, "guest_user", UserRole::Guest).await;
     // Add a guest member
     let add_member_response = execute_command(
         &kernel,

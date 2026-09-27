@@ -53,7 +53,13 @@ function uiConfig(env) {
   if (defaultServer !== "" && !SERVER_ADDRESS_SHAPE.test(defaultServer)) {
     throw new Error("DEFAULT_WORKSPACE_SERVER is a host[:port] or empty");
   }
-  return { loopbackAgent, defaultServer };
+  // Cloudflare Web Analytics' site token: a Worker secret, like the TURN keys, so the repo holds no
+  // high-entropy value; unset means no beacon (local proofs, self-hosting). control/ui.mjs injects it.
+  const webAnalyticsToken = optional(env, "WEB_ANALYTICS_TOKEN");
+  if (webAnalyticsToken !== null && !/^[0-9a-f]{32}$/.test(webAnalyticsToken)) {
+    throw new Error("WEB_ANALYTICS_TOKEN is a 32-hex-digit site token");
+  }
+  return { loopbackAgent, defaultServer, webAnalyticsToken };
 }
 
 const optional = (env, name) => (env[name] === undefined || env[name] === "" ? null : env[name]);

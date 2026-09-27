@@ -2,7 +2,7 @@
 <!--
   Citadel-Agent-x64.msi: the Windows one-click install (WiX 5, built by release-agent.yml).
 
-    wix build -arch x64 -d Version=X.Y.Z -d AgentExe=path\citadel-agent.exe -d Icon=path\favicon.ico
+    wix build -arch x64 -d Version=X.Y.Z -d AgentExe=path\citadel-agent.exe -d Icon=path\app.ico
       -d Bind=... -d Origin=... -d Stun=... -d DataDirName=... -o Citadel-Agent-x64.msi citadel-agent.wxs
 
   Bind, Origin, Stun and DataDirName come from apps/macos-agent/Info.plist through
@@ -45,7 +45,7 @@
            that are not advertised. -->
       <Component Directory="ProgramMenuFolder" Id="StartMenuShortcut">
         <Shortcut Id="StartMenuShortcut" Name="Citadel Agent" Target="[#CitadelAgentExe]"
-                  Description="The local agent Citadel Workspace connects to"
+                  Description="The local agent Citadel Workspaces connects to"
                   WorkingDirectory="INSTALLFOLDER" Icon="CitadelAgent.ico"
                   Arguments="$(var.Head) &quot;%USERPROFILE%\$(var.DataDirName)&quot; $(var.Tail)" />
         <RegistryValue Root="HKCU" Key="Software\Avarok\Citadel Agent" Name="StartMenuShortcut"

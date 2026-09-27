@@ -13,13 +13,16 @@ name: Agent certificate
 description: Issues (on a tag push) and verifies the certificate compiled into every agent build.
 inputs:
   cloudflare-dns-api-token:
-    description: CLOUDFLARE_DNS_API_TOKEN (Zone:DNS:Edit on avarok.net); read only on a tag push.
+    description: CLOUDFLARE_DNS_API_TOKEN (Zone:DNS:Edit on avarok.net); read only when issuing.
+    required: true
+  issue:
+    description: "'true' for a real release (issue a fresh certificate); anything else builds with the committed one."
     required: true
 runs:
   using: composite
   steps:
     - name: Obtain a certificate for local.avarok.net (DNS-01)
-      if: startsWith(github.ref, 'refs/tags/agent-v')
+      if: inputs.issue == 'true'
       env:
         CF_TOKEN: ${{ inputs.cloudflare-dns-api-token }}
       shell: bash
