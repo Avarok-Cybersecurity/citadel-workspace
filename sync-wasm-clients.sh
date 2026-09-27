@@ -23,6 +23,20 @@ print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
+# npm install, retried. The registry resets connections now and then (ECONNRESET fetching
+# vite killed a CI stack start on 2026-09-26, before any test ran), and one reset should not
+# fail a run; five should. The UI image's own install already retries the same way.
+npm_install_retrying() {
+    local attempt
+    for attempt in 1 2 3 4 5; do
+        npm install "$@" && return 0
+        print_warning "npm install failed (attempt $attempt/5); retrying in $((attempt * 15))s"
+        sleep $((attempt * 15))
+    done
+    print_error "npm install failed 5 times: $*"
+    return 1
+}
+
 # Check if we're in the right directory
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 WORKSPACE_ROOT="$SCRIPT_DIR"
@@ -232,7 +246,7 @@ if [ -d "$DEST1" ]; then
     # platforms, which every other platform then cannot install. Observed twice,
     # reverted twice, before the cause was looked for.
     print_status "Installing npm dependencies..."
-    npm install --package-lock=false
+    npm_install_retrying --package-lock=false
 
     print_status "Running TypeScript build..."
     npm run build
@@ -345,7 +359,7 @@ find ./node_modules -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || tru
 
 print_status "Installing dependencies for citadel-workspace-client-ts..."
 # Also a root workspace member; see the note above.
-npm install --package-lock=false
+npm_install_retrying --package-lock=false
 
 # Build the TypeScript client
 print_status "Building TypeScript client..."
@@ -418,7 +432,7 @@ print_status "Installing dependencies for citadel-workspaces.."
 # resolution treats peer deps as advisory rather than transactional,
 # which is the historical npm behavior and matches what the rest of
 # our workspace npm-ci flow uses.
-npm install --package-lock=false --legacy-peer-deps
+npm_install_retrying --package-lock=false --legacy-peer-deps
 
 # Drop the Playwright copies this install just placed here.
 #
