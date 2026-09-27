@@ -46,7 +46,8 @@ export function claimMessage(cfg, slug, claim, token) {
     `Claim code: ${claim}\n\n` +
     "Open this link to claim it and become its administrator. It also confirms this email address:\n" +
     `${claimLink}\n\n` +
-    "Keep the code private. It makes whoever holds it the workspace's administrator, and it manages the workspace's billing.\n\n" +
+    "Keep the code private. It makes whoever holds it the workspace's administrator. Once you confirm this address with the link above, billing\n" +
+    "can only be managed through a link emailed to this address, not with the code alone.\n\n" +
     `Didn't create a workspace? Tell us, and this address will not be emailed again:\n${notMe}\n`;
   return { subject: SUBJECT, text };
 }
@@ -57,21 +58,33 @@ export function claimMessage(cfg, slug, claim, token) {
  * failed. Never throws for a send that did not happen.
  */
 export async function sendClaimEmail(io, cfg, { slug, tenantId, to, claim, client }) {
+  const token = randomHex(32);
+  const sent = await mailWithinLimits(io, { to, client, what: `the claim email for ${slug}` }, claimMessage(cfg, slug, claim, token));
+  if (sent.sent) {
+    const now = io.now();
+    await io.store.recordVerification(slug, tenantId, await sha256Hex(token), now + VERIFY_TTL_SECONDS, now);
+  }
+  return sent;
+}
+
+/**
+ * Sends `message` to `to` unless the address is suppressed or a daily limit is reached; the one
+ * way this service mails anyone, so every message counts against the same limits.
+ * `{sent: true}` or `{sent: false, reason}`; never throws for a send that did not happen.
+ */
+export async function mailWithinLimits(io, { to, client, what }, message) {
   if (to === null) return { sent: false, reason: "no-address" };
   const recipient = await sha256Hex(to);
   if (await io.mailLedger.suppressed(recipient)) return { sent: false, reason: "suppressed" };
   const limits = { [`to:${recipient}`]: SEND_LIMITS.perRecipient, all: SEND_LIMITS.overall };
   if (client) limits[`ip:${client}`] = SEND_LIMITS.perClient;
-  const now = io.now();
-  if (!(await io.mailLedger.take(limits, Math.floor(now / 86400)))) return { sent: false, reason: "limited" };
-  const token = randomHex(32);
+  if (!(await io.mailLedger.take(limits, Math.floor(io.now() / 86400)))) return { sent: false, reason: "limited" };
   try {
-    await io.mail.send({ to, ...claimMessage(cfg, slug, claim, token) });
+    await io.mail.send({ to, ...message });
   } catch (e) {
-    console.error(`[control] the claim email for ${slug} was not sent: ${e?.message ?? e}`);
+    console.error(`[control] ${what} was not sent: ${e?.message ?? e}`);
     return { sent: false, reason: "failed" };
   }
-  await io.store.recordVerification(slug, tenantId, await sha256Hex(token), now + VERIFY_TTL_SECONDS, now);
   return { sent: true };
 }
 

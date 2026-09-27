@@ -8,7 +8,8 @@ import { checkSlug } from "./slug.mjs";
 import { Store } from "./store.mjs";
 import { UsageStore } from "./usage-store.mjs";
 import { config, isWebSocketUpgrade, json, upgradeRequired, readJson, refuse } from "./http.mjs";
-import { createTenant, openPortal, slugAvailability, tenantStatus } from "./tenants.mjs";
+import { createTenant, slugAvailability, tenantStatus } from "./tenants.mjs";
+import { openPortal, openPortalByLink } from "./portal.mjs";
 import { handleWebhook } from "./webhook.mjs";
 import { serveUi } from "./ui.mjs";
 import { mailTransport } from "./mail.mjs";
@@ -100,10 +101,12 @@ async function api(io, cfg, request, url) {
       if (body.error) return body.error;
       return await EMAIL_ROUTES[parts[2]](io, cfg, parts[1], body.value, request.headers.get("cf-connecting-ip"));
     }
-    if (method === "POST" && parts.length === 3 && parts[0] === "tenants" && parts[2] === "portal") {
+    if (method === "POST" && parts.length === 3 && parts[0] === "tenants" && (parts[2] === "portal" || parts[2] === "portal-link")) {
       const body = await readJson(request, cfg, API_BODY_LIMIT);
       if (body.error) return body.error;
-      return await openPortal(io, cfg, parts[1], body.value);
+      return parts[2] === "portal"
+        ? await openPortal(io, cfg, parts[1], body.value, request.headers.get("cf-connecting-ip"))
+        : await openPortalByLink(io, cfg, parts[1], body.value);
     }
     if (method === "POST" && parts.length === 2 && parts[0] === "stripe" && parts[1] === "webhook") {
       return await handleWebhook(io, cfg, request);
