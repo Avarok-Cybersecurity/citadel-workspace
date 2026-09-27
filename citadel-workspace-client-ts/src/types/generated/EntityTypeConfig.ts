@@ -29,4 +29,10 @@ name_placeholder: string,
 /**
  * Description field placeholder
  */
-description_placeholder: string, };
+description_placeholder: string, 
+/**
+ * Whether a new node of this type starts with its chat switched on. Absent in schemas saved
+ * before it existed, which therefore keep the default every new node has had since
+ * 2026-09-27: on.
+ */
+chat_default: boolean, };

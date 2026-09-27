@@ -174,7 +174,6 @@ const GATED_BY = {
   // now enforced directly, by UpdateWorkspaceProfile.)
   DeleteWorkspace: 'is_admin or workspace owner, plus the master password',
   ManageNodeMembers: 'AddUsers / RemoveUsers in async_domain_server_ops',
-  ManageNodeTypes: 'is_admin on CreateNodeType and UpdateTreeSchema',
   // No such operation exists in the server yet. Listed so the matrix showing a
   // toggle for it is a known, deliberate gap rather than an unnoticed one.
   BanUser: 'NOT IMPLEMENTED - no ban operation exists',

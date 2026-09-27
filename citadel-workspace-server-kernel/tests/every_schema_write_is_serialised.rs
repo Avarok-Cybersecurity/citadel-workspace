@@ -16,49 +16,78 @@
 //! test which usually passes is worse than none because it reads as coverage.
 //! The lock primitive itself has a 25-way concurrency test in transaction/mod.rs.
 
-const SOURCE: &str = include_str!("../src/kernel/command_processor/async_process_command.rs");
+//! Both writers now live in `tree_schema_update.rs` and share one save, `save_validated`, which
+//! expects its caller to hold the lock. So what is asserted is: no schema write anywhere else in
+//! the command processor, exactly one save in that module (inside `save_validated`), and a
+//! `lock_nodes()` guard in every function that calls it, taken before the call.
+
+const PROCESSOR: &str = include_str!("../src/kernel/command_processor/async_process_command.rs");
+const SCHEMA_WRITERS: &str = include_str!("../src/kernel/command_processor/tree_schema_update.rs");
 
 /// Comments stripped: this campaign has already produced one source assertion
 /// that matched the comment explaining the code's absence.
-fn code() -> String {
-    SOURCE
+fn code(source: &str) -> Vec<String> {
+    source
         .lines()
         .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
+        .map(str::to_string)
+        .collect()
 }
 
 #[test]
-fn every_save_tree_schema_is_under_the_nodes_lock() {
-    let code = code();
-    let lines: Vec<&str> = code.lines().collect();
+fn every_schema_write_is_under_the_nodes_lock() {
+    assert!(
+        !code(PROCESSOR)
+            .iter()
+            .any(|l| l.contains(".save_tree_schema(")),
+        "the command processor writes the schema itself again; route it through \
+         tree_schema_update::save_validated, which validates and expects the lock"
+    );
 
-    let mut checked = 0usize;
+    let lines = code(SCHEMA_WRITERS);
+    let saves: Vec<usize> = (0..lines.len())
+        .filter(|&i| lines[i].contains(".save_tree_schema("))
+        .collect();
+    assert_eq!(
+        saves.len(),
+        1,
+        "expected the one save, in save_validated; found {}",
+        saves.len()
+    );
+    let owner = lines[..saves[0]]
+        .iter()
+        .rev()
+        .find(|l| l.contains("fn "))
+        .expect("save outside a function");
+    assert!(
+        owner.contains("fn save_validated"),
+        "the save is in `{owner}`, not save_validated"
+    );
+
+    // Every call of save_validated, and the lock taken earlier in the same function.
+    let mut callers = 0usize;
     for (i, line) in lines.iter().enumerate() {
-        if !line.contains(".save_tree_schema(") {
+        if !line.contains("save_validated(") || line.contains("fn save_validated") {
             continue;
         }
-        checked += 1;
-
-        // The guard is taken in the same match arm, which is at most a few dozen
-        // lines above. Looking back a bounded window rather than to the top of
-        // the function keeps a NEIGHBOUR's lock from satisfying this.
-        let from = i.saturating_sub(40);
-        let window = lines[from..i].join("\n");
+        callers += 1;
+        let start = lines[..i]
+            .iter()
+            .rposition(|l| l.contains("fn "))
+            .expect("call outside a function");
         assert!(
-            window.contains("lock_nodes()"),
-            "the save_tree_schema at line {} has no lock_nodes() guard within the \
-             preceding 40 lines. Two schema writers can then interleave: both read \
-             the same schema, both append, and the later save discards the earlier \
-             one's rules while its caller is told it succeeded.",
+            lines[start..i].iter().any(|l| l.contains("lock_nodes()")),
+            "the save_validated call at line {} is not preceded by lock_nodes() in its function. \
+             Two schema writers can then interleave: both read the same schema, both append, \
+             and the later save discards the earlier one's rules while its caller is told it \
+             succeeded.",
             i + 1
         );
     }
-
     assert_eq!(
-        checked, 2,
-        "expected two schema writers (CreateNodeType and UpdateTreeSchema), found \
-         {checked}. A third would need the same lock, and finding fewer means this \
-         test's matcher has stopped seeing them and is asserting nothing."
+        callers, 2,
+        "expected two schema writers (CreateNodeType and UpdateTreeSchema), found {callers}. A \
+         third would need the same lock, and finding fewer means this test's matcher has \
+         stopped seeing them and is asserting nothing."
     );
 }

@@ -1010,21 +1010,13 @@ fn build_tree(
     root_tree
 }
 
-/// Populate `allowed_child_types` from the tree schema for nodes that have `None`.
-/// Ensures nodes created before schema enrichment was added still get correct values.
+/// Every listed node with the child levels the current schema allows it; see
+/// `schema_rules::with_derived_children`. This filled only a missing list, so a stored copy went
+/// stale the moment the hierarchy changed.
 fn enrich_allowed_child_types(nodes: Vec<DomainNode>, schema: &TreeSchema) -> Vec<DomainNode> {
     nodes
         .into_iter()
-        .map(|mut node| {
-            if node.allowed_child_types.is_none() {
-                node.allowed_child_types = schema
-                    .rules
-                    .iter()
-                    .find(|r| r.parent_type == node.entity_type.type_name())
-                    .map(|r| r.allowed_child_types.clone());
-            }
-            node
-        })
+        .map(|node| crate::handlers::domain::schema_rules::with_derived_children(node, schema))
         .collect()
 }
 

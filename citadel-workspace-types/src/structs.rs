@@ -901,6 +901,15 @@ pub struct EntityTypeConfig {
     pub name_placeholder: String,
     /// Description field placeholder
     pub description_placeholder: String,
+    /// Whether a new node of this type starts with its chat switched on. Absent in schemas saved
+    /// before it existed, which therefore keep the default every new node has had since
+    /// 2026-09-27: on.
+    #[serde(default = "chat_on_by_default")]
+    pub chat_default: bool,
+}
+
+fn chat_on_by_default() -> bool {
+    true
 }
 
 /// Schema defining the structure rules for a workspace tree
@@ -948,6 +957,7 @@ impl Default for TreeSchema {
                     name_placeholder: "e.g., Avarok Cybersecurity".to_string(),
                     description_placeholder: "Describe the purpose of this workspace..."
                         .to_string(),
+                    chat_default: true,
                 },
                 EntityTypeConfig {
                     type_name: "Office".to_string(),
@@ -956,6 +966,7 @@ impl Default for TreeSchema {
                     plural_label: "Offices".to_string(),
                     name_placeholder: "e.g., Engineering, Marketing, HR".to_string(),
                     description_placeholder: "Describe the purpose of this office...".to_string(),
+                    chat_default: true,
                 },
                 EntityTypeConfig {
                     type_name: "Room".to_string(),
@@ -964,6 +975,7 @@ impl Default for TreeSchema {
                     plural_label: "Rooms".to_string(),
                     name_placeholder: "e.g., General, Design Reviews, Standups".to_string(),
                     description_placeholder: "Describe the purpose of this room...".to_string(),
+                    chat_default: true,
                 },
             ],
         }

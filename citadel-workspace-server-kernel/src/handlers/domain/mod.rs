@@ -48,6 +48,9 @@ pub mod async_ops;
 // Tree validation module
 pub mod tree_validator;
 
+/// What makes a hierarchy schema valid.
+pub mod schema_rules;
+
 // Legacy module structure (preserved for compatibility)
 pub mod entity;
 pub mod server_ops;
