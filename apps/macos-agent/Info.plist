@@ -27,6 +27,12 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<!-- Shown by macOS when the agent first reaches the local network: a workspace server or a
+	     colleague's agent on the same Wi-Fi. Without approval macOS refuses those connections with
+	     "No route to host", while the internet still works (reproduced 2026-09-27), so the words
+	     have to make the choice easy to understand. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Citadel Agent connects directly to other members and to workspace servers on your local network, so calls, messages and files between people nearby do not go through a relay.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© Avarok Cybersecurity</string>
 	<!-- What the launcher runs the agent with (Support.swift). Each is required. -->

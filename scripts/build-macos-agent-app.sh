@@ -48,6 +48,10 @@ lipo -create "$work/launcher-arm64" "$work/launcher-x86_64" -output "$APP/Conten
 
 sed "s/__VERSION__/$VERSION/g" "$SRC/Info.plist" > "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
+# Required: without it the Local Network prompt has no explanation, and a refusal silently cuts
+# the agent off from LAN servers and nearby members (see the key's comment in Info.plist).
+[ -n "$(plutil -extract NSLocalNetworkUsageDescription raw "$APP/Contents/Info.plist" 2>/dev/null)" ] \
+  || { echo "build-macos-agent-app: Info.plist has no NSLocalNetworkUsageDescription" >&2; exit 1; }
 
 # The icon: the brand kit's dark app icon (the guidelines' default), at every size an .icns holds.
 "$ROOT/scripts/make-macos-icns.sh" "$BRAND" "$APP/Contents/Resources/AppIcon.icns"
