@@ -48,7 +48,7 @@ describe("POST /api/tenants, Turnstile", () => {
     }
     expect(calls).toHaveLength(0);
     const big = await SELF.fetch(`${ORIGIN}/api/tenants`, {
-      method: "POST", headers: { origin: ORIGIN, "content-type": "application/json" }, body: JSON.stringify({ pad: "x".repeat(5000) }),
+      method: "POST", headers: { origin: ORIGIN, "content-type": "application/json" }, body: JSON.stringify({ pad: "x".repeat(60 * 1024) }), // past the create route's 48 KB, which leaves room for an icon
     });
     expect(big.status).toBe(413);
   });

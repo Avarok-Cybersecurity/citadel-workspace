@@ -12,8 +12,10 @@ import { createTenant, openPortal, slugAvailability, tenantStatus } from "./tena
 import { handleWebhook } from "./webhook.mjs";
 import { serveUi } from "./ui.mjs";
 
-/** Creation and portal bodies are a handful of short fields. */
+/** Portal bodies are a handful of short fields. */
 const API_BODY_LIMIT = 4096;
+/** Creation may also carry the workspace icon: 32 KB decoded is about 44 KB of base64. */
+const CREATE_BODY_LIMIT = 48 * 1024;
 
 export const objectFor = (env, slug) => env.WORKSPACE.get(env.WORKSPACE.idFromName(slug));
 
@@ -73,7 +75,7 @@ async function api(io, cfg, request, url) {
       return await slugAvailability(io, decodeURIComponent(parts[1]));
     }
     if (method === "POST" && parts.length === 1 && parts[0] === "tenants") {
-      const body = await readJson(request, cfg, API_BODY_LIMIT);
+      const body = await readJson(request, cfg, CREATE_BODY_LIMIT);
       if (body.error) return body.error;
       return await createTenant(io, cfg, body.value, request.headers.get("cf-connecting-ip"));
     }

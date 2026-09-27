@@ -10,12 +10,13 @@ import { CLAIM_SEAL, digestsEqual, randomHex, RESERVATION_SEAL, seal, sha256Hex,
 import { CREATE_ACTION, verifyTurnstile } from "./turnstile.mjs";
 import { priceIds, stripe, StripeError } from "./stripe.mjs";
 import { json, refuse } from "./http.mjs";
+import { logoOf, MAX_LOGO_BYTES } from "./logo.mjs";
 
 /** How long a free tenant's reservation holds its slug should the request die mid-way. */
 const FREE_RESERVATION_SECONDS = 300;
 /** Past the Checkout's own expiry, so a payment completed at the last second still finds its row. */
 const CHECKOUT_GRACE_SECONDS = 600;
-const CREATE_FIELDS = new Set(["slug", "display_name", "tier", "interval", "seats", "storage_blocks", "turnstile_token", "reservation_token"]);
+const CREATE_FIELDS = new Set(["slug", "display_name", "logo", "tier", "interval", "seats", "storage_blocks", "turnstile_token", "reservation_token"]);
 const TOKEN = /^[0-9a-f]{64}$/;
 
 const isCount = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
@@ -29,6 +30,10 @@ export function readCreate(body) {
   if (!slug.ok) return { error: refuse(`slug-${slug.reason}`, `that address is ${slug.reason}`, 400) };
   const name = displayNameOf(body.display_name);
   if (name === null) return bad(`display_name is 1 to ${MAX_DISPLAY_NAME} printable characters`);
+  const logo = body.logo === undefined ? null : logoOf(body.logo);
+  if (body.logo !== undefined && logo === null) {
+    return bad(`logo is a WebP, PNG or JPEG data URL of at most ${MAX_LOGO_BYTES / 1024} KB`);
+  }
   if (!tierIds().includes(body.tier)) return bad(`tier is one of ${tierIds().join(", ")}`);
   if (typeof body.turnstile_token !== "string" || body.turnstile_token.length < 1 || body.turnstile_token.length > 2048) {
     return bad("turnstile_token is required");
@@ -37,7 +42,7 @@ export function readCreate(body) {
     return bad("reservation_token is the 64 hex characters a paid creation returned");
   }
   const retry = body.reservation_token ?? null;
-  const plan = { slug: body.slug, display_name: name, tier: body.tier, interval: null, seats: 0, storage_blocks: 0 };
+  const plan = { slug: body.slug, display_name: name, logo, tier: body.tier, interval: null, seats: 0, storage_blocks: 0 };
   if (!isPaid(body.tier)) {
     if (body.interval !== undefined || body.seats !== undefined || body.storage_blocks !== undefined) {
       return bad("the free tier takes no interval, seats or storage_blocks");
@@ -93,6 +98,7 @@ export async function createTenant(io, cfg, body, ip) {
       tenant_id: row.tenant_id,
       master_password: claim,
       display_name: plan.display_name,
+      logo: plan.logo,
       entitlements: entitlements({ ...plan, status: paid ? "pending" : "active", period_start: null, period_end: null }),
     });
     if (!paid) {
