@@ -11,6 +11,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { randomBytes } from "node:crypto";
+import { createServer } from "node:http";
 
 const require = createRequire(import.meta.url);
 const { start_client } = require("./proof-client/pkg/citadel_tenant_proof_client.js");
@@ -45,6 +46,24 @@ export function redirect(from, to) {
 }
 
 export const endpoint = (tenant) => `ws://${BASE}/${tenant}`;
+
+/**
+ * A local stand-in for Email Sending: `wrangler dev` has no MAIL binding, and /create requires a
+ * way to email the claim code. What the proofs' workspaces would have been emailed is kept here.
+ */
+export const MAIL_SINK_PORT = PORT + 1;
+export const mailSent = [];
+let mailSink = null;
+function startMailSink() {
+  if (mailSink) return;
+  mailSink = createServer((req, res) => {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => { mailSent.push(JSON.parse(body)); res.writeHead(202).end(); });
+  }).listen(MAIL_SINK_PORT, "127.0.0.1");
+}
+/** The address a proof's workspace is created with. */
+export const proofEmail = (slug) => `proof+${slug}@example.test`;
 export const secret = () => randomBytes(12).toString("hex");
 
 export async function client(tenant) {
@@ -84,7 +103,7 @@ export async function provision(slug) {
   const res = await fetch(`${HTTP_BASE}/api/tenants`, {
     method: "POST",
     headers: { origin: HTTP_BASE, "content-type": "application/json" },
-    body: JSON.stringify({ slug, display_name: `Proof ${slug}`, tier: "free", turnstile_token: "XXXX.DUMMY.TOKEN.XXXX" }),
+    body: JSON.stringify({ slug, display_name: `Proof ${slug}`, email: proofEmail(slug), tier: "free", turnstile_token: "XXXX.DUMMY.TOKEN.XXXX" }),
   });
   const body = await res.json().catch(() => null);
   if (res.status !== 201 || body?.status !== "active" || !/^[0-9a-f]{64}$/.test(body?.claim_code ?? "")) {
@@ -112,6 +131,7 @@ export const DEV_OVERRIDES = [
   "--var", `ALLOWED_ORIGINS:${HTTP_BASE}`,
   "--var", "TURNSTILE_HOSTNAMES:example.com",
   "--var", `TURNSTILE_SECRET:${TURNSTILE_TESTING_SECRET}`,
+  "--var", `MAIL_ENDPOINT:http://127.0.0.1:${MAIL_SINK_PORT}/`,
 ];
 
 /**
@@ -122,6 +142,8 @@ export const DEV_OVERRIDES = [
 export const PRODUCTION_LIKE_OVERRIDES = [
   "--var", "TURNSTILE_HOSTNAMES:example.com",
   "--var", `TURNSTILE_SECRET:${TURNSTILE_TESTING_SECRET}`,
+  // And email, which only an onboarded domain can send for real: the local sink.
+  "--var", `MAIL_ENDPOINT:http://127.0.0.1:${MAIL_SINK_PORT}/`,
 ];
 
 /**
@@ -130,6 +152,7 @@ export const PRODUCTION_LIKE_OVERRIDES = [
  */
 export async function startWrangler(persistTo, overrides) {
   if (!Array.isArray(overrides)) throw new Error("startWrangler: pass DEV_OVERRIDES or PRODUCTION_LIKE_OVERRIDES");
+  startMailSink();
   const migrate = spawnSync(
     "npx",
     ["wrangler@4", "d1", "migrations", "apply", "citadel-control", "--local", "--persist-to", persistTo],

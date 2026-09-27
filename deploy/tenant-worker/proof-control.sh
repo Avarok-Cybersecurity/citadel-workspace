@@ -25,11 +25,17 @@ write_vars() {  # $1 = Turnstile secret (Cloudflare's public testing secrets onl
 
 # The dev overrides of wrangler.toml (see its header), and this edge as its own host: with routes
 # configured, wrangler dev otherwise rewrites Host and Origin to work.avarok.net.
+# /create requires a way to email the claim code, and wrangler dev has no Email Sending binding:
+# a local sink that accepts what the control plane would have mailed (control/mail.mjs).
+MAIL_SINK_PORT=$((PORT + 1))
 serve() {
+  node -e "require('http').createServer((q, s) => { q.resume(); q.on('end', () => s.writeHead(202).end()); }).listen($MAIL_SINK_PORT, '127.0.0.1')" &
+  SINK_PID=$!
   npx wrangler dev --port "$PORT" --ip 127.0.0.1 --persist-to "$PERSIST" \
     --local-upstream "127.0.0.1:$PORT" \
     --var TENANT_PATH_ROUTING:on --var TENANT_DIAGNOSTICS:on --assets test/fixture-ui \
     --var TURNSTILE_HOSTNAMES:example.com --var "ALLOWED_ORIGINS:$BASE" \
+    --var "MAIL_ENDPOINT:http://127.0.0.1:$MAIL_SINK_PORT/" \
     > "$PERSIST.log" 2>&1 &
   PID=$!
   for _ in $(seq 1 60); do
@@ -38,7 +44,7 @@ serve() {
   done
   echo "wrangler dev did not come up; see $PERSIST.log"; exit 1
 }
-stop() { kill "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; }
+stop() { kill "$PID" "${SINK_PID:-}" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; }
 trap stop EXIT
 
 WHSEC="whsec_$(openssl rand -hex 24)"

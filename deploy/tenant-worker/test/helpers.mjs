@@ -42,7 +42,7 @@ export const PRICES = {
  * `turn` is how Cloudflare Realtime TURN answers `generate-ice-servers`: `{status, body}`, by
  * default a 201 with a STUN and a TURN server whose credentials are numbered by call.
  */
-export function outbound({ turnstile = { success: true, hostname: "example.com" }, checkout, expire = {}, meterEvents = { failures: 0 }, subscriptions = { failures: 0 }, turn } = {}) {
+export function outbound({ turnstile = { success: true, hostname: "example.com" }, checkout, expire = {}, meterEvents = { failures: 0 }, subscriptions = { failures: 0 }, turn, mailStatus = 202 } = {}) {
   let turnCalls = 0;
   let meterFailures = meterEvents.failures;
   let subscriptionFailures = subscriptions.failures;
@@ -54,6 +54,8 @@ export function outbound({ turnstile = { success: true, hostname: "example.com" 
     const form = init.body instanceof URLSearchParams ? init.body : new URLSearchParams(url.search);
     calls.push({ url: url.origin + url.pathname, method, form, headers: init.headers ?? {}, body: init.body });
     if (url.hostname === "challenges.cloudflare.com") return Response.json(turnstile);
+    // The MAIL_ENDPOINT sink (vitest.config.mjs): what the control plane would have emailed.
+    if (url.hostname === MAIL_SINK_HOST) return new Response(null, { status: mailStatus });
     if (url.hostname === "rtc.live.cloudflare.com") {
       turnCalls += 1;
       if (turn) return Response.json(turn.body, { status: turn.status });
@@ -127,7 +129,15 @@ export const post = (path, body, headers = {}) =>
 
 export const get = (path) => SELF.fetch(`${ORIGIN}${path}`);
 
-export const createBody = (slug, extra = {}) => ({ slug, display_name: "Acme Ltd", tier: "free", turnstile_token: "tok", ...extra });
+/** One address per workspace: the per-recipient send limit would otherwise be spent across the suite. */
+export const ownerEmail = (slug) => `owner+${slug}@example.com`;
+export const createBody = (slug, extra = {}) => ({ slug, display_name: "Acme Ltd", email: ownerEmail(slug), tier: "free", turnstile_token: "tok", ...extra });
+
+/** Host of the MAIL_ENDPOINT the suite sets (vitest.config.mjs). */
+export const MAIL_SINK_HOST = "mail.sink.test";
+/** The messages the sink received, from an `outbound()` call log. */
+export const mailsIn = (calls) =>
+  calls.filter((c) => c.url.startsWith(`https://${MAIL_SINK_HOST}`)).map((c) => JSON.parse(c.body));
 
 export const tenantRow = (slug) => env.CONTROL_DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
 export const eventRecorded = async (id) =>

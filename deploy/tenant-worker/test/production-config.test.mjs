@@ -28,6 +28,13 @@ async function expectNothingSaid(response) {
 }
 
 describe("wrangler.toml, as wrangler reads it", () => {
+  it("mails through the Email Sending binding, from the mail subdomain, and never through a sink", () => {
+    const deployed = production();
+    expect(deployed.send_email?.map((b) => b.name)).toEqual(["MAIL"]);
+    expect(deployed.vars.MAIL_FROM).toBe("Citadel Workspace <claim@mail.avarok.net>");
+    expect(deployed.vars.MAIL_ENDPOINT).toBeUndefined();
+  });
+
   it("turns diagnostics and path routing off", () => {
     const { vars } = production();
     expect(vars.TENANT_DIAGNOSTICS).toBe("off");

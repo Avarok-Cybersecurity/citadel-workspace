@@ -11,12 +11,13 @@ import { CREATE_ACTION, verifyTurnstile } from "./turnstile.mjs";
 import { priceIds, stripe, StripeError } from "./stripe.mjs";
 import { json, refuse } from "./http.mjs";
 import { logoOf, MAX_LOGO_BYTES } from "./logo.mjs";
+import { emailOf, MAX_EMAIL_LENGTH, sendClaimEmail } from "./owner-email.mjs";
 
 /** How long a free tenant's reservation holds its slug should the request die mid-way. */
 const FREE_RESERVATION_SECONDS = 300;
 /** Past the Checkout's own expiry, so a payment completed at the last second still finds its row. */
 const CHECKOUT_GRACE_SECONDS = 600;
-const CREATE_FIELDS = new Set(["slug", "display_name", "logo", "tier", "interval", "seats", "storage_blocks", "turnstile_token", "reservation_token"]);
+const CREATE_FIELDS = new Set(["slug", "display_name", "logo", "email", "tier", "interval", "seats", "storage_blocks", "turnstile_token", "reservation_token"]);
 const TOKEN = /^[0-9a-f]{64}$/;
 
 const isCount = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
@@ -30,6 +31,8 @@ export function readCreate(body) {
   if (!slug.ok) return { error: refuse(`slug-${slug.reason}`, `that address is ${slug.reason}`, 400) };
   const name = displayNameOf(body.display_name);
   if (name === null) return bad(`display_name is 1 to ${MAX_DISPLAY_NAME} printable characters`);
+  const email = emailOf(body.email);
+  if (email === null) return bad(`email is the address the claim code is sent to, at most ${MAX_EMAIL_LENGTH} characters`);
   const logo = body.logo === undefined ? null : logoOf(body.logo);
   if (body.logo !== undefined && logo === null) {
     return bad(`logo is a WebP, PNG or JPEG data URL of at most ${MAX_LOGO_BYTES / 1024} KB`);
@@ -42,7 +45,7 @@ export function readCreate(body) {
     return bad("reservation_token is the 64 hex characters a paid creation returned");
   }
   const retry = body.reservation_token ?? null;
-  const plan = { slug: body.slug, display_name: name, logo, tier: body.tier, interval: null, seats: 0, storage_blocks: 0 };
+  const plan = { slug: body.slug, display_name: name, logo, owner_email: email, tier: body.tier, interval: null, seats: 0, storage_blocks: 0 };
   if (!isPaid(body.tier)) {
     if (body.interval !== undefined || body.seats !== undefined || body.storage_blocks !== undefined) {
       return bad("the free tier takes no interval, seats or storage_blocks");
@@ -68,6 +71,9 @@ export async function slugAvailability(io, slug) {
 
 export async function createTenant(io, cfg, body, ip) {
   if (!cfg.turnstile) return refuse("turnstile-not-configured", "workspace creation is not available yet", 503);
+  // Required, as the address is: without a way to send it, the claim code would exist only on
+  // one screen, which is exactly what the email is for.
+  if (!io.mail) return refuse("email-not-configured", "workspace creation is not available yet", 503);
   const read = readCreate(body);
   if (read.error) return read.error;
   const { plan } = read;
@@ -103,7 +109,11 @@ export async function createTenant(io, cfg, body, ip) {
     });
     if (!paid) {
       await io.store.activateFree(plan.slug, row.tenant_id);
-      return json({ slug: plan.slug, status: "active", workspace_host: hostOf(cfg, plan.slug), claim_code: claim }, 201);
+      const mail = await sendClaimEmail(io, cfg, { slug: plan.slug, tenantId: row.tenant_id, to: plan.owner_email, claim, client: ip });
+      return json(
+        { slug: plan.slug, status: "active", workspace_host: hostOf(cfg, plan.slug), claim_code: claim, email_sent: mail.sent },
+        201,
+      );
     }
     const checkout = await openCheckout(io, cfg, row, now);
     await io.store.attachCheckout(
@@ -197,7 +207,7 @@ export async function tenantStatus(io, cfg, slug, sessionId) {
   if (!checkSlug(slug).ok) return refuse("not-found", "no such workspace", 404);
   const row = await io.store.holder(slug, io.now());
   if (!row) return refuse("not-found", "no such workspace", 404);
-  const answer = { slug, status: row.status, tier: row.tier, workspace_host: hostOf(cfg, slug) };
+  const answer = { slug, status: row.status, tier: row.tier, workspace_host: hostOf(cfg, slug), email_verified: row.email_verified_at !== null };
   if (row.status !== "active" || typeof sessionId !== "string" || sessionId.length < 8 || sessionId.length > 255) {
     return json(answer);
   }

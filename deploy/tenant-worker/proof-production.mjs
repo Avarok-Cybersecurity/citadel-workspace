@@ -18,7 +18,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { check, HTTP_BASE, PRODUCTION_LIKE_OVERRIDES, startWrangler, stopWrangler, verdict } from "./proof-lib.mjs";
+import { check, HTTP_BASE, PRODUCTION_LIKE_OVERRIDES, proofEmail, startWrangler, stopWrangler, verdict } from "./proof-lib.mjs";
 
 const [persistTo, claimsFile, slug, flag] = process.argv.slice(2);
 if (!persistTo || !claimsFile || !slug || (flag !== undefined && flag !== "--serve")) {
@@ -78,7 +78,7 @@ try {
   const created = await fetch(`${HTTP_BASE}/api/tenants`, {
     method: "POST",
     headers: { origin: ORIGIN, "content-type": "application/json" },
-    body: JSON.stringify({ slug, display_name: `Proof ${slug}`, tier: "free", turnstile_token: "XXXX.DUMMY.TOKEN.XXXX" }),
+    body: JSON.stringify({ slug, display_name: `Proof ${slug}`, email: proofEmail(slug), tier: "free", turnstile_token: "XXXX.DUMMY.TOKEN.XXXX" }),
   });
   const body = await created.json();
   check(results, `POST /api/tenants creates ${slug}, active`, created.status === 201 && body.status === "active" && /^[0-9a-f]{64}$/.test(body.claim_code ?? ""),

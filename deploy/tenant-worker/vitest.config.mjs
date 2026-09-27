@@ -9,7 +9,7 @@ const migrations = await readD1Migrations("./control/migrations");
 // for the tests that hold production to its promises (test/production-config.test.mjs). The
 // bindings below override some of these vars for every other test; this copy is untouched.
 const production = unstable_readConfig({ config: "./wrangler.toml" });
-const PRODUCTION_CONFIG = JSON.stringify({ vars: production.vars, routes: production.routes, assets: production.assets });
+const PRODUCTION_CONFIG = JSON.stringify({ vars: production.vars, routes: production.routes, assets: production.assets, send_email: production.send_email });
 
 export default defineConfig({
   plugins: [
@@ -30,6 +30,9 @@ export default defineConfig({
           // Answered in-process by test/helpers.mjs outbound(); never sent to Cloudflare.
           TURN_KEY_ID: "turn_key_vitest",
           TURN_KEY_API_TOKEN: "turn_token_vitest",
+          // Mail goes to a sink test/helpers.mjs outbound() answers; production uses the MAIL binding.
+          MAIL_FROM: "Citadel Workspace <claim@mail.example.test>",
+          MAIL_ENDPOINT: "https://mail.sink.test/send",
           TENANT_PATH_ROUTING: "on",
           TENANT_DIAGNOSTICS: "on",
         },

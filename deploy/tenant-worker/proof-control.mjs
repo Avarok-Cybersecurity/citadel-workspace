@@ -46,7 +46,7 @@ const api = async (method, path, body) => {
   });
   return { status: r.status, body: await r.json().catch(() => null) };
 };
-const create = (extra) => api("POST", "/api/tenants", { slug, display_name: "Proof Org", turnstile_token: "XXXX.DUMMY.TOKEN.XXXX", ...extra });
+const create = (extra) => api("POST", "/api/tenants", { slug, display_name: "Proof Org", email: `proof+${slug}@example.test`, turnstile_token: "XXXX.DUMMY.TOKEN.XXXX", ...extra });
 const stripeGet = async (path) => {
   const r = await fetch(`https://api.stripe.com/v1${path}`, { headers: { authorization: `Bearer ${vars.STRIPE_SECRET_KEY}` } });
   const body = await r.json();

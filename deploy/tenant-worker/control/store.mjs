@@ -5,7 +5,7 @@
 const COLUMNS =
   "slug, tenant_id, display_name, status, tier, interval, seats, storage_blocks, stripe_customer, " +
   "stripe_subscription, created_at, expires_at, claim_hash, checkout_hash, sub_event_created, reservation_hash, checkout_sealed, " +
-  "period_start, period_end, usage_subscription";
+  "period_start, period_end, usage_subscription, owner_email, email_verified_at, email_sent_at, verify_hash, verify_expires";
 
 export class Store {
   constructor(db) {
@@ -65,11 +65,11 @@ export class Store {
         this.db
           .prepare(
             "INSERT INTO tenants (slug, tenant_id, display_name, status, tier, interval, seats, storage_blocks, " +
-              "created_at, expires_at, claim_hash, reservation_hash) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)",
+              "created_at, expires_at, claim_hash, reservation_hash, owner_email) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
           )
           .bind(
             row.slug, row.tenant_id, row.display_name, row.tier, row.interval, row.seats, row.storage_blocks, now,
-            row.expires_at, row.claim_hash, row.reservation_hash,
+            row.expires_at, row.claim_hash, row.reservation_hash, row.owner_email,
           ),
       ]);
       return true;
@@ -113,6 +113,48 @@ export class Store {
       .bind(slug, sealed)
       .run();
     return done.meta.changes === 1;
+  }
+
+  /** Records the verification token just emailed (by hash) and when it went. */
+  async recordVerification(slug, tenantId, verifyHash, expires, now) {
+    await this.db
+      .prepare("UPDATE tenants SET verify_hash = ?, verify_expires = ?, email_sent_at = ? WHERE slug = ? AND tenant_id = ?")
+      .bind(verifyHash, expires, now, slug, tenantId)
+      .run();
+  }
+
+  /** A new address: unverified until its own link is followed. */
+  async setOwnerEmail(slug, tenantId, email) {
+    await this.db
+      .prepare("UPDATE tenants SET owner_email = ?, email_verified_at = NULL, verify_hash = NULL, verify_expires = NULL WHERE slug = ? AND tenant_id = ?")
+      .bind(email, slug, tenantId)
+      .run();
+  }
+
+  /** True when `verifyHash` is the live token for `slug`; stamps the address verified, once. */
+  async verifyEmail(slug, verifyHash, now) {
+    const done = await this.db
+      .prepare(
+        "UPDATE tenants SET email_verified_at = COALESCE(email_verified_at, ?) " +
+          "WHERE slug = ? AND verify_hash = ? AND verify_expires > ? AND owner_email IS NOT NULL",
+      )
+      .bind(now, slug, verifyHash, now)
+      .run();
+    return done.meta.changes === 1;
+  }
+
+  /** Forgets the address `verifyHash` was sent to, returning it; null when the token is not live. */
+  async forgetEmail(slug, verifyHash) {
+    const row = await this.db
+      .prepare("SELECT owner_email FROM tenants WHERE slug = ? AND verify_hash = ? AND owner_email IS NOT NULL")
+      .bind(slug, verifyHash)
+      .first();
+    if (!row) return null;
+    await this.db
+      .prepare("UPDATE tenants SET owner_email = NULL, email_verified_at = NULL, verify_hash = NULL, verify_expires = NULL WHERE slug = ? AND verify_hash = ?")
+      .bind(slug, verifyHash)
+      .run();
+    return row.owner_email;
   }
 
   async eventSeen(id) {
