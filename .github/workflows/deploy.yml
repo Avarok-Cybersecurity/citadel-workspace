@@ -146,7 +146,8 @@ jobs:
           [ -n "$STRIPE_KEY" ] || { echo "::error::the STRIPE_TEST_RESTRICTED_KEY secret is not set"; exit 1; }
           umask 077
           printf '%s' "$CF_TOKEN" > "$RUNNER_TEMP/cf-token"
-          printf '%s' "$STRIPE_KEY" > "$RUNNER_TEMP/stripe-key"
+          # The file format scripts/stripe-catalogue.mjs reads: a STRIPE_SECRET_KEY= line, not the bare key.
+          printf 'STRIPE_SECRET_KEY=%s\n' "$STRIPE_KEY" > "$RUNNER_TEMP/stripe-key"
           CITADEL_CF_TOKEN_FILE="$RUNNER_TEMP/cf-token" CITADEL_STRIPE_KEY_FILE="$RUNNER_TEMP/stripe-key" \
             deploy/tenant-worker/deploy.sh
           rm -f "$RUNNER_TEMP/cf-token" "$RUNNER_TEMP/stripe-key"
