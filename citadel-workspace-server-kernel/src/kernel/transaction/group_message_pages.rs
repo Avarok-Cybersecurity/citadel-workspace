@@ -113,6 +113,8 @@ mod tests {
             message_type: GroupMessageType::Text,
             timestamp: 0,
             edited_at: None,
+            document_id: None,
+            document_title: None,
             reply_to: None,
             reply_count: 0,
             sender_name: String::new(),

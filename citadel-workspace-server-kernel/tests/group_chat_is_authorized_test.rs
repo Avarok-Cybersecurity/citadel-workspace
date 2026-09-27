@@ -110,6 +110,8 @@ fn post(group_id: &str) -> WorkspaceProtocolRequest {
         content: "hello".to_string(),
         reply_to: None,
         mentions: None,
+        document_id: None,
+        document_title: None,
     }
 }
 

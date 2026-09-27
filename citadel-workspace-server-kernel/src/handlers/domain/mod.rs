@@ -51,6 +51,9 @@ pub mod tree_validator;
 /// What makes a hierarchy schema valid.
 pub mod schema_rules;
 
+/// Merging live-document updates on the server.
+pub mod live_doc_merge;
+
 // Legacy module structure (preserved for compatibility)
 pub mod entity;
 pub mod server_ops;

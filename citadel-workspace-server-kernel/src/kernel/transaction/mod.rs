@@ -19,6 +19,8 @@ use std::sync::Arc;
 mod accounts;
 pub mod backend_ops_simple;
 mod group_message_pages;
+/// A channel's live documents.
+pub mod live_docs;
 // Note: TransactionManager has been removed. Use BackendTransactionManager instead.
 
 /// How many message locks exist, total.
@@ -1359,6 +1361,8 @@ mod group_message_tests {
             reply_count: 0,
             mentions: vec![],
             edited_at: None,
+            document_id: None,
+            document_title: None,
         }
     }
 
@@ -1955,6 +1959,8 @@ mod group_paging_tests {
             message_type: GroupMessageType::Text,
             timestamp: 0,
             edited_at: None,
+            document_id: None,
+            document_title: None,
             reply_to: None,
             reply_count: 0,
             mentions: vec![],

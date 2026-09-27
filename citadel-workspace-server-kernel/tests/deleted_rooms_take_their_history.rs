@@ -73,6 +73,8 @@ fn mk_message(id: &str, group_id: &str) -> citadel_workspace_types::GroupMessage
         reply_count: 0,
         mentions: vec![],
         edited_at: None,
+        document_id: None,
+        document_title: None,
     }
 }
 

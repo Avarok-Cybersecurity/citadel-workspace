@@ -3,4 +3,4 @@
 /**
  * Type of group message
  */
-export type GroupMessageType = "Text" | "Markdown" | "System";
+export type GroupMessageType = "Text" | "Markdown" | "System" | "LiveDocument";

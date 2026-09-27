@@ -48,4 +48,9 @@ mentions: Array<string>,
 /**
  * Unix timestamp of last edit (None if never edited)
  */
-edited_at: bigint | null, };
+edited_at: bigint | null, 
+/**
+ * The live document a LiveDocument message shares. Absent on every other message, and on
+ * every message stored before live documents reached group chats.
+ */
+document_id: string | null, document_title: string | null, };

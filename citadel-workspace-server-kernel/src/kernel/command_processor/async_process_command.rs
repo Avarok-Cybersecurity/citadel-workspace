@@ -715,6 +715,8 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             content,
             reply_to,
             mentions,
+            document_id,
+            document_title,
         } => {
             use crate::kernel::group_access::{authorize_group_write, GROUP_ACCESS_DENIED};
             // System notices are the server's voice ("X joined", "settings changed"); a client
@@ -732,6 +734,15 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     GROUP_ACCESS_DENIED.to_string(),
                 ));
             }
+
+            let (document_id, document_title) = match super::live_docs::document_fields(
+                message_type,
+                document_id.as_deref(),
+                document_title.as_deref(),
+            ) {
+                Ok(fields) => fields,
+                Err(reason) => return Ok(WorkspaceProtocolResponse::Error(reason)),
+            };
 
             use citadel_workspace_types::GroupMessage;
             use uuid::Uuid;
@@ -763,6 +774,8 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 reply_count: 0,
                 mentions: mentions.clone().unwrap_or_default(),
                 edited_at: None,
+                document_id,
+                document_title,
             };
 
             // Store the message
@@ -792,6 +805,26 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     e
                 ))),
             }
+        }
+
+        WorkspaceProtocolRequest::LiveDocOpen { group_id, doc_id } => {
+            super::live_docs::open(kernel, actor_user_id, group_id, doc_id).await
+        }
+
+        WorkspaceProtocolRequest::LiveDocUpdate {
+            group_id,
+            doc_id,
+            update,
+        } => {
+            super::live_docs::update(
+                kernel,
+                actor_user_id,
+                requester_cid,
+                group_id,
+                doc_id,
+                update,
+            )
+            .await
         }
 
         WorkspaceProtocolRequest::EditGroupMessage {
