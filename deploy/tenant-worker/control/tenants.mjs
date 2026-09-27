@@ -1,5 +1,5 @@
 /**
- * Creating a tenant, reporting its status, and opening its billing portal.
+ * Creating a tenant and reporting its status. (Its billing portal: portal.mjs.)
  */
 import { checkSlug } from "./slug.mjs";
 import { displayNameOf, MAX_DISPLAY_NAME } from "./display-name.mjs";
@@ -219,23 +219,4 @@ export async function tenantStatus(io, cfg, slug, sessionId) {
   // Two callers racing with the session id: one clears it and is answered; the other is not.
   if (!(await io.store.collectClaim(slug, held.claim_sealed))) return json(answer);
   return json({ ...answer, claim_code: claim });
-}
-
-export async function openPortal(io, cfg, slug, body) {
-  if (!cfg.stripeKey) return refuse("billing-not-configured", "billing is not available yet", 503);
-  if (!checkSlug(slug).ok) return refuse("not-found", "no such workspace", 404);
-  const row = await io.store.holder(slug, io.now());
-  const presented = typeof body.claim_code === "string" && /^[0-9a-f]{64}$/.test(body.claim_code) ? body.claim_code : null;
-  // One answer for "no such workspace" and "wrong code", so the route is no oracle for either.
-  if (!row || !presented || !digestsEqual(await sha256Hex(presented), row.claim_hash)) {
-    return refuse("not-owner", "that claim code does not own this workspace", 403);
-  }
-  if (!row.stripe_customer) return refuse("no-subscription", "this workspace has no subscription to manage", 404);
-  if (!cfg.portalConfiguration) return refuse("portal-not-configured", "managing a subscription is not available yet", 503);
-  const session = await stripe(io, cfg.stripeKey, "POST", "/billing_portal/sessions", {
-    customer: row.stripe_customer,
-    configuration: cfg.portalConfiguration,
-    return_url: `${cfg.publicOrigin}/`,
-  });
-  return json({ portal_url: session.url });
 }

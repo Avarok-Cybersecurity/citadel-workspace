@@ -157,6 +157,22 @@ export class Store {
     return row.owner_email;
   }
 
+  async recordPortalLink(slug, tenantId, portalHash, expires) {
+    await this.db
+      .prepare("UPDATE tenants SET portal_hash = ?, portal_expires = ? WHERE slug = ? AND tenant_id = ?")
+      .bind(portalHash, expires, slug, tenantId)
+      .run();
+  }
+
+  /** Spends the live portal link `portalHash` of `slug`: true once, then never again. */
+  async takePortalLink(slug, portalHash, now) {
+    const done = await this.db
+      .prepare("UPDATE tenants SET portal_hash = NULL, portal_expires = NULL WHERE slug = ? AND portal_hash = ? AND portal_expires > ?")
+      .bind(slug, portalHash, now)
+      .run();
+    return done.meta.changes === 1;
+  }
+
   async eventSeen(id) {
     return (await this.db.prepare("SELECT 1 AS seen FROM stripe_events WHERE id = ?").bind(id).first()) !== null;
   }
