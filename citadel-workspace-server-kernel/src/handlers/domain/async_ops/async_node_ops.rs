@@ -3,6 +3,7 @@
 //! This module implements AsyncNodeOperations for AsyncDomainServerOperations,
 //! providing the generalized tree hierarchy node operations.
 
+use crate::handlers::domain::async_ops::node_chat::{set_chat_enabled, NEW_NODE_CHAT_ENABLED};
 use crate::handlers::domain::async_ops::AsyncPermissionOperations;
 use crate::handlers::domain::node_ops::AsyncNodeOperations;
 use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
@@ -184,7 +185,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             .map(|r| r.allowed_child_types.clone());
 
         // Create the node
-        let node = DomainNode {
+        let mut node = DomainNode {
             id: node_id.clone(),
             parent_id: parent_id.map(String::from),
             entity_type: entity_type.clone(),
@@ -206,6 +207,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             created_at: now,
             updated_at: now,
         };
+        set_chat_enabled(&mut node, NEW_NODE_CHAT_ENABLED);
 
         // Insert the node
         nodes.insert(node_id.clone(), node.clone());
@@ -383,11 +385,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             node.rules = Some(String::from(new_rules));
         }
         if let Some(new_chat_enabled) = chat_enabled {
-            node.chat_enabled = new_chat_enabled;
-            // Assign chat channel ID if enabling chat
-            if new_chat_enabled && node.chat_channel_id.is_none() {
-                node.chat_channel_id = Some(uuid::Uuid::new_v4().to_string());
-            }
+            set_chat_enabled(&mut node, new_chat_enabled);
         }
 
         // Exactly one default, so setting it clears the others. Done inside the
