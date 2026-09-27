@@ -196,6 +196,19 @@ pub enum WorkspaceProtocolRequest {
         mentions: Option<Vec<String>>,
     },
 
+    /// Open a live document in a group chat channel: its whole state, and where it stands in
+    /// the channel's sequence of updates to it. Needs read access to the channel.
+    LiveDocOpen { group_id: String, doc_id: String },
+
+    /// One Yjs update to a live document in a group chat channel, v1-encoded, in base64. The
+    /// server merges it, so a malformed or oversized update is refused rather than stored, and
+    /// every reader of the channel receives it with its sequence number. Needs send access.
+    LiveDocUpdate {
+        group_id: String,
+        doc_id: String,
+        update: String,
+    },
+
     /// Edit an existing group message
     EditGroupMessage {
         group_id: String,
@@ -390,6 +403,20 @@ pub enum WorkspaceProtocolResponse {
     Workspaces(Vec<WorkspaceMetadata>),
     Success(String),
     Error(String),
+    /// A live document's whole state (Yjs v1, base64) and the sequence number it stands at.
+    LiveDocState {
+        group_id: String,
+        doc_id: String,
+        seq: u32,
+        state: String,
+    },
+    /// One accepted update to a live document, numbered: a reader that sees a gap re-opens it.
+    LiveDocUpdated {
+        group_id: String,
+        doc_id: String,
+        seq: u32,
+        update: String,
+    },
     WorkspaceNotInitialized,
     /// The members of a domain, and WHICH domain they are.
     ///

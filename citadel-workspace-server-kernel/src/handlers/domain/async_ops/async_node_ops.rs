@@ -524,6 +524,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             self.backend_tx_manager
                 .delete_all_group_messages(channel_id)
                 .await?;
+            // And its live documents, kept under the same channel key.
+            self.backend_tx_manager.delete_live_docs(channel_id).await?;
         }
 
         // Remove all deleted nodes

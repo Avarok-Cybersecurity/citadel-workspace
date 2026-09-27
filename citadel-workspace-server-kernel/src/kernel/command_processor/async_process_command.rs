@@ -794,6 +794,26 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             }
         }
 
+        WorkspaceProtocolRequest::LiveDocOpen { group_id, doc_id } => {
+            super::live_docs::open(kernel, actor_user_id, group_id, doc_id).await
+        }
+
+        WorkspaceProtocolRequest::LiveDocUpdate {
+            group_id,
+            doc_id,
+            update,
+        } => {
+            super::live_docs::update(
+                kernel,
+                actor_user_id,
+                requester_cid,
+                group_id,
+                doc_id,
+                update,
+            )
+            .await
+        }
+
         WorkspaceProtocolRequest::EditGroupMessage {
             group_id,
             message_id,

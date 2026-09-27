@@ -47,3 +47,6 @@ mod workspace_record;
 
 /// UpdateTreeSchema and CreateNodeType: the hierarchy, validated.
 mod tree_schema_update;
+
+/// LiveDocOpen and LiveDocUpdate: live documents in office and room chats.
+mod live_docs;

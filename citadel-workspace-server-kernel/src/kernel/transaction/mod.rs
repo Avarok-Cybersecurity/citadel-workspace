@@ -19,6 +19,8 @@ use std::sync::Arc;
 mod accounts;
 pub mod backend_ops_simple;
 mod group_message_pages;
+/// A channel's live documents.
+pub mod live_docs;
 // Note: TransactionManager has been removed. Use BackendTransactionManager instead.
 
 /// How many message locks exist, total.
