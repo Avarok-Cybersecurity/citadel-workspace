@@ -717,6 +717,13 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             mentions,
         } => {
             use crate::kernel::group_access::{authorize_group_write, GROUP_ACCESS_DENIED};
+            // System notices are the server's voice ("X joined", "settings changed"); a client
+            // choosing that type would post in it. Text and Markdown are the member's choice.
+            if *message_type == citadel_workspace_types::GroupMessageType::System {
+                return Ok(WorkspaceProtocolResponse::Error(
+                    "System messages are written by the server, not sent".to_string(),
+                ));
+            }
             if authorize_group_write(kernel, actor_user_id, group_id)
                 .await
                 .is_none()
