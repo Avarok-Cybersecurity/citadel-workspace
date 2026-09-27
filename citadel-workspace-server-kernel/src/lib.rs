@@ -66,6 +66,11 @@ pub mod config {
         /// workspace still named the default; never written over a name an administrator chose.
         /// Unset keeps `DEFAULT_ROOT_WORKSPACE_NAME`. See `resolve_workspace_name`.
         pub workspace_name: Option<String>,
+        /// The root workspace's icon, as a data URL: what the creator chose at /create. Seeded
+        /// into a fresh store's metadata under `logo`, and given to a stored root that has never
+        /// had one; never written over an icon an administrator set or cleared. Held to the
+        /// UpdateWorkspaceProfile rules; see `resolve_workspace_logo`.
+        pub workspace_logo: Option<String>,
     }
 
     impl std::fmt::Debug for ServerConfig {
@@ -94,6 +99,11 @@ pub mod config {
                 .field("file_transfer", &self.file_transfer)
                 .field("allow_first_connect_admin", &self.allow_first_connect_admin)
                 .field("workspace_name", &self.workspace_name)
+                // Its size, not the image: every boot logs this, and the icon is tens of KB.
+                .field(
+                    "workspace_logo",
+                    &self.workspace_logo.as_ref().map(String::len),
+                )
                 .finish()
         }
     }
@@ -497,6 +507,19 @@ pub fn resolve_workspace_name(config: &ServerConfig) -> Result<Option<String>, N
         .map_err(|e| NetworkError::msg(format!("workspace_name {e}")))
 }
 
+/// The configured root workspace icon, checked as UpdateWorkspaceProfile checks one.
+///
+/// Refused rather than dropped, as the name is: a server that quietly started without the icon
+/// its creator chose would look like a lost setting.
+pub fn resolve_workspace_logo(config: &ServerConfig) -> Result<Option<String>, NetworkError> {
+    let Some(logo) = config.workspace_logo.as_deref() else {
+        return Ok(None);
+    };
+    kernel::command_processor::workspace_logo::validate_logo(logo)
+        .map(|()| Some(logo.to_string()))
+        .map_err(|e| NetworkError::msg(format!("workspace_logo: {e}")))
+}
+
 /// A workspace name as it will be shown: trimmed, 1 to MAX_WORKSPACE_NAME_CHARS characters, no
 /// control characters. The one rule for the configured name and for a rename.
 pub fn validate_workspace_name(raw: &str) -> Result<String, String> {
@@ -666,6 +689,7 @@ async fn workspace_kernel(
     ).await?;
     kernel.set_first_connect_admin(first_connect_admin);
     kernel.set_workspace_name(resolve_workspace_name(config)?);
+    kernel.set_workspace_logo(resolve_workspace_logo(config)?);
     if ice_servers.is_none() {
         info!(target: "citadel", "No relay-credential source: GetIceServers answers that no relay is available.");
     }
@@ -1161,6 +1185,7 @@ mod server_config_debug_tests {
             file_transfer: Some(FileTransferConfig::default()),
             allow_first_connect_admin: None,
             workspace_name: Some("Admin Lab".to_string()),
+            workspace_logo: None,
         }
     }
 

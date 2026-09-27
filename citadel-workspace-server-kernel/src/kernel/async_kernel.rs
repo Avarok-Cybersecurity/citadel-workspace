@@ -148,6 +148,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     workspace_structure: Option<(WorkspaceStructureConfig, Option<PathBuf>)>,
     /// The configured root workspace name (`ServerConfig::workspace_name`), or none for the default
     workspace_name: Option<String>,
+    /// The configured root workspace icon (`ServerConfig::workspace_logo`), if any.
+    workspace_logo: Option<String>,
     /// Broadcast channel for sending updates to all connected clients
     broadcast_tx: broadcast::Sender<BroadcastMessage>,
     /// File transfer configuration
@@ -205,6 +207,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             workspace_password: self.workspace_password.clone(),
             workspace_structure: self.workspace_structure.clone(),
             workspace_name: self.workspace_name.clone(),
+            workspace_logo: self.workspace_logo.clone(),
             broadcast_tx: self.broadcast_tx.clone(),
             file_transfer_config: self.file_transfer_config.clone(),
             first_connect_admin: self.first_connect_admin,
@@ -246,6 +249,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             workspace_password: None,
             workspace_structure: None,
             workspace_name: None,
+            workspace_logo: None,
             broadcast_tx,
             file_transfer_config: FileTransferConfig::default(),
             rate_limiter: RateLimiter::new(DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL),
@@ -291,6 +295,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// The root workspace's configured name, applied by `inject_admin_user`.
     pub fn set_workspace_name(&mut self, name: Option<String>) {
         self.workspace_name = name;
+    }
+
+    /// Set the icon `inject_admin_user` seeds (see `ServerConfig::workspace_logo`).
+    pub fn set_workspace_logo(&mut self, logo: Option<String>) {
+        self.workspace_logo = logo;
     }
 
     /// Set by the server bootstrap from configuration. Off unless asked for.
@@ -597,6 +606,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
         if workspace_exists {
             self.apply_configured_workspace_name().await?;
+            self.apply_configured_workspace_logo().await?;
         } else {
             info!(target: "citadel", "Creating root workspace with no owner (first user with master password becomes admin)");
 
@@ -648,7 +658,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 owner_id: UNASSIGNED_OWNER.to_string(),
                 members: vec![],
                 offices: vec![],
-                metadata: vec![],
+                metadata: match &self.workspace_logo {
+                    Some(logo) => serde_json::to_vec(&serde_json::json!({ "logo": logo }))
+                        .map_err(|e| {
+                            NetworkError::msg(format!("encoding the workspace icon: {e}"))
+                        })?,
+                    None => vec![],
+                },
             };
 
             // Create domain wrapper for the workspace
@@ -700,6 +716,44 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         }
         info!(target: "citadel", "Naming the root workspace {name:?} (it had the default name)");
         workspace.name = name.to_string();
+        backend
+            .insert_workspace(crate::WORKSPACE_ROOT_ID.to_string(), workspace.clone())
+            .await?;
+        backend
+            .insert_domain(
+                crate::WORKSPACE_ROOT_ID.to_string(),
+                citadel_workspace_types::structs::Domain::Workspace { workspace },
+            )
+            .await
+    }
+
+    /// Gives an existing root workspace the configured icon, if its metadata has never held one.
+    ///
+    /// A `logo` key that is present, even as null, is an administrator's choice (set or cleared
+    /// through UpdateWorkspaceProfile), and the configuration never takes it back.
+    async fn apply_configured_workspace_logo(&self) -> Result<(), NetworkError> {
+        let Some(logo) = self.workspace_logo.as_deref() else {
+            return Ok(());
+        };
+        let backend = &self.domain_operations.backend_tx_manager;
+        let Some(mut workspace) = backend.get_workspace(crate::WORKSPACE_ROOT_ID).await? else {
+            return Ok(());
+        };
+        let has_logo_key = serde_json::from_slice::<serde_json::Value>(&workspace.metadata)
+            .ok()
+            .and_then(|m| m.as_object().map(|o| o.contains_key("logo")))
+            .unwrap_or(false);
+        if has_logo_key {
+            return Ok(());
+        }
+        let patch = serde_json::to_vec(&serde_json::json!({ "logo": logo }))
+            .map_err(|e| NetworkError::msg(format!("encoding the workspace icon: {e}")))?;
+        workspace.metadata =
+            crate::handlers::domain::server_ops::metadata_merge::merge_metadata_document(
+                &workspace.metadata,
+                &patch,
+            )
+            .map_err(NetworkError::msg)?;
         backend
             .insert_workspace(crate::WORKSPACE_ROOT_ID.to_string(), workspace.clone())
             .await?;

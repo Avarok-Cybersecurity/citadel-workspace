@@ -119,7 +119,7 @@ describe("the workspace's name", () => {
       const refused = [];
       for (const display_name of ["a\u0085b", undefined]) {
         try {
-          await instance.provisioning.provision({ tenant_id, master_password, entitlements, display_name }, false);
+          await instance.provisioning.provision({ tenant_id, master_password, entitlements, display_name, logo: null }, false);
           refused.push(null);
         } catch (e) {
           refused.push(e.message);

@@ -6,6 +6,7 @@
 
 import { displayNameOf } from "./display-name.mjs";
 import { sha256Hex } from "./secrets.mjs";
+import { logoOf } from "./logo.mjs";
 
 const KEY = "control:provisioning";
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -44,12 +45,15 @@ export class Provisioning {
    * reservation is provisioned again for its new tenant; an object whose node has ever started
    * belongs to its tenant for good and refuses another's password.
    */
-  async provision({ tenant_id, master_password, entitlements, display_name }, running) {
+  async provision({ tenant_id, master_password, entitlements, display_name, logo }, running) {
     if (typeof tenant_id !== "string" || !HEX64.test(master_password ?? "") || typeof entitlements !== "object") {
       throw new Error("provisioning needs a tenant id, a 32-byte hex master password and entitlements");
     }
     const name = displayNameOf(display_name);
     if (name === null) throw new Error("provisioning needs a display_name the workspace can be shown by");
+    // Checked again here, as the name is: this object is the one that hands it to the kernel.
+    if (logo === undefined) throw new Error("provisioning needs a logo, or null for none");
+    if (logo !== null && logoOf(logo) === null) throw new Error("provisioning was given a logo the workspace cannot show");
     const current = this.record;
     if (current && current.tenant_id !== tenant_id && (current.started || running)) {
       throw new Error("this object already serves another tenant");
@@ -59,6 +63,7 @@ export class Provisioning {
       master_password,
       entitlements,
       display_name: name,
+      logo,
       started: current?.tenant_id === tenant_id && Boolean(current.started),
     };
     await this.storage.put(KEY, this.record);
@@ -74,6 +79,8 @@ export class Provisioning {
     const lines = [`bind_addr = "127.0.0.1:0"`, `workspace_master_password = ${JSON.stringify(this.masterPassword())}`];
     const name = this.displayName();
     if (name !== null) lines.push(`workspace_name = ${JSON.stringify(name)}`);
+    // A data URL is base64 and ASCII punctuation only, so JSON-quoting is a TOML basic string.
+    if (this.record?.logo) lines.push(`workspace_logo = ${JSON.stringify(this.record.logo)}`);
     return lines.join("\n");
   }
 
@@ -113,6 +120,8 @@ export class Provisioning {
       provisioned: this.record !== null,
       entitlements: this.record?.entitlements ?? null,
       display_name: this.displayName(),
+      // Its size, not the image: stats are for proofs, and the icon is tens of kilobytes.
+      logo_bytes: this.record?.logo?.length ?? 0,
       master_password_sha256_prefix: this.fingerprint,
     };
   }
