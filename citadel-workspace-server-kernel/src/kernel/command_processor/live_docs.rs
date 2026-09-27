@@ -95,3 +95,36 @@ pub(super) async fn update<R: Ratchet + Send + Sync + 'static>(
     kernel.broadcast_to_group(accepted.clone(), requester_cid, group_id.to_string());
     Ok(accepted)
 }
+
+/// The longest title a shared live document may carry.
+pub const MAX_DOC_TITLE_CHARS: usize = 120;
+
+/// The document fields of a group message: both present, and sane, exactly when it is a
+/// LiveDocument message; absent otherwise.
+pub(super) fn document_fields(
+    message_type: &citadel_workspace_types::GroupMessageType,
+    document_id: Option<&str>,
+    document_title: Option<&str>,
+) -> Result<(Option<String>, Option<String>), String> {
+    let is_doc = *message_type == citadel_workspace_types::GroupMessageType::LiveDocument;
+    match (is_doc, document_id, document_title) {
+        (false, None, None) => Ok((None, None)),
+        (true, Some(id), Some(title)) => {
+            let title = title.trim();
+            let chars = title.chars().count();
+            if !usable_doc_id(id) {
+                return Err("that is not a live document id".to_string());
+            }
+            if chars == 0 || chars > MAX_DOC_TITLE_CHARS || title.chars().any(char::is_control) {
+                return Err(format!(
+                    "a live document's title is 1 to {MAX_DOC_TITLE_CHARS} characters"
+                ));
+            }
+            Ok((Some(id.to_string()), Some(title.to_string())))
+        }
+        _ => Err(
+            "a live document message names its document and title; no other message does"
+                .to_string(),
+        ),
+    }
+}

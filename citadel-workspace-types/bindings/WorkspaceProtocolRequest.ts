@@ -87,7 +87,11 @@ reply_to: string | null,
 /**
  * List of mentioned usernames
  */
-mentions: Array<string> | null, } } | { "LiveDocOpen": { group_id: string, doc_id: string, } } | { "LiveDocUpdate": { group_id: string, doc_id: string, update: string, } } | { "EditGroupMessage": { group_id: string, message_id: string, new_content: string, } } | { "DeleteGroupMessage": { group_id: string, message_id: string, } } | { "GetGroupMessages": { group_id: string, 
+mentions: Array<string> | null, 
+/**
+ * For a LiveDocument message: the document it shares, and its title.
+ */
+document_id: string | null, document_title: string | null, } } | { "LiveDocOpen": { group_id: string, doc_id: string, } } | { "LiveDocUpdate": { group_id: string, doc_id: string, update: string, } } | { "EditGroupMessage": { group_id: string, message_id: string, new_content: string, } } | { "DeleteGroupMessage": { group_id: string, message_id: string, } } | { "GetGroupMessages": { group_id: string, 
 /**
  * Get messages before this timestamp (for pagination)
  */

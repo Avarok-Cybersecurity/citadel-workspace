@@ -63,6 +63,8 @@ fn message(group_id: &str, message_type: GroupMessageType) -> WorkspaceProtocolR
         content: "Ops has been archived".to_string(),
         reply_to: None,
         mentions: None,
+        document_id: None,
+        document_title: None,
     }
 }
 

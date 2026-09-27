@@ -76,6 +76,8 @@ fn msg(id: &str, group_id: &str) -> GroupMessage {
         reply_count: 0,
         mentions: vec![],
         edited_at: None,
+        document_id: None,
+        document_title: None,
     }
 }
 

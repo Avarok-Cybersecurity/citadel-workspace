@@ -246,3 +246,56 @@ async fn a_document_goes_with_its_office() {
         "the deleted office's document is still stored"
     );
 }
+
+fn share(
+    channel: &str,
+    kind: citadel_workspace_types::GroupMessageType,
+    id: Option<&str>,
+    title: Option<&str>,
+) -> WorkspaceProtocolRequest {
+    WorkspaceProtocolRequest::SendGroupMessage {
+        group_id: channel.to_string(),
+        message_type: kind,
+        content: "Shared a live document".to_string(),
+        reply_to: None,
+        mentions: None,
+        document_id: id.map(str::to_string),
+        document_title: title.map(str::to_string),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_live_document_is_shared_in_the_channel_by_id_and_title() {
+    use citadel_workspace_types::GroupMessageType::{LiveDocument, Text};
+    let kernel = create_test_kernel().await;
+    let (_, channel) = office(&kernel).await;
+    match send(
+        &kernel,
+        share(&channel, LiveDocument, Some(DOC), Some(" Sprint plan ")),
+        TEST_ADMIN_USER_ID,
+    )
+    .await
+    {
+        WorkspaceProtocolResponse::GroupMessageNotification { message, .. } => {
+            assert_eq!(
+                (
+                    message.document_id.as_deref(),
+                    message.document_title.as_deref()
+                ),
+                (Some(DOC), Some("Sprint plan"))
+            );
+        }
+        other => panic!("sharing failed: {other:?}"),
+    }
+    for bad in [
+        share(&channel, LiveDocument, None, Some("t")),
+        share(&channel, LiveDocument, Some("../escape"), Some("t")),
+        share(&channel, LiveDocument, Some(DOC), Some("")),
+        share(&channel, Text, Some(DOC), Some("t")),
+    ] {
+        assert!(matches!(
+            send(&kernel, bad, TEST_ADMIN_USER_ID).await,
+            WorkspaceProtocolResponse::Error(_)
+        ));
+    }
+}

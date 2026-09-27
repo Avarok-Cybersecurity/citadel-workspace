@@ -194,6 +194,11 @@ pub enum WorkspaceProtocolRequest {
         reply_to: Option<String>,
         /// List of mentioned usernames
         mentions: Option<Vec<String>>,
+        /// For a LiveDocument message: the document it shares, and its title.
+        #[serde(default)]
+        document_id: Option<String>,
+        #[serde(default)]
+        document_title: Option<String>,
     },
 
     /// Open a live document in a group chat channel: its whole state, and where it stands in
@@ -595,6 +600,8 @@ pub enum GroupMessageType {
     Markdown,
     /// System message (user joined, settings changed, etc.)
     System,
+    /// A live document shared in the channel; `document_id` and `document_title` name it.
+    LiveDocument,
 }
 
 /// A message in a group chat channel
@@ -625,6 +632,12 @@ pub struct GroupMessage {
     /// Unix timestamp of last edit (None if never edited)
     #[ts(type = "bigint | null")]
     pub edited_at: Option<u64>,
+    /// The live document a LiveDocument message shares. Absent on every other message, and on
+    /// every message stored before live documents reached group chats.
+    #[serde(default)]
+    pub document_id: Option<String>,
+    #[serde(default)]
+    pub document_title: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
