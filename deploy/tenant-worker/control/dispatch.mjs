@@ -11,11 +11,21 @@ import { config, isWebSocketUpgrade, json, upgradeRequired, readJson, refuse } f
 import { createTenant, openPortal, slugAvailability, tenantStatus } from "./tenants.mjs";
 import { handleWebhook } from "./webhook.mjs";
 import { serveUi } from "./ui.mjs";
+import { mailTransport } from "./mail.mjs";
+import { MailLedger } from "./mail-ledger.mjs";
+import { notMe, resendEmail, verifyEmail } from "./owner-email.mjs";
 
 /** Portal bodies are a handful of short fields. */
 const API_BODY_LIMIT = 4096;
 /** Creation may also carry the workspace icon: 32 KB decoded is about 44 KB of base64. */
 const CREATE_BODY_LIMIT = 48 * 1024;
+
+/** The owner-email routes under /api/tenants/:slug/. */
+const EMAIL_ROUTES = {
+  "verify-email": (io, _cfg, slug, body) => verifyEmail(io, slug, body),
+  "not-me": (io, _cfg, slug, body) => notMe(io, slug, body),
+  email: (io, cfg, slug, body, client) => resendEmail(io, cfg, slug, body, client),
+};
 
 export const objectFor = (env, slug) => env.WORKSPACE.get(env.WORKSPACE.idFromName(slug));
 
@@ -27,6 +37,8 @@ export function ioFor(env) {
     store: new Store(env.CONTROL_DB),
     usage: new UsageStore(env.CONTROL_DB),
     tenant: (slug) => objectFor(env, slug),
+    mail: mailTransport(env),
+    mailLedger: new MailLedger(env.CONTROL_DB),
   };
 }
 
@@ -81,6 +93,12 @@ async function api(io, cfg, request, url) {
     }
     if (method === "GET" && parts.length === 3 && parts[0] === "tenants" && parts[2] === "status") {
       return await tenantStatus(io, cfg, parts[1], url.searchParams.get("session_id"));
+    }
+    if (method === "POST" && parts.length === 3 && parts[0] === "tenants" && EMAIL_ROUTES[parts[2]]) {
+      if (!checkSlug(parts[1]).ok) return refuse("not-found", "no such workspace", 404);
+      const body = await readJson(request, cfg, API_BODY_LIMIT);
+      if (body.error) return body.error;
+      return await EMAIL_ROUTES[parts[2]](io, cfg, parts[1], body.value, request.headers.get("cf-connecting-ip"));
     }
     if (method === "POST" && parts.length === 3 && parts[0] === "tenants" && parts[2] === "portal") {
       const body = await readJson(request, cfg, API_BODY_LIMIT);

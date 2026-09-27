@@ -12,6 +12,8 @@ import { entitlements, planOfItems } from "./plans.mjs";
 import { verifyWebhook } from "./stripe.mjs";
 import { reconcileUsageSubscription } from "./usage-subscription.mjs";
 import { json, readText, refuse } from "./http.mjs";
+import { CLAIM_SEAL, sha256Hex, unseal } from "./secrets.mjs";
+import { sendClaimEmail } from "./owner-email.mjs";
 
 /** Stripe's events are well under this; a larger body is not one of them. */
 const WEBHOOK_BODY_LIMIT = 512 * 1024;
@@ -44,7 +46,32 @@ export async function handleWebhook(io, cfg, request) {
     await io.tenant(outcome.change.slug).setEntitlements(outcome.entitlements);
   }
   await io.store.applyEvent(event, io.now(), outcome.change);
-  return json({ received: true, applied: Boolean(outcome.change), note: outcome.note ?? null, tenant: outcome.change?.slug ?? null });
+  const emailed = outcome.claimEmail ? await sendPaidClaimEmail(io, cfg, outcome.claimEmail) : null;
+  return json({
+    received: true, applied: Boolean(outcome.change), note: outcome.note ?? null, tenant: outcome.change?.slug ?? null,
+    ...(emailed === null ? {} : { email_sent: emailed }),
+  });
+}
+
+/**
+ * The claim email of a paid workspace, now active. Never throws: the event is already recorded,
+ * so a failure here must not make Stripe retry it, and the success page still shows the code.
+ * Unsealed without being collected, so that page can still reveal it once.
+ */
+async function sendPaidClaimEmail(io, cfg, { row, sessionId }) {
+  try {
+    if (typeof sessionId !== "string" || !io.mail) return false;
+    // Read after the event made the tenant active, which is what sealedClaim looks for.
+    const held = await io.store.sealedClaim(row.slug, await sha256Hex(sessionId));
+    if (!held) return false;
+    const claim = await unseal(CLAIM_SEAL, sessionId, held.claim_sealed, held.tenant_id);
+    if (claim === null) return false;
+    const sent = await sendClaimEmail(io, cfg, { slug: row.slug, tenantId: row.tenant_id, to: row.owner_email, claim, client: null });
+    return sent.sent;
+  } catch (e) {
+    console.error(`[control] the claim email for ${row.slug} was not sent: ${e?.message ?? e}`);
+    return false;
+  }
 }
 
 /** `{change, entitlements}`, `{note}` for an event that changes nothing, or `{error}`. */
@@ -77,6 +104,9 @@ async function checkoutCompleted(io, session) {
     // stands until that event says otherwise.
     fields.status = "active";
     fields.expires_at = null;
+    // The claim email: sent once the event is recorded (handleWebhook), because the claim code is
+    // sealed under this Checkout Session's id, which only this event and the success page hold.
+    return { ...change(row, fields), claimEmail: { row, sessionId: session.id } };
   }
   return change(row, fields);
 }
