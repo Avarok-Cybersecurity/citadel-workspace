@@ -40,7 +40,10 @@ TOKEN=""
 if [ "$DRY_RUN" = 0 ]; then
   [ -n "${CITADEL_CF_TOKEN_FILE:-}" ] || fail "set CITADEL_CF_TOKEN_FILE to the file holding the Cloudflare API token"
   [ -f "$CITADEL_CF_TOKEN_FILE" ] || fail "CITADEL_CF_TOKEN_FILE names no file"
-  case "$(stat -f '%Lp' "$CITADEL_CF_TOKEN_FILE" 2>/dev/null || stat -c '%a' "$CITADEL_CF_TOKEN_FILE")" in
+  # GNU first: on Linux `stat -f` means filesystem status and SUCCEEDS with other output, so a
+  # BSD-first chain never reached its fallback and refused every CI deploy's 0600 file.
+  # BSD/macOS rejects -c, so the chain falls through to its form there.
+  case "$(stat -c '%a' "$CITADEL_CF_TOKEN_FILE" 2>/dev/null || stat -f '%Lp' "$CITADEL_CF_TOKEN_FILE")" in
     600|400) ;;
     *) fail "the token file is readable by others; chmod 600 it" ;;
   esac
