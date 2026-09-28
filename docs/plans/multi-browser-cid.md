@@ -81,6 +81,21 @@ are added only in phase 3, after phase 2 moves ILM into the agent.
 - [ ] Phase 2
   - [x] 2a (citadel-agent #79, parent stacked on #172): `IlmKvStore` makes the ILM backend storage-generic (the browser keeps its exact LocalDB requests), `AgentKvStore` writes the same `{prefix}-{cid}` keys through the agent's backend, one shared `wire.rs` framing, `ilm/host.rs` per-CID registry that refuses a second ILM. Nothing starts it yet. 372 tests pass; 10 negative controls went red.
   - [x] 2b (citadel-agent #80, parent stacked on #173): `--multi-subscriber` (off unless given, on both agent binaries); `GetSessionsResponse.agent_ilm` offer listing hosted CIDs; `EnableAgentIlm` (owner-only, idempotent) and `SendReliable` (owner-only, refused before opt-in, no raw fallback); both P2P read loops route an opted-in session's ILM frames to the agent ILM, everything else raw and untouched; every session-removal path stops the ILM, a TCP drop does not. 433 tests pass; 11 negative controls red.
-  - [ ] 2c WASM/UI
+  - [ ] 2c WASM/UI. Refined 2026-09-28 from the code:
+    - The rule "no browser ILM for an agent-hosted CID" lives in the WASM client, the one place that
+      creates browser ILMs (`multiplex` in `open_messenger_for` / `ensure_messenger_open`, lib.rs). A new
+      `agent_hosted` set in its state: `open`/`ensure` return without multiplexing for a member;
+      marking a CID fails if a browser ILM already runs for it (connections map), and marking blocks a
+      concurrent open (pending_opens), so the two can never both exist.
+    - Order: UI fetches GetSessions fresh (never a cached offer: after a reload the agent may already
+      host the CID) → if `agent_ilm` is present, mark the CID agent-hosted → send `EnableAgentIlm` →
+      on failure unmark and fall back to today's open.
+    - Inbound needs no WASM change: agent deliveries are unwrapped bodies, which the messenger's
+      "not an ILM frame" branch already forwards to JS without queueing.
+    - `send_p2p_message_reliable` for a marked CID sends `SendReliable`; its answer must be awaited, not
+      fire-and-forget. `SendReliableFailure` "not opted in" means the agent restarted and lost the
+      hosted ILM: re-run the opt-in and resend once, else surface the failure.
+    - Tests: a marked CID never multiplexes (and a running ILM refuses the mark); the restart case
+      re-opts-in; old agent (no offer) keeps today's path.
 - [ ] Phase 3
 - [ ] Phase 4
