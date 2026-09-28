@@ -21,6 +21,7 @@ export type { UpdateOperation } from './generated/UpdateOperation.js';
 export type { User } from './generated/User.js';
 export type { UserRole } from './generated/UserRole.js';
 export type { Workspace } from './generated/Workspace.js';
+export type { WorkspaceLogoChange } from './generated/WorkspaceLogoChange.js';
 export type { WorkspaceMetadata } from './generated/WorkspaceMetadata.js';
 export type { WorkspaceProtocolPayload } from './generated/WorkspaceProtocolPayload.js';
 export type { WorkspaceProtocolRequest } from './generated/WorkspaceProtocolRequest.js';

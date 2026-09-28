@@ -100,7 +100,19 @@ const PAIRS = [
   ['warning-emphasis', 'card'],
 ];
 
-const needed = [...new Set([...PAIRS.flat(), ...TINTED.flat(), 'card'])];
+/**
+ * [edge token, surface token] — an edge that must be SEEN, not read: WCAG 1.4.11 asks 3:1 of a
+ * control's boundary. `--input` (about 1.08:1 on white) was every field's resting border, so the
+ * light-mode chat composer had no visible edge at all (owner, 2026-09-27).
+ */
+const NON_TEXT_MIN = 3;
+const NON_TEXT = [
+  ['control-border', 'background'],
+  ['control-border', 'card'],
+  ['control-border', 'surface'],
+];
+
+const needed = [...new Set([...PAIRS.flat(), ...TINTED.flat(), ...NON_TEXT.flat(), 'card'])];
 const decls = Object.fromEntries(needed.map((t) => [t, declarations(t)]));
 
 for (const [name, list] of Object.entries(decls)) {
@@ -130,6 +142,16 @@ for (const [index, theme] of [[0, 'light'], [1, 'dark']]) {
     }
   }
 
+  for (const [edge, bg] of NON_TEXT) {
+    const value = ratio(hslToRgb(decls[edge][index]), hslToRgb(decls[bg][index]));
+    rows.push(
+      `  ${theme.padEnd(5)} ${`--${edge} on --${bg}`.padEnd(46)} ${value.toFixed(2)}:1  (needs ${NON_TEXT_MIN})`,
+    );
+    if (value < NON_TEXT_MIN) {
+      failures.push(`${theme}: --${edge} on --${bg} is ${value.toFixed(2)}:1, below ${NON_TEXT_MIN}`);
+    }
+  }
+
   const card = hslToRgb(decls.card[index]);
   const over = (fg, bg, alpha) => fg.map((c, i) => c * alpha + bg[i] * (1 - alpha));
   for (const [text, surface] of TINTED) {
@@ -146,9 +168,9 @@ for (const [index, theme] of [[0, 'light'], [1, 'dark']]) {
 
 console.log(rows.join('\n'));
 if (failures.length > 0) {
-  console.error('\ncheck-token-contrast: semantic text fails WCAG AA:\n');
+  console.error('\ncheck-token-contrast: semantic text or a control edge fails WCAG:\n');
   for (const f of failures) console.error(`  ${f}`);
   console.error('');
   process.exit(1);
 }
-console.log(`\ncheck-token-contrast: OK — ${rows.length} pairings clear AA across both themes.`);
+console.log(`\ncheck-token-contrast: OK — ${rows.length} pairings clear their WCAG minimum across both themes.`);

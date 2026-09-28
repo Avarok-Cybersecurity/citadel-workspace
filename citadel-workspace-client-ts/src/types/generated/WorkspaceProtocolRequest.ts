@@ -5,6 +5,7 @@ import type { Permission } from "./Permission";
 import type { TreeSchema } from "./TreeSchema";
 import type { UpdateOperation } from "./UpdateOperation";
 import type { UserRole } from "./UserRole";
+import type { WorkspaceLogoChange } from "./WorkspaceLogoChange";
 
 export type WorkspaceProtocolRequest = { "CreateWorkspace": { name: string, description: string, workspace_master_password: string, metadata: Array<number> | null, } } | { "GetWorkspace": { 
 /**
@@ -109,7 +110,15 @@ workspace_id: string | null,
  * the whole document — metadata is shared with other features, and
  * overwriting it erased the initialisation marker.
  */
-theme: number[], } } | { "UpdateNode": { node_id: string, name: string | null, description: string | null, mdx_content: string | null, rules: string | null, chat_enabled: boolean | null, 
+theme: number[], } } | { "UpdateWorkspaceProfile": { 
+/**
+ * None targets the root workspace, matching UpdateWorkspace.
+ */
+workspace_id: string | null, name: string | null, description: string | null, 
+/**
+ * None leaves the icon as it is.
+ */
+logo: WorkspaceLogoChange | null, } } | { "UpdateNode": { node_id: string, name: string | null, description: string | null, mdx_content: string | null, rules: string | null, chat_enabled: boolean | null, 
 /**
  * Make this the node the workspace opens on.
  *

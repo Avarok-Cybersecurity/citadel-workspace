@@ -48,6 +48,7 @@ jobs:
         with:
           fetch-depth: 0 # the agent-v* tags and the history between them
       - run: node --test scripts/lib/agent-release-decision.test.mjs
+      - run: node --test scripts/lib/lock-closure.test.mjs
       - run: node scripts/agent-release-state.mjs --pr
 
   fmt:

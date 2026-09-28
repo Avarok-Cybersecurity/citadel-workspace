@@ -170,8 +170,8 @@ const GATED_BY = {
   EditContent: 'EditMdx / EditTreeStructure on the node being edited',
   // Reads are gated on ViewContent; group_access::authorize_group_read.
   ReadMessages: 'ViewContent in kernel::group_access',
-  // Workspace-level operations take admin-or-owner plus the master password.
-  UpdateWorkspace: 'is_admin or workspace owner, plus the master password',
+  // Deleting takes admin-or-owner plus the master password. (UpdateWorkspace is
+  // now enforced directly, by UpdateWorkspaceProfile.)
   DeleteWorkspace: 'is_admin or workspace owner, plus the master password',
   ManageNodeMembers: 'AddUsers / RemoveUsers in async_domain_server_ops',
   ManageNodeTypes: 'is_admin on CreateNodeType and UpdateTreeSchema',

@@ -9,6 +9,7 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
 import { decide } from "./lib/agent-release-decision.mjs";
+import { lockClosure } from "./lib/lock-closure.mjs";
 
 const MANIFEST = "citadel-workspace-internal-service/Cargo.toml";
 
@@ -17,7 +18,6 @@ const MANIFEST = "citadel-workspace-internal-service/Cargo.toml";
 export const AGENT_INPUTS = [
   "citadel-workspace-internal-service",
   "citadel-internal-service", // the submodule: its pointer is the agent's source
-  "Cargo.lock",
   "Cargo.toml",
   "apps/macos-agent",
   "packaging",
@@ -45,6 +45,14 @@ function crateVersion() {
   return m[1];
 }
 
+// Cargo.lock is compared by the agent's slice of it, not as a whole file: a dependency added to
+// the workspace server read as an agent change and demanded a release identical to the last.
+const AGENT_PACKAGE = "citadel-workspace-internal-service";
+function lockChanged(tag) {
+  const closure = (rev) => lockClosure(git("show", `${rev}:Cargo.lock`), AGENT_PACKAGE).join("\n");
+  return closure(tag) !== closure("HEAD");
+}
+
 const version = crateVersion();
 const tags = git("tag", "-l", "agent-v*", "--sort=-v:refname").split("\n").filter(Boolean);
 const latestTag = tags[0] ?? null;
@@ -53,7 +61,7 @@ let changedSinceLatest = true;
 if (latestTag) {
   try {
     execFileSync("git", ["diff", "--quiet", latestTag, "HEAD", "--", ...AGENT_INPUTS]);
-    changedSinceLatest = false;
+    changedSinceLatest = lockChanged(latestTag);
   } catch (err) {
     if (err.status !== 1) throw err; // 1 = differences; anything else is a real failure
   }
