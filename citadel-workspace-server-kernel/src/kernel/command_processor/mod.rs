@@ -44,3 +44,6 @@ pub mod workspace_logo;
 
 /// The one read-modify-write for a stored workspace record.
 mod workspace_record;
+
+/// UpdateTreeSchema and CreateNodeType: the hierarchy, validated.
+mod tree_schema_update;

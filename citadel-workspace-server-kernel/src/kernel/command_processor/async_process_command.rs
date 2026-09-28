@@ -1071,7 +1071,9 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         WorkspaceProtocolRequest::GetNode { node_id } => {
             use crate::handlers::domain::node_ops::AsyncNodeOperations;
             match kernel.domain_ops().get_node(actor_user_id, node_id).await {
-                Ok(node) => Ok(WorkspaceProtocolResponse::Node(node)),
+                Ok(node) => Ok(WorkspaceProtocolResponse::Node(
+                    super::tree_schema_update::with_current_children(kernel, node).await?,
+                )),
                 Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
                     "Failed to get node: {}",
                     e
@@ -1156,6 +1158,8 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     // reached the gate and never reached here: setting which
                     // room a workspace opens on was written on the server and
                     // announced to nobody.
+                    let node =
+                        super::tree_schema_update::with_current_children(kernel, node).await?;
                     if crate::handlers::domain::node_ops::update_changes_structure(
                         name.as_deref(),
                         description.as_deref(),
@@ -1309,42 +1313,13 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         }
 
         WorkspaceProtocolRequest::UpdateTreeSchema { schema } => {
-            // Admin or Owner. The trait import that was here went with the
-            // `is_admin` call: `is_admin_or_owner` is an inherent method.
-            let may_edit_schema = kernel
-                .domain_ops()
-                .is_admin_or_owner(actor_user_id)
-                .await
-                .unwrap_or(false);
-            if !may_edit_schema {
-                return Ok(WorkspaceProtocolResponse::Error(
-                    "Permission denied: only an admin or the owner can update tree schema"
-                        .to_string(),
-                ));
-            }
-
-            // The same lock CreateNodeType holds. This write is a blind
-            // overwrite of a caller-supplied schema, so it does not race itself
-            // -- but landing between that handler's read and its save would
-            // discard this schema entirely.
-            let _schema_guard = kernel
-                .domain_operations
-                .backend_tx_manager
-                .lock_nodes()
-                .await;
-
-            match kernel
-                .domain_operations
-                .backend_tx_manager
-                .save_tree_schema(schema)
-                .await
-            {
-                Ok(_) => Ok(WorkspaceProtocolResponse::TreeSchema(schema.clone())),
-                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                    "Failed to update tree schema: {}",
-                    e
-                ))),
-            }
+            super::tree_schema_update::update_tree_schema(
+                kernel,
+                actor_user_id,
+                requester_cid,
+                schema,
+            )
+            .await
         }
 
         WorkspaceProtocolRequest::CreateNodeType {
@@ -1353,79 +1328,19 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             icon,
             allowed_parents,
         } => {
-            use crate::handlers::domain::async_ops::AsyncDomainOperations;
-            use citadel_workspace_types::structs::CustomNodeType;
-
-            // Check if user has ManageNodeTypes permission
-            let is_admin = kernel
-                .domain_ops()
-                .is_admin(actor_user_id)
-                .await
-                .unwrap_or(false);
-            if !is_admin {
-                return Ok(WorkspaceProtocolResponse::Error(
-                    "Permission denied: Only admins can create custom node types".to_string(),
-                ));
-            }
-
-            // Create the custom node type
-            let node_type = CustomNodeType {
+            let node_type = citadel_workspace_types::structs::CustomNodeType {
                 name: name.clone(),
                 display_name: display_name.clone(),
                 icon: icon.clone(),
                 allowed_parents: allowed_parents.clone(),
             };
-
-            // Held across the read AND the save, like every other
-            // read-modify-write in this file. Two CreateNodeType calls both read
-            // the same schema, each appended its own nesting rules, and the
-            // second save overwrote the first -- the earlier type's rules gone,
-            // its caller told it succeeded. UpdateTreeSchema below takes the
-            // same lock so a blind overwrite cannot land inside this window
-            // either.
-            let _schema_guard = kernel
-                .domain_operations
-                .backend_tx_manager
-                .lock_nodes()
-                .await;
-
-            // For now, custom node types are stored in the tree schema's rules
-            // Update the schema to include this new type
-            let mut schema = kernel
-                .domain_operations
-                .backend_tx_manager
-                .get_tree_schema_or_default()
-                .await?;
-
-            // Add nesting rules for this new type
-            use citadel_workspace_types::structs::NestingRule;
-            for parent_type in allowed_parents {
-                // Find or create rule for each allowed parent
-                if let Some(rule) = schema
-                    .rules
-                    .iter_mut()
-                    .find(|r| &r.parent_type == parent_type)
-                {
-                    if !rule.allowed_child_types.contains(name) {
-                        rule.allowed_child_types.push(name.clone());
-                    }
-                } else {
-                    schema.rules.push(NestingRule {
-                        parent_type: parent_type.clone(),
-                        allowed_child_types: vec![name.clone()],
-                    });
-                }
-            }
-
-            // Save the updated schema
-            kernel
-                .domain_operations
-                .backend_tx_manager
-                .save_tree_schema(&schema)
-                .await?;
-
-            // Return the list of node types including the new one
-            Ok(WorkspaceProtocolResponse::NodeTypes(vec![node_type]))
+            super::tree_schema_update::create_node_type(
+                kernel,
+                actor_user_id,
+                requester_cid,
+                node_type,
+            )
+            .await
         }
 
         WorkspaceProtocolRequest::ListNodeTypes => {
