@@ -81,7 +81,7 @@ are added only in phase 3, after phase 2 moves ILM into the agent.
 - [ ] Phase 2
   - [x] 2a (citadel-agent #79, parent stacked on #172): `IlmKvStore` makes the ILM backend storage-generic (the browser keeps its exact LocalDB requests), `AgentKvStore` writes the same `{prefix}-{cid}` keys through the agent's backend, one shared `wire.rs` framing, `ilm/host.rs` per-CID registry that refuses a second ILM. Nothing starts it yet. 372 tests pass; 10 negative controls went red.
   - [x] 2b (citadel-agent #80, parent stacked on #173): `--multi-subscriber` (off unless given, on both agent binaries); `GetSessionsResponse.agent_ilm` offer listing hosted CIDs; `EnableAgentIlm` (owner-only, idempotent) and `SendReliable` (owner-only, refused before opt-in, no raw fallback); both P2P read loops route an opted-in session's ILM frames to the agent ILM, everything else raw and untouched; every session-removal path stops the ILM, a TCP drop does not. 433 tests pass; 11 negative controls red.
-  - [ ] 2c WASM/UI. Refined 2026-09-28 from the code:
+  - [x] 2c WASM/UI (agent #81, parent #175, UI #77; drafts). End-to-end on loopback 2026-09-28: with the flag both pages opt in and chat goes out as SendReliable, no browser-ILM traffic; without it the browser ILM runs; messages both ways either way. Design as refined:
     - The rule "no browser ILM for an agent-hosted CID" lives in the WASM client, the one place that
       creates browser ILMs (`multiplex` in `open_messenger_for` / `ensure_messenger_open`, lib.rs). A new
       `agent_hosted` set in its state: `open`/`ensure` return without multiplexing for a member;
