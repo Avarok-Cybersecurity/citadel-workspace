@@ -1,5 +1,6 @@
 use citadel_internal_service::kernel::CitadelWorkspaceService;
 use citadel_internal_service::stun::{StunServers, STUN_SERVERS_ENV};
+use citadel_internal_service::sweep_stale_browser_transfers;
 use citadel_internal_service::OriginPolicy;
 use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
 use std::error::Error;
@@ -10,6 +11,14 @@ use structopt::StructOpt;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     citadel_logging::setup_log();
+
+    // Staged browser uploads older than their TTL, from a run that ended before its own cleanup
+    // (a restart, a crash, sleep). Without this they were never removed: the other agent binary
+    // (citadel-internal-service/service) swept at startup and this one, the one that ships, did
+    // not, so they piled up until the 256 MiB staging cap refused every browser send (found live
+    // 2026-09-27: 254 MB of staged files from Sept 23 on; a 2 MB send refused). First, before
+    // argument parsing, so every start sweeps; blocking std::fs, before any task is spawned.
+    sweep_stale_browser_transfers();
 
     // Initialize deadlock detector if feature is enabled
     #[cfg(feature = "deadlock-detection")]
