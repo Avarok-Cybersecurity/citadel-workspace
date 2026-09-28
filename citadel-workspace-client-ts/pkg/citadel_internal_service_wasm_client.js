@@ -50,6 +50,17 @@ export function init(ws_url) {
 }
 
 /**
+ * @param {string} cid_str
+ * @returns {Promise<boolean>}
+ */
+export function is_agent_hosted(cid_str) {
+    const ptr0 = passStringToWasm0(cid_str, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.is_agent_hosted(ptr0, len0);
+    return ret;
+}
+
+/**
  * @returns {boolean}
  */
 export function is_initialized() {
@@ -59,6 +70,21 @@ export function is_initialized() {
 
 export function main() {
     wasm.main();
+}
+
+/**
+ * Mark `cid` agent-hosted. Refused while this browser runs or is opening an ILM for it.
+ *
+ * Takes the state's WRITE lock: the open path checks and claims a CID under the read lock, so
+ * holding the write lock here makes the check-and-mark exclusive with it.
+ * @param {string} cid_str
+ * @returns {Promise<void>}
+ */
+export function mark_agent_hosted(cid_str) {
+    const ptr0 = passStringToWasm0(cid_str, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.mark_agent_hosted(ptr0, len0);
+    return ret;
 }
 
 /**
@@ -156,6 +182,18 @@ export function send_p2p_message_reliable(local_cid_str, peer_cid_str, message, 
     var ptr3 = isLikeNone(security_level) ? 0 : passStringToWasm0(security_level, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     var len3 = WASM_VECTOR_LEN;
     const ret = wasm.send_p2p_message_reliable(ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3);
+    return ret;
+}
+
+/**
+ * Undo a mark, e.g. after the agent refused the opt-in, so the ordinary open can proceed.
+ * @param {string} cid_str
+ * @returns {Promise<void>}
+ */
+export function unmark_agent_hosted(cid_str) {
+    const ptr0 = passStringToWasm0(cid_str, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.unmark_agent_hosted(ptr0, len0);
     return ret;
 }
 
@@ -576,22 +614,22 @@ function __wbg_get_imports() {
             return ret;
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 225, function: Function { arguments: [NamedExternref("CloseEvent")], shim_idx: 226, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 326, function: Function { arguments: [NamedExternref("CloseEvent")], shim_idx: 327, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_fe2dac47b3707fa5___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut__web_sys_8228e1473dafd92___features__gen_CloseEvent__CloseEvent____Output_______, wasm_bindgen_fe2dac47b3707fa5___convert__closures_____invoke___web_sys_8228e1473dafd92___features__gen_CloseEvent__CloseEvent_____);
             return ret;
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 435, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 436, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 478, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 479, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_fe2dac47b3707fa5___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut__web_sys_8228e1473dafd92___features__gen_MessageEvent__MessageEvent____Output_______, wasm_bindgen_fe2dac47b3707fa5___convert__closures_____invoke___web_sys_8228e1473dafd92___features__gen_MessageEvent__MessageEvent_____);
             return ret;
         },
         __wbindgen_cast_0000000000000003: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 519, function: Function { arguments: [Externref], shim_idx: 520, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 540, function: Function { arguments: [Externref], shim_idx: 541, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_fe2dac47b3707fa5___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut__wasm_bindgen_fe2dac47b3707fa5___JsValue____Output_______, wasm_bindgen_fe2dac47b3707fa5___convert__closures_____invoke___wasm_bindgen_fe2dac47b3707fa5___JsValue_____);
             return ret;
         },
         __wbindgen_cast_0000000000000004: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { dtor_idx: 530, function: Function { arguments: [], shim_idx: 531, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { dtor_idx: 551, function: Function { arguments: [], shim_idx: 552, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen_fe2dac47b3707fa5___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut_____Output_______, wasm_bindgen_fe2dac47b3707fa5___convert__closures_____invoke______);
             return ret;
         },

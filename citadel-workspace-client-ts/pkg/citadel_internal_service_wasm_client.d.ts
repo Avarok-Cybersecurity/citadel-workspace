@@ -14,9 +14,19 @@ export function get_version(): string;
 
 export function init(ws_url: string): Promise<void>;
 
+export function is_agent_hosted(cid_str: string): Promise<boolean>;
+
 export function is_initialized(): boolean;
 
 export function main(): void;
+
+/**
+ * Mark `cid` agent-hosted. Refused while this browser runs or is opening an ILM for it.
+ *
+ * Takes the state's WRITE lock: the open path checks and claims a CID under the read lock, so
+ * holding the write lock here makes the check-and-mark exclusive with it.
+ */
+export function mark_agent_hosted(cid_str: string): Promise<void>;
 
 export function next_message(): Promise<any>;
 
@@ -53,6 +63,11 @@ export function send_media_frame(local_cid_str: string, peer_cid_str: string, tr
  */
 export function send_p2p_message_reliable(local_cid_str: string, peer_cid_str: string, message: Uint8Array, security_level?: string | null): Promise<void>;
 
+/**
+ * Undo a mark, e.g. after the agent refused the opt-in, so the ordinary open can proceed.
+ */
+export function unmark_agent_hosted(cid_str: string): Promise<void>;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -61,14 +76,17 @@ export interface InitOutput {
     readonly ensure_messenger_open: (a: number, b: number) => any;
     readonly get_version: () => [number, number];
     readonly init: (a: number, b: number) => any;
+    readonly is_agent_hosted: (a: number, b: number) => any;
     readonly is_initialized: () => number;
     readonly main: () => void;
+    readonly mark_agent_hosted: (a: number, b: number) => any;
     readonly next_message: () => any;
     readonly open_messenger_for: (a: number, b: number) => any;
     readonly restart: (a: number, b: number) => any;
     readonly send_direct_to_internal_service: (a: any) => any;
     readonly send_media_frame: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number];
     readonly send_p2p_message_reliable: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => any;
+    readonly unmark_agent_hosted: (a: number, b: number) => any;
     readonly wasm_bindgen_fe2dac47b3707fa5___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut__web_sys_8228e1473dafd92___features__gen_CloseEvent__CloseEvent____Output_______: (a: number, b: number) => void;
     readonly wasm_bindgen_fe2dac47b3707fa5___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut__web_sys_8228e1473dafd92___features__gen_MessageEvent__MessageEvent____Output_______: (a: number, b: number) => void;
     readonly wasm_bindgen_fe2dac47b3707fa5___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut__wasm_bindgen_fe2dac47b3707fa5___JsValue____Output_______: (a: number, b: number) => void;

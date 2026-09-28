@@ -11,6 +11,9 @@ import { WorkspaceSessionManager, type SessionConfig } from './session.js';
 interface WorkspaceWasmModule extends WasmModule {
   open_messenger_for(cid_str: string): Promise<void>;
   ensure_messenger_open(cid_str: string): Promise<boolean>;
+  mark_agent_hosted(cid_str: string): Promise<void>;
+  unmark_agent_hosted(cid_str: string): Promise<void>;
+  is_agent_hosted(cid_str: string): Promise<boolean>;
   send_media_frame(
     local_cid_str: string,
     peer_cid_str: string,
@@ -479,6 +482,24 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   async ensureMessengerOpen(cid: string): Promise<boolean> {
     const wasmModule = this.getWorkspaceWasmModule();
     return await wasmModule.ensure_messenger_open(cid);
+  }
+
+  /**
+   * Mark `cid` as one whose ILM the agent runs, so this browser never opens its own for it.
+   * Refused (throws) while this browser runs or is opening an ILM for `cid`: two ILMs for one
+   * account corrupt each other's state. See the WASM client's agent_hosted.rs.
+   */
+  async markAgentHosted(cid: bigint): Promise<void> {
+    await this.getWorkspaceWasmModule().mark_agent_hosted(cid.toString());
+  }
+
+  /** Undo {@link markAgentHosted}, e.g. after the agent refused the opt-in. */
+  async unmarkAgentHosted(cid: bigint): Promise<void> {
+    await this.getWorkspaceWasmModule().unmark_agent_hosted(cid.toString());
+  }
+
+  async isAgentHosted(cid: bigint): Promise<boolean> {
+    return await this.getWorkspaceWasmModule().is_agent_hosted(cid.toString());
   }
 
   /**
