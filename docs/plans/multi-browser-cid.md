@@ -79,5 +79,8 @@ are added only in phase 3, after phase 2 moves ILM into the agent.
 
 - [x] Phase 1 (citadel-agent #78, parent #172): `SessionSubscribers` (owner + readers, owner semantics unchanged), `SessionRoute` fans out, a closed connection leaves every session (an owner with readers is replaced), the gate admits a reader. No reader can be added yet.
 - [ ] Phase 2
+  - [x] 2a (citadel-agent #79, parent stacked on #172): `IlmKvStore` makes the ILM backend storage-generic (the browser keeps its exact LocalDB requests), `AgentKvStore` writes the same `{prefix}-{cid}` keys through the agent's backend, one shared `wire.rs` framing, `ilm/host.rs` per-CID registry that refuses a second ILM. Nothing starts it yet. 372 tests pass; 10 negative controls went red.
+  - [ ] 2b opt-in + `SendReliable`
+  - [ ] 2c WASM/UI
 - [ ] Phase 3
 - [ ] Phase 4
