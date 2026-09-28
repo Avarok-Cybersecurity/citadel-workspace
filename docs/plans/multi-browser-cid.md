@@ -51,6 +51,24 @@ are added only in phase 3, after phase 2 moves ILM into the agent.
    store and `UnderlyingSessionTransport` over the peer sinks; one ILM per CID in the agent;
    `requests/message.rs` sends through it; inbound P2P feeds it; the WASM messenger stops running
    ILM for agent-hosted sessions.
+   Researched 2026-09-28 (read-only agent). Findings that shape it:
+   - The connector's messenger (`citadel-internal-service-connector/src/messenger`) compiles
+     natively; the agent already depends on the connector, so there is no cycle. ILM's
+     `UnderlyingSessionTransport` is `ISMHandle` (messenger/mod.rs:1123), `Backend` is
+     `CitadelWorkspaceBackend` (backend.rs:399) over LocalDB with keys `{prefix}-{cid}`.
+   - Frames between agents must stay byte-identical: bincode2 `WireWrapper` (mod.rs:278) with
+     `ISMAux` carrying `Payload<WrappedMessage>`; never reorder variants in the types crate.
+   - The UI currently receives every P2P message twice (an immediate unwrapped forward at
+     mod.rs:472-483, then ILM's delivery at :271) and dedupes.
+   Breakdown:
+   - **2a** Agent-side ILM host, unused until opted in: a `Backend` over the agent's
+     `BackendHandler` with the SAME `{prefix}-{cid}` keys (so it takes over state the browser's ILM
+     persisted), a transport over `conn.peers[peer].sink`, local delivery through `SessionRoute`.
+   - **2b** Opt-in: a capability the browser can read, a `SendReliable` request, inbound WireWrapper
+     frames fed to the agent's ILM only for opted-in sessions (everything else keeps the raw path).
+   - **2c** WASM/UI: when the agent offers it, `send_p2p_message_reliable` sends `SendReliable`
+     and `multiplex` is skipped; otherwise today's in-browser ILM. Old agent + new UI and new agent
+     + old UI both keep working.
 3. **Per-CID event stream.** A per-CID actor serialises intents, mints message id/index/seq,
    writes the pages, keeps a bounded ring, fans out `ConversationEvent`; `Subscribe`/`Resume`
    requests; the UI drops optimistic writes (`message-sender.ts`) and renders from events; the
