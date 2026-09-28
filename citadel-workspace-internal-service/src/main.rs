@@ -1,3 +1,4 @@
+use citadel_internal_service::kernel::ilm::service::MultiSubscriber;
 use citadel_internal_service::kernel::CitadelWorkspaceService;
 use citadel_internal_service::stun::{StunServers, STUN_SERVERS_ENV};
 use citadel_internal_service::sweep_stale_browser_transfers;
@@ -74,6 +75,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .await?
     };
+    let service = service.with_multi_subscriber(multi_subscriber(opts.multi_subscriber));
 
     // Backend selection precedence:
     //   1. INTERNAL_SERVICE_BACKEND / INTERNAL_SERVICE_DATA_DIR env vars
@@ -152,6 +154,20 @@ struct Options {
     /// UI.
     #[structopt(long)]
     no_tls: bool,
+    /// Offer agent-hosted ILM, so a session can opt in to this agent running its
+    /// reliable-messaging layer instead of the browser (docs/plans/multi-browser-cid.md).
+    /// Off unless given.
+    #[structopt(long)]
+    multi_subscriber: bool,
+}
+
+fn multi_subscriber(flag: bool) -> MultiSubscriber {
+    if flag {
+        citadel_logging::info!(target: "citadel", "multi_subscriber is ON: agent-hosted ILM is offered to sessions that opt in");
+        MultiSubscriber::On
+    } else {
+        MultiSubscriber::Off
+    }
 }
 
 /// The certificate the agent serves, and the only one.
