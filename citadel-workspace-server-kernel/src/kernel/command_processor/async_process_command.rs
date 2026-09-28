@@ -174,102 +174,66 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 ));
             }
 
-            // Held across the whole read-modify-write below. A workspace is
-            // stored whole, so without this a concurrent member or settings
-            // update reads the same record, and whichever writes second
-            // discards the other's field.
-            let _workspace_guard = kernel
-                .domain_operations
-                .backend_tx_manager
-                .lock_workspaces()
-                .await;
-
-            match kernel
-                .domain_operations
-                .backend_tx_manager
-                .get_workspace(target_id)
-                .await
-            {
-                Ok(Some(mut workspace)) => {
-                    // Merge, do not replace: `metadata` is one JSON object
-                    // that several features share, and assigning over it erased
-                    // the initialisation marker, so an initialised workspace
-                    // came back looking unconfigured and the setup modal opened
-                    // over a working workspace and blocked every click behind
-                    // its backdrop. The rule now lives in one place so the next
-                    // writer inherits it instead of rediscovering this.
-                    let patch = serde_json::json!({ "theme": match serde_json::from_slice::<serde_json::Value>(theme) {
-                        Ok(value) => value,
-                        Err(e) => {
-                            return Ok(WorkspaceProtocolResponse::Error(format!(
-                                "Theme payload is not valid JSON: {}",
-                                e
-                            )))
-                        }
-                    } });
-                    let patch_bytes = match serde_json::to_vec(&patch) {
-                        Ok(bytes) => bytes,
-                        Err(e) => {
-                            return Ok(WorkspaceProtocolResponse::Error(format!(
-                                "Failed to encode theme patch: {}",
-                                e
-                            )))
-                        }
-                    };
-                    workspace.metadata = match crate::handlers::domain::server_ops::metadata_merge::merge_metadata_document(
-                        &workspace.metadata,
-                        &patch_bytes,
-                    ) {
-                        Ok(bytes) => bytes,
-                        Err(e) => return Ok(WorkspaceProtocolResponse::Error(e)),
-                    };
-                    kernel
-                        .domain_operations
-                        .backend_tx_manager
-                        .insert_workspace(target_id.to_string(), workspace.clone())
-                        .await?;
-
-                    // The denormalized copy, which every other workspace
-                    // mutator also writes. Updating only the workspace record
-                    // left the Domain::Workspace copy holding the previous
-                    // metadata, so a reader that goes through the domain saw
-                    // the old theme and would eventually write it back.
-                    kernel
-                        .domain_operations
-                        .backend_tx_manager
-                        .insert_domain(
-                            target_id.to_string(),
-                            citadel_workspace_types::structs::Domain::Workspace {
-                                workspace: workspace.clone(),
-                            },
-                        )
-                        .await?;
-
-                    // The theme is what EVERY member sees; a change reaching
-                    // only its author is the one case where a silent broadcast
-                    // is most obviously wrong. Same receiving half as
-                    // UpdateWorkspace above.
-                    // Scoped to this workspace's members. The record carries the
-                    // full member list, so sending it to every connected session
-                    // discloses the membership of a workspace the recipient
-                    // cannot read -- their GetWorkspace for it is refused and
-                    // ListWorkspaces omits it.
-                    kernel.broadcast_to_workspace(
-                        WorkspaceProtocolResponse::Workspace(workspace.clone()),
-                        requester_cid,
-                        workspace.id.clone(),
-                    );
-
-                    Ok(WorkspaceProtocolResponse::Workspace(workspace))
+            // Merge, do not replace: `metadata` is one JSON object that several
+            // features share, and assigning over it erased the initialisation
+            // marker, so an initialised workspace came back looking
+            // unconfigured and the setup modal opened over a working workspace
+            // and blocked every click behind its backdrop.
+            let value: serde_json::Value = match serde_json::from_slice(theme) {
+                Ok(value) => value,
+                Err(e) => {
+                    return Ok(WorkspaceProtocolResponse::Error(format!(
+                        "Theme payload is not valid JSON: {}",
+                        e
+                    )))
                 }
-                Ok(None) => Ok(WorkspaceProtocolResponse::Error(
-                    "Workspace not found".to_string(),
-                )),
-                Err(e) => Ok(WorkspaceProtocolResponse::Error(format!(
-                    "Failed to update workspace theme: {}",
-                    e
-                ))),
-            }
+            };
+            let patch_bytes = match serde_json::to_vec(&serde_json::json!({ "theme": value })) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    return Ok(WorkspaceProtocolResponse::Error(format!(
+                        "Failed to encode theme patch: {}",
+                        e
+                    )))
+                }
+            };
+            // The theme is what EVERY member sees; the shared helper saves both
+            // copies and announces it to this workspace's members.
+            super::workspace_record::mutate_workspace(
+                kernel,
+                target_id,
+                requester_cid,
+                "theme",
+                |workspace| {
+                    workspace.metadata =
+                        crate::handlers::domain::server_ops::metadata_merge::merge_metadata_document(
+                            &workspace.metadata,
+                            &patch_bytes,
+                        )?;
+                    Ok(())
+                },
+            )
+            .await
+        }
+
+        WorkspaceProtocolRequest::UpdateWorkspaceProfile {
+            workspace_id,
+            name,
+            description,
+            logo,
+        } => {
+            super::workspace_profile::update_workspace_profile(
+                kernel,
+                actor_user_id,
+                requester_cid,
+                super::workspace_profile::ProfileChange {
+                    workspace_id: workspace_id.as_deref(),
+                    name: name.as_deref(),
+                    description: description.as_deref(),
+                    logo: logo.as_ref(),
+                },
+            )
+            .await
         }
 
         WorkspaceProtocolRequest::DeleteWorkspace {

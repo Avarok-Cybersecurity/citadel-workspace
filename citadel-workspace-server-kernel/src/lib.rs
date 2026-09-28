@@ -22,6 +22,8 @@ pub const DEFAULT_ROOT_WORKSPACE_NAME: &str = "Root Workspace";
 /// The longest `workspace_name` a server accepts: the limit the hosted control plane applies to
 /// the name a workspace is created with.
 pub const MAX_WORKSPACE_NAME_CHARS: usize = 64;
+/// The longest workspace description a rename accepts.
+pub const MAX_WORKSPACE_DESCRIPTION_CHARS: usize = 500;
 
 pub mod config {
     use citadel_workspace_types::structs::DomainPermissions;
@@ -490,14 +492,22 @@ pub fn resolve_workspace_name(config: &ServerConfig) -> Result<Option<String>, N
     let Some(raw) = config.workspace_name.as_deref() else {
         return Ok(None);
     };
+    validate_workspace_name(raw)
+        .map(Some)
+        .map_err(|e| NetworkError::msg(format!("workspace_name {e}")))
+}
+
+/// A workspace name as it will be shown: trimmed, 1 to MAX_WORKSPACE_NAME_CHARS characters, no
+/// control characters. The one rule for the configured name and for a rename.
+pub fn validate_workspace_name(raw: &str) -> Result<String, String> {
     let name = raw.trim();
     let chars = name.chars().count();
     if chars == 0 || chars > MAX_WORKSPACE_NAME_CHARS || name.chars().any(char::is_control) {
-        return Err(NetworkError::msg(format!(
-            "workspace_name must be 1 to {MAX_WORKSPACE_NAME_CHARS} printable characters"
-        )));
+        return Err(format!(
+            "must be 1 to {MAX_WORKSPACE_NAME_CHARS} printable characters"
+        ));
     }
-    Ok(Some(name.to_string()))
+    Ok(name.to_string())
 }
 
 #[cfg(not(target_family = "wasm"))]

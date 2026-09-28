@@ -1185,6 +1185,28 @@ impl Workspace {
     // ...
 }
 
+/// A change to the workspace icon, carried by `UpdateWorkspaceProfile`.
+///
+/// Stored under the workspace metadata's `logo` key: a small raster image as a
+/// data URL (WebP, PNG or JPEG; never SVG, which can carry script), or `null`
+/// once cleared.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[ts(export)]
+pub enum WorkspaceLogoChange {
+    Set { data_url: String },
+    Clear,
+}
+
+/// By length: every request is debug-logged, and the image is tens of kilobytes of base64.
+impl std::fmt::Debug for WorkspaceLogoChange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Set { data_url } => write!(f, "Set {{ data_url: <{} bytes> }}", data_url.len()),
+            Self::Clear => write!(f, "Clear"),
+        }
+    }
+}
+
 /// Lightweight workspace metadata for listing multiple workspaces.
 /// Excludes large fields like office lists to reduce payload size.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]

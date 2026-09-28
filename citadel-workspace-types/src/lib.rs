@@ -272,6 +272,23 @@ pub enum WorkspaceProtocolRequest {
         theme: Vec<u8>,
     },
 
+    /// Rename the workspace, describe it, or change its icon.
+    ///
+    /// Separate from UpdateWorkspace for the reason UpdateWorkspaceTheme is: that
+    /// request demands the workspace master password, the credential that also
+    /// claims and deletes the workspace, and an owner renaming their workspace
+    /// should not have to hold it. Gated on Permission::UpdateWorkspace instead.
+    /// Writes only these fields and the `logo` metadata key; members, owner,
+    /// roles, `initialized` and `theme` are never touched.
+    UpdateWorkspaceProfile {
+        /// None targets the root workspace, matching UpdateWorkspace.
+        workspace_id: Option<String>,
+        name: Option<String>,
+        description: Option<String>,
+        /// None leaves the icon as it is.
+        logo: Option<structs::WorkspaceLogoChange>,
+    },
+
     /// Update an existing node's properties
     UpdateNode {
         node_id: String,
