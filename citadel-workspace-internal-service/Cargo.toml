@@ -28,5 +28,6 @@ citadel-internal-service = { path = "../citadel-internal-service/citadel-interna
 citadel_sdk = { workspace = true, features = ["sql"]}
 citadel_types = { workspace = true }
 citadel_logging = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 parking_lot = { workspace = true, optional = true }
 lazy_static = { workspace = true, optional = true }
