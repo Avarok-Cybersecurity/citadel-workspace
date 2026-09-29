@@ -520,12 +520,15 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 // — while `GetUserPermissions` reported it could view nothing.
                 // Same propagation the node readers needed: `get_workspace`
                 // learned to ask ViewContent and its siblings did not.
+                // ViewMembers, not ViewContent: seeing who else is here is its own
+                // permission (every role that can access a node holds it; Banned
+                // holds nothing).
                 let may_view = kernel
                     .domain_ops()
                     .check_entity_permission(
                         actor_user_id,
                         target_id,
-                        citadel_workspace_types::structs::Permission::ViewContent,
+                        citadel_workspace_types::structs::Permission::ViewMembers,
                     )
                     .await
                     .unwrap_or(false);
@@ -541,26 +544,71 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 }
             }
 
-            // Collect member IDs from legacy Domain storage or DomainNode tree storage
-            let member_ids = if let Ok(Some(domain)) = kernel
-                .domain_operations
-                .backend_tx_manager
-                .get_domain(target_id)
-                .await
-            {
-                domain.members().clone()
-            } else if let Ok(Some(node)) = kernel
-                .domain_operations
-                .backend_tx_manager
-                .get_node(target_id)
-                .await
-            {
-                node.members.clone()
-            } else {
+            // Everyone with access to the target, not only its own list: the
+            // node's members, then each level above's (kernel/roster.rs).
+            let backend = &kernel.domain_operations.backend_tx_manager;
+            let is_workspace = matches!(backend.get_domain(target_id).await, Ok(Some(_)));
+            let nodes = match backend.get_all_nodes_shared().await {
+                Ok(nodes) => nodes,
+                Err(err) => return Ok(WorkspaceProtocolResponse::Error(err.into_string())),
+            };
+            if !is_workspace && !nodes.contains_key(target_id) {
                 return Ok(WorkspaceProtocolResponse::Error(
                     "Domain not found".to_string(),
                 ));
+            }
+            let path: Vec<String> = if is_workspace {
+                vec![target_id.to_string()]
+            } else {
+                crate::handlers::domain::tree_validator::TreeValidator::get_path_to_root(
+                    &nodes, target_id,
+                )
             };
+            let mut level_members: std::collections::HashMap<String, Vec<String>> =
+                std::collections::HashMap::new();
+            for level in &path {
+                // A workspace level reads the `Workspace` record: the copy
+                // `is_member_of_domain` enforces, so the listed and the enforced
+                // rosters are the same list.
+                if let Some(node) = nodes.get(level) {
+                    level_members.insert(level.clone(), node.members.clone());
+                } else if let Ok(Some(workspace)) = backend.get_workspace(level).await {
+                    level_members.insert(level.clone(), workspace.members.clone());
+                } else if let Ok(Some(domain)) = backend.get_domain(level).await {
+                    level_members.insert(level.clone(), domain.members().clone());
+                }
+            }
+            let roster = crate::kernel::roster::effective_roster(&path, |level| {
+                level_members.get(level).cloned().unwrap_or_default()
+            });
+
+            // A ban sets the role and leaves the account in `workspace.members`,
+            // so a listed id is not proof of access. Only people who can view
+            // the target are on its roster.
+            let mut member_ids: Vec<String> = Vec::new();
+            let mut inherited_from: std::collections::HashMap<String, String> =
+                std::collections::HashMap::new();
+            {
+                use crate::handlers::domain::async_ops::AsyncPermissionOperations;
+                for entry in roster {
+                    let has_access = kernel
+                        .domain_ops()
+                        .check_entity_permission(
+                            &entry.user_id,
+                            target_id,
+                            citadel_workspace_types::structs::Permission::ViewContent,
+                        )
+                        .await
+                        .unwrap_or(false);
+                    if !has_access {
+                        continue;
+                    }
+                    if let Some(via) = entry.via {
+                        inherited_from.insert(entry.user_id.clone(), via);
+                    }
+                    member_ids.push(entry.user_id);
+                }
+            }
 
             // Redacted for a non-admin caller.
             //
@@ -611,6 +659,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 // above resolved it, so the answer says what it is about.
                 domain_id: Some(target_id.to_string()),
                 members: users,
+                inherited_from,
             })
         }
 

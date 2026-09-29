@@ -282,6 +282,9 @@ pub enum Permission {
     UpdateNodeSettings,
     /// View content
     ViewContent,
+    /// See the other members of a node you have access to: everyone listed on
+    /// it, and everyone who reaches it through a level above.
+    ViewMembers,
     /// Manage node members
     ManageNodeMembers,
     /// Send messages
@@ -316,7 +319,7 @@ impl Permission {
     /// when reporting a user's effective permissions. `exhaustiveness_guard`
     /// below stops compiling when a variant is added to the enum, which is what
     /// keeps this list honest.
-    pub const ALL_VARIANTS: [Permission; 27] = [
+    pub const ALL_VARIANTS: [Permission; 28] = [
         Self::All,
         Self::CreateNode,
         Self::DeleteNode,
@@ -332,6 +335,7 @@ impl Permission {
         Self::AddNode,
         Self::UpdateNodeSettings,
         Self::ViewContent,
+        Self::ViewMembers,
         Self::ManageNodeMembers,
         Self::SendMessages,
         Self::ReadMessages,
@@ -366,6 +370,7 @@ impl Permission {
             Self::AddNode => (),
             Self::UpdateNodeSettings => (),
             Self::ViewContent => (),
+            Self::ViewMembers => (),
             Self::ManageNodeMembers => (),
             Self::SendMessages => (),
             Self::ReadMessages => (),
@@ -411,6 +416,7 @@ impl Permission {
                 // Basic member permissions
                 // Note: Members do NOT have EditContent - that requires Owner or Admin role
                 permissions.insert(Self::ViewContent);
+                permissions.insert(Self::ViewMembers);
                 permissions.insert(Self::SendMessages);
                 permissions.insert(Self::ReadMessages);
                 permissions.insert(Self::UploadFiles);
@@ -419,6 +425,7 @@ impl Permission {
             UserRole::Guest => {
                 // Guest permissions - read-only access
                 permissions.insert(Self::ViewContent);
+                permissions.insert(Self::ViewMembers);
             }
             UserRole::Banned => {
                 // No permissions for banned users
@@ -427,6 +434,7 @@ impl Permission {
                 // Custom role permissions based on rank
                 // Basic permissions for all custom roles
                 permissions.insert(Self::ViewContent);
+                permissions.insert(Self::ViewMembers);
                 permissions.insert(Self::ReadMessages);
 
                 // Additional permissions based on rank
@@ -501,6 +509,10 @@ pub struct DomainPermissions {
     // === Read Permissions (default: true) ===
     /// Whether users can view content in this domain
     pub view_content: bool,
+    /// Whether users can see the other members of this domain. A read
+    /// permission: a stored record without the key takes the struct default,
+    /// true, so no existing roster disappears on upgrade.
+    pub view_members: bool,
     /// Whether users can read messages in group chat
     pub read_messages: bool,
     /// Whether users can download files
@@ -581,6 +593,7 @@ impl Default for DomainPermissions {
         Self {
             // Read permissions - enabled by default
             view_content: true,
+            view_members: true,
             read_messages: true,
             download_files: true,
 
@@ -648,6 +661,7 @@ impl DomainPermissions {
     pub fn full_access() -> Self {
         Self {
             view_content: true,
+            view_members: true,
             read_messages: true,
             download_files: true,
             edit_content: true,
@@ -681,6 +695,7 @@ impl DomainPermissions {
         match permission {
             Permission::All => {
                 self.view_content
+                    && self.view_members
                     && self.read_messages
                     && self.download_files
                     && self.edit_content
@@ -708,6 +723,7 @@ impl DomainPermissions {
                     && self.themes
             }
             Permission::ViewContent => self.view_content,
+            Permission::ViewMembers => self.view_members,
             Permission::ReadMessages => self.read_messages,
             Permission::DownloadFiles => self.download_files,
             Permission::EditContent => self.edit_content,

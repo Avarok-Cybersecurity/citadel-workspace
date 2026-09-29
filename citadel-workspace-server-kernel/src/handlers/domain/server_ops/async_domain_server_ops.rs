@@ -882,6 +882,9 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         self.ensure_may_act_on(admin_id, user_id_to_remove, "remove")
             .await?;
 
+        // The root branch always removes someone listed there; the node branch
+        // records whether they were, for the check after the grant cleanup.
+        let mut listed_here = true;
         // If this is the workspace root, use the workspace storage
         if domain_id == crate::WORKSPACE_ROOT_ID {
             // BEFORE the last-admin check, not after.
@@ -1016,6 +1019,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             let node = nodes
                 .get_mut(domain_id)
                 .ok_or_else(|| NetworkError::msg("Domain not found"))?;
+            listed_here = node.members.iter().any(|m| m == user_id_to_remove);
             node.members.retain(|m| m != user_id_to_remove);
             self.backend_tx_manager.save_nodes(&nodes).await?;
         }
@@ -1036,11 +1040,22 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         // is not reentrant, and the branch guards are gone by now, so this
         // cannot deadlock with them.
         let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
+        let mut had_grant_here = false;
         if let Some(mut user) = self.backend_tx_manager.get_user(user_id_to_remove).await? {
-            user.permissions.remove(domain_id);
+            had_grant_here = user.permissions.remove(domain_id).is_some();
             self.backend_tx_manager
                 .insert_user(user_id_to_remove.to_string(), user)
                 .await?;
+        }
+
+        // Neither listed on this node nor granted anything on it: their access
+        // comes from a level above, which this removal cannot touch. Rosters now
+        // list such people (kernel/roster.rs), so "removed" here would report a
+        // change that did not happen -- they would still be in the room.
+        if !listed_here && !had_grant_here {
+            return Err(NetworkError::msg(format!(
+                "{user_id_to_remove} has access here through a level above, not as a member of this one; manage them there"
+            )));
         }
 
         Ok(())
