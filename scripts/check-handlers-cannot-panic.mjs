@@ -66,6 +66,27 @@ function stripTests(source) {
   }
 }
 
+/**
+ * Files that are test modules declared elsewhere: `#[cfg(test)] mod tests;` in
+ * `x.rs` or `x/mod.rs` names `x/tests.rs` or `x/tests/mod.rs`. stripTests only
+ * removes inline `mod … { … }` blocks, so a test module kept in its own file was
+ * scanned as handler code (2026-09-29: responses/peer_event/tests.rs flagged).
+ */
+function testModuleFiles(files) {
+  const out = new Set();
+  for (const file of files) {
+    const source = readFileSync(join(ROOT, file), 'utf8');
+    const base = file.endsWith('/mod.rs') || file.endsWith('/lib.rs') || file.endsWith('/main.rs')
+      ? dirname(file)
+      : file.replace(/\.rs$/, '');
+    for (const m of source.matchAll(/#\[cfg\(test\)\]\s*(?:#\[[^\]]*\]\s*)*mod\s+(\w+)\s*;/g)) {
+      out.add(`${base}/${m[1]}.rs`);
+      out.add(`${base}/${m[1]}/mod.rs`);
+    }
+  }
+  return out;
+}
+
 function* walk(dir) {
   for (const entry of readdirSync(join(ROOT, dir))) {
     const rel = `${dir}/${entry}`;
@@ -77,8 +98,12 @@ function* walk(dir) {
 const offenders = [];
 let scanned = 0;
 
+const allFiles = DIRS.flatMap((dir) => [...walk(dir)]);
+const testFiles = testModuleFiles(allFiles);
+
 for (const dir of DIRS) {
   for (const file of walk(dir)) {
+    if (testFiles.has(file)) continue;
     const rel = relative(join(ROOT, 'citadel-internal-service/citadel-internal-service/src/kernel'), join(ROOT, file));
     const source = stripTests(readFileSync(join(ROOT, file), 'utf8'));
     scanned += 1;

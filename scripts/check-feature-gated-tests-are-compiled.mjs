@@ -130,6 +130,17 @@ function ciFeatures() {
  * Keyed `crate/feature`, because `testing` on one crate says nothing about
  * `testing` on another.
  */
+/**
+ * `crate/feature` -> the `dep/feature`s it turns on, from each crate's own
+ * `[features]` table (`compression-zstd = ["intersession-layer-messaging/compression-zstd"]`).
+ *
+ * Without these edges a feature reached through a forwarding crate -- the agent
+ * enables the connector's `compression-zstd`, which enables ILM's -- read as
+ * never enabled, although cargo unifies it into the one workspace build that
+ * compiles ILM's tests (2026-09-29: ILM's zstd tests flagged, falsely).
+ */
+const FORWARDS = new Map();
+
 function manifestFeatures(dir, found = new Set()) {
   for (const entry of readdirSync(dir)) {
     if (entry === 'target' || entry === 'node_modules' || entry === '.git') continue;
@@ -151,6 +162,21 @@ function manifestFeatures(dir, found = new Set()) {
 
     // This crate's own `default = [...]`, which enables its features for itself.
     const self = toml.match(/^\s*name\s*=\s*"([^"]+)"/m);
+
+    // Forwarding entries in this crate's `[features]` table: `x = ["dep/feat", "dep?/feat"]`.
+    const table = toml.match(/^\[features\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/m);
+    if (self && table) {
+      for (const line of table[1].matchAll(/^\s*([A-Za-z0-9_-]+)\s*=\s*\[([^\]]*)\]/gm)) {
+        const targets = [];
+        for (const item of line[2].split(',')) {
+          const name = item.trim().replace(/^["']|["']$/g, '');
+          const fwd = name.match(/^([A-Za-z0-9_-]+)\??\/([A-Za-z0-9_-]+)$/);
+          if (fwd) targets.push(`${fwd[1]}/${fwd[2]}`);
+          else if (name && !name.startsWith('dep:')) targets.push(`${self[1]}/${name}`);
+        }
+        if (targets.length) FORWARDS.set(`${self[1]}/${line[1]}`, targets);
+      }
+    }
     const dflt = toml.match(/^\s*default\s*=\s*\[([^\]]*)\]/m);
     if (self && dflt) {
       for (const f of dflt[1].split(',')) {
@@ -180,6 +206,15 @@ function owningCrate(file) {
 
 const { enabled, commandsSeen, commands } = ciFeatures();
 const viaManifest = manifestFeatures(AGENT);
+// Follow forwarding to a fixed point: an enabled `crate/feature` enables what it forwards to.
+for (let grew = true; grew; ) {
+  grew = false;
+  for (const on of [...viaManifest]) {
+    for (const next of FORWARDS.get(on) ?? []) {
+      if (!viaManifest.has(next)) { viaManifest.add(next); grew = true; }
+    }
+  }
+}
 
 const problems = [];
 const gatingFeatures = new Set();
