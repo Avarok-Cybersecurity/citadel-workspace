@@ -28,7 +28,11 @@ pub type FromAgent = UnboundedReceiver<InternalServiceResponse>;
 
 pub async fn spawn_agent(insecure: bool) -> Result<SocketAddr, Box<dyn Error>> {
     let bind: SocketAddr = format!("127.0.0.1:{}", get_free_port()).parse()?;
-    let kernel = CitadelWorkspaceService::<_, StackedRatchet>::new_tcp(bind).await?;
+    let kernel = CitadelWorkspaceService::<_, StackedRatchet>::new_tcp(
+        bind,
+        citadel_internal_service::SERVER_RECONNECT,
+    )
+    .await?;
     let mut builder = NodeBuilder::default();
     let builder = builder
         .with_backend(BackendType::InMemory)

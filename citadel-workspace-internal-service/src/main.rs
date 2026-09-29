@@ -2,15 +2,18 @@ use citadel_internal_service::kernel::CitadelWorkspaceService;
 use citadel_internal_service::stun::{StunServers, STUN_SERVERS_ENV};
 use citadel_internal_service::sweep_stale_browser_transfers;
 use citadel_internal_service::OriginPolicy;
+use citadel_internal_service::SERVER_RECONNECT;
 use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
 use std::error::Error;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 
+mod log_setup;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    citadel_logging::setup_log();
+    log_setup::install()?;
 
     // Staged browser uploads older than their TTL, from a run that ended before its own cleanup
     // (a restart, a crash, sleep). Without this they were never removed: the other agent binary
@@ -64,13 +67,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         citadel_logging::warn!(target: "citadel",
             "Serving plain ws:// (--no-tls). A page served over HTTPS cannot open this \
              socket; use this only behind a same-origin proxy on loopback.");
-        CitadelWorkspaceService::new_websocket(opts.bind, origins).await?
+        CitadelWorkspaceService::new_websocket(opts.bind, origins, SERVER_RECONNECT).await?
     } else {
         CitadelWorkspaceService::new_websocket_tls(
             opts.bind,
             origins,
             BUILTIN_TLS_CERT,
             BUILTIN_TLS_KEY,
+            SERVER_RECONNECT,
         )
         .await?
     };
