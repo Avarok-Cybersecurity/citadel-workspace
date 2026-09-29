@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { WorkspaceClient } from '../WorkspaceClient.js';
-import type { CompressionHint } from '../compression-hint.js';
+import type { CompressionHint } from 'citadel-internal-service-wasm-client';
 import type { WasmModule } from 'citadel-internal-service-wasm-client';
 
 type ReliableCall = [string, string, Uint8Array, string | null | undefined, string | null | undefined];
@@ -18,10 +18,16 @@ class RecordingClient extends WorkspaceClient {
     super({ websocketUrl: 'ws://test-not-connected' });
     const calls: ReliableCall[] = this.calls;
     this.wasmModule = {
+      // The inherited send checks the module is initialised before it sends.
+      is_initialized: (): boolean => true,
       send_p2p_message_reliable: async (...args: ReliableCall): Promise<void> => {
         calls.push(args);
       },
     } as unknown as WasmModule;
+    // init() would connect a WebSocket and start the message loop; this double stands in for
+    // the connected module, so mark the (private) handshake done. Renaming the field breaks
+    // this test loudly rather than silently skipping the send.
+    (this as unknown as { initializationComplete: boolean }).initializationComplete = true;
   }
 }
 
