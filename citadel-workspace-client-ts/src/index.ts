@@ -11,6 +11,7 @@ export * from './types/workspace-types.js';
 // Export workspace client wrapper
 export { WorkspaceClient } from './WorkspaceClient.js';
 export type { WorkspaceClientConfig } from './WorkspaceClient.js';
+export type { CompressionHint } from './compression-hint.js';
 
 // Export auth module
 export { WorkspaceAuth } from './auth.js';

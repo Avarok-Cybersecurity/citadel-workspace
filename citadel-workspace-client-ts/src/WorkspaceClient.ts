@@ -6,11 +6,21 @@ import type { WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProto
 import { decodeWorkspacePayload, encodeWorkspacePayload } from './workspace-json.js';
 import { WorkspaceAuth } from './auth.js';
 import { WorkspaceSessionManager, type SessionConfig } from './session.js';
+import type { CompressionHint } from './compression-hint.js';
+
+type ReliableSecurityLevel = Parameters<InternalServiceWasmClient['sendP2PMessageReliable']>[3];
 
 // Extends parent WasmModule with workspace-specific WASM methods
 interface WorkspaceWasmModule extends WasmModule {
   open_messenger_for(cid_str: string): Promise<void>;
   ensure_messenger_open(cid_str: string): Promise<boolean>;
+  send_p2p_message_reliable(
+    local_cid_str: string,
+    peer_cid_str: string,
+    message: Uint8Array,
+    security_level: string | null,
+    compression_hint?: CompressionHint | null,
+  ): Promise<void>;
   send_media_frame(
     local_cid_str: string,
     peer_cid_str: string,
@@ -479,6 +489,26 @@ export class WorkspaceClient extends InternalServiceWasmClient {
   async ensureMessengerOpen(cid: string): Promise<boolean> {
     const wasmModule = this.getWorkspaceWasmModule();
     return await wasmModule.ensure_messenger_open(cid);
+  }
+
+  /**
+   * Reliable (ILM) send, with the payload's compression hint forwarded to WASM.
+   * A WASM build that predates the hint takes four arguments and ignores the fifth.
+   */
+  override async sendP2PMessageReliable(
+    localCid: string,
+    peerCid: string,
+    message: Uint8Array,
+    securityLevel?: ReliableSecurityLevel,
+    compressionHint?: CompressionHint,
+  ): Promise<void> {
+    await this.getWorkspaceWasmModule().send_p2p_message_reliable(
+      localCid,
+      peerCid,
+      message,
+      securityLevel ?? null,
+      compressionHint ?? null,
+    );
   }
 
   /**
