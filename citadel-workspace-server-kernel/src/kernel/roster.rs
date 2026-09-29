@@ -34,11 +34,15 @@ pub(crate) fn effective_roster(
     let Some((target, above)) = path.split_last() else {
         return roster;
     };
-    let levels = std::iter::once((target, None)).chain(above.iter().rev().map(|level| (level, Some(level.clone()))));
+    let levels = std::iter::once((target, None))
+        .chain(above.iter().rev().map(|level| (level, Some(level.clone()))));
     for (level, via) in levels {
         for user_id in members_of(level) {
             if seen.insert(user_id.clone()) {
-                roster.push(RosterEntry { user_id, via: via.clone() });
+                roster.push(RosterEntry {
+                    user_id,
+                    via: via.clone(),
+                });
             }
         }
     }
@@ -57,20 +61,34 @@ mod tests {
     fn members(table: &[(&str, &[&str])]) -> impl Fn(&str) -> Vec<String> {
         let map: HashMap<String, Vec<String>> = table
             .iter()
-            .map(|(level, ids)| (level.to_string(), ids.iter().map(|s| s.to_string()).collect()))
+            .map(|(level, ids)| {
+                (
+                    level.to_string(),
+                    ids.iter().map(|s| s.to_string()).collect(),
+                )
+            })
             .collect();
         move |level: &str| map.get(level).cloned().unwrap_or_default()
     }
 
     fn entry(user_id: &str, via: Option<&str>) -> RosterEntry {
-        RosterEntry { user_id: user_id.to_string(), via: via.map(str::to_string) }
+        RosterEntry {
+            user_id: user_id.to_string(),
+            via: via.map(str::to_string),
+        }
     }
 
     #[test]
     fn an_office_lists_the_workspace_members_who_reach_it() {
         // The live case: an office with no members of its own.
-        let roster = effective_roster(&path(&["ws", "office"]), members(&[("ws", &["thomas", "john"])]));
-        assert_eq!(roster, vec![entry("thomas", Some("ws")), entry("john", Some("ws"))]);
+        let roster = effective_roster(
+            &path(&["ws", "office"]),
+            members(&[("ws", &["thomas", "john"])]),
+        );
+        assert_eq!(
+            roster,
+            vec![entry("thomas", Some("ws")), entry("john", Some("ws"))]
+        );
     }
 
     #[test]
@@ -79,16 +97,30 @@ mod tests {
             &path(&["ws", "office"]),
             members(&[("ws", &["thomas", "john"]), ("office", &["john"])]),
         );
-        assert_eq!(roster, vec![entry("john", None), entry("thomas", Some("ws"))]);
+        assert_eq!(
+            roster,
+            vec![entry("john", None), entry("thomas", Some("ws"))]
+        );
     }
 
     #[test]
     fn inherited_members_are_marked_with_the_nearest_level() {
         let roster = effective_roster(
             &path(&["ws", "office", "room"]),
-            members(&[("ws", &["ann", "bea"]), ("office", &["bea"]), ("room", &["cai"])]),
+            members(&[
+                ("ws", &["ann", "bea"]),
+                ("office", &["bea"]),
+                ("room", &["cai"]),
+            ]),
         );
-        assert_eq!(roster, vec![entry("cai", None), entry("bea", Some("office")), entry("ann", Some("ws"))]);
+        assert_eq!(
+            roster,
+            vec![
+                entry("cai", None),
+                entry("bea", Some("office")),
+                entry("ann", Some("ws"))
+            ]
+        );
     }
 
     #[test]

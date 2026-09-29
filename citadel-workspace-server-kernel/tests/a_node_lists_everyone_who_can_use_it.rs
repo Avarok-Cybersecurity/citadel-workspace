@@ -23,7 +23,13 @@ const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 async fn node(kernel: &Kernel, parent: &str, kind: &str, name: &str) -> String {
     kernel
         .domain_operations
-        .create_node(TEST_ADMIN_USER_ID, Some(parent), &NodeEntityType::Child(kind.to_string()), name, "")
+        .create_node(
+            TEST_ADMIN_USER_ID,
+            Some(parent),
+            &NodeEntityType::Child(kind.to_string()),
+            name,
+            "",
+        )
         .await
         .expect("an admin may create the node")
         .id
@@ -35,12 +41,23 @@ async fn member(kernel: &Kernel, id: &str, role: UserRole) {
 }
 
 /// The roster as `viewer` sees it: member ids, and who came from where.
-async fn roster(kernel: &Kernel, viewer: &str, domain: &str) -> Result<(Vec<String>, HashMap<String, String>), String> {
-    let request = WorkspaceProtocolRequest::ListMembers { domain_id: Some(domain.to_string()) };
-    match process_command_with_user(kernel, &request, viewer).await.expect("dispatch") {
-        WorkspaceProtocolResponse::Members { members, inherited_from, .. } => {
-            Ok((members.into_iter().map(|m| m.id).collect(), inherited_from))
-        }
+async fn roster(
+    kernel: &Kernel,
+    viewer: &str,
+    domain: &str,
+) -> Result<(Vec<String>, HashMap<String, String>), String> {
+    let request = WorkspaceProtocolRequest::ListMembers {
+        domain_id: Some(domain.to_string()),
+    };
+    match process_command_with_user(kernel, &request, viewer)
+        .await
+        .expect("dispatch")
+    {
+        WorkspaceProtocolResponse::Members {
+            members,
+            inherited_from,
+            ..
+        } => Ok((members.into_iter().map(|m| m.id).collect(), inherited_from)),
         WorkspaceProtocolResponse::Error(message) => Err(message),
         other => panic!("expected Members or Error, got {other:?}"),
     }
@@ -53,14 +70,27 @@ async fn an_office_lists_the_workspace_members_who_can_use_it() {
     member(&kernel, "bea", UserRole::Member).await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
 
-    let (ids, via) = roster(&kernel, "ann", &office).await.expect("a member may list an office she can use");
+    let (ids, via) = roster(&kernel, "ann", &office)
+        .await
+        .expect("a member may list an office she can use");
     for id in ["ann", "bea"] {
-        assert!(ids.contains(&id.to_string()), "{id} reaches the office through the workspace and is missing: {ids:?}");
-        assert_eq!(via.get(id).map(String::as_str), Some(ROOT), "{id} must be marked as coming from the workspace");
+        assert!(
+            ids.contains(&id.to_string()),
+            "{id} reaches the office through the workspace and is missing: {ids:?}"
+        );
+        assert_eq!(
+            via.get(id).map(String::as_str),
+            Some(ROOT),
+            "{id} must be marked as coming from the workspace"
+        );
     }
     // The creator is on the office itself: listed, and not marked.
     assert!(ids.contains(&TEST_ADMIN_USER_ID.to_string()));
-    assert_eq!(via.get(TEST_ADMIN_USER_ID), None, "a direct member is not marked as inherited");
+    assert_eq!(
+        via.get(TEST_ADMIN_USER_ID),
+        None,
+        "a direct member is not marked as inherited"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -76,9 +106,19 @@ async fn a_room_marks_each_person_with_the_nearest_level() {
         .await
         .expect("an admin may add bea to the office");
 
-    let (_, via) = roster(&kernel, "ann", &room).await.expect("ann may list the room");
-    assert_eq!(via.get("bea").map(String::as_str), Some(office.as_str()), "bea is on the office above the room");
-    assert_eq!(via.get("ann").map(String::as_str), Some(ROOT), "ann only through the workspace");
+    let (_, via) = roster(&kernel, "ann", &room)
+        .await
+        .expect("ann may list the room");
+    assert_eq!(
+        via.get("bea").map(String::as_str),
+        Some(office.as_str()),
+        "bea is on the office above the room"
+    );
+    assert_eq!(
+        via.get("ann").map(String::as_str),
+        Some(ROOT),
+        "ann only through the workspace"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -89,10 +129,21 @@ async fn a_banned_account_is_not_on_any_roster() {
     member(&kernel, "exiled", UserRole::Banned).await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
 
-    let (ids, _) = roster(&kernel, "ann", &office).await.expect("ann may list the office");
-    assert!(!ids.contains(&"exiled".to_string()), "a banned account has no access and must not be listed: {ids:?}");
+    let (ids, _) = roster(&kernel, "ann", &office)
+        .await
+        .expect("ann may list the office");
+    assert!(
+        !ids.contains(&"exiled".to_string()),
+        "a banned account has no access and must not be listed: {ids:?}"
+    );
     // The control: the same account IS in the stored list, so the filter is what removed it.
-    let workspace = kernel.domain_operations.backend_tx_manager.get_workspace(ROOT).await.unwrap().unwrap();
+    let workspace = kernel
+        .domain_operations
+        .backend_tx_manager
+        .get_workspace(ROOT)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(workspace.members.contains(&"exiled".to_string()));
 }
 
@@ -103,7 +154,10 @@ async fn someone_outside_the_workspace_is_still_refused() {
     let office = node(&kernel, ROOT, "Office", "Ops").await;
 
     let refused = roster(&kernel, "stranger", &office).await;
-    assert!(matches!(&refused, Err(m) if m.contains("not a member")), "got {refused:?}");
+    assert!(
+        matches!(&refused, Err(m) if m.contains("not a member")),
+        "got {refused:?}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -113,7 +167,9 @@ async fn a_guest_sees_the_roster_too() {
     member(&kernel, "ann", UserRole::Member).await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
 
-    let (ids, _) = roster(&kernel, "gil", &office).await.expect("a guest with access may see who else has it");
+    let (ids, _) = roster(&kernel, "gil", &office)
+        .await
+        .expect("a guest with access may see who else has it");
     assert!(ids.contains(&"ann".to_string()));
 }
 
@@ -123,8 +179,13 @@ async fn removing_someone_who_only_inherits_access_says_so() {
     member(&kernel, "ann", UserRole::Member).await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
 
-    let inherited = kernel.domain_operations.remove_user_from_domain(TEST_ADMIN_USER_ID, "ann", &office).await;
-    let message = inherited.expect_err("removing an inherited member must not report a removal that did not happen").into_string();
+    let inherited = kernel
+        .domain_operations
+        .remove_user_from_domain(TEST_ADMIN_USER_ID, "ann", &office)
+        .await;
+    let message = inherited
+        .expect_err("removing an inherited member must not report a removal that did not happen")
+        .into_string();
     assert!(message.contains("through a level above"), "got {message}");
 
     // The control: someone listed on the office itself is removed as before.
