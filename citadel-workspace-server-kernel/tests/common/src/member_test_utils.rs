@@ -43,11 +43,12 @@ pub async fn new_internal_service_with_admin(
     ),
     Box<dyn Error>,
 > {
-    let internal_service_kernel = citadel_internal_service::kernel::CitadelWorkspaceService::<
-        _,
-        StackedRatchet,
-    >::new_tcp(bind_address_internal_service)
-    .await?;
+    let internal_service_kernel =
+        citadel_internal_service::kernel::CitadelWorkspaceService::<_, StackedRatchet>::new_tcp(
+            bind_address_internal_service,
+            citadel_internal_service::SERVER_RECONNECT,
+        )
+        .await?;
     let internal_service = NodeBuilder::default()
         .with_node_type(NodeType::Peer)
         .with_backend(BackendType::InMemory)

@@ -50,8 +50,12 @@ export function send_media_frame(local_cid_str: string, peer_cid_str: string, tr
  * Sends a P2P message using ISM-routed reliable messaging.
  * Unlike send_p2p_message which bypasses ISM, this function uses
  * send_message_to_with_security_level for guaranteed delivery.
+ *
+ * `compression_hint` says what `message` is: "json", "text" or "yjs-update"
+ * may be compressed toward a peer that supports it; "opaque", "cbor-command"
+ * or an absent hint are sent as they are. Any other value is an error.
  */
-export function send_p2p_message_reliable(local_cid_str: string, peer_cid_str: string, message: Uint8Array, security_level?: string | null): Promise<void>;
+export function send_p2p_message_reliable(local_cid_str: string, peer_cid_str: string, message: Uint8Array, security_level?: string | null, compression_hint?: string | null): Promise<void>;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -68,7 +72,7 @@ export interface InitOutput {
     readonly restart: (a: number, b: number) => any;
     readonly send_direct_to_internal_service: (a: any) => any;
     readonly send_media_frame: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number];
-    readonly send_p2p_message_reliable: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => any;
+    readonly send_p2p_message_reliable: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => any;
     readonly wasm_bindgen_fe2dac47b3707fa5___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut__web_sys_8228e1473dafd92___features__gen_CloseEvent__CloseEvent____Output_______: (a: number, b: number) => void;
     readonly wasm_bindgen_fe2dac47b3707fa5___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut__web_sys_8228e1473dafd92___features__gen_MessageEvent__MessageEvent____Output_______: (a: number, b: number) => void;
     readonly wasm_bindgen_fe2dac47b3707fa5___closure__destroy___dyn_core_f0fd674eaa06beef___ops__function__FnMut__wasm_bindgen_fe2dac47b3707fa5___JsValue____Output_______: (a: number, b: number) => void;
