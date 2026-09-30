@@ -45,6 +45,9 @@ fn a_stored_domain_node_still_loads() {
     // The permissions block is nested and has 26 fields of its own, which is
     // exactly where a new flag lands without anyone thinking about storage.
     assert!(node.default_permissions.view_content);
+    // Stored before "Members can see each other" existed, so the key is absent.
+    // Absent must read as visible: an upgrade may not hide a single roster.
+    assert!(node.default_permissions.view_members);
 }
 
 #[test]
