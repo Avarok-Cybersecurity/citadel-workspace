@@ -407,6 +407,12 @@ pub enum WorkspaceProtocolResponse {
     Members {
         domain_id: Option<String>,
         members: Vec<User>,
+        /// Member id -> the level above (a node id, or the workspace id) whose
+        /// membership gives them access here. Absent for people listed on this
+        /// node directly. `serde(default)` so a reply from a server that
+        /// predates the field still decodes, as a list of direct members.
+        #[serde(default)]
+        inherited_from: std::collections::HashMap<String, String>,
     },
     Member(User),
     /// Response containing a user's role and permissions for a domain

@@ -30,6 +30,12 @@ export type DomainPermissions = {
  */
 view_content: boolean, 
 /**
+ * Whether users can see the other members of this domain. A read
+ * permission: a stored record without the key takes the struct default,
+ * true, so no existing roster disappears on upgrade.
+ */
+view_members: boolean, 
+/**
  * Whether users can read messages in group chat
  */
 read_messages: boolean, 
