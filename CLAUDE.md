@@ -791,11 +791,12 @@ bookkeeping. An SDK-reported C2S drop removes a session only if it was already
 `Ending` (a Disconnect or Deregister in progress); otherwise it starts the
 reconnect, and only 4 can end that.
 
-`scripts/check-sessions-are-removed-in-two-places.mjs` holds five of these files
-with a reason for each. `reconnect/report.rs` is not on its list: the gate
-matches `server_connection_map.remove(` and cannot see a removal through a guard
-bound to a local, which is how `fail` removes. A new removal is still a change to
-the session lifecycle and has to be argued for there.
+`scripts/check-session-removals-are-documented.mjs` holds exactly these six
+files, each with its reason, and fails in both directions: a removal anywhere
+else, a listed file that removes nothing, or a listed file this section does not
+name. It follows the map's write guard to whatever local it is bound to, which
+is how the give-up removes. A seventh path is a change to the session lifecycle
+and has to be argued for there and here.
 
 > Two paths that were listed here were not paths. `requests/get_sessions.rs`
 > once reconciled the map against the SDK's view; every branch of that filter

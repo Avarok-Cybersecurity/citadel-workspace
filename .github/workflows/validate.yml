@@ -317,7 +317,7 @@ jobs:
         # a response failed to send -- the ordinary case of a tab navigating away.
         # A refresh at the wrong moment logged the user out of every session in
         # that tab; the only trace was a line saying the send failed.
-        run: node scripts/check-sessions-are-removed-in-two-places.mjs
+        run: node scripts/check-session-removals-are-documented.mjs
 
       - name: Remote checks read the deployment, not a literal
         # The wrapper probed `nc -z 127.0.0.1 12349` while the deployed server

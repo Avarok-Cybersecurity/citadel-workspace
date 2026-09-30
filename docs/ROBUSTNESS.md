@@ -10966,7 +10966,7 @@ session from the InternalService's `server_connection_map`"*, and it is marked
 **This branch had already corrected it.** Its version lists five files with a
 reason for each, names `connection_management.rs` and
 `connection_management_claim.rs` explicitly, and points at
-`scripts/check-sessions-are-removed-in-two-places.mjs`, which holds the list so
+`scripts/check-session-removals-are-documented.mjs` (then `check-sessions-are-removed-in-two-places`), which holds the list so
 a sixth has to be argued for. The stale text is the other branch's, arriving via
 session context rather than the tree. Checking which file actually carries a
 claim, before editing it, cost one grep and saved a wrong "fix" to a document
