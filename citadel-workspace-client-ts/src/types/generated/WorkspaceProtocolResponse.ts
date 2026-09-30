@@ -11,7 +11,14 @@ import type { UserRole } from "./UserRole";
 import type { Workspace } from "./Workspace";
 import type { WorkspaceMetadata } from "./WorkspaceMetadata";
 
-export type WorkspaceProtocolResponse = { "Workspace": Workspace } | { "Workspaces": Array<WorkspaceMetadata> } | { "Success": string } | { "Error": string } | "WorkspaceNotInitialized" | { "Members": { domain_id: string | null, members: Array<User>, } } | { "Member": User } | { "UserPermissions": { domain_id: string, user_id: string, role: UserRole, permissions: Array<Permission>, } } | { "MemberRoleUpdated": { user_id: string, new_role: UserRole, } } | { "UserProfileUpdated": User } | { "NodeContentUpdated": { node_id: string, mdx_content: string, 
+export type WorkspaceProtocolResponse = { "Workspace": Workspace } | { "Workspaces": Array<WorkspaceMetadata> } | { "Success": string } | { "Error": string } | "WorkspaceNotInitialized" | { "Members": { domain_id: string | null, members: Array<User>, 
+/**
+ * Member id -> the level above (a node id, or the workspace id) whose
+ * membership gives them access here. Absent for people listed on this
+ * node directly. `serde(default)` so a reply from a server that
+ * predates the field still decodes, as a list of direct members.
+ */
+inherited_from: { [key in string]?: string }, } } | { "Member": User } | { "UserPermissions": { domain_id: string, user_id: string, role: UserRole, permissions: Array<Permission>, } } | { "MemberRoleUpdated": { user_id: string, new_role: UserRole, } } | { "UserProfileUpdated": User } | { "NodeContentUpdated": { node_id: string, mdx_content: string, 
 /**
  * The content's SHA-256, so a watcher can verify what it just received.
  *
