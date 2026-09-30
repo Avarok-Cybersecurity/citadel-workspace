@@ -512,6 +512,11 @@ pub struct DomainPermissions {
     /// Whether users can see the other members of this domain. A read
     /// permission: a stored record without the key takes the struct default,
     /// true, so no existing roster disappears on upgrade.
+    ///
+    /// On a node's `default_permissions` this is the "Members can see each
+    /// other" switch, and the only node default read anywhere: false hides the
+    /// roster of this node and every node below it from non-admins
+    /// (`SetMembersVisible`, `kernel/roster.rs`).
     pub view_members: bool,
     /// Whether users can read messages in group chat
     pub read_messages: bool,

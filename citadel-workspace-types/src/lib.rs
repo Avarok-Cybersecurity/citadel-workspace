@@ -309,6 +309,17 @@ pub enum WorkspaceProtocolRequest {
         is_default: Option<bool>,
     },
 
+    /// Switch "Members can see each other" on a node. Admin only.
+    ///
+    /// Stored as the node's `default_permissions.view_members`. Off, it takes
+    /// `ViewMembers` from every non-admin on this node and on every node below
+    /// it; admins and owners are unaffected. Separate from UpdateNode because
+    /// its gate is the Admin role, not a permission a Custom role can hold.
+    SetMembersVisible {
+        node_id: String,
+        visible: bool,
+    },
+
     /// Delete a node. If cascade is true, also deletes all descendants.
     DeleteNode {
         node_id: String,
@@ -413,6 +424,12 @@ pub enum WorkspaceProtocolResponse {
         /// predates the field still decodes, as a list of direct members.
         #[serde(default)]
         inherited_from: std::collections::HashMap<String, String>,
+    },
+    /// The roster of `domain_id` exists and an admin has hidden it from this
+    /// caller (SetMembersVisible). Not an empty `Members`: an empty list claims
+    /// nobody else is here.
+    MembersHidden {
+        domain_id: String,
     },
     Member(User),
     /// Response containing a user's role and permissions for a domain

@@ -92,6 +92,7 @@ const UNSCOPED = new Map([
   ['ServerCapabilities', 'static server configuration, not user data'],
   ['Workspaces', 'a response to list_workspaces, which scopes by membership itself'],
   ['Members', 'a response to a members query, already authorized at the handler'],
+  ['MembersHidden', 'a response to a members query, naming only the domain asked about'],
   ['Member', 'a response to a member query, already authorized at the handler'],
   ['UserPermissions', 'a response to a permissions query, already authorized'],
   ['UserProfileUpdated', 'a profile is shown to anyone who can see the member list'],
