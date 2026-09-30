@@ -94,7 +94,6 @@ const SKIP = new Map([
   ['lib/file-transfer/service.ts', 283],
   // Two data-testid attributes, so the integration suite's readiness probe can
   // stop keying on button copy — see ROBUSTNESS round 168.
-  ['pages/Landing.tsx', 261],
   ['types/messaging-layer.ts', 453],
   ['types/workspace-protocol.ts', 294],
 ]);
