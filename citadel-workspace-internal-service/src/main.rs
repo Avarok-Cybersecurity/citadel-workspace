@@ -13,7 +13,8 @@ mod log_setup;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    log_setup::install()?;
+    // Held for the whole run: dropping it stops the log writer thread.
+    let _log_writer = log_setup::install()?;
 
     // Staged browser uploads older than their TTL, from a run that ended before its own cleanup
     // (a restart, a crash, sleep). Without this they were never removed: the other agent binary
