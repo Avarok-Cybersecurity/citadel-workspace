@@ -592,6 +592,8 @@ jobs:
         run: node scripts/check-ci-matrices-agree.mjs
       - name: Check every workspace crate reaches the images that run cargo
         run: node scripts/check-dockerfiles-copy-every-crate.mjs
+      - name: Check the sync image has every script the WASM sync runs
+        run: node scripts/check-sync-image-has-its-scripts.mjs
       - name: Check the inline-upload byte cap agrees across the wire
         run: node scripts/check-transfer-cap-parity.mjs
       - name: Check the browser outwaits the agent on peer discovery
