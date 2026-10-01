@@ -11,14 +11,14 @@ describe("periods", () => {
   it("without a Stripe period, the UTC calendar month", () => {
     expect(calendarMonth(T0)).toEqual({ start: Date.UTC(2026, 8, 1) / 1000, end: Date.UTC(2026, 9, 1) / 1000 });
     expect(calendarMonth(Date.UTC(2026, 11, 31, 23, 59))).toEqual({ start: Date.UTC(2026, 11, 1) / 1000, end: Date.UTC(2027, 0, 1) / 1000 });
-    expect(periodAt({ period_start: null, period_end: null }, T0)).toEqual(calendarMonth(T0));
-    expect(periodAt(null, T0)).toEqual(calendarMonth(T0));
+    expect(periodAt({ period_start: null, period_end: null }, T0)).toEqual({ ...calendarMonth(T0), fallback: true });
+    expect(periodAt(null, T0)).toEqual({ ...calendarMonth(T0), fallback: true });
   });
   it("the Stripe period while it lasts, then rolled on by its own length", () => {
     const e = { period_start: S0 - 100, period_end: S0 + 100 };
-    expect(periodAt(e, T0)).toEqual({ start: S0 - 100, end: S0 + 100 });
-    expect(periodAt(e, (S0 + 100) * 1000)).toEqual({ start: S0 + 100, end: S0 + 300 });
-    expect(periodAt(e, (S0 + 650) * 1000)).toEqual({ start: S0 + 500, end: S0 + 700 });
+    expect(periodAt(e, T0)).toEqual({ start: S0 - 100, end: S0 + 100, fallback: false });
+    expect(periodAt(e, (S0 + 100) * 1000)).toEqual({ start: S0 + 100, end: S0 + 300, fallback: false });
+    expect(periodAt(e, (S0 + 650) * 1000)).toEqual({ start: S0 + 500, end: S0 + 700, fallback: false });
   });
 });
 
@@ -73,6 +73,25 @@ describe("rollover", () => {
     // The same period again (a repeated alarm, a repeated setEntitlements) resets nothing.
     expect(m.adopt(next, T0 + 11_000)).toBeNull();
     expect(m.snapshot(T0 + 11_000)).toMatchObject({ bytes_in: 3, active_seconds: 1 });
+  });
+
+  it("the calendar-month fallback gives way to a Stripe period that began before it", () => {
+    // Found on the deploy of 2026-10-01: an object metering on the fallback month (it started
+    // before any Stripe period reached it) never took a period that began the day before, because
+    // "an earlier period is ignored" applied to the fallback too. Paid usage was recorded against
+    // the calendar month instead of the billing period, on the first day of every month.
+    const now = Date.UTC(2026, 9, 1, 0, 30);
+    const fallback = periodAt(null, now);
+    const stripe = periodAt({ period_start: Date.UTC(2026, 8, 30, 6) / 1000, period_end: Date.UTC(2026, 9, 30, 6) / 1000 }, now);
+    expect(stripe.start).toBeLessThan(fallback.start);
+    const m = new Meter(fallback, null, now);
+    m.connect(1, now);
+    m.inbound(1, 7);
+    const closed = m.adopt(stripe, now + 1000);
+    expect(closed).toMatchObject({ period_start: fallback.start, bytes_in: 7 });
+    expect(m.snapshot(now + 1000)).toMatchObject({ period_start: stripe.start, period_end: stripe.end });
+    // Once on a Stripe period, an earlier Stripe period (a stale renewal) is still ignored.
+    expect(m.adopt({ ...stripe, start: stripe.start - 86400, end: stripe.start }, now + 2000)).toBeNull();
   });
 
   it("the same period with a corrected end is adopted in place; an earlier one is ignored", () => {

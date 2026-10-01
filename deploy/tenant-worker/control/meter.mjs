@@ -20,18 +20,19 @@ export function calendarMonth(nowMs) {
 
 /**
  * The period `nowMs` falls in: the Stripe period the entitlements carry, or the calendar month
- * when they carry none. A Stripe period that has ended before its renewal arrived is rolled on by
+ * when they carry none (`fallback: true`, so a meter on it knows to give way to the real period;
+ * see `Meter.adopt`). A Stripe period that has ended before its renewal arrived is rolled on by
  * its own length; the renewal's `setEntitlements` then corrects the boundary.
  */
 export function periodAt(entitlements, nowMs) {
   const start = entitlements?.period_start;
   const end = entitlements?.period_end;
-  if (!Number.isInteger(start) || !Number.isInteger(end) || end <= start) return calendarMonth(nowMs);
+  if (!Number.isInteger(start) || !Number.isInteger(end) || end <= start) return { ...calendarMonth(nowMs), fallback: true };
   const now = Math.floor(nowMs / 1000);
-  if (now < end) return { start, end };
+  if (now < end) return { start, end, fallback: false };
   const length = end - start;
   const skipped = Math.floor((now - start) / length);
-  return { start: start + skipped * length, end: start + (skipped + 1) * length };
+  return { start: start + skipped * length, end: start + (skipped + 1) * length, fallback: false };
 }
 
 export class Meter {
@@ -112,7 +113,10 @@ export class Meter {
       this.period = period;
       return null;
     }
-    if (period.start < this.period.start) return null;
+    // An earlier Stripe period is a stale renewal and is ignored. The calendar-month fallback is not
+    // a billing period: the first Stripe period replaces it whenever that period began, which on
+    // the first of a month is before the fallback's own start.
+    if (period.start < this.period.start && !this.period.fallback) return null;
     const closed = this.snapshot(nowMs);
     this.period = period;
     this.totals = { ...EMPTY, peak_connections: this.open.size };
