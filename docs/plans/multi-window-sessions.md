@@ -200,6 +200,29 @@ The retention sweep runs in the agent, hourly per account.
   - `Detached` shows the existing held-elsewhere notice.
   - Every window still routes by cid. The leader/follower tab model inside one browser is unchanged.
 
+### As built (mw5)
+
+- The handshake has two halves. The agent's greeting, `ServiceConnectionAccepted.agent_ilm`, says
+  whether it hosts, so no window waits on an older agent that never answers a declaration. A window
+  that is told yes declares `DeclareCapabilities { agent_ilm: true }` and awaits `AgentCapabilities`
+  before anything else on that socket: requests are handled in parallel, and a claim sent beside the
+  declaration could overtake it and be refused as an older page. `conversation_store` was folded into
+  `agent_ilm`: one cannot be had without the other.
+- Followers do not declare; they ask the leader what its socket was told (`__agentCapabilitiesProxy`).
+- A `ConversationSend`'s Appended event carries the send's `request_id`, so the asking window clears
+  its composer when its own bubble is on screen. `ConversationEvent` and `SessionRoleNotification`
+  are therefore CID-routed in the browser; routed by request id the event would consume the pending
+  entry the answer needs.
+- Every window applies events through one ordered queue; a `seq` gap or reset re-reads.
+- Retention: the window's runner prunes nothing when hosted; a changed period is told to the agent
+  (`SetAccountPreferences`, which sweeps on hearing), and its count is reported from the store.
+- "Open here too" joins with the password or a passkey (the passkey unlocks the password, which is
+  the attach proof). The token is sealed with AES-GCM, the session's cid bound in as additional data,
+  under a non-extractable key in IndexedDB. A silent re-join happens inside the claim
+  (`claim-session.ts`), so every way into a session gets it.
+- The browser page writer (`message-pagination-store.ts`, `message-page-operations.ts`) stays, marked
+  as the path for agents before 0.8.6. It goes once no supported agent predates 0.8.6.
+
 ## mw6: native notifications from the agent (after mw5)
 
 - **Per signed-in account,** the agent raises OS notifications for what the web UI notifies for today:

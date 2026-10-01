@@ -578,6 +578,39 @@ This architecture enables testing multiple users with a single browser:
 - Leader coordinates WebSocket communication for all sessions
 - When tab switches users, it accesses a different session from storage
 
+### Several browsers, one session (agent 0.8.6)
+
+The leader/follower model above is per browser. Across browsers (and the PWA)
+one session can be attached to several sockets at once:
+
+```
+Browser A (leader socket) ─┐                       ┌─ ILM for alice ── P2P ── peers
+Browser B (leader socket) ─┼─ agent: alice's ─────┤
+PWA window               ─┘  subscriber set       └─ conversation store (single writer)
+        ▲                            │
+        └──── ConversationEvent / notifications to every subscriber;
+              a request's answer only to the socket that asked
+```
+
+- **Joining.** `ConnectionManagement::AttachSession { session_cid, proof }`,
+  the proof being the password or a token an earlier password attach
+  returned. The UI offers it as "Open here too"; the token is kept sealed per
+  browser and re-attaches without asking.
+- **Who writes.** The agent hosts the account's ILM (exactly one per CID: its
+  per-source frontier forbids two) and its conversation store. Windows ask
+  (`ConversationSend`, `ConversationPatch`, ...) and render from
+  `ConversationEvent`s, which carry a per-account `seq`; a window that sees a
+  gap re-reads.
+- **Capability.** The agent's greeting says whether it hosts; a window that
+  can be hosted declares it on its socket. Older agents keep the browser ILM
+  and page store; older pages are refused by a hosted account.
+- **Roles.** `SessionRoleNotification` (Primary / Secondary / Detached) tells
+  each socket where it stands; a Detached window is offered the session back.
+- **Leaving.** A dropped socket detaches only itself; logout reaches every
+  window.
+
+Design and phases: [docs/plans/multi-window-sessions.md](docs/plans/multi-window-sessions.md).
+
 ## Domain Permissions
 
 **Hierarchical Structure**:
