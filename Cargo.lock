@@ -776,6 +776,8 @@ dependencies = [
  "libc",
  "parking_lot",
  "rfd",
+ "serde",
+ "serde_json",
  "tokio 1.49.0",
  "uuid",
 ]

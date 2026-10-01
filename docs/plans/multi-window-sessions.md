@@ -159,6 +159,25 @@ A Rust codec reproduces this, and a fixture test decodes bytes that the UI's cbo
 
 The retention sweep runs in the agent, hourly per account.
 
+**As built (agent #99):**
+
+- The Rust types in `citadel-internal-service-types` (`conversation.rs`, `conversation_api.rs`) are the
+  one definition, and the TypeScript is generated from them.
+- No field is skipped on the wire, because TCP clients speak bincode. The stored JSON omits absent
+  fields itself. `kernel/conversations/stored.rs` is the only place the on-disk differences live.
+- Fixtures written by the UI's own encoder pin both the cbor-x and the stored-JSON compatibility.
+- An unreadable peer registry reads as "known", as the UI's stranger gate does.
+- The WASM client grew from 4.0 MB to 4.8 MB. Measured with twiggy, that is +377 KB of function-name
+  debug data and +442 KB of code:
+  - ~307 KB is serde for the new types, in the three formats the client speaks;
+  - ~38 KB is derived `Clone` on the larger request enum.
+
+  No agent-only code and no ts-rs is linked into the client. The name section was 1.9 MB, 40% of the
+  binary. Nothing removed it, because wasm-opt is off for CI determinism. It is now stripped after
+  wasm-bindgen (`scripts/strip-wasm-names.mjs`, which `sync-wasm-clients.sh` and the build script
+  both run), so the glue is untouched. `check-wasm-ships-without-names.mjs` gates it. The shipped
+  binary is 2.86 MB, below master's 3.69 MB, and the precache cap stays at 4 MiB.
+
 ## mw5: switch-over and migration guard
 
 - **Capability handshake.** The WASM client sends `DeclareCapabilities { agent_ilm: true,

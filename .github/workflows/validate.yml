@@ -565,6 +565,9 @@ jobs:
       - name: The committed WASM matches its source
         run: node scripts/check-wasm-matches-its-source.mjs
 
+      - name: The committed WASM ships without its name section
+        run: node scripts/check-wasm-ships-without-names.mjs
+
       - name: Every group-chat handler asks an authorization gate
         run: node scripts/check-group-handlers-are-authorized.mjs
       - name: Check every integration spec is named by a test script
