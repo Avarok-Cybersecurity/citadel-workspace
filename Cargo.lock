@@ -762,6 +762,7 @@ name = "citadel-internal-service"
 version = "0.1.0"
 dependencies = [
  "async-recursion",
+ "async-trait",
  "bincode2",
  "bytes",
  "citadel-internal-service-connector",
@@ -771,6 +772,7 @@ dependencies = [
  "citadel_sdk",
  "futures",
  "getrandom 0.3.4",
+ "intersession-layer-messaging",
  "libc",
  "parking_lot",
  "rfd",
