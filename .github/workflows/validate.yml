@@ -1363,6 +1363,10 @@ jobs:
             artifact: reconnect-both-c2s
           - test: test:reconnect-p2p-one-c2s
             artifact: reconnect-p2p-one-c2s
+          # One account in several windows (agent 0.8.6): "Open here too", fan-out
+          # to every window, the sealed re-join token, and logout ending all of them.
+          - test: test:multi-window
+            artifact: multi-window
     steps:
       - uses: actions/checkout@v4
         with:
