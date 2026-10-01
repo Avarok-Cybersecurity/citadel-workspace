@@ -1497,13 +1497,25 @@ jobs:
         # same shape as the failure that gate was written for.
         run: ./scripts/pull-base-images.sh
       - name: Start Services
+        # Its own budget, below the job's, because a JOB timeout cancels and
+        # every `if: failure()` dump below is skipped on cancellation. Two legs
+        # (runs 36841197969, 36874090292) hung here until the job budget and
+        # left nothing: no service logs, no screenshots, no log blob at all. A
+        # STEP timeout fails the step instead, so the dumps run. 35 minutes is
+        # the observed maximum of 29 across ~2,400 runs of this step plus
+        # headroom; the median is 18.
+        timeout-minutes: 35
         env:
           INTERNAL_SERVICE_PORT: '12345'
           WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
-        run: docker compose up -d --build --wait
+        # The sampler is killed with the step's other orphans when it ends.
+        run: |
+          ./scripts/ci-host-pressure.sh sample 30 &
+          docker compose up -d --build --wait
       - name: Dump Service Logs on Start Failure
         if: failure()
         run: |
+          ./scripts/ci-host-pressure.sh report
           echo "=== sync-wasm-client logs ==="
           docker compose logs sync-wasm-client 2>&1 | tail -200
           echo "=== server logs ==="
@@ -1516,6 +1528,11 @@ jobs:
           docker image prune -af
           df -h
       - name: Run Integration Test
+        # A step budget for the same reason as Start Services: a job timeout
+        # would cancel, and cancellation skips the log dump and the screenshot
+        # upload below. Observed maximum 17.5 minutes (test:offline) over
+        # ~2,200 runs; the median is 1.5.
+        timeout-minutes: 25
         env:
           IN_CI: 'true'
           WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
@@ -1720,13 +1737,25 @@ jobs:
         # same shape as the failure that gate was written for.
         run: ./scripts/pull-base-images.sh
       - name: Start Services
+        # Its own budget, below the job's, because a JOB timeout cancels and
+        # every `if: failure()` dump below is skipped on cancellation. Two legs
+        # (runs 36841197969, 36874090292) hung here until the job budget and
+        # left nothing: no service logs, no screenshots, no log blob at all. A
+        # STEP timeout fails the step instead, so the dumps run. 35 minutes is
+        # the observed maximum of 29 across ~2,400 runs of this step plus
+        # headroom; the median is 18.
+        timeout-minutes: 35
         env:
           INTERNAL_SERVICE_PORT: '12345'
           WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
-        run: docker compose up -d --build --wait
+        # The sampler is killed with the step's other orphans when it ends.
+        run: |
+          ./scripts/ci-host-pressure.sh sample 30 &
+          docker compose up -d --build --wait
       - name: Dump Service Logs on Start Failure
         if: failure()
         run: |
+          ./scripts/ci-host-pressure.sh report
           docker compose logs sync-wasm-client 2>&1 | tail -200
           docker compose logs -t server 2>&1 | tail -50
           docker compose logs -t internal-service 2>&1 | tail -50
@@ -1736,6 +1765,9 @@ jobs:
           docker image prune -af
           df -h
       - name: Run Playwright Tests
+        # See Run Integration Test: a step budget keeps the report upload and the
+        # log dump alive when a shard hangs. Observed maximum 11 minutes.
+        timeout-minutes: 25
         env:
           IN_CI: 'true'
           # No test.config.json in CI — it is gitignored, so lib/config.ts falls
@@ -2187,6 +2219,9 @@ jobs:
         # docker-compose.yml. Without it, the Vite production build
         # fails to resolve `../citadel_internal_service_wasm_client.js`
         # from `dist/InternalServiceWasmClient.js`.
+        # Its own budget so a stall fails the step and the failure dumps run;
+        # a job timeout would cancel and skip them. Observed maximum 7 minutes.
+        timeout-minutes: 20
         env:
           WORKSPACE_MASTER_PASSWORD: 'ci-prod-build'
           INTERNAL_SERVICE_PORT: '12345'
@@ -2431,6 +2466,10 @@ jobs:
         # denied, so probing for the API is not enough.
         run: node scripts/check-production-image.mjs ghcr.io/avarok-cybersecurity/citadel-workspace-ui:latest 18085
       - name: Smoke Test - Services Start
+        # The health waits below are bounded; `docker compose up` itself is not.
+        # A step budget makes a stall fail the step so the dump below runs.
+        # Observed maximum 15 seconds: the images are already built.
+        timeout-minutes: 10
         env:
           WORKSPACE_MASTER_PASSWORD: 'ci-smoke-test'
           INTERNAL_SERVICE_PORT: '12345'
