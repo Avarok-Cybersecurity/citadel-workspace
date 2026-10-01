@@ -187,11 +187,7 @@ if [ ! -d "pkg" ]; then
     print_error "WASM build failed - pkg directory not created"
     exit 1
 fi
-
-# The function-name debug section is 40% of the binary every user downloads.
-# Removed after wasm-bindgen so the module and its glue are otherwise untouched
-# (scripts/strip-wasm-names.mjs; gated by check-wasm-ships-without-names.mjs).
-node "$WORKSPACE_ROOT/scripts/strip-wasm-names.mjs" pkg/citadel_internal_service_wasm_client_bg.wasm
+node "$WORKSPACE_ROOT/scripts/strip-wasm-names.mjs" pkg/citadel_internal_service_wasm_client_bg.wasm  # 40% of the binary is names
 
 # Step 2: Generate TypeScript types
 print_status "Generating TypeScript types..."
