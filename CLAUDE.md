@@ -763,22 +763,40 @@ regardless of orphan-mode setting, so a page refresh, a navigation or a closed
 tab leaves the session intact and reconnectable. The `orphan_sessions` map is no
 longer consulted for cleanup decisions at all.
 
-A session ends for exactly two reasons:
+A session is removed in these places, and only these:
 
-1. **The user signed out** — `requests/peer/disconnect.rs` for the current
-   session, `requests/connection_management.rs` for a session in the Previous
-   Sessions list (DisconnectOrphan, single and bulk; the single-session branch
-   checks `may_disconnect` first).
-2. **The account is gone** — Deregister.
+1. **The user signed out** — `requests/peer/disconnect.rs` (Disconnect, the
+   current session).
+2. **The user signed out a Previous Session** — DisconnectOrphan in
+   `requests/connection_management.rs`, single and bulk; the single-session
+   branch checks `may_disconnect` first.
+3. **The account is gone** — Deregister (`requests/deregister.rs`), removed only
+   once the protocol has confirmed it.
+4. **The reconnect gave up** — `reconnect/report.rs::fail`, after a server drop
+   the agent could not recover: the server refused the session (e.g. "CID not
+   registered to this node"), it gave no answer for 10 minutes
+   (`give_up_after`), or it still held the dropped session past its hold window
+   (`server_holds_session_for`). The UI is sent `ServerReconnectFailed` and then
+   `DisconnectNotification`, and the give-up is recorded in `GetSessions`'
+   `signed_out` list until that account signs in again, so a UI that was closed
+   at the time can still say so.
+5. **ClaimSession finds no SDK session** — `requests/connection_management_claim_sdk.rs`
+   drops the entry of a session the SDK no longer holds. Skipped while the agent
+   is reconnecting it, since a reconnecting session has no SDK session by design.
+6. **Connect replaces a stale entry** — `requests/connect.rs` (`ReplaceStale`), for
+   a session with this username that the SDK no longer holds.
 
-Two further files take an entry out of `server_connection_map`, and neither ends
-a session: `requests/connect.rs` and `requests/connection_management_claim.rs`
-drop a record for a session the SDK no longer holds. The session had already
-ended; they are discarding the bookkeeping.
+5 and 6 end nothing: the session had already ended, and they discard the
+bookkeeping. An SDK-reported C2S drop removes a session only if it was already
+`Ending` (a Disconnect or Deregister in progress); otherwise it starts the
+reconnect, and only 4 can end that.
 
-That is five files, and `scripts/check-sessions-are-removed-in-two-places.mjs`
-holds the list with a reason for each — a sixth is a change to the session
-lifecycle and has to be argued for there.
+`scripts/check-session-removals-are-documented.mjs` holds exactly these six
+files, each with its reason, and fails in both directions: a removal anywhere
+else, a listed file that removes nothing, or a listed file this section does not
+name. It follows the map's write guard to whatever local it is bound to, which
+is how the give-up removes. A seventh path is a change to the session lifecycle
+and has to be argued for there and here.
 
 > Two paths that were listed here were not paths. `requests/get_sessions.rs`
 > once reconciled the map against the SDK's view; every branch of that filter
@@ -809,7 +827,7 @@ same username, asks the SDK whether that session is still active, and:
 
 > There is **no** `impl Drop for Connection`, and no exponential-backoff retry in
 > the connect path. Earlier revisions of this document described both; neither
-> exists in the tree. Cleanup is explicit, in the three request handlers above.
+> exists in the tree. Cleanup is explicit, in the six places listed above.
 
 ## Common Debugging Workflows
 

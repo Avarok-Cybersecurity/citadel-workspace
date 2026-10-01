@@ -25,8 +25,11 @@
 //!     here rather than in the type.
 //!
 //! WHAT THIS DOES NOT ASSERT: that the loaded permissions have any effect.
-//! `default_permissions` is written to every node and read by NO code path —
-//! `DomainPermissions::has_permission` has zero callers — so the shipped
+//! `default_permissions` is written to every node and read by one code path
+//! only: `view_members`, the "Members can see each other" switch that
+//! `ListMembers` honours (an_admin_can_hide_a_nodes_roster.rs). Every other
+//! field is read by nothing — `DomainPermissions::has_permission` has zero
+//! callers — so the shipped
 //! "Announcements" room configured with `send_messages: false` does not stop
 //! anyone posting. That is a product decision about the permissions model, not
 //! a bug to fix quietly, and it is recorded in docs/ROBUSTNESS.md.

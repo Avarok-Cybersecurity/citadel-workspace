@@ -564,6 +564,19 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     &nodes, target_id,
                 )
             };
+            // An admin can switch the roster off for a node and everything
+            // below it; admins and owners still see it (members_visibility.rs).
+            if super::members_visibility::hidden_on_path(&nodes, &path)
+                && !kernel
+                    .domain_operations
+                    .is_admin_or_owner(actor_user_id)
+                    .await
+                    .unwrap_or(false)
+            {
+                return Ok(WorkspaceProtocolResponse::MembersHidden {
+                    domain_id: target_id.to_string(),
+                });
+            }
             let mut level_members: std::collections::HashMap<String, Vec<String>> =
                 std::collections::HashMap::new();
             for level in &path {
@@ -1228,6 +1241,17 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     e
                 ))),
             }
+        }
+
+        WorkspaceProtocolRequest::SetMembersVisible { node_id, visible } => {
+            super::members_visibility::set_members_visible(
+                kernel,
+                actor_user_id,
+                requester_cid,
+                node_id,
+                *visible,
+            )
+            .await
         }
 
         WorkspaceProtocolRequest::DeleteNode { node_id, cascade } => {

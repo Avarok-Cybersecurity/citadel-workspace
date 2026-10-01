@@ -49,6 +49,16 @@ pub(crate) fn effective_roster(
     roster
 }
 
+/// Whether an admin has hidden the roster of the last element of `path`.
+///
+/// `hides(level)` is true when that level's "Members can see each other" switch
+/// is off. Off on a node reaches the node and everything below it, so the
+/// roster is hidden when the node or any level above it hides it. Callers
+/// exempt admins and owners; this only reads the switches.
+pub(crate) fn roster_hidden(path: &[String], hides: impl Fn(&str) -> bool) -> bool {
+    path.iter().any(|level| hides(level))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,6 +137,20 @@ mod tests {
     fn the_workspace_itself_is_all_direct() {
         let roster = effective_roster(&path(&["ws"]), members(&[("ws", &["thomas"])]));
         assert_eq!(roster, vec![entry("thomas", None)]);
+    }
+
+    #[test]
+    fn a_switch_off_above_hides_the_levels_below() {
+        let hidden = |level: &str| level == "office";
+        assert!(roster_hidden(&path(&["ws", "office", "room"]), hidden));
+        assert!(roster_hidden(&path(&["ws", "office"]), hidden));
+    }
+
+    #[test]
+    fn a_switch_off_below_does_not_reach_up_or_across() {
+        let hidden = |level: &str| level == "office";
+        assert!(!roster_hidden(&path(&["ws"]), hidden));
+        assert!(!roster_hidden(&path(&["ws", "sales", "room"]), hidden));
     }
 
     #[test]

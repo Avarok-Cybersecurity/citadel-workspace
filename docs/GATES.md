@@ -102,8 +102,8 @@ what was already here.
 | `check-sender-identity.mjs` | A message's sender must come from the transport, never from its payload. |
 | `check-service-logs-are-captured.mjs` | A job that starts the stack must dump its logs when a test fails. |
 | `check-session-query-failures-are-not-absence.mjs` | "I could not ask" is not "there is nothing there". |
+| `check-session-removals-are-documented.mjs` | A session outlives its connection, and is removed only where CLAUDE.md says. |
 | `check-session-teardown-prunes-cid-state.mjs` | Every place a session leaves `server_connection_map` must also prune the CID-keyed kernel maps (pending peer signals, username cache). |
-| `check-sessions-are-removed-in-two-places.mjs` | A session outlives its connection. |
 | `check-setup-node-restores-the-npm-cache.mjs` | Every `actions/setup-node` step must restore the npm cache. |
 | `check-stack-reachable.mjs` | Verify the running stack is reachable FROM THIS MACHINE, not from inside a container. |
 | `check-static-assets-are-compressed-well.mjs` | Static assets must be compressed at a level worth the bytes. |

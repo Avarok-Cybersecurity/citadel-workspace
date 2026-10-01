@@ -18,7 +18,7 @@ export type WorkspaceProtocolResponse = { "Workspace": Workspace } | { "Workspac
  * node directly. `serde(default)` so a reply from a server that
  * predates the field still decodes, as a list of direct members.
  */
-inherited_from: { [key in string]?: string }, } } | { "Member": User } | { "UserPermissions": { domain_id: string, user_id: string, role: UserRole, permissions: Array<Permission>, } } | { "MemberRoleUpdated": { user_id: string, new_role: UserRole, } } | { "UserProfileUpdated": User } | { "NodeContentUpdated": { node_id: string, mdx_content: string, 
+inherited_from: { [key in string]?: string }, } } | { "MembersHidden": { domain_id: string, } } | { "Member": User } | { "UserPermissions": { domain_id: string, user_id: string, role: UserRole, permissions: Array<Permission>, } } | { "MemberRoleUpdated": { user_id: string, new_role: UserRole, } } | { "UserProfileUpdated": User } | { "NodeContentUpdated": { node_id: string, mdx_content: string, 
 /**
  * The content's SHA-256, so a watcher can verify what it just received.
  *
