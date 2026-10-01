@@ -99,7 +99,7 @@ The Citadel Workspace is a multi-layered protocol system for secure, peer-to-pee
 - `Message { cid, peer_cid, message_contents }` - Carries subprotocols (WorkspaceProtocol, P2P messages)
 
 **Session Management**:
-- `ConnectionManagement { SetConnectionOrphan, ClaimSession, DisconnectOrphan }` - Manage orphan sessions
+- `ConnectionManagement { SetConnectionOrphan, ClaimSession, DisconnectOrphan, ReleaseSession, AttachSession }` - Manage orphan sessions, and attach further windows to a live one (`AttachSession` needs the password or a token a password attach returned; see [docs/plans/multi-window-sessions.md](docs/plans/multi-window-sessions.md))
 
 **Key Data Structures**:
 ```rust
@@ -108,7 +108,8 @@ struct Connection {
     peers: HashMap<u64, PeerConnection>,       // Active P2P connections
     sink_to_server: PeerChannelSendHalf,       // Channel to server
     client_server_remote: ClientServerRemote,  // Remote control interface
-    associated_tcp_connection: Arc<AtomicUuid>,// TCP connection UUID
+    subscribers: SessionSubscribers,           // Every attached localhost connection, primary first
+    attach_tokens: AttachTokens,               // Proofs for re-attaching without the password
     c2s_file_transfer_handlers: HashMap<...>,  // File transfer state
     groups: HashMap<...>,                      // Group chat state
 }

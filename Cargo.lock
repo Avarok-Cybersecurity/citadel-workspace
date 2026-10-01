@@ -770,6 +770,7 @@ dependencies = [
  "citadel_proto",
  "citadel_sdk",
  "futures",
+ "getrandom 0.3.4",
  "libc",
  "parking_lot",
  "rfd",
@@ -854,7 +855,7 @@ dependencies = [
 
 [[package]]
 name = "citadel-workspace-internal-service"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "citadel-internal-service",
  "citadel_logging",

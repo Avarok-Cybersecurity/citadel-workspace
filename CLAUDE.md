@@ -806,6 +806,18 @@ and has to be argued for there and here.
 > — the ordinary case of a tab navigating between a request and its response.
 > That one was real, and it was the reason the gate exists.
 
+### One session, several windows (agent)
+
+A session is attached to an ordered set of localhost connections
+(`kernel/session_subscribers.rs`), not one owner. Every session notification
+reaches every attached connection; a request's own response reaches only the
+connection that sent it. A dropped connection detaches only itself. Joining a
+live session from another browser or the PWA is `ConnectionManagement::AttachSession`
+with the password or a token a password attach returned. A live `Connect` still
+takes the session over (older UIs), and the displaced windows get
+`SessionRoleNotification { role: Detached }`. Plan and phases:
+`docs/plans/multi-window-sessions.md`.
+
 ### Connecting when a session already exists
 
 `connect.rs` does NOT delete the old session. It looks up any session with the
