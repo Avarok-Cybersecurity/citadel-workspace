@@ -26,3 +26,32 @@ The last phase of [multi-window-sessions.md](multi-window-sessions.md), after th
     mute and settings rows.
   - **Linux and Windows:** have no tray today. The agent gains one (`tray-icon`) and native
     notifications (D-Bus and WinRT toast).
+
+## As built (agent 0.8.6, macOS)
+
+- **Decision** (agent `kernel/notices/decide.rs`, pure).
+  - What raises a notice: a chat message from a peer, a ring (`CallInvite`), a peer request, a group
+    invitation, a file offer.
+  - A muted account raises nothing but calls.
+  - A window showing that conversation holds back its messages and files. A window showing that
+    account holds back the rest.
+  - `NotificationPreview::SenderOnly` is the default, per account, so a notice names the sender until
+    the user turns on "Message Text in Notifications" (Settings → Privacy). A call has no text.
+  - The target holds the account, its server host and the target id only. The menu-bar app builds the
+    URL from its own origin, and a test asserts that no content reaches it.
+- **Focus** is `ConnectionManagement::ReportFocus { session_cid, peer_cid, focused }`.
+  - Only a window attached to the session may send it. The web UI sends it when the answer changes.
+  - It is read when the event happens, not when the notice is sent. A closed window's focus is dropped
+    with it.
+- **The notice plane** is `NoticeSubscribe` / `NoticeSetMuted`, answered with `NoticeRows` and followed
+  by `NativeNotice`.
+  - One subscriber hears every account, so it is gated by a launch token. Citadel Agent.app mints the
+    token for each launch (32 random bytes) and passes it only in the agent's environment
+    (`CITADEL_NOTICE_TOKEN`), never as an argument.
+  - The token is compared in constant time and never logged. The agent's Debug of it is redacted.
+  - A terminal-run agent has no token, and its plane stays shut.
+- **macOS** (`apps/macos-agent`): `NoticeClient` subscribes, and `NoticePoster` raises
+  `UNUserNotification`s (calls are time-sensitive) and opens the link on a click. The panel's connected
+  rows show the unread count, a mute bell and a settings button (`open=settings:notifications`).
+- **Linux and Windows** follow in 0.8.7, as a `Notifier` registered on the hub (`NoticeHub::new`'s
+  `others`), proven on those CI legs.

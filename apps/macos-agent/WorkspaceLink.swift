@@ -3,7 +3,7 @@ import AppKit
 /// Opens Citadel Workspace at one account: in the installed web app when it can be opened there,
 /// otherwise on the site in the default browser.
 ///
-/// The page reads `?account=<username>[&server=<host>]`, or the same as `web+citadel://open?...`
+/// The page reads `?account=<username>[&server=<host>][&open=<target>]`, or the same as `web+citadel://open?...`
 /// through its manifest's protocol handler, validates both, and then either switches to that
 /// account's live session or shows the login form with the username filled in. Nothing secret ever
 /// goes in the link, and a link never logs anyone in on its own.
@@ -11,8 +11,15 @@ enum WorkspaceLink {
     static let scheme = "web+citadel"
 
     static func open(_ account: Account, origin: URL, log: LogFile) {
-        let query = [URLQueryItem(name: "account", value: account.username)]
-            + (account.workspaceHost.map { [URLQueryItem(name: "server", value: $0)] } ?? [])
+        open(username: account.username, server: account.workspaceHost, target: nil, origin: origin, log: log)
+    }
+
+    /// `target` is what a notice names to open there: `conversation:<cid>`, `call:<cid>`,
+    /// `requests` or `settings:notifications`. Never content: a link lands in history.
+    static func open(username: String, server: String?, target: String?, origin: URL, log: LogFile) {
+        let query = [URLQueryItem(name: "account", value: username)]
+            + (server.map { [URLQueryItem(name: "server", value: $0)] } ?? [])
+            + (target.map { [URLQueryItem(name: "open", value: $0)] } ?? [])
 
         // A Chromium app shim passes a native app's URL on only when its scheme is one the web app
         // registered; an https URL is dropped and the app opens at its start page, which would lose
@@ -24,7 +31,7 @@ enum WorkspaceLink {
             link.queryItems = query
             if let url = link.url {
                 NSWorkspace.shared.open([url], withApplicationAt: shim, configuration: NSWorkspace.OpenConfiguration()) { _, error in
-                    if let error { log.write("the web app would not open \(account.username): \(error)") }
+                    if let error { log.write("the web app would not open \(username): \(error)") }
                 }
                 return
             }

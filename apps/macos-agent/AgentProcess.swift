@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 /// Runs the agent binary bundled beside this launcher, and keeps it running.
 ///
@@ -19,6 +20,10 @@ final class AgentProcess {
     private let endpoint: (host: String, port: UInt16)
     private let log: LogFile
     private var process: Process?
+    /// The secret that opens this agent's notice stream (agent kernel/notices): minted for each
+    /// launch, handed over in the environment -- never an argument, which any process can list --
+    /// and never logged. Nil when another agent answers on the port: that one is not ours to hear.
+    private(set) var noticeToken: String?
     private var quickExits = 0
     private var stopping = false
     var onChange: ((State) -> Void)?
@@ -38,6 +43,7 @@ final class AgentProcess {
     func start() {
         stopping = false
         if PortProbe.isListening(host: endpoint.host, port: endpoint.port) {
+            noticeToken = nil
             state = .external
             log.write("an agent is already listening on \(endpoint.host):\(endpoint.port); not starting another")
             // Checked again later: when that agent stops, this one takes over.
@@ -83,6 +89,10 @@ final class AgentProcess {
         let p = Process()
         p.executableURL = executable
         p.arguments = arguments
+        let token = AgentProcess.mintToken()
+        var environment = ProcessInfo.processInfo.environment
+        environment["CITADEL_NOTICE_TOKEN"] = token
+        p.environment = environment
         p.standardOutput = log.handle
         p.standardError = log.handle
         let started = Date()
@@ -97,8 +107,19 @@ final class AgentProcess {
             return
         }
         process = p
+        noticeToken = token
         log.write("agent started (pid \(p.processIdentifier))")
         waitUntilListening(attempt: 0)
+    }
+
+    /// 32 random bytes as hex, from the system's CSPRNG.
+    private static func mintToken() -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
+            fatal("Citadel Agent cannot start", "The system did not supply random bytes for the agent's notice token.")
+            return ""
+        }
+        return bytes.map { String(format: "%02x", $0) }.joined()
     }
 
     private func waitUntilListening(attempt: Int) {

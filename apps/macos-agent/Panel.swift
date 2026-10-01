@@ -51,6 +51,9 @@ struct Account: Identifiable, Equatable {
 enum PanelAction {
     case openAccount(Account)
     case logIn(Account)
+    /// The account's notification settings in the workspace.
+    case openSettings(Account)
+    case setMuted(Account, Bool)
     case openWorkspace
     case createWorkspace
     case restartAgent
@@ -60,6 +63,8 @@ enum PanelAction {
 
 final class PanelModel: ObservableObject {
     @Published var accounts: [Account] = [] { didSet { onResize?() } }
+    /// Unread counts and mutes, from the agent's notice stream; empty without one.
+    @Published var rows: [UInt64: NoticeRow] = [:]
     @Published var agent: AgentProcess.State = .starting
     @Published var search = ""
     /// Whether the account list has been read at least once, so "no accounts" is never shown

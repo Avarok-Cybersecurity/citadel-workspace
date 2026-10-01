@@ -41,7 +41,7 @@ lipo -create "$ARM" "$X64" -output "$APP/Contents/MacOS/citadel-agent"
 # which Swift 6's strict concurrency checking cannot see through NSApplication's run loop.
 for arch in arm64 x86_64; do
   swiftc -swift-version 5 -O -target "$arch-apple-macos13" \
-    -framework AppKit -framework SwiftUI -framework ServiceManagement \
+    -framework AppKit -framework SwiftUI -framework ServiceManagement -framework UserNotifications -framework Security \
     "$SRC"/*.swift -o "$work/launcher-$arch"
 done
 lipo -create "$work/launcher-arm64" "$work/launcher-x86_64" -output "$APP/Contents/MacOS/Citadel Agent"

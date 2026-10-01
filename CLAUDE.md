@@ -840,6 +840,10 @@ the PWA -- is an equal subscriber:
 - A page from before 0.8.6 is refused by a hosted account: "This page is older
   than your Citadel agent. Reload it to continue." That is the migration
   guard working, not a bug.
+- Native notifications come from the agent (`kernel/notices`), not the page:
+  Citadel Agent.app subscribes with the launch token it passed the agent in
+  `CITADEL_NOTICE_TOKEN`. A terminal-run agent raises none. Previews default to
+  the sender only, per account. Design: `docs/plans/multi-window-mw6-notifications.md`.
 
 ### Connecting when a session already exists
 
