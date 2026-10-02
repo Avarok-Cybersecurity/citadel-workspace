@@ -240,6 +240,10 @@ jobs:
         # skipped by the time the test fails. Twenty-four failing legs uploaded
         # screenshots and discarded the backend logs that would have said why.
         run: node scripts/check-service-logs-are-captured.mjs
+      - name: A foreground compose up fails when its container fails
+        # A foreground compose start exits 0 whatever its container did; a sync that
+        # died after wiping the WASM output read green and failed two steps later.
+        run: node scripts/check-compose-up-keeps-the-exit-status.mjs
       - name: Helpers survive a target that vanishes
         # closeAnyModals clicked a Cancel button that was mid-animation; when
         # the dialog finished closing on its own the element detached, and
@@ -2234,7 +2238,7 @@ jobs:
         env:
           WORKSPACE_MASTER_PASSWORD: 'ci-prod-build'
           INTERNAL_SERVICE_PORT: '12345'
-        run: docker compose up --build sync-wasm-client
+        run: docker compose up --build --exit-code-from sync-wasm-client sync-wasm-client
 
       # The production-bundle gates live HERE, not in the typecheck matrix.
       #
