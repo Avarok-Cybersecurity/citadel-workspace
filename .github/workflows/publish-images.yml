@@ -258,7 +258,7 @@ jobs:
         env:
           WORKSPACE_MASTER_PASSWORD: 'ci-prod-build'
           INTERNAL_SERVICE_PORT: '12345'
-        run: docker compose up --build sync-wasm-client
+        run: docker compose up --build --exit-code-from sync-wasm-client sync-wasm-client
 
       - uses: docker/setup-buildx-action@v3
 
