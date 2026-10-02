@@ -36,13 +36,25 @@ env:
   INTERNAL_SERVICE_STUN_SERVERS: "stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302"
 
 jobs:
+  # Jobs whose runs-on is the long `vars.CITADEL_MAC_RUNNER` expression may run on
+  # the self-hosted Apple Silicon runners (`apple-48gb-metal`, two slots). They are
+  # the ones needing neither Docker nor Linux; everything that brings up
+  # `docker compose` stays on ubuntu-latest. Unset, the org variable sends every one
+  # of them back to ubuntu-latest, which is the escape hatch when the Mac is down.
+  # The same-repo clause is not optional: this repository is public, and a fork's
+  # pull request must never execute on that machine.
+  # scripts/check-mac-runner-is-fork-safe.mjs refuses any other spelling.
   agent-release-in-step:
     name: The agent's version moves with the agent
     # Deploy (deploy.yml) refuses a commit whose agent changed under an already-released version,
     # because the site would then expect an agent nobody can download. Failing the PR says so
     # before merge rather than at deploy.
     timeout-minutes: 5
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,7 +69,11 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 2m; this is generous headroom over it, not a target.
     timeout-minutes: 15
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -80,7 +96,11 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 3m; this is generous headroom over it, not a target.
     timeout-minutes: 15
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -118,7 +138,11 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is under a minute; this is generous headroom over it, not a target.
     timeout-minutes: 10
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -133,6 +157,10 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Check crate coverage
         run: node scripts/check-crate-coverage.mjs
+      - name: No fork's pull request can reach the self-hosted Mac
+        run: node scripts/check-mac-runner-is-fork-safe.mjs
+      - name: The Mac fork guard refuses every unguarded shape
+        run: node --test scripts/lib/mac-runner-routing.test.mjs
       - name: Check the docs' commands resolve
         run: node scripts/check-doc-commands.mjs
       - name: Check request handlers cannot panic
@@ -666,7 +694,11 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 3m; this is generous headroom over it, not a target.
     timeout-minutes: 20
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -695,7 +727,11 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 15m; this is generous headroom over it, not a target.
     timeout-minutes: 40
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -711,6 +747,12 @@ jobs:
         # agent. Production ships the feature.
         run: cargo nextest run --workspace --features websockets
         working-directory: citadel-internal-service
+        env:
+          # The tests give every node a filesystem backend under temp_dir(). On a
+          # hosted VM that is discarded; on the self-hosted Mac one run left 181
+          # directories in the user's TMPDIR, so use the per-job temp dir the
+          # runner empties.
+          TMPDIR: ${{ runner.temp }}
 
   rust-tests:
     name: Rust Tests - ${{ matrix.crate }}
@@ -718,7 +760,11 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 3m; this is generous headroom over it, not a target.
     timeout-minutes: 25
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -755,7 +801,11 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 6m; this is generous headroom over it, not a target.
     timeout-minutes: 25
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -801,7 +851,11 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is under a minute; this is generous headroom over it, not a target.
     timeout-minutes: 15
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -862,7 +916,11 @@ jobs:
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 1m; this is generous headroom over it, not a target.
     timeout-minutes: 15
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -2649,7 +2707,11 @@ jobs:
       - production-build
     # It only reads a JSON blob; the timeout is the house rule, not a need.
     timeout-minutes: 5
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-latest' }}
     steps:
       - name: Every validation job succeeded
         env:
