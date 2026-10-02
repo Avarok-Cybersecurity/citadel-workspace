@@ -20,6 +20,7 @@ struct PanelView: View {
                 }
             }
             Hairline()
+            if let update = model.update { UpdateRow(update: update, perform: model.perform); Hairline() }
             AgentFooter(model: model).frame(height: PanelMetrics.footer)
             SearchField(text: $model.search).frame(height: PanelMetrics.search)
         }

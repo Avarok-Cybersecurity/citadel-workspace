@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var notices: NoticeClient?
     private var poster: NoticePoster?
     private var poll: Timer?
+    private var updater: AppUpdater?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if Installer.offerToMoveIfNeeded() { return }
@@ -32,6 +33,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 WorkspaceLink.open(username: account, server: server, target: open, origin: settings.workspaceURL, log: log)
             }
             notices.onNotice = { [weak poster] notice in poster?.post(notice) }
+            let updater = AppUpdater(bundle: Bundle.main.bundleURL,
+                                     steps: UpdateSteps.live(agent: agent, host: settings.bindHost, port: settings.bindPort, log: log))
+            updater.onFailure = { [weak notices] version, why in notices?.reportInstall(version: version, error: why) }
+            notices.onUpdate = { [weak self, weak poster] update in self?.model.update = update; poster?.post(update) }
+            notices.onInstall = { image, version in
+                guard UpdateSteps.isAgentDownload(image) else { log.write("refusing an update image outside the agent's downloads: \(image.path)"); return }
+                updater.install(image: image, version: version)
+            }
+            poster.onOpenURL = { NSWorkspace.shared.open($0) }
+            self.updater = updater
             notices.onRows = { [weak self] rows in self?.model.rows = rows }
             agent.onChange = { [weak self, weak tray, weak agent] state in
                 tray?.show(state)
@@ -39,8 +50,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // Only the agent this app started can be heard: it alone holds our token.
                 if state == .running, let token = agent?.noticeToken { notices.start(token: token) } else { notices.stop() }
             }
-            model.perform = { [weak agent, weak notices] action in
+            model.perform = { [weak self, weak agent, weak notices] action in
                 if case .setMuted(let account, let muted) = action { notices?.setMuted(account.cid, muted); return }
+                if case .installUpdate = action {
+                    if Actions.confirmRestart(signedIn: self?.model.accounts.filter(\.connected).count ?? 0) { notices?.applyUpdate() }
+                    return
+                }
                 Actions.perform(action, settings: settings, log: log, agent: agent)
             }
             poster.prepare()
@@ -94,12 +109,29 @@ enum Actions {
         case .openSettings(let account):
             WorkspaceLink.open(username: account.username, server: account.workspaceHost, target: "settings:notifications",
                                origin: settings.workspaceURL, log: log)
-        case .setMuted:
+        case .setMuted, .installUpdate:
             break // Handled where the notice stream is (AppDelegate).
+        case .openURL(let url): NSWorkspace.shared.open(url)
         case .restartAgent: agent?.restart()
         case .toggleLogin: LoginItem.toggle(log: log)
         case .showLog: NSWorkspace.shared.open(log.url)
         }
+    }
+}
+
+extension Actions {
+    /// Says plainly what a restart costs before it happens; true to go ahead.
+    static func confirmRestart(signedIn: Int) -> Bool {
+        guard signedIn > 0 else { return true }
+        let alert = NSAlert()
+        alert.messageText = "Restart Citadel Agent to update?"
+        alert.informativeText = signedIn == 1
+            ? "The account signed in on this Mac will need to sign in again."
+            : "The \(signedIn) accounts signed in on this Mac will need to sign in again."
+        alert.addButton(withTitle: "Restart to update")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertFirstButtonReturn
     }
 }
 

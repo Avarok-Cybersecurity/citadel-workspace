@@ -10,11 +10,20 @@ use structopt::StructOpt;
 
 mod log_setup;
 mod notice_token;
+#[cfg(feature = "self-update")]
+mod update_setup;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     // Held for the whole run: dropping it stops the log writer thread.
     let _log_writer = log_setup::install()?;
+
+    // Started by an updating agent to start its successor and roll it back if it fails
+    // (citadel-internal-service's updater/watchdog.rs): nothing else of this run applies.
+    #[cfg(feature = "self-update")]
+    if let Some(code) = citadel_internal_service::updater::watchdog::run_if_requested() {
+        std::process::exit(code);
+    }
 
     // Staged browser uploads older than their TTL, from a run that ended before its own cleanup
     // (a restart, a crash, sleep). Without this they were never removed: the other agent binary
@@ -114,7 +123,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         builder = builder.with_insecure_skip_cert_verification()
     }
 
-    builder.build(notice_token::applied(service))?.await?;
+    let service = notice_token::applied(service);
+    #[cfg(feature = "self-update")]
+    let service = update_setup::applied(service, opts.bind)?;
+    builder.build(service)?.await?;
 
     Ok(())
 }

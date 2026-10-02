@@ -59,6 +59,9 @@ enum PanelAction {
     case restartAgent
     case toggleLogin
     case showLog
+    /// "Restart to update": install the release the agent verified.
+    case installUpdate
+    case openURL(URL)
 }
 
 final class PanelModel: ObservableObject {
@@ -70,6 +73,8 @@ final class PanelModel: ObservableObject {
     /// Whether the account list has been read at least once, so "no accounts" is never shown
     /// merely because nothing has been asked yet.
     @Published var loaded = false
+    /// A newer agent release, when the agent has announced one.
+    @Published var update: AgentUpdate? { didSet { onResize?() } }
     var perform: (PanelAction) -> Void = { _ in }
     var onResize: (() -> Void)?
     var onOpen: (() -> Void)?
@@ -87,7 +92,8 @@ final class PanelModel: ObservableObject {
     var preferredHeight: CGFloat {
         // Each row is followed by a 1 pt hairline; with no rows, the empty row is 1.5 rows tall.
         let rows = accounts.isEmpty ? PanelMetrics.row * 1.5 : CGFloat(accounts.count) * (PanelMetrics.row + 1)
-        let total = PanelMetrics.title + 1 + rows + 1 + PanelMetrics.footer + PanelMetrics.search
+        let update = self.update == nil ? 0 : PanelMetrics.update + 1
+        let total = PanelMetrics.title + 1 + rows + 1 + update + PanelMetrics.footer + PanelMetrics.search
         return min(total, PanelMetrics.maxHeight)
     }
 }
@@ -99,6 +105,7 @@ enum PanelMetrics {
     static let title: CGFloat = 60
     static let row: CGFloat = 72
     static let footer: CGFloat = 40
+    static let update: CGFloat = 56
     static let search: CGFloat = 60
     static let padding: CGFloat = 16
     static let avatar: CGFloat = 40

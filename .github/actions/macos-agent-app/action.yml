@@ -60,3 +60,11 @@ runs:
         NOTARY_ISSUER_ID: ${{ inputs.notary-issuer-id }}
       shell: bash
       run: ./scripts/notarise-macos.sh "$RUNNER_TEMP/app/Citadel Agent.app"
+    # What the installed app will do with this build as an update: verify its signature, its
+    # notarisation and its version from a scratch disk image of a copy, plus the swap and
+    # rollback sequence. A build that fails here could not be installed by the updater.
+    - name: The updater accepts this app
+      shell: bash
+      env:
+        AGENT_VERSION: ${{ inputs.version }}
+      run: ./scripts/test-macos-agent-updater.sh "$RUNNER_TEMP/app/Citadel Agent.app" "$AGENT_VERSION"
