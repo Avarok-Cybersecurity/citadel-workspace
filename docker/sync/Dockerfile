@@ -57,8 +57,9 @@ RUN rustc --version && \
 # Set working directory
 WORKDIR /workspace
 
-# Copy sync script
+# Copy sync script, and the name stripper it runs after wasm-pack
 COPY ./sync-wasm-clients.sh /workspace/
+COPY ./scripts/strip-wasm-names.mjs /workspace/scripts/
 
 # Make script executable
 RUN chmod +x /workspace/sync-wasm-clients.sh

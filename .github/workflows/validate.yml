@@ -569,6 +569,9 @@ jobs:
       - name: The committed WASM matches its source
         run: node scripts/check-wasm-matches-its-source.mjs
 
+      - name: The committed WASM ships without its name section
+        run: node scripts/check-wasm-ships-without-names.mjs
+
       - name: Every group-chat handler asks an authorization gate
         run: node scripts/check-group-handlers-are-authorized.mjs
       - name: Check every integration spec is named by a test script
@@ -593,6 +596,8 @@ jobs:
         run: node scripts/check-ci-matrices-agree.mjs
       - name: Check every workspace crate reaches the images that run cargo
         run: node scripts/check-dockerfiles-copy-every-crate.mjs
+      - name: Check the sync image has every script the WASM sync runs
+        run: node scripts/check-sync-image-has-its-scripts.mjs
       - name: Check the inline-upload byte cap agrees across the wire
         run: node scripts/check-transfer-cap-parity.mjs
       - name: Check the browser outwaits the agent on peer discovery
@@ -1362,6 +1367,10 @@ jobs:
             artifact: reconnect-both-c2s
           - test: test:reconnect-p2p-one-c2s
             artifact: reconnect-p2p-one-c2s
+          # One account in several windows (agent 0.8.6): "Open here too", fan-out
+          # to every window, the sealed re-join token, and logout ending all of them.
+          - test: test:multi-window
+            artifact: multi-window
     steps:
       - uses: actions/checkout@v4
         with:

@@ -1,8 +1,7 @@
 use citadel_internal_service::kernel::CitadelWorkspaceService;
 use citadel_internal_service::stun::{StunServers, STUN_SERVERS_ENV};
 use citadel_internal_service::sweep_stale_browser_transfers;
-use citadel_internal_service::OriginPolicy;
-use citadel_internal_service::SERVER_RECONNECT;
+use citadel_internal_service::{OriginPolicy, SERVER_RECONNECT};
 use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
 use std::error::Error;
 use std::net::SocketAddr;
@@ -10,6 +9,7 @@ use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 
 mod log_setup;
+mod notice_token;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -114,7 +114,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         builder = builder.with_insecure_skip_cert_verification()
     }
 
-    builder.build(service)?.await?;
+    builder.build(notice_token::applied(service))?.await?;
 
     Ok(())
 }

@@ -169,6 +169,18 @@ fn main() {
 
     println!("cargo:warning=WASM build successful!");
 
+    // The same post-build step as sync-wasm-clients.sh, so a build-script rebuild
+    // produces the binary the gate (check-wasm-ships-without-names.mjs) accepts.
+    let binary = wasm_pkg_dir.join("citadel_internal_service_wasm_client_bg.wasm");
+    let stripped = Command::new("node")
+        .arg(workspace_root.join("scripts/strip-wasm-names.mjs"))
+        .arg(&binary)
+        .status();
+    if !matches!(stripped, Ok(status) if status.success()) {
+        eprintln!("Stripping the WASM name section failed ({stripped:?}); node is required.");
+        std::process::exit(1);
+    }
+
     // Copy files to citadel-workspaces/public/wasm
     if workspace_wasm_dir.exists() {
         println!("cargo:warning=Copying WASM files to citadel-workspaces/public/wasm...");

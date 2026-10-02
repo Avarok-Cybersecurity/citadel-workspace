@@ -14,7 +14,7 @@ struct PanelView: View {
                         EmptyRow(model: model)
                     }
                     ForEach(model.shown) { account in
-                        AccountRow(account: account, perform: model.perform)
+                        AccountRow(account: account, row: model.rows[account.cid], perform: model.perform)
                         Hairline()
                     }
                 }
@@ -67,6 +67,8 @@ struct TitleRow: View {
 /// SDK, and a plain swiftc build (build-macos-agent-app.sh) has no macro plugins.
 struct AccountRow: View {
     let account: Account
+    /// The agent's unread count and mute for it, when the notice stream is up.
+    let row: NoticeRow?
     let perform: (PanelAction) -> Void
 
     var body: some View {
@@ -77,6 +79,9 @@ struct AccountRow: View {
                 Text(subtitle).font(.system(size: 12)).foregroundColor(.panelSecondary).lineLimit(1).truncationMode(.middle)
             }
             Spacer(minLength: 8)
+            if let row, account.connected {
+                NoticeControls(account: account, row: row, perform: perform)
+            }
             if account.connected {
                 HStack(spacing: 6) {
                     Circle().fill(Color.panelConnected).frame(width: 8, height: 8)
@@ -105,6 +110,35 @@ struct AccountRow: View {
         if let host = account.workspaceHost { return host }
         if !account.fullName.isEmpty, account.fullName != account.username { return account.fullName }
         return account.connected ? "Signed in" : "Signed out"
+    }
+}
+
+/// Unread count, mute and the account's notification settings, for a connected account.
+struct NoticeControls: View {
+    let account: Account
+    let row: NoticeRow
+    let perform: (PanelAction) -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if row.unread > 0 {
+                Text(row.unread > 99 ? "99+" : String(row.unread))
+                    .font(.system(size: 11, weight: .semibold)).foregroundColor(.white)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Capsule().fill(Color.panelAccent))
+                    .accessibilityLabel("\(row.unread) unread")
+            }
+            Button { perform(.setMuted(account, !row.muted)) } label: {
+                Image(systemName: row.muted ? "bell.slash" : "bell").foregroundColor(.panelSecondary)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(row.muted ? "Unmute \(account.username)" : "Mute \(account.username)")
+            Button { perform(.openSettings(account)) } label: {
+                Image(systemName: "gearshape").foregroundColor(.panelSecondary)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Notification settings for \(account.username)")
+        }
     }
 }
 

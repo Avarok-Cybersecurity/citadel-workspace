@@ -762,6 +762,7 @@ name = "citadel-internal-service"
 version = "0.1.0"
 dependencies = [
  "async-recursion",
+ "async-trait",
  "bincode2",
  "bytes",
  "citadel-internal-service-connector",
@@ -770,9 +771,13 @@ dependencies = [
  "citadel_proto",
  "citadel_sdk",
  "futures",
+ "getrandom 0.3.4",
+ "intersession-layer-messaging",
  "libc",
  "parking_lot",
  "rfd",
+ "serde",
+ "serde_json",
  "tokio 1.49.0",
  "uuid",
 ]
@@ -854,7 +859,7 @@ dependencies = [
 
 [[package]]
 name = "citadel-workspace-internal-service"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "citadel-internal-service",
  "citadel_logging",

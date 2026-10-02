@@ -12,6 +12,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var tray: Tray?
     private let model = PanelModel()
     private var client: AgentClient?
+    private var notices: NoticeClient?
+    private var poster: NoticePoster?
     private var poll: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -24,13 +26,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             let agent = AgentProcess(executable: executable, settings: settings, log: log)
             let tray = Tray(model: model)
-            agent.onChange = { [weak self, weak tray] state in
+            let notices = NoticeClient(port: settings.bindPort, log: log)
+            let poster = NoticePoster(log: log)
+            poster.onOpen = { account, server, open in
+                WorkspaceLink.open(username: account, server: server, target: open, origin: settings.workspaceURL, log: log)
+            }
+            notices.onNotice = { [weak poster] notice in poster?.post(notice) }
+            notices.onRows = { [weak self] rows in self?.model.rows = rows }
+            agent.onChange = { [weak self, weak tray, weak agent] state in
                 tray?.show(state)
                 if state == .running || state == .external { self?.refresh() }
+                // Only the agent this app started can be heard: it alone holds our token.
+                if state == .running, let token = agent?.noticeToken { notices.start(token: token) } else { notices.stop() }
             }
-            model.perform = { [weak agent] action in
+            model.perform = { [weak agent, weak notices] action in
+                if case .setMuted(let account, let muted) = action { notices?.setMuted(account.cid, muted); return }
                 Actions.perform(action, settings: settings, log: log, agent: agent)
             }
+            poster.prepare()
+            self.notices = notices
+            self.poster = poster
             self.agent = agent
             self.tray = tray
             let client = AgentClient(port: settings.bindPort)
@@ -76,6 +91,11 @@ enum Actions {
         case .createWorkspace: NSWorkspace.shared.open(settings.workspaceURL.appendingPathComponent("create"))
         case .openAccount(let account), .logIn(let account):
             WorkspaceLink.open(account, origin: settings.workspaceURL, log: log)
+        case .openSettings(let account):
+            WorkspaceLink.open(username: account.username, server: account.workspaceHost, target: "settings:notifications",
+                               origin: settings.workspaceURL, log: log)
+        case .setMuted:
+            break // Handled where the notice stream is (AppDelegate).
         case .restartAgent: agent?.restart()
         case .toggleLogin: LoginItem.toggle(log: log)
         case .showLog: NSWorkspace.shared.open(log.url)
