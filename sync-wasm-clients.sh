@@ -187,6 +187,7 @@ if [ ! -d "pkg" ]; then
     print_error "WASM build failed - pkg directory not created"
     exit 1
 fi
+node "$WORKSPACE_ROOT/scripts/strip-wasm-names.mjs" pkg/citadel_internal_service_wasm_client_bg.wasm  # 40% of the binary is names
 
 # Step 2: Generate TypeScript types
 print_status "Generating TypeScript types..."

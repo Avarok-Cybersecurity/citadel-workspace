@@ -806,6 +806,45 @@ and has to be argued for there and here.
 > — the ordinary case of a tab navigating between a request and its response.
 > That one was real, and it was the reason the gate exists.
 
+### One session, several windows (agent)
+
+A session is attached to an ordered set of localhost connections
+(`kernel/session_subscribers.rs`), not one owner. Every session notification
+reaches every attached connection; a request's own response reaches only the
+connection that sent it. A dropped connection detaches only itself. Joining a
+live session from another browser or the PWA is `ConnectionManagement::AttachSession`
+with the password or a token a password attach returned. A live `Connect` still
+takes the session over (older UIs), and the displaced windows get
+`SessionRoleNotification { role: Detached }`. Plan and phases:
+`docs/plans/multi-window-sessions.md`.
+
+With agent 0.8.6 the agent also **hosts each account's ILM and is the only
+writer of its conversations**, so every window -- tabs of several browsers,
+the PWA -- is an equal subscriber:
+
+- The agent's greeting (`ServiceConnectionAccepted.agent_ilm`) says it can.
+  The leader declares `DeclareCapabilities { agent_ilm: true }` before
+  reporting its socket up; followers ask the leader
+  (`citadel-workspaces/src/lib/agent-conversations/capabilities.ts`). An older
+  agent is never declared to, and the browser ILM and page store stay in use.
+- A hosted account's window opens no browser ILM, sends `SendReliable`, reads
+  the store with `ConversationPage`/`ConversationList`, and asks for each
+  compound action (`ConversationSend`, `ConversationEdit`, `ConversationReact`, `ConversationMarkRead`, ...). What
+  changed comes back to every window as a `ConversationEvent`
+  (`agent-conversations/conversation-events.ts`); never write the
+  `msgs_with_peer_*` keys yourself -- the agent refuses it.
+- "**Open here too**" (`components/OpenHereToo.tsx`) is how a second browser
+  joins: `AttachSession` with the password or a passkey, and the token it
+  earns sealed in IndexedDB under a non-extractable key, so that browser joins
+  silently next time (`lib/sessions/join-token.ts`).
+- A page from before 0.8.6 is refused by a hosted account: "This page is older
+  than your Citadel agent. Reload it to continue." That is the migration
+  guard working, not a bug.
+- Native notifications come from the agent (`kernel/notices`), not the page:
+  Citadel Agent.app subscribes with the launch token it passed the agent in
+  `CITADEL_NOTICE_TOKEN`. A terminal-run agent raises none. Previews default to
+  the sender only, per account. Design: `docs/plans/multi-window-mw6-notifications.md`.
+
 ### Connecting when a session already exists
 
 `connect.rs` does NOT delete the old session. It looks up any session with the
