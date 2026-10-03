@@ -71,6 +71,8 @@ runs:
     # DOWNLOADED and run on someone else's machine, so linking against
     # whatever OpenSSL the build agent happened to have is a runtime failure
     # waiting to happen on a machine that has a different one, or none.
+    # --features self-update: the downloaded agent updates itself from GitHub releases. Only
+    # these builds: the docker image and a developer's build must never replace themselves.
     # THE BINARY THE BROWSER CAN TALK TO. citadel-workspace-internal-service (this repo)
     # wraps the kernel in the WebSocket interface and the Origin allowlist; it is what the
     # docker image runs. The submodule's citadel_service_bin starts the kernel on the raw
@@ -82,7 +84,7 @@ runs:
       shell: bash
       env:
         TARGET: ${{ inputs.target }}
-      run: cargo build --release --target "$TARGET" -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features vendored
+      run: cargo build --release --target "$TARGET" -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features vendored,self-update
     # PowerShell, not bash, on Windows: vendored OpenSSL runs its Configure with the first
     # perl on PATH, and under Git's bash that is Git's cut-down perl, which lacks the modules
     # Configure needs ("Can't locate ... Params/Check.pm"). The runner's Strawberry perl is
@@ -92,7 +94,7 @@ runs:
       shell: pwsh
       env:
         TARGET: ${{ inputs.target }}
-      run: cargo build --release --target "$env:TARGET" -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features vendored
+      run: cargo build --release --target "$env:TARGET" -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features vendored,self-update
 
     # Signed and notarised BEFORE packaging, so the tarball carries a binary
     # macOS will run without argument.

@@ -1,6 +1,6 @@
 [package]
 name = "citadel-workspace-internal-service"
-version = "0.8.6"
+version = "0.8.7"
 edition = "2021"
 license.workspace = true
 
@@ -12,6 +12,10 @@ license.workspace = true
 vendored = ["citadel-internal-service/vendored"]
 deadlock-detection = ["parking_lot/deadlock_detection", "parking_lot", "lazy_static"]
 native-dialogs = ["citadel-internal-service/native-dialogs"]
+# Check GitHub for newer agent releases and install them (the agent's src/updater). Only the
+# artefacts the release builds turn this on (.github/actions/build-agent): the docker image and a
+# developer's `cargo run` must never replace themselves.
+self-update = []
 
 [[bin]]
 name = "citadel-workspace-internal-service"
