@@ -24,6 +24,8 @@ import { UsageTable } from "./control/usage-table.mjs";
 import { meterSocket } from "./control/sockets.mjs";
 import { enforcedEntitlements, METERING } from "./control/plans.mjs";
 import { runMonitor } from "./control/monitor.mjs";
+import { storedRows } from "./control/stored-rows.mjs";
+import { ksfParams, TenantSignIn } from "./control/tenant-sign-in.mjs";
 
 const FLUSH_MS = METERING.flush_seconds * 1000;
 /** Periods `usage()` reports: the current one and the one before, whose final totals the monitor may not have seen. */
@@ -68,6 +70,8 @@ export class WorkspaceServer extends DurableObject {
     // Metered usage (control/meter.mjs), resumed from this period's persisted totals.
     this.usageTable = new UsageTable(ctx.storage.sql);
     this.meter = null;
+    // Sign-in (control/tenant-sign-in.mjs): the OPRF seed, the sign-in settings, the admission check.
+    this.signIn = new TenantSignIn(ctx.storage, { random: crypto, turnstile: () => config(env).turnstile, io: { fetch: (u, i) => fetch(u, i) } });
     // Relay credentials for the kernel's GetIceServers (control/ice.mjs), gated on this tenant's
     // plan and this period's metered relay.
     this.ice = new IceMinter(turnConfig(env), { fetch: (url, init) => fetch(url, init), nowMs: Date.now }, () => {
@@ -77,6 +81,7 @@ export class WorkspaceServer extends DurableObject {
     });
     ctx.blockConcurrencyWhile(async () => {
       await this.provisioning.load();
+      await this.signIn.load();
       const now = Date.now();
       const period = periodAt(this.provisioning.summary().entitlements, now);
       this.meter = new Meter(period, this.usageTable.load(period.start), now);
@@ -85,8 +90,15 @@ export class WorkspaceServer extends DurableObject {
 
   /** RPC from the control plane: this tenant's master password and entitlements. */
   async provision(data) {
+    const before = this.provisioning.tenantId();
     await this.provisioning.provision(data, this.server !== null);
+    await this.signIn.provisioned(before !== null && before !== data.tenant_id);
     this.#roll(Date.now());
+  }
+
+  /** RPC for discovery (dispatch.mjs): whether this workspace requires a check to sign in. */
+  admissionRequired() {
+    return this.signIn.required();
   }
 
   /** RPC from the control plane: the tenant's plan changed (a new billing period among it). */
@@ -141,7 +153,9 @@ export class WorkspaceServer extends DurableObject {
       Number(required(env, "ARGON_TIME_COST")),
     );
     const iceHost = { mint: (memberId) => this.ice.mint(memberId) };
-    this.server = new this.wasm.TenantServer(config, this.storage(), argon, iceHost, required(env, "LOG_FILTER"), (outcome) => {
+    const ksf = ksfParams(env);
+    const pq = new this.wasm.PqSignIn(this.signIn.takeSeed(), ksf.memKib, ksf.iterations, ksf.lanes);
+    this.server = new this.wasm.TenantServer(config, this.storage(), argon, iceHost, pq, this.signIn.host(), required(env, "LOG_FILTER"), (outcome) => {
       this.exit = outcome;
       console.error(`[tenant] node exited: ${outcome}`);
     });
@@ -162,19 +176,6 @@ export class WorkspaceServer extends DurableObject {
     };
   }
 
-  /** Row counts and the largest stored value per table, for the proofs and the limits report. */
-  storedRows() {
-    const sql = this.ctx.storage.sql;
-    const tables = [...sql.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'citadel_%'")].map((r) => r.name);
-    return Object.fromEntries(
-      tables.map((t) => {
-        const hasBin = [...sql.exec(`SELECT name FROM pragma_table_info('${t}') WHERE name = 'bin'`)].length > 0;
-        const size = hasBin ? "COALESCE(MAX(LENGTH(bin)), 0)" : "0";
-        return [t, sql.exec(`SELECT COUNT(*) AS rows, ${size} AS max_bin_bytes FROM ${t}`).one()];
-      }),
-    );
-  }
-
   /** RPC, for the local proofs only: the Worker calls it when TENANT_DIAGNOSTICS is on (dispatch.mjs). */
   stats() {
     return {
@@ -184,7 +185,7 @@ export class WorkspaceServer extends DurableObject {
       wasm_instance: this.wasm === null ? null : this.wasm.instance_id(),
       wasm_instances_in_isolate: instancesInIsolate,
       wasm_memory_bytes: this.wasm === null ? 0 : this.wasm.memory().buffer.byteLength,
-      stored: this.storedRows(),
+      stored: storedRows(this.ctx.storage.sql),
       connections: this.meter.connections(),
       usage: this.meter.snapshot(Date.now()),
       ...this.provisioning.summary(),
@@ -221,6 +222,7 @@ export class WorkspaceServer extends DurableObject {
     // Frames and bytes per connection and per period (control/meter.mjs). CPU is measured outside
     // the isolate (proof.mjs samples workerd's process CPU at each phase boundary).
     this.meter.connect(n, Date.now());
+    let peer = null;
     meterSocket(server, {
       meter: this.meter,
       id: n,
@@ -228,10 +230,13 @@ export class WorkspaceServer extends DurableObject {
       now: Date.now,
       onRelease: (record) => {
         console.log(`[tenant] connection ${n} closed after ${record.open_ms} ms; ${JSON.stringify(record)}`);
+        if (peer !== null) this.signIn.released(peer);
         if (this.meter.openCount === 0) this.#flush(Date.now());
       },
     });
-    this.server.accept(server);
+    peer = this.server.accept(server);
+    // The client's address, for the admission check's siteverify (control/admission.mjs).
+    this.signIn.connected(peer, request.headers.get("cf-connecting-ip"));
     if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + FLUSH_MS);
     return new Response(null, { status: 101, webSocket: client });
   }

@@ -5,17 +5,14 @@
 //! (worker.mjs, control/ice.mjs). The TURN provider's API key stays in the object: this side
 //! sees only the short-lived credentials, which the kernel returns over the member's session.
 
+use crate::host_promise::{parse, HostPromise};
 use citadel_sdk::prelude::async_trait;
 use citadel_workspace_server_kernel::kernel::ice_servers::{
     IceServerGrant, IceServerMember, IceServerSource, IceServersUnavailable,
 };
 use citadel_workspace_types::ice::IceServer;
 use serde::Deserialize;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::JsFuture;
 
 #[wasm_bindgen]
 extern "C" {
@@ -49,36 +46,14 @@ struct DurableObjectIce(IceHost);
 unsafe impl Send for DurableObjectIce {}
 unsafe impl Sync for DurableObjectIce {}
 
-/// A host Promise, awaitable where the kernel requires `Send` futures.
-struct HostPromise(JsFuture);
-
-// SAFETY: as for `DurableObjectIce`: one thread, one object per instance.
-unsafe impl Send for HostPromise {}
-
-impl Future for HostPromise {
-    type Output = Result<JsValue, JsValue>;
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Pin::new(&mut self.0).poll(cx)
-    }
-}
-
 /// The kernel's relay-credential source over `host`.
 pub fn source(host: IceHost) -> std::sync::Arc<dyn IceServerSource> {
     std::sync::Arc::new(DurableObjectIce(host))
 }
 
-fn parse(value: &JsValue) -> Result<HostAnswer, String> {
-    let text = js_sys::JSON::stringify(value)
-        .map_err(|e| format!("unserialisable answer: {e:?}"))?
-        .as_string()
-        .ok_or("the answer is not JSON")?;
-    serde_json::from_str(&text).map_err(|e| format!("malformed answer: {e}"))
-}
-
 impl DurableObjectIce {
     fn promise(&self, member_id: &str) -> Result<HostPromise, String> {
-        let promise = self.0.mint(member_id).map_err(|e| format!("{e:?}"))?;
-        Ok(HostPromise(JsFuture::from(promise)))
+        HostPromise::from_call(self.0.mint(member_id))
     }
 }
 
@@ -98,7 +73,7 @@ impl IceServerSource for DurableObjectIce {
         let answer = promise
             .await
             .map_err(|e| format!("{e:?}"))
-            .and_then(|value| parse(&value))
+            .and_then(|value| parse::<HostAnswer>(&value))
             .map_err(failed)?;
         match answer {
             HostAnswer::Granted {

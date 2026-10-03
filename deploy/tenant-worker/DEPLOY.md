@@ -82,6 +82,13 @@ Turnstile: in the dashboard (Turnstile, the widget for that sitekey), the widget
 include `work.avarok.net`; the Worker also refuses a pass whose hostname is anything else
 (`TURNSTILE_HOSTNAMES`).
 
+The same widget serves the sign-in check a workspace admin can turn on ("Require a human check
+to sign in"): its site key is the public var `TURNSTILE_SITE_KEY`, which discovery
+(`GET /api/admission[/<slug>]`) hands to the sign-in and registration forms, and the object's
+admission check verifies its tokens with `TURNSTILE_SECRET` and the actions `sign-in` and
+`register`. The widget renders on `work.avarok.net`, so `TURNSTILE_HOSTNAMES` is the hostname
+those answers carry too, not the tenant's own host.
+
 ### 5. Stripe, in TEST mode
 
 Nothing here reaches live mode: `deploy.sh`'s catalogue audit refuses a live key.
@@ -147,6 +154,17 @@ in `tenants.usage_subscription` (migration 0004) in the same batch as the event,
 the plan ends, and replaces it if the customer cancels it. The monitor bills a yearly tenant once
 it exists; until then its overage is recorded and logged as unbilled.
 
+## Post-quantum sign-in: the OPRF seed
+
+Each tenant's object generates a 32-byte OPRF seed (the server key of the password factor's
+hardening) when it is provisioned, or at its first start on a build that has this, and keeps it
+in its key-value storage under `control:oprf-seed`, apart from the account rows. It is never
+logged, reported or exported, and **there is no copy anywhere else**: an object whose seed is
+lost or replaced can no longer sign in any post-quantum account, which then needs its recovery
+codes. A stored value that is not 32 bytes stops the object rather than being replaced.
+`PQ_KSF_*` in `wrangler.toml` is the Argon2id cost clients stretch a password factor with; the
+node refuses anything below the SDK's floor.
+
 ## Deploying
 
 ```sh
@@ -161,7 +179,7 @@ CITADEL_CF_TOKEN_FILE=~/cf-token.txt CITADEL_STRIPE_KEY_FILE=~/stripe.citadel.te
    carries the three empty meta tags the Worker fills in).
 2. Gates: the vitest suite (including `test/production-config.test.mjs`: no stats, host routing
    only), `cargo test -p tenant-storage-compat` (accounts a 0.10.0 server stored in its object
-   still load under this tree's SDK) and `scripts/check-preview-csp-matches-production.mjs`
+   still load under this tree's SDK, stay legacy, and upgrade to post-quantum sign-in in place) and `scripts/check-preview-csp-matches-production.mjs`
    (nginx, vite and the Worker serve one CSP).
 3. The D1 id is not the placeholder.
 4. The Stripe catalogue audit passes (read-only).
@@ -198,7 +216,8 @@ without a real Turnstile pass, needs (the header of `wrangler.toml` lists them).
 | Run | Overrides | What it proves |
 |---|---|---|
 | `npx vitest run` | path routing and diagnostics on, `test/fixture-ui` as assets; the production tests read `wrangler.toml` through wrangler and use its own vars | the control plane, the UI headers and meta tags, no stats in production |
-| `node upgrade.mjs <dir> <old-pkg>` | dev | what the build in `<old-pkg>` stored in an object loads under this one: the same account logs in and reads its profile back |
+| `node upgrade.mjs <dir> <old-tenant-worker>` | dev | what the build in `<old-tenant-worker>` (a built `deploy/tenant-worker` of the commit production runs) stored in an object loads under this one: the same account logs in, reads its profile back, and is upgraded to post-quantum sign-in by that login |
+| `node sign-in.mjs <dir>` | dev | post-quantum accounts, the sign-in setting (admin-only, discovery follows it) and the OPRF seed surviving a restart |
 | `./proof-control.sh` | dev (as `proof-lib.mjs` `DEV_OVERRIDES`) | Turnstile, free creation, a real TEST-mode Checkout and signed webhooks |
 | `node serve-tenants.mjs ...` | dev | tenants by path, for the agent and kernel proofs |
 | `node proof-production.mjs ...` | Turnstile's testing secret and hostname only | the site, host routing, `426` on a tenant host, and (with `--serve`) the WebSocket proof below |
