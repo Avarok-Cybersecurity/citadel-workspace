@@ -15,6 +15,7 @@ export type { NestingRule } from './generated/NestingRule.js';
 export type { NodeEntityType } from './generated/NodeEntityType.js';
 export type { Permission } from './generated/Permission.js';
 export type { PermissionEndowOperation } from './generated/PermissionEndowOperation.js';
+export type { SignInSettings } from './generated/SignInSettings.js';
 export type { TreeNode } from './generated/TreeNode.js';
 export type { TreeSchema } from './generated/TreeSchema.js';
 export type { UpdateOperation } from './generated/UpdateOperation.js';

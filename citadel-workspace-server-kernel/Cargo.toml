@@ -18,6 +18,8 @@ path = "src/main.rs"
 structopt = { workspace = true }
 citadel_io = { workspace = true }
 citadel_types = { workspace = true }
+# The post-quantum sign-in settings a host starts the node with (`kernel::sign_in`).
+citadel_user = { workspace = true }
 citadel-workspace-types = { workspace = true }
 citadel_logging = { workspace = true }
 parking_lot = { workspace = true }
@@ -53,7 +55,7 @@ citadel_sdk = { workspace = true, features = ["sql"] }
 # `citadel_sdk` without its default `std`/`filesystem` features, as its own wasm tests build it.
 [target.'cfg(target_family = "wasm")'.dependencies]
 tokio = { version = "1.44.1", default-features = false, features = ["macros", "sync"] }
-citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "e748bc6b54907127ae5aa1d0d55fab6bda5d120e", default-features = false }
 
 [dev-dependencies]
 citadel_sdk = { workspace = true, features = ["localhost-testing", "multi-threaded"] }
