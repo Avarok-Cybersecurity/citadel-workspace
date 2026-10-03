@@ -10,6 +10,8 @@ final class NoticePoster: NSObject, UNUserNotificationCenterDelegate {
     private let center = UNUserNotificationCenter.current()
     private let log: LogFile
     var onOpen: ((_ account: String, _ server: String?, _ open: String) -> Void)?
+    var onOpenURL: ((URL) -> Void)?
+    private var announced: String?
 
     init(log: LogFile) {
         self.log = log
@@ -41,6 +43,21 @@ final class NoticePoster: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// "Citadel Agent X.Y.Z is available", once per version; a click opens the release.
+    func post(_ update: AgentUpdate) {
+        guard update.latest != announced else { return }
+        announced = update.latest
+        let content = UNMutableNotificationContent()
+        content.title = "Citadel Agent \(update.latest) is available"
+        content.body = update.ready
+            ? "Choose Restart to update in the menu bar. Signed-in accounts will need to sign in again."
+            : "Download it to update from \(update.current)."
+        content.userInfo = ["url": (update.ready ? update.notesURL : update.downloadURL).absoluteString]
+        center.add(UNNotificationRequest(identifier: "update-\(update.latest)", content: content, trigger: nil)) { [log] error in
+            if let error { log.write("the update notification could not be shown: \(error)") }
+        }
+    }
+
     /// A menu-bar app is never the frontmost window, but say so anyway: show it, with its sound.
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
@@ -50,6 +67,9 @@ final class NoticePoster: NSObject, UNUserNotificationCenterDelegate {
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                 withCompletionHandler done: @escaping () -> Void) {
         let info = response.notification.request.content.userInfo
+        if let url = (info["url"] as? String).flatMap(URL.init(string:)) {
+            DispatchQueue.main.async { self.onOpenURL?(url) }
+        }
         if let account = info["account"] as? String, let open = info["open"] as? String {
             let server = (info["server"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             DispatchQueue.main.async { self.onOpen?(account, server, open) }

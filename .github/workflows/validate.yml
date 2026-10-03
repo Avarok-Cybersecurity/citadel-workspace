@@ -789,6 +789,11 @@ jobs:
       - uses: Avarok-Cybersecurity/gh-actions-deps@master
       - name: Run Cargo Test
         run: cargo test -p ${{ matrix.crate }}
+      # The agent's updater wiring (update_setup.rs) is behind `self-update`, which only the
+      # release builds turn on (build-agent): without the flag its tests are not compiled.
+      - name: Run Cargo Test (self-update)
+        if: matrix.crate == 'citadel-workspace-internal-service'
+        run: cargo test -p citadel-workspace-internal-service --features self-update
 
       # check-generated-types-fresh compares the committed bindings against the
       # client's copy. Both can be stale and identical: the bindings are only
