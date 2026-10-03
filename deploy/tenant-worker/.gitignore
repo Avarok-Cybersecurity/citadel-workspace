@@ -9,3 +9,4 @@ ui-dist/
 .wrangler-prod-proof/
 .wrangler-prod-proof*.log
 .deploy-dry-run/
+pkg.held-by-upgrade/

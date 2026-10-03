@@ -12,8 +12,9 @@
 #                        (scripts/stripe-catalogue.mjs): the prices the Worker sells must exist.
 #                        A live key is refused by that script, so this deploys test mode only.
 #
-# Order: build (wasm, UI) -> local gates (vitest, CSP parity) -> the D1 id is real -> Stripe's
-# catalogue matches -> every secret is set -> D1 migrations (remote) -> deploy -> smoke.
+# Order: build (wasm, UI) -> local gates (vitest, stored-account compat, CSP parity) -> the D1 id
+# is real -> Stripe's catalogue matches -> every secret is set -> D1 migrations (remote) -> deploy
+# -> smoke.
 set -euo pipefail
 cd "$(dirname "$0")"
 HERE="$(pwd)"
@@ -68,6 +69,8 @@ say "build: the UI (build-ui.sh)"
 
 say "gates"
 npx --no-install vitest run
+# What earlier builds stored in the tenant objects still loads under this SDK.
+cargo test --locked -p tenant-storage-compat
 node "$ROOT/scripts/check-preview-csp-matches-production.mjs"
 
 # The configuration wrangler will deploy, as wrangler reads it.

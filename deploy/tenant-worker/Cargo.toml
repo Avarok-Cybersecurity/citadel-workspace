@@ -2,8 +2,10 @@
 # `server-wasm` is the workspace server a Durable Object hosts, `proof-client` is the Citadel
 # client the end-to-end proof dials it with. A workspace of their own so a native
 # `cargo build --workspace` at the repository root never tries to link a wasm-bindgen cdylib.
+# `storage-compat` is native and test-only: it reads a Durable Object's stored accounts with this
+# workspace's SDK (`cargo test -p tenant-storage-compat`).
 [workspace]
-members = ["server-wasm", "proof-client", "console-log"]
+members = ["server-wasm", "proof-client", "console-log", "storage-compat"]
 resolver = "3"
 
 [workspace.dependencies]

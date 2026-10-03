@@ -160,8 +160,9 @@ CITADEL_CF_TOKEN_FILE=~/cf-token.txt CITADEL_STRIPE_KEY_FILE=~/stripe.citadel.te
 1. `npm ci`; `build.sh` (the server wasm); `build-ui.sh` (the UI into `ui-dist/`, which it checks
    carries the three empty meta tags the Worker fills in).
 2. Gates: the vitest suite (including `test/production-config.test.mjs`: no stats, host routing
-   only) and `scripts/check-preview-csp-matches-production.mjs` (nginx, vite and the Worker serve
-   one CSP).
+   only), `cargo test -p tenant-storage-compat` (accounts a 0.10.0 server stored in its object
+   still load under this tree's SDK) and `scripts/check-preview-csp-matches-production.mjs`
+   (nginx, vite and the Worker serve one CSP).
 3. The D1 id is not the placeholder.
 4. The Stripe catalogue audit passes (read-only).
 5. `wrangler secret list` shows `TURNSTILE_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`.
@@ -197,6 +198,7 @@ without a real Turnstile pass, needs (the header of `wrangler.toml` lists them).
 | Run | Overrides | What it proves |
 |---|---|---|
 | `npx vitest run` | path routing and diagnostics on, `test/fixture-ui` as assets; the production tests read `wrangler.toml` through wrangler and use its own vars | the control plane, the UI headers and meta tags, no stats in production |
+| `node upgrade.mjs <dir> <old-pkg>` | dev | what the build in `<old-pkg>` stored in an object loads under this one: the same account logs in and reads its profile back |
 | `./proof-control.sh` | dev (as `proof-lib.mjs` `DEV_OVERRIDES`) | Turnstile, free creation, a real TEST-mode Checkout and signed webhooks |
 | `node serve-tenants.mjs ...` | dev | tenants by path, for the agent and kernel proofs |
 | `node proof-production.mjs ...` | Turnstile's testing secret and hostname only | the site, host routing, `426` on a tenant host, and (with `--serve`) the WebSocket proof below |
