@@ -10,18 +10,18 @@ associated with each account."
 - **No WebAuthn anywhere.** A grep for `webauthn|passkey|navigator.credentials|hmac-secret`
   across `wt/cp-int`, `wt/agent-dmg`, `wt/ui-onboard/src` and `wt/ws-deploy/deploy`
   returns nothing.
-- **SDK auth modes.** `cp-int/citadel_proto/src/auth.rs:55` — `AuthenticationRequest`
+- **SDK auth modes.** `auth.rs:55` in the SDK's `citadel_proto` crate — `AuthenticationRequest`
   has only `Credentialed { id, password }` and `Passwordless { username, server_addr }`
   (transient). The workspace kernel refuses transient accounts
   (`citadel-workspace-server-kernel/tests/transient_accounts_are_refused.rs`).
-- **Password path.** `citadel_user/src/auth/proposed_credentials.rs`: client runs
+- **Password path.** `proposed_credentials.rs` in the SDK's `citadel_user` crate: client runs
   SHA3-256 then client-side Argon2 (`new_connect` → `argon_hash`), the hash travels in
   `DoConnectStage0Packet` already encrypted, and the server checks it with
   `AsyncArgon::verify` against a `ServerArgonContainer`
-  (`citadel_proto/src/proto/validation.rs:44`).
+  (`validation.rs:44` in the SDK's `citadel_proto`).
 - **The password is an authenticator, not a key input.** Session keys come from the
   stored CNAC `static_aux_ratchet` plus the fresh post-quantum pre-connect exchange
-  (`packet_processor/preconnect_packet.rs:114-168`). So swapping the credential check
+  (`preconnect_packet.rs:114-168` in the SDK's packet processor). So swapping the credential check
   is cryptographically possible without weakening session keys — but it is an SDK
   protocol change (the CNAC only knows `DeclaredAuthenticationMode::Argon`).
 - **Agent storage.** The agent persists to a filesystem backend (`~/.citadel-agent`,
@@ -30,7 +30,7 @@ associated with each account."
   (`citadel-internal-service/src/kernel/requests/mod.rs:509-524`).
 - **"Remember credentials" stores the password in plaintext** in that CID-0 KV:
   `handleAuthSuccess` writes `password` / `serverPassword` into `StoredSession`
-  (`ui-onboard/src/lib/connection/session-management.ts:84`,
+  (`session-management.ts:84` in the UI's connection library,
   `io-websocket.ts: localDBSet(0n, SESSION_STORAGE_KEY, …)`), serialised with JSON.
   Any local process that can open a WebSocket to :12345 with an allowed Origin
   header (non-browser clients can forge it) can read it.
