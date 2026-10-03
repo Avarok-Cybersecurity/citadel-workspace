@@ -36,6 +36,12 @@ final class NoticeClient {
     private var token: String?
     var onNotice: ((Notice) -> Void)?
     var onRows: (([UInt64: NoticeRow]) -> Void)?
+    /// A newer agent release (agent kernel/updates), from its announcement or a status answer.
+    var onUpdate: ((AgentUpdate) -> Void)?
+    /// The agent hands this app the verified disk image to install.
+    var onInstall: ((_ image: URL, _ version: String) -> Void)?
+    /// An install that failed, for whichever agent runs next: it is the one still installed.
+    private var pendingReport: [String: Any]?
 
     init(port: UInt16, log: LogFile) {
         url = URL(string: "wss://local.avarok.net:\(port)/")!
@@ -66,6 +72,25 @@ final class NoticeClient {
         }
     }
 
+    /// "Restart to update": the agent hands the verified image back through `onInstall`.
+    func applyUpdate() {
+        queue.async { if let task = self.task { NoticeClient.send(task, "UpdateApply", [:]) } }
+    }
+
+    func reportInstall(version: String, error: String) {
+        queue.async {
+            self.pendingReport = ["version": version, "error": error]
+            if let task = self.task, let token = self.token { self.flushReport(task, token) }
+        }
+    }
+
+    private func flushReport(_ task: URLSessionWebSocketTask, _ token: String) {
+        guard var report = pendingReport else { return }
+        pendingReport = nil
+        report["token"] = token
+        NoticeClient.send(task, "UpdateInstallResult", report)
+    }
+
     private func connect() {
         guard let token else { return }
         let task = session.webSocketTask(with: url)
@@ -87,6 +112,18 @@ final class NoticeClient {
             switch variant {
             case "ServiceConnectionAccepted":
                 NoticeClient.send(task, "NoticeSubscribe", ["token": token])
+                NoticeClient.send(task, "UpdateGetStatus", [:])
+                self.flushReport(task, token)
+            case "UpdateAvailable":
+                if let update = AgentUpdate(body) { DispatchQueue.main.async { self.onUpdate?(update) } }
+            case "UpdateStatus":
+                if let update = (body["available"] as? [String: Any]).flatMap(AgentUpdate.init) {
+                    DispatchQueue.main.async { self.onUpdate?(update) }
+                }
+            case "UpdateInstall":
+                if let path = body["path"] as? String, let version = body["version"] as? String {
+                    DispatchQueue.main.async { self.onInstall?(URL(fileURLWithPath: path), version) }
+                }
             case "NativeNotice":
                 if let notice = NoticeClient.notice(body) { DispatchQueue.main.async { self.onNotice?(notice) } }
             case "NoticeRows":
@@ -142,5 +179,17 @@ final class NoticeClient {
             out[cid] = NoticeRow(unread: (row["unread"] as? NSNumber)?.intValue ?? 0, muted: row["muted"] as? Bool ?? false)
         }
         return out
+    }
+}
+
+extension AgentUpdate {
+    /// From the agent's `UpdateAvailable`; nil for anything malformed or not on GitHub.
+    init?(_ body: [String: Any]) {
+        guard let current = body["current"] as? String, let latest = body["latest"] as? String,
+              let notes = (body["notes_url"] as? String).flatMap(URL.init(string:)),
+              let download = (body["download_url"] as? String).flatMap(URL.init(string:)),
+              let ready = body["ready"] as? Bool,
+              [notes, download].allSatisfy({ $0.scheme == "https" && $0.host == "github.com" }) else { return nil }
+        self.init(current: current, latest: latest, notesURL: notes, downloadURL: download, ready: ready)
     }
 }
