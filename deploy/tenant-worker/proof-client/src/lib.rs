@@ -119,7 +119,7 @@ impl ProofKernel {
         let conn = remote
             .connect(
                 AuthenticationRequest::credentialed(self.username.as_str(), self.password.as_str()),
-                ConnectMode::default(),
+                ConnectMode::Standard { force_login: false },
                 UdpMode::Disabled,
                 None,
                 SessionSecuritySettings::default(),
@@ -160,7 +160,7 @@ impl ProofKernel {
         let conn = remote
             .connect(
                 AuthenticationRequest::credentialed(self.username.as_str(), self.password.as_str()),
-                ConnectMode::default(),
+                ConnectMode::Standard { force_login: false },
                 UdpMode::Disabled,
                 None,
                 SessionSecuritySettings::default(),

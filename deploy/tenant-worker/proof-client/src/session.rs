@@ -156,7 +156,7 @@ impl ProofClient {
                 .remote
                 .connect(
                     credentials(&username, &password),
-                    ConnectMode::default(),
+                    ConnectMode::Standard { force_login: false },
                     UdpMode::Disabled,
                     None,
                     SessionSecuritySettings::default(),
@@ -178,8 +178,8 @@ impl ProofClient {
         future_to_promise(async move {
             let request: WorkspaceProtocolRequest =
                 serde_json::from_str(&request_json).map_err(js_err)?;
-            let bytes = serde_json::to_vec(&WorkspaceProtocolPayload::Request(request))
-                .map_err(js_err)?;
+            let bytes =
+                serde_json::to_vec(&WorkspaceProtocolPayload::Request(request)).map_err(js_err)?;
             let mut channel = inner
                 .channel
                 .borrow_mut()
