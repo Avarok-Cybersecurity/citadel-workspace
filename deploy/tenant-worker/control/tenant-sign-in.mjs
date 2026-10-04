@@ -1,15 +1,17 @@
 /**
  * Everything a tenant's object holds for sign-in, in one place: the OPRF seed post-quantum
  * sign-in is started with (oprf-seed.mjs), the workspace's sign-in settings (admission.mjs), the
- * client address each of the node's connections came from, and the host object the node calls.
+ * tenant's slug and the client address each of the node's connections came from, and the host
+ * object the node calls.
  *
  * The node calls the host object (server-wasm sign_in.rs):
  *   loadSettings()      -> Promise<string>   the settings as JSON, `{"require_turnstile_sign_in":b}`
  *   storeSettings(json) -> Promise<void>     replace them (the kernel has checked the caller is an admin)
- *   admit(json)         -> Promise<string|null>
- *       `{"username","kind":"SignIn"|"Register","token":string|null,"remote_addr":"a.b.c.d:p"}`;
- *       null admits, else "admission_required" / "admission_failed". This is the SDK admission
- *       hook's body: server-wasm forwards `AdmissionContext` here once the SDK exposes the hook.
+ *   admit(json)         -> Promise<null | {refuse, reason?}>
+ *       the SDK's AdmissionContext for a FRESH sign-in or registration (a recovery-code sign-in
+ *       and a resume-token reconnect are never asked),
+ *       `{"username","kind":"SignIn"|"Register","token":string|null,"remote_addr":"100.64.x.y"|null}`.
+ *       null admits; `{refuse:"admission_required"}` / `{refuse:"admission_failed",reason}`.
  */
 import { admit, SignInSettings } from "./admission.mjs";
 import { required } from "./http.mjs";
@@ -42,7 +44,18 @@ export class TenantSignIn {
     this.io = io;
     this.settings = new SignInSettings(storage);
     this.seed = null;
+    this.tenant = null;
     this.peers = new Map();
+  }
+
+  /**
+   * The slug this object serves, from the host or path of each request it is handed (dispatch.mjs
+   * `tenantFor`): what a token must have been rendered for. One object is one slug, for good.
+   */
+  serving(slug) {
+    if (typeof slug !== "string") throw new Error("a tenant object was reached without its slug");
+    if (this.tenant !== null && this.tenant !== slug) throw new Error(`this object serves ${this.tenant}, not ${slug}`);
+    this.tenant = slug;
   }
 
   /** Before the object answers anything: the settings, and the seed (generated if this object has none). */
@@ -64,13 +77,13 @@ export class TenantSignIn {
     return seed;
   }
 
-  /** The client address a connection came from (CF-Connecting-IP), by the node's address for it. */
-  connected(peerAddr, ip) {
-    if (ip) this.peers.set(peerAddr, ip);
+  /** The client address a connection came from (CF-Connecting-IP), by the node's IP for it. */
+  connected(peerIp, ip) {
+    if (ip) this.peers.set(peerIp, ip);
   }
 
-  released(peerAddr) {
-    this.peers.delete(peerAddr);
+  released(peerIp) {
+    this.peers.delete(peerIp);
   }
 
   /** Whether a check is required here now: what discovery reports (dispatch.mjs). */
@@ -83,6 +96,7 @@ export class TenantSignIn {
     const ctx = {
       required: this.required(),
       turnstile: this.turnstile(),
+      tenant: this.tenant,
       io: this.io,
       log: (detail) => console.error(`[tenant] admission: ${detail}`),
     };

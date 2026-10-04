@@ -43,14 +43,14 @@ citadel-workspace-executor = { path = "./citadel-workspace-executor" }
 # Secondary package (for dev purposes, use the local path at ./citadel-internal-service)
 
 # Avarok deps
-citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "e748bc6b54907127ae5aa1d0d55fab6bda5d120e" }
-citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "e748bc6b54907127ae5aa1d0d55fab6bda5d120e" }
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "78c71ca16c381cf9e62c39bd8c2ef77250c7ca51" }
+citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "78c71ca16c381cf9e62c39bd8c2ef77250c7ca51" }
 # Dev-only: the credential-mirror test reads MIN/MAX_{PASSWORD,USERNAME,NAME}_LENGTH
 # directly, so a client-side mirror cannot drift from the SDK unnoticed.
-citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "e748bc6b54907127ae5aa1d0d55fab6bda5d120e" }
-citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "e748bc6b54907127ae5aa1d0d55fab6bda5d120e" }
+citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "78c71ca16c381cf9e62c39bd8c2ef77250c7ca51" }
+citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "78c71ca16c381cf9e62c39bd8c2ef77250c7ca51" }
 # The SDK's runtime shim: `spawn`, timers and clocks that work on native and on wasm32 alike.
-citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "e748bc6b54907127ae5aa1d0d55fab6bda5d120e", default-features = false }
+citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "78c71ca16c381cf9e62c39bd8c2ef77250c7ca51", default-features = false }
 
 # Avarok deps (for dev purposes, use the local path at ../Citadel-Protocol)
 #citadel_sdk = { path = "../Citadel-Protocol/citadel_sdk" }

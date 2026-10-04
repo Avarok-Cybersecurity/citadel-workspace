@@ -12,6 +12,9 @@ use citadel_workspace_types::sign_in::SignInSettings;
 use citadel_workspace_types::WorkspaceProtocolResponse;
 use std::sync::Arc;
 
+pub use citadel_user::auth::pq::admission::{
+    AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal, AdmissionToken,
+};
 pub use citadel_user::auth::pq::oprf::OprfSeed;
 pub use citadel_user::auth::pq::record::KsfParams;
 pub use citadel_user::auth::pq::server::PqAuthServerSettings;
@@ -31,10 +34,12 @@ pub trait SignInSettingsStore: Send + Sync {
 pub type SignInSettingsHandle = Option<Arc<dyn SignInSettingsStore>>;
 
 /// What a hosted node is started with for sign-in: the post-quantum settings (the tenant's OPRF
-/// seed and the Argon2id parameters clients stretch with), and the host's settings store. Both
-/// are named by the host; `None` is a decision it makes, not a default.
+/// seed and the Argon2id parameters clients stretch with), the admission check every fresh
+/// sign-in and registration passes (the SDK asks it), and the host's settings store, which that
+/// check reads. All are named by the host; `None` is a decision it makes, not a default.
 pub struct HostedSignIn {
     pub pq_sign_in: Option<PqAuthServerSettings>,
+    pub admission: Option<Arc<dyn AdmissionPolicy>>,
     pub settings: SignInSettingsHandle,
 }
 

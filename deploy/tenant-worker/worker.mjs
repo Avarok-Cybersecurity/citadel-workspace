@@ -15,7 +15,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { instantiate } from "./server-wasm/pkg/instance.mjs";
 import wasm from "./server-wasm/pkg/citadel_tenant_server_wasm_bg.wasm";
-import { dispatch, ioFor } from "./control/dispatch.mjs";
+import { dispatch, ioFor, tenantFor } from "./control/dispatch.mjs";
 import { config, isWebSocketUpgrade, json, turnConfig, upgradeRequired } from "./control/http.mjs";
 import { IceMinter } from "./control/ice.mjs";
 import { Provisioning } from "./control/provisioning.mjs";
@@ -203,6 +203,7 @@ export class WorkspaceServer extends DurableObject {
     if (!this.provisioning.ready()) {
       return new Response("this workspace has not been provisioned", { status: 503 });
     }
+    this.signIn.serving(tenantFor(new URL(request.url), config(this.env)));
     const limits = enforcedEntitlements(this.provisioning.summary().entitlements);
     this.#roll(Date.now());
     if (!this.meter.admits(limits.connections_max)) {

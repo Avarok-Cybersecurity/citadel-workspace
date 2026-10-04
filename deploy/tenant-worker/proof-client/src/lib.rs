@@ -5,6 +5,7 @@
 //! every byte it sends crosses the Durable Object's WebSocket into the Citadel node there.
 
 mod session;
+mod session_kernel;
 
 use citadel_sdk::prelude::*;
 use citadel_workspace_types::{

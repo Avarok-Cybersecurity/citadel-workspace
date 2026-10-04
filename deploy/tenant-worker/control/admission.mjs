@@ -11,12 +11,19 @@
  * that cannot be reached, a Turnstile secret that is not configured and a kind it does not know
  * are all refusals. With the setting off it admits and asks no one.
  */
-import { verifyTurnstile } from "./turnstile.mjs";
+import { boundVerdict, siteverify } from "./turnstile.mjs";
 
 export const SIGN_IN_SETTINGS_KEY = "control:sign-in-settings";
 
-/** The refusal codes the client reads as `reason_code` (UI lib/admission/refusal.ts). */
+/**
+ * The refusal codes the client reads as `reason_code` (UI lib/admission/refusal.ts), which the
+ * node maps to the SDK's PqSignInAdmissionRequired (350) / PqSignInAdmissionFailed (351).
+ */
 export const REFUSAL = Object.freeze({ required: "admission_required", failed: "admission_failed" });
+const NEEDS_TOKEN = Object.freeze({ refuse: REFUSAL.required });
+const failed = (reason) => ({ refuse: REFUSAL.failed, reason });
+/** Said when the check itself could not be done; the detail goes to the log only. */
+export const CHECK_UNAVAILABLE = "the check could not be completed";
 
 /** The widget's `data-action` for each kind of admission (UI lib/admission/copy.ts ADMISSION_ACTION). */
 export const ACTION = Object.freeze({ SignIn: "sign-in", Register: "register" });
@@ -61,29 +68,31 @@ export class SignInSettings {
 }
 
 /**
- * The verdict for one admission: null to admit, else a REFUSAL code. `required` is the setting,
- * `turnstile` the configured secret and hostnames (http.mjs `config().turnstile`, null when no
- * secret is set), `io.fetch` the way out, `log` where a failure's detail goes (never the token).
+ * The verdict for one admission: null to admit, else `{ refuse, reason? }` with a REFUSAL code
+ * and, when failed, a reason fit to show. `required` is the setting, `turnstile` the configured
+ * secret and hostnames (http.mjs `config().turnstile`, null when no secret is set), `tenant` the
+ * slug the token must have been rendered for, `io.fetch` the way out, `log` where a failure's
+ * detail goes (never the token).
  */
-export async function admit({ required, turnstile, io, log }, { kind, token, ip }) {
+export async function admit({ required, turnstile, tenant, io, log }, { kind, token, ip }) {
   if (!required) return null;
-  if (typeof token !== "string" || token.length === 0) return REFUSAL.required;
+  if (typeof token !== "string" || token.length === 0) return NEEDS_TOKEN;
   const action = Object.hasOwn(ACTION, kind) ? ACTION[kind] : null;
   if (action === null) {
     log(`admission of an unknown kind ${JSON.stringify(kind)} refused`);
-    return REFUSAL.failed;
+    return failed(CHECK_UNAVAILABLE);
   }
-  if (token.length > MAX_TOKEN_CHARS) return REFUSAL.failed;
-  if (turnstile === null) {
-    log("a sign-in check is required but TURNSTILE_SECRET is not set: refusing");
-    return REFUSAL.failed;
+  if (token.length > MAX_TOKEN_CHARS) return failed("the check's token is malformed");
+  if (turnstile === null || typeof tenant !== "string") {
+    log(`a sign-in check is required but ${turnstile === null ? "TURNSTILE_SECRET is not set" : "the tenant is unknown"}: refusing`);
+    return failed(CHECK_UNAVAILABLE);
   }
   try {
-    const detail = await verifyTurnstile(io, turnstile, token, action, ip);
-    return detail === null ? null : REFUSAL.failed;
+    const detail = boundVerdict(await siteverify(io, turnstile.secret, token, ip), turnstile.hostnames, action, tenant);
+    return detail === null ? null : failed(detail);
   } catch (e) {
     log(`siteverify could not be reached: ${e?.message ?? e}`);
-    return REFUSAL.failed;
+    return failed(CHECK_UNAVAILABLE);
   }
 }
 

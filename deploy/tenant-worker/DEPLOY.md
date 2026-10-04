@@ -87,7 +87,11 @@ to sign in"): its site key is the public var `TURNSTILE_SITE_KEY`, which discove
 (`GET /api/admission[/<slug>]`) hands to the sign-in and registration forms, and the object's
 admission check verifies its tokens with `TURNSTILE_SECRET` and the actions `sign-in` and
 `register`. The widget renders on `work.avarok.net`, so `TURNSTILE_HOSTNAMES` is the hostname
-those answers carry too, not the tenant's own host.
+those answers carry too, not the tenant's own host. The widget is rendered with `cData` set to
+the tenant's slug, and the check refuses an answer whose `cdata` names another workspace (only
+an answer from Cloudflare's testing keys, which carries none, is taken without it). The check
+runs only for fresh sign-ins and registrations: a recovery-code sign-in and a resume-token
+reconnect are not asked, and a client older than 0.12 is told to update.
 
 ### 5. Stripe, in TEST mode
 
@@ -159,9 +163,12 @@ it exists; until then its overage is recorded and logged as unbilled.
 Each tenant's object generates a 32-byte OPRF seed (the server key of the password factor's
 hardening) when it is provisioned, or at its first start on a build that has this, and keeps it
 in its key-value storage under `control:oprf-seed`, apart from the account rows. It is never
-logged, reported or exported, and **there is no copy anywhere else**: an object whose seed is
-lost or replaced can no longer sign in any post-quantum account, which then needs its recovery
-codes. A stored value that is not 32 bytes stops the object rather than being replaced.
+logged, reported or exported, and **there is no copy anywhere else** (an owner decision,
+docs/plans/pq-sign-in.md): an object whose seed is lost or replaced can no longer verify any
+password factor, which must then be reset; security keys and recovery codes keep working. A
+stored value that is not 32 bytes stops the object rather than being replaced. Legacy accounts
+are upgraded at their next login and cannot go back: rolling the Worker back below this release
+locks out every account that signed in since.
 `PQ_KSF_*` in `wrangler.toml` is the Argon2id cost clients stretch a password factor with; the
 node refuses anything below the SDK's floor.
 
@@ -217,6 +224,7 @@ without a real Turnstile pass, needs (the header of `wrangler.toml` lists them).
 |---|---|---|
 | `npx vitest run` | path routing and diagnostics on, `test/fixture-ui` as assets; the production tests read `wrangler.toml` through wrangler and use its own vars | the control plane, the UI headers and meta tags, no stats in production |
 | `node upgrade.mjs <dir> <old-tenant-worker>` | dev | what the build in `<old-tenant-worker>` (a built `deploy/tenant-worker` of the commit production runs) stored in an object loads under this one: the same account logs in, reads its profile back, and is upgraded to post-quantum sign-in by that login |
+| `node admission.mjs <dir>` | dev, then the always-fail Turnstile testing secret | the sign-in check enforced: no token refused (350), a passing token admitted, a refused one failed (351), for sign-in and registration; recovery-code and resume-token sign-ins not asked |
 | `node sign-in.mjs <dir>` | dev | post-quantum accounts, the sign-in setting (admin-only, discovery follows it) and the OPRF seed surviving a restart |
 | `./proof-control.sh` | dev (as `proof-lib.mjs` `DEV_OVERRIDES`) | Turnstile, free creation, a real TEST-mode Checkout and signed webhooks |
 | `node serve-tenants.mjs ...` | dev | tenants by path, for the agent and kernel proofs |

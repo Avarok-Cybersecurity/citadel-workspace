@@ -88,9 +88,11 @@ impl TenantServer {
         };
         let backend = BackendType::HostSql(storage::backend_handle(storage));
         let ice_servers = Some(ice::source(ice));
+        let (settings, admission) = sign_in::host_capabilities(sign_in);
         let sign_in = HostedSignIn {
             pq_sign_in: Some(pq.into_settings()),
-            settings: Some(sign_in::settings_store(sign_in)),
+            admission: Some(admission),
+            settings: Some(settings),
         };
         let (injector, listener) = WasmListener::injected();
         wasm_bindgen_futures::spawn_local(async move {
@@ -105,8 +107,9 @@ impl TenantServer {
         })
     }
 
-    /// Hand the node a WebSocket the Durable Object has already `accept()`ed. Returns the address
-    /// the node knows the connection by, which the object maps to the client's real one.
+    /// Hand the node a WebSocket the Durable Object has already `accept()`ed. Returns the IP the
+    /// node knows the connection by (unique per connection), which the object maps to the
+    /// client's real one: the admission check is told that IP.
     pub fn accept(&self, ws: web_sys::WebSocket) -> Result<String, JsError> {
         let stream = WasmWebSocketStream::from_accepted(ws)
             .map_err(|e| JsError::new(&format!("cannot wrap socket: {e}")))?;
@@ -114,7 +117,7 @@ impl TenantServer {
         self.injector
             .inject(WasmStream::WebSocket(stream), peer)
             .map_err(|e| JsError::new(&e.to_string()))?;
-        Ok(peer.to_string())
+        Ok(peer.ip().to_string())
     }
 
     /// A Worker sees no client socket address, but the node keys inbound sessions by one, so each

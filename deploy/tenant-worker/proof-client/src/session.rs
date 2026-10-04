@@ -18,42 +18,7 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 
-type Slot<T> = citadel_io::Mutex<Option<T>>;
-
-/// Hands the node's remote out and holds the node open until told to stop.
-struct SessionKernel {
-    remote_tx: Slot<oneshot::Sender<NodeRemote<StackedRatchet>>>,
-    stop_rx: Slot<oneshot::Receiver<()>>,
-}
-
-#[async_trait]
-impl NetKernel<StackedRatchet> for SessionKernel {
-    fn load_remote(&mut self, remote: NodeRemote<StackedRatchet>) -> Result<(), NetworkError> {
-        let tx = self.remote_tx.lock().take();
-        let tx = tx.ok_or_else(|| NetworkError::msg("remote loaded twice"))?;
-        tx.send(remote)
-            .map_err(|_| NetworkError::msg("the client went away before its node started"))
-    }
-
-    async fn on_start(&self) -> Result<(), NetworkError> {
-        let stop = self.stop_rx.lock().take();
-        if let Some(stop) = stop {
-            let _ = stop.await;
-        }
-        Ok(())
-    }
-
-    async fn on_node_event_received(
-        &self,
-        _message: NodeResult<StackedRatchet>,
-    ) -> Result<(), NetworkError> {
-        Ok(())
-    }
-
-    async fn on_stop(&mut self) -> Result<(), NetworkError> {
-        Ok(())
-    }
-}
+use crate::session_kernel::SessionKernel;
 
 struct Channel {
     tx: PeerChannelSendHalf<StackedRatchet>,
@@ -128,34 +93,69 @@ pub async fn start_client(
 
 #[wasm_bindgen]
 impl ProofClient {
-    /// Register an account on the server. Resolves when the server accepted it.
-    pub fn register(&self, username: String, password: String) -> js_sys::Promise {
+    /// Register an account on the server, with `admission` (a Turnstile token) when the server
+    /// asks for one. Resolves, once the server accepted it, with the account's recovery codes as
+    /// a JSON array (empty for a legacy registration).
+    pub fn register(
+        &self,
+        username: String,
+        password: String,
+        admission: Option<String>,
+    ) -> js_sys::Promise {
         let inner = self.inner.clone();
         future_to_promise(async move {
-            inner
+            let registered = inner
                 .remote
-                .register(
+                .register_admitted(
                     inner.server_addr,
                     "Proof User",
                     username.as_str(),
                     password.as_str(),
                     SessionSecuritySettings::default(),
                     None,
+                    admission,
                 )
                 .await
                 .map_err(js_err)?;
-            Ok(JsValue::UNDEFINED)
+            let codes = serde_json::to_string(&registered.recovery_codes).map_err(js_err)?;
+            Ok(JsValue::from_str(&codes))
         })
     }
 
-    /// Log in with an account this client registered. Resolves with the session CID.
-    pub fn connect(&self, username: String, password: String) -> js_sys::Promise {
+    /// Log in with an account this client registered, with `admission` when given (a
+    /// post-quantum sign-in carrying the token). Resolves with the session CID.
+    pub fn connect(
+        &self,
+        username: String,
+        password: String,
+        admission: Option<String>,
+    ) -> js_sys::Promise {
+        let request = match admission {
+            None => credentials(&username, &password),
+            Some(token) => AuthenticationRequest::sign_in(
+                username.clone(),
+                SignInFactors::password(password.as_str()).with_admission(token),
+            ),
+        };
+        self.open(request)
+    }
+
+    /// Sign in with one of the account's recovery codes (a restricted recovery session).
+    /// Resolves with the session CID.
+    pub fn connect_recovery(&self, username: String, code: String) -> js_sys::Promise {
+        match SignInFactors::recovery_code(&code) {
+            Ok(factors) => self.open(AuthenticationRequest::sign_in(username, factors)),
+            Err(e) => js_sys::Promise::reject(&js_err(e)),
+        }
+    }
+
+    fn open(&self, request: AuthenticationRequest) -> js_sys::Promise {
         let inner = self.inner.clone();
         future_to_promise(async move {
             let conn = inner
                 .remote
                 .connect(
-                    credentials(&username, &password),
+                    request,
                     ConnectMode::Standard { force_login: false },
                     UdpMode::Disabled,
                     None,

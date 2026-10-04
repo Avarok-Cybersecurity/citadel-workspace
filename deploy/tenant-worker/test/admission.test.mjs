@@ -12,40 +12,51 @@ import { DISCOVERY_MAX_AGE } from "../control/discovery.mjs";
 import { freeTenant, freshSlug, get, outbound, tenantObject } from "./helpers.mjs";
 
 const SITEVERIFY = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
-const PEER = "100.64.0.7:1";
+/** The IP the node knows a connection by (server-wasm `TenantServer::accept`). */
+const PEER = "100.64.0.7";
 const request = (kind, token, remote_addr = PEER) => JSON.stringify({ username: "alice", kind, token, remote_addr });
 const siteverifyCalls = (calls) => calls.filter((c) => c.url === SITEVERIFY);
+/** A real key's pass for `tenant` and `action`, as siteverify answers one. */
+const pass = (tenant, action) => ({ success: true, hostname: "example.com", action, cdata: tenant });
 
-/** The tenant object's verdict for one admission, with its setting as `required`. */
-async function verdictIn(object, required, admission, ip = "203.0.113.9") {
-  return runInDurableObject(object, async (instance) => {
+/** Inside the tenant's object, serving its slug as a socket it was handed would. */
+const inTenant = ({ slug, object }, work) =>
+  runInDurableObject(object, async (instance) => {
+    instance.signIn.serving(slug);
+    return work(instance);
+  });
+
+/** The object's refusal code for one admission (null: admitted), with its setting as `required`. */
+async function verdictIn(tenant, required, admission, ip = "203.0.113.9") {
+  const answer = await inTenant(tenant, async (instance) => {
     await instance.signIn.settings.set({ require_turnstile_sign_in: required });
     instance.signIn.connected(PEER, ip);
     return instance.signIn.host().admit(admission);
   });
+  return answer?.refuse ?? null;
 }
 
 describe("the admission check", () => {
   it("admits without asking anyone while the setting is off, token or not", async () => {
-    const { object } = await freeTenant("ad");
+    const t = await freeTenant("ad");
     const { calls } = outbound();
-    expect(await verdictIn(object, false, request("SignIn", null))).toBeNull();
-    expect(await verdictIn(object, false, request("Register", "tok"))).toBeNull();
+    expect(await verdictIn(t, false, request("SignIn", null))).toBeNull();
+    expect(await verdictIn(t, false, request("Register", "tok"))).toBeNull();
     expect(siteverifyCalls(calls)).toHaveLength(0);
   });
 
   it("with the setting on, refuses a missing token as required, before asking anyone", async () => {
-    const { object } = await freeTenant("ad");
+    const t = await freeTenant("ad");
     const { calls } = outbound();
-    expect(await verdictIn(object, true, request("SignIn", null))).toBe(REFUSAL.required);
-    expect(await verdictIn(object, true, request("Register", ""))).toBe(REFUSAL.required);
+    expect(await verdictIn(t, true, request("SignIn", null))).toBe(REFUSAL.required);
+    expect(await verdictIn(t, true, request("Register", ""))).toBe(REFUSAL.required);
     expect(siteverifyCalls(calls)).toHaveLength(0);
   });
 
   it("asks siteverify with the secret, the token and the client's address, and admits a pass", async () => {
-    const { object } = await freeTenant("ad");
-    const { calls } = outbound({ turnstile: { success: true, hostname: "example.com", action: ACTION.SignIn } });
-    expect(await verdictIn(object, true, request("SignIn", "tok-1"))).toBeNull();
+    const t = await freeTenant("ad");
+    const { calls } = outbound({ turnstile: pass(t.slug, ACTION.SignIn) });
+    expect(await verdictIn(t, true, request("SignIn", "tok-1"))).toBeNull();
     const [call] = siteverifyCalls(calls);
     expect(call.method).toBe("POST");
     expect(call.form.get("secret")).toBe(env.TURNSTILE_SECRET);
@@ -54,53 +65,83 @@ describe("the admission check", () => {
   });
 
   it("binds the action to the kind: a sign-in token does not register, nor the reverse", async () => {
-    const { object } = await freeTenant("ad");
-    outbound({ turnstile: { success: true, hostname: "example.com", action: ACTION.SignIn } });
-    expect(await verdictIn(object, true, request("Register", "tok"))).toBe(REFUSAL.failed);
+    const t = await freeTenant("ad");
+    outbound({ turnstile: pass(t.slug, ACTION.SignIn) });
+    expect(await verdictIn(t, true, request("Register", "tok"))).toBe(REFUSAL.failed);
     vi.restoreAllMocks();
-    outbound({ turnstile: { success: true, hostname: "example.com", action: ACTION.Register } });
-    expect(await verdictIn(object, true, request("Register", "tok"))).toBeNull();
-    expect(await verdictIn(object, true, request("SignIn", "tok"))).toBe(REFUSAL.failed);
+    outbound({ turnstile: pass(t.slug, ACTION.Register) });
+    expect(await verdictIn(t, true, request("Register", "tok"))).toBeNull();
+    expect(await verdictIn(t, true, request("SignIn", "tok"))).toBe(REFUSAL.failed);
+  });
+
+  it("binds the token to the tenant: another workspace's token, or one with no workspace, is refused", async () => {
+    const t = await freeTenant("ad");
+    outbound({ turnstile: pass("someone-else", ACTION.SignIn) });
+    const other = await inTenant(t, async (instance) => {
+      await instance.signIn.settings.set({ require_turnstile_sign_in: true });
+      return instance.signIn.host().admit(request("SignIn", "tok"));
+    });
+    expect(other).toEqual({ refuse: REFUSAL.failed, reason: "the Turnstile answer is for another workspace" });
+    vi.restoreAllMocks();
+    outbound({ turnstile: { success: true, hostname: "example.com", action: ACTION.SignIn } });
+    expect(await verdictIn(t, true, request("SignIn", "tok"))).toBe(REFUSAL.failed);
+  });
+
+  it("takes a TESTING key's answer, which carries no workspace, on the secret and hostname alone", async () => {
+    const t = await freeTenant("ad");
+    outbound({ turnstile: { success: true, hostname: "example.com", metadata: { result_with_testing_key: true } } });
+    expect(await verdictIn(t, true, request("SignIn", "XXXX.DUMMY.TOKEN.XXXX"))).toBeNull();
   });
 
   it("refuses a failed check, one for another site, and a kind it does not know", async () => {
-    const { object } = await freeTenant("ad");
+    const t = await freeTenant("ad");
     outbound({ turnstile: { success: false, "error-codes": ["timeout-or-duplicate"] } });
-    expect(await verdictIn(object, true, request("SignIn", "spent"))).toBe(REFUSAL.failed);
+    expect(await verdictIn(t, true, request("SignIn", "spent"))).toBe(REFUSAL.failed);
     vi.restoreAllMocks();
-    outbound({ turnstile: { success: true, hostname: "evil.example" } });
-    expect(await verdictIn(object, true, request("SignIn", "tok"))).toBe(REFUSAL.failed);
+    outbound({ turnstile: { ...pass(t.slug, ACTION.SignIn), hostname: "evil.example" } });
+    expect(await verdictIn(t, true, request("SignIn", "tok"))).toBe(REFUSAL.failed);
     vi.restoreAllMocks();
     const { calls } = outbound();
-    expect(await verdictIn(object, true, request("Delete", "tok"))).toBe(REFUSAL.failed);
+    expect(await verdictIn(t, true, request("Delete", "tok"))).toBe(REFUSAL.failed);
     expect(siteverifyCalls(calls)).toHaveLength(0);
   });
 
   it("fails closed when siteverify cannot be reached or answers nonsense", async () => {
-    const { object } = await freeTenant("ad");
+    const t = await freeTenant("ad");
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("network unreachable"));
-    expect(await verdictIn(object, true, request("SignIn", "tok"))).toBe(REFUSAL.failed);
+    expect(await verdictIn(t, true, request("SignIn", "tok"))).toBe(REFUSAL.failed);
     vi.restoreAllMocks();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("<html>bad gateway</html>", { status: 502 }));
-    expect(await verdictIn(object, true, request("SignIn", "tok"))).toBe(REFUSAL.failed);
+    expect(await verdictIn(t, true, request("SignIn", "tok"))).toBe(REFUSAL.failed);
   });
 
   it("fails closed when the setting is on and no Turnstile secret is configured", async () => {
-    const { object } = await freeTenant("ad");
+    const t = await freeTenant("ad");
     const { calls } = outbound();
-    const answer = await runInDurableObject(object, async (instance) => {
+    const answer = await inTenant(t, async (instance) => {
       await instance.signIn.settings.set({ require_turnstile_sign_in: true });
       instance.signIn.turnstile = () => null;
       return instance.signIn.host().admit(request("SignIn", "tok"));
     });
-    expect(answer).toBe(REFUSAL.failed);
+    expect(answer?.refuse).toBe(REFUSAL.failed);
+    expect(siteverifyCalls(calls)).toHaveLength(0);
+  });
+
+  it("fails closed when the object does not know which workspace it serves", async () => {
+    const { object } = await freeTenant("ad");
+    const { calls } = outbound();
+    const answer = await runInDurableObject(object, async (instance) => {
+      await instance.signIn.settings.set({ require_turnstile_sign_in: true });
+      return instance.signIn.host().admit(request("SignIn", "tok"));
+    });
+    expect(answer?.refuse).toBe(REFUSAL.failed);
     expect(siteverifyCalls(calls)).toHaveLength(0);
   });
 
   it("sends no client address it does not have, and forgets one whose connection closed", async () => {
-    const { object } = await freeTenant("ad");
-    const { calls } = outbound();
-    await runInDurableObject(object, async (instance) => {
+    const t = await freeTenant("ad");
+    const { calls } = outbound({ turnstile: pass(t.slug, ACTION.SignIn) });
+    await inTenant(t, async (instance) => {
       await instance.signIn.settings.set({ require_turnstile_sign_in: true });
       instance.signIn.connected(PEER, "203.0.113.9");
       instance.signIn.released(PEER);

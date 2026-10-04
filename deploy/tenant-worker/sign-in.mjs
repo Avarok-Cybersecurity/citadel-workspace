@@ -70,7 +70,8 @@ try {
   check(results, "discovery still says required after a restart", (await discovered()) === true);
   let again = null;
   try {
-    await admin.connect(adminName, adminPassword);
+    // The check is on now, so this fresh sign-in carries a token (Turnstile's testing secret passes it).
+    await admin.connect(adminName, adminPassword, "XXXX.DUMMY.TOKEN.XXXX");
     again = await request(admin, "GetSignInSettings");
   } catch (e) {
     check(results, "the admin signed in again after the restart (the seed survived)", false, e?.message ?? String(e));

@@ -1,20 +1,20 @@
-//! Sign-in, as the Durable Object provides it: post-quantum sign-in's settings, and the
-//! workspace's sign-in settings, which the object keeps (control/tenant-sign-in.mjs documents the
-//! host object's methods).
+//! Sign-in, as the Durable Object provides it: post-quantum sign-in's settings, the workspace's
+//! sign-in settings, and the admission check every fresh sign-in and registration passes. The
+//! object keeps the settings and runs the check (control/tenant-sign-in.mjs documents the host
+//! object's methods); this side forwards the SDK's questions to it.
 //!
-//! The admission hook is the SDK's to call (`ServerMiscSettings::admission`); the object's
-//! `admit(json)` is its body. Seam: once the SDK exposes `AdmissionPolicy`, an impl here forwards
-//! `AdmissionContext { username, kind, token, remote_addr }` to `SignInHost::admit` as that JSON,
-//! maps `"admission_required"` / `"admission_failed"` to the SDK's two refusals and anything
-//! else that is not null (a rejected Promise, a malformed answer) to `AdmissionFailed`, and
-//! `HostedSignIn` carries it in.
+//! The check fails CLOSED here too: a host that cannot be asked, or answers anything this side
+//! cannot read, refuses the sign-in.
 
-use crate::host_promise::HostPromise;
+use crate::host_promise::{parse, HostPromise};
 use citadel_sdk::prelude::async_trait;
 use citadel_workspace_server_kernel::kernel::sign_in::{
-    KsfParams, OprfSeed, PqAuthServerSettings, SignInSettingsStore, SignInSettingsUnavailable,
+    AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal, KsfParams, OprfSeed,
+    PqAuthServerSettings, SignInSettingsStore, SignInSettingsUnavailable,
 };
 use citadel_workspace_types::sign_in::SignInSettings;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -27,6 +27,9 @@ extern "C" {
 
     #[wasm_bindgen(method, catch, js_name = storeSettings)]
     fn store_settings(this: &SignInHost, settings_json: &str) -> Result<js_sys::Promise, JsValue>;
+
+    #[wasm_bindgen(method, catch)]
+    fn admit(this: &SignInHost, request_json: &str) -> Result<js_sys::Promise, JsValue>;
 }
 
 /// Post-quantum sign-in for this tenant: its OPRF seed and the Argon2id cost clients stretch a
@@ -70,9 +73,66 @@ struct DurableObjectSignIn(SignInHost);
 unsafe impl Send for DurableObjectSignIn {}
 unsafe impl Sync for DurableObjectSignIn {}
 
-/// The kernel's sign-in settings store over `host`.
-pub fn settings_store(host: SignInHost) -> std::sync::Arc<dyn SignInSettingsStore> {
-    std::sync::Arc::new(DurableObjectSignIn(host))
+/// The kernel's sign-in settings store and the node's admission check, both over `host`.
+pub fn host_capabilities(
+    host: SignInHost,
+) -> (Arc<dyn SignInSettingsStore>, Arc<dyn AdmissionPolicy>) {
+    let host = Arc::new(DurableObjectSignIn(host));
+    (host.clone(), host)
+}
+
+/// What the object is asked: the SDK's `AdmissionContext`, the token as its string.
+#[derive(Serialize)]
+struct AdmissionRequest<'a> {
+    username: &'a str,
+    kind: &'static str,
+    token: Option<&'a str>,
+    remote_addr: Option<String>,
+}
+
+/// What the object answers: `null` admits.
+#[derive(Deserialize)]
+#[serde(tag = "refuse", rename_all = "snake_case")]
+enum HostRefusal {
+    AdmissionRequired,
+    AdmissionFailed { reason: String },
+}
+
+/// Said to the client when the check could not be completed; the object logs the detail.
+const CHECK_UNAVAILABLE: &str = "the check could not be completed";
+
+fn kind_name(kind: AdmissionKind) -> &'static str {
+    match kind {
+        AdmissionKind::SignIn => "SignIn",
+        AdmissionKind::Register => "Register",
+    }
+}
+
+fn check_failed(detail: String) -> AdmissionRefusal {
+    web_sys::console::error_1(&format!("[tenant] admission host failed: {detail}").into());
+    AdmissionRefusal::Failed(CHECK_UNAVAILABLE.to_string())
+}
+
+#[async_trait]
+impl AdmissionPolicy for DurableObjectSignIn {
+    async fn admit(&self, ctx: AdmissionContext) -> Result<(), AdmissionRefusal> {
+        let request = AdmissionRequest {
+            username: &ctx.username,
+            kind: kind_name(ctx.kind),
+            token: ctx.token.as_ref().map(|token| token.as_str()),
+            remote_addr: ctx.remote_addr.map(|ip| ip.to_string()),
+        };
+        let json = serde_json::to_string(&request).map_err(|e| check_failed(e.to_string()))?;
+        let promise = HostPromise::from_call(self.0.admit(&json)).map_err(check_failed)?;
+        let answer = promise.await.map_err(|e| check_failed(format!("{e:?}")))?;
+        if answer.is_null() {
+            return Ok(());
+        }
+        match parse::<HostRefusal>(&answer).map_err(check_failed)? {
+            HostRefusal::AdmissionRequired => Err(AdmissionRefusal::Required),
+            HostRefusal::AdmissionFailed { reason } => Err(AdmissionRefusal::Failed(reason)),
+        }
+    }
 }
 
 fn host_failed(detail: String) -> SignInSettingsUnavailable {

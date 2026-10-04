@@ -721,6 +721,7 @@ pub async fn run_server_on<T: PlatformOps>(
         // hosted tenant has open registration too. Post-quantum sign-in as the host names it.
         .with_server_misc_settings(ServerMiscSettings {
             pq_sign_in: sign_in.pq_sign_in,
+            admission: sign_in.admission,
             ..production_server_misc_settings()
         })
         .with_injected_listener(listener)
