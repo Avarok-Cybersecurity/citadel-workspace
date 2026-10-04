@@ -117,6 +117,44 @@ jobs:
       - name: Run Cargo Clippy
         run: cargo clippy -p ${{ matrix.crate }} -- -D warnings
 
+  # The agent as Windows people get it. Every other Rust job here runs on Linux or macOS, where
+  # `cfg(windows)` code (the tray icon, the log routing, the login entry) is not even compiled,
+  # and no PR job built for Windows at all: the release pipeline was the first to find out.
+  # `--features vendored` because the MSVC runner has no OpenSSL (release-agent.yml, build-agent).
+  windows-agent:
+    name: The Windows agent builds, has no console window, and its Windows code passes its tests
+    # The release pipeline's Windows build is the longest observed leg at about 16 minutes; this
+    # compiles the agent twice (debug for the tests, release for the shipped binary).
+    timeout-minutes: 60
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Tests, including the Windows-only ones (registry entry, icon, ShellExecute)
+        shell: bash
+        run: cargo test -p citadel-workspace-internal-service --features vendored
+      - name: Build the agent the way the release does
+        shell: bash
+        run: cargo build --release -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features vendored
+      - name: The shipped binary opens no console window
+        shell: bash
+        run: |
+          node --test scripts/lib/assert-pe-subsystem.test.mjs
+          node scripts/lib/assert-pe-subsystem.mjs target/release/citadel-workspace-internal-service.exe windows
+      - name: It still prints its version when asked from a terminal
+        shell: pwsh
+        run: |
+          # A Windows-subsystem program is neither waited for nor captured by a bare call: start
+          # it with its output redirected, as the release gates read it.
+          $out = Join-Path $env:RUNNER_TEMP 'version.txt'
+          $run = Start-Process -FilePath target/release/citadel-workspace-internal-service.exe -ArgumentList '--version' -Wait -PassThru -NoNewWindow -RedirectStandardOutput $out
+          if ($run.ExitCode -ne 0) { throw "--version exited $($run.ExitCode)" }
+          $printed = (Get-Content $out) -join "`n"
+          # The version has one source, the crate's manifest.
+          $version = (Select-String -Path citadel-workspace-internal-service/Cargo.toml -Pattern '^version = "(.*)"' | Select-Object -First 1).Matches[0].Groups[1].Value
+          if ($printed.Trim() -ne "citadel-agent $version") { throw "--version printed '$printed', expected citadel-agent $version" }
+
   # The citadel-internal-service workspace, covered WHOLESALE rather than
   # crate-by-crate.
   #
@@ -2716,6 +2754,7 @@ jobs:
       - internal-service-rust-lint
       - internal-service-rust-tests
       - rust-tests
+      - windows-agent
       - unit-tests
       - typecheck
       - lint

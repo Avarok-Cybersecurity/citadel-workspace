@@ -54,6 +54,11 @@ pub fn install() -> Result<WorkerGuard, String> {
         // the writer thread would be lost with the one message that explains the exit.
         eprintln!("Panic occurred: {info}");
         citadel_logging::error!(target: "citadel", "Panic occurred: {info}");
+        // No console to read the line above, and the process is about to end: say so in a dialog.
+        #[cfg(windows)]
+        crate::windows_shell::report_fatal(&std::io::Error::other(format!(
+            "Panic occurred: {info}"
+        )));
         std::process::exit(1);
     }));
     let rust_log: Option<String> = std::env::var("RUST_LOG").ok();
