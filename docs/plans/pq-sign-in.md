@@ -16,6 +16,32 @@ Status: agreed with the owner on 2026-10-02. This supersedes options A and C of
 4. **A sign-in policy per account:** `Password`, `PasswordAndKey` or `KeyOnly`.
 5. **Recovery codes** for lost keys.
 
+## Owner decisions, 2026-10-03 (server phase)
+6. **No backup of the OPRF seed.** Each tenant's seed lives only in its Durable
+   Object's key-value storage (`control:oprf-seed`), apart from the account rows,
+   and is never exported.
+   - What it buys: there is no second copy to steal, leak or forget to rotate, and
+     nothing outside the object can ever drive an offline guess.
+   - What it costs: if the seed is lost while the accounts survive, every
+     **password** factor of that tenant stops verifying and must be reset. Security
+     keys and **recovery codes** don't use the OPRF and keep working, so members
+     sign in with a code (a restricted session), enrol a key or reset the password,
+     and carry on. A stored value that is not a seed stops the object; it is never
+     silently replaced, since a new seed is the same lockout.
+   - Losing the whole of the object's storage loses the accounts with it; a seed
+     backup would not help there.
+7. **Upgrade legacy accounts immediately, at their next login.** A legacy
+   (Argon2) account's first successful login against a 0.12 server carries the
+   upgrade, and the server swaps the record in the same exchange.
+   - What it buys: the server stops running Argon2 for that account at once, and the
+     stolen-rows offline guess is closed account by account as people sign in,
+     with no migration window to manage.
+   - What it costs: it is one way. After the swap the legacy path is refused, so a
+     client older than 0.12, or a server rolled back below 0.12, can't sign that
+     account in until it is updated ("update your app"). A rollback of the tenant
+     Worker past this release must be treated as breaking for every account that
+     signed in since.
+
 ## What is wrong today
 - Password login makes the server run Argon2 (`AsyncArgon::verify`) on every
   login, and a stolen record is enough to guess passwords offline.

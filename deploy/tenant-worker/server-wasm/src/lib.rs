@@ -5,7 +5,9 @@
 //! running on the isolate's event loop for as long as the object lives. Its accounts and
 //! workspace data live in the object's own SQLite storage (`storage`), so they outlive it.
 
+mod host_promise;
 mod ice;
+mod sign_in;
 mod storage;
 
 use citadel_sdk::prelude::{
@@ -13,6 +15,7 @@ use citadel_sdk::prelude::{
     WasmStream, WasmWebSocketStream,
 };
 use citadel_workspace_server_kernel::config::ServerConfig;
+use citadel_workspace_server_kernel::kernel::sign_in::HostedSignIn;
 use citadel_workspace_server_kernel::run_server_on;
 use std::cell::Cell;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -59,14 +62,18 @@ pub struct TenantServer {
 impl TenantServer {
     /// Start the node. `config_toml` is a `kernel.toml`; `storage` is the object's SQLite storage
     /// (see `storage::TenantStorage`); `ice` mints relay credentials for `GetIceServers` (see
-    /// `ice::IceHost`). `on_exit` is called with a description of how the node ended, which for a
+    /// `ice::IceHost`); `pq` is post-quantum sign-in and `sign_in` the object's sign-in settings
+    /// (see `sign_in`). `on_exit` is called with a description of how the node ended, which for a
     /// server that should run until eviction is always a failure.
+    #[allow(clippy::too_many_arguments)]
     #[wasm_bindgen(constructor)]
     pub fn start(
         config_toml: &str,
         storage: storage::TenantStorage,
         argon: ArgonCost,
         ice: ice::IceHost,
+        pq: sign_in::PqSignIn,
+        sign_in: sign_in::SignInHost,
         log_filter: &str,
         on_exit: js_sys::Function,
     ) -> Result<TenantServer, JsError> {
@@ -81,10 +88,17 @@ impl TenantServer {
         };
         let backend = BackendType::HostSql(storage::backend_handle(storage));
         let ice_servers = Some(ice::source(ice));
+        let (settings, admission) = sign_in::host_capabilities(sign_in);
+        let sign_in = HostedSignIn {
+            pq_sign_in: Some(pq.into_settings()),
+            admission: Some(admission),
+            settings: Some(settings),
+        };
         let (injector, listener) = WasmListener::injected();
         wasm_bindgen_futures::spawn_local(async move {
             let outcome =
-                run_server_on::<WasmIO>(config, listener, backend, argon, ice_servers).await;
+                run_server_on::<WasmIO>(config, listener, backend, argon, ice_servers, sign_in)
+                    .await;
             let _ = on_exit.call1(&JsValue::NULL, &format!("{outcome:?}").into());
         });
         Ok(Self {
@@ -93,13 +107,17 @@ impl TenantServer {
         })
     }
 
-    /// Hand the node a WebSocket the Durable Object has already `accept()`ed.
-    pub fn accept(&self, ws: web_sys::WebSocket) -> Result<(), JsError> {
+    /// Hand the node a WebSocket the Durable Object has already `accept()`ed. Returns the IP the
+    /// node knows the connection by (unique per connection), which the object maps to the
+    /// client's real one: the admission check is told that IP.
+    pub fn accept(&self, ws: web_sys::WebSocket) -> Result<String, JsError> {
         let stream = WasmWebSocketStream::from_accepted(ws)
             .map_err(|e| JsError::new(&format!("cannot wrap socket: {e}")))?;
+        let peer = self.next_peer_addr();
         self.injector
-            .inject(WasmStream::WebSocket(stream), self.next_peer_addr())
-            .map_err(|e| JsError::new(&e.to_string()))
+            .inject(WasmStream::WebSocket(stream), peer)
+            .map_err(|e| JsError::new(&e.to_string()))?;
+        Ok(peer.ip().to_string())
     }
 
     /// A Worker sees no client socket address, but the node keys inbound sessions by one, so each

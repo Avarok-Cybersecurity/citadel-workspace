@@ -18,6 +18,8 @@ path = "src/main.rs"
 structopt = { workspace = true }
 citadel_io = { workspace = true }
 citadel_types = { workspace = true }
+# The post-quantum sign-in settings a host starts the node with (`kernel::sign_in`).
+citadel_user = { workspace = true }
 citadel-workspace-types = { workspace = true }
 citadel_logging = { workspace = true }
 parking_lot = { workspace = true }

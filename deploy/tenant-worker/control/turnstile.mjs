@@ -29,11 +29,28 @@ export function verdict(answer, hostnames, action) {
   return null;
 }
 
-/** Asks siteverify about `token`; resolves to the verdict. */
-export async function verifyTurnstile(io, { secret, hostnames }, token, action, ip) {
+/**
+ * `verdict`, for a token that must also have been rendered for `cdata` (the widget's `cData`, a
+ * tenant's slug), so a token obtained for one workspace cannot be spent on another. An answer
+ * from Cloudflare's TESTING keys carries no cdata (and says so in `metadata`); it is bound by the
+ * secret and hostname alone, as for the action. A real key's answer must carry it.
+ */
+export function boundVerdict(answer, hostnames, action, cdata) {
+  const general = verdict(answer, hostnames, action);
+  if (general !== null) return general;
+  if (answer.metadata?.result_with_testing_key === true && answer.cdata === undefined) return null;
+  return answer.cdata === cdata ? null : "the Turnstile answer is for another workspace";
+}
+
+/** Siteverify's answer about `token`, or null when it cannot be read. */
+export async function siteverify(io, secret, token, ip) {
   const form = new URLSearchParams({ secret, response: token });
   if (ip) form.set("remoteip", ip);
   const response = await io.fetch(SITEVERIFY, { method: "POST", body: form });
-  const answer = await response.json().catch(() => null);
-  return verdict(answer, hostnames, action);
+  return response.json().catch(() => null);
+}
+
+/** Asks siteverify about `token`; resolves to the verdict. */
+export async function verifyTurnstile(io, { secret, hostnames }, token, action, ip) {
+  return verdict(await siteverify(io, secret, token, ip), hostnames, action);
 }

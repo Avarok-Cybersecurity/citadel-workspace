@@ -29,9 +29,17 @@ pub async fn create_test_kernel() -> Arc<AsyncWorkspaceServerKernel<MonoRatchet>
 pub async fn create_test_kernel_with_ice_servers(
     ice_servers: IceServerSourceHandle,
 ) -> Arc<AsyncWorkspaceServerKernel<MonoRatchet>> {
+    create_configured_test_kernel(|kernel| kernel.set_ice_server_source(ice_servers)).await
+}
+
+/// `create_test_kernel`, with `configure` applied to the kernel before it is initialised: the
+/// host capabilities a test builds it with (relay credentials, sign-in settings).
+pub async fn create_configured_test_kernel(
+    configure: impl FnOnce(&mut AsyncWorkspaceServerKernel<MonoRatchet>),
+) -> Arc<AsyncWorkspaceServerKernel<MonoRatchet>> {
     // Create kernel without node_remote
     let mut kernel = AsyncWorkspaceServerKernel::<MonoRatchet>::new(None);
-    kernel.set_ice_server_source(ice_servers);
+    configure(&mut kernel);
 
     // Initialize the backend without node_remote for testing
     // The backend will use a default in-memory storage

@@ -101,6 +101,7 @@ const UNSCOPED = new Map([
   ['Nodes', 'a response to a list query, filtered by the handler'],
   ['IceServers', 'only ever the answer to the requesting member (never fanned out); it carries a TURN credential'],
   ['IceServersUnavailable', 'the answer to the requesting member that it gets no relay, and why'],
+  ['SignInSettings', 'only ever the answer to the requesting member (never fanned out); whether sign-in needs a human check is public anyway'],
   ['TreeStructure', 'a response to a tree query, filtered by the handler'],
   ['TreeSchema', 'schema, not content'],
   ['NodeTypes', 'schema, not content'],

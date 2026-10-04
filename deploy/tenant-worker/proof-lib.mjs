@@ -33,12 +33,35 @@ if (typeof WebSocket !== "function") {
 // Every socket the wasm client opens goes through here, so a proof can point a client that
 // registered on one tenant at another tenant's object without the client knowing.
 const redirects = new Map();
+const open = new Set();
 const NativeWebSocket = globalThis.WebSocket;
 globalThis.WebSocket = class extends NativeWebSocket {
   constructor(url, protocols) {
     super(redirects.get(String(url)) ?? url, protocols);
+    open.add(this);
+    this.addEventListener("close", () => open.delete(this));
+  }
+
+  send(data) {
+    if (!this.severed) super.send(data);
   }
 };
+
+/**
+ * Every client socket dies as its client sees it, and the server sees nothing: no close frame
+ * reaches it, the socket stays open underneath, and nothing more is sent on it. The client tears
+ * its side down; the server still holds the session -- the half-open link a dropped network
+ * leaves, which is what a resume-token reconnect is for.
+ */
+export function severClientSockets() {
+  for (const socket of open) {
+    socket.severed = true;
+    open.delete(socket);
+    const closed = new Event("close");
+    Object.defineProperties(closed, { code: { value: 1006 }, reason: { value: "severed" }, wasClean: { value: false } });
+    socket.dispatchEvent(closed);
+  }
+}
 export function redirect(from, to) {
   if (to === null) redirects.delete(from);
   else redirects.set(from, to);
@@ -129,11 +152,19 @@ export const PRODUCTION_LIKE_OVERRIDES = [
  * migrated there, with `overrides` on top of wrangler.toml; resolves once serving.
  */
 export async function startWrangler(persistTo, overrides) {
+  return startWranglerIn(process.cwd(), persistTo, overrides);
+}
+
+/**
+ * `startWrangler` for the tenant worker in `dir`: another build's (upgrade.mjs runs the build
+ * production runs from its own checkout, its Worker and its wasm together).
+ */
+export async function startWranglerIn(dir, persistTo, overrides) {
   if (!Array.isArray(overrides)) throw new Error("startWrangler: pass DEV_OVERRIDES or PRODUCTION_LIKE_OVERRIDES");
   const migrate = spawnSync(
     "npx",
     ["wrangler@4", "d1", "migrations", "apply", "citadel-control", "--local", "--persist-to", persistTo],
-    { encoding: "utf8", env: { ...process.env, CI: "1" } },
+    { cwd: dir, encoding: "utf8", env: { ...process.env, CI: "1" } },
   );
   if (migrate.status !== 0) throw new Error(`migrating the control plane's D1 failed:\n${migrate.stdout}${migrate.stderr}`);
   const child = spawn(
@@ -143,7 +174,7 @@ export async function startWrangler(persistTo, overrides) {
       "--local-protocol", LOCAL_PROTOCOL,
       ...overrides,
     ],
-    { detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, CI: "1" } },
+    { cwd: dir, detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, CI: "1" } },
   );
   let output = "";
   const collect = (chunk) => {

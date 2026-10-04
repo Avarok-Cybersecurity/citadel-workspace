@@ -24,6 +24,8 @@ export default defineConfig({
           // tests answer siteverify themselves at the fetch boundary, so it never leaves the process.
           TURNSTILE_SECRET: "1x0000000000000000000000000000000AA",
           TURNSTILE_HOSTNAMES: "example.com",
+          // Cloudflare's always-pass testing site key: public, and never rendered here.
+          TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
           STRIPE_SECRET_KEY: "sk_test_not_a_real_key",
           STRIPE_PORTAL_CONFIGURATION: "bpc_test_citadel",
           STRIPE_WEBHOOK_SECRET: "whsec_vitest_only",

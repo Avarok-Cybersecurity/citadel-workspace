@@ -10,6 +10,7 @@ import { UsageStore } from "./usage-store.mjs";
 import { config, isWebSocketUpgrade, json, upgradeRequired, readJson, refuse } from "./http.mjs";
 import { createTenant, openPortal, slugAvailability, tenantStatus } from "./tenants.mjs";
 import { handleWebhook } from "./webhook.mjs";
+import { admissionAnywhere, admissionOf } from "./discovery.mjs";
 import { serveUi } from "./ui.mjs";
 
 /** Creation and portal bodies are a handful of short fields. */
@@ -71,6 +72,10 @@ async function api(io, cfg, request, url) {
   try {
     if (method === "GET" && parts.length === 2 && parts[0] === "slug") {
       return await slugAvailability(io, decodeURIComponent(parts[1]));
+    }
+    if (method === "GET" && parts.length === 1 && parts[0] === "admission") return admissionAnywhere(cfg);
+    if (method === "GET" && parts.length === 2 && parts[0] === "admission") {
+      return await admissionOf(io, cfg, decodeURIComponent(parts[1]));
     }
     if (method === "POST" && parts.length === 1 && parts[0] === "tenants") {
       const body = await readJson(request, cfg, API_BODY_LIMIT);
