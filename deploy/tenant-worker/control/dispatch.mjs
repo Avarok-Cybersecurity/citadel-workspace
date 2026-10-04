@@ -7,6 +7,7 @@
 import { checkSlug } from "./slug.mjs";
 import { Store } from "./store.mjs";
 import { UsageStore } from "./usage-store.mjs";
+import { AuthVersionStore } from "./auth-versions.mjs";
 import { config, isWebSocketUpgrade, json, upgradeRequired, readJson, refuse } from "./http.mjs";
 import { createTenant, openPortal, slugAvailability, tenantStatus } from "./tenants.mjs";
 import { handleWebhook } from "./webhook.mjs";
@@ -25,6 +26,7 @@ export function ioFor(env) {
     now: () => Math.floor(Date.now() / 1000),
     store: new Store(env.CONTROL_DB),
     usage: new UsageStore(env.CONTROL_DB),
+    authVersions: new AuthVersionStore(env.CONTROL_DB),
     tenant: (slug) => objectFor(env, slug),
   };
 }

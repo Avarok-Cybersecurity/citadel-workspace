@@ -5,6 +5,7 @@
 //! running on the isolate's event loop for as long as the object lives. Its accounts and
 //! workspace data live in the object's own SQLite storage (`storage`), so they outlive it.
 
+mod auth_versions;
 mod host_promise;
 mod ice;
 mod sign_in;

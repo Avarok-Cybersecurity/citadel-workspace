@@ -3,13 +3,14 @@ name = "tenant-storage-compat"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Native checks that a tenant Durable Object's stored accounts load under this tree's SDK"
+description = "Native checks that a tenant Durable Object's stored accounts load, and are counted, under this tree's SDK"
 
 # Native only: rusqlite stands in for the Durable Object's SQLite (the same engine), and a
 # bundled C SQLite does not build for wasm32.
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 citadel_sdk = { workspace = true, features = ["std", "filesystem"] }
 citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
+tenant-auth-versions = { path = "../auth-versions" }
 rusqlite = { version = "0.32", features = ["bundled", "backup"] }
 
 # The post-quantum sign-in settings and registration, to upgrade a stored legacy account the way a
