@@ -174,6 +174,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     first_connect_admin: bool,
     /// What mints relay credentials for `GetIceServers`: the host's, or none.
     ice_servers: crate::kernel::ice_servers::IceServerSourceHandle,
+    /// Where the workspace's sign-in settings live: the host's store, or none.
+    sign_in_settings: crate::kernel::sign_in::SignInSettingsHandle,
 }
 
 /// Removes a CID's account attribution when its connection task ends.
@@ -209,6 +211,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             file_transfer_config: self.file_transfer_config.clone(),
             first_connect_admin: self.first_connect_admin,
             ice_servers: self.ice_servers.clone(),
+            sign_in_settings: self.sign_in_settings.clone(),
             // RateLimiter::Clone shares the same Arc<Mutex<HashMap>>,
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
@@ -252,7 +255,18 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             connected_users: Arc::new(RwLock::new(HashMap::new())),
             first_connect_admin: false,
             ice_servers: None,
+            sign_in_settings: None,
         }
+    }
+
+    /// Set by the server bootstrap: the host's sign-in settings store, or none, in which case
+    /// both sign-in settings requests answer that this server has no such settings.
+    pub fn set_sign_in_settings(&mut self, store: crate::kernel::sign_in::SignInSettingsHandle) {
+        self.sign_in_settings = store;
+    }
+
+    pub fn sign_in_settings(&self) -> &crate::kernel::sign_in::SignInSettingsHandle {
+        &self.sign_in_settings
     }
 
     /// Set by the server bootstrap: the host's relay-credential minter, or none, in which case

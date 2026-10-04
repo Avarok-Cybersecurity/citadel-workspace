@@ -4,6 +4,7 @@ import type { DomainNode } from "./DomainNode";
 import type { GroupMessage } from "./GroupMessage";
 import type { IceServer } from "./IceServer";
 import type { Permission } from "./Permission";
+import type { SignInSettings } from "./SignInSettings";
 import type { TreeNode } from "./TreeNode";
 import type { TreeSchema } from "./TreeSchema";
 import type { User } from "./User";
@@ -50,7 +51,7 @@ max_file_transfer_size_mb: bigint,
 /**
  * RE-VFS storage quota per user (in megabytes)
  */
-revfs_storage_quota_mb: bigint, } } | { "IceServers": { ice_servers: Array<IceServer>, expires_at: bigint, } } | { "IceServersUnavailable": { reason: string, } } | { "Node": DomainNode } | { "Nodes": Array<DomainNode> } | { "TreeStructure": { root: TreeNode, } } | { "TreeSchema": TreeSchema } | { "NodeTypes": Array<CustomNodeType> } | { "NodeDeleted": { node_id: string, 
+revfs_storage_quota_mb: bigint, } } | { "IceServers": { ice_servers: Array<IceServer>, expires_at: bigint, } } | { "IceServersUnavailable": { reason: string, } } | { "SignInSettings": SignInSettings } | { "Node": DomainNode } | { "Nodes": Array<DomainNode> } | { "TreeStructure": { root: TreeNode, } } | { "TreeSchema": TreeSchema } | { "NodeTypes": Array<CustomNodeType> } | { "NodeDeleted": { node_id: string, 
 /**
  * IDs of child nodes that were also deleted (if cascade was true)
  */

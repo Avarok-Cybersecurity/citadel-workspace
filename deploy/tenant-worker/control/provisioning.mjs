@@ -26,6 +26,11 @@ export class Provisioning {
     return this.record !== null && this.record.entitlements?.status === "active";
   }
 
+  /** The tenant this object was last provisioned for, or null. */
+  tenantId() {
+    return this.record?.tenant_id ?? null;
+  }
+
   masterPassword() {
     if (this.record === null) throw new Error("this tenant has not been provisioned");
     return this.record.master_password;

@@ -19,6 +19,7 @@ pub mod profile_visibility;
 pub mod rate_limiter;
 pub(crate) mod roster;
 pub mod secret_eq;
+pub mod sign_in;
 pub mod transaction;
 
 // Import focused kernel modules - commented out old sync code

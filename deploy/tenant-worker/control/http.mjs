@@ -10,7 +10,7 @@ export const json = (body, status = 200, headers = {}) =>
 
 export const refuse = (error, detail, status) => json({ error, detail }, status);
 
-function required(env, name) {
+export function required(env, name) {
   const value = env[name];
   if (value === undefined || value === "") throw new Error(`${name} is not set`);
   return value;
@@ -102,6 +102,8 @@ export function config(env) {
     diagnostics: onOff(env, "TENANT_DIAGNOSTICS"),
     ui: uiConfig(env),
     checkoutTtl: pendingTtl,
+    // Public: the widget's site key, sent to every visitor (discovery.mjs).
+    turnstileSiteKey: required(env, "TURNSTILE_SITE_KEY"),
     turnstile: optional(env, "TURNSTILE_SECRET")
       ? { secret: env.TURNSTILE_SECRET, hostnames: required(env, "TURNSTILE_HOSTNAMES") }
       : null,

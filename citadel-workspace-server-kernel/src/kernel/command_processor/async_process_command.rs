@@ -1088,6 +1088,21 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
 
         WorkspaceProtocolRequest::GetIceServers => Ok(kernel.ice_servers_for(actor_user_id).await),
 
+        WorkspaceProtocolRequest::GetSignInSettings => {
+            Ok(crate::kernel::sign_in::read(kernel.sign_in_settings()).await)
+        }
+
+        WorkspaceProtocolRequest::UpdateSignInSettings { settings } => {
+            // The Admin role, as SetMembersVisible: who may sign in at all is not a permission
+            // a Custom role can be granted.
+            use crate::handlers::domain::async_ops::AsyncDomainOperations;
+            let is_admin = kernel.domain_operations.is_admin(actor_user_id).await?;
+            Ok(
+                crate::kernel::sign_in::update(kernel.sign_in_settings(), is_admin, *settings)
+                    .await,
+            )
+        }
+
         // ========== Tree Node Operations (Generalized Hierarchy) ==========
         // These handlers support the generalized workspace tree structure
         // where any node can have child nodes of any type

@@ -5,6 +5,7 @@
 /// cleanly and fails at runtime.
 pub mod dependency_agreement;
 pub mod ice;
+pub mod sign_in;
 pub mod structs;
 /// The build script's submodule-freshness rule, here so it can be tested.
 ///
@@ -16,6 +17,7 @@ pub mod submodule_freshness;
 use custom_debug::Debug;
 use ice::IceServer;
 use serde::{Deserialize, Serialize};
+use sign_in::SignInSettings;
 use structs::{
     CustomNodeType, DomainNode, NodeEntityType, Permission, TreeNode, TreeSchema, User, UserRole,
     Workspace, WorkspaceMetadata,
@@ -238,6 +240,19 @@ pub enum WorkspaceProtocolRequest {
     /// its host declines to mint (not configured, the plan's relay is used up, too many
     /// requests). A client that gets no servers falls back to direct connections.
     GetIceServers,
+
+    // ========== Sign-in ==========
+    /// Read this workspace's sign-in settings (`sign_in::SignInSettings`). Any member may read
+    /// them; whether a check is required is public anyway (the host's discovery endpoint says
+    /// so to anyone about to sign in). A server whose host keeps no such settings answers
+    /// `Error`.
+    GetSignInSettings,
+
+    /// Replace this workspace's sign-in settings. Admin only: the Admin role, not a permission a
+    /// Custom role can be granted, since it decides who can get in at all.
+    UpdateSignInSettings {
+        settings: SignInSettings,
+    },
 
     // ========== Generic Tree Node Operations ==========
     /// Create a new node in the workspace hierarchy tree.
@@ -532,6 +547,9 @@ pub enum WorkspaceProtocolResponse {
     IceServersUnavailable {
         reason: String,
     },
+
+    /// This workspace's sign-in settings, as stored now.
+    SignInSettings(SignInSettings),
 
     // ========== Tree Node Responses ==========
     /// Single node response

@@ -60,6 +60,12 @@ new_sqlite_classes = ["WorkspaceServer"]
 ARGON_LANES = "1"
 ARGON_MEM_KIB = "4096"
 ARGON_TIME_COST = "1"
+# Post-quantum sign-in: the Argon2id cost CLIENTS stretch a password factor with (the server never
+# runs it). OWASP's minimum, the SDK's floor (KsfParams::FLOOR): the browser's WASM client runs it
+# when no agent is present. Raising it later applies to new password factors only.
+PQ_KSF_MEM_KIB = "19456"
+PQ_KSF_ITERATIONS = "2"
+PQ_KSF_LANES = "1"
 LOG_FILTER = "citadel=warn"
 
 # The control plane. Secrets (`wrangler secret put`), each of which leaves its routes answering
@@ -75,6 +81,10 @@ CONTROL_HOST = "work.avarok.net"
 PUBLIC_ORIGIN = "https://work.avarok.net"
 ALLOWED_ORIGINS = "https://work.avarok.net"
 TURNSTILE_HOSTNAMES = "work.avarok.net"
+# Public: the widget's site key, the one the UI's create-workspace step renders
+# (citadel-workspaces lib/onboarding/turnstile.ts). Discovery (/api/admission/<slug>) hands it to
+# a sign-in form when its workspace requires the check.
+TURNSTILE_SITE_KEY = "0x4AAAAAAFAR1uNZSc7lTBiy"
 # Citadel's own customer portal (test mode). Never the account default, which belongs to another
 # product on the same Stripe account. Created with features: plan/seat change between the Team and
 # Business prices, cancel at period end, payment method, invoices, return to PUBLIC_ORIGIN.

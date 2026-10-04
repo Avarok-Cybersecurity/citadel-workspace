@@ -640,6 +640,7 @@ async fn workspace_kernel(
     workspace_structure: Option<(WorkspaceStructureConfig, Option<std::path::PathBuf>)>,
     first_connect_admin: bool,
     ice_servers: kernel::ice_servers::IceServerSourceHandle,
+    sign_in_settings: kernel::sign_in::SignInSettingsHandle,
 ) -> Result<kernel::async_kernel::AsyncWorkspaceServerKernel<StackedRatchet>, NetworkError> {
     if first_connect_admin {
         citadel_logging::warn!(target: "citadel", "⚠️  WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN is on: the first account to connect becomes the workspace administrator. Intended for local development. On a reachable deployment this hands ownership to whoever registers first.");
@@ -670,6 +671,7 @@ async fn workspace_kernel(
         info!(target: "citadel", "No relay-credential source: GetIceServers answers that no relay is available.");
     }
     kernel.set_ice_server_source(ice_servers);
+    kernel.set_sign_in_settings(sign_in_settings);
     Ok(kernel)
 }
 
@@ -681,13 +683,15 @@ async fn workspace_kernel(
 /// backend and the Argon2 cost, because both depend on where it runs (a Worker has a fraction of
 /// the memory and CPU the release Argon2 defaults assume). `config.bind_addr` is recorded as the
 /// node's address and never bound. `ice_servers` is the host's relay-credential minter
-/// (`GetIceServers`), or `None` for a host that has none.
+/// (`GetIceServers`), or `None` for a host that has none. `sign_in` is what the host gives
+/// sign-in: the post-quantum settings and the workspace's sign-in settings store.
 pub async fn run_server_on<T: PlatformOps>(
     config: ServerConfig,
     listener: T::Listener,
     backend: BackendType,
     server_argon_settings: ArgonDefaultServerSettings,
     ice_servers: kernel::ice_servers::IceServerSourceHandle,
+    sign_in: kernel::sign_in::HostedSignIn,
 ) -> Result<(), NetworkError> {
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel on an injected listener...");
     let bind_address: SocketAddr = config.bind_addr.parse().map_err(|e| {
@@ -703,6 +707,7 @@ pub async fn run_server_on<T: PlatformOps>(
         workspace_structure,
         first_connect_admin,
         ice_servers,
+        sign_in.settings,
     )
     .await?;
 
@@ -713,8 +718,11 @@ pub async fn run_server_on<T: PlatformOps>(
         .with_backend(backend)
         .with_server_argon_settings(server_argon_settings)
         // The same refusal of password-less transient accounts as the native server: a
-        // hosted tenant has open registration too.
-        .with_server_misc_settings(production_server_misc_settings())
+        // hosted tenant has open registration too. Post-quantum sign-in as the host names it.
+        .with_server_misc_settings(ServerMiscSettings {
+            pq_sign_in: sign_in.pq_sign_in,
+            ..production_server_misc_settings()
+        })
         .with_injected_listener(listener)
         .build(kernel)
         .map_err(|e| NetworkError::generic(e.to_string()))?
@@ -779,8 +787,17 @@ pub async fn run_server_with_base_path(
     )?;
 
     // The native server has no relay-credential minter: nothing here holds a TURN provider's
-    // key, so GetIceServers answers "unavailable" rather than inventing a list.
-    let kernel = workspace_kernel(&config, workspace_structure, first_connect_admin, None).await?;
+    // key, so GetIceServers answers "unavailable" rather than inventing a list. Nor has it an
+    // admission check, so it keeps no sign-in settings: a switch nothing enforces would claim a
+    // protection that is not there.
+    let kernel = workspace_kernel(
+        &config,
+        workspace_structure,
+        first_connect_admin,
+        None,
+        None,
+    )
+    .await?;
 
     // `NodeType::server` and `NodeBuilder::build` now return `anyhow::Error`
     // (newer citadel_sdk); map into this fn's `NetworkError`, which no longer

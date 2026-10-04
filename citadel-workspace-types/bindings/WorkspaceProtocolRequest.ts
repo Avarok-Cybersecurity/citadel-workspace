@@ -2,6 +2,7 @@
 import type { GroupMessageType } from "./GroupMessageType";
 import type { NodeEntityType } from "./NodeEntityType";
 import type { Permission } from "./Permission";
+import type { SignInSettings } from "./SignInSettings";
 import type { TreeSchema } from "./TreeSchema";
 import type { UpdateOperation } from "./UpdateOperation";
 import type { UserRole } from "./UserRole";
@@ -99,7 +100,7 @@ limit: number | null, } } | { "GetThreadMessages": { group_id: string,
 /**
  * The parent message ID
  */
-parent_message_id: string, } } | "GetServerCapabilities" | "GetIceServers" | { "CreateNode": { parent_id: string | null, entity_type: NodeEntityType, name: string, description: string, } } | { "GetNode": { node_id: string, } } | { "UpdateWorkspaceTheme": { 
+parent_message_id: string, } } | "GetServerCapabilities" | "GetIceServers" | "GetSignInSettings" | { "UpdateSignInSettings": { settings: SignInSettings, } } | { "CreateNode": { parent_id: string | null, entity_type: NodeEntityType, name: string, description: string, } } | { "GetNode": { node_id: string, } } | { "UpdateWorkspaceTheme": { 
 /**
  * None targets the root workspace, matching UpdateWorkspace.
  */
