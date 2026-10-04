@@ -25,6 +25,7 @@ import { meterSocket } from "./control/sockets.mjs";
 import { enforcedEntitlements, METERING } from "./control/plans.mjs";
 import { runMonitor } from "./control/monitor.mjs";
 import { storedRows } from "./control/stored-rows.mjs";
+import { authVersions } from "./control/auth-versions.mjs";
 import { ksfParams, TenantSignIn } from "./control/tenant-sign-in.mjs";
 
 const FLUSH_MS = METERING.flush_seconds * 1000;
@@ -120,6 +121,11 @@ export class WorkspaceServer extends DurableObject {
     return { entitlements: this.provisioning.summary().entitlements, periods: this.usageTable.recent(REPORTED_PERIODS) };
   }
 
+  /** RPC for the monitor: the stored accounts counted by auth-record version (read-only; no HTTP route). */
+  authVersions() {
+    return authVersions(this.ctx.storage.sql, (this.wasm ??= newInstance()));
+  }
+
   /** The flush alarm: armed while any socket is open. Its own errors are logged, and it re-arms. */
   async alarm() {
     try {
@@ -146,7 +152,7 @@ export class WorkspaceServer extends DurableObject {
     const env = this.env;
     const config = this.provisioning.kernelConfig();
     const t0 = Date.now();
-    this.wasm = newInstance();
+    this.wasm ??= newInstance();
     const argon = new this.wasm.ArgonCost(
       Number(required(env, "ARGON_LANES")),
       Number(required(env, "ARGON_MEM_KIB")),

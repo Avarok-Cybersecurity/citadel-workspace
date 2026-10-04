@@ -712,6 +712,7 @@ dependencies = [
  "js-sys",
  "serde",
  "serde_json",
+ "tenant-auth-versions",
  "tenant-console-log",
  "toml",
  "wasm-bindgen",
