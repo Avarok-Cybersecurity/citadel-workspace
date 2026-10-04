@@ -1,0 +1,18 @@
+[package]
+name = "tenant-auth-versions"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Counts a tenant's stored accounts by auth-record version, without loading them"
+
+[dependencies]
+citadel_sdk = { workspace = true }
+citadel_crypt = { workspace = true }
+citadel_user = { workspace = true }
+bincode = "1"
+serde = { version = "1", features = ["derive"] }
+
+# Natively (the tests) the SDK needs its std runtime, as in storage-compat; the wasm build keeps
+# the workspace's default-features = false.
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+citadel_sdk = { workspace = true, features = ["std", "filesystem"] }
