@@ -168,6 +168,10 @@ const CARGO_WORKSPACES = [
   ['rust internal-service workspace', join(ROOT, 'citadel-internal-service')],
 ];
 
+// spawnSync's default 1 MiB output buffer is smaller than the UI's vitest run prints, which made
+// the "unit tests" gate fail with ENOBUFS before a single test result was read.
+const OUTPUT_LIMIT = 256 * 1024 * 1024;
+
 const haveCargo = spawnSync('cargo', ['--version'], { stdio: 'ignore' }).status === 0;
 
 // The wasm target, because nothing else local compiles it.
@@ -310,7 +314,7 @@ const failed = [];
 // that matters a thousand lines down.
 for (const [name, cmd, args, cwd] of ENVIRONMENT) {
   process.stdout.write(`  ${name} … `);
-  const run = spawnSync(cmd, args, { cwd, encoding: 'utf8', env: { ...process.env, SKIP_WASM_BUILD: '1' } });
+  const run = spawnSync(cmd, args, { cwd, encoding: 'utf8', maxBuffer: OUTPUT_LIMIT, env: { ...process.env, SKIP_WASM_BUILD: '1' } });
   if (run.status === 0) {
     console.log('ok');
     continue;
@@ -334,6 +338,7 @@ for (const [name, cmd, args, cwd] of CHECKS) {
   const run = spawnSync(cmd, args, {
     cwd,
     encoding: 'utf8',
+    maxBuffer: OUTPUT_LIMIT,
     env: { ...process.env, SKIP_WASM_BUILD: '1' },
   });
   if (run.status === 0) {
