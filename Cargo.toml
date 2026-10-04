@@ -43,14 +43,14 @@ citadel-workspace-executor = { path = "./citadel-workspace-executor" }
 # Secondary package (for dev purposes, use the local path at ./citadel-internal-service)
 
 # Avarok deps
-citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "78c71ca16c381cf9e62c39bd8c2ef77250c7ca51" }
-citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "78c71ca16c381cf9e62c39bd8c2ef77250c7ca51" }
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
+citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 # Dev-only: the credential-mirror test reads MIN/MAX_{PASSWORD,USERNAME,NAME}_LENGTH
 # directly, so a client-side mirror cannot drift from the SDK unnoticed.
-citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "78c71ca16c381cf9e62c39bd8c2ef77250c7ca51" }
-citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "78c71ca16c381cf9e62c39bd8c2ef77250c7ca51" }
+citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
+citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
 # The SDK's runtime shim: `spawn`, timers and clocks that work on native and on wasm32 alike.
-citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "78c71ca16c381cf9e62c39bd8c2ef77250c7ca51", default-features = false }
+citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
 
 # Avarok deps (for dev purposes, use the local path at ../Citadel-Protocol)
 #citadel_sdk = { path = "../Citadel-Protocol/citadel_sdk" }
@@ -78,3 +78,11 @@ async-recursion = { version = "1.0" }
 rstest = { version = "0.25.0" }
 bincode = "2.0.1"
 chrono = { version = "0.4.34", features = ["serde"] }
+
+# quinn-proto 0.11.19 plus quinn-rs/quinn#2660 (re-arm the loss-detection timer when a path
+# validation fails; upstream issue #2658), which otherwise panics debug builds in
+# `pto_time_and_space` when a relay fallback provokes a failed migration. A `[patch]` applies only
+# in the workspace that declares it, so the SDK's and the agent's do not reach this one. Drop it
+# with quinn-proto 0.11.20+ or quinn 0.12 (see https://github.com/Avarok-Cybersecurity/quinn).
+[patch.crates-io]
+quinn-proto = { git = "https://github.com/Avarok-Cybersecurity/quinn", rev = "5413bbaa53a1df59b25b75da5f572369a0c811f7" }

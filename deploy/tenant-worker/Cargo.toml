@@ -9,7 +9,7 @@ members = ["server-wasm", "proof-client", "console-log", "storage-compat"]
 resolver = "3"
 
 [workspace.dependencies]
-citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "78c71ca16c381cf9e62c39bd8c2ef77250c7ca51", default-features = false }
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
 citadel-workspace-server-kernel = { path = "../../citadel-workspace-server-kernel" }
 citadel-workspace-types = { path = "../../citadel-workspace-types" }
 wasm-bindgen = "0.2.108"
@@ -25,3 +25,11 @@ overflow-checks = true
 opt-level = 3
 lto = true
 codegen-units = 1
+
+# quinn-proto 0.11.19 plus quinn-rs/quinn#2660 (re-arm the loss-detection timer when a path
+# validation fails; upstream issue #2658), which otherwise panics debug builds in
+# `pto_time_and_space` when a relay fallback provokes a failed migration. A `[patch]` applies only
+# in the workspace that declares it, so the SDK's and the agent's do not reach this one. Drop it
+# with quinn-proto 0.11.20+ or quinn 0.12 (see https://github.com/Avarok-Cybersecurity/quinn).
+[patch.crates-io]
+quinn-proto = { git = "https://github.com/Avarok-Cybersecurity/quinn", rev = "5413bbaa53a1df59b25b75da5f572369a0c811f7" }

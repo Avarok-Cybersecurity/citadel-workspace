@@ -9,10 +9,10 @@ description = "Native checks that a tenant Durable Object's stored accounts load
 # bundled C SQLite does not build for wasm32.
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 citadel_sdk = { workspace = true, features = ["std", "filesystem"] }
-citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "78c71ca16c381cf9e62c39bd8c2ef77250c7ca51", default-features = false }
+citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
 rusqlite = { version = "0.32", features = ["bundled", "backup"] }
 
 # The post-quantum sign-in settings and registration, to upgrade a stored legacy account the way a
 # login against this tree's server does (tests/a_0_10_account_upgrades_to_pq_sign_in.rs).
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
-citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "78c71ca16c381cf9e62c39bd8c2ef77250c7ca51" }
+citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }

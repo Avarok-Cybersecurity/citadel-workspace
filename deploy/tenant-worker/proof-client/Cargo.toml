@@ -18,4 +18,4 @@ tenant-console-log = { path = "../console-log" }
 serde_json = { workspace = true }
 futures = "0.3"
 log = "0.4"
-citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "78c71ca16c381cf9e62c39bd8c2ef77250c7ca51", default-features = false }
+citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
