@@ -1,3 +1,8 @@
+// A release build on Windows is a GUI-subsystem program: no console window opens when it is
+// started from the Start menu, the login entry or the installer. Output then goes where
+// `windows_shell::init` routes it. Debug builds keep the console a developer reads.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 use citadel_internal_service::kernel::CitadelWorkspaceService;
 use citadel_internal_service::stun::{StunServers, STUN_SERVERS_ENV};
 use citadel_internal_service::sweep_stale_browser_transfers;
@@ -10,11 +15,41 @@ use structopt::StructOpt;
 
 mod log_setup;
 mod notice_token;
+mod shell_menu;
 #[cfg(feature = "self-update")]
 mod update_setup;
+#[cfg(windows)]
+mod windows_shell;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    #[cfg(windows)]
+    windows_shell::init();
+    let result = run().await;
+    // With no console, a failure printed by returning it from main is seen by nobody.
+    #[cfg(windows)]
+    if let Err(error) = &result {
+        windows_shell::report_fatal(error.as_ref());
+    }
+    result
+}
+
+/// What clap does for `Options::from_args`, except that on Windows a usage error is also shown in
+/// a dialog when there is no terminal to print it on.
+fn parse_options() -> Options {
+    match Options::from_args_safe() {
+        Ok(options) => options,
+        Err(error) => {
+            #[cfg(windows)]
+            if error.use_stderr() {
+                windows_shell::report_fatal(&error);
+            }
+            error.exit()
+        }
+    }
+}
+
+async fn run() -> Result<(), Box<dyn Error>> {
     // Held for the whole run: dropping it stops the log writer thread.
     let _log_writer = log_setup::install()?;
 
@@ -39,7 +74,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let _ = *DEADLOCK_INIT;
     }
 
-    let opts: Options = Options::from_args();
+    let opts: Options = parse_options();
 
     // Which pages may open a control connection to this agent.
     //
@@ -50,12 +85,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // default would either be wrong for every real deployment (localhost) or be
     // the hole itself (any). See citadel_internal_service::OriginPolicy for
     // what this control does and does not reach.
-    let origins = resolve_origin_policy(
-        std::env::var("INTERNAL_SERVICE_ALLOWED_ORIGINS")
-            .ok()
-            .as_deref(),
-        opts.allowed_origins.as_deref(),
-    )?;
+    let env_origins = std::env::var("INTERNAL_SERVICE_ALLOWED_ORIGINS").ok();
+    let origins = resolve_origin_policy(env_origins.as_deref(), opts.allowed_origins.as_deref())?;
     // The STUN servers this agent learns its public address from, required like --bind: the
     // SDK would otherwise fall back to a built-in list nobody chose for this deployment.
     let stun_servers = StunServers::resolve(
@@ -121,6 +152,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if opts.dangerous.unwrap_or(false) {
         citadel_logging::warn!(target: "citadel", "⚠️  SECURITY WARNING: TLS certificate verification is DISABLED via --dangerous flag. Never use in production!");
         builder = builder.with_insecure_skip_cert_verification()
+    }
+
+    // Bound successfully, so this is the agent that stays up: only now does it get an icon, and a
+    // second copy that found the port taken never flashes one.
+    #[cfg(windows)]
+    if let Some(spec) = origin_spec(env_origins.as_deref(), opts.allowed_origins.as_deref()) {
+        windows_shell::start_tray(spec);
     }
 
     let service = notice_token::applied(service);
@@ -194,6 +232,14 @@ struct Options {
 const BUILTIN_TLS_CERT: &[u8] = include_bytes!("../tls/local.avarok.net.crt.pem");
 const BUILTIN_TLS_KEY: &[u8] = include_bytes!("../tls/local.avarok.net.key.pem");
 
+/// The allowlist specification in force: env over CLI. Empty strings are unset, for the same
+/// reason as the backend vars: an unset `.env` entry arrives as Some("").
+fn origin_spec<'a>(env_spec: Option<&'a str>, cli_spec: Option<&'a str>) -> Option<&'a str> {
+    env_spec
+        .filter(|s| !s.is_empty())
+        .or(cli_spec.filter(|s| !s.is_empty()))
+}
+
 /// Resolve the origin allowlist from env + CLI, or explain what is missing.
 ///
 /// Env wins over CLI, matching `select_backend_type` above, so a docker
@@ -203,13 +249,7 @@ fn resolve_origin_policy(
     env_spec: Option<&str>,
     cli_spec: Option<&str>,
 ) -> Result<OriginPolicy, Box<dyn Error>> {
-    // Empty strings are unset, for the same reason as the backend vars: an
-    // unset `.env` entry arrives as Some("").
-    let spec = env_spec
-        .filter(|s| !s.is_empty())
-        .or(cli_spec.filter(|s| !s.is_empty()));
-
-    let Some(spec) = spec else {
+    let Some(spec) = origin_spec(env_spec, cli_spec) else {
         return Err("no WebSocket origin allowlist configured. Set \
              INTERNAL_SERVICE_ALLOWED_ORIGINS (or pass --allowed-origins) to the origins \
              your UI is served from, e.g. \"http://localhost:5291\". Pass \"*\" to accept \

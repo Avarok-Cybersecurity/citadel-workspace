@@ -2,8 +2,8 @@
 #
 #   $env:EXPECTED_VERSION = 'X.Y.Z'; pwsh scripts/smoke-windows-msi.ps1 Citadel-Agent-x64.msi
 #
-# Silent install; the exe is under Program Files and prints the expected --version; the install
-# started the agent; the Start-menu shortcut, started the way Explorer starts it, runs an agent that
+# Silent install; the exe is under Program Files, is a Windows-subsystem program (no console
+# window) and prints the expected --version; the install started the agent; the Start-menu shortcut, started the way Explorer starts it, runs an agent that
 # listens, answers the site's handshake with 101, refuses a foreign origin, and keeps the account in
 # %USERPROFILE%; the login entry runs the same command; msiexec /x removes all of it.
 # The port must be free: an agent already on it would answer every check for this one.
@@ -61,8 +61,15 @@ New-ItemProperty -Path $runKey -Name $sentinel -Value 'C:\\Windows\\notepad.exe'
 
 Msiexec "/i `"$((Resolve-Path $Msi).Path)`" /qn /l*v `"$log`""
 if (-not (Test-Path $exe)) { Fail "the MSI did not install $exe" }
-$got = ((& $exe --version) -join "`n").Trim()
-if ($LASTEXITCODE -ne 0) { Fail "$exe --version exited $LASTEXITCODE" }
+& node (Join-Path $root 'scripts/lib/assert-pe-subsystem.mjs') $exe windows
+if ($LASTEXITCODE -ne 0) { Fail "$exe would open a console window" }
+# The agent is a Windows-subsystem program (no console window), and PowerShell neither waits for
+# one nor captures its output when it is simply called. Started with its output redirected, it
+# is waited for, and the exit code and the text are both real.
+$versionOut = Join-Path $env:RUNNER_TEMP 'version.txt'
+$versionRun = Start-Process -FilePath $exe -ArgumentList '--version' -Wait -PassThru -NoNewWindow -RedirectStandardOutput $versionOut
+if ($versionRun.ExitCode -ne 0) { Fail "$exe --version exited $($versionRun.ExitCode)" }
+$got = ((Get-Content $versionOut) -join "`n").Trim()
 if ($got -ne "citadel-agent $expected") { Fail "$exe --version printed '$got', expected exactly 'citadel-agent $expected'" }
 Write-Host "  --version: $got"
 
