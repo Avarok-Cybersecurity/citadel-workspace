@@ -6,7 +6,7 @@
 use citadel_internal_service::kernel::CitadelWorkspaceService;
 use citadel_internal_service::stun::{StunServers, STUN_SERVERS_ENV};
 use citadel_internal_service::sweep_stale_browser_transfers;
-use citadel_internal_service::{OriginPolicy, SERVER_RECONNECT};
+use citadel_internal_service::{OriginPolicy, AGENT_SUPERVISOR, SERVER_RECONNECT};
 use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
 use std::error::Error;
 use std::net::SocketAddr;
@@ -118,7 +118,8 @@ async fn run() -> Result<(), Box<dyn Error>> {
             SERVER_RECONNECT,
         )
         .await?
-    };
+    }
+    .with_supervisor(AGENT_SUPERVISOR);
 
     // Backend selection precedence:
     //   1. INTERNAL_SERVICE_BACKEND / INTERNAL_SERVICE_DATA_DIR env vars
