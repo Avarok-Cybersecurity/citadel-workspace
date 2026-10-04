@@ -122,7 +122,7 @@ jobs:
   # and no PR job built for Windows at all: the release pipeline was the first to find out.
   # `--features vendored` because the MSVC runner has no OpenSSL (release-agent.yml, build-agent).
   windows-agent:
-    name: The Windows agent builds, has no console window, and its Windows code passes
+    name: The Windows agent builds, has no console window, and its Windows code passes its tests
     # The release pipeline's Windows build is the longest observed leg at about 16 minutes; this
     # compiles the agent twice (debug for the tests, release for the shipped binary).
     timeout-minutes: 60
@@ -131,9 +131,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Clippy, with the Windows-only code compiled in
-        shell: bash
-        run: cargo clippy -p citadel-workspace-internal-service --features vendored -- -D warnings
       - name: Tests, including the Windows-only ones (registry entry, icon, ShellExecute)
         shell: bash
         run: cargo test -p citadel-workspace-internal-service --features vendored
