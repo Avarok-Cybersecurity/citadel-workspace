@@ -40,6 +40,10 @@ const ALLOWED = new Map([
     'requests/media/open.rs::let session = peer.media.take().expect("checked Some above");',
     'the check and the take share one write lock with no await between them',
   ],
+  [
+    'requests/file/staged_upload.rs::let upload = conn.staged_uploads.get_mut(&upload_id).expect("planned");',
+    'plan_chunk returned Append only because get() found this upload, under the same write lock with no await between',
+  ],
 ]);
 
 if (!DIRS.every((d) => existsSync(join(ROOT, d)))) {
