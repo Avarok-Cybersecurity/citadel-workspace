@@ -85,7 +85,7 @@ const SKIP = new Map([
   // store AND its persistence).
   ['lib/live-document-store/service.ts', 279],
   ['lib/p2p/message-handler.ts', 259],
-  ['lib/server-auto-connect-service/service.ts', 256],
+  ['lib/server-auto-connect-service/service.ts', 252],
   ['lib/revfs/revfs-retry.ts', 254],
   ['lib/multi-instance/instance-channel.ts', 251],
 
