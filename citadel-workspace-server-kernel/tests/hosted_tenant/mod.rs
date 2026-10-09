@@ -31,6 +31,7 @@ pub async fn spawn_agent(insecure: bool) -> Result<SocketAddr, Box<dyn Error>> {
     let kernel = CitadelWorkspaceService::<_, StackedRatchet>::new_tcp(
         bind,
         citadel_internal_service::SERVER_RECONNECT,
+        citadel_internal_service::BrowserTransferRoot::in_system_temp_dir(),
     )
     .await?;
     let mut builder = NodeBuilder::default();
