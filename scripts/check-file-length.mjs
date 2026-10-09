@@ -74,7 +74,7 @@ const SKIP = new Map([
   // change back -- so these carry their exact length and cannot grow.
   //
   // `server-auto-connect-service/service.ts` is here after THREE extractions
-  // took it 301 -> 256 (attempt-lifecycle, websocket-responses,
+  // took it 301 -> 252 (attempt-lifecycle, websocket-responses,
   // sign-out-record); what is left is the singleton and its lifecycle.
   // `peer-registration-store/persistence.ts` is absent because its split
   // (local-db-client.ts) brought it under the cap outright, which is the
@@ -85,7 +85,7 @@ const SKIP = new Map([
   // store AND its persistence).
   ['lib/live-document-store/service.ts', 279],
   ['lib/p2p/message-handler.ts', 259],
-  ['lib/server-auto-connect-service/service.ts', 256],
+  ['lib/server-auto-connect-service/service.ts', 252],
   ['lib/revfs/revfs-retry.ts', 254],
   ['lib/multi-instance/instance-channel.ts', 251],
 
