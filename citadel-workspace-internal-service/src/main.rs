@@ -1,6 +1,6 @@
 use citadel_internal_service::kernel::CitadelWorkspaceService;
 use citadel_internal_service::stun::{StunServers, STUN_SERVERS_ENV};
-use citadel_internal_service::sweep_stale_browser_transfers;
+use citadel_internal_service::{sweep_stale_browser_transfers, BrowserTransferRoot};
 use citadel_internal_service::{OriginPolicy, SERVER_RECONNECT};
 use citadel_sdk::prelude::{BackendType, NodeBuilder, NodeType, StackedRatchet};
 use std::error::Error;
@@ -31,7 +31,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // not, so they piled up until the 256 MiB staging cap refused every browser send (found live
     // 2026-09-27: 254 MB of staged files from Sept 23 on; a 2 MB send refused). First, before
     // argument parsing, so every start sweeps; blocking std::fs, before any task is spawned.
-    sweep_stale_browser_transfers();
+    let browser_transfers = BrowserTransferRoot::in_system_temp_dir();
+    sweep_stale_browser_transfers(&browser_transfers);
 
     // Initialize deadlock detector if feature is enabled
     #[cfg(feature = "deadlock-detection")]
@@ -77,7 +78,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         citadel_logging::warn!(target: "citadel",
             "Serving plain ws:// (--no-tls). A page served over HTTPS cannot open this \
              socket; use this only behind a same-origin proxy on loopback.");
-        CitadelWorkspaceService::new_websocket(opts.bind, origins, SERVER_RECONNECT).await?
+        CitadelWorkspaceService::new_websocket(
+            opts.bind,
+            origins,
+            SERVER_RECONNECT,
+            browser_transfers,
+        )
+        .await?
     } else {
         CitadelWorkspaceService::new_websocket_tls(
             opts.bind,
@@ -85,6 +92,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             BUILTIN_TLS_CERT,
             BUILTIN_TLS_KEY,
             SERVER_RECONNECT,
+            browser_transfers,
         )
         .await?
     };
