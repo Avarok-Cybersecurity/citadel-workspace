@@ -7,11 +7,8 @@
 import { createScheduledController, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import worker from "../worker.mjs";
-import { ioFor } from "../control/dispatch.mjs";
-import { config } from "../control/http.mjs";
-import { runMonitor } from "../control/monitor.mjs";
 import {
-  createBody, deliver, freeTenant, freshSlug, item, objectStats, outbound, post, relay, subscriptionEvent, tenantObject, tenantRow,
+  createBody, deliver, freeTenant, freshSlug, item, monitorOf, objectStats, outbound, post, relay, subscriptionEvent, tenantObject, tenantRow,
 } from "./helpers.mjs";
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -26,13 +23,6 @@ async function activeTeam() {
   const event = subscriptionEvent("customer.subscription.created", row, { id: `evt_${crypto.randomUUID()}`, created: now(), items: [item("citadel-team-month", 3)], period });
   expect((await deliver(event)).status).toBe(200);
   return { row: await tenantRow(slug), period };
-}
-
-/** The monitor over these tenants only: the suite's D1 holds every other test's tenants too. */
-function monitorOf(...slugs) {
-  const io = ioFor(env);
-  const only = { ...io, store: Object.assign(Object.create(io.store), { active: async () => (await io.store.active()).filter((r) => slugs.includes(r.slug)) }) };
-  return () => runMonitor(only, config(env));
 }
 
 const meterEvents = (calls, tenantId) =>

@@ -1,6 +1,6 @@
 [package]
 name = "citadel-workspace-internal-service"
-version = "0.8.8"
+version = "0.8.9"
 edition = "2021"
 license.workspace = true
 
@@ -39,3 +39,19 @@ lazy_static = { workspace = true, optional = true }
 
 [dev-dependencies]
 tracing = "0.1"
+
+# The Windows tray icon and its supporting Win32 calls (src/windows_shell). Windows only: the
+# Mac has its own menu-bar app (apps/macos-agent) and Linux has a launcher, so neither links these.
+[target.'cfg(windows)'.dependencies]
+tray-icon = { version = "0.21", default-features = false }
+png = "0.18"
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Console",
+    "Win32_System_Environment",
+    "Win32_System_Registry",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }

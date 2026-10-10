@@ -79,8 +79,9 @@ for (const file of rustFiles(REQUESTS)) {
     subscriptionsSeen += 1;
 
     // Is the stream this opens consumed under a bound? Look at the block that
-    // follows — generously, since rustfmt spreads these over many lines.
-    const block = lines.slice(Math.max(0, i - 6), Math.min(i + 24, limit)).join('\n');
+    // follows — generously, since rustfmt spreads these over many lines (upload.rs bounds its
+    // stream 35 lines after opening it, after registering the send's correlation).
+    const block = lines.slice(Math.max(0, i - 6), Math.min(i + 40, limit)).join('\n');
     if (BOUNDED.test(block)) continue;
 
     problems.push(

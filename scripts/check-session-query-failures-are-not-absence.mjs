@@ -159,7 +159,13 @@ for (const file of walk(AGENT)) {
     if (body.some((l) => /best-effort:/.test(l))) return;
     if (body.some((l) => /\b(return|\?;)/.test(l))) return;
 
-    const absent = body.find((l) => MEANS_ABSENT.test(l));
+    // `None` out of a fn returning `Option<bool>` is the third state, "could not
+    // ask": absence is `Some(false)`, and the caller keeps the failure on `None`.
+    const signature = lines.slice(0, i).reverse().find((l) => /\bfn\s/.test(l)) ?? '';
+    const isUnknownState = /->\s*Option<bool>/.test(signature);
+    const absent = body.find(
+      (l) => MEANS_ABSENT.test(l) && !(isUnknownState && /^\s*None\s*,?\s*$/.test(l)),
+    );
     if (absent) {
       problems.push(
         `${relative(ROOT, file)}:${i + errAt + 1} — the Err arm evaluates to ` +

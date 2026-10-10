@@ -43,6 +43,7 @@ pub async fn new_internal_service_with_admin(
         citadel_internal_service::kernel::CitadelWorkspaceService::<_, StackedRatchet>::new_tcp(
             bind_address_internal_service,
             citadel_internal_service::SERVER_RECONNECT,
+            citadel_internal_service_test_common::test_transfers(),
         )
         .await?;
     let internal_service = NodeBuilder::default()

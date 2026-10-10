@@ -7,9 +7,12 @@
  *   2. copies the object's recent periods' totals into D1 (`tenant_usage`), overwriting;
  *   3. reports relay beyond the tier's included GB to Stripe's Billing Meter, in whole GB, once:
  *      an outbox row is opened, the event sent under an identifier naming the GB it covers, and
- *      only then is the report recorded (the webhook's rule: record AFTER the write it guards).
+ *      only then is the report recorded (the webhook's rule: record AFTER the write it guards);
+ *   4. takes the census of the object's accounts by auth-record version (control/auth-versions.mjs):
+ *      counts only, logged and kept in D1, warning while any legacy Argon2 account remains.
  * The object is authoritative for its own limits; a missed run delays a report, nothing more.
  */
+import { AUTH_VERSION_KEYS } from "./auth-versions.mjs";
 import { entitlements, METERING, OVERAGE_EVENT, overageBilledOn, overageSoldWith } from "./plans.mjs";
 import { stripe } from "./stripe.mjs";
 
@@ -48,6 +51,16 @@ async function monitorTenant(io, cfg, row) {
     }
     await report(io, cfg, row, period.period_start, overage);
   }
+  await census(io, row, object);
+}
+
+/** The tenant's accounts by auth-record version: counts only, never a username or a CID. */
+async function census(io, row, object) {
+  const counts = await object.authVersions();
+  await io.authVersions.record(row.tenant_id, counts, io.now());
+  console.log(`[monitor] ${row.slug}: auth records ${AUTH_VERSION_KEYS.map((k) => `${k}=${counts[k]}`).join(" ")}`);
+  if (counts.legacy_argon > 0) console.warn(`[monitor] ${row.slug}: ${counts.legacy_argon} legacy Argon2 account(s) remain`);
+  if (counts.undecodable > 0) console.warn(`[monitor] ${row.slug}: ${counts.undecodable} account record(s) could not be read for the census`);
 }
 
 async function report(io, cfg, row, periodStart, overage) {

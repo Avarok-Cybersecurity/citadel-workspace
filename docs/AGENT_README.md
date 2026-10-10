@@ -73,6 +73,11 @@ If you delete `~/.citadel-agent` (or, for an older setup, `./data`), or point
 
 ## Windows
 
+The installed agent opens no terminal window. It shows an icon in the notification area, next
+to the clock, with the same menu as the Mac's menu bar, and writes what a terminal would have
+shown to `%LOCALAPPDATA%\Citadel Agent\agent.log` (the menu's "Show Log"). Started from a
+terminal, as below, it prints in that terminal instead.
+
 ```powershell
 .\citadel-agent.exe --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302
 ```

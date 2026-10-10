@@ -25,3 +25,9 @@ if [ -n "$WANT" ]; then
     *) echo "::error::$ARCHIVE claims $WANT but the binary is: $DESC" >&2; exit 1 ;;
   esac
 fi
+# The Windows agent opens no console window: a black terminal that stays up for as long as the
+# agent runs was the first Windows tester's first report (2026-10-04). The header says which
+# subsystem Windows will start it in.
+case "$ARCHIVE" in
+  *windows-x64*) node "$LIB/assert-pe-subsystem.mjs" "$BIN" windows ;;
+esac

@@ -170,7 +170,7 @@ stored value that is not 32 bytes stops the object rather than being replaced. L
 are upgraded at their next login and cannot go back: rolling the Worker back below this release
 locks out every account that signed in since.
 `PQ_KSF_*` in `wrangler.toml` is the Argon2id cost clients stretch a password factor with; the
-node refuses anything below the SDK's floor.
+node refuses anything below the SDK's floor. The monitor counts accounts by auth-record version (AUTH-CENSUS.md).
 
 ## Deploying
 
