@@ -1,0 +1,57 @@
+# Signs every release asset in dist/ with ML-DSA-65 (tools/release-sign; the message is
+# citadel-release-signature's) and verifies each signature with the tool before anything is
+# uploaded. A publishing run signs with CITADEL_RELEASE_MLDSA_KEY and verifies against the
+# public key the agent embeds, so a signature the updater would refuse is never published. A dry
+# run signs with a key generated here and thrown away, labelled as such: nothing it signs is
+# published.
+name: Sign the agent release
+description: Writes and verifies <asset>.mldsa.sig for every release asset in dist/.
+inputs:
+  publishes:
+    description: "'true' when this run publishes a release."
+    required: true
+  tag:
+    description: The agent-vX.Y.Z tag a publishing run releases under.
+    required: true
+  version:
+    description: The version this run builds (names the dry run's tag).
+    required: true
+  mldsa-key:
+    description: The CITADEL_RELEASE_MLDSA_KEY secret. Required when publishing.
+    required: true
+  tool:
+    description: The release-sign binary.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Sign and verify every asset
+      shell: bash
+      env:
+        PUBLISHES: ${{ inputs.publishes }}
+        TAG: ${{ inputs.tag }}
+        VERSION: ${{ inputs.version }}
+        MLDSA_KEY: ${{ inputs.mldsa-key }}
+        TOOL: ${{ inputs.tool }}
+        EMBEDDED: citadel-internal-service/citadel-internal-service/src/updater/release_public_key.txt
+      run: |
+        set -euo pipefail
+        chmod +x "$TOOL"
+        keys="$(mktemp -d)"
+        trap 'rm -rf "$keys"' EXIT
+        if [ "$PUBLISHES" = "true" ]; then
+          [[ "$TAG" =~ ^agent-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::not an agent-vX.Y.Z tag: $TAG"; exit 1; }
+          [ -n "$MLDSA_KEY" ] || { echo "::error::CITADEL_RELEASE_MLDSA_KEY is not set: no release is published unsigned"; exit 1; }
+          (umask 077 && printf '%s\n' "$MLDSA_KEY" > "$keys/private")
+          public="$EMBEDDED"
+          tag="$TAG"
+        else
+          tag="dry-run-agent-v$VERSION"
+          echo "::warning::DRY RUN: signing with an EPHEMERAL ML-DSA key generated in this job, under the tag $tag. These signatures are not the release key's and are never published."
+          "$TOOL" keygen --private-key "$keys/private" --public-key "$keys/public" >/dev/null
+          public="$keys/public"
+        fi
+        mapfile -t assets < <(find dist -maxdepth 1 -type f ! -name '*.sha256' ! -name '*.mldsa.sig' | sort)
+        [ "${#assets[@]}" -ge 9 ] || { echo "::error::only ${#assets[@]} assets in dist/ to sign: ${assets[*]}"; exit 1; }
+        "$TOOL" sign --private-key "$keys/private" --tag "$tag" "${assets[@]}"
+        "$TOOL" verify --public-key "$public" --tag "$tag" "${assets[@]}"

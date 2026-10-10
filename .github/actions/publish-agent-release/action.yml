@@ -1,8 +1,9 @@
 # The steps of release-agent.yml's publish job, once it has downloaded every release asset into
-# dist/: check them against the header's release-download list, attest them, and publish. Runs
+# dist/: check them against the header's release-download list and their ML-DSA signatures'
+# presence, attest them, and publish (the signatures with them). Runs
 # with the publish job's permissions, the only job granted id-token and attestations write.
 name: Publish the agent release
-description: Verifies, attests and publishes the release assets in dist/.
+description: Verifies, attests and publishes the release assets in dist/ and their signatures.
 inputs:
   github-token:
     description: The job's GITHUB_TOKEN, for gh.
@@ -25,6 +26,11 @@ runs:
           [ -f "dist/$n" ] && [ -f "dist/$n.sha256" ] || { echo "::error::$n (or its .sha256) is missing"; exit 1; }
         done
         (cd dist && sha256sum -c ./*.sha256)
+        # The sign job verified each against the agent's embedded key; none may be missing here.
+        for f in dist/*; do
+          case "$f" in *.sha256|*.mldsa.sig) continue ;; esac
+          [ -f "$f.mldsa.sig" ] || { echo "::error::$f has no ML-DSA signature: no release is published unsigned"; exit 1; }
+        done
         # The TLS key ships inside the binaries by design, never beside them.
         keys="$(find dist -type f \( -iname '*.pem' -o -iname '*.key' -o -iname '*.p12' -o -iname '*.p8' \))"
         [ -z "$keys" ] || { echo "::error::key files among the release assets: $keys"; exit 1; }

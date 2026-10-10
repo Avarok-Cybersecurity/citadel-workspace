@@ -41,6 +41,31 @@ signed, notarised, stapled app, which the Swift app can verify as a unit before 
 
 ## Verify (any failure leaves the install untouched and logs why at `error`)
 
+Every check below is required; the ML-DSA signature is checked first and replaces none of the
+others.
+
+0. ML-DSA-65 (FIPS 204) release signature. The release must publish `<name>.mldsa.sig` beside the
+   asset; without one the update is refused before anything is downloaded. After the download
+   the agent rebuilds the signed message from the release's tag, the asset's name and the sha256
+   it computed itself, and verifies it against the public key it embeds
+   (`citadel-internal-service/citadel-internal-service/src/updater/release_key.rs`, the text of
+   `release_public_key.txt`).
+   Missing, malformed, by another key, or for another tag, file or digest: refused, and
+   `UpdateStatus.last_error` says why, prefixed `ML-DSA:`. `UpdateAvailable.mldsa_verified` is true
+   when the staged update passed it (the UI's badge). The format, defined once in the agent's
+   `citadel-release-signature` crate and used by both the updater and `tools/release-sign`:
+
+   ```text
+   message   = b"citadel-agent-release-v1\0" || tag || b"\0" || asset_name || b"\0" || sha256(asset)
+   signature = ML-DSA-65, deterministic, empty context, over message
+   .mldsa.sig = hex(signature) (3309 bytes, 6618 lowercase hex characters) and a newline
+   ```
+
+   `tag` is `agent-vX.Y.Z` and `asset_name` the published file name (`Citadel-Agent.dmg`), both
+   UTF-8 without NUL; `sha256(asset)` is the 32 raw bytes of the digest. Binding the tag and the
+   name means a signature cannot be moved onto another asset or another release. The public key is
+   the 1952-byte ML-DSA-65 verifying key in hex (3904 characters); the private key is the 32-byte
+   seed in hex, the `CITADEL_RELEASE_MLDSA_KEY` repository secret.
 1. HTTPS only, every hop (redirects included) to `api.github.com`, `github.com`,
    `objects.githubusercontent.com` or `release-assets.githubusercontent.com` — the last is where
    GitHub redirects release downloads today, so it has to be on the list. Asset URLs must be
@@ -62,7 +87,7 @@ signed, notarised, stapled app, which the Swift app can verify as a unit before 
 
 ## Notify
 
-`UpdateAvailable { current, latest, notes_url, download_url, ready }` goes to every connected window
+`UpdateAvailable { current, latest, notes_url, download_url, ready, mldsa_verified }` goes to every connected window
 (the UI banner: "Citadel Agent X.Y.Z is available" with "Restart to update" when ready, "Download"
 otherwise) and to the menu-bar app's notice stream (a native notification and a panel row).
 
@@ -86,6 +111,45 @@ open accounts will have to sign in again before it sends the request.
 
 A version whose install failed is never retried automatically in that run or the next.
 
+## Signing releases
+
+`release-agent.yml` signs every asset (everything in `dist/` but the `.sha256` files) in its
+`sign` job with `tools/release-sign`, after the builds and before publishing, and verifies each
+signature with the same tool against the agent's embedded public key before anything is uploaded.
+`gh release create` publishes the `.mldsa.sig` files with the assets, and the publish step refuses
+any asset without one.
+
+- The `release-key` job runs before any build. On a run that publishes, it fails if
+  `CITADEL_RELEASE_MLDSA_KEY` is unset, if the embedded key is the placeholder
+  (`citadel_release_signature::PLACEHOLDER_PUBLIC_KEY`), or if the secret is not the embedded
+  key's private half (it signs a probe and verifies it). No release is published unsigned.
+- A `workflow_dispatch` dry run signs with a key generated in the job and thrown away, under the
+  tag `dry-run-agent-vX.Y.Z`. It is labelled as such in the log, and nothing it signs is published.
+- Validate's `release-sign` job tests the tool and fails a PR whose agent embeds no real key.
+
+Key setup (once, by the owner; the private key never enters a repository or a log):
+
+```sh
+git submodule update --init citadel-internal-service
+cargo run --release --manifest-path tools/release-sign/Cargo.toml -- keygen \
+  --private-key ~/citadel-release-mldsa.key \
+  --public-key citadel-internal-service/citadel-internal-service/src/updater/release_public_key.txt
+gh secret set CITADEL_RELEASE_MLDSA_KEY -R Avarok-Cybersecurity/citadel-workspace < ~/citadel-release-mldsa.key
+```
+
+`keygen` creates the private key file with mode 0600 and never overwrites one. It prints only the
+public key, which is safe to print, and `--public-key` writes it where the agent embeds it. That
+change is committed in the agent repository. Rotating the key works the same way, and an agent
+only trusts the new key once it has been updated to a build that embeds it.
+
+### Bootstrap
+
+Releases before the first ML-DSA-capable agent publish no `.mldsa.sig`, and agents before that one
+never look for it. The first ML-DSA-capable agent therefore arrives by the classical path: an
+older agent installs it on its sha256 and attestation (and, for the app, its code signature and
+notarisation) as before. From that agent on, a release without a valid signature by the embedded
+key is refused, so no later update can be installed by the classical checks alone.
+
 ## Settings
 
 "Automatically install updates when no account is signed in" (default on, as the owner asked) and
@@ -98,6 +162,8 @@ A version whose install failed is never retried automatically in that run or the
   everyone out; the UI asks first.
 - `UpdateInstall` goes only to the token-holding menu-bar app; `UpdateInstallResult` must carry
   the token.
+- The ML-DSA public key is embedded, like the trust root. An update signed by any other key,
+  including a new key the agent was never told about, is refused.
 - The trust root is embedded: if Sigstore rotates its keys before the agent is updated, attestation
   checks fail closed and updates stop being applied (the banner still links the download).
 

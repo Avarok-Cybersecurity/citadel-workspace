@@ -33,6 +33,9 @@ export const AGENT_INPUTS = [
   ".github/actions/linux-agent-packages",
   ".github/actions/windows-agent-msi",
   ".github/actions/publish-agent-release",
+  ".github/actions/release-sign-tool",
+  ".github/actions/sign-agent-release",
+  "tools/release-sign",
 ];
 
 const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();

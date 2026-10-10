@@ -875,6 +875,7 @@ dependencies = [
  "bytes",
  "citadel-internal-service-connector",
  "citadel-internal-service-types",
+ "citadel-release-signature",
  "citadel_io",
  "citadel_proto",
  "citadel_sdk",
@@ -966,6 +967,16 @@ dependencies = [
  "custom_debug",
  "serde",
  "uuid",
+ "zeroize",
+]
+
+[[package]]
+name = "citadel-release-signature"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "ml-dsa",
+ "sha2",
  "zeroize",
 ]
 
@@ -2949,6 +2960,7 @@ checksum = "707114b52a152fa7bdb290cd7cd5912d9467273b6d74e21b8d81aca1f8533f6b"
 dependencies = [
  "ctutils",
  "typenum",
+ "zeroize",
 ]
 
 [[package]]
@@ -3753,6 +3765,7 @@ dependencies = [
  "pkcs8 0.11.0",
  "shake",
  "signature 3.0.0",
+ "zeroize",
 ]
 
 [[package]]
@@ -3764,6 +3777,7 @@ dependencies = [
  "ctutils",
  "hybrid-array",
  "num-traits",
+ "zeroize",
 ]
 
 [[package]]
