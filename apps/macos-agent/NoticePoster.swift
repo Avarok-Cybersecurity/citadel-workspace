@@ -12,6 +12,14 @@ final class NoticePoster: NSObject, UNUserNotificationCenterDelegate {
     var onOpen: ((_ account: String, _ server: String?, _ open: String) -> Void)?
     var onOpenURL: ((URL) -> Void)?
     private var announced: String?
+    /// Told whether macOS lets this app show notifications; not told while the user has yet to answer.
+    var onAuthorization: ((_ allowed: Bool) -> Void)?
+
+    /// System Settings at this app's notification switch (macOS 13+ pane id).
+    static var settingsURL: URL {
+        let id = Bundle.main.bundleIdentifier ?? ""
+        return URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(id)")!
+    }
 
     init(log: LogFile) {
         self.log = log
@@ -21,9 +29,19 @@ final class NoticePoster: NSObject, UNUserNotificationCenterDelegate {
     /// Once at launch. macOS asks the user the first time and remembers the answer.
     func prepare() {
         center.delegate = self
-        center.requestAuthorization(options: [.alert, .sound, .badge]) { [log] granted, error in
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { [log, weak self] granted, error in
             if let error { log.write("notifications could not be requested: \(error)") }
             if !granted { log.write("notifications are turned off for Citadel Agent") }
+            self?.checkAuthorization()
+        }
+    }
+
+    /// The answer as it stands now: the user may have changed it in System Settings since launch.
+    func checkAuthorization() {
+        center.getNotificationSettings { [weak self] settings in
+            guard settings.authorizationStatus != .notDetermined else { return }
+            let allowed = settings.authorizationStatus != .denied
+            DispatchQueue.main.async { self?.onAuthorization?(allowed) }
         }
     }
 

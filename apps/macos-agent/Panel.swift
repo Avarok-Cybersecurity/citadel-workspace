@@ -5,14 +5,18 @@ import SwiftUI
 /// in. The pattern is certified.sh's tray (rMazing apps/macos/TrayPanel.swift): a transient
 /// popover, SwiftUI inside, a solid backdrop painted under the popover's own frame so the arrow
 /// takes the panel's colour too.
-final class Panel {
+final class Panel: NSObject, NSPopoverDelegate {
     private let popover = NSPopover()
+    /// Clicks in other apps, which a transient popover of a background app never hears; held only while shown.
+    private var outsideClicks: Any?
     let model: PanelModel
 
     init(model: PanelModel) {
         self.model = model
+        super.init()
         popover.behavior = .transient
         popover.animates = true
+        popover.delegate = self
         popover.appearance = NSAppearance(named: .vibrantDark)
         popover.contentViewController = PanelHost(model: model)
         model.onResize = { [weak self] in self?.resize() }
@@ -21,12 +25,31 @@ final class Panel {
     func toggle(relativeTo button: NSView) {
         if popover.isShown { popover.performClose(nil); return }
         resize()
+        // A transient popover closes on an outside click only while its app is active, and this
+        // app is an accessory that never is unless asked.
+        NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
+        watchOutsideClicks()
         popover.contentViewController?.view.window?.contentView?.setAccessibilityIdentifier(PanelMetrics.identifier)
         model.onOpen?()
     }
 
     func close() { popover.performClose(nil) }
+
+    func popoverDidClose(_ notification: Notification) { stopWatchingOutsideClicks() }
+
+    private func watchOutsideClicks() {
+        guard outsideClicks == nil else { return }
+        outsideClicks = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.popover.performClose(nil)
+        }
+    }
+
+    private func stopWatchingOutsideClicks() {
+        outsideClicks.map(NSEvent.removeMonitor)
+        outsideClicks = nil
+    }
 
     var isShown: Bool { popover.isShown }
 
@@ -59,6 +82,11 @@ enum PanelAction {
     case restartAgent
     case toggleLogin
     case showLog
+    /// The workspace's /agent page, at #about and at #updates.
+    case openAbout
+    case checkForUpdates
+    /// System Settings, at this app's notification switch.
+    case openNotificationSettings
     /// "Restart to update": install the release the agent verified.
     case installUpdate
     case openURL(URL)
@@ -75,6 +103,8 @@ final class PanelModel: ObservableObject {
     @Published var loaded = false
     /// A newer agent release, when the agent has announced one.
     @Published var update: AgentUpdate? { didSet { onResize?() } }
+    /// macOS has notifications denied for this app, so nothing the agent raises can be seen.
+    @Published var notificationsOff = false { didSet { onResize?() } }
     var perform: (PanelAction) -> Void = { _ in }
     var onResize: (() -> Void)?
     var onOpen: (() -> Void)?
@@ -92,7 +122,7 @@ final class PanelModel: ObservableObject {
     var preferredHeight: CGFloat {
         // Each row is followed by a 1 pt hairline; with no rows, the empty row is 1.5 rows tall.
         let rows = accounts.isEmpty ? PanelMetrics.row * 1.5 : CGFloat(accounts.count) * (PanelMetrics.row + 1)
-        let update = self.update == nil ? 0 : PanelMetrics.update + 1
+        let update = (self.update == nil ? 0 : PanelMetrics.update + 1) + (notificationsOff ? PanelMetrics.notifications + 1 : 0)
         let total = PanelMetrics.title + 1 + rows + 1 + update + PanelMetrics.footer + PanelMetrics.search
         return min(total, PanelMetrics.maxHeight)
     }
@@ -106,6 +136,7 @@ enum PanelMetrics {
     static let row: CGFloat = 72
     static let footer: CGFloat = 40
     static let update: CGFloat = 56
+    static let notifications: CGFloat = 48
     static let search: CGFloat = 60
     static let padding: CGFloat = 16
     static let avatar: CGFloat = 40

@@ -21,6 +21,8 @@ pub enum MenuAction {
     CreateWorkspace,
     ToggleLogin,
     ShowLog,
+    About,
+    CheckUpdates,
     Quit,
 }
 
@@ -32,6 +34,8 @@ impl MenuAction {
             Self::CreateWorkspace => "create-workspace",
             Self::ToggleLogin => "toggle-login",
             Self::ShowLog => "show-log",
+            Self::About => "about",
+            Self::CheckUpdates => "check-updates",
             Self::Quit => "quit",
         }
     }
@@ -42,6 +46,8 @@ impl MenuAction {
             Self::CreateWorkspace,
             Self::ToggleLogin,
             Self::ShowLog,
+            Self::About,
+            Self::CheckUpdates,
             Self::Quit,
         ]
         .into_iter()
@@ -61,7 +67,7 @@ pub enum Entry {
 }
 
 /// The menu, top to bottom. `workspace` is the site the agent serves; without one (the origin
-/// allowlist is `*`, or not https) there is no site to open, so those two items are left out
+/// allowlist is `*`, or not https) there is no site to open, so the items that open it are left out
 /// rather than pointing nowhere.
 pub fn entries(workspace: Option<&str>, start_at_login: bool) -> Vec<Entry> {
     let action = |action, title| Entry::Action {
@@ -85,6 +91,14 @@ pub fn entries(workspace: Option<&str>, start_at_login: bool) -> Vec<Entry> {
     });
     menu.push(action(MenuAction::ShowLog, "Show Log"));
     menu.push(Entry::Separator);
+    if workspace.is_some() {
+        menu.push(action(MenuAction::About, "About Citadel Agent"));
+        menu.push(action(
+            MenuAction::CheckUpdates,
+            "Check for Updates\u{2026}",
+        ));
+        menu.push(Entry::Separator);
+    }
     menu.push(action(MenuAction::Quit, "Quit Citadel Agent"));
     menu
 }
@@ -114,6 +128,12 @@ fn is_https_origin(origin: &str) -> bool {
 
 pub fn create_url(origin: &str) -> String {
     format!("{origin}/create")
+}
+
+/// The workspace's page about this agent, at one of its sections (`about`, `updates`): the Mac
+/// menu bar opens the same addresses.
+pub fn agent_page_url(origin: &str, section: &str) -> String {
+    format!("{origin}/agent#{section}")
 }
 
 /// `<local app data>\Citadel Agent\agent.log`: where "Show Log" opens, and where output goes when
