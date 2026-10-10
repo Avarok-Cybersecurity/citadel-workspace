@@ -26,6 +26,13 @@
 # reads it and fails a tag push whose agent-vX.Y.Z says anything else; every artefact is then run
 # with --version and must print exactly that (scripts/lib/assert-agent-version.sh).
 #
+# EVERY ASSET IS SIGNED with ML-DSA-65 as well as checksummed and attested: `sign` writes
+# `<asset>.mldsa.sig` with the CITADEL_RELEASE_MLDSA_KEY secret (tools/release-sign) and verifies
+# each against the public key the agent embeds before anything is uploaded; the agent's updater
+# refuses an update without it. `release-key` fails a publishing run before anything builds when
+# the secret is missing, the embedded key is the placeholder, or the two are not one pair. A dry
+# run signs with a throwaway key, labelled. docs/plans/agent-auto-update.md has the format.
+#
 # Each job's steps live in composite actions under .github/actions/. What the UI's contract test
 # reads stays here: the build matrix, the packaged binary's name, the Mac image, and every
 # upload-artifact step publish collects.
@@ -71,6 +78,8 @@ jobs:
     timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
+      # Whether this run publishes: the publish job's own condition, for the jobs that sign.
+      publishes: ${{ startsWith(github.ref, 'refs/tags/agent-v') || inputs.publish == true }}
     steps:
       - uses: actions/checkout@v4
       - id: version
@@ -92,8 +101,23 @@ jobs:
           cloudflare-dns-api-token: ${{ secrets.CLOUDFLARE_DNS_API_TOKEN }}
           issue: ${{ startsWith(env.RELEASE_REF, 'refs/tags/agent-v') }}
 
+  # The release key, before 45 minutes of builds: see the action.
+  release-key:
+    name: Release signing key
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [version]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: ./.github/actions/release-sign-tool
+        with:
+          publishes: ${{ needs.version.outputs.publishes }}
+          mldsa-key: ${{ secrets.CITADEL_RELEASE_MLDSA_KEY }}
+
   build:
-    needs: [certificate, version]
+    needs: [certificate, version, release-key]
     # Bounds a hang, not performance. Without it a stuck job holds a runner for
     # GitHub's 360-minute default, and the observed worst case is the Windows
     # target at about 16 minutes.
@@ -278,11 +302,43 @@ jobs:
             Citadel-Agent-x64.msi.sha256
           if-no-files-found: error
 
+  # <asset>.mldsa.sig for every release asset, verified before it is uploaded (the action says how).
+  sign:
+    name: Sign release assets (ML-DSA-65)
+    needs: [version, release-key, build, macos-app, linux-packages, windows-msi]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-sign-tool
+          path: ${{ runner.temp }}/release-sign
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: citadel-agent-*
+          merge-multiple: true
+          path: dist
+      - uses: ./.github/actions/sign-agent-release
+        with:
+          publishes: ${{ needs.version.outputs.publishes }}
+          tag: ${{ inputs.publish && inputs.tag || github.ref_name }}
+          version: ${{ needs.version.outputs.version }}
+          mldsa-key: ${{ secrets.CITADEL_RELEASE_MLDSA_KEY }}
+          tool: ${{ runner.temp }}/release-sign/release-sign
+      - uses: actions/upload-artifact@v4
+        with:
+          name: citadel-agent-mldsa-signatures
+          path: dist/*.mldsa.sig
+          if-no-files-found: error
+
   publish:
     # Observed under a minute; this bounds a hang, not performance.
     timeout-minutes: 15
     name: Publish release
-    needs: [build, macos-app, linux-packages, windows-msi]
+    needs: [build, macos-app, linux-packages, windows-msi, sign]
     runs-on: ubuntu-latest
     # Only a real tag push publishes. workflow_dispatch builds and smoke-tests
     # every platform without creating a release, so the pipeline is exercisable
