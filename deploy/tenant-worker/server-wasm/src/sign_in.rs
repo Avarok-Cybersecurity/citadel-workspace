@@ -15,6 +15,7 @@ use citadel_workspace_server_kernel::kernel::sign_in::{
 use citadel_workspace_types::sign_in::SignInSettings;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -101,6 +102,15 @@ enum HostRefusal {
 /// Said to the client when the check could not be completed; the object logs the detail.
 const CHECK_UNAVAILABLE: &str = "the check could not be completed";
 
+/// How long after a session ends its client's reconnect is still not asked the check: the
+/// agent retries a dropped session for 600 s (`SERVER_RECONNECT.give_up_after` in
+/// citadel-internal-service), and its last attempt may take 30 s more to reach the check
+/// (`attempt_timeout`) after up to 30 s of backoff. 900 s covers that with five minutes
+/// spare for the gap between the server ending the session and the agent seeing the drop.
+/// It exempts only from the check; the reconnect still proves the password, and each
+/// ended session's token is honoured once, for its own account.
+const RESUME_GRACE: Duration = Duration::from_secs(900);
+
 fn kind_name(kind: AdmissionKind) -> &'static str {
     match kind {
         AdmissionKind::SignIn => "SignIn",
@@ -132,6 +142,10 @@ impl AdmissionPolicy for DurableObjectSignIn {
             HostRefusal::AdmissionRequired => Err(AdmissionRefusal::Required),
             HostRefusal::AdmissionFailed { reason } => Err(AdmissionRefusal::Failed(reason)),
         }
+    }
+
+    fn resume_grace(&self) -> Duration {
+        RESUME_GRACE
     }
 }
 
