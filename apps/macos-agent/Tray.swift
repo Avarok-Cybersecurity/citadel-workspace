@@ -51,6 +51,9 @@ final class Tray: NSObject, NSMenuDelegate {
         add(menu, "Show Log", .showLog)
         if case .failed = model.agent { add(menu, "Restart Agent", .restartAgent) }
         menu.addItem(.separator())
+        add(menu, "About Citadel Agent", .openAbout)
+        add(menu, "Check for Updates…", .checkForUpdates)
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Citadel Agent", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 

@@ -20,6 +20,9 @@ fn the_menu_is_the_mac_menu_bars_item_for_item() {
             "Start at Login",
             "Show Log",
             "-",
+            "About Citadel Agent",
+            "Check for Updates\u{2026}",
+            "-",
             "Quit Citadel Agent"
         ]
     );
@@ -45,6 +48,30 @@ fn without_a_site_the_menu_does_not_offer_to_open_it() {
         titles(&entries(None, true)),
         ["Start at Login", "Show Log", "-", "Quit Citadel Agent"]
     );
+}
+
+#[test]
+fn the_agent_pages_are_under_the_site() {
+    assert_eq!(
+        agent_page_url("https://work.avarok.net", "about"),
+        "https://work.avarok.net/agent#about"
+    );
+    assert_eq!(
+        agent_page_url("https://work.avarok.net:8443", "updates"),
+        "https://work.avarok.net:8443/agent#updates"
+    );
+}
+
+#[test]
+fn the_pages_the_menus_open_are_the_same_on_the_mac() {
+    // main.swift names the sections; a section renamed on one side only fails here.
+    let swift = include_str!("../../../apps/macos-agent/main.swift");
+    for section in ["about", "updates"] {
+        assert!(
+            swift.contains(&format!("openAgentPage(\"{section}\"")),
+            "{section} is not opened by main.swift"
+        );
+    }
 }
 
 #[test]

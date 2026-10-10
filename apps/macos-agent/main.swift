@@ -58,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 Actions.perform(action, settings: settings, log: log, agent: agent)
             }
+            poster.onAuthorization = { [weak self] allowed in self?.model.notificationsOff = !allowed }
             poster.prepare()
             self.notices = notices
             self.poster = poster
@@ -65,7 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.tray = tray
             let client = AgentClient(port: settings.bindPort)
             self.client = client
-            model.onOpen = { [weak self] in self?.refresh() }
+            model.onOpen = { [weak self, weak poster] in self?.refresh(); poster?.checkAuthorization() }
             // Only while the panel is open: nothing else shows the list.
             poll = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
                 guard let self, self.tray?.isPanelShown == true else { return }
@@ -115,11 +116,21 @@ enum Actions {
         case .restartAgent: agent?.restart()
         case .toggleLogin: LoginItem.toggle(log: log)
         case .showLog: NSWorkspace.shared.open(log.url)
+        case .openAbout: openAgentPage("about", origin: settings.workspaceURL)
+        case .checkForUpdates: openAgentPage("updates", origin: settings.workspaceURL)
+        case .openNotificationSettings: NSWorkspace.shared.open(NoticePoster.settingsURL)
         }
     }
 }
 
 extension Actions {
+    /// `<origin>/agent#<section>`, opened the way "Open Citadel Workspaces" opens the origin.
+    static func openAgentPage(_ section: String, origin: URL) {
+        var page = URLComponents(url: origin.appendingPathComponent("agent"), resolvingAgainstBaseURL: false)
+        page?.fragment = section
+        if let url = page?.url { NSWorkspace.shared.open(url) }
+    }
+
     /// Says plainly what a restart costs before it happens; true to go ahead.
     static func confirmRestart(signedIn: Int) -> Bool {
         guard signedIn > 0 else { return true }
