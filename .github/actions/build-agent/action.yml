@@ -84,7 +84,15 @@ runs:
       shell: bash
       env:
         TARGET: ${{ inputs.target }}
-      run: cargo build --release --target "$TARGET" -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features vendored,self-update
+      run: |
+        # native-dialogs: the PickFile request opens the OS file dialog (reported to the UI in
+        # the greeting as native_picker). Linux goes through the desktop portal (rfd's
+        # xdg-portal backend, no GTK needed). macOS stays off: rfd panics there
+        # ("NonWindowed environment ... thread different than main") and the agent's panic hook
+        # then exits the whole agent. Verified by sending PickFile to a macOS build.
+        features=vendored,self-update
+        if [ "$RUNNER_OS" = "Linux" ]; then features="$features,native-dialogs"; fi
+        cargo build --release --target "$TARGET" -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features "$features"
     # PowerShell, not bash, on Windows: vendored OpenSSL runs its Configure with the first
     # perl on PATH, and under Git's bash that is Git's cut-down perl, which lacks the modules
     # Configure needs ("Can't locate ... Params/Check.pm"). The runner's Strawberry perl is
@@ -94,7 +102,7 @@ runs:
       shell: pwsh
       env:
         TARGET: ${{ inputs.target }}
-      run: cargo build --release --target "$env:TARGET" -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features vendored,self-update
+      run: cargo build --release --target "$env:TARGET" -p citadel-workspace-internal-service --bin citadel-workspace-internal-service --features vendored,self-update,native-dialogs
 
     # Signed and notarised BEFORE packaging, so the tarball carries a binary
     # macOS will run without argument.
