@@ -147,6 +147,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      # Dependencies only (rust-cache drops this workspace's own crates before saving), keyed on
+      # the toolchain and every Cargo.lock/Cargo.toml. Most of this job's 40 minutes (run
+      # 38056778313) is recompiling unchanged dependencies twice -- vendored OpenSSL among them,
+      # whose build-script output under target/*/build/openssl-sys-* is cached with the rest.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: windows-agent
       # pwsh, not bash, for both cargo steps: vendored OpenSSL's Configure runs the first perl on
       # PATH, which under Git's bash is Git's cut-down perl ("Can't locate Locale/Maketext/Simple.pm").
       # Under pwsh it is the runner's Strawberry perl -- the same fix as the build-agent action's

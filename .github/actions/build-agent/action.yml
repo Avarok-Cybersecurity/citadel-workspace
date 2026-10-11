@@ -53,6 +53,15 @@ runs:
 
     # A musl target links statically against musl, whose C compiler wrapper the vendored
     # OpenSSL, ring and pqcrypto builds all need; the runner has only glibc's.
+    # Dependencies only: rust-cache removes this workspace's own crates before saving, so the
+    # agent itself is always compiled from this checkout. Keyed per target, on the toolchain and
+    # every Cargo.lock/Cargo.toml; a release only restores caches saved by runs on its own ref or
+    # on master, which pull requests cannot write. The Windows leg was the slowest of the
+    # release (19.6 minutes in run 38069518949), most of it unchanged dependencies -- vendored
+    # OpenSSL's build included.
+    - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      with:
+        key: release-${{ inputs.target }}
     - name: Install the musl toolchain
       if: contains(inputs.target, '-musl')
       shell: bash
