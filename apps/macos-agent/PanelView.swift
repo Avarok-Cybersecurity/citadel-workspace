@@ -21,6 +21,7 @@ struct PanelView: View {
             }
             Hairline()
             if let update = model.update { UpdateRow(update: update, perform: model.perform); Hairline() }
+            if model.notificationsOff { NotificationsOffRow(perform: model.perform); Hairline() }
             AgentFooter(model: model).frame(height: PanelMetrics.footer)
             SearchField(text: $model.search).frame(height: PanelMetrics.search)
         }
@@ -48,6 +49,9 @@ struct TitleRow: View {
                     Divider()
                     Button(LoginItem.isEnabled ? "Don't Start at Login" : "Start at Login") { model.perform(.toggleLogin) }
                     Button("Show Log") { model.perform(.showLog) }
+                    Divider()
+                    Button("About Citadel Agent") { model.perform(.openAbout) }
+                    Button("Check for Updates…") { model.perform(.checkForUpdates) }
                     Divider()
                     Button("Quit Citadel Agent") { NSApp.terminate(nil) }
                 } label: {

@@ -1,0 +1,20 @@
+[package]
+name = "release-sign"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "Signs and verifies Citadel agent release assets with ML-DSA-65."
+publish = false
+
+# Its own workspace: the release workflow builds it alone, with only the agent submodule (not its
+# nested ones) checked out.
+[workspace]
+
+[dependencies]
+# The signed message, signing and verification: one definition, shared with the agent's updater.
+citadel-release-signature = { path = "../../citadel-internal-service/citadel-release-signature" }
+getrandom = "0.3"
+zeroize = "1.8"
+
+[dev-dependencies]
+tempfile = "3"

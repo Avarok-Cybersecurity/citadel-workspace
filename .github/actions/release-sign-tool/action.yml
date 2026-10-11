@@ -1,0 +1,53 @@
+# Builds and tests tools/release-sign, then, before anything else in the release builds, holds the
+# release to its ML-DSA-65 key: a run that publishes needs the CITADEL_RELEASE_MLDSA_KEY secret,
+# an embedded public key that is not the placeholder, and the two to be one key pair. Hands the
+# tool to the sign job as the release-sign-tool artifact.
+name: The release signing tool, and the release key gate
+description: Builds release-sign and refuses a publishing run without a usable ML-DSA release key.
+inputs:
+  publishes:
+    description: "'true' when this run publishes a release (the publish job's condition)."
+    required: true
+  mldsa-key:
+    description: The CITADEL_RELEASE_MLDSA_KEY secret (the 32-byte seed, hex). Empty when unset.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Build and test release-sign
+      shell: bash
+      run: |
+        set -euo pipefail
+        cargo test --locked --manifest-path tools/release-sign/Cargo.toml
+        cargo test --locked --manifest-path citadel-internal-service/citadel-release-signature/Cargo.toml
+        cargo build --release --locked --manifest-path tools/release-sign/Cargo.toml
+        mkdir -p "$RUNNER_TEMP/release-sign"
+        cp tools/release-sign/target/release/release-sign "$RUNNER_TEMP/release-sign/"
+    - name: The release key is configured, embedded, and one pair
+      shell: bash
+      env:
+        PUBLISHES: ${{ inputs.publishes }}
+        MLDSA_KEY: ${{ inputs.mldsa-key }}
+        EMBEDDED: citadel-internal-service/citadel-internal-service/src/updater/release_public_key.txt
+      run: |
+        set -euo pipefail
+        tool="$RUNNER_TEMP/release-sign/release-sign"
+        if [ "$PUBLISHES" != "true" ]; then
+          "$tool" check-key --public-key "$EMBEDDED" \
+            || echo "::warning::DRY RUN: the embedded release key would refuse a release (above); a publishing run fails here"
+          exit 0
+        fi
+        [ -n "$MLDSA_KEY" ] || { echo "::error::CITADEL_RELEASE_MLDSA_KEY is not set: no release is published unsigned"; exit 1; }
+        "$tool" check-key --public-key "$EMBEDDED"
+        probe="$(mktemp -d)"
+        trap 'rm -rf "$probe"' EXIT
+        (umask 077 && printf '%s\n' "$MLDSA_KEY" > "$probe/key")
+        echo "probe" > "$probe/probe"
+        "$tool" sign --private-key "$probe/key" --tag agent-v0.0.0-key-probe "$probe/probe" >/dev/null
+        "$tool" verify --public-key "$EMBEDDED" --tag agent-v0.0.0-key-probe "$probe/probe" \
+          || { echo "::error::CITADEL_RELEASE_MLDSA_KEY is not the private half of the agent's embedded release key"; exit 1; }
+    - uses: actions/upload-artifact@v4
+      with:
+        name: release-sign-tool
+        path: ${{ runner.temp }}/release-sign/release-sign
+        if-no-files-found: error
