@@ -110,7 +110,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: true
+          # Recursive: release-sign-tool runs `cargo test` on citadel-release-signature, whose
+          # manifest belongs to the citadel-internal-service workspace, and cargo loads every
+          # member of it -- including intersession-layer-messaging, a submodule of that
+          # submodule. `true` checks out one level only, so the 0.9.0 Deploy (run 38169318701)
+          # died here with "failed to load manifest for workspace member".
+          submodules: recursive
       - uses: ./.github/actions/release-sign-tool
         with:
           publishes: ${{ needs.version.outputs.publishes }}
