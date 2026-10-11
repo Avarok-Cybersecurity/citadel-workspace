@@ -86,7 +86,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: Avarok-Cybersecurity/gh-actions-deps@master
+      - uses: ./.github/actions/rust-toolchain
       - name: Run Cargo Fmt
         run: cargo fmt -p ${{ matrix.crate }} --check
 
@@ -113,7 +113,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: Avarok-Cybersecurity/gh-actions-deps@master
+      - uses: ./.github/actions/rust-toolchain
       - name: Run Cargo Clippy
         run: cargo clippy -p ${{ matrix.crate }} -- -D warnings
 
@@ -770,7 +770,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: Avarok-Cybersecurity/gh-actions-deps@master
+      - uses: ./.github/actions/rust-toolchain
       - name: Run Cargo Fmt
         run: cargo fmt --all --check
         working-directory: citadel-internal-service
@@ -803,7 +803,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: Avarok-Cybersecurity/gh-actions-deps@master
+      - uses: ./.github/actions/rust-toolchain
       - uses: taiki-e/install-action@nextest
       - name: Run Cargo Nextest
         # `--features websockets`: the origin-policy and handshake tests are
@@ -844,7 +844,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: Avarok-Cybersecurity/gh-actions-deps@master
+      - uses: ./.github/actions/rust-toolchain
       - name: Run Cargo Test
         run: cargo test -p ${{ matrix.crate }}
       # The agent's updater wiring (update_setup.rs) is behind `self-update`, which only the
