@@ -1,0 +1,18 @@
+# CI only: the integration jobs' stack, run from the images this run already built.
+#
+# `scripts/ci-stack.sh load` points COMPOSE_FILE at docker-compose.yml plus this file, after
+# it has loaded the images, checked their labels against the checkout, and restored the files
+# the run's ONE WASM sync produced. Every service is otherwise exactly docker-compose.yml's.
+#
+# The sync container still runs, in its own image and with its own mounts, and every service
+# still waits for it to complete -- but instead of rebuilding the WASM client (7 minutes per
+# job) it re-verifies, from inside the container, that every file the sync produced is in
+# place byte for byte. A missing or altered file fails it, and the stack does not start.
+services:
+  sync-wasm-client:
+    command:
+      - sh
+      - -c
+      - cd /workspace && sha256sum --check --strict --quiet /ci/sync-products.sha256 && echo "sync products verified ($$(wc -l < /ci/sync-products.sha256) files)"
+    volumes:
+      - ${CI_STACK_SYNC_MANIFEST:?set by scripts/ci-stack.sh load}:/ci/sync-products.sha256:ro

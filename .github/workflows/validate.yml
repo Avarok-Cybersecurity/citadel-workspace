@@ -1355,6 +1355,63 @@ jobs:
         run: ./scripts/check-doc-env-vars.sh
         working-directory: .
 
+  # The integration stack, built once per run. Every integration and Playwright leg used to
+  # build it itself, with a compose build on every leg: in run 38056778313 that was 25.7 of
+  # test:crud's 30 minutes (17.5 of image builds, 7.3 of WASM sync), repeated in 53 legs.
+  # One leg per image here, in parallel; the sync leg also runs the sync once. Each leg's
+  # images carry the checkout's source identity, and every consumer refuses a mismatch
+  # (scripts/ci-stack.sh).
+  integration-stack:
+    name: Integration stack - ${{ matrix.service }}
+    # The cheap gates first, for the same reason as the integration matrix below: a lint-red
+    # change should not pay for two release Rust builds.
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign]
+    # The slowest leg is the agent's release compile: 16m43s inside a build that shared four
+    # cores with the server's (run 38056778313). This bounds a hang, not performance.
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [sync-wasm-client, server, internal-service, ui]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Free Disk Space
+        # The server and agent images are the ~5.6 GB `dev` stage (toolchain plus target/).
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/.ghcup "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean || echo 'apt-get clean skipped (lock held)'
+          df -h
+      - name: Pull base images (retried)
+        run: ./scripts/pull-base-images.sh
+      - name: Build the image
+        # The same env Start Services had, so compose interpolates the same build args.
+        env:
+          INTERNAL_SERVICE_PORT: '12345'
+          WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
+        run: ./scripts/ci-stack.sh build ${{ matrix.service }} "$RUNNER_TEMP/ci-stack"
+      - name: Run the WASM sync once, for every job
+        if: matrix.service == 'sync-wasm-client'
+        timeout-minutes: 20
+        env:
+          INTERNAL_SERVICE_PORT: '12345'
+          WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
+        run: ./scripts/ci-stack.sh sync-products "$RUNNER_TEMP/ci-stack"
+      - name: Dump the sync's log on failure
+        if: failure() && matrix.service == 'sync-wasm-client'
+        run: docker compose logs sync-wasm-client 2>&1 | tail -200
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-stack-${{ matrix.service }}
+          path: ${{ runner.temp }}/ci-stack/
+          if-no-files-found: error
+          # zstd already; zipping it again costs time and saves nothing.
+          compression-level: 0
+          # Long enough to re-run a failed leg; the images are run-scoped and expire on their own.
+          retention-days: 3
+
   integration-tests:
     name: Integration Test - ${{ matrix.test }}
     # The cheap checks first. Measured: of five recent red runs, two failed ONLY in
@@ -1372,7 +1429,7 @@ jobs:
     # Measured: a full parent run is ~1,281 runner-min and the integration
     # matrix is 87% of it. Gating on every cheap job means a lint-red PR costs
     # ~25 jobs instead of 74.
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign]
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, integration-stack]
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
@@ -1623,13 +1680,18 @@ jobs:
                  citadel-workspaces/integration-tests/node_modules/playwright
           ln -sf ${{ github.workspace }}/node_modules/@playwright \
                  citadel-workspaces/integration-tests/node_modules/@playwright
-      - name: Pull base images (retried)
-        # A base-image manifest pull is a network fetch that happens before any
-        # RUN, so the retry gate on RUN fetches cannot see it. A run died on a
-        # 502 from registry-1.docker.io resolving `FROM rust:1.92.0` and took
-        # test:tree-permissions with it -- a red job with no test signal, the
-        # same shape as the failure that gate was written for.
-        run: ./scripts/pull-base-images.sh
+      # The stack the integration-stack legs built for this run: no image build here, and no
+      # WASM sync. The base-image pulls (and their retries) moved with the builds.
+      - name: Download the stack this run built
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ci-stack-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/ci-stack
+      - name: Load the stack, and prove it was built from this checkout
+        # Loading ~12 GB of layers; minutes, not tens of them. A hang fails the step.
+        timeout-minutes: 15
+        run: ./scripts/ci-stack.sh load "$RUNNER_TEMP/ci-stack"
       - name: Start Services
         # Its own budget, below the job's, because a JOB timeout cancels and
         # every `if: failure()` dump below is skipped on cancellation. Two legs
@@ -1645,7 +1707,7 @@ jobs:
         # The sampler is killed with the step's other orphans when it ends.
         run: |
           ./scripts/ci-host-pressure.sh sample 30 &
-          docker compose up -d --build --wait
+          docker compose up -d --no-build --wait
       - name: Dump Service Logs on Start Failure
         if: failure()
         run: |
@@ -1744,7 +1806,7 @@ jobs:
           path: citadel-workspaces/integration-tests/screenshots/
 
   playwright-tests:
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign]
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, integration-stack]
     # The @playwright/test suite under integration-tests/src/tests-pw. It existed
     # but ran in NO job, so those specs were dead weight: written, compiled by the
     # typecheck job, and never executed against a running stack.
@@ -1863,13 +1925,18 @@ jobs:
                  citadel-workspaces/integration-tests/node_modules/playwright
           ln -sf ${{ github.workspace }}/node_modules/@playwright \
                  citadel-workspaces/integration-tests/node_modules/@playwright
-      - name: Pull base images (retried)
-        # A base-image manifest pull is a network fetch that happens before any
-        # RUN, so the retry gate on RUN fetches cannot see it. A run died on a
-        # 502 from registry-1.docker.io resolving `FROM rust:1.92.0` and took
-        # test:tree-permissions with it -- a red job with no test signal, the
-        # same shape as the failure that gate was written for.
-        run: ./scripts/pull-base-images.sh
+      # The stack the integration-stack legs built for this run: no image build here, and no
+      # WASM sync. The base-image pulls (and their retries) moved with the builds.
+      - name: Download the stack this run built
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ci-stack-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/ci-stack
+      - name: Load the stack, and prove it was built from this checkout
+        # Loading ~12 GB of layers; minutes, not tens of them. A hang fails the step.
+        timeout-minutes: 15
+        run: ./scripts/ci-stack.sh load "$RUNNER_TEMP/ci-stack"
       - name: Start Services
         # Its own budget, below the job's, because a JOB timeout cancels and
         # every `if: failure()` dump below is skipped on cancellation. Two legs
@@ -1885,7 +1952,7 @@ jobs:
         # The sampler is killed with the step's other orphans when it ends.
         run: |
           ./scripts/ci-host-pressure.sh sample 30 &
-          docker compose up -d --build --wait
+          docker compose up -d --no-build --wait
       - name: Dump Service Logs on Start Failure
         if: failure()
         run: |
@@ -2783,6 +2850,7 @@ jobs:
       - playwright-tests
       - deploy-gate-tests
       - production-build
+      - integration-stack
     # It only reads a JSON blob; the timeout is the house rule, not a need.
     timeout-minutes: 5
     runs-on: >-
