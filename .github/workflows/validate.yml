@@ -219,6 +219,8 @@ jobs:
         run: node scripts/check-mac-runner-is-fork-safe.mjs
       - name: The Mac fork guard refuses every unguarded shape
         run: node --test scripts/lib/mac-runner-routing.test.mjs
+      - name: Publish skips re-validation only on proof that this tree passed
+        run: node --test scripts/lib/publish-validation-decision.test.mjs
       - name: Check the docs' commands resolve
         run: node scripts/check-doc-commands.mjs
       - name: Check request handlers cannot panic
@@ -2880,3 +2882,25 @@ jobs:
             exit 1
           fi
           echo "all $total validation jobs succeeded"
+      # The tree this run validated, for Publish Images' gate (scripts/publish-validation-gate.mjs).
+      # Only reached when every job above succeeded. The gate trusts this record only from a
+      # pull_request run for the merged head of a same-repository PR, so the code that wrote it
+      # is that reviewed head merged with master; and it skips re-validation only when this
+      # tree is byte-for-byte the tree master now holds.
+      - name: Record the tree this run validated
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/validated"
+          tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$GITHUB_SHA" --jq .tree.sha)"
+          printf '{"sha":"%s","tree":"%s","event":"%s","run_id":"%s"}\n' \
+            "$GITHUB_SHA" "$tree" "$GITHUB_EVENT_NAME" "$GITHUB_RUN_ID" > "$RUNNER_TEMP/validated/validated-tree.json"
+          cat "$RUNNER_TEMP/validated/validated-tree.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validated-tree
+          path: ${{ runner.temp }}/validated/validated-tree.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 30

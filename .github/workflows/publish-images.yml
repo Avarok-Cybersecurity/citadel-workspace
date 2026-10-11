@@ -111,8 +111,43 @@ jobs:
   # promoted `latest` — which is the tag docker-compose.production.yml and
   # deploy.sh pull by default. The existing smoke test is a port-liveness probe;
   # it proves the container starts, not that the code works.
+  # Is re-running the suite provably redundant? Measured on the 0.8.9 release (run
+  # 38056778313), "Validate before publishing" was 139 of the 191 minutes from merge to
+  # published images -- re-proving a tree the merged PR's own run had proved hours earlier.
+  # The 0.9.0 merge commit 3211ea7f has tree b6fbb4c1, which is exactly the tree PR #219's
+  # run 38151312850 validated (its refs/pull/219/merge, 61e47bc2).
+  #
+  # Skipped ONLY on proof: a push to master whose commit is a same-repository PR's merge commit,
+  # whose tree is byte-for-byte the tree a successful pull_request run of that PR's final head
+  # recorded, with every job of that run green. Everything else -- a dispatch, a direct push, a
+  # fork, master moving between the PR run and the merge, any doubt or lookup error -- runs the
+  # full validation below. Rules: scripts/lib/publish-validation-decision.mjs (and its tests).
+  validation-gate:
+    name: Was this exact tree already validated?
+    # API reads and one small artifact download; observed seconds. This bounds a hang.
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read        # the PR's validate runs, their jobs and their tree record
+      pull-requests: read  # which PR this merge commit belongs to
+    outputs:
+      validated: ${{ steps.gate.outputs.validated }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/publish-validation-gate.mjs
+
   validate:
     name: Validate before publishing
+    # Runs unless the gate PROVED the tree validated. A gate that failed or was cancelled has
+    # no `true` output, so this still runs: the fallback is the old behaviour, never a skip.
+    needs: validation-gate
+    if: ${{ !cancelled() && needs.validation-gate.outputs.validated != 'true' }}
     # No `timeout-minutes` here, deliberately. It is not a permitted key on a
     # job that calls a reusable workflow, and GitHub rejects the file at
     # run-creation time: the run appears with ZERO jobs and a red X, so nothing
@@ -126,7 +161,13 @@ jobs:
     # Observed 8m; this bounds a hang, not performance.
     # Without it a stuck job holds a runner for GitHub's 360-minute default.
     timeout-minutes: 40
-    needs: validate
+    needs: [validation-gate, validate]
+    # Either the full validation passed here, or the gate proved this exact tree passed it as
+    # the merged PR and the validation was skipped for that reason alone.
+    if: >-
+      ${{ !cancelled() && (needs.validate.result == 'success' ||
+          (needs.validate.result == 'skipped' && needs.validation-gate.result == 'success' &&
+           needs.validation-gate.outputs.validated == 'true')) }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -413,7 +454,9 @@ jobs:
     # master-only guard, this is what guarantees `latest` never points at a
     # half-published release or at unmerged code from a manual branch dispatch.
     needs: publish
-    if: github.ref == 'refs/heads/master'
+    # Explicit, not the implicit success(): `validate` may be skipped by the gate, and a skipped
+    # job anywhere upstream otherwise skips this one even though every publish leg succeeded.
+    if: ${{ !cancelled() && needs.publish.result == 'success' && github.ref == 'refs/heads/master' }}
     runs-on: ubuntu-latest
     steps:
       # Checked again here, and first. This job runs on a fresh runner, so the
