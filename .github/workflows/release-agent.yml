@@ -110,7 +110,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: true
+          # Recursive: the action also tests citadel-release-signature, a member of the agent's
+          # workspace, and cargo loads that whole workspace, intersession-layer-messaging included.
+          submodules: recursive
       - uses: ./.github/actions/release-sign-tool
         with:
           publishes: ${{ needs.version.outputs.publishes }}
