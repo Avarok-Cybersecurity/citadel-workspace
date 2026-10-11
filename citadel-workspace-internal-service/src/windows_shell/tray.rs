@@ -87,6 +87,14 @@ fn perform(
             .workspace
             .as_deref()
             .map(|o| native::open(&shell_menu::create_url(o))),
+        MenuAction::About => config
+            .workspace
+            .as_deref()
+            .map(|o| native::open(&shell_menu::agent_page_url(o, "about"))),
+        MenuAction::CheckUpdates => config
+            .workspace
+            .as_deref()
+            .map(|o| native::open(&shell_menu::agent_page_url(o, "updates"))),
         MenuAction::ShowLog => Some(native::open(&config.log.to_string_lossy())),
         MenuAction::ToggleLogin => {
             toggle_login(login);
