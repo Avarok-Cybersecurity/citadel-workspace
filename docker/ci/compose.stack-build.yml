@@ -1,0 +1,28 @@
+# CI only: the labels `scripts/ci-stack.sh build` stamps on each integration-stack image.
+#
+# Merged over docker-compose.yml, so context, Dockerfile, target and build args are exactly
+# the ones `docker compose up --build` uses. Labels change no layer's behaviour; they are
+# what lets every integration job refuse an image that was not built from its own checkout:
+#
+#   org.opencontainers.image.revision  the parent commit (what verify-image-revisions.sh reads)
+#   com.avarok.ci.source               sha256 of every repository's HEAD in the checkout,
+#                                      so a UI pull request's own commit is covered too
+#   com.avarok.ci.run                  the run that built it; no image crosses runs
+x-ci-labels: &ci-labels
+  org.opencontainers.image.revision: ${CI_STACK_REVISION:?set by scripts/ci-stack.sh}
+  com.avarok.ci.source: ${CI_STACK_SOURCE:?set by scripts/ci-stack.sh}
+  com.avarok.ci.run: ${CI_STACK_RUN:?set by scripts/ci-stack.sh}
+
+services:
+  sync-wasm-client:
+    build:
+      labels: *ci-labels
+  server:
+    build:
+      labels: *ci-labels
+  internal-service:
+    build:
+      labels: *ci-labels
+  ui:
+    build:
+      labels: *ci-labels

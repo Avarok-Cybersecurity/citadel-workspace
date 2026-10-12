@@ -1,0 +1,22 @@
+name: Rust toolchain for the gate jobs
+description: >-
+  What Avarok-Cybersecurity/gh-actions-deps@master set up for these jobs, minus the step that
+  took a minute of every one of them.
+# That shared action ends in `cargo install --force cargo-make`: a 56-second release compile of
+# a tool nothing in this repository runs (no Makefile.toml, no `cargo make`, no `makers`), and
+# `--force` repeats it even on the self-hosted Mac where it is already installed. It ran in all
+# thirteen Rust gate jobs, which queue for the Mac's two slots ahead of every integration job:
+# in run 38056778313 it was about 12 of the 19 minutes before the first Docker job could start.
+#
+# Everything else it does that applies to these jobs is kept, in its order: the macOS
+# OPENSSL_ROOT_DIR and dtolnay/rust-toolchain@stable. Its LLVM and OpenSSL steps are
+# Windows-only, and none of these jobs runs on Windows. Its second, non-recursive
+# `actions/checkout@v2` re-checked-out the commit the job's own checkout had just produced.
+runs:
+  using: composite
+  steps:
+    - name: Set OPENSSL_ROOT_DIR
+      if: runner.os == 'macOS'
+      shell: bash
+      run: echo "OPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1" >> "$GITHUB_ENV"
+    - uses: dtolnay/rust-toolchain@stable
