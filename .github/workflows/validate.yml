@@ -82,6 +82,7 @@ jobs:
           - citadel-workspace-internal-service
           - citadel-workspace-server-kernel
           - citadel-workspace-executor
+          - citadel-support-signature
     steps:
       - uses: actions/checkout@v4
         with:
@@ -109,6 +110,7 @@ jobs:
           - citadel-workspace-internal-service
           - citadel-workspace-server-kernel
           - citadel-workspace-executor
+          - citadel-support-signature
     steps:
       - uses: actions/checkout@v4
         with:
@@ -132,6 +134,22 @@ jobs:
       - run: cargo clippy --locked --all-targets --manifest-path tools/release-sign/Cargo.toml -- -D warnings
       - run: cargo test --locked --manifest-path tools/release-sign/Cargo.toml
       - run: cargo run --locked --manifest-path tools/release-sign/Cargo.toml -- check-key --public-key citadel-internal-service/citadel-internal-service/src/updater/release_public_key.txt
+
+  # tools/telemetry-read (Avarok support's signed telemetry reads) is its own workspace too. It
+  # depends on citadel-workspace-types, whose agent-side types load the agent's workspace, nested
+  # submodules included; hence recursive.
+  telemetry-read:
+    name: telemetry-read builds and passes its tests
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/rust-toolchain
+      - run: cargo fmt --manifest-path tools/telemetry-read/Cargo.toml --check
+      - run: cargo clippy --locked --all-targets --manifest-path tools/telemetry-read/Cargo.toml -- -D warnings
+      - run: cargo test --locked --manifest-path tools/telemetry-read/Cargo.toml
 
   # The agent as Windows people get it. Every other Rust job here runs on Linux or macOS, where
   # `cfg(windows)` code (the tray icon, the log routing, the login entry) is not even compiled,
@@ -849,6 +867,7 @@ jobs:
           - citadel-workspace-internal-service
           - citadel-workspace-server-kernel
           - citadel-workspace-executor
+          - citadel-support-signature
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1374,7 +1393,7 @@ jobs:
     name: Integration stack - ${{ matrix.service }}
     # The cheap gates first, for the same reason as the integration matrix below: a lint-red
     # change should not pay for two release Rust builds.
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign]
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read]
     # The slowest leg is the agent's release compile: 16m43s inside a build that shared four
     # cores with the server's (run 38056778313). This bounds a hang, not performance.
     timeout-minutes: 45
@@ -1438,7 +1457,7 @@ jobs:
     # Measured: a full parent run is ~1,281 runner-min and the integration
     # matrix is 87% of it. Gating on every cheap job means a lint-red PR costs
     # ~25 jobs instead of 74.
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, integration-stack]
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, integration-stack]
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
@@ -1815,7 +1834,7 @@ jobs:
           path: citadel-workspaces/integration-tests/screenshots/
 
   playwright-tests:
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, integration-stack]
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, integration-stack]
     # The @playwright/test suite under integration-tests/src/tests-pw. It existed
     # but ran in NO job, so those specs were dead weight: written, compiled by the
     # typecheck job, and never executed against a running stack.
@@ -2074,7 +2093,7 @@ jobs:
             citadel-workspaces/integration-tests/test-results/
 
   deploy-gate-tests:
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign]
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read]
     # Regression coverage for the release-consistency gate that stands between a `docker
     # compose pull` and a production restart. It is the mechanism that stops a partially
     # promoted `latest` from restarting production on two backend images that never shipped
@@ -2342,7 +2361,7 @@ jobs:
     # Measured: a full parent run is ~1,281 runner-min and the integration
     # matrix is 87% of it. Gating on every cheap job means a lint-red PR costs
     # ~25 jobs instead of 74.
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign]
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read]
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
@@ -2852,6 +2871,7 @@ jobs:
       - rust-tests
       - windows-agent
       - release-sign
+      - telemetry-read
       - unit-tests
       - typecheck
       - lint

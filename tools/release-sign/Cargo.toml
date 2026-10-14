@@ -14,6 +14,7 @@ publish = false
 # The signed message, signing and verification: one definition, shared with the agent's updater.
 citadel-release-signature = { path = "../../citadel-internal-service/citadel-release-signature" }
 getrandom = "0.3"
+hex = "0.4"
 zeroize = "1.8"
 
 [dev-dependencies]

@@ -1,0 +1,23 @@
+[package]
+name = "telemetry-read"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "Avarok support's ML-DSA-65 signed telemetry reads from the Citadel control plane."
+publish = false
+
+# Its own workspace, like tools/release-sign, whose key-file handling it reuses: the owner runs it
+# offline with the support key, and nothing else builds it.
+[workspace]
+
+[dependencies]
+# The signed request: one definition, shared with the control plane's verifier (server-wasm).
+citadel-support-signature = { path = "../../citadel-support-signature" }
+citadel-workspace-types = { path = "../../citadel-workspace-types" }
+# The private key file (64 hex characters, mode 0600, never overwritten).
+release-sign = { path = "../release-sign" }
+getrandom = "0.3"
+serde_json = "1"
+# HTTPS with a post-quantum key exchange only (X25519MLKEM768; see main.rs `agent`).
+ureq = { version = "3.4", default-features = false, features = ["rustls-no-provider", "rustls-webpki-roots"] }
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }

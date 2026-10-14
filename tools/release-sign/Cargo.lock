@@ -291,6 +291,7 @@ version = "0.1.0"
 dependencies = [
  "citadel-release-signature",
  "getrandom 0.3.4",
+ "hex",
  "tempfile",
  "zeroize",
 ]

@@ -23,7 +23,8 @@
 //! public and safe to print. `--public-key` also writes that line to a file (the agent's
 //! `updater/release_public_key.txt`).
 //!
-//! This module parses and decides; main.rs does the file I/O.
+//! This module parses and decides; main.rs does the file I/O, and `keyfile` the private key file
+//! (shared with tools/telemetry-read).
 
 use citadel_release_signature::{Refusal, ReleaseSigningKey, SIGNATURE_SUFFIX};
 use std::path::{Path, PathBuf};
@@ -158,6 +159,8 @@ pub fn verify(
     let digest = citadel_release_signature::sha256(bytes);
     citadel_release_signature::verify(public_key, tag, name, &digest, signature)
 }
+
+pub mod keyfile;
 
 #[cfg(test)]
 mod tests;
