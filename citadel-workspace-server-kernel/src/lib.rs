@@ -684,7 +684,8 @@ async fn workspace_kernel(
 /// the memory and CPU the release Argon2 defaults assume). `config.bind_addr` is recorded as the
 /// node's address and never bound. `ice_servers` is the host's relay-credential minter
 /// (`GetIceServers`), or `None` for a host that has none. `sign_in` is what the host gives
-/// sign-in: the post-quantum settings and the workspace's sign-in settings store.
+/// sign-in: the post-quantum settings and the workspace's sign-in settings store. `telemetry` is
+/// the host's support-grant mirror and the callback that receives the built kernel.
 pub async fn run_server_on<T: PlatformOps>(
     config: ServerConfig,
     listener: T::Listener,
@@ -692,6 +693,7 @@ pub async fn run_server_on<T: PlatformOps>(
     server_argon_settings: ArgonDefaultServerSettings,
     ice_servers: kernel::ice_servers::IceServerSourceHandle,
     sign_in: kernel::sign_in::HostedSignIn,
+    telemetry: kernel::telemetry::HostedTelemetry<StackedRatchet>,
 ) -> Result<(), NetworkError> {
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel on an injected listener...");
     let bind_address: SocketAddr = config.bind_addr.parse().map_err(|e| {
@@ -702,7 +704,7 @@ pub async fn run_server_on<T: PlatformOps>(
     })?;
     let workspace_structure = resolve_workspace_structure(&config, None)?;
     let first_connect_admin = resolve_first_connect_admin(None, config.allow_first_connect_admin)?;
-    let kernel = workspace_kernel(
+    let mut kernel = workspace_kernel(
         &config,
         workspace_structure,
         first_connect_admin,
@@ -710,6 +712,8 @@ pub async fn run_server_on<T: PlatformOps>(
         sign_in.settings,
     )
     .await?;
+    kernel.set_support_grant_observer(telemetry.support_grants);
+    (telemetry.kernel_ready)(kernel.clone());
 
     let node_type =
         NodeType::server(bind_address).map_err(|e| NetworkError::generic(e.to_string()))?;

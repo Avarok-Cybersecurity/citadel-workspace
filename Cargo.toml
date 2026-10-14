@@ -3,6 +3,7 @@ members = [
     "citadel-workspace-server-kernel",
     "citadel-workspace-internal-service",
     "citadel-workspace-types",
+    "citadel-support-signature",
     "citadel-workspace-executor",
     "citadel-workspace-server-kernel/tests/common",
 ]

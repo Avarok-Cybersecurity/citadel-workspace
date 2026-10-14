@@ -15,9 +15,29 @@ use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::WorkspaceProtocolResponse;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::telemetry::{
-    TelemetryAccessor, TelemetryFilter, TelemetryPage, TelemetryRequest,
+    SupportAccess, TelemetryAccessor, TelemetryFilter, TelemetryPage, TelemetryRequest,
 };
+use std::sync::Arc;
 use store::TelemetryStore;
+
+/// The host's record of which workspaces Avarok support may read (the control plane lists them).
+/// Told the stored grant after every change an admin makes. It is a mirror for listing only:
+/// `support_list_telemetry` checks the kernel's own record on every read.
+#[async_trait::async_trait]
+pub trait SupportGrantObserver: Send + Sync {
+    async fn support_access_changed(&self, access: SupportAccess);
+}
+
+/// The observer as the kernel holds it: absent unless the host passed one.
+pub type SupportGrantObserverHandle = Option<Arc<dyn SupportGrantObserver>>;
+
+/// What a host that serves support reads gives the kernel: the grant observer, and a callback
+/// handed a clone of the kernel once it is built, for the host's alarm
+/// (`purge_expired_telemetry`) and verified support reads (`support_list_telemetry`).
+pub struct HostedTelemetry<R: Ratchet> {
+    pub support_grants: SupportGrantObserverHandle,
+    pub kernel_ready: Box<dyn FnOnce(AsyncWorkspaceServerKernel<R>)>,
+}
 
 /// Serialises every Telemetry Service read-modify-write. Each index, the user list and the
 /// access log are one record each, so two writers interleaving would lose one's change. The
@@ -77,7 +97,16 @@ pub(crate) async fn serve<R: Ratchet + Send + Sync + 'static>(
             per_user_bytes,
         } => reads::set_policy(&store, *retention_days, *per_user_bytes, now_ms).await,
         TelemetryRequest::SetSupportAccess { enabled, until_ms } => {
-            reads::set_support_access(&store, *enabled, *until_ms, now_ms).await
+            let response = reads::set_support_access(&store, *enabled, *until_ms, now_ms).await?;
+            if let (Some(observer), false) = (
+                kernel.support_grant_observer(),
+                matches!(response, WorkspaceProtocolResponse::Error(_)),
+            ) {
+                observer
+                    .support_access_changed(store.support_access().await?)
+                    .await;
+            }
+            Ok(response)
         }
         TelemetryRequest::ListTelemetryAccessLog => reads::access_log(&store).await,
         TelemetryRequest::SetWorkspaceTerms { text } => {

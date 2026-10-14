@@ -1,0 +1,24 @@
+[package]
+name = "citadel-support-signature"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "The ML-DSA-65 signed request Avarok support sends the control plane: its format, signing and verification."
+publish = false
+
+# Shared by tools/telemetry-read (signs), deploy/tenant-worker/server-wasm (verifies, in the
+# control-plane Worker) and the kernel's tests. Explicit versions, no `workspace = true` keys, so
+# the tool's and the tenant worker's own workspaces build it as a path dependency.
+[dependencies]
+citadel-workspace-types = { path = "../citadel-workspace-types" }
+# The version and features citadel-release-signature uses; `zeroize` wipes the signing key on drop.
+ml-dsa = { version = "0.1.1", default-features = false, features = ["alloc", "zeroize"] }
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+zeroize = "1.8"
+
+[dev-dependencies]
+# Only to prove a release signature is never a support signature (the tests, and the fixtures
+# examples/support_fixtures.rs writes for deploy/tenant-worker/test/support.test.mjs).
+citadel-release-signature = { path = "../citadel-internal-service/citadel-release-signature" }
