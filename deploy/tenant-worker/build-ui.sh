@@ -5,9 +5,9 @@
 # Needs the parent repo's submodules checked out -- citadel-workspaces (the UI) at the revision
 # to ship, and citadel-internal-service (its typescript-client) -- and Node >= 22.
 #
-# The steps are the production Docker image's (docker/ui/Dockerfile, build stage), in the repo's
-# own npm workspace instead of a flattened copy: the root lockfile, the two client packages built
-# before the UI that imports them, then `vite build`.
+# The steps are the production Docker image's (docker/ui/Dockerfile, build stage), which also
+# builds in the repo's npm workspace: the root lockfile, the two client packages built before the
+# UI that imports them, then `vite build`.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"

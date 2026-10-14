@@ -16,15 +16,12 @@ COPY citadel-workspaces/package.json ./
 # and nothing wrong with anyone's code.
 #
 # A monorepo publish race resolves within minutes, so a bounded retry converts a
-# hard failure into a slower success. It does NOT make the build reproducible:
-# the real fix is installing the committed lockfile, which is blocked twice over
-# — this is an npm WORKSPACE, so the lockfile lives at the repo root and covers
-# every package, and citadel-workspaces/package.json carries two `file:` deps
-# pointing outside its own directory. Installing it here would mean copying the
-# root manifest, every workspace manifest and both file: targets, then rewriting
-# their paths — which is what the production stage does with `sed`, and that
-# rewriting is exactly what invalidates a lockfile. Retrying is the mitigation,
-# not the cure.
+# hard failure into a slower success. It does NOT make this stage reproducible. The
+# production `build` stage below no longer has the problem: it installs the root
+# lockfile with `npm ci`. This development stage still resolves ranges because its
+# layout is fixed by docker-compose.yml, which mounts the UI's files at /app and
+# keeps node_modules in a volume there, so it cannot be the repo-shaped workspace
+# that the lockfile describes.
 #
 # Five attempts, not three. Observed 2026-08-26: `@tanstack/react-query@5.102.5`
 # published requiring `@tanstack/query-core@5.102.5`, which had not propagated.
@@ -89,69 +86,50 @@ ENV VITE_WS_URL=${VITE_WS_URL}
 
 WORKDIR /app
 
-# Stage local file: dependencies into /workspace. Both packages have
-# `main`/`exports` pointing at `dist/index.js`, so they have to be
-# tsc-built BEFORE the UI's `npm install` copies them into node_modules —
-# Vite's resolver fails the production build with "Failed to resolve
-# entry for package … incorrect main/module/exports" otherwise.
-COPY citadel-workspace-client-ts /workspace/citadel-workspace-client-ts
-COPY citadel-internal-service/typescript-client /workspace/citadel-internal-service-wasm-client
-
-# `citadel-workspace-client-ts/package.json` references the wasm client
-# via `file:../citadel-internal-service/typescript-client`, which only
-# resolves outside this flattened /workspace/ layout. Rewrite it so the
-# wasm client is installed from the sibling /workspace path.
-RUN sed -i 's|file:../citadel-internal-service/typescript-client|file:/workspace/citadel-internal-service-wasm-client|' /workspace/citadel-workspace-client-ts/package.json
-
-# Build wasm client (innermost dep) first, then workspace client (which
-# depends on it). Both produce dist/ so subsequent installs see the
-# entry points declared in their package.json.
-# Retried, like the two `npm install`s above and for the same reason: this
-# image has no lockfile here, so every build re-resolves against the live
-# registry and a publish race or a reset connection is a red job with no test
-# output. The loop was written twice in this file and these two were left bare.
-WORKDIR /workspace/citadel-internal-service-wasm-client
+# Installed from the committed root lockfile, in the repository's own layout.
+#
+# This is an npm WORKSPACE: package-lock.json lives at the repo root and pins every
+# package under it, including the two `file:` dependencies, which the lockfile records
+# as workspace links. So the stage reproduces that layout under /app and runs `npm ci`,
+# exactly as PR CI does. `npm ci` installs the lockfile's versions and fails, rather
+# than re-resolving, if package.json and the lockfile disagree. An upstream publish
+# therefore cannot change this build or break it: 2026-10-12 this stage died with
+# `ETARGET No matching version found for @radix-ui/react-use-callback-ref@1.1.5`,
+# published 19 seconds after the install ran, because it resolved ranges against the
+# live registry every time.
+#
+# Only manifests are copied before the install, so this layer is cached until a
+# dependency changes. All four workspace members are listed because `npm ci` checks the
+# lockfile against every one of them. `.npmrc` carries `engine-strict`.
+#
+# The retry stays for what it can answer, a reset connection while fetching the pinned
+# tarballs. It cannot change what is installed. Exhausting it fails the build: a loop that
+# merely ends would leave an empty node_modules for a later, opaque failure.
+COPY package.json package-lock.json .npmrc ./
+COPY citadel-workspaces/package.json citadel-workspaces/
+COPY citadel-workspaces/integration-tests/package.json citadel-workspaces/integration-tests/
+COPY citadel-workspace-client-ts/package.json citadel-workspace-client-ts/
+COPY citadel-internal-service/typescript-client/package.json citadel-internal-service/typescript-client/
 RUN for attempt in 1 2 3 4 5; do \
-      npm install && break; \
-      echo "npm install failed (attempt $attempt/5); registry may be mid-publish, retrying in $((attempt * 20))s"; \
+      npm ci --no-audit --no-fund && exit 0; \
+      echo "npm ci failed (attempt $attempt/5); retrying in $((attempt * 20))s"; \
       sleep $((attempt * 20)); \
     done; \
-    npm run build
+    exit 1
 
-WORKDIR /workspace/citadel-workspace-client-ts
-RUN for attempt in 1 2 3 4 5; do \
-      npm install && break; \
-      echo "npm install failed (attempt $attempt/5); registry may be mid-publish, retrying in $((attempt * 20))s"; \
-      sleep $((attempt * 20)); \
-    done; \
-    npm run build
+# Both packages have `main`/`exports` pointing at `dist/index.js`, and the UI imports them
+# through node_modules links, so they are tsc-built BEFORE the UI: Vite's resolver fails the
+# production build with "Failed to resolve entry for package ..." otherwise. Innermost first.
+COPY citadel-internal-service/typescript-client citadel-internal-service/typescript-client
+RUN npm run build --workspace=citadel-internal-service-wasm-client
+COPY citadel-workspace-client-ts citadel-workspace-client-ts
+RUN npm run build --workspace=citadel-workspace-client-ts
 
-# Now build the UI itself.
-WORKDIR /app
-COPY citadel-workspaces/package.json ./
-
-# Rewrite the UI's file: references the same way so they point at the
-# already-built /workspace/ packages.
-RUN sed -i 's|file:../citadel-internal-service/typescript-client|file:/workspace/citadel-internal-service-wasm-client|' package.json && \
-    sed -i 's|file:../citadel-workspace-client-ts|file:/workspace/citadel-workspace-client-ts|' package.json
-
-# Same retry, same window, same reason — see the build stage above. Widened
-# with it: leaving this at three would have kept the Production Docker Build
-# exposed to exactly the race that took out the other five jobs, while the
-# comment above claimed they matched.
-RUN for attempt in 1 2 3 4 5; do \
-      npm install --package-lock-only && npm install && break; \
-      echo "npm install failed (attempt $attempt/5); registry may be mid-publish, retrying in $((attempt * 20))s"; \
-      sleep $((attempt * 20)); \
-    done; \
-    npm ls --depth=0 >/dev/null 2>&1 || npm install
-
-# Copy the full UI source tree
-COPY citadel-workspaces/ ./
-
-# Build for production
+# Now build the UI itself. NODE_ENV is set only now: before the install it would skip the
+# devDependencies the builds need.
+COPY citadel-workspaces citadel-workspaces
 ENV NODE_ENV=production
-RUN npm run build
+RUN npm run build --workspace=citadel-workspaces
 
 # ==============================================================================
 # Production serve stage - static files via nginx, non-root.
@@ -178,7 +156,7 @@ RUN npm run build
 FROM nginx:1.30-alpine AS production
 
 # Copy the built static assets from the build stage
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=build /app/citadel-workspaces/dist /usr/share/nginx/html
 
 # nginx ships with default config files that assume the master runs
 # as root and write logs / pid / cache under root-owned paths. Re-own

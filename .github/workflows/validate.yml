@@ -2434,6 +2434,7 @@ jobs:
           mkdir -p citadel-workspaces/node_modules
           mkdir -p citadel-internal-service/typescript-client/node_modules
           mkdir -p citadel-workspace-client-ts/node_modules
+          mkdir -p citadel-workspaces/integration-tests/node_modules
       - name: Pull base images (retried)
         # A base-image manifest pull is a network fetch that happens before any
         # RUN, so the retry gate on RUN fetches cannot see it. A run died on a

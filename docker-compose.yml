@@ -16,6 +16,13 @@ services:
       - ./citadel-internal-service:/workspace/citadel-internal-service:rw
       - ./citadel-workspace-client-ts:/workspace/citadel-workspace-client-ts:rw
       - ./citadel-workspaces:/workspace/citadel-workspaces:rw
+      # The root of the npm workspace, read-only: the sync installs with `npm ci` from this
+      # lockfile instead of resolving ranges against the live registry (an upstream publish
+      # broke Publish ui that way on 2026-10-12). The four members' manifests arrive through
+      # the mounts above and below; `npm ci` checks the lockfile against every one.
+      - ./package.json:/workspace/package.json:ro
+      - ./package-lock.json:/workspace/package-lock.json:ro
+      - ./.npmrc:/workspace/.npmrc:ro
       # Shadows the host's node_modules for this container only.
       #
       # Step 9 runs `rm -rf ./node_modules && npm install` inside the bind mount
@@ -31,6 +38,9 @@ services:
       # the runner user afterwards.
       - sync_tsclient_node_modules:/workspace/citadel-internal-service/typescript-client/node_modules
       - sync_wasmclient_node_modules:/workspace/citadel-workspace-client-ts/node_modules
+      # The lockfile nests one package under integration-tests, so the root install writes a
+      # node_modules there too -- into the host bind mount, as root, unless it is a volume.
+      - sync_integration_node_modules:/workspace/citadel-workspaces/integration-tests/node_modules
       # And the UI's own dist. Step 9 runs a throwaway `vite build --mode
       # development` there purely to prove the UI compiles; the artefacts are of
       # no use to anyone outside the container, and leaving them root-owned on
@@ -294,6 +304,7 @@ volumes:
   sync_ui_node_modules:
   sync_tsclient_node_modules:
   sync_wasmclient_node_modules:
+  sync_integration_node_modules:
   sync_ui_dist:
   sync_target_cache:
   ui_node_modules:
