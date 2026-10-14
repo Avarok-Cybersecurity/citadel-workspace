@@ -9,9 +9,9 @@ use citadel_workspace_types::telemetry::{
 };
 use citadel_workspace_types::terms::PLATFORM_TERMS_VERSION;
 use common::telemetry_test_utils::{
-    ask, batch, everything, member, messages, opt_in, refusal, telemetry, upload,
+    ask, batch, everything, hosted_kernel, member, messages, opt_in, refusal, telemetry, upload,
 };
-use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID as ADMIN};
+use common::workspace_test_utils::TEST_ADMIN_USER_ID as ADMIN;
 
 const DAY_MS: u64 = 24 * 60 * 60 * 1000;
 
@@ -24,7 +24,7 @@ fn now_ms() -> u64 {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_upload_without_consent_is_refused() {
-    let kernel = create_test_kernel().await;
+    let kernel = hosted_kernel().await;
     member(&kernel, "alice").await;
     assert_eq!(
         upload(&kernel, "alice", batch("a", 1, 10)).await,
@@ -35,7 +35,7 @@ async fn an_upload_without_consent_is_refused() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn consent_needs_the_current_terms() {
-    let kernel = create_test_kernel().await;
+    let kernel = hosted_kernel().await;
     member(&kernel, "alice").await;
     let on = ask(
         &kernel,
@@ -58,7 +58,7 @@ async fn consent_needs_the_current_terms() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn new_workspace_terms_pause_uploads_until_accepted() {
-    let kernel = create_test_kernel().await;
+    let kernel = hosted_kernel().await;
     member(&kernel, "alice").await;
     opt_in(&kernel, "alice").await;
     assert!(matches!(
@@ -101,7 +101,7 @@ async fn new_workspace_terms_pause_uploads_until_accepted() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_per_user_cap_drops_the_oldest_first() {
-    let kernel = create_test_kernel().await;
+    let kernel = hosted_kernel().await;
     member(&kernel, "alice").await;
     member(&kernel, "bob").await;
     opt_in(&kernel, "alice").await;
@@ -132,7 +132,7 @@ async fn the_per_user_cap_drops_the_oldest_first() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_purge_removes_only_what_is_past_retention() {
-    let kernel = create_test_kernel().await;
+    let kernel = hosted_kernel().await;
     member(&kernel, "alice").await;
     opt_in(&kernel, "alice").await;
     upload(&kernel, "alice", batch("a", 2, 10)).await;
@@ -156,7 +156,7 @@ async fn the_purge_removes_only_what_is_past_retention() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_policy_beyond_the_platform_maximum_is_refused() {
-    let kernel = create_test_kernel().await;
+    let kernel = hosted_kernel().await;
     for (retention_days, per_user_bytes) in [
         (
             MAX_TELEMETRY_RETENTION_DAYS + 1,
@@ -176,7 +176,7 @@ async fn a_policy_beyond_the_platform_maximum_is_refused() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_batch_over_the_byte_limit_is_refused() {
-    let kernel = create_test_kernel().await;
+    let kernel = hosted_kernel().await;
     member(&kernel, "alice").await;
     opt_in(&kernel, "alice").await;
     let response = ask(

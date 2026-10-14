@@ -27,7 +27,7 @@ pub async fn start_production_server_with(extra_toml: &str) -> SocketAddr {
     );
     let addr = free_addr();
     let config: ServerConfig = toml::from_str(&format!(
-        "bind_addr = \"{addr}\"\nworkspace_master_password = \"a-test-master-password\"\n{extra_toml}"
+        "bind_addr = \"{addr}\"\nworkspace_master_password = \"a-test-master-password\"\nrequire_platform_terms = false\n{extra_toml}"
     ))
     .expect("config");
     tokio::spawn(async move {

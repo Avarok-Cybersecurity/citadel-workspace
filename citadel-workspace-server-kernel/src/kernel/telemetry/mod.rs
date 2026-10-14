@@ -31,7 +31,15 @@ pub(crate) async fn serve<R: Ratchet + Send + Sync + 'static>(
     request: &TelemetryRequest,
     now_ms: u64,
 ) -> Result<WorkspaceProtocolResponse, NetworkError> {
-    let store = TelemetryStore::new(&kernel.domain_operations.backend_tx_manager);
+    let Some(platform_terms_required) = kernel.platform_terms_required() else {
+        return Ok(WorkspaceProtocolResponse::Error(
+            "This server does not say whether Avarok's platform terms apply to it".to_string(),
+        ));
+    };
+    let store = TelemetryStore::new(
+        &kernel.domain_operations.backend_tx_manager,
+        platform_terms_required,
+    );
     let _guard = TELEMETRY_LOCK.lock().await;
     match request {
         TelemetryRequest::AcceptTerms {
@@ -91,7 +99,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// host's clock). For the tenant's daily alarm; uploads enforce the same on write.
     /// Returns the number of segments removed.
     pub async fn purge_expired_telemetry(&self, now_ms: u64) -> Result<u32, NetworkError> {
-        let store = TelemetryStore::new(&self.domain_operations.backend_tx_manager);
+        let store = TelemetryStore::new(
+            &self.domain_operations.backend_tx_manager,
+            self.platform_terms_required().unwrap_or(false),
+        );
         let _guard = TELEMETRY_LOCK.lock().await;
         let policy = store.policy().await?;
         service::enforce_policy(&store, &policy, now_ms).await
@@ -106,7 +117,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         page: &TelemetryPage,
         now_ms: u64,
     ) -> Result<WorkspaceProtocolResponse, NetworkError> {
-        let store = TelemetryStore::new(&self.domain_operations.backend_tx_manager);
+        let store = TelemetryStore::new(
+            &self.domain_operations.backend_tx_manager,
+            self.platform_terms_required().unwrap_or(false),
+        );
         let _guard = TELEMETRY_LOCK.lock().await;
         if !rules::support_access_active(&store.support_access().await?, now_ms) {
             return Ok(WorkspaceProtocolResponse::Error(

@@ -7,6 +7,7 @@
 import { env, runInDurableObject, SELF } from "cloudflare:test";
 import { vi } from "vitest";
 import { ioFor } from "../control/dispatch.mjs";
+import { CUSTOMER_TERMS_VERSION } from "../control/customer-terms.mjs";
 import { config } from "../control/http.mjs";
 import { runMonitor } from "../control/monitor.mjs";
 import { signLikeStripe } from "./stripe-sign.mjs";
@@ -130,7 +131,7 @@ export const post = (path, body, headers = {}) =>
 
 export const get = (path) => SELF.fetch(`${ORIGIN}${path}`);
 
-export const createBody = (slug, extra = {}) => ({ slug, display_name: "Acme Ltd", tier: "free", turnstile_token: "tok", ...extra });
+export const createBody = (slug, extra = {}) => ({ slug, display_name: "Acme Ltd", tier: "free", turnstile_token: "tok", accepted_customer_terms_version: CUSTOMER_TERMS_VERSION, ...extra });
 
 export const tenantRow = (slug) => env.CONTROL_DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
 export const eventRecorded = async (id) =>

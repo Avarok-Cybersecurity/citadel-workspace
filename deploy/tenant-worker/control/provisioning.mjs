@@ -76,7 +76,12 @@ export class Provisioning {
    * `displayNameOf` admits (no control characters, no lone surrogates).
    */
   kernelConfig() {
-    const lines = [`bind_addr = "127.0.0.1:0"`, `workspace_master_password = ${JSON.stringify(this.masterPassword())}`];
+    const lines = [
+      `bind_addr = "127.0.0.1:0"`,
+      `workspace_master_password = ${JSON.stringify(this.masterPassword())}`,
+      // An Avarok-hosted tenant: its creator and members were shown the platform terms.
+      "require_platform_terms = true",
+    ];
     const name = this.displayName();
     if (name !== null) lines.push(`workspace_name = ${JSON.stringify(name)}`);
     return lines.join("\n");

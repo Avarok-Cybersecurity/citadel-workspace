@@ -36,7 +36,9 @@ pub(crate) async fn my_consent<R: Ratchet + Send + Sync + 'static>(
     let terms = current_terms(store).await?;
     let consent = store.consent(user_id).await?;
     Ok(reply(TelemetryResponse::Consent(rules::consent_view(
-        &consent, &terms,
+        &consent,
+        &terms,
+        store.platform_terms_required(),
     ))))
 }
 
@@ -48,13 +50,19 @@ pub(crate) async fn accept_terms<R: Ratchet + Send + Sync + 'static>(
     now_ms: u64,
 ) -> Result<WorkspaceProtocolResponse, NetworkError> {
     let terms = current_terms(store).await?;
-    if !terms.accepted_by(Some(platform_version), workspace_version) {
+    let require_platform = store.platform_terms_required();
+    if !rules::terms_accepted(
+        &terms,
+        require_platform,
+        Some(platform_version),
+        workspace_version,
+    ) {
         return Ok(refuse(
             "These are not the current terms; read them again with GetTerms",
         ));
     }
     let mut consent = store.consent(user_id).await?;
-    consent.accepted_platform_version = Some(platform_version);
+    consent.accepted_platform_version = require_platform.then_some(platform_version);
     consent.accepted_workspace_version = workspace_version;
     consent.accepted_at_ms = Some(now_ms);
     store.save_consent(user_id, &consent).await?;
@@ -70,7 +78,9 @@ pub(crate) async fn set_consent<R: Ratchet + Send + Sync + 'static>(
 ) -> Result<WorkspaceProtocolResponse, NetworkError> {
     let terms = current_terms(store).await?;
     let mut consent = store.consent(user_id).await?;
-    if enabled && !rules::consent_view(&consent, &terms).terms_current {
+    if enabled
+        && !rules::consent_view(&consent, &terms, store.platform_terms_required()).terms_current
+    {
         return Ok(refuse(
             "Accept the current terms before turning on diagnostics",
         ));
@@ -91,7 +101,11 @@ pub(crate) async fn upload<R: Ratchet + Send + Sync + 'static>(
     now_ms: u64,
 ) -> Result<WorkspaceProtocolResponse, NetworkError> {
     let terms = current_terms(store).await?;
-    let consent = rules::consent_view(&store.consent(user_id).await?, &terms);
+    let consent = rules::consent_view(
+        &store.consent(user_id).await?,
+        &terms,
+        store.platform_terms_required(),
+    );
     if let Some(refusal) = rules::upload_refusal(&consent) {
         return Ok(reply(TelemetryResponse::UploadRefused(refusal)));
     }
