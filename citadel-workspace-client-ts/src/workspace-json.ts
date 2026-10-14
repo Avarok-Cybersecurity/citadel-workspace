@@ -1,4 +1,5 @@
 import type { WorkspaceProtocolPayload } from './types/workspace-types.js';
+import { parseWithU64, stringifyWithU64 } from './json-u64.js';
 
 /**
  * The single boundary between the ts-rs generated `bigint` annotations and the
@@ -18,11 +19,8 @@ import type { WorkspaceProtocolPayload } from './types/workspace-types.js';
  *    (Number(beforeTimestamp) at call sites, a re-declared
  *    `drainSeconds: number`) — evidence the trap fires in practice.
  *
- * LIMIT: JSON.parse coerces numbers to IEEE-754 doubles before any reviver
- * runs, so a u64 above Number.MAX_SAFE_INTEGER cannot survive this transport
- * at all. Encoding and decoding both fail fast on such values instead of
- * silently corrupting them. Carrying full-range u64 needs a protocol change
- * (string-encoded u64 or CBOR) on the Rust side — not fixable here.
+ * Full-range u64 values (peer CIDs are random 63-bit ids) cross intact in both
+ * directions; see json-u64.ts for how.
  */
 
 /**
@@ -35,14 +33,22 @@ import type { WorkspaceProtocolPayload } from './types/workspace-types.js';
  * desynchronize this list.
  */
 export const WORKSPACE_BIGINT_FIELDS: ReadonlySet<string> = new Set([
+  'at_ms',
   'before_timestamp',
   'created_at',
   'drain_seconds',
   'edited_at',
   'expires_at',
   'max_file_transfer_size_mb',
+  'max_per_user_bytes',
+  'peer_cid',
+  'per_user_bytes',
+  'received_at_ms',
   'revfs_storage_quota_mb',
+  'since_ms',
+  'time_ms',
   'timestamp',
+  'until_ms',
   'updated_at',
 ]);
 
@@ -50,24 +56,10 @@ export const WORKSPACE_BIGINT_FIELDS: ReadonlySet<string> = new Set([
  * Serialize a workspace protocol payload to the JSON bytes the server expects.
  *
  * Any `bigint` in the payload — wherever it appears — is emitted as a JSON
- * number, which serde deserializes into u64. A bigint outside the safe-integer
- * range throws a RangeError naming the field, because emitting it as a double
- * would silently change its value.
+ * number holding exactly its value, which serde deserializes into u64.
  */
 export function encodeWorkspacePayload(payload: WorkspaceProtocolPayload): Uint8Array {
-  const json = JSON.stringify(payload, (key, value) => {
-    if (typeof value === 'bigint') {
-      if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < -BigInt(Number.MAX_SAFE_INTEGER)) {
-        throw new RangeError(
-          `Workspace protocol field "${key}" is ${value}, which does not fit in a JSON number ` +
-            `(|value| > Number.MAX_SAFE_INTEGER). The JSON transport cannot carry it without corruption.`
-        );
-      }
-      return Number(value);
-    }
-    return value;
-  });
-  return new TextEncoder().encode(json);
+  return new TextEncoder().encode(stringifyWithU64(payload));
 }
 
 /**
@@ -75,8 +67,7 @@ export function encodeWorkspacePayload(payload: WorkspaceProtocolPayload): Uint8
  * matches the generated types: fields declared `bigint` come back as bigint.
  *
  * Throws (instead of guessing) when a declared-bigint field arrives as a
- * non-integer or as an unsafe integer — the latter means precision was already
- * lost inside JSON.parse and the true value is unrecoverable.
+ * non-integer, or an integer too large for a double arrives in any other field.
  */
 export function decodeWorkspacePayload(
   bytes: number[] | Uint8Array | string
@@ -86,16 +77,5 @@ export function decodeWorkspacePayload(
       ? bytes
       : new TextDecoder().decode(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
 
-  return JSON.parse(text, (key, value) => {
-    if (WORKSPACE_BIGINT_FIELDS.has(key) && typeof value === 'number') {
-      if (!Number.isSafeInteger(value)) {
-        throw new RangeError(
-          `Workspace protocol field "${key}" arrived as ${value}, which is not a safe integer; ` +
-            `its u64 value cannot be recovered from JSON.`
-        );
-      }
-      return BigInt(value);
-    }
-    return value;
-  }) as WorkspaceProtocolPayload;
+  return parseWithU64(text, (key) => WORKSPACE_BIGINT_FIELDS.has(key)) as WorkspaceProtocolPayload;
 }

@@ -51,8 +51,11 @@ fn grant(until_ms: Option<u64>) -> TelemetryRequest {
 async fn a_verified_request_is_served_and_audited_and_an_unsigned_one_is_not() {
     let recorded = Arc::new(Recorded::default());
     let observer: Arc<dyn SupportGrantObserver> = recorded.clone();
-    let kernel =
-        create_configured_test_kernel(|k| k.set_support_grant_observer(Some(observer))).await;
+    let kernel = create_configured_test_kernel(|k| {
+        k.set_platform_terms_required(true);
+        k.set_support_grant_observer(Some(observer))
+    })
+    .await;
     member(&kernel, "alice").await;
     opt_in(&kernel, "alice").await;
     upload(&kernel, "alice", batch("a", 1, 10)).await;
@@ -98,8 +101,11 @@ async fn a_verified_request_is_served_and_audited_and_an_unsigned_one_is_not() {
 async fn every_grant_change_reaches_the_host_and_a_refused_one_does_not() {
     let recorded = Arc::new(Recorded::default());
     let observer: Arc<dyn SupportGrantObserver> = recorded.clone();
-    let kernel =
-        create_configured_test_kernel(|k| k.set_support_grant_observer(Some(observer))).await;
+    let kernel = create_configured_test_kernel(|k| {
+        k.set_platform_terms_required(true);
+        k.set_support_grant_observer(Some(observer))
+    })
+    .await;
     member(&kernel, "alice").await;
     let until = now_ms() + 60 * 60 * 1000;
 
