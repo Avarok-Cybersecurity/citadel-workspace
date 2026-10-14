@@ -8,9 +8,10 @@ use citadel_workspace_types::telemetry::{
     TelemetryAccessor, TelemetryFilter, TelemetryRequest, TelemetryResponse,
 };
 use common::telemetry_test_utils::{
-    ask, batch, everything, member, messages, opt_in, refusal, telemetry, upload, FIRST_PAGE,
+    ask, batch, everything, hosted_kernel, member, messages, opt_in, refusal, telemetry, upload,
+    FIRST_PAGE,
 };
-use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID as ADMIN};
+use common::workspace_test_utils::TEST_ADMIN_USER_ID as ADMIN;
 
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
@@ -42,7 +43,7 @@ async fn access_log(kernel: &common::member_test_utils::GateKernel) -> Vec<Telem
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_member_cannot_read_telemetry_and_an_admin_can() {
-    let kernel = create_test_kernel().await;
+    let kernel = hosted_kernel().await;
     member(&kernel, "alice").await;
     opt_in(&kernel, "alice").await;
     upload(&kernel, "alice", batch("a", 1, 10)).await;
@@ -63,7 +64,7 @@ async fn a_member_cannot_read_telemetry_and_an_admin_can() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_member_cannot_set_the_policy_or_grant_support() {
-    let kernel = create_test_kernel().await;
+    let kernel = hosted_kernel().await;
     member(&kernel, "alice").await;
     for request in [
         TelemetryRequest::SetTelemetryPolicy {
@@ -84,7 +85,7 @@ async fn a_member_cannot_set_the_policy_or_grant_support() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn erasure_removes_only_the_callers_rows() {
-    let kernel = create_test_kernel().await;
+    let kernel = hosted_kernel().await;
     for user in ["alice", "bob", "carol"] {
         member(&kernel, user).await;
         opt_in(&kernel, user).await;
@@ -111,7 +112,7 @@ async fn erasure_removes_only_the_callers_rows() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn support_reads_only_under_an_unexpired_grant_and_is_audited() {
-    let kernel = create_test_kernel().await;
+    let kernel = hosted_kernel().await;
     member(&kernel, "alice").await;
     opt_in(&kernel, "alice").await;
     upload(&kernel, "alice", batch("a", 1, 10)).await;
@@ -145,7 +146,7 @@ async fn support_reads_only_under_an_unexpired_grant_and_is_audited() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_grant_needs_a_bounded_expiry() {
-    let kernel = create_test_kernel().await;
+    let kernel = hosted_kernel().await;
     for until_ms in [
         None,
         Some(now_ms() - 1),

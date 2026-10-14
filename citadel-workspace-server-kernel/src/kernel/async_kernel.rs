@@ -148,6 +148,10 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     workspace_structure: Option<(WorkspaceStructureConfig, Option<PathBuf>)>,
     /// The configured root workspace name (`ServerConfig::workspace_name`), or none for the default
     workspace_name: Option<String>,
+    /// Whether telemetry consent needs the Avarok platform terms accepted
+    /// (`ServerConfig::require_platform_terms`). `None` until the bootstrap sets it: the
+    /// Telemetry Service refuses to answer rather than guess which terms its users were shown.
+    platform_terms_required: Option<bool>,
     /// Broadcast channel for sending updates to all connected clients
     broadcast_tx: broadcast::Sender<BroadcastMessage>,
     /// File transfer configuration
@@ -209,6 +213,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             workspace_password: self.workspace_password.clone(),
             workspace_structure: self.workspace_structure.clone(),
             workspace_name: self.workspace_name.clone(),
+            platform_terms_required: self.platform_terms_required,
             broadcast_tx: self.broadcast_tx.clone(),
             file_transfer_config: self.file_transfer_config.clone(),
             first_connect_admin: self.first_connect_admin,
@@ -252,6 +257,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             workspace_password: None,
             workspace_structure: None,
             workspace_name: None,
+            platform_terms_required: None,
             broadcast_tx,
             file_transfer_config: FileTransferConfig::default(),
             rate_limiter: RateLimiter::new(DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL),
@@ -321,6 +327,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// The root workspace's configured name, applied by `inject_admin_user`.
     pub fn set_workspace_name(&mut self, name: Option<String>) {
         self.workspace_name = name;
+    }
+
+    /// Whether this server's users were shown, and so must accept, Avarok's platform terms.
+    pub fn set_platform_terms_required(&mut self, required: bool) {
+        self.platform_terms_required = Some(required);
+    }
+
+    /// `None` when no configuration said.
+    pub fn platform_terms_required(&self) -> Option<bool> {
+        self.platform_terms_required
     }
 
     /// Set by the server bootstrap from configuration. Off unless asked for.

@@ -20,11 +20,23 @@ const NO_SUPPORT_ACCESS: SupportAccess = SupportAccess {
 
 pub(crate) struct TelemetryStore<'a, R: Ratchet + Send + Sync + 'static> {
     backend: &'a BackendTransactionManager<R>,
+    /// Configuration, not stored: see `ServerConfig::require_platform_terms`.
+    platform_terms_required: bool,
 }
 
 impl<'a, R: Ratchet + Send + Sync + 'static> TelemetryStore<'a, R> {
-    pub(crate) fn new(backend: &'a BackendTransactionManager<R>) -> Self {
-        Self { backend }
+    pub(crate) fn new(
+        backend: &'a BackendTransactionManager<R>,
+        platform_terms_required: bool,
+    ) -> Self {
+        Self {
+            backend,
+            platform_terms_required,
+        }
+    }
+
+    pub(crate) fn platform_terms_required(&self) -> bool {
+        self.platform_terms_required
     }
 
     pub(crate) async fn users(&self) -> Result<BTreeSet<String>, NetworkError> {

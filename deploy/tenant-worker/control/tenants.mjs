@@ -10,12 +10,13 @@ import { CLAIM_SEAL, digestsEqual, randomHex, RESERVATION_SEAL, seal, sha256Hex,
 import { CREATE_ACTION, verifyTurnstile } from "./turnstile.mjs";
 import { priceIds, stripe, StripeError } from "./stripe.mjs";
 import { json, refuse } from "./http.mjs";
+import { readAcceptedTerms } from "./customer-terms.mjs";
 
 /** How long a free tenant's reservation holds its slug should the request die mid-way. */
 const FREE_RESERVATION_SECONDS = 300;
 /** Past the Checkout's own expiry, so a payment completed at the last second still finds its row. */
 const CHECKOUT_GRACE_SECONDS = 600;
-const CREATE_FIELDS = new Set(["slug", "display_name", "tier", "interval", "seats", "storage_blocks", "turnstile_token", "reservation_token"]);
+const CREATE_FIELDS = new Set(["slug", "display_name", "tier", "interval", "seats", "storage_blocks", "turnstile_token", "reservation_token", "accepted_customer_terms_version"]);
 const TOKEN = /^[0-9a-f]{64}$/;
 
 const isCount = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
@@ -25,6 +26,8 @@ export function readCreate(body) {
   const bad = (detail) => ({ error: refuse("malformed-request", detail, 400) });
   const extra = Object.keys(body).filter((k) => !CREATE_FIELDS.has(k));
   if (extra.length) return bad(`unknown fields: ${extra.join(", ")}`);
+  const terms = readAcceptedTerms(body);
+  if (terms.error) return terms;
   const slug = checkSlug(body.slug);
   if (!slug.ok) return { error: refuse(`slug-${slug.reason}`, `that address is ${slug.reason}`, 400) };
   const name = displayNameOf(body.display_name);
@@ -37,7 +40,9 @@ export function readCreate(body) {
     return bad("reservation_token is the 64 hex characters a paid creation returned");
   }
   const retry = body.reservation_token ?? null;
-  const plan = { slug: body.slug, display_name: name, tier: body.tier, interval: null, seats: 0, storage_blocks: 0 };
+  const plan = {
+    slug: body.slug, customer_terms_version: terms.version, display_name: name, tier: body.tier, interval: null, seats: 0, storage_blocks: 0,
+  };
   if (!isPaid(body.tier)) {
     if (body.interval !== undefined || body.seats !== undefined || body.storage_blocks !== undefined) {
       return bad("the free tier takes no interval, seats or storage_blocks");

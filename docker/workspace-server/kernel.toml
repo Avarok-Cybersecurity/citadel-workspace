@@ -1,6 +1,10 @@
 # Workspace master password — set via WORKSPACE_MASTER_PASSWORD env var (preferred)
 # or directly here for local development. Server refuses to start if empty.
 bind_addr = "0.0.0.0:12349"
+# Whether users must have accepted Avarok's platform terms before diagnostics can be switched on.
+# False here: this server is self-hosted, so its users were never shown them. An Avarok-hosted
+# tenant sets it true (deploy/tenant-worker/control/provisioning.mjs).
+require_platform_terms = false
 # TLS certificate verification — set to true ONLY for local development with self-signed certs.
 dangerous_skip_cert_verification = false
 

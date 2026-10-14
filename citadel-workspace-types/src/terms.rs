@@ -11,6 +11,12 @@ use ts_rs::TS;
 pub const PLATFORM_TERMS_VERSION: u32 = 1;
 /// Avarok's platform terms.
 pub const PLATFORM_TERMS_TEXT: &str = include_str!("platform_terms.md");
+/// Bump with every change to `CUSTOMER_TERMS_TEXT`; creating a workspace requires the current one.
+/// The control plane carries this number (deploy/tenant-worker/control/customer-terms.mjs) and
+/// scripts/check-customer-terms-version-parity.mjs fails the build if the two differ.
+pub const CUSTOMER_TERMS_VERSION: u32 = 1;
+/// The terms whoever creates a workspace accepts for it.
+pub const CUSTOMER_TERMS_TEXT: &str = include_str!("customer_terms.md");
 /// Longest workspace terms an admin may set, in characters.
 pub const MAX_WORKSPACE_TERMS_CHARS: usize = 20_000;
 

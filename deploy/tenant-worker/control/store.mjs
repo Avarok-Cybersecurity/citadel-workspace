@@ -71,6 +71,10 @@ export class Store {
             row.slug, row.tenant_id, row.display_name, row.tier, row.interval, row.seats, row.storage_blocks, now,
             row.expires_at, row.claim_hash, row.reservation_hash,
           ),
+        // The acceptance lands with the reservation or not at all.
+        this.db
+          .prepare("INSERT INTO customer_terms_acceptances (tenant_id, slug, version, accepted_at) VALUES (?, ?, ?, ?)")
+          .bind(row.tenant_id, row.slug, row.customer_terms_version, now),
       ]);
       return true;
     } catch (e) {

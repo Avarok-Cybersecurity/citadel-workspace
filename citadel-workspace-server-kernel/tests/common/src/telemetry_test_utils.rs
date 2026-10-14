@@ -10,6 +10,14 @@ use citadel_workspace_types::telemetry::{
 use citadel_workspace_types::terms::PLATFORM_TERMS_VERSION;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
+/// A kernel configured as an Avarok-hosted tenant: its users were shown the platform terms.
+pub async fn hosted_kernel() -> std::sync::Arc<GateKernel> {
+    crate::workspace_test_utils::create_configured_test_kernel(|kernel| {
+        kernel.set_platform_terms_required(true)
+    })
+    .await
+}
+
 pub async fn ask(kernel: &GateKernel, user: &str, request: TelemetryRequest) -> WorkspaceProtocolResponse {
     process_command_with_user(kernel, &WorkspaceProtocolRequest::Telemetry(request), user)
         .await

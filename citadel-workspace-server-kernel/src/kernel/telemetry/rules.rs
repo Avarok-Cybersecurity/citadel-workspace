@@ -32,8 +32,30 @@ pub(crate) fn current_terms(workspace: Option<&WorkspaceTermsRecord>) -> Current
     }
 }
 
-pub(crate) fn consent_view(record: &ConsentRecord, terms: &CurrentTerms) -> MyConsent {
-    let terms_current = terms.accepted_by(
+/// Whether a user who accepted these versions has accepted what this server requires: the
+/// platform terms only where `require_platform` says its users were shown them.
+pub(crate) fn terms_accepted(
+    terms: &CurrentTerms,
+    require_platform: bool,
+    platform: Option<u32>,
+    workspace: Option<u32>,
+) -> bool {
+    let platform = if require_platform {
+        platform
+    } else {
+        Some(terms.platform.version)
+    };
+    terms.accepted_by(platform, workspace)
+}
+
+pub(crate) fn consent_view(
+    record: &ConsentRecord,
+    terms: &CurrentTerms,
+    require_platform: bool,
+) -> MyConsent {
+    let terms_current = terms_accepted(
+        terms,
+        require_platform,
         record.accepted_platform_version,
         record.accepted_workspace_version,
     );
