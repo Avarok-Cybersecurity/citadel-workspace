@@ -73,6 +73,9 @@ LOG_FILTER = "citadel=warn"
 #   TURNSTILE_SECRET       workspace creation
 #   STRIPE_SECRET_KEY      paid creation, the billing portal
 #   STRIPE_WEBHOOK_SECRET  the Stripe webhook
+#   CITADEL_SUPPORT_MLDSA_PUBLIC_KEY  Avarok support's signed telemetry reads (control/support.mjs):
+#                          the ML-DSA-65 public key `tools/telemetry-read keygen` prints. Public, but
+#                          a secret so this file carries no value for it (DEPLOY.md step 4)
 # and two OPTIONAL ones deploy.sh does not require yet (DEPLOY.md step 4): without both, a
 # member's GetIceServers is answered "no relay servers" (control/ice.mjs):
 #   TURN_KEY_ID            the Cloudflare Realtime TURN key relay credentials are minted from

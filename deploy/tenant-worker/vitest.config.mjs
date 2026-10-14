@@ -1,6 +1,7 @@
 import { defineConfig } from "vitest/config";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-workers";
 import { unstable_readConfig } from "wrangler";
+import { readFileSync } from "node:fs";
 
 // The real Worker (worker.mjs: control plane + tenant Durable Object with its wasm server) under
 // Miniflare, with a local D1 migrated from control/migrations.
@@ -32,6 +33,8 @@ export default defineConfig({
           // Answered in-process by test/helpers.mjs outbound(); never sent to Cloudflare.
           TURN_KEY_ID: "turn_key_vitest",
           TURN_KEY_API_TOKEN: "turn_token_vitest",
+          // The test support key's public half (test/support.test.mjs): its signed fixtures verify.
+          CITADEL_SUPPORT_MLDSA_PUBLIC_KEY: JSON.parse(readFileSync("./test/fixtures/support-requests.json", "utf8")).public_key,
           TENANT_PATH_ROUTING: "on",
           TENANT_DIAGNOSTICS: "on",
         },

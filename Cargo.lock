@@ -985,6 +985,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "citadel-support-signature"
+version = "0.1.0"
+dependencies = [
+ "citadel-release-signature",
+ "citadel-workspace-types",
+ "hex",
+ "ml-dsa",
+ "serde",
+ "serde_json",
+ "zeroize",
+]
+
+[[package]]
 name = "citadel-workspace-executor"
 version = "0.1.0"
 dependencies = [
@@ -1033,6 +1046,7 @@ dependencies = [
  "citadel-internal-service-connector",
  "citadel-internal-service-test-common",
  "citadel-internal-service-types",
+ "citadel-support-signature",
  "citadel-workspace-server-kernel-test-common",
  "citadel-workspace-types",
  "citadel_io",

@@ -62,6 +62,7 @@ COPY --exclude=tests ./citadel-workspace-server-kernel /usr/src/app/citadel-work
 COPY ./docker/workspace-server/citadel-workspace-server-kernel.Cargo.docker.toml /usr/src/app/citadel-workspace-server-kernel/Cargo.toml
 COPY ./citadel-workspace-internal-service /usr/src/app/citadel-workspace-internal-service
 COPY ./citadel-workspace-types /usr/src/app/citadel-workspace-types
+COPY ./citadel-support-signature /usr/src/app/citadel-support-signature
 # A workspace member. Cargo loads EVERY member's manifest before building any
 # of them, so omitting a crate this image never builds still fails the build
 # with "failed to load manifest for workspace member".

@@ -64,6 +64,8 @@ citadel-internal-service-connector = { path = "../citadel-internal-service/citad
 citadel-internal-service-test-common = { path = "../citadel-internal-service/citadel-internal-service/tests/common" }
 citadel-internal-service-types = { path = "../citadel-internal-service/citadel-internal-service-types" }
 common = { path = "./tests/common", package = "citadel-workspace-server-kernel-test-common" }
+# The signed support request, verified before the kernel serves it (support_reads_are_signed.rs).
+citadel-support-signature = { path = "../citadel-support-signature" }
 
 rstest = { workspace = true }
 bincode = { workspace = true }

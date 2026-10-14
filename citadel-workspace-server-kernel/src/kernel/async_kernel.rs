@@ -176,6 +176,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     ice_servers: crate::kernel::ice_servers::IceServerSourceHandle,
     /// Where the workspace's sign-in settings live: the host's store, or none.
     sign_in_settings: crate::kernel::sign_in::SignInSettingsHandle,
+    /// Told when an admin changes the support grant: the host's mirror of it, or none.
+    support_grants: crate::kernel::telemetry::SupportGrantObserverHandle,
 }
 
 /// Removes a CID's account attribution when its connection task ends.
@@ -212,6 +214,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             first_connect_admin: self.first_connect_admin,
             ice_servers: self.ice_servers.clone(),
             sign_in_settings: self.sign_in_settings.clone(),
+            support_grants: self.support_grants.clone(),
             // RateLimiter::Clone shares the same Arc<Mutex<HashMap>>,
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
@@ -256,7 +259,20 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             first_connect_admin: false,
             ice_servers: None,
             sign_in_settings: None,
+            support_grants: None,
         }
+    }
+
+    /// Set by the server bootstrap: what to tell when the support grant changes, or none.
+    pub fn set_support_grant_observer(
+        &mut self,
+        observer: crate::kernel::telemetry::SupportGrantObserverHandle,
+    ) {
+        self.support_grants = observer;
+    }
+
+    pub fn support_grant_observer(&self) -> &crate::kernel::telemetry::SupportGrantObserverHandle {
+        &self.support_grants
     }
 
     /// Set by the server bootstrap: the host's sign-in settings store, or none, in which case
