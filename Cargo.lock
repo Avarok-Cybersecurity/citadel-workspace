@@ -887,6 +887,7 @@ dependencies = [
  "intersession-layer-messaging",
  "libc",
  "parking_lot",
+ "regex",
  "reqwest",
  "rfd",
  "semver",
@@ -899,6 +900,8 @@ dependencies = [
  "sigstore-verify",
  "tempfile",
  "tokio 1.49.0",
+ "tracing-log",
+ "tracing-subscriber",
  "uuid",
  "wayland-backend",
  "zeroize",
@@ -997,6 +1000,7 @@ name = "citadel-workspace-internal-service"
 version = "0.9.0"
 dependencies = [
  "citadel-internal-service",
+ "citadel-workspace-types",
  "citadel_logging",
  "citadel_sdk",
  "citadel_types",
@@ -1004,6 +1008,7 @@ dependencies = [
  "lazy_static",
  "parking_lot",
  "png 0.18.1",
+ "serde_json",
  "structopt",
  "tokio 1.49.0",
  "tracing",

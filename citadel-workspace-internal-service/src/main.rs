@@ -16,6 +16,7 @@ use structopt::StructOpt;
 mod log_setup;
 mod notice_token;
 mod shell_menu;
+mod telemetry;
 #[cfg(feature = "self-update")]
 mod update_setup;
 #[cfg(windows)]
@@ -50,8 +51,10 @@ fn parse_options() -> Options {
 }
 
 async fn run() -> Result<(), Box<dyn Error>> {
+    let (telemetry_collector, telemetry_uplink) =
+        telemetry::build(env!("CARGO_PKG_VERSION"), std::env::consts::OS)?;
     // Held for the whole run: dropping it stops the log writer thread.
-    let _log_writer = log_setup::install()?;
+    let _log_writer = log_setup::install(telemetry_collector)?;
 
     // Started by an updating agent to start its successor and roll it back if it fails
     // (citadel-internal-service's updater/watchdog.rs): nothing else of this run applies.
@@ -127,7 +130,8 @@ async fn run() -> Result<(), Box<dyn Error>> {
         )
         .await?
     }
-    .with_supervisor(AGENT_SUPERVISOR);
+    .with_supervisor(AGENT_SUPERVISOR)
+    .with_telemetry(telemetry_uplink);
 
     // Backend selection precedence:
     //   1. INTERNAL_SERVICE_BACKEND / INTERNAL_SERVICE_DATA_DIR env vars
