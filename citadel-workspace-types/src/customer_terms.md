@@ -1,6 +1,6 @@
 # Citadel Workspace Customer Terms
 
-**Version 1 · Effective [EFFECTIVE DATE]**
+**Version 1 · Effective October 14, 2026**
 
 These Customer Terms ("Agreement") are a binding agreement between **Avarok Corp**, a Delaware corporation ("Avarok", "we", "us"), and the person or organization that creates a workspace ("Customer", "you"). They govern Customer's subscription to and use of Citadel Workspace, including the hosted workspace server, the web application, the Citadel Agent software, and related services (the "Service").
 
@@ -18,7 +18,7 @@ Avarok will make a workspace available to Customer on hosted infrastructure, und
 4. obtaining any notices and consents from its Members, and providing any legal basis, required for Customer's use of the Service and Avarok's processing of Customer Data under this Agreement; and
 5. keeping its account credentials, the workspace's administrative credentials and recovery material, and its devices secure.
 
-Customer will ensure its Members comply with the Terms of Use and will promptly notify Avarok at [SECURITY EMAIL] of any unauthorized use or security incident it becomes aware of.
+Customer will ensure its Members comply with the Terms of Use and will promptly notify Avarok at security@avarok.net of any unauthorized use or security incident it becomes aware of.
 
 ## 2. Plans, fees, and payment
 
@@ -37,10 +37,10 @@ Free plans are offered at Avarok's discretion, may have limits, and may be chang
 "Customer Data" means data that Customer, its Admins, and its Members submit to or store on the Service, including workspace structure, membership, roles and profiles, content in shared workspace channels and storage, and diagnostic logs Members choose to share.
 
 - **Ownership.** As between the parties, Customer owns Customer Data. Customer grants Avarok a worldwide, non-exclusive, royalty-free license to host, store, transmit, and process Customer Data only to provide, secure, maintain, and support the Service and as Customer instructs through its use of the Service.
-- **Role.** For personal data in Customer Data, Customer is the controller, and Avarok processes it as a processor or service provider on Customer's behalf. Where required by law, the parties' data processing addendum at [DPA URL] applies and forms part of this Agreement.
+- **Role.** For personal data in Customer Data, Customer is the controller, and Avarok processes it as a processor or service provider on Customer's behalf. Where required by law, the parties' data processing addendum at https://work.avarok.net/legal/dpa applies and forms part of this Agreement.
 - **End-to-end encrypted content.** Messages and files exchanged directly between Members' agents, including through relays Avarok operates, are encrypted end to end. Avarok does not hold the keys to that content and cannot access, recover, or produce it.
 - **Diagnostic logs and support access.** Members may choose to share redacted diagnostic logs with the workspace (see the Terms of Use). Customer's Admins set their retention, up to 90 days, and per-Member size limits. **Avarok may read a workspace's diagnostic logs only while an Admin has granted Avarok support access**, for a period of up to 30 days per grant, and only to diagnose and support the Service. Every such access is recorded in a log visible to Customer's Admins. Customer may revoke a grant at any time.
-- **Subprocessors.** Avarok uses third-party subprocessors, including its hosting, network, payment, and bot-protection providers, to provide the Service. A current list is available at [SUBPROCESSOR LIST URL].
+- **Subprocessors.** Avarok uses third-party subprocessors, including its hosting, network, payment, and bot-protection providers, to provide the Service. A current list is available at https://work.avarok.net/legal/subprocessors.
 - **Security.** Avarok will maintain reasonable administrative, technical, and physical safeguards designed to protect Customer Data, and will notify Customer without undue delay after becoming aware of a breach of security leading to unauthorized access to Customer Data on systems Avarok controls.
 - **Usage data.** Avarok may collect and use data about the operation and use of the Service, such as service metrics, quotas, and billing usage, that does not include the content of Customer Data, to operate, secure, bill for, and improve the Service.
 - **Legal requests.** Avarok may disclose Customer Data if required by law. Where legally permitted, Avarok will notify Customer and give it a chance to object.
@@ -93,8 +93,8 @@ This Agreement is governed by the laws of the State of Delaware, without regard 
 - **Assignment.** Neither party may assign this Agreement without the other's consent, except to a successor in a merger, acquisition, or sale of all or substantially all of its assets or business to which this Agreement relates, with notice.
 - **Force majeure.** Neither party is liable for delays or failures caused by events beyond its reasonable control, other than payment obligations.
 - **Independent contractors.** The parties are independent contractors. This Agreement creates no partnership, agency, or employment relationship.
-- **Publicity.** Avarok may identify Customer as a customer, by name and logo, unless Customer opts out by writing to [LEGAL EMAIL].
+- **Publicity.** Avarok may identify Customer as a customer, by name and logo, unless Customer opts out by writing to security@avarok.net.
 - **Severability and waiver.** If any provision is unenforceable, the rest remains in effect. A failure to enforce a provision is not a waiver.
-- **Notices.** Notices to Avarok must be sent to [LEGAL EMAIL] and [MAILING ADDRESS]. Avarok may send notices through the Service or to Customer's account email.
+- **Notices.** Notices to Avarok must be sent to security@avarok.net and 251 Little Falls Drive, Wilmington, DE 19808. Avarok may send notices through the Service or to Customer's account email.
 - **Electronic acceptance.** Customer agrees that accepting this Agreement electronically is the legal equivalent of a signature.
-- **Contact.** Avarok Corp, [MAILING ADDRESS], [LEGAL EMAIL].
+- **Contact.** Avarok Corp, 251 Little Falls Drive, Wilmington, DE 19808, security@avarok.net.

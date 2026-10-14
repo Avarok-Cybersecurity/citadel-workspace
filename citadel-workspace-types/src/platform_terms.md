@@ -1,6 +1,6 @@
 # Citadel Workspace Terms of Use
 
-**Version 1 · Effective [EFFECTIVE DATE]**
+**Version 1 · Effective October 14, 2026**
 
 These Terms of Use ("Terms") are a binding agreement between you and **Avarok Corp**, a Delaware corporation ("Avarok", "we", "us"). They govern your use of Citadel Workspace, including the web application, the Citadel Agent software you install on your device, the hosted workspace servers, and related services (together, the "Service").
 
@@ -18,7 +18,7 @@ The Workspace Owner, not Avarok, is responsible for its workspace, its Admins, a
 
 You must be at least 16 years old, or the minimum age required where you live to consent to these Terms without a parent or guardian, whichever is higher. If you use the Service on behalf of an organization, you confirm you are authorized to do so.
 
-You are responsible for your account and for keeping your password, passkeys, devices, and any recovery material secure. The Service uses strong, end-to-end and post-quantum cryptography. **Because of that design, Avarok may be unable to recover your account, your keys, or your encrypted data if you lose your credentials or devices.** Tell your Admins, and us at [SECURITY EMAIL], promptly if you suspect unauthorized use.
+You are responsible for your account and for keeping your password, passkeys, devices, and any recovery material secure. The Service uses strong, end-to-end and post-quantum cryptography. **Because of that design, Avarok may be unable to recover your account, your keys, or your encrypted data if you lose your credentials or devices.** Tell your Admins, and us at security@avarok.net, promptly if you suspect unauthorized use.
 
 ## 3. How the Service handles your content
 
@@ -28,7 +28,7 @@ You are responsible for your account and for keeping your password, passkeys, de
 - **Workspace data.** Some data is stored on the workspace server we host for the Workspace Owner, such as the workspace's structure, membership, roles, profile details you choose to provide, and content posted to shared workspace channels or storage. We process this data on the Workspace Owner's behalf and under its instructions.
 - **Your device.** The Citadel Agent keeps data on your device, which you are responsible for securing.
 
-You keep all rights you have in Your Content. You grant Avarok a worldwide, non-exclusive, royalty-free license to host, store, transmit, and process Your Content only as needed to provide, secure, and support the Service. Our handling of personal information is described in our Privacy Notice at [PRIVACY NOTICE URL].
+You keep all rights you have in Your Content. You grant Avarok a worldwide, non-exclusive, royalty-free license to host, store, transmit, and process Your Content only as needed to provide, secure, and support the Service. Our handling of personal information is described in our Privacy Notice at https://work.avarok.net/legal/privacy.
 
 ## 4. Diagnostic logs (optional)
 
@@ -76,7 +76,7 @@ If you send us suggestions or feedback, you grant Avarok a perpetual, irrevocabl
 
 ## 10. Copyright complaints
 
-If you believe content on the Service infringes your copyright, send a notice meeting the requirements of 17 U.S.C. § 512(c)(3) to our designated agent at [DMCA AGENT NAME, ADDRESS, EMAIL]. We may remove content and terminate repeat infringers. Because end-to-end encrypted content is not accessible to Avarok, we may be unable to act on content we cannot see.
+If you believe content on the Service infringes your copyright, send a notice meeting the requirements of 17 U.S.C. § 512(c)(3) to our designated agent at Copyright Agent, Avarok Corp, 251 Little Falls Drive, Wilmington, DE 19808, security@avarok.net. We may remove content and terminate repeat infringers. Because end-to-end encrypted content is not accessible to Avarok, we may be unable to act on content we cannot see.
 
 ## 11. Suspension and termination
 
@@ -96,7 +96,7 @@ To the extent permitted by law, you will defend, indemnify, and hold harmless Av
 
 ## 15. Dispute resolution and arbitration
 
-**Informal resolution first.** Before filing a claim, you and Avarok agree to try to resolve the dispute informally for 30 days after one side sends the other a written notice describing it. Send notices to Avarok at [LEGAL EMAIL] and [MAILING ADDRESS].
+**Informal resolution first.** Before filing a claim, you and Avarok agree to try to resolve the dispute informally for 30 days after one side sends the other a written notice describing it. Send notices to Avarok at security@avarok.net and 251 Little Falls Drive, Wilmington, DE 19808.
 
 **Binding individual arbitration.** Any dispute, claim, or controversy arising out of or relating to these Terms or the Service that is not resolved informally will be resolved by final and binding arbitration administered by the American Arbitration Association under its Consumer Arbitration Rules (or Commercial Arbitration Rules, if you use the Service for business purposes), before a single arbitrator. The Federal Arbitration Act governs this Section. The arbitration may be held by video or in the county where you live, or another location both sides agree on.
 
@@ -104,7 +104,7 @@ To the extent permitted by law, you will defend, indemnify, and hold harmless Av
 
 **Exceptions.** Either side may bring an individual claim in small-claims court, and either side may seek injunctive relief in court to protect intellectual property or to stop unauthorized access to or misuse of the Service.
 
-**Opt-out.** You may opt out of this arbitration agreement by emailing [LEGAL EMAIL] within 30 days after you first accept these Terms, with your name, username, and a clear statement that you opt out of arbitration.
+**Opt-out.** You may opt out of this arbitration agreement by emailing security@avarok.net within 30 days after you first accept these Terms, with your name, username, and a clear statement that you opt out of arbitration.
 
 If the class action waiver is found unenforceable for a claim, that claim will be decided in court, not in arbitration.
 
@@ -120,4 +120,4 @@ These Terms are governed by the laws of the State of Delaware, without regard to
 - **Severability and waiver.** If any provision is unenforceable, the rest remains in effect. A failure to enforce a provision is not a waiver.
 - **No third-party beneficiaries.** Except as stated in Section 14, these Terms create no rights for third parties.
 - **Notices.** We may send you notices through the Service or to the contact details you provide.
-- **Contact.** Avarok Corp, [MAILING ADDRESS], [LEGAL EMAIL].
+- **Contact.** Avarok Corp, 251 Little Falls Drive, Wilmington, DE 19808, security@avarok.net.
