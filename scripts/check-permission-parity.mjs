@@ -180,7 +180,6 @@ const GATED_BY = {
   BanUser: 'NOT IMPLEMENTED - no ban operation exists',
   ManageDomains: 'NOT IMPLEMENTED - no domain-management operation exists',
   ConfigureSystem: 'NOT IMPLEMENTED - no system-configuration operation exists',
-  EditWorkspaceConfig: 'NOT IMPLEMENTED - no workspace-config operation exists',
 };
 
 // Comments are stripped first, and that is not a detail. This check's own

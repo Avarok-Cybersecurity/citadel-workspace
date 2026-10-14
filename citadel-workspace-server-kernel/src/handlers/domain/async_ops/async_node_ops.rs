@@ -4,6 +4,9 @@
 //! providing the generalized tree hierarchy node operations.
 
 use crate::handlers::domain::async_ops::node_chat::{set_chat_enabled, NEW_NODE_CHAT_ENABLED};
+use crate::handlers::domain::async_ops::node_views::{
+    enrich_allowed_child_types, enrich_tree, unnamed_root, with_live_child_types, workspace_root,
+};
 use crate::handlers::domain::async_ops::AsyncPermissionOperations;
 use crate::handlers::domain::node_ops::AsyncNodeOperations;
 use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
@@ -12,21 +15,13 @@ use crate::platform::{SystemTime, UNIX_EPOCH};
 use async_trait::async_trait;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{
-    DomainNode, DomainPermissions, NodeEntityType, Permission, TreeNode, TreeSchema,
+    DomainNode, DomainPermissions, NodeEntityType, Permission, TreeNode,
 };
 use std::collections::{HashSet, VecDeque};
 
 /// Entity type name constants to avoid repeated string allocations
 mod type_names {
     pub const WORKSPACE: &str = "Workspace";
-}
-
-/// Default synthetic node values
-mod defaults {
-    pub const ROOT_NAME: &str = crate::DEFAULT_ROOT_WORKSPACE_NAME;
-    pub const ROOT_DESC: &str = "Root workspace";
-    pub const UNKNOWN_OWNER: &str = "unknown";
-    pub const WORKSPACE_LABEL: &str = "Workspace";
 }
 
 /// Get current unix timestamp in seconds
@@ -177,13 +172,6 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
 
         let now = current_timestamp();
 
-        // Derive allowed child types from the tree schema (SSOT)
-        let allowed_child_types = schema
-            .rules
-            .iter()
-            .find(|r| r.parent_type == entity_type.type_name())
-            .map(|r| r.allowed_child_types.clone());
-
         // Create the node
         let mut node = DomainNode {
             id: node_id.clone(),
@@ -202,7 +190,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             chat_channel_id: None,
             default_permissions: DomainPermissions::default(),
             metadata: vec![],
-            allowed_child_types,
+            // Derived from the live schema on every read (node_views), never stored.
+            allowed_child_types: None,
             is_default: false,
             created_at: now,
             updated_at: now,
@@ -224,12 +213,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         // Save all nodes
         self.backend_tx_manager.save_nodes(&nodes).await?;
 
-        Ok(node)
+        Ok(with_live_child_types(node, &schema))
     }
 
     async fn get_node(&self, user_id: &str, node_id: &str) -> Result<DomainNode, NetworkError> {
         // Membership AND ViewContent — see ensure_may_view_workspace.
         ensure_may_view_workspace(self, user_id).await?;
+
+        let schema = self.backend_tx_manager.get_tree_schema_or_default().await?;
 
         // Handle workspace-root sentinel ID (not stored as a DomainNode)
         if node_id == crate::WORKSPACE_ROOT_ID {
@@ -237,58 +228,19 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                 .backend_tx_manager
                 .get_workspace(crate::WORKSPACE_ROOT_ID)
                 .await?;
-            let (name, description, owner_id, members) = if let Some(ws) = workspace {
-                (
-                    ws.name.clone(),
-                    ws.description.clone(),
-                    ws.owner_id.clone(),
-                    ws.members.clone(),
-                )
-            } else {
-                (
-                    String::from(defaults::ROOT_NAME),
-                    String::from(defaults::ROOT_DESC),
-                    String::from(defaults::UNKNOWN_OWNER),
-                    vec![],
-                )
-            };
-
             let nodes = self.backend_tx_manager.get_all_nodes_shared().await?;
-            let children: Vec<String> = nodes
-                .values()
-                .filter(|n| n.parent_id.as_deref() == Some(crate::WORKSPACE_ROOT_ID))
-                .map(|n| n.id.clone())
-                .collect();
-
-            return Ok(DomainNode {
-                id: String::from(crate::WORKSPACE_ROOT_ID),
-                parent_id: None,
-                entity_type: NodeEntityType::Workspace,
-                depth: 0,
-                name,
-                description,
-                owner_id,
-                members,
-                children,
-                mdx_content: String::new(),
-                mdx_content_hash: None,
-                rules: None,
-                chat_enabled: false,
-                chat_channel_id: None,
-                default_permissions: DomainPermissions::default(),
-                metadata: vec![],
-                allowed_child_types: None,
-                is_default: true,
-                created_at: 0,
-                updated_at: 0,
-            });
+            return Ok(with_live_child_types(
+                workspace_root(workspace, &nodes),
+                &schema,
+            ));
         }
 
-        // Get the node from storage
-        self.backend_tx_manager
+        let node = self
+            .backend_tx_manager
             .get_node(node_id)
             .await?
-            .ok_or_else(|| NetworkError::msg(format!("Node '{}' not found", node_id)))
+            .ok_or_else(|| NetworkError::msg(format!("Node '{}' not found", node_id)))?;
+        Ok(with_live_child_types(node, &schema))
     }
 
     async fn update_node(
@@ -413,7 +365,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         nodes.insert(String::from(node_id), node.clone());
         self.backend_tx_manager.save_nodes(&nodes).await?;
 
-        Ok(node)
+        let schema = self.backend_tx_manager.get_tree_schema_or_default().await?;
+        Ok(with_live_child_types(node, &schema))
     }
 
     async fn delete_node(
@@ -645,6 +598,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         nodes
             .get(node_id)
             .cloned()
+            .map(|node| with_live_child_types(node, &schema))
             .ok_or_else(|| NetworkError::msg("Node disappeared after move"))
     }
 
@@ -781,107 +735,34 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
 
         let nodes = self.backend_tx_manager.get_all_nodes_shared().await?;
 
+        let schema = self.backend_tx_manager.get_tree_schema_or_default().await?;
+
         // Find the root node
-        let root_node = if let Some(rid) = root_id {
-            // Handle special case for workspace-root sentinel
-            if rid == crate::WORKSPACE_ROOT_ID {
-                // Return a synthetic workspace root node
+        let root_node = match root_id {
+            // The workspace-root sentinel is a workspace record, never a stored node.
+            Some(rid) if rid == crate::WORKSPACE_ROOT_ID => {
                 let workspace = self
                     .backend_tx_manager
                     .get_workspace(crate::WORKSPACE_ROOT_ID)
                     .await?;
-                let (name, description, owner_id, members) = if let Some(ws) = workspace {
-                    (
-                        ws.name.clone(),
-                        ws.description.clone(),
-                        ws.owner_id.clone(),
-                        ws.members.clone(),
-                    )
-                } else {
-                    // Fallback for missing workspace
-                    (
-                        String::from(defaults::ROOT_NAME),
-                        String::from(defaults::ROOT_DESC),
-                        String::from(defaults::UNKNOWN_OWNER),
-                        vec![],
-                    )
-                };
-
-                // Get children - nodes whose parent is workspace-root
-                let children: Vec<String> = nodes
-                    .values()
-                    .filter(|n| n.parent_id.as_deref() == Some(crate::WORKSPACE_ROOT_ID))
-                    .map(|n| n.id.clone())
-                    .collect();
-
-                DomainNode {
-                    id: String::from(crate::WORKSPACE_ROOT_ID),
-                    parent_id: None,
-                    entity_type: NodeEntityType::Workspace,
-                    depth: 0,
-                    name,
-                    description,
-                    owner_id,
-                    members,
-                    children,
-                    mdx_content: String::new(),
-                    mdx_content_hash: None,
-                    rules: None,
-                    chat_enabled: false,
-                    chat_channel_id: None,
-                    default_permissions: DomainPermissions::default(),
-                    metadata: vec![],
-                    allowed_child_types: None,
-                    is_default: true,
-                    created_at: 0,
-                    updated_at: 0,
-                }
-            } else {
-                nodes
-                    .get(rid)
-                    .ok_or_else(|| NetworkError::msg(format!("Root node '{}' not found", rid)))?
-                    .clone()
+                workspace_root(workspace, &nodes)
             }
-        } else {
+            Some(rid) => nodes
+                .get(rid)
+                .ok_or_else(|| NetworkError::msg(format!("Root node '{}' not found", rid)))?
+                .clone(),
             // No root_id specified - find workspace root node or create synthetic one
-            nodes
+            None => nodes
                 .values()
                 .find(|n| n.parent_id.is_none())
                 .cloned()
-                .unwrap_or_else(|| {
-                    // Create synthetic workspace root
-                    let children: Vec<String> = nodes
-                        .values()
-                        .filter(|n| n.parent_id.as_deref() == Some(crate::WORKSPACE_ROOT_ID))
-                        .map(|n| n.id.clone())
-                        .collect();
-
-                    DomainNode {
-                        id: String::from(crate::WORKSPACE_ROOT_ID),
-                        parent_id: None,
-                        entity_type: NodeEntityType::Workspace,
-                        depth: 0,
-                        name: String::from(defaults::WORKSPACE_LABEL),
-                        description: String::new(),
-                        owner_id: String::new(),
-                        members: vec![],
-                        children,
-                        mdx_content: String::new(),
-                        mdx_content_hash: None,
-                        rules: None,
-                        chat_enabled: false,
-                        chat_channel_id: None,
-                        default_permissions: DomainPermissions::default(),
-                        metadata: vec![],
-                        allowed_child_types: None,
-                        is_default: true,
-                        created_at: 0,
-                        updated_at: 0,
-                    }
-                })
+                .unwrap_or_else(|| unnamed_root(&nodes)),
         };
 
-        Ok(build_tree(root_node, &nodes, max_depth))
+        Ok(enrich_tree(
+            build_tree(root_node, &nodes, max_depth),
+            &schema,
+        ))
     }
 }
 
@@ -1006,24 +887,6 @@ fn build_tree(
     }
 
     root_tree
-}
-
-/// Populate `allowed_child_types` from the tree schema for nodes that have `None`.
-/// Ensures nodes created before schema enrichment was added still get correct values.
-fn enrich_allowed_child_types(nodes: Vec<DomainNode>, schema: &TreeSchema) -> Vec<DomainNode> {
-    nodes
-        .into_iter()
-        .map(|mut node| {
-            if node.allowed_child_types.is_none() {
-                node.allowed_child_types = schema
-                    .rules
-                    .iter()
-                    .find(|r| r.parent_type == node.entity_type.type_name())
-                    .map(|r| r.allowed_child_types.clone());
-            }
-            node
-        })
-        .collect()
 }
 
 /// Filter nodes by entity type if filter is specified

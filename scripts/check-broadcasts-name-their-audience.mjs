@@ -105,6 +105,7 @@ const UNSCOPED = new Map([
   ['TreeStructure', 'a response to a tree query, filtered by the handler'],
   ['TreeSchema', 'schema, not content'],
   ['NodeTypes', 'schema, not content'],
+  ['Telemetry', 'only ever the answer to the requesting member (never fanned out); it carries consent state and agent logs'],
 ]);
 
 /**

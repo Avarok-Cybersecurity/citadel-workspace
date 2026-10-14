@@ -1,0 +1,31 @@
+//! Accepted terms are current only when both versions are the required ones.
+
+use citadel_workspace_types::terms::{CurrentTerms, TermsDocument, PLATFORM_TERMS_VERSION};
+
+fn terms(workspace: Option<u32>) -> CurrentTerms {
+    CurrentTerms {
+        platform: TermsDocument {
+            version: PLATFORM_TERMS_VERSION,
+            text: "platform".to_string(),
+        },
+        workspace: workspace.map(|version| TermsDocument {
+            version,
+            text: "workspace".to_string(),
+        }),
+    }
+}
+
+#[test]
+fn the_current_platform_version_is_required() {
+    assert!(terms(None).accepted_by(Some(PLATFORM_TERMS_VERSION), None));
+    assert!(!terms(None).accepted_by(None, None));
+    assert!(!terms(None).accepted_by(Some(PLATFORM_TERMS_VERSION + 1), None));
+}
+
+#[test]
+fn workspace_terms_are_required_only_when_the_workspace_has_them() {
+    assert!(terms(None).accepted_by(Some(PLATFORM_TERMS_VERSION), Some(4)));
+    assert!(terms(Some(2)).accepted_by(Some(PLATFORM_TERMS_VERSION), Some(2)));
+    assert!(!terms(Some(2)).accepted_by(Some(PLATFORM_TERMS_VERSION), Some(1)));
+    assert!(!terms(Some(2)).accepted_by(Some(PLATFORM_TERMS_VERSION), None));
+}

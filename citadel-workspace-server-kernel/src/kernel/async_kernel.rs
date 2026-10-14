@@ -1255,7 +1255,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 chat_channel_id,
                 default_permissions: office_config.default_permissions.clone(),
                 metadata: Vec::new(),
-                allowed_child_types: Some(schema.get_allowed_children(&office_entity_type)),
+                allowed_child_types: None, // derived on read from the live schema
                 is_default,
                 created_at: current_time,
                 updated_at: current_time,
@@ -1334,7 +1334,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                     chat_channel_id: room_chat_channel_id,
                     default_permissions: room_config.default_permissions.clone(),
                     metadata: Vec::new(),
-                    allowed_child_types: Some(schema.get_allowed_children(&room_entity_type)),
+                    allowed_child_types: None, // derived on read from the live schema
                     is_default: false,
                     created_at: current_time,
                     updated_at: current_time,
@@ -1501,6 +1501,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     );
                 }
             }
+            self.migrate_default_tree_schema().await?;
         }
 
         // Full-tree integrity check, after seeding and migrations have run.

@@ -5,6 +5,7 @@ import type { GroupMessage } from "./GroupMessage";
 import type { IceServer } from "./IceServer";
 import type { Permission } from "./Permission";
 import type { SignInSettings } from "./SignInSettings";
+import type { TelemetryResponse } from "./TelemetryResponse";
 import type { TreeNode } from "./TreeNode";
 import type { TreeSchema } from "./TreeSchema";
 import type { User } from "./User";
@@ -55,4 +56,4 @@ revfs_storage_quota_mb: bigint, } } | { "IceServers": { ice_servers: Array<IceSe
 /**
  * IDs of child nodes that were also deleted (if cascade was true)
  */
-children_deleted: Array<string>, } } | { "NodeMoved": { node_id: string, old_parent_id: string | null, new_parent_id: string | null, } } | { "ServerShutdown": { message: string, drain_seconds: bigint, } };
+children_deleted: Array<string>, } } | { "NodeMoved": { node_id: string, old_parent_id: string | null, new_parent_id: string | null, } } | { "ServerShutdown": { message: string, drain_seconds: bigint, } } | { "Telemetry": TelemetryResponse };

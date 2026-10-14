@@ -13,6 +13,8 @@ pub mod structs;
 /// rather than known. The classification is pure and lives here; `build.rs`
 /// `include!`s this file and supplies the git calls.
 pub mod submodule_freshness;
+pub mod telemetry;
+pub mod terms;
 
 use custom_debug::Debug;
 use ice::IceServer;
@@ -406,6 +408,9 @@ pub enum WorkspaceProtocolRequest {
 
     /// List all available node types (built-in and custom)
     ListNodeTypes,
+
+    /// Terms, consent and the Telemetry Service; see `telemetry`.
+    Telemetry(telemetry::TelemetryRequest),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -597,6 +602,8 @@ pub enum WorkspaceProtocolResponse {
         #[ts(type = "bigint")]
         drain_seconds: u64,
     },
+
+    Telemetry(telemetry::TelemetryResponse),
 }
 
 /// Type of group message

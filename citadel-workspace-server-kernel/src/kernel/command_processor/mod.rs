@@ -47,3 +47,6 @@ mod workspace_record;
 
 /// "Members can see each other": SetMembersVisible, and the rule ListMembers reads.
 mod members_visibility;
+
+/// Terms, consent and the Telemetry Service.
+mod telemetry;

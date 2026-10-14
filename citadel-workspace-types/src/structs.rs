@@ -309,6 +309,8 @@ pub enum Permission {
     ManageNodeTypes,
     /// Edit the workspace theme every member sees
     Themes,
+    /// Read the workspace's telemetry and its access log
+    ViewTelemetry,
 }
 
 impl Permission {
@@ -319,7 +321,7 @@ impl Permission {
     /// when reporting a user's effective permissions. `exhaustiveness_guard`
     /// below stops compiling when a variant is added to the enum, which is what
     /// keeps this list honest.
-    pub const ALL_VARIANTS: [Permission; 28] = [
+    pub const ALL_VARIANTS: [Permission; 29] = [
         Self::All,
         Self::CreateNode,
         Self::DeleteNode,
@@ -348,6 +350,7 @@ impl Permission {
         Self::EditTreeStructure,
         Self::ManageNodeTypes,
         Self::Themes,
+        Self::ViewTelemetry,
     ];
 
     /// Not called at runtime. Adding a variant to `Permission` fails to compile
@@ -383,6 +386,7 @@ impl Permission {
             Self::EditTreeStructure => (),
             Self::ManageNodeTypes => (),
             Self::Themes => (),
+            Self::ViewTelemetry => (),
         }
     }
 
@@ -754,6 +758,8 @@ impl DomainPermissions {
             Permission::EditTreeStructure => self.edit_tree_structure,
             Permission::ManageNodeTypes => self.manage_node_types,
             Permission::Themes => self.themes,
+            // A workspace-wide administrator's read: no node's defaults can grant it.
+            Permission::ViewTelemetry => false,
         }
     }
 }
@@ -876,14 +882,6 @@ impl DomainNode {
     pub fn is_root(&self) -> bool {
         self.parent_id.is_none() && self.entity_type.is_workspace()
     }
-
-    /// Check if this node can have children of the given type
-    pub fn can_have_child_type(&self, child_type: &str) -> bool {
-        match &self.allowed_child_types {
-            Some(allowed) => allowed.iter().any(|t| t == child_type),
-            None => true, // No restrictions
-        }
-    }
 }
 
 /// Recursive tree structure for representing the full hierarchy
@@ -895,7 +893,7 @@ pub struct TreeNode {
 }
 
 /// Rule defining what child types are allowed under a parent type
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct NestingRule {
     /// Parent node type (use "Workspace" for root, or child type names)
@@ -940,7 +938,10 @@ pub struct TreeSchema {
 }
 
 impl Default for TreeSchema {
-    /// Default schema: Workspace → Office → Room (traditional 3-level hierarchy)
+    /// Default schema: Workspace → [Office], Office → [Room, Office], Room → [Room], any depth.
+    ///
+    /// Room comes first under Office: callers that take the first allowed type (seeding, a
+    /// single-type "Add Child") still create rooms there.
     fn default() -> Self {
         Self {
             id: "default".to_string(),
@@ -952,14 +953,14 @@ impl Default for TreeSchema {
                 },
                 NestingRule {
                     parent_type: "Office".to_string(),
-                    allowed_child_types: vec!["Room".to_string()],
+                    allowed_child_types: vec!["Room".to_string(), "Office".to_string()],
                 },
                 NestingRule {
                     parent_type: "Room".to_string(),
-                    allowed_child_types: vec![], // Rooms are leaf nodes by default
+                    allowed_child_types: vec!["Room".to_string()],
                 },
             ],
-            max_depth: Some(3), // Workspace(0) → Office(1) → Room(2)
+            max_depth: None,
             entity_type_configs: vec![
                 EntityTypeConfig {
                     type_name: "Workspace".to_string(),
