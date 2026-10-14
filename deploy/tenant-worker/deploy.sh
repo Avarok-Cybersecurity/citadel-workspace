@@ -27,7 +27,7 @@ case "${1:-}" in
   *) echo "usage: ./deploy.sh [--dry-run]" >&2; exit 2 ;;
 esac
 
-REQUIRED_SECRETS=(TURNSTILE_SECRET STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET)
+REQUIRED_SECRETS=(TURNSTILE_SECRET STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET CITADEL_SUPPORT_MLDSA_PUBLIC_KEY)
 # Optional until the agent asks for relay servers: TURN_KEY_ID and TURN_KEY_API_TOKEN. Unset,
 # GetIceServers answers "no relay servers" (control/ice.mjs); DEPLOY.md step 4.
 say() { printf '\n== %s\n' "$*"; }

@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { dispatch } from "../control/dispatch.mjs";
 import { config } from "../control/http.mjs";
 import { createBody, freshSlug, outbound, post, production, productionEnv } from "./helpers.mjs";
+import deployScript from "../deploy.sh?raw";
 
 const STATS_FIELDS = ["accepted", "connections", "stored", "entitlements", "master_password_sha256_prefix", "provisioned", "wasm_instance"];
 
@@ -81,5 +82,19 @@ describe("a tenant host under the production configuration", () => {
     const slug = await activeTenant();
     const object = env.WORKSPACE.get(env.WORKSPACE.idFromName(slug));
     await expectNothingSaid(await object.fetch(new Request(`https://${slug}.work.avarok.net/`)));
+  });
+});
+
+describe("Avarok support's public key", () => {
+  it("has no value in wrangler.toml: it is only ever the CITADEL_SUPPORT_MLDSA_PUBLIC_KEY secret", () => {
+    expect(production().vars).not.toHaveProperty("CITADEL_SUPPORT_MLDSA_PUBLIC_KEY");
+    expect(config(productionEnv({ CITADEL_SUPPORT_MLDSA_PUBLIC_KEY: undefined })).supportPublicKey).toBeNull();
+  });
+  it("is a secret deploy.sh refuses to deploy without", () => {
+    const required = deployScript.split("\n").find((line) => line.startsWith("REQUIRED_SECRETS=("));
+    expect(required).toMatch(/[( ]CITADEL_SUPPORT_MLDSA_PUBLIC_KEY[ )]/);
+  });
+  it("is refused when it is not an ML-DSA-65 key, rather than served with", () => {
+    expect(() => config(productionEnv({ CITADEL_SUPPORT_MLDSA_PUBLIC_KEY: "ab".repeat(100) }))).toThrow(/CITADEL_SUPPORT_MLDSA_PUBLIC_KEY/);
   });
 });

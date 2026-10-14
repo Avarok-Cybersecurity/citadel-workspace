@@ -65,6 +65,19 @@ function uiConfig(env) {
 const optional = (env, name) => (env[name] === undefined || env[name] === "" ? null : env[name]);
 
 /**
+ * Avarok support's ML-DSA-65 public key (control/support.mjs): 1952 bytes as 3904 lowercase hex
+ * characters, as `telemetry-read keygen` prints it. A secret, though public, so wrangler.toml
+ * carries no value for it; unset, the support routes answer 503, and deploy.sh refuses to deploy.
+ */
+function supportPublicKey(env) {
+  const key = optional(env, "CITADEL_SUPPORT_MLDSA_PUBLIC_KEY");
+  if (key !== null && !/^[0-9a-f]{3904}$/.test(key.trim())) {
+    throw new Error("CITADEL_SUPPORT_MLDSA_PUBLIC_KEY is an ML-DSA-65 public key: 3904 lowercase hex characters");
+  }
+  return key === null ? null : key.trim();
+}
+
+/**
  * Cloudflare Realtime TURN (control/ice.mjs): the key's id and API token are secrets, and
  * without both no relay credentials are minted (members are told so); the credentials' lifetime
  * is a var, required whether or not the secrets are set.
@@ -113,6 +126,7 @@ export function config(env) {
     // account is shared with another product, whose default portal would then be shown to
     // Citadel customers. Unset, the portal route answers 503.
     portalConfiguration: optional(env, "STRIPE_PORTAL_CONFIGURATION"),
+    supportPublicKey: supportPublicKey(env),
   };
 }
 
