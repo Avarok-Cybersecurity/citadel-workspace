@@ -125,11 +125,19 @@ jobs:
   release-sign:
     name: release-sign builds, passes its tests, and the agent embeds a release key
     timeout-minutes: 15
-    runs-on: ubuntu-latest
+    # The Mac pool when it is on (a cargo-only job: no Docker, no apt); the hosted pool otherwise.
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
+      # The toolchain the other Rust gate jobs set up; a self-hosted runner has its own
+      # RUSTUP_HOME, not the hosted image's preinstalled toolchain.
+      - uses: ./.github/actions/rust-toolchain
       - run: cargo fmt --manifest-path tools/release-sign/Cargo.toml --check
       - run: cargo clippy --locked --all-targets --manifest-path tools/release-sign/Cargo.toml -- -D warnings
       - run: cargo test --locked --manifest-path tools/release-sign/Cargo.toml
@@ -141,7 +149,12 @@ jobs:
   telemetry-read:
     name: telemetry-read builds and passes its tests
     timeout-minutes: 20
-    runs-on: ubuntu-latest
+    # The Mac pool when it is on (a cargo-only job: no Docker, no apt); the hosted pool otherwise.
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -944,7 +957,10 @@ jobs:
         # explicit install pinned CI to a DIFFERENT version than every developer
         # runs -- 3.0.7 here against the 3.2.7 the lockfile resolves. A green run
         # then said nothing about the version anyone else would use.
-        run: npx vitest run
+        # Three workers on the self-hosted Mac: its four Avarok slots share 12 cores (with two
+        # more org runners), and a worker per core in four jobs at once is how unrelated tests
+        # hit their 5 s timeouts there. Hosted runners are unshared.
+        run: npx vitest run ${{ runner.environment == 'self-hosted' && '--maxWorkers=3' || '' }}
         working-directory: citadel-workspaces
 
   typecheck:
