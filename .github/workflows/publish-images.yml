@@ -445,6 +445,39 @@ jobs:
           docker push "$IMAGE:$SHA_TAG"
           docker push "$DOCKERHUB_IMAGE:$SHA_TAG"
 
+  # Starts the Deploy workflow for this commit as soon as it is validated, in parallel with the
+  # image publish: deploy.sh reads no image (it deploys the Worker and the UI bundle), so waiting
+  # for three image builds, their smoke tests and two registry pushes only delayed it. Deploy used
+  # to run on `workflow_run` of this whole workflow; it now has no trigger but this dispatch (and a
+  # manual one), so it runs once per validated master commit, never twice.
+  #
+  # The same condition as `publish`: the full validation passed here, or the gate proved this
+  # exact tree passed it as the merged PR -- never on a skip for any other reason. Master only,
+  # as the old trigger's `branches: [master]` was. Deploy itself still refuses a commit that is no
+  # longer master's head, and owns the agent release (plan -> tag -> release-agent.yml).
+  # A dispatch made with the workflow token is the one event that token may start a run with.
+  deploy:
+    name: Start the deploy
+    needs: [validation-gate, validate]
+    if: >-
+      ${{ !cancelled() && github.ref == 'refs/heads/master' &&
+          (needs.validate.result == 'success' ||
+          (needs.validate.result == 'skipped' && needs.validation-gate.result == 'success' &&
+           needs.validation-gate.outputs.validated == 'true')) }}
+    # One API call; this bounds a hang.
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write # workflow_dispatch of deploy.yml, nothing else
+    steps:
+      - name: Dispatch Deploy for ${{ github.sha }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref master -f sha="$GITHUB_SHA"
+          echo "Deploy dispatched for $GITHUB_SHA; it refuses the commit if master has moved on."
+
   promote-latest:
     name: Promote latest
     # Observed under a minute; this bounds a hang, not performance.
