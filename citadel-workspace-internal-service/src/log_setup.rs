@@ -4,8 +4,13 @@
 //! timestamps. The installed app sets no `RUST_LOG`, so a session the agent lost to a failed
 //! reconnect left no reason in the user's log, and nothing said when (found live 2026-09-29).
 
+use citadel_internal_service::telemetry::{TelemetryCollector, TelemetryLayer};
+use std::sync::Arc;
 use tracing_appender::non_blocking::{NonBlocking, NonBlockingBuilder, WorkerGuard};
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{EnvFilter, Layer};
 
 /// Log lines held for the writer thread before new ones are dropped.
 ///
@@ -46,9 +51,15 @@ pub fn filter_directives(rust_log: Option<&str>) -> Result<String, String> {
         .map_err(|err| format!("RUST_LOG={directives:?} is not a valid log filter: {err}"))
 }
 
+/// What the telemetry layer sees, whatever `RUST_LOG` says: the shipped filter prints errors
+/// only, and the collector captures warnings too. Each layer has its own filter, so neither
+/// widens or narrows the other.
+pub const TELEMETRY_LOG_LEVEL: LevelFilter = LevelFilter::WARN;
+
 /// Installs the panic hook `setup_log()` installs, then a timestamped subscriber writing through
-/// `non_blocking_writer`. The returned guard must be held until the process ends.
-pub fn install() -> Result<WorkerGuard, String> {
+/// `non_blocking_writer`, beside `telemetry`'s layer. The returned guard must be held until the
+/// process ends.
+pub fn install(telemetry: Arc<TelemetryCollector>) -> Result<WorkerGuard, String> {
     std::panic::set_hook(Box::new(|info| {
         // Straight to stderr as well: `exit` below skips destructors, so a line only queued for
         // the writer thread would be lost with the one message that explains the exit.
@@ -64,13 +75,27 @@ pub fn install() -> Result<WorkerGuard, String> {
     let rust_log: Option<String> = std::env::var("RUST_LOG").ok();
     let directives: String = filter_directives(rust_log.as_deref())?;
     let (writer, guard) = non_blocking_writer(std::io::stdout(), LOG_QUEUE_LINES);
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::new(directives))
-        .with_target(true)
-        .with_writer(writer)
+    subscriber(&directives, writer, telemetry)
         .try_init()
         .map_err(|err| format!("could not install the log subscriber: {err}"))?;
     Ok(guard)
+}
+
+/// The printed log, filtered by `directives`, beside the telemetry layer at its own level.
+pub fn subscriber<W>(
+    directives: &str,
+    writer: W,
+    telemetry: Arc<TelemetryCollector>,
+) -> impl tracing::Subscriber + Send + Sync
+where
+    W: for<'w> tracing_subscriber::fmt::MakeWriter<'w> + Send + Sync + 'static,
+{
+    let printed = tracing_subscriber::fmt::layer()
+        .with_target(true)
+        .with_writer(writer)
+        .with_filter(EnvFilter::new(directives));
+    let captured = TelemetryLayer::new(telemetry).with_filter(TELEMETRY_LOG_LEVEL);
+    tracing_subscriber::registry().with(printed).with(captured)
 }
 
 #[cfg(test)]

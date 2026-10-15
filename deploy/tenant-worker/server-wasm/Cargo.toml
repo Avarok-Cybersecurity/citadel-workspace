@@ -19,6 +19,8 @@ js-sys = { workspace = true }
 web-sys = { workspace = true }
 tenant-console-log = { path = "../console-log" }
 tenant-auth-versions = { path = "../auth-versions" }
+# The signed support request the control plane verifies (support.rs).
+citadel-support-signature = { path = "../../../citadel-support-signature" }
 toml = "0.8"
 
 # Keep the name section through wasm-opt so a panic inside the Durable Object prints Rust

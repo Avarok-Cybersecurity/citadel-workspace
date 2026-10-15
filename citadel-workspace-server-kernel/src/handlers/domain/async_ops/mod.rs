@@ -16,6 +16,7 @@ pub mod async_workspace_ops;
 #[cfg(test)]
 mod delete_node_recovery_tests;
 mod node_chat;
+mod node_views;
 
 // Re-export all async traits
 pub use async_domain_ops::AsyncDomainOperations;

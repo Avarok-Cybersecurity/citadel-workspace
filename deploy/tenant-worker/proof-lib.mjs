@@ -11,6 +11,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { randomBytes } from "node:crypto";
+import { CUSTOMER_TERMS_VERSION } from "./control/customer-terms.mjs";
 
 const require = createRequire(import.meta.url);
 const { start_client } = require("./proof-client/pkg/citadel_tenant_proof_client.js");
@@ -107,7 +108,7 @@ export async function provision(slug) {
   const res = await fetch(`${HTTP_BASE}/api/tenants`, {
     method: "POST",
     headers: { origin: HTTP_BASE, "content-type": "application/json" },
-    body: JSON.stringify({ slug, display_name: `Proof ${slug}`, tier: "free", turnstile_token: "XXXX.DUMMY.TOKEN.XXXX" }),
+    body: JSON.stringify({ slug, display_name: `Proof ${slug}`, tier: "free", turnstile_token: "XXXX.DUMMY.TOKEN.XXXX", accepted_customer_terms_version: CUSTOMER_TERMS_VERSION }),
   });
   const body = await res.json().catch(() => null);
   if (res.status !== 201 || body?.status !== "active" || !/^[0-9a-f]{64}$/.test(body?.claim_code ?? "")) {

@@ -13,6 +13,10 @@ func check(_ ok: Bool, _ what: String, file: String = #file, line: Int = #line) 
     if ok { print("ok   \(what)") } else { failures += 1; print("FAIL \(what) (line \(line))") }
 }
 func fail(_ what: String) { failures += 1; print("FAIL \(what)") }
+/// What a failed `UpdateSteps.run` said, so a red check names the command's exit status and its output.
+func outcome(_ tool: String, _ result: (status: Int32, output: String)) -> String {
+    result.status == 0 ? "" : " [\(tool) exited \(result.status): \(result.output.trimmingCharacters(in: .whitespacesAndNewlines))]"
+}
 
 /// Steps that record what they were asked to do; time moves only when `after` is called.
 final class Script {
@@ -114,7 +118,7 @@ if args.count == 3 {
     let image = scratch.appendingPathComponent("Citadel-Agent.dmg")
     let copied = try! UpdateSteps.run("/usr/bin/ditto", [source.path, app.path])
     let made = try! UpdateSteps.run("/usr/bin/hdiutil", ["create", "-quiet", "-srcfolder", content.path, "-format", "UDZO", image.path])
-    check(copied.status == 0 && made.status == 0, "a scratch disk image of the app")
+    check(copied.status == 0 && made.status == 0, "a scratch disk image of the app" + outcome("ditto", copied) + outcome("hdiutil", made))
     let out = scratch.appendingPathComponent("incoming.app")
     do { try UpdateSteps.extract(image: image, to: out) } catch { fail("extract: \(error)") }
     let team = UpdateSteps.team(of: out)

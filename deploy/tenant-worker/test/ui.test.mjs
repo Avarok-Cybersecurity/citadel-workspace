@@ -118,3 +118,18 @@ describe("what the site does not swallow", () => {
     expect(r.status).toBe(426);
   });
 });
+
+describe("the public legal pages", () => {
+  const PAGES = ["terms", "customer-terms", "privacy", "dpa", "subprocessors"];
+  it.each(PAGES)("/legal/%s reaches the SPA shell, signed out, with the security headers", async (page) => {
+    const shell = await (await at("/")).text();
+    const r = await at(`/legal/${page}`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("content-type")).toContain("text/html");
+    expect(await r.text()).toBe(shell);
+    expectSecurityHeaders(r);
+  });
+  it("is told apart from a missing hashed bundle, which stays a 404 (so the check can fail)", async () => {
+    expect((await at("/assets/legal-missing.js")).status).toBe(404);
+  });
+});

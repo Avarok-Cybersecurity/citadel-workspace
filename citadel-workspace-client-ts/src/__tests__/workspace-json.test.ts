@@ -39,7 +39,7 @@ void test('DEFECT C (request): the defect was real — bare JSON.stringify throw
   assert.throws(() => JSON.stringify(paginationRequest), TypeError);
 });
 
-void test('encode fails fast on a bigint that cannot survive the JSON transport', () => {
+void test('encode writes a bigint above 2^53 as the exact integer serde reads into u64', () => {
   const payload = {
     Request: {
       GetGroupMessages: {
@@ -49,7 +49,8 @@ void test('encode fails fast on a bigint that cannot survive the JSON transport'
       },
     },
   } as unknown as WorkspaceProtocolPayload;
-  assert.throws(() => encodeWorkspacePayload(payload), RangeError);
+  const text = new TextDecoder().decode(encodeWorkspacePayload(payload));
+  assert.equal(text, '{"Request":{"GetGroupMessages":{"group_id":"g","before_timestamp":18446744073709551615,"limit":null}}}');
 });
 
 void test('DEFECT C (response): declared-bigint fields decode as bigint, everything else untouched', () => {
@@ -99,11 +100,49 @@ void test('decode accepts number[], Uint8Array and string inputs identically', (
   }
 });
 
-void test('decode fails fast on an unsafe integer in a declared-bigint field', () => {
-  // 2^60 has already lost precision inside JSON.parse; silently returning a
-  // wrong bigint would be corruption, so the codec throws instead.
-  const wire = '{"Response":{"ServerShutdown":{"message":"x","drain_seconds":1152921504606846976}}}';
+// Account ids are random 63-bit values (citadel_crypt entropy_bank: gen::<u64>() >> 1).
+const PEER_CID = '7340187244936118791';
+
+void test('a peer CID above 2^53 decodes to its exact value', () => {
+  // A double rounds this id to 7340187244936118784, which names no account.
+  const wire = `{"Response":{"Telemetry":{"entries":[{"peer_cid":${PEER_CID},"message":"x"}]}}}`;
+  const payload = decodeWorkspacePayload(wire) as unknown as {
+    Response: { Telemetry: { entries: Array<{ peer_cid: bigint; message: string }> } };
+  };
+  assert.equal(payload.Response.Telemetry.entries[0].peer_cid, BigInt(PEER_CID));
+});
+
+void test('a peer CID survives encode then decode exactly', () => {
+  const request = { Request: { Telemetry: { ListTelemetry: { filter: { peer_cid: BigInt(PEER_CID) } } } } };
+  const bytes = encodeWorkspacePayload(request as unknown as WorkspaceProtocolPayload);
+  const back = decodeWorkspacePayload(bytes) as unknown as typeof request;
+  assert.equal(back.Request.Telemetry.ListTelemetry.filter.peer_cid, BigInt(PEER_CID));
+});
+
+void test('digits and marker-like text inside strings are left alone', () => {
+  const message = `cid ${PEER_CID} said "u64:00:${PEER_CID}" \\ done`;
+  const bytes = encodeWorkspacePayload({ Request: { Note: { message, peer_cid: BigInt(PEER_CID) } } } as unknown as WorkspaceProtocolPayload);
+  const back = decodeWorkspacePayload(bytes) as unknown as { Request: { Note: { message: string; peer_cid: bigint } } };
+  assert.equal(back.Request.Note.message, message);
+  assert.equal(back.Request.Note.peer_cid, BigInt(PEER_CID));
+});
+
+void test('decode fails fast on an unsafe integer in a field that is not u64', () => {
+  // Returning it as a number would hand back a silently rounded value.
+  const wire = `{"Response":{"Other":{"count":${PEER_CID}}}}`;
   assert.throws(() => decodeWorkspacePayload(wire), RangeError);
+});
+
+void test('decode fails fast on a fraction in a u64 field', () => {
+  assert.throws(() => decodeWorkspacePayload('{"Response":{"X":{"drain_seconds":1.5}}}'), RangeError);
+});
+
+void test('floats and exponents outside u64 fields are untouched', () => {
+  const back = decodeWorkspacePayload('{"Response":{"X":{"ratio":-1.25e+30,"n":-3}}}') as unknown as {
+    Response: { X: { ratio: number; n: number } };
+  };
+  assert.equal(back.Response.X.ratio, -1.25e30);
+  assert.equal(back.Response.X.n, -3);
 });
 
 void test('SSOT: WORKSPACE_BIGINT_FIELDS matches the generated workspace types exactly', () => {

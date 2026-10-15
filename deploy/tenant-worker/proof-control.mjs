@@ -16,6 +16,7 @@
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { signLikeStripe } from "./test/stripe-sign.mjs";
+import { CUSTOMER_TERMS_VERSION } from "./control/customer-terms.mjs";
 
 const [mode, base] = process.argv.slice(2);
 if (!mode || !base) {
@@ -46,7 +47,7 @@ const api = async (method, path, body) => {
   });
   return { status: r.status, body: await r.json().catch(() => null) };
 };
-const create = (extra) => api("POST", "/api/tenants", { slug, display_name: "Proof Org", turnstile_token: "XXXX.DUMMY.TOKEN.XXXX", ...extra });
+const create = (extra) => api("POST", "/api/tenants", { slug, display_name: "Proof Org", turnstile_token: "XXXX.DUMMY.TOKEN.XXXX", accepted_customer_terms_version: CUSTOMER_TERMS_VERSION, ...extra });
 const stripeGet = async (path) => {
   const r = await fetch(`https://api.stripe.com/v1${path}`, { headers: { authorization: `Bearer ${vars.STRIPE_SECRET_KEY}` } });
   const body = await r.json();

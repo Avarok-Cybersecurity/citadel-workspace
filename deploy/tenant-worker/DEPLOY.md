@@ -67,6 +67,16 @@ cfw secret put STRIPE_WEBHOOK_SECRET   # whsec_... from step 5
 cfw secret list                        # names only
 ```
 
+Avarok support's telemetry reads (control/support.mjs) need the support key's PUBLIC half. The
+owner generates the pair once, offline, and keeps the private key file off this machine's backups:
+
+```sh
+cargo run --release --manifest-path ../../tools/telemetry-read/Cargo.toml -- keygen --private-key <offline path>/support.key
+cfw secret put CITADEL_SUPPORT_MLDSA_PUBLIC_KEY   # the 3904 hex characters keygen printed
+```
+
+It is a secret only so that wrangler.toml carries no value for it; `deploy.sh` requires it.
+
 Two more are OPTIONAL, and `deploy.sh` does not require them until the agent asks for relay
 servers: the Cloudflare Realtime TURN key the tenant objects mint members' short-lived relay
 credentials from (`GetIceServers`, control/ice.mjs). Without both, a member asking for relay

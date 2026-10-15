@@ -23,17 +23,41 @@ print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
-# npm install, retried. The registry resets connections now and then (ECONNRESET fetching
-# vite killed a CI stack start on 2026-09-26, before any test ran), and one reset should not
-# fail a run; five should. The UI image's own install already retries the same way.
-npm_install_retrying() {
-    local attempt
+# Installs every workspace member's dependencies from the root package-lock.json, retried.
+#
+# This used to be three `npm install --package-lock=false` runs, one per member, each
+# resolving ranges against the live registry. An upstream publish therefore changed -- or
+# broke -- the sync, and with it every job that starts the stack: 2026-10-12 Publish ui died
+# here with `ETARGET No matching version found for @radix-ui/react-use-callback-ref@1.1.5`,
+# published 19 seconds after the install ran. `npm ci` installs exactly what the lockfile
+# pins and refuses, rather than re-resolving, when a manifest and the lockfile disagree.
+#
+# One install at the root, not one per member: the members are npm workspaces, so the
+# lockfile covers all of them and the dependencies are hoisted to <root>/node_modules.
+# Each member's own node_modules is emptied first, because a nested copy left by an earlier
+# run would shadow the hoisted one. Emptied, not removed: under Docker they are mount points
+# (docker-compose.yml) and `rm -rf` on one fails with EBUSY. `npm ci` itself clears the
+# CONTENTS of the root node_modules, so that mount point is safe too.
+#
+# The retry answers a reset connection while fetching the pinned tarballs, as before. It
+# cannot change what is installed.
+install_workspace_deps() {
+    local attempt member
+    if [ ! -f "$WORKSPACE_ROOT/package-lock.json" ]; then
+        print_error "No package-lock.json at $WORKSPACE_ROOT."
+        print_error "Under Docker the root package.json, package-lock.json and .npmrc must be mounted (docker-compose.yml)."
+        return 1
+    fi
+    for member in citadel-internal-service/typescript-client citadel-workspace-client-ts citadel-workspaces citadel-workspaces/integration-tests; do
+        mkdir -p "$WORKSPACE_ROOT/$member/node_modules"
+        find "$WORKSPACE_ROOT/$member/node_modules" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    done
     for attempt in 1 2 3 4 5; do
-        npm install "$@" && return 0
-        print_warning "npm install failed (attempt $attempt/5); retrying in $((attempt * 15))s"
+        (cd "$WORKSPACE_ROOT" && npm ci --no-audit --no-fund) && return 0
+        print_warning "npm ci failed (attempt $attempt/5); retrying in $((attempt * 15))s"
         sleep $((attempt * 15))
     done
-    print_error "npm install failed 5 times: $*"
+    print_error "npm ci failed 5 times"
     return 1
 }
 
@@ -237,17 +261,10 @@ if [ -d "$DEST1" ]; then
     print_status "Rebuilding TypeScript client in $DEST1..."
     cd "$DEST1"
 
-    # Always install dependencies (since we clean node_modules in step 0)
-    #
-    # `--package-lock=false`, as at the bottom of this script. This directory is a
-    # member of the ROOT npm workspace, so a plain `npm install` here walks up and
-    # rewrites the root package-lock.json: it renames the package to whatever the
-    # checkout directory is called and drops the platform-optional entries this
-    # host does not need -- 406 lines of @esbuild/@rollup binaries for other
-    # platforms, which every other platform then cannot install. Observed twice,
-    # reverted twice, before the cause was looked for.
-    print_status "Installing npm dependencies..."
-    npm_install_retrying --package-lock=false
+    # Every member's dependencies, from the root lockfile, once. The three members below
+    # (this one, citadel-workspace-client-ts, citadel-workspaces) share that one install.
+    print_status "Installing npm dependencies from package-lock.json..."
+    install_workspace_deps
 
     print_status "Running TypeScript build..."
     npm run build
@@ -354,13 +371,7 @@ fi
 print_status "Rebuilding citadel-workspace-client-ts..."
 cd "$WORKSPACE_ROOT/citadel-workspace-client-ts"
 rm -rf ./dist
-# Emptied, not removed — mount point under Docker; see DEST1 above.
-mkdir -p ./node_modules
-find ./node_modules -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
-
-print_status "Installing dependencies for citadel-workspace-client-ts..."
-# Also a root workspace member; see the note above.
-npm_install_retrying --package-lock=false
+# Dependencies were installed with the rest of the workspace; see install_workspace_deps.
 
 # Build the TypeScript client
 print_status "Building TypeScript client..."
@@ -414,91 +425,9 @@ cd "$WORKSPACE_ROOT/citadel-workspaces"
 mkdir -p ./dist
 find ./dist -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 
-# Empty node_modules rather than deleting it. Under Docker it is a mount point
-# (see the sync_ui_node_modules volume in docker-compose.yml), and `rm -rf` on a
-# mount point fails with EBUSY — which, with `set -e` above, would abort the
-# whole sync rather than just this step. Emptying works in both cases, and
-# `mkdir -p` covers a first native run where the directory does not exist yet.
-mkdir -p ./node_modules
-find ./node_modules -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-
-print_status "Installing dependencies for citadel-workspaces.."
-# Use --package-lock=false to avoid platform-specific lockfile issues when running in Docker.
-# Use --legacy-peer-deps because @vitejs/plugin-react-swc's peer dep
-# range (vite ^4 || ^5 || ^6 || ^7) trips npm's modern ERESOLVE
-# resolver under certain registry/cache states even when the local
-# devDep (`vite ^5.4.1`) satisfies it — observed as an intermittent
-# CI failure on the integration-test matrix where sync-wasm-client
-# would exit 1 with `Found: vite@undefined` mid-resolve. Legacy
-# resolution treats peer deps as advisory rather than transactional,
-# which is the historical npm behavior and matches what the rest of
-# our workspace npm-ci flow uses.
-npm_install_retrying --package-lock=false --legacy-peer-deps
-
-# Drop the Playwright copies this install just placed here.
-#
-# `--package-lock=false` resolves fresh, so it installs whatever version the
-# range allows rather than the one the root lockfile pins. The result is TWO
-# Playwright installs: `npx` picks the root's, while `require()` walks up from
-# integration-tests and finds this one. They disagree about which browser build
-# to use, and the failure is a browser path with an impossible build number
-# (chromium-1234) and a "Please run npx playwright install" banner that does not
-# help, because installing browsers is not the problem.
-#
-# Removed rather than pinned: nothing under citadel-workspaces/ needs Playwright
-# at all — the tests live in integration-tests/ and resolve from the root.
-if [ -d node_modules/playwright ] || [ -d node_modules/playwright-core ] || [ -d node_modules/@playwright ]; then
-    print_status "Removing Playwright from citadel-workspaces/node_modules (it shadows the root install)"
-    rm -rf node_modules/playwright node_modules/playwright-core node_modules/@playwright
-fi
-
-# Recreate symlinks for WASM client (removed when node_modules was deleted)
-print_status "Recreating symlinks for citadel-internal-service-wasm-client..."
-ln -sf ../../citadel-internal-service/typescript-client node_modules/citadel-internal-service-wasm-client
-
-# Also create symlink at root node_modules for Vite resolution
-# (Vite resolves imports from citadel-workspace-client-ts/dist/ up to /workspace/node_modules/)
-mkdir -p "$WORKSPACE_ROOT/node_modules"
-ln -sf ../citadel-internal-service/typescript-client "$WORKSPACE_ROOT/node_modules/citadel-internal-service-wasm-client"
-
+# Dependencies were installed with the rest of the workspace; see install_workspace_deps.
+# Workspace links, including citadel-internal-service-wasm-client, come from that install.
 npx vite build --mode development
-
-# Put the tree back on the versions the lockfile pins.
-#
-# Every install above resolves FRESH (`--package-lock=false`), which is deliberate
-# -- see the note on the citadel-workspaces install for the ERESOLVE it avoids --
-# but it leaves the workspace holding whatever the registry served today rather
-# than what package-lock.json records. Observed after a run: typescript 6.0.3
-# installed at the root against a lockfile pinning 5.9.3, so `tsc` then failed on
-# a deprecation this repository has not adopted; and before that, component tests
-# timing out because the runner had been replaced underneath them. Both were
-# repaired by hand, twice, before anyone thought to make the script do it.
-#
-# The existing hand-patch three steps up -- deleting the Playwright copies this
-# install "just placed here" -- is the same repair for one package. This is that
-# repair for all of them, and it is what CI does anyway.
-# Only where there IS a workspace root to restore.
-#
-# The sync CONTAINER mounts three subtrees -- citadel-internal-service,
-# citadel-workspace-client-ts, citadel-workspaces -- and not the parent's
-# package-lock.json, so `/workspace` has no root lockfile at all. The first
-# version of this ran unconditionally and took down every "Start Services" job
-# with `npm ci can only install with an existing package-lock.json`, which is a
-# regression this script introduced into CI rather than a problem it found.
-#
-# On a host checkout the lockfile is there and the restore is exactly the repair
-# that was being done by hand after every run.
-if [ -f "$WORKSPACE_ROOT/package-lock.json" ]; then
-    print_status "Restoring the workspace to the versions package-lock.json pins..."
-    if ! (cd "$WORKSPACE_ROOT" && npm ci); then
-        print_error "npm ci failed at the workspace root."
-        print_error "The tree is left holding freshly-resolved versions rather than the pinned ones;"
-        print_error "run 'npm ci' at $WORKSPACE_ROOT before trusting a test result."
-        exit 1
-    fi
-else
-    print_status "No root package-lock.json at $WORKSPACE_ROOT (container mode); nothing to restore."
-fi
 
 print_status "WASM client synchronization complete!"
 print_status ""

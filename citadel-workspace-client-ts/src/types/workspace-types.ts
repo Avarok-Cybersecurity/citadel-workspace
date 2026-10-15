@@ -2,6 +2,7 @@
 // SSOT: citadel-workspace-types/bindings/ (generated from Rust types via ts-rs)
 // To regenerate: run `cargo test -p citadel-workspace-types` then copy bindings/ to src/types/generated/
 
+export type { CurrentTerms } from './generated/CurrentTerms.js';
 export type { CustomNodeType } from './generated/CustomNodeType.js';
 export type { Domain } from './generated/Domain.js';
 export type { DomainNode } from './generated/DomainNode.js';
@@ -11,11 +12,28 @@ export type { GroupMessage } from './generated/GroupMessage.js';
 export type { GroupMessageType } from './generated/GroupMessageType.js';
 export type { MetadataField } from './generated/MetadataField.js';
 export type { MetadataValue } from './generated/MetadataValue.js';
+export type { MyConsent } from './generated/MyConsent.js';
 export type { NestingRule } from './generated/NestingRule.js';
 export type { NodeEntityType } from './generated/NodeEntityType.js';
 export type { Permission } from './generated/Permission.js';
 export type { PermissionEndowOperation } from './generated/PermissionEndowOperation.js';
 export type { SignInSettings } from './generated/SignInSettings.js';
+export type { SupportAccess } from './generated/SupportAccess.js';
+export type { TelemetryAccessLogEntry } from './generated/TelemetryAccessLogEntry.js';
+export type { TelemetryAccessor } from './generated/TelemetryAccessor.js';
+export type { TelemetryBatch } from './generated/TelemetryBatch.js';
+export type { TelemetryEntry } from './generated/TelemetryEntry.js';
+export type { TelemetryFilter } from './generated/TelemetryFilter.js';
+export type { TelemetryLevel } from './generated/TelemetryLevel.js';
+export type { TelemetryPage } from './generated/TelemetryPage.js';
+export type { TelemetryPageResult } from './generated/TelemetryPageResult.js';
+export type { TelemetryPolicy } from './generated/TelemetryPolicy.js';
+export type { TelemetryRecord } from './generated/TelemetryRecord.js';
+export type { TelemetryRequest } from './generated/TelemetryRequest.js';
+export type { TelemetryResponse } from './generated/TelemetryResponse.js';
+export type { TelemetrySettings } from './generated/TelemetrySettings.js';
+export type { TelemetryUploadRefusal } from './generated/TelemetryUploadRefusal.js';
+export type { TermsDocument } from './generated/TermsDocument.js';
 export type { TreeNode } from './generated/TreeNode.js';
 export type { TreeSchema } from './generated/TreeSchema.js';
 export type { UpdateOperation } from './generated/UpdateOperation.js';

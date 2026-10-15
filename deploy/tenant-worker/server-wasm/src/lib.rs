@@ -10,6 +10,8 @@ mod host_promise;
 mod ice;
 mod sign_in;
 mod storage;
+mod support;
+mod telemetry;
 
 use citadel_sdk::prelude::{
     ArgonDefaultServerSettings, BackendType, WasmConnectionInjector, WasmIO, WasmListener,
@@ -17,6 +19,7 @@ use citadel_sdk::prelude::{
 };
 use citadel_workspace_server_kernel::config::ServerConfig;
 use citadel_workspace_server_kernel::kernel::sign_in::HostedSignIn;
+use citadel_workspace_server_kernel::kernel::telemetry::HostedTelemetry;
 use citadel_workspace_server_kernel::run_server_on;
 use std::cell::Cell;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -57,6 +60,7 @@ pub fn instance_id() -> String {
 pub struct TenantServer {
     injector: WasmConnectionInjector,
     accepted: Cell<u32>,
+    kernel: telemetry::KernelSlot,
 }
 
 #[wasm_bindgen]
@@ -64,7 +68,7 @@ impl TenantServer {
     /// Start the node. `config_toml` is a `kernel.toml`; `storage` is the object's SQLite storage
     /// (see `storage::TenantStorage`); `ice` mints relay credentials for `GetIceServers` (see
     /// `ice::IceHost`); `pq` is post-quantum sign-in and `sign_in` the object's sign-in settings
-    /// (see `sign_in`). `on_exit` is called with a description of how the node ended, which for a
+    /// (see `sign_in`). `support_grants` mirrors the support grant (see `support`). `on_exit` is called with a description of how the node ended, which for a
     /// server that should run until eviction is always a failure.
     #[allow(clippy::too_many_arguments)]
     #[wasm_bindgen(constructor)]
@@ -75,6 +79,7 @@ impl TenantServer {
         ice: ice::IceHost,
         pq: sign_in::PqSignIn,
         sign_in: sign_in::SignInHost,
+        support_grants: support::SupportGrantHost,
         log_filter: &str,
         on_exit: js_sys::Function,
     ) -> Result<TenantServer, JsError> {
@@ -95,16 +100,30 @@ impl TenantServer {
             admission: Some(admission),
             settings: Some(settings),
         };
+        let kernel = telemetry::KernelSlot::default();
+        let slot = kernel.clone();
+        let telemetry = HostedTelemetry {
+            support_grants: Some(support::observer(support_grants)),
+            kernel_ready: Box::new(move |built| *slot.borrow_mut() = Some(built)),
+        };
         let (injector, listener) = WasmListener::injected();
         wasm_bindgen_futures::spawn_local(async move {
-            let outcome =
-                run_server_on::<WasmIO>(config, listener, backend, argon, ice_servers, sign_in)
-                    .await;
+            let outcome = run_server_on::<WasmIO>(
+                config,
+                listener,
+                backend,
+                argon,
+                ice_servers,
+                sign_in,
+                telemetry,
+            )
+            .await;
             let _ = on_exit.call1(&JsValue::NULL, &format!("{outcome:?}").into());
         });
         Ok(Self {
             injector,
             accepted: Cell::new(0),
+            kernel,
         })
     }
 

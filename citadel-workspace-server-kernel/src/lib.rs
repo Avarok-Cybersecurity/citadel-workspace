@@ -66,6 +66,11 @@ pub mod config {
         /// workspace still named the default; never written over a name an administrator chose.
         /// Unset keeps `DEFAULT_ROOT_WORKSPACE_NAME`. See `resolve_workspace_name`.
         pub workspace_name: Option<String>,
+        /// Whether users must have accepted Avarok's platform terms before diagnostics can be
+        /// switched on. True for an Avarok-hosted tenant, whose sign-up showed them; false for a
+        /// self-hosted server, whose users never saw them. No default: a server that does not
+        /// say refuses to start. See `resolve_require_platform_terms`.
+        pub require_platform_terms: Option<bool>,
     }
 
     impl std::fmt::Debug for ServerConfig {
@@ -94,6 +99,7 @@ pub mod config {
                 .field("file_transfer", &self.file_transfer)
                 .field("allow_first_connect_admin", &self.allow_first_connect_admin)
                 .field("workspace_name", &self.workspace_name)
+                .field("require_platform_terms", &self.require_platform_terms)
                 .finish()
         }
     }
@@ -483,6 +489,18 @@ pub fn resolve_workspace_structure(
     }
 }
 
+/// Whether `config` says its users must have accepted Avarok's platform terms. Unset is a
+/// configuration error: a default would block a self-hosted server's users on terms they were
+/// never shown, or skip them for a hosted one.
+pub fn resolve_require_platform_terms(config: &ServerConfig) -> Result<bool, NetworkError> {
+    config.require_platform_terms.ok_or_else(|| {
+        NetworkError::msg(
+            "require_platform_terms must be set: true when users were shown Avarok's platform \
+             terms (an Avarok-hosted tenant), false for a self-hosted server",
+        )
+    })
+}
+
 /// The root workspace name `config` asks for, trimmed; `None` when it names none.
 ///
 /// A name that cannot be shown is a configuration error, not something to fall back from: a
@@ -667,6 +685,7 @@ async fn workspace_kernel(
     ).await?;
     kernel.set_first_connect_admin(first_connect_admin);
     kernel.set_workspace_name(resolve_workspace_name(config)?);
+    kernel.set_platform_terms_required(resolve_require_platform_terms(config)?);
     if ice_servers.is_none() {
         info!(target: "citadel", "No relay-credential source: GetIceServers answers that no relay is available.");
     }
@@ -684,7 +703,8 @@ async fn workspace_kernel(
 /// the memory and CPU the release Argon2 defaults assume). `config.bind_addr` is recorded as the
 /// node's address and never bound. `ice_servers` is the host's relay-credential minter
 /// (`GetIceServers`), or `None` for a host that has none. `sign_in` is what the host gives
-/// sign-in: the post-quantum settings and the workspace's sign-in settings store.
+/// sign-in: the post-quantum settings and the workspace's sign-in settings store. `telemetry` is
+/// the host's support-grant mirror and the callback that receives the built kernel.
 pub async fn run_server_on<T: PlatformOps>(
     config: ServerConfig,
     listener: T::Listener,
@@ -692,6 +712,7 @@ pub async fn run_server_on<T: PlatformOps>(
     server_argon_settings: ArgonDefaultServerSettings,
     ice_servers: kernel::ice_servers::IceServerSourceHandle,
     sign_in: kernel::sign_in::HostedSignIn,
+    telemetry: kernel::telemetry::HostedTelemetry<StackedRatchet>,
 ) -> Result<(), NetworkError> {
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel on an injected listener...");
     let bind_address: SocketAddr = config.bind_addr.parse().map_err(|e| {
@@ -702,7 +723,7 @@ pub async fn run_server_on<T: PlatformOps>(
     })?;
     let workspace_structure = resolve_workspace_structure(&config, None)?;
     let first_connect_admin = resolve_first_connect_admin(None, config.allow_first_connect_admin)?;
-    let kernel = workspace_kernel(
+    let mut kernel = workspace_kernel(
         &config,
         workspace_structure,
         first_connect_admin,
@@ -710,6 +731,8 @@ pub async fn run_server_on<T: PlatformOps>(
         sign_in.settings,
     )
     .await?;
+    kernel.set_support_grant_observer(telemetry.support_grants);
+    (telemetry.kernel_ready)(kernel.clone());
 
     let node_type =
         NodeType::server(bind_address).map_err(|e| NetworkError::generic(e.to_string()))?;
@@ -1179,6 +1202,7 @@ mod server_config_debug_tests {
             file_transfer: Some(FileTransferConfig::default()),
             allow_first_connect_admin: None,
             workspace_name: Some("Admin Lab".to_string()),
+            require_platform_terms: Some(false),
         }
     }
 

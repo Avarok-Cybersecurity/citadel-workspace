@@ -13,6 +13,9 @@ import { createTenant, openPortal, slugAvailability, tenantStatus } from "./tena
 import { handleWebhook } from "./webhook.mjs";
 import { admissionAnywhere, admissionOf } from "./discovery.mjs";
 import { serveUi } from "./ui.mjs";
+import { serveSupport, supportRoute } from "./support.mjs";
+import { SupportStore } from "./support-store.mjs";
+import { verifySupportRequest } from "./support-verifier.mjs";
 
 /** Creation and portal bodies are a handful of short fields. */
 const API_BODY_LIMIT = 4096;
@@ -24,10 +27,13 @@ export function ioFor(env) {
   return {
     fetch: (url, init) => fetch(url, init),
     now: () => Math.floor(Date.now() / 1000),
+    nowMs: () => Date.now(),
     store: new Store(env.CONTROL_DB),
     usage: new UsageStore(env.CONTROL_DB),
     authVersions: new AuthVersionStore(env.CONTROL_DB),
     tenant: (slug) => objectFor(env, slug),
+    support: new SupportStore(env.CONTROL_DB),
+    verifySupport: verifySupportRequest,
   };
 }
 
@@ -95,6 +101,8 @@ async function api(io, cfg, request, url) {
     if (method === "POST" && parts.length === 2 && parts[0] === "stripe" && parts[1] === "webhook") {
       return await handleWebhook(io, cfg, request);
     }
+    const support = supportRoute(method, parts);
+    if (support !== null) return await serveSupport(io, cfg, request, support);
     return refuse("not-found", "no such route", 404);
   } catch (e) {
     console.error(`[control] ${method} ${url.pathname} failed: ${e?.stack ?? e}`);

@@ -148,6 +148,10 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     workspace_structure: Option<(WorkspaceStructureConfig, Option<PathBuf>)>,
     /// The configured root workspace name (`ServerConfig::workspace_name`), or none for the default
     workspace_name: Option<String>,
+    /// Whether telemetry consent needs the Avarok platform terms accepted
+    /// (`ServerConfig::require_platform_terms`). `None` until the bootstrap sets it: the
+    /// Telemetry Service refuses to answer rather than guess which terms its users were shown.
+    platform_terms_required: Option<bool>,
     /// Broadcast channel for sending updates to all connected clients
     broadcast_tx: broadcast::Sender<BroadcastMessage>,
     /// File transfer configuration
@@ -176,6 +180,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     ice_servers: crate::kernel::ice_servers::IceServerSourceHandle,
     /// Where the workspace's sign-in settings live: the host's store, or none.
     sign_in_settings: crate::kernel::sign_in::SignInSettingsHandle,
+    /// Told when an admin changes the support grant: the host's mirror of it, or none.
+    support_grants: crate::kernel::telemetry::SupportGrantObserverHandle,
 }
 
 /// Removes a CID's account attribution when its connection task ends.
@@ -207,11 +213,13 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             workspace_password: self.workspace_password.clone(),
             workspace_structure: self.workspace_structure.clone(),
             workspace_name: self.workspace_name.clone(),
+            platform_terms_required: self.platform_terms_required,
             broadcast_tx: self.broadcast_tx.clone(),
             file_transfer_config: self.file_transfer_config.clone(),
             first_connect_admin: self.first_connect_admin,
             ice_servers: self.ice_servers.clone(),
             sign_in_settings: self.sign_in_settings.clone(),
+            support_grants: self.support_grants.clone(),
             // RateLimiter::Clone shares the same Arc<Mutex<HashMap>>,
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
@@ -249,6 +257,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             workspace_password: None,
             workspace_structure: None,
             workspace_name: None,
+            platform_terms_required: None,
             broadcast_tx,
             file_transfer_config: FileTransferConfig::default(),
             rate_limiter: RateLimiter::new(DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL),
@@ -256,7 +265,20 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             first_connect_admin: false,
             ice_servers: None,
             sign_in_settings: None,
+            support_grants: None,
         }
+    }
+
+    /// Set by the server bootstrap: what to tell when the support grant changes, or none.
+    pub fn set_support_grant_observer(
+        &mut self,
+        observer: crate::kernel::telemetry::SupportGrantObserverHandle,
+    ) {
+        self.support_grants = observer;
+    }
+
+    pub fn support_grant_observer(&self) -> &crate::kernel::telemetry::SupportGrantObserverHandle {
+        &self.support_grants
     }
 
     /// Set by the server bootstrap: the host's sign-in settings store, or none, in which case
@@ -305,6 +327,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// The root workspace's configured name, applied by `inject_admin_user`.
     pub fn set_workspace_name(&mut self, name: Option<String>) {
         self.workspace_name = name;
+    }
+
+    /// Whether this server's users were shown, and so must accept, Avarok's platform terms.
+    pub fn set_platform_terms_required(&mut self, required: bool) {
+        self.platform_terms_required = Some(required);
+    }
+
+    /// `None` when no configuration said.
+    pub fn platform_terms_required(&self) -> Option<bool> {
+        self.platform_terms_required
     }
 
     /// Set by the server bootstrap from configuration. Off unless asked for.
@@ -1255,7 +1287,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                 chat_channel_id,
                 default_permissions: office_config.default_permissions.clone(),
                 metadata: Vec::new(),
-                allowed_child_types: Some(schema.get_allowed_children(&office_entity_type)),
+                allowed_child_types: None, // derived on read from the live schema
                 is_default,
                 created_at: current_time,
                 updated_at: current_time,
@@ -1334,7 +1366,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
                     chat_channel_id: room_chat_channel_id,
                     default_permissions: room_config.default_permissions.clone(),
                     metadata: Vec::new(),
-                    allowed_child_types: Some(schema.get_allowed_children(&room_entity_type)),
+                    allowed_child_types: None, // derived on read from the live schema
                     is_default: false,
                     created_at: current_time,
                     updated_at: current_time,
@@ -1501,6 +1533,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     );
                 }
             }
+            self.migrate_default_tree_schema().await?;
         }
 
         // Full-tree integrity check, after seeding and migrations have run.
