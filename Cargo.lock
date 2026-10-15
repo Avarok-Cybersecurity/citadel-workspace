@@ -1084,6 +1084,7 @@ dependencies = [
  "citadel-workspace-types",
  "citadel_logging",
  "citadel_sdk",
+ "futures",
  "serde_json",
  "tokio 1.49.0",
  "toml",

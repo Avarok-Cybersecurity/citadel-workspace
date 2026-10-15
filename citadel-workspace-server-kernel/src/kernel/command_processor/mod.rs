@@ -43,7 +43,7 @@ mod workspace_profile;
 pub mod workspace_logo;
 
 /// The one read-modify-write for a stored workspace record.
-mod workspace_record;
+pub(crate) mod workspace_record;
 
 /// "Members can see each other": SetMembersVisible, and the rule ListMembers reads.
 mod members_visibility;

@@ -21,5 +21,6 @@ citadel-workspace-types = { path = "../../../citadel-workspace-types" }
 #bincode = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }
+futures = { workspace = true }
 toml = "0.8"
 uuid = { workspace = true }

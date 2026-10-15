@@ -3,6 +3,7 @@ pub mod integration_test_utils;
 pub mod member_test_utils;
 pub mod permission_test_utils;
 pub mod permissions_test_utils;
+pub mod production_client;
 pub mod production_server;
 pub mod telemetry_test_utils;
 pub mod trust_test_utils;

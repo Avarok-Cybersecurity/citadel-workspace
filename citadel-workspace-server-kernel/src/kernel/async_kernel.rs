@@ -1794,21 +1794,20 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             }
                         }
 
+                        // Announced, not only written. Members already signed in
+                        // load the roster once, so a colleague who joined after
+                        // them never appeared until a reload. The joiner's own
+                        // session is excluded: it has not subscribed yet and
+                        // reads the record itself.
                         if !ws.members.contains(&user_id) {
                             ws.members.push(user_id.clone());
-                            this.domain_operations
-                                .backend_tx_manager
-                                .insert_workspace(crate::WORKSPACE_ROOT_ID.to_string(), ws.clone())
-                                .await?;
-
-                            // Update domain as well
-                            let ws_domain = citadel_workspace_types::structs::Domain::Workspace {
-                                workspace: ws,
-                            };
-                            this.domain_operations
-                                .backend_tx_manager
-                                .insert_domain(crate::WORKSPACE_ROOT_ID.to_string(), ws_domain)
-                                .await?;
+                            crate::kernel::command_processor::workspace_record::save_and_announce(
+                                &this,
+                                crate::WORKSPACE_ROOT_ID,
+                                ws,
+                                Some(user_cid),
+                            )
+                            .await?;
                         }
 
                         if outcome == crate::FirstMemberOutcome::Promote {

@@ -39,6 +39,11 @@ async fn ask<R: Ratchet>(
         if let Ok(WorkspaceProtocolPayload::Response(response)) =
             serde_json::from_slice::<WorkspaceProtocolPayload>(bytes.as_ref())
         {
+            // A colleague joining is announced as the workspace record. None of
+            // the requests here is answered with one, so it is never the reply.
+            if matches!(*response, WorkspaceProtocolResponse::Workspace(_)) {
+                continue;
+            }
             return Ok(*response);
         }
     }

@@ -51,6 +51,25 @@ where
         return Ok(WorkspaceProtocolResponse::Error(e));
     }
 
+    save_and_announce(kernel, workspace_id, workspace, requester_cid).await
+}
+
+/// Save both copies of `workspace` and announce it to this workspace's members, except
+/// `requester_cid`.
+///
+/// The caller must hold `lock_workspaces` across its read and this write. That is why this is
+/// separate from `mutate_workspace`: connect enrolment already holds the lock for a longer span
+/// (the user record and the first-member decision), and the lock is not reentrant.
+pub(crate) async fn save_and_announce<R>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    workspace_id: &str,
+    workspace: Workspace,
+    requester_cid: Option<u64>,
+) -> Result<WorkspaceProtocolResponse, NetworkError>
+where
+    R: Ratchet + Send + Sync + 'static,
+{
+    let backend = &kernel.domain_operations.backend_tx_manager;
     backend
         .insert_workspace(workspace_id.to_string(), workspace.clone())
         .await?;
