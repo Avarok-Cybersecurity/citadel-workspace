@@ -50,3 +50,6 @@ mod members_visibility;
 
 /// Terms, consent and the Telemetry Service.
 mod telemetry;
+
+/// Who connects without asking: the workspace's policy, a member's own, and the check.
+mod messaging_trust;

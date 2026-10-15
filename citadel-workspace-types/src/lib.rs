@@ -5,6 +5,7 @@
 /// cleanly and fails at runtime.
 pub mod dependency_agreement;
 pub mod ice;
+pub mod messaging_trust;
 pub mod sign_in;
 pub mod structs;
 /// The build script's submodule-freshness rule, here so it can be tested.
@@ -411,6 +412,9 @@ pub enum WorkspaceProtocolRequest {
 
     /// Terms, consent and the Telemetry Service; see `telemetry`.
     Telemetry(telemetry::TelemetryRequest),
+
+    /// Who connects without asking; see `messaging_trust`.
+    MessagingTrust(messaging_trust::MessagingTrustRequest),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -604,6 +608,8 @@ pub enum WorkspaceProtocolResponse {
     },
 
     Telemetry(telemetry::TelemetryResponse),
+
+    MessagingTrust(messaging_trust::MessagingTrustResponse),
 }
 
 /// Type of group message
