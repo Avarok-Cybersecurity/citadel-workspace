@@ -4,5 +4,5 @@ pub mod member_test_utils;
 pub mod permission_test_utils;
 pub mod permissions_test_utils;
 pub mod production_server;
-pub mod workspace_test_utils;
 pub mod telemetry_test_utils;
+pub mod workspace_test_utils;

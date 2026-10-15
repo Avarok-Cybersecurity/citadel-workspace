@@ -18,7 +18,11 @@ pub async fn hosted_kernel() -> std::sync::Arc<GateKernel> {
     .await
 }
 
-pub async fn ask(kernel: &GateKernel, user: &str, request: TelemetryRequest) -> WorkspaceProtocolResponse {
+pub async fn ask(
+    kernel: &GateKernel,
+    user: &str,
+    request: TelemetryRequest,
+) -> WorkspaceProtocolResponse {
     process_command_with_user(kernel, &WorkspaceProtocolRequest::Telemetry(request), user)
         .await
         .expect("dispatch failed")
@@ -55,7 +59,12 @@ pub async fn opt_in(kernel: &GateKernel, user: &str) {
     )
     .await;
     assert!(matches!(telemetry(accepted), TelemetryResponse::Consent(_)));
-    let on = ask(kernel, user, TelemetryRequest::SetTelemetryConsent { enabled: true }).await;
+    let on = ask(
+        kernel,
+        user,
+        TelemetryRequest::SetTelemetryConsent { enabled: true },
+    )
+    .await;
     match telemetry(on) {
         TelemetryResponse::Consent(c) => assert!(c.uploads_allowed, "{c:?}"),
         other => panic!("opting in failed: {other:?}"),
@@ -111,7 +120,9 @@ pub async fn messages(kernel: &GateKernel, reader: &str, filter: TelemetryFilter
     )
     .await;
     match telemetry(listed) {
-        TelemetryResponse::Page(page) => page.records.into_iter().map(|r| r.entry.message).collect(),
+        TelemetryResponse::Page(page) => {
+            page.records.into_iter().map(|r| r.entry.message).collect()
+        }
         other => panic!("listing failed: {other:?}"),
     }
 }
