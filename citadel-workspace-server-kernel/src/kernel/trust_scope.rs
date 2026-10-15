@@ -117,7 +117,3 @@ pub(crate) fn trusts(
         .iter()
         .all(|user| in_subtree(nodes, root, root_members, &user.id))
 }
-
-#[cfg(test)]
-#[path = "trust_scope_tests.rs"]
-mod tests;

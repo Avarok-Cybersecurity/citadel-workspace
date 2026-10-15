@@ -72,9 +72,13 @@ pub fn on(node_id: &str) -> Policy {
 }
 
 pub async fn send(kernel: &Kernel, user: &str, request: Req) -> WorkspaceProtocolResponse {
-    process_command_with_user(kernel, &WorkspaceProtocolRequest::MessagingTrust(request), user)
-        .await
-        .expect("dispatch failed")
+    process_command_with_user(
+        kernel,
+        &WorkspaceProtocolRequest::MessagingTrust(request),
+        user,
+    )
+    .await
+    .expect("dispatch failed")
 }
 
 pub async fn settings_after(kernel: &Kernel, user: &str, request: Req) -> MessagingTrustSettings {

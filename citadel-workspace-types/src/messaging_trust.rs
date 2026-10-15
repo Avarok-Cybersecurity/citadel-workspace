@@ -13,8 +13,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// The id of the workspace every tree hangs from.
-pub const WORKSPACE_ROOT_ID: &str = "workspace-root";
+pub use crate::WORKSPACE_ROOT_ID;
 /// Key of the workspace policy in `Workspace.metadata`, and of a member's own in `User.metadata`.
 pub const MESSAGING_TRUST_POLICY_KEY: &str = "messaging_trust_policy";
 /// The policy of a workspace whose admin has set none: Slack-like, everyone connects.

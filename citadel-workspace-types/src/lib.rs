@@ -17,6 +17,9 @@ pub mod submodule_freshness;
 pub mod telemetry;
 pub mod terms;
 
+/// The id of the workspace every tree hangs from; the kernel and the UI read it from here.
+pub const WORKSPACE_ROOT_ID: &str = "workspace-root";
+
 use custom_debug::Debug;
 use ice::IceServer;
 use serde::{Deserialize, Serialize};
