@@ -1393,9 +1393,12 @@ jobs:
   # (scripts/ci-stack.sh).
   integration-stack:
     name: Integration stack - ${{ matrix.service }}
-    # The cheap gates first, for the same reason as the integration matrix below: a lint-red
-    # change should not pay for two release Rust builds.
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read]
+    # No `needs:`, deliberately, unlike every other Docker job here. These four legs ARE the
+    # critical path: the agent's release compile (~17 min) used to start only after the cheap
+    # gates (~10 min), so every integration leg began at t~27. Starting at t=0 overlaps the two.
+    # The cost of a lint-red change is these four legs, not the 55 test legs, which still wait
+    # for every cheap gate (and for this job). check-expensive-jobs-wait-for-cheap-ones.mjs
+    # names this job as its one exemption.
     # The slowest leg is the agent's release compile: 16m43s inside a build that shared four
     # cores with the server's (run 38056778313). This bounds a hang, not performance.
     timeout-minutes: 45

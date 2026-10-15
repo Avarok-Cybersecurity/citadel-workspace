@@ -108,6 +108,17 @@ const stepsText = (job) => job.commands;
 const CHEAP = /cargo\s+fmt|cargo\s+clippy|eslint|tsc\b/;
 const EXPENSIVE = /docker\s+compose/;
 
+// The one exemption, by name, in each workflow: the job that builds the integration stack.
+// It is the critical path -- the agent's ~17-minute release compile -- and gating it behind the
+// ~10 minutes of cheap gates made every test leg start at t~27. Started at t=0 it costs a
+// lint-red change four build legs, not the fifty-odd test legs, which stay gated (and need it).
+// Narrow on purpose: where a workflow has a job of that name, it must be the stack build (it
+// runs `ci-stack.sh build`) and must run no test, or this check fails. A workflow without one
+// (the UI's, before it builds its stack once) exempts nothing.
+const STARTS_AT_ONCE = 'integration-stack';
+const STACK_BUILD = /ci-stack\.sh\s+build\b/;
+const RUNS_TESTS = /npm\s+run\s+test|playwright\s+test|vitest|cargo\s+(test|nextest)/;
+
 const failures = [];
 let cheapSeen = 0;
 let expensiveSeen = 0;
@@ -143,7 +154,17 @@ for (const file of FILES) {
   cheapSeen += cheapJobs.length;
   expensiveSeen += expensiveJobs.length;
 
+  const exempt = jobs[STARTS_AT_ONCE];
+  if (exempt && (!STACK_BUILD.test(stepsText(exempt)) || RUNS_TESTS.test(stepsText(exempt)))) {
+    console.error(
+      `${label}: '${STARTS_AT_ONCE}' is exempt from this rule only as the stack build, and ` +
+        'it does not run `ci-stack.sh build`, or it runs tests. Fix the job or the exemption.',
+    );
+    process.exit(1);
+  }
+
   for (const name of expensiveJobs) {
+    if (name === STARTS_AT_ONCE) continue;
     const declared = jobs[name].needs;
     const missing = cheapJobs.filter((c) => c !== name && !declared.has(c));
     if (missing.length) {
