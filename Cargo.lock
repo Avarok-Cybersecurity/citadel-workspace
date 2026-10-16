@@ -1010,7 +1010,7 @@ dependencies = [
 
 [[package]]
 name = "citadel-workspace-internal-service"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "citadel-internal-service",
  "citadel-workspace-types",
