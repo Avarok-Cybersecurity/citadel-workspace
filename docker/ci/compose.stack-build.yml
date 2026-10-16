@@ -8,10 +8,14 @@
 #   com.avarok.ci.source               sha256 of every repository's HEAD in the checkout,
 #                                      so a UI pull request's own commit is covered too
 #   com.avarok.ci.run                  the run that built it; no image crosses runs
+#   com.avarok.ci.backend              sha256 of every repository's HEAD but the UI's: what a
+#                                      server or agent image is built from, so the UI's CI can
+#                                      reuse one (`ci-stack.sh reuse` restamps the two above)
 x-ci-labels: &ci-labels
   org.opencontainers.image.revision: ${CI_STACK_REVISION:?set by scripts/ci-stack.sh}
   com.avarok.ci.source: ${CI_STACK_SOURCE:?set by scripts/ci-stack.sh}
   com.avarok.ci.run: ${CI_STACK_RUN:?set by scripts/ci-stack.sh}
+  com.avarok.ci.backend: ${CI_STACK_BACKEND:?set by scripts/ci-stack.sh}
 
 services:
   sync-wasm-client:

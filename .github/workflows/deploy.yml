@@ -1,10 +1,11 @@
 # Deploys work.avarok.net -- the tenant Worker, its Durable Object server and the UI -- and makes
 # sure the agent people download is the one that deployment expects, in that order:
 #
-#   master passes Publish Images (which runs the whole Validate suite first)
-#     -> plan:    is the agent this commit builds already released? (scripts/agent-release-state.mjs)
-#     -> release: if not, tag agent-vX.Y.Z here and publish it (release-agent.yml), notarised,
-#                 attested, every asset the UI links present
+#   master passes validation in Publish Images, whose `deploy` job then starts this run
+#     -> plan:    still master's head? is the agent this commit builds already released?
+#                 (scripts/agent-release-state.mjs) If not, tag agent-vX.Y.Z here.
+#     -> release: publish that tag (release-agent.yml), notarised, attested, every asset the UI
+#                 links present
 #     -> deploy:  deploy/tenant-worker/deploy.sh (its own gates, D1 migrations, smoke)
 #     -> verify:  the latest release IS this commit's agent, its downloads resolve, the site answers
 #
@@ -12,14 +13,21 @@
 # at whatever was last tagged: two days of agent fixes ran live on a locally built agent nobody
 # could download. Here the site cannot go out ahead of its agent: a changed agent with an unbumped
 # version fails `plan` (and fails the PR earlier, in Validate), and `deploy` waits on the release.
+#
+# Started after VALIDATION, not after the image publish. This ran on `workflow_run` of the whole
+# Publish Images run, so every deploy also waited for the three image builds, their smoke tests
+# and both registry pushes -- none of which deploy.sh reads (it deploys a Worker and a UI bundle;
+# no Docker, no GHCR). Publish Images' `deploy` job dispatches this with the validated commit as
+# soon as validation passes (or the gate proved the tree validated), in parallel with the publish.
 name: Deploy
 
 on:
-  workflow_run:
-    workflows: ["Publish Images"]
-    types: [completed]
-    branches: [master]
   workflow_dispatch:
+    inputs:
+      sha:
+        description: 'The master commit to deploy (Publish Images passes the validated one). Empty: the dispatched ref.'
+        required: false
+        type: string
 
 # One deploy at a time, and never cancelled halfway: a cancelled deploy can leave the Worker and
 # the release out of step, which is the state this workflow exists to prevent.
@@ -31,26 +39,35 @@ permissions:
   contents: read
 
 jobs:
+  # The head check, the release decision and the tag, in one job: they were two runner
+  # acquisitions in a row (~30 s of work behind ~10 min of queue in a saturated pool).
   plan:
     name: Plan (is the agent released?)
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    permissions:
+      contents: write # the agent-v* tag, created only when the plan says a release is due
     outputs:
       state: ${{ steps.state.outputs.state }}
       version: ${{ steps.state.outputs.version }}
       tag: ${{ steps.state.outputs.tag }}
       sha: ${{ steps.sha.outputs.sha }}
     steps:
+      - name: The commit asked for is a full commit id
+        env:
+          SHA: ${{ inputs.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::'$SHA' is not a 40-character commit id"; exit 1; }
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ inputs.sha || github.sha }}
           fetch-depth: 0 # the agent-v* tags and the history between them
       - id: sha
         name: The commit being deployed is still master's head
         # A slower run for an older commit must not deploy over a newer one.
         env:
-          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          SHA: ${{ inputs.sha || github.sha }}
         run: |
           set -euo pipefail
           head="$(git rev-parse origin/master)"
@@ -66,21 +83,12 @@ jobs:
         run: |
           echo "::error::The agent changed since its last release but its version did not. Bump citadel-workspace-internal-service/Cargo.toml; nothing was deployed."
           exit 1
-
-  tag:
-    name: Tag the agent release
-    needs: plan
-    if: needs.plan.outputs.state == 'needs-release'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: write
-    steps:
-      - name: Create ${{ needs.plan.outputs.tag }} at the deployed commit
+      - name: Create the release tag at the deployed commit
+        if: steps.state.outputs.state == 'needs-release'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.plan.outputs.tag }}
-          SHA: ${{ needs.plan.outputs.sha }}
+          TAG: ${{ steps.state.outputs.tag }}
+          SHA: ${{ steps.sha.outputs.sha }}
         run: |
           set -euo pipefail
           # Idempotent for a re-run: the tag may exist already, but only at this commit.
@@ -94,7 +102,7 @@ jobs:
 
   release:
     name: Release the agent
-    needs: [plan, tag]
+    needs: plan
     if: needs.plan.outputs.state == 'needs-release'
     uses: ./.github/workflows/release-agent.yml
     with:
@@ -130,9 +138,25 @@ jobs:
             deploy/tenant-worker/package-lock.json
       - name: Rust with the wasm32 target
         run: rustup target add wasm32-unknown-unknown
+      # The release binary, checksum-pinned, instead of `cargo install` compiling it from source on
+      # every deploy (minutes of a 45-minute budget). Same version as before.
       - name: wasm-pack
-        timeout-minutes: 10
-        run: cargo install wasm-pack --locked --version 0.13.1
+        timeout-minutes: 5
+        env:
+          WASM_PACK_VERSION: 0.13.1
+          WASM_PACK_SHA256: c539d91ccab2591a7e975bcf82c82e1911b03335c80aa83d67ad25ed2ad06539
+        run: |
+          set -euo pipefail
+          name="wasm-pack-v${WASM_PACK_VERSION}-x86_64-unknown-linux-musl"
+          dir="$RUNNER_TEMP/wasm-pack"
+          mkdir -p "$dir"
+          curl -fsSL --retry 5 --retry-all-errors --connect-timeout 30 --max-time 120 \
+            -o "$dir/$name.tar.gz" \
+            "https://github.com/rustwasm/wasm-pack/releases/download/v${WASM_PACK_VERSION}/$name.tar.gz"
+          echo "$WASM_PACK_SHA256  $dir/$name.tar.gz" | sha256sum --check --strict
+          tar -xzf "$dir/$name.tar.gz" -C "$dir"
+          install -m 0755 "$dir/$name/wasm-pack" "$HOME/.cargo/bin/wasm-pack"
+          wasm-pack --version | grep -qx "wasm-pack $WASM_PACK_VERSION"
       - name: UI dependencies
         timeout-minutes: 15
         run: npm ci --no-audit --no-fund
