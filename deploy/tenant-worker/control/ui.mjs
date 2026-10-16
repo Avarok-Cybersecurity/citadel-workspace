@@ -99,13 +99,22 @@ export function webAnalyticsBeacon(token) {
 }
 
 /**
+ * The route a page is being shown at, or null when it is fetched to be stored. The service worker
+ * precaches "/" and serves that copy for EVERY route, so its fetch (not a navigation) must not keep
+ * anything meant for "/" alone.
+ */
+export function shownRoute(request) {
+  return request.headers.get("sec-fetch-mode") === "navigate" ? new URL(request.url).pathname : null;
+}
+
+/**
  * Fills the page's meta tags in, adds the analytics beacon, and drops each `[data-route]` element
  * belonging to another route (the landing hero's preload), as the page is streamed.
  */
-function withMeta(response, meta, analyticsToken, pathname) {
+function withMeta(response, meta, analyticsToken, route) {
   let rewriter = new HTMLRewriter().on("[data-route]", {
     element: (el) => {
-      if (el.getAttribute("data-route") !== pathname) el.remove();
+      if (el.getAttribute("data-route") !== route) el.remove();
     },
   });
   if (analyticsToken) {
@@ -149,5 +158,5 @@ export async function serveUi(assets, ui, request) {
   // The page already carries the beacon (above), so the edge must not add a second one; no-transform
   // is the header Cloudflare honours for that. Caching is unchanged.
   if (ui.webAnalyticsToken) response.headers.set("cache-control", `${rule.cache}, no-transform`);
-  return withMeta(response, pageMeta(ui), ui.webAnalyticsToken, url.pathname);
+  return withMeta(response, pageMeta(ui), ui.webAnalyticsToken, shownRoute(request));
 }

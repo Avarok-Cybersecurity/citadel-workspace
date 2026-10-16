@@ -73,14 +73,21 @@ describe("the SPA shell", () => {
 
 describe("a link meant for one route", () => {
   const HERO = 'href="/backgrounds/landing-hero.webp"';
+  const navigate = { headers: { "sec-fetch-mode": "navigate" } };
   it("the landing hero's preload reaches /, the page that shows the hero", async () => {
-    expect(await (await at("/")).text()).toContain(HERO);
+    expect(await (await at("/", navigate)).text()).toContain(HERO);
   });
 
-  // The service worker caches /index.html and serves it for every route, so that copy must not carry it either.
+  // The service worker precaches "/" (a fetch, not a navigation) and serves that copy for every route.
+  it("the copy of / the service worker stores, and shows on every route, does not carry it", async () => {
+    const html = await (await at("/", { headers: { "sec-fetch-mode": "same-origin" } })).text();
+    expect(html).toContain('name="citadel-control-plane"');
+    expect(html).not.toContain(HERO);
+  });
+
   for (const path of ["/workspace", "/index.html", "/create"]) {
     it(`${path} does not download an image it never shows`, async () => {
-      const html = await (await at(path)).text();
+      const html = await (await at(path, navigate)).text();
       expect(html).toContain('name="citadel-control-plane"');
       expect(html).not.toContain(HERO);
     });
