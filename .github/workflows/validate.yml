@@ -845,6 +845,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Free Disk Space
+        uses: ./.github/actions/free-runner-disk
       - uses: ./.github/actions/rust-toolchain
       - uses: taiki-e/install-action@nextest
       - name: Run Cargo Nextest
@@ -887,6 +889,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Free Disk Space
+        uses: ./.github/actions/free-runner-disk
       - uses: ./.github/actions/rust-toolchain
       - name: Run Cargo Test
         run: cargo test -p ${{ matrix.crate }}
@@ -1425,11 +1429,7 @@ jobs:
         with:
           submodules: recursive
       - name: Free Disk Space
-        # The server and agent images are the ~5.6 GB `dev` stage (toolchain plus target/).
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/.ghcup "$AGENT_TOOLSDIRECTORY"
-          sudo apt-get clean || echo 'apt-get clean skipped (lock held)'
-          df -h
+        uses: ./.github/actions/free-runner-disk
       - name: Pull base images (retried)
         run: ./scripts/pull-base-images.sh
       - name: Build the image
@@ -1600,20 +1600,7 @@ jobs:
         with:
           submodules: recursive
       - name: Free Disk Space
-        run: |
-          # Remove unnecessary pre-installed tools (frees 10-20 GB)
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf /usr/local/.ghcup
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          # Best effort: this frees cache, it does not build anything. apt takes a
-          # lock, and unattended-upgrades holds one for minutes after boot — the
-          # failure that killed test:crud in this same workflow. A cleanup that
-          # cannot run is not a reason to fail the build. Preventive: no run has
-          # failed here, but the mechanism is one already proven live in this file.
-          sudo apt-get clean || echo 'apt-get clean skipped (lock held)'
-          df -h
+        uses: ./.github/actions/free-runner-disk
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -1875,15 +1862,7 @@ jobs:
         with:
           submodules: recursive
       - name: Free Disk Space
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/.ghcup "$AGENT_TOOLSDIRECTORY"
-          # Best effort: this frees cache, it does not build anything. apt takes a
-          # lock, and unattended-upgrades holds one for minutes after boot — the
-          # failure that killed test:crud in this same workflow. A cleanup that
-          # cannot run is not a reason to fail the build. Preventive: no run has
-          # failed here, but the mechanism is one already proven live in this file.
-          sudo apt-get clean || echo 'apt-get clean skipped (lock held)'
-          df -h
+        uses: ./.github/actions/free-runner-disk
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -2390,20 +2369,7 @@ jobs:
         with:
           submodules: recursive
       - name: Free Disk Space
-        run: |
-          # Remove unnecessary pre-installed tools (frees 10-20 GB)
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf /usr/local/.ghcup
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          # Best effort: this frees cache, it does not build anything. apt takes a
-          # lock, and unattended-upgrades holds one for minutes after boot — the
-          # failure that killed test:crud in this same workflow. A cleanup that
-          # cannot run is not a reason to fail the build. Preventive: no run has
-          # failed here, but the mechanism is one already proven live in this file.
-          sudo apt-get clean || echo 'apt-get clean skipped (lock held)'
-          df -h
+        uses: ./.github/actions/free-runner-disk
       # BEFORE the sync container runs, not after.
       #
       # The sync mounts named volumes over three node_modules directories. On a
