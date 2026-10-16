@@ -71,6 +71,22 @@ describe("the SPA shell", () => {
   }
 });
 
+describe("a link meant for one route", () => {
+  const HERO = 'href="/backgrounds/landing-hero.webp"';
+  it("the landing hero's preload reaches /, the page that shows the hero", async () => {
+    expect(await (await at("/")).text()).toContain(HERO);
+  });
+
+  // The service worker caches /index.html and serves it for every route, so that copy must not carry it either.
+  for (const path of ["/workspace", "/index.html", "/create"]) {
+    it(`${path} does not download an image it never shows`, async () => {
+      const html = await (await at(path)).text();
+      expect(html).toContain('name="citadel-control-plane"');
+      expect(html).not.toContain(HERO);
+    });
+  }
+});
+
 describe("files", () => {
   it("a hashed bundle is immutable for a year", async () => {
     const r = await at("/assets/index-f1x7ur3a.js");
@@ -122,7 +138,8 @@ describe("what the site does not swallow", () => {
 describe("the public legal pages", () => {
   const PAGES = ["terms", "customer-terms", "privacy", "dpa", "subprocessors"];
   it.each(PAGES)("/legal/%s reaches the SPA shell, signed out, with the security headers", async (page) => {
-    const shell = await (await at("/")).text();
+    // Any route but "/", which alone keeps the landing hero's preload.
+    const shell = await (await at("/some/deep/route")).text();
     const r = await at(`/legal/${page}`);
     expect(r.status).toBe(200);
     expect(r.headers.get("content-type")).toContain("text/html");

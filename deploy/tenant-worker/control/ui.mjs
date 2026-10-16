@@ -98,9 +98,16 @@ export function webAnalyticsBeacon(token) {
   return `<script defer src="${WEB_ANALYTICS_SCRIPT_ORIGIN}/beacon.min.js" data-cf-beacon='{"token":"${token}"}'></script>`;
 }
 
-/** Fills the page's meta tags in, and adds the analytics beacon, as the page is streamed. */
-function withMeta(response, meta, analyticsToken) {
-  let rewriter = new HTMLRewriter();
+/**
+ * Fills the page's meta tags in, adds the analytics beacon, and drops each `[data-route]` element
+ * belonging to another route (the landing hero's preload), as the page is streamed.
+ */
+function withMeta(response, meta, analyticsToken, pathname) {
+  let rewriter = new HTMLRewriter().on("[data-route]", {
+    element: (el) => {
+      if (el.getAttribute("data-route") !== pathname) el.remove();
+    },
+  });
   if (analyticsToken) {
     rewriter = rewriter.on("head", {
       element: (el) => {
@@ -142,5 +149,5 @@ export async function serveUi(assets, ui, request) {
   // The page already carries the beacon (above), so the edge must not add a second one; no-transform
   // is the header Cloudflare honours for that. Caching is unchanged.
   if (ui.webAnalyticsToken) response.headers.set("cache-control", `${rule.cache}, no-transform`);
-  return withMeta(response, pageMeta(ui), ui.webAnalyticsToken);
+  return withMeta(response, pageMeta(ui), ui.webAnalyticsToken, url.pathname);
 }
