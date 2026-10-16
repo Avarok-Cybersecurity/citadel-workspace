@@ -5,8 +5,6 @@
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::structs::{Domain, User};
 
-use crate::kernel::transaction::BackendTransactionManager;
-
 /// Comprehensive trait defining all domain-level operations for the workspace system.
 ///
 /// This trait serves as the primary interface for all domain-related operations,
@@ -44,25 +42,6 @@ pub trait DomainOperations<R: Ratchet + Send + Sync + 'static> {
     /// * `Ok(())` - Initialization successful
     /// * `Err(NetworkError)` - Initialization failed with specific error details
     fn init(&self) -> Result<(), NetworkError>;
-
-    /// Checks if a user has administrative privileges.
-    ///
-    /// Administrative privileges grant access to system-wide operations
-    /// and override many standard permission checks.
-    ///
-    /// # Arguments
-    /// * `tx` - Read transaction for database access
-    /// * `user_id` - ID of the user to check for admin status
-    ///
-    /// # Returns
-    /// * `Ok(true)` - User has admin privileges
-    /// * `Ok(false)` - User does not have admin privileges
-    /// * `Err(NetworkError)` - Check failed due to system error
-    fn is_admin(
-        &self,
-        tx: &BackendTransactionManager<R>,
-        user_id: &str,
-    ) -> Result<bool, NetworkError>;
 
     /// Retrieves a user entity by their unique identifier.
     ///

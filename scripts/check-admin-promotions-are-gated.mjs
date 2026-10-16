@@ -1,12 +1,18 @@
 #!/usr/bin/env node
-// Every assignment that makes somebody an administrator must sit behind a gate.
+// Every write that gives somebody a role must sit behind a gate.
 //
-// `user.role` is a single GLOBAL field: `is_admin` reads it and never asks which
-// workspace. So one ungated `user.role = UserRole::Admin` is a workspace-wide
-// privilege escalation, and three of them existed at once — reached through the
+// A member's authority is the role their record names in `workspace_roles`, and
+// the root workspace's role is the workspace-wide one. So one ungated write of a
+// role id there is a workspace-wide privilege escalation. When the role was the
+// global `user.role` enum, three of them existed at once — reached through the
 // role door, the permission door, and workspace creation — because nothing kept
 // the promotion sites consistent with each other. Each was found by hand, one
 // round apart.
+//
+// A role write is any of:
+//   - `assign_workspace_role(` with anything but `Assignment::Banned`
+//   - `workspace_roles.insert(` (rustfmt often puts `.insert(` on its own line)
+//   - the legacy `user.role = UserRole::Admin|Owner` / `= role`
 //
 // A gate is one of:
 //   - `is_bootstrap` / `root_exists`  — there is no workspace yet, so this
@@ -15,9 +21,12 @@
 //     WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN
 //   - `ensure_may_grant_role` / `ensure_may_grant_permissions` — containment:
 //     you cannot hand out authority you do not hold
+//   - `role_edits::delete` — moving a deleted role's holders to its
+//     replacement, which `delete` refuses unless the actor may assign it
 //
-// Demotions are not promotions: assigning Member, Guest or Banned only takes
-// authority away and needs nothing.
+// A ban is not a promotion: `Assignment::Banned` only takes authority away.
+// Since roles are editable, Member or Guest can carry anything, so writing them
+// is a promotion like any other.
 import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
@@ -26,13 +35,29 @@ const ROOT = 'citadel-workspace-server-kernel/src';
 // are gated" while the door everyone actually walks through was the second. `user.role = role`
 // in write_user_role_locked is reached from add_user_to_domain and update_workspace_member_role;
 // a deleted `ensure_may_grant_role` above either of them left this check green.
-const PROMOTION = /\.role\s*=\s*(?:UserRole::(?:Admin|Owner)\b|\w*role\b)/;
+const LEGACY_PROMOTION = /\.role\s*=\s*(?:UserRole::(?:Admin|Owner)\b|\w*role\b)/;
+const ASSIGNS = /(?<!fn\s)\bassign_workspace_role\s*\(/;
+/// Whether line `i` writes a role. `assign_workspace_role`'s own body is not a site: every
+/// call to it is one, and is checked where it is made.
+function isRoleWrite(lines, i) {
+  const code = lines[i].replace(/\/\/.*$/, '');
+  if (LEGACY_PROMOTION.test(code)) return true;
+  if (ASSIGNS.test(code)) {
+    const args = lines.slice(i, i + 4).join('\n');
+    return !/Assignment::Banned/.test(args);
+  }
+  const prev = (lines[i - 1] || '').replace(/\/\/.*$/, '');
+  return /\.insert\s*\(/.test(code) && /workspace_roles\s*$|workspace_roles\s*\.insert/.test(
+    /workspace_roles\s*\.insert/.test(code) ? code : prev,
+  );
+}
 const GATES = [
   'is_bootstrap',
   'root_exists',
   'FirstMemberOutcome',
   'ensure_may_grant_role',
   'ensure_may_grant_permissions',
+  'role_edits::delete',
 ];
 // How far above the assignment the gate may sit. Generous, because the gate is
 // often an early `return` at the top of the function.
@@ -103,16 +128,22 @@ function enclosingFunction(lines, target) {
   return null;
 }
 
-/// Lines that call `name(` from outside its own body.
-function callSites(lines, name, start, end) {
+/// Lines in every scanned file that call `name(` from outside its own body (in `file`).
+///
+/// Every file, not only the writer's: the guarded role writer lives in `role_writes.rs` and is
+/// called from `async_domain_server_ops.rs`, so a same-file search finds no caller and reports
+/// the gated door as ungated -- or, worse, a future one as gated.
+function callSites(sources, file, name, start, end) {
   const out = [];
   const call = new RegExp(`\\b${name}\\s*\\(`);
-  lines.forEach((line, i) => {
-    if (i >= start && i <= end) return;
-    const code = line.replace(/\/\/.*$/, '');
-    if (/\bfn\s+[A-Za-z0-9_]+\s*[(<]/.test(code)) return;
-    if (call.test(code)) out.push(i);
-  });
+  for (const [other, lines] of sources) {
+    lines.forEach((line, i) => {
+      if (other === file && i >= start && i <= end) return;
+      const code = line.replace(/\/\/.*$/, '');
+      if (/\bfn\s+[A-Za-z0-9_]+\s*[(<]/.test(code)) return;
+      if (call.test(code)) out.push({ file: other, line: i });
+    });
+  }
   return out;
 }
 
@@ -123,19 +154,24 @@ function callSites(lines, name, start, end) {
 /// The gate window is the enclosing FUNCTION BODY up to the call, not a fixed number of
 /// lines: `ensure_may_grant_role` sits ~70 lines above the write it protects in
 /// add_user_to_domain, and a line window silently called that ungated.
-function ungatedCallers(lines, target, depth) {
+function ungatedCallers(sources, file, target, depth) {
+  const lines = sources.get(file);
   const fn = enclosingFunction(lines, target);
   if (!fn) return null;
-  const bodyGated = (from, to) =>
-    GATES.some((g) => lines.slice(from, to).some((l) => l.replace(/\/\/.*$/, '').includes(g)));
-  const callers = callSites(lines, fn.name, fn.start, fn.end);
+  const callers = callSites(sources, file, fn.name, fn.start, fn.end);
   if (callers.length === 0) return null;
   const bad = [];
   for (const c of callers) {
-    const outer = enclosingFunction(lines, c);
-    if (outer && bodyGated(outer.start, c)) continue;
+    const callerLines = sources.get(c.file);
+    const outer = enclosingFunction(callerLines, c.line);
+    const bodyGated =
+      outer &&
+      GATES.some((g) =>
+        callerLines.slice(outer.start, c.line).some((l) => l.replace(/\/\/.*$/, '').includes(g)),
+      );
+    if (bodyGated) continue;
     if (depth > 1) {
-      const deeper = ungatedCallers(lines, c, depth - 1);
+      const deeper = ungatedCallers(sources, c.file, c.line, depth - 1);
       if (deeper !== null) { bad.push(...deeper); continue; }
     }
     bad.push(c);
@@ -151,13 +187,14 @@ try {
   process.exit(1);
 }
 
+const sources = new Map(files.map((file) => [file, readFileSync(file, 'utf8').split('\n')]));
 const problems = [];
 let checked = 0;
-for (const file of files) {
-  const lines = readFileSync(file, 'utf8').split('\n');
+for (const [file, lines] of sources) {
   lines.forEach((line, i) => {
     const code = line.replace(/\/\/.*$/, '');
-    if (!PROMOTION.test(code)) return;
+    if (!isRoleWrite(lines, i)) return;
+    if (enclosingFunction(lines, i)?.name === 'assign_workspace_role') return;
     // A struct literal building a fresh user is not a promotion of an existing
     // one; those are covered by the gate on whatever writes the record.
     if (/^\s*role:/.test(code)) return;
@@ -173,23 +210,23 @@ for (const file of files) {
     // by ensure_may_grant_role. Following the callers (two levels, since there is a wrapper)
     // is what makes this check able to fail: matching only the enclosing function reported
     // "all 3 gated" while the door everyone walks through was not examined at all.
-    const ungated = ungatedCallers(lines, i, 2);
+    const ungated = ungatedCallers(sources, file, i, 2);
     if (ungated === null) {
       problems.push({ file, line: i + 1, code: code.trim().slice(0, 80) });
       return;
     }
     ungated.forEach((c) =>
       problems.push({
-        file,
-        line: c + 1,
-        code: `reaches a role write with no gate above it: ${lines[c].trim().slice(0, 60)}`,
+        file: c.file,
+        line: c.line + 1,
+        code: `reaches a role write with no gate above it: ${sources.get(c.file)[c.line].trim().slice(0, 60)}`,
       }),
     );
   });
 }
 
 if (!checked) {
-  console.error('FAIL: found no administrator promotions at all — the pattern has gone stale.');
+  console.error('FAIL: found no role writes at all — the pattern has gone stale.');
   console.error('A gate that matches nothing reports a safety it never measured.');
   process.exit(1);
 }
@@ -201,7 +238,7 @@ for (const p of problems) {
 if (problems.length) {
   console.error(`\nFAIL: ${problems.length} of ${checked} promotion(s) are ungated.`);
   console.error(`Gate it with one of: ${GATES.join(', ')}.`);
-  console.error('user.role is global — an ungated promotion is workspace-wide.');
+  console.error('The root workspace role is workspace-wide — an ungated write of it is too.');
   process.exit(1);
 }
-console.log(`OK: all ${checked} administrator promotion(s) sit behind a gate.`);
+console.log(`OK: all ${checked} role write(s) sit behind a gate.`);

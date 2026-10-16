@@ -13,7 +13,7 @@
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
 use citadel_workspace_server_kernel::handlers::domain::node_ops::AsyncNodeOperations;
 use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
-use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
+use common::member_test_utils::{an_owner, insert_user_with_role, join_root, GateKernel as Kernel};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
 const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
@@ -59,16 +59,18 @@ async fn a_room(kernel: &Kernel) -> String {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn adding_an_admin_to_a_room_does_not_change_their_workspace_role() {
     let kernel = create_test_kernel().await;
-    // A second admin, so the last-admin guard is not what is being tested.
+    // A second admin, so the last-admin guard is not what is being tested, added by the
+    // Owner: an Admin is not below another Admin, so an Admin may not act on one.
     insert_user_with_role(&kernel, "second_admin", UserRole::Admin).await;
     join_root(&kernel, "second_admin").await;
+    an_owner(&kernel, "owner").await;
     let room = a_room(&kernel).await;
 
     kernel
         .domain_operations
-        .add_user_to_domain(TEST_ADMIN_USER_ID, "second_admin", &room, UserRole::Guest)
+        .add_user_to_domain("owner", "second_admin", &room, UserRole::Guest.into())
         .await
-        .expect("an admin may add a member to a room");
+        .expect("the Owner may add an admin to a room");
 
     assert_eq!(
         role_of(&kernel, "second_admin").await,
@@ -88,11 +90,11 @@ async fn the_role_given_still_scopes_what_they_may_do_in_that_room() {
 
     kernel
         .domain_operations
-        .add_user_to_domain(TEST_ADMIN_USER_ID, "visitor", &room, UserRole::Guest)
+        .add_user_to_domain(TEST_ADMIN_USER_ID, "visitor", &room, UserRole::Guest.into())
         .await
         .expect("an admin may add a member to a room");
 
-    let guest_may = Permission::for_role(&UserRole::Guest);
+    let guest_may = Permission::for_legacy_role(&UserRole::Guest);
     let granted = kernel
         .domain_operations
         .backend_tx_manager
@@ -123,11 +125,12 @@ async fn a_role_change_at_the_root_still_changes_the_workspace_role() {
     insert_user_with_role(&kernel, "promotable", UserRole::Member).await;
     join_root(&kernel, "promotable").await;
 
+    an_owner(&kernel, "owner").await;
     kernel
         .domain_operations
-        .add_user_to_domain(TEST_ADMIN_USER_ID, "promotable", ROOT, UserRole::Admin)
+        .add_user_to_domain("owner", "promotable", ROOT, UserRole::Admin.into())
         .await
-        .expect("an admin may set a member's workspace role at the root");
+        .expect("the Owner may set a member's workspace role at the root");
 
     assert_eq!(role_of(&kernel, "promotable").await, UserRole::Admin);
 }

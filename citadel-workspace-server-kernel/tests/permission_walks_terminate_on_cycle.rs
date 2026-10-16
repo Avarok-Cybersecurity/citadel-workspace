@@ -66,6 +66,7 @@ async fn permission_walks_terminate_on_a_cyclic_tree() {
                 id: "victim".to_string(),
                 name: "Victim".to_string(),
                 role: UserRole::Member,
+                workspace_roles: Default::default(),
                 permissions: HashMap::new(),
                 metadata: HashMap::new(),
             },

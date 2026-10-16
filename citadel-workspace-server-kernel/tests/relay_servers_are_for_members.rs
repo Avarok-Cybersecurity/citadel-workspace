@@ -11,9 +11,11 @@ use citadel_workspace_server_kernel::kernel::ice_servers::{
     IceServerGrant, IceServerMember, IceServerSource, IceServersUnavailable,
 };
 use citadel_workspace_types::ice::IceServer;
-use citadel_workspace_types::structs::UserRole;
+use citadel_workspace_types::structs::{Permission, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
-use common::member_test_utils::{insert_user_with_role, join_root, GateKernel};
+use common::member_test_utils::{
+    insert_user_with_role, join_root, member_holding, seed_role, GateKernel,
+};
 use common::workspace_test_utils::{create_test_kernel, create_test_kernel_with_ice_servers};
 use std::sync::{Arc, Mutex};
 
@@ -160,4 +162,48 @@ async fn a_host_that_declines_is_reported_with_its_reason() {
         }
         other => panic!("a declined mint must be reported as unavailable: {other:?}"),
     }
+}
+
+/// Asked of the role's permissions, not its name: relaying media is sending, so a role that may
+/// send gets relays and one that may only read does not, whatever either is called.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn relays_follow_the_permission_to_send() {
+    let source = InMemorySource::new(None);
+    let kernel = kernel_with(&source).await;
+    seed_role(
+        &kernel,
+        "role-caller",
+        150,
+        &[Permission::ViewContent, Permission::SendMessages],
+    )
+    .await;
+    seed_role(
+        &kernel,
+        "role-reader",
+        160,
+        &[
+            Permission::ViewContent,
+            Permission::ViewMembers,
+            Permission::ReadMessages,
+            Permission::UploadFiles,
+            Permission::DownloadFiles,
+        ],
+    )
+    .await;
+    member_holding(&kernel, "cara", "role-caller").await;
+    member_holding(&kernel, "rita", "role-reader").await;
+
+    assert!(
+        matches!(
+            ask(&kernel, "cara").await,
+            WorkspaceProtocolResponse::IceServers { .. }
+        ),
+        "a role that may send was refused relays"
+    );
+    let response = ask(&kernel, "rita").await;
+    assert!(
+        refused(&response),
+        "a role that may not send got relays: {response:?}"
+    );
+    assert_eq!(source.asked(), vec!["cara".to_string()]);
 }

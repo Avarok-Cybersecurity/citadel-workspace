@@ -29,20 +29,31 @@ const UPLOAD: ObjectTransferOrientation = ObjectTransferOrientation::Receiver {
 const DOWNLOAD: ObjectTransferOrientation = ObjectTransferOrientation::Sender;
 
 async fn add_user(kernel: &Kernel, id: &str, role: UserRole) {
-    let mut user = User {
+    let user = User {
         id: id.to_string(),
         name: id.to_string(),
         role,
+        workspace_roles: Default::default(),
         permissions: HashMap::new(),
         metadata: Default::default(),
     };
-    user.set_role_permissions(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID);
     kernel
         .domain_operations
         .backend_tx_manager
         .insert_user(id.to_string(), user)
         .await
         .expect("insert user");
+    // A role confers its permissions on members of the workspace it belongs to.
+    let mgr = &kernel.domain_operations.backend_tx_manager;
+    let mut workspace = mgr
+        .get_workspace(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID)
+        .await
+        .expect("read workspace")
+        .expect("root workspace exists");
+    workspace.members.push(id.to_string());
+    mgr.insert_workspace(workspace.id.clone(), workspace)
+        .await
+        .expect("save workspace");
 }
 
 /// The role model's own claim, enforced: Guest holds ViewContent and nothing

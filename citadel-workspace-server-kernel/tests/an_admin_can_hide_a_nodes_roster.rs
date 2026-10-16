@@ -10,9 +10,11 @@
 //! request goes through `process_command_with_user`, as the named account.
 use citadel_workspace_server_kernel::handlers::domain::node_ops::AsyncNodeOperations;
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
-use citadel_workspace_types::structs::{NodeEntityType, UserRole};
+use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
-use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
+use common::member_test_utils::{
+    insert_user_with_role, join_root, member_holding, seed_role, GateKernel as Kernel,
+};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
 const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
@@ -165,23 +167,50 @@ async fn switching_it_back_on_restores_the_roster() {
     ));
 }
 
+/// The switch is workspace configuration: EditWorkspaceConfig, which the Owner holds and an
+/// Admin may give a role below them. It was the Admin role alone, which refused the Owner.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn only_an_admin_may_set_it() {
+async fn only_a_role_that_configures_the_workspace_may_set_it() {
     let kernel = create_test_kernel().await;
     member(&kernel, "ann", UserRole::Member).await;
-    member(&kernel, "olga", UserRole::Owner).await;
+    seed_role(
+        &kernel,
+        "role-curator",
+        250,
+        &[Permission::ViewContent, Permission::ViewMembers],
+    )
+    .await;
+    member_holding(&kernel, "carl", "role-curator").await;
     let office = node(&kernel, ROOT, "Office", "Ops").await;
 
-    for actor in ["ann", "olga"] {
+    for actor in ["ann", "carl"] {
         let answer = set_visible(&kernel, actor, &office, false).await;
         assert!(
             matches!(&answer, WorkspaceProtocolResponse::Error(m) if m.contains("Permission denied")),
-            "{actor} is not an admin and must be refused: {answer:?}"
+            "{actor} lacks EditWorkspaceConfig and must be refused: {answer:?}"
         );
         assert!(
             stored_flag(&kernel, &office).await,
             "{actor}'s refused switch must not be stored"
         );
+    }
+
+    seed_role(
+        &kernel,
+        "role-steward",
+        260,
+        &[Permission::EditWorkspaceConfig],
+    )
+    .await;
+    member_holding(&kernel, "sam", "role-steward").await;
+    member(&kernel, "olga", UserRole::Owner).await;
+    for (actor, visible) in [("sam", false), ("olga", true)] {
+        let answer = set_visible(&kernel, actor, &office, visible).await;
+        assert!(
+            matches!(answer, WorkspaceProtocolResponse::Node(_)),
+            "{actor} holds EditWorkspaceConfig: {answer:?}"
+        );
+        assert_eq!(stored_flag(&kernel, &office).await, visible);
     }
 }
 

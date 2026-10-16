@@ -2,7 +2,7 @@
 //!
 //! The setting lives with the host, not in the workspace record: the host's admission check reads
 //! it at every sign-in, before any session exists. The kernel reads and writes it through the
-//! host's `SignInSettingsStore`, gated on the Admin role, and a kernel built without one says the
+//! host's `SignInSettingsStore`, gated on EditWorkspaceConfig, and a kernel built without one says the
 //! server has no such setting rather than inventing a value.
 //!
 //! Real: the kernel, its command processor and the in-memory backend. The store is the host
@@ -13,9 +13,11 @@ use citadel_workspace_server_kernel::kernel::sign_in::{
     SignInSettingsStore, SignInSettingsUnavailable, NOT_SUPPORTED,
 };
 use citadel_workspace_types::sign_in::SignInSettings;
-use citadel_workspace_types::structs::UserRole;
+use citadel_workspace_types::structs::{Permission, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
-use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
+use common::member_test_utils::{
+    insert_user_with_role, join_root, member_holding, seed_role, GateKernel as Kernel,
+};
 use common::workspace_test_utils::{
     create_configured_test_kernel, create_test_kernel, TEST_ADMIN_USER_ID,
 };
@@ -133,12 +135,34 @@ async fn a_member_cannot_change_it() {
     let (kernel, cell) = hosted(false).await;
     let answer = send(&kernel, "member", update(ON)).await;
     let message = refusal(answer);
-    assert!(message.contains("only an admin"), "{message}");
+    assert!(message.contains("EditWorkspaceConfig"), "{message}");
     assert_eq!(
         *cell.stored.lock().unwrap(),
         OFF,
         "a member's change was stored"
     );
+}
+
+/// Asked as the permission, not the role: a role given EditWorkspaceConfig may change it, and
+/// the Owner, whom the Admin-only gate refused, may too.
+#[tokio::test]
+async fn a_role_that_configures_the_workspace_may_change_it() {
+    let (kernel, cell) = hosted(false).await;
+    seed_role(
+        &kernel,
+        "role-gatekeeper",
+        250,
+        &[Permission::EditWorkspaceConfig],
+    )
+    .await;
+    member_holding(&kernel, "gina", "role-gatekeeper").await;
+    assert_eq!(settings(send(&kernel, "gina", update(ON)).await), ON);
+    assert_eq!(*cell.stored.lock().unwrap(), ON);
+
+    insert_user_with_role(&kernel, "olga", UserRole::Owner).await;
+    join_root(&kernel, "olga").await;
+    assert_eq!(settings(send(&kernel, "olga", update(OFF)).await), OFF);
+    assert_eq!(*cell.stored.lock().unwrap(), OFF);
 }
 
 #[tokio::test]

@@ -57,7 +57,7 @@ async fn office_with_editor<R: citadel_sdk::prelude::Ratchet>(
         WorkspaceProtocolRequest::AddMember {
             user_id: user.to_string(),
             domain_id: Some(office.id.clone()),
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: None,
         },
     )

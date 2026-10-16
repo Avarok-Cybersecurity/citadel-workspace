@@ -3,4 +3,20 @@ import type { MetadataValue } from "./MetadataValue";
 import type { Permission } from "./Permission";
 import type { UserRole } from "./UserRole";
 
-export type User = { id: string, name: string, role: UserRole, permissions: { [key in string]?: Array<Permission> }, metadata: { [key in string]?: MetadataValue }, };
+export type User = { id: string, name: string, 
+/**
+ * The account's standing, and the role a record written before the role table named.
+ *
+ * Authoritative only for `Banned`, which is a standing rather than a role: a banned
+ * account holds nothing anywhere. Otherwise the role is `workspace_roles`, and this is
+ * written alongside it (`roles_legacy::legacy_mirror`) for clients that read only this
+ * field. Never read for authority.
+ */
+role: UserRole, 
+/**
+ * Workspace id -> the id of the role this member holds in that workspace's table.
+ *
+ * `serde(default)`: records written before the table have no such key, and
+ * `read_legacy_role` maps their enum role into it when they are read.
+ */
+workspace_roles: { [key in string]?: string }, permissions: { [key in string]?: Array<Permission> }, metadata: { [key in string]?: MetadataValue }, };

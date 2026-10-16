@@ -51,7 +51,7 @@ async fn test_permission_set() {
         WorkspaceProtocolRequest::AddMember {
             user_id: "test_user".to_string(),
             domain_id: Some(office.id.clone()),
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: None,
         },
     )
@@ -119,21 +119,37 @@ async fn test_permission_inheritance() {
     let office = extract_node(create_office_response).expect("Failed to create office");
 
     // A registered account: AddMember admits no other.
-    insert_user_with_role(&kernel, "admin_member", UserRole::Admin).await;
-    // Add a member with Admin role to office
+    insert_user_with_role(&kernel, "admin_member", UserRole::Member).await;
+    // An Admin may not hand out the admin role, even as a grant on one office: it is their
+    // own position, and only the Owner assigns that.
+    let as_admin = execute_command(
+        &kernel,
+        WorkspaceProtocolRequest::AddMember {
+            user_id: "admin_member".to_string(),
+            domain_id: Some(office.id.clone()),
+            role: UserRole::Admin.into(),
+            metadata: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        extract_success(as_admin).is_none(),
+        "an Admin granted the admin role on an office"
+    );
     let add_member_response = execute_command(
         &kernel,
         WorkspaceProtocolRequest::AddMember {
             user_id: "admin_member".to_string(),
             domain_id: Some(office.id.clone()),
-            role: UserRole::Admin,
+            role: UserRole::Member.into(),
             metadata: None,
         },
     )
     .await
     .unwrap();
 
-    let success_msg = extract_success(add_member_response).expect("Failed to add admin member");
+    let success_msg = extract_success(add_member_response).expect("Failed to add member");
     assert_eq!(success_msg, "Member added successfully");
 
     // Admin should have all permissions by default
@@ -184,7 +200,7 @@ async fn test_permission_denial() {
         WorkspaceProtocolRequest::AddMember {
             user_id: "guest_user".to_string(),
             domain_id: Some(office.id.clone()),
-            role: UserRole::Guest,
+            role: UserRole::Guest.into(),
             metadata: None,
         },
     )

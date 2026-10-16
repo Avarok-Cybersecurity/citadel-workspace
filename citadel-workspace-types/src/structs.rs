@@ -1,6 +1,5 @@
 use custom_debug::Debug;
 use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use ts_rs::TS;
@@ -11,7 +10,19 @@ use ts_rs::TS;
 pub struct User {
     pub id: String,
     pub name: String,
+    /// The account's standing, and the role a record written before the role table named.
+    ///
+    /// Authoritative only for `Banned`, which is a standing rather than a role: a banned
+    /// account holds nothing anywhere. Otherwise the role is `workspace_roles`, and this is
+    /// written alongside it (`roles_legacy::legacy_mirror`) for clients that read only this
+    /// field. Never read for authority.
     pub role: UserRole,
+    /// Workspace id -> the id of the role this member holds in that workspace's table.
+    ///
+    /// `serde(default)`: records written before the table have no such key, and
+    /// `read_legacy_role` maps their enum role into it when they are read.
+    #[serde(default)]
+    pub workspace_roles: HashMap<String, String>,
     // Permissions are a map of domain IDs to sets of permissions
     pub permissions: HashMap<String, HashSet<Permission>>,
     pub metadata: HashMap<String, MetadataValue>,
@@ -24,9 +35,23 @@ impl User {
             id,
             name,
             role,
+            workspace_roles: HashMap::new(),
             permissions: HashMap::new(),
             metadata: HashMap::new(),
         }
+    }
+
+    pub fn is_banned(&self) -> bool {
+        self.role == UserRole::Banned
+    }
+
+    /// The id of the role this account holds in `workspace_id`, or `None` when it holds none
+    /// there (never added, or banned).
+    pub fn role_id_in(&self, workspace_id: &str) -> Option<&str> {
+        if self.is_banned() {
+            return None;
+        }
+        self.workspace_roles.get(workspace_id).map(String::as_str)
     }
 
     /// Get permissions for a specific domain
@@ -70,11 +95,6 @@ impl User {
         }
     }
 
-    /// Check if user has administrator role
-    pub fn is_administrator(&self) -> bool {
-        matches!(self.role, UserRole::Admin)
-    }
-
     /// Grant a permission to the user for a specific domain
     pub fn grant_permission<T: Into<String>>(&mut self, domain_id: T, permission: Permission) {
         // Use into() which is more efficient for owned strings and only clones when necessary
@@ -100,17 +120,14 @@ impl User {
     pub fn clear_permissions<T: AsRef<str>>(&mut self, domain_id: T) {
         self.permissions.remove(domain_id.as_ref());
     }
-
-    /// Set all permissions for a domain based on the user's role
-    pub fn set_role_permissions<T: AsRef<str> + Into<String>>(&mut self, domain_id: T) {
-        let role_permissions = Permission::for_role(&self.role);
-        self.permissions.insert(domain_id.into(), role_permissions);
-    }
 }
 
+/// The role vocabulary from before roles were editable, kept so stored records and older
+/// clients still decode. A role is now an entry in the workspace's table (`roles`), named by id;
+/// `roles_legacy` maps these onto it. `Banned` is the one value still read for itself: it is a
+/// standing, not a role.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[ts(export)]
-#[allow(dead_code)]
 pub enum UserRole {
     Admin,
     Owner,
@@ -130,122 +147,6 @@ impl fmt::Display for UserRole {
             UserRole::Banned => write!(f, "Banned"),
             UserRole::Custom(name, _) => write!(f, "{}", name),
         }
-    }
-}
-
-const ADMIN_RANK: u8 = u8::MAX;
-const OWNER_RANK: u8 = 20;
-const MEMBER_RANK: u8 = 10;
-const GUEST_RANK: u8 = 5;
-const BANNED_RANK: u8 = 0;
-
-// Custom role thresholds for permission escalation.
-// These are intentionally separate from the role ranks above — they define
-// the rank *above which* custom roles gain additional permissions.
-// Currently CUSTOM_BASIC_THRESHOLD == MEMBER_RANK, meaning custom roles
-// above Member rank get edit permissions.
-const CUSTOM_BASIC_THRESHOLD: u8 = 10;
-const CUSTOM_EDITOR_THRESHOLD: u8 = 15;
-
-pub struct WorkspaceRoles {
-    // Mapping from the name to the user role
-    pub roles: HashMap<String, UserRole>,
-}
-
-impl WorkspaceRoles {
-    pub fn new() -> Self {
-        Self {
-            roles: vec![
-                UserRole::Admin,
-                UserRole::Owner,
-                UserRole::Member,
-                UserRole::Guest,
-                UserRole::Banned,
-            ]
-            .into_iter()
-            .map(|role| (role.to_string(), role))
-            .collect(),
-        }
-    }
-}
-
-impl Default for WorkspaceRoles {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl UserRole {
-    pub fn get_rank(&self) -> u8 {
-        match self {
-            UserRole::Admin => ADMIN_RANK,
-            UserRole::Owner => OWNER_RANK,
-            UserRole::Member => MEMBER_RANK,
-            UserRole::Guest => GUEST_RANK,
-            UserRole::Banned => BANNED_RANK,
-            UserRole::Custom(_, rank) => *rank,
-        }
-    }
-
-    /// Where this role sits in the workspace's chain of command.
-    ///
-    /// `Some(n)`, higher outranks lower. `None` for Custom roles, which have no
-    /// place in the ladder — see below.
-    ///
-    /// Deliberately NOT `get_rank`, and deliberately not derived from
-    /// `Permission::for_role`, because all three answer different questions:
-    ///
-    ///   - `get_rank` is a sort order and the scale Custom roles are created on.
-    ///     `ADMIN_RANK` is `u8::MAX` there so no Custom role can be minted above
-    ///     it, which is about namespacing, not authority.
-    ///   - `Permission::for_role` says what a role may DO. Admin holds the `All`
-    ///     wildcard and Owner holds everything except `All` and
-    ///     `ConfigureSystem`, so set containment makes Admin outrank Owner.
-    ///   - this says who a role may MANAGE, and there the Owner is above the
-    ///     Admin: the Owner runs the workspace, and an Admin is someone they
-    ///     appoint.
-    ///
-    /// Custom roles return `None` on purpose. Ranking them here would reopen a
-    /// hole that was closed once already: `create_custom_role` permits ranks
-    /// 21-254, and a Custom role above the editor threshold holds nine of the
-    /// twenty-seven permissions, so a rank-21 Custom would outrank Owner while
-    /// holding a third of its authority. Callers fall back to permission-set
-    /// containment for those, which does track power.
-    pub fn command_authority(&self) -> Option<u8> {
-        match self {
-            UserRole::Owner => Some(4),
-            UserRole::Admin => Some(3),
-            UserRole::Member => Some(2),
-            UserRole::Guest => Some(1),
-            UserRole::Banned => Some(0),
-            UserRole::Custom(_, _) => None,
-        }
-    }
-
-    /// Creates a custom user role with a given name and rank.
-    pub fn create_custom_role(name: String, rank: u8) -> Option<Self> {
-        if rank == ADMIN_RANK
-            || rank == OWNER_RANK
-            || rank == MEMBER_RANK
-            || rank == GUEST_RANK
-            || rank == BANNED_RANK
-        {
-            return None;
-        }
-
-        Some(UserRole::Custom(name, rank))
-    }
-}
-
-impl Ord for UserRole {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.get_rank().cmp(&other.get_rank())
-    }
-}
-
-impl PartialOrd for UserRole {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
     }
 }
 
@@ -311,6 +212,8 @@ pub enum Permission {
     Themes,
     /// Read the workspace's telemetry and its access log
     ViewTelemetry,
+    /// Create, edit and delete the workspace's roles, and assign them to members
+    ManageRoles,
 }
 
 impl Permission {
@@ -321,7 +224,7 @@ impl Permission {
     /// when reporting a user's effective permissions. `exhaustiveness_guard`
     /// below stops compiling when a variant is added to the enum, which is what
     /// keeps this list honest.
-    pub const ALL_VARIANTS: [Permission; 29] = [
+    pub const ALL_VARIANTS: [Permission; 30] = [
         Self::All,
         Self::CreateNode,
         Self::DeleteNode,
@@ -351,6 +254,7 @@ impl Permission {
         Self::ManageNodeTypes,
         Self::Themes,
         Self::ViewTelemetry,
+        Self::ManageRoles,
     ];
 
     /// Not called at runtime. Adding a variant to `Permission` fails to compile
@@ -387,77 +291,8 @@ impl Permission {
             Self::ManageNodeTypes => (),
             Self::Themes => (),
             Self::ViewTelemetry => (),
+            Self::ManageRoles => (),
         }
-    }
-
-    /// Get a set of permissions for a specific role
-    pub fn for_role(role: &UserRole) -> HashSet<Self> {
-        let mut permissions = HashSet::new();
-
-        match role {
-            UserRole::Admin => {
-                permissions.insert(Self::All);
-            }
-            UserRole::Owner => {
-                // The owner runs the workspace, so they hold everything except the
-                // `All` wildcard (Admin's) and `ConfigureSystem` (server-level).
-                //
-                // This used to be an explicit insert list, and the warning that
-                // carried — "a new permission has to be listed here or the owner
-                // silently lacks it" — came true several times over: Owner had no
-                // ViewContent, SendMessages, ReadMessages, UploadFiles or
-                // DownloadFiles, making the role strictly weaker than Member for
-                // everyday use, and no EditMdx, so promoting someone to Owner in
-                // the admin UI left them unable to edit a document. Deriving the
-                // set by subtraction means a new variant is included by default.
-                permissions.extend(
-                    Self::ALL_VARIANTS
-                        .into_iter()
-                        .filter(|p| !matches!(p, Self::All | Self::ConfigureSystem)),
-                );
-            }
-            UserRole::Member => {
-                // Basic member permissions
-                // Note: Members do NOT have EditContent - that requires Owner or Admin role
-                permissions.insert(Self::ViewContent);
-                permissions.insert(Self::ViewMembers);
-                permissions.insert(Self::SendMessages);
-                permissions.insert(Self::ReadMessages);
-                permissions.insert(Self::UploadFiles);
-                permissions.insert(Self::DownloadFiles);
-            }
-            UserRole::Guest => {
-                // Guest permissions - read-only access
-                permissions.insert(Self::ViewContent);
-                permissions.insert(Self::ViewMembers);
-            }
-            UserRole::Banned => {
-                // No permissions for banned users
-            }
-            UserRole::Custom(_, rank) => {
-                // Custom role permissions based on rank
-                // Basic permissions for all custom roles
-                permissions.insert(Self::ViewContent);
-                permissions.insert(Self::ViewMembers);
-                permissions.insert(Self::ReadMessages);
-
-                // Additional permissions based on rank
-                if *rank > CUSTOM_BASIC_THRESHOLD {
-                    permissions.insert(Self::EditContent);
-                    permissions.insert(Self::SendMessages);
-                    permissions.insert(Self::UploadFiles);
-                    permissions.insert(Self::DownloadFiles);
-                }
-
-                if *rank > CUSTOM_EDITOR_THRESHOLD {
-                    permissions.insert(Self::AddUsers);
-                    permissions.insert(Self::RemoveUsers);
-                    permissions.insert(Self::EditMdx);
-                }
-            }
-        }
-
-        permissions
     }
 
     /// Check if a permission set has a specific permission
@@ -760,6 +595,8 @@ impl DomainPermissions {
             Permission::Themes => self.themes,
             // A workspace-wide administrator's read: no node's defaults can grant it.
             Permission::ViewTelemetry => false,
+            // Workspace-wide as well: a node cannot hand out the authority to edit roles.
+            Permission::ManageRoles => false,
         }
     }
 }

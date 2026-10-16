@@ -29,6 +29,7 @@ async fn user_with_role(kernel: &Kernel, id: &str, role: UserRole) {
                 id: id.to_string(),
                 name: id.to_string(),
                 role,
+                workspace_roles: Default::default(),
                 permissions: HashMap::new(),
                 metadata: Default::default(),
             },
@@ -60,7 +61,7 @@ async fn try_add(kernel: &Kernel, actor: &str, newcomer: &str) -> Result<(), Str
             actor,
             newcomer,
             citadel_workspace_server_kernel::WORKSPACE_ROOT_ID,
-            UserRole::Member,
+            UserRole::Member.into(),
         )
         .await
         .map_err(|e| e.to_string())

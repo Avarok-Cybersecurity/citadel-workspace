@@ -17,6 +17,8 @@ pub mod profile_limits;
 pub mod profile_update;
 pub mod profile_visibility;
 pub mod rate_limiter;
+/// Edits to a workspace's role table, and the rules they obey. Pure.
+pub mod role_edits;
 pub(crate) mod roster;
 pub mod secret_eq;
 pub mod sign_in;

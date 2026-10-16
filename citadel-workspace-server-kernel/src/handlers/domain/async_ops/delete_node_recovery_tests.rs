@@ -22,7 +22,7 @@ use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainSer
 use crate::kernel::transaction::BackendTransactionManager;
 use citadel_sdk::prelude::StackedRatchet;
 use citadel_workspace_types::structs::{
-    DomainNode, DomainPermissions, NodeEntityType, User, UserRole,
+    DomainNode, DomainPermissions, NodeEntityType, User, UserRole, Workspace,
 };
 use citadel_workspace_types::{GroupMessage, GroupMessageType};
 use std::collections::HashMap;
@@ -33,6 +33,7 @@ fn admin() -> User {
         id: "admin".to_string(),
         name: "Admin".to_string(),
         role: UserRole::Admin,
+        workspace_roles: Default::default(),
         permissions: HashMap::new(),
         metadata: HashMap::new(),
     }
@@ -89,6 +90,22 @@ async fn a_failed_history_purge_leaves_the_delete_retryable() {
     mgr.insert_user("admin".to_string(), admin())
         .await
         .expect("seed admin");
+    // The workspace the room hangs from, with the admin in it: a role confers its permissions
+    // within its own workspace, and nowhere without one.
+    mgr.insert_workspace(
+        crate::WORKSPACE_ROOT_ID.to_string(),
+        Workspace {
+            id: crate::WORKSPACE_ROOT_ID.to_string(),
+            name: "Root".to_string(),
+            description: String::new(),
+            owner_id: "admin".to_string(),
+            members: vec!["admin".to_string()],
+            offices: vec![],
+            metadata: vec![],
+        },
+    )
+    .await
+    .expect("seed workspace");
     let mut nodes = HashMap::new();
     nodes.insert("room1".to_string(), room("room1", "chan-1"));
     mgr.save_nodes(&nodes).await.expect("seed node");
@@ -112,10 +129,16 @@ async fn a_failed_history_purge_leaves_the_delete_retryable() {
     let channel_key = "citadel_workspace.group_messages.chan-1.page.0";
     mgr.fail_deletes_of(channel_key);
 
-    let _ = ops
+    let refused = ops
         .delete_node("admin", "room1", false)
         .await
         .expect_err("the purge failure must surface");
+    // The purge's failure, not a refusal: a denied delete also errs and also leaves the node,
+    // and would pass every assertion below without testing the ordering at all.
+    assert!(
+        !refused.to_string().contains("Permission denied"),
+        "the delete was refused before it reached the purge: {refused}"
+    );
 
     // The discriminating assertion: the tree write must NOT have happened.
     // With the old ordering the node was already saved away, so the Err was a

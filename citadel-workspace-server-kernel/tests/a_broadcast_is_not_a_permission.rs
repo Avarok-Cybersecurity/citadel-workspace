@@ -52,7 +52,12 @@ async fn a_member_of_the_office_may_receive_its_content() {
     let node = office(&kernel).await;
     kernel
         .domain_operations
-        .add_user_to_domain(TEST_ADMIN_USER_ID, "insider", &node, UserRole::Member)
+        .add_user_to_domain(
+            TEST_ADMIN_USER_ID,
+            "insider",
+            &node,
+            UserRole::Member.into(),
+        )
         .await
         .expect("an admin may add a member to an office");
 
@@ -71,14 +76,19 @@ async fn a_banned_account_may_not_receive_node_content() {
     let node = office(&kernel).await;
     kernel
         .domain_operations
-        .add_user_to_domain(TEST_ADMIN_USER_ID, "outcast", &node, UserRole::Member)
+        .add_user_to_domain(
+            TEST_ADMIN_USER_ID,
+            "outcast",
+            &node,
+            UserRole::Member.into(),
+        )
         .await
         .expect("an admin may add a member to an office");
     assert!(may_view(&kernel, "outcast", &node).await, "precondition");
 
     kernel
         .domain_operations
-        .add_user_to_domain(TEST_ADMIN_USER_ID, "outcast", ROOT, UserRole::Banned)
+        .add_user_to_domain(TEST_ADMIN_USER_ID, "outcast", ROOT, UserRole::Banned.into())
         .await
         .expect("an admin may ban");
 

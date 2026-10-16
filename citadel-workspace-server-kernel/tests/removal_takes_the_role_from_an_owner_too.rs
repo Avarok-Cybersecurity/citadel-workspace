@@ -27,7 +27,7 @@
 
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
 use citadel_workspace_types::structs::UserRole;
-use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
+use common::member_test_utils::{an_owner, insert_user_with_role, join_root, GateKernel as Kernel};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
 const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
@@ -43,12 +43,15 @@ async fn role_of(kernel: &Kernel, user: &str) -> UserRole {
         .role
 }
 
-/// The authority that outlives removal if the role does: `is_admin_or_owner` is
-/// the whole gate on role assignment, permission editing and schema writes.
+/// The authority that outlives removal if the role does: `ManageRoles` is the
+/// whole gate on role assignment and permission editing.
 async fn still_administers(kernel: &Kernel, user: &str) -> bool {
     kernel
         .domain_operations
-        .is_admin_or_owner(user)
+        .holds_workspace_permission(
+            user,
+            citadel_workspace_types::structs::Permission::ManageRoles,
+        )
         .await
         .expect("backend read")
 }
@@ -107,8 +110,10 @@ async fn removing_an_admin_still_takes_the_role() {
     let kernel = create_test_kernel().await;
     insert_user_with_role(&kernel, "deputy", UserRole::Admin).await;
     join_root(&kernel, "deputy").await;
+    // The Owner removes: an Admin is not below another Admin.
+    an_owner(&kernel, "owner").await;
 
-    remove_as(&kernel, TEST_ADMIN_USER_ID, "deputy").await;
+    remove_as(&kernel, "owner", "deputy").await;
 
     assert_eq!(role_of(&kernel, "deputy").await, UserRole::Banned);
     assert!(!still_administers(&kernel, "deputy").await);
@@ -129,8 +134,17 @@ async fn removing_a_plain_member_does_not_promote_them() {
 
     let after = role_of(&kernel, "visitor").await;
     assert_eq!(after, UserRole::Banned);
-    assert!(
-        after.get_rank() <= UserRole::Guest.get_rank(),
-        "removal must never raise an account's rank; got {after:?}",
+    // Banned is a standing below every role: it holds none, so it confers nothing.
+    let record = kernel
+        .domain_operations
+        .backend_tx_manager
+        .get_user("visitor")
+        .await
+        .expect("backend read")
+        .expect("user exists");
+    assert_eq!(
+        record.role_id_in(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID),
+        None,
+        "a removed account still holds a role"
     );
 }

@@ -7,7 +7,7 @@ use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 use citadel_logging::{debug, info, warn};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::WorkspaceMetadata;
+use citadel_workspace_types::structs::{Permission, WorkspaceMetadata};
 
 /// Process a command asynchronously with a specific user context
 ///
@@ -289,15 +289,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             // fifteen lines below, already gates exactly this data correctly;
             // the same rule applies here.
             {
-                use crate::handlers::domain::async_ops::AsyncDomainOperations;
-                let is_admin = kernel
+                // ManageRoles: another member's whole record -- role and every
+                // grant -- is what managing their role reads.
+                let may_read_others = kernel
                     .domain_ops()
-                    .is_admin(actor_user_id)
+                    .holds_workspace_permission(actor_user_id, Permission::ManageRoles)
                     .await
                     .unwrap_or(false);
-                if actor_user_id != user_id && !is_admin {
+                if actor_user_id != user_id && !may_read_others {
                     return Ok(WorkspaceProtocolResponse::Error(
-                        "Permission denied: Can only view your own member record or must be admin"
+                        "Permission denied: Can only view your own member record without ManageRoles"
                             .to_string(),
                     ));
                 }
@@ -368,9 +369,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     // a raw error toast, and a promoted member saw nothing new.
                     // The whole client-side role-changed pathway could only fire
                     // for an admin editing themselves.
-                    let notification = WorkspaceProtocolResponse::MemberRoleUpdated {
-                        user_id: user_id.clone(),
-                        new_role: role.clone(),
+                    //
+                    // Built from the stored record, so it names the role the
+                    // member now holds rather than the spelling the request used.
+                    let notification = match role_update_notice(kernel, user_id).await {
+                        Some(notification) => notification,
+                        None => {
+                            return Ok(WorkspaceProtocolResponse::Error(
+                                "Failed to update member role: the member vanished".to_string(),
+                            ))
+                        }
                     };
                     // Scoped to workspace members. A named user's GLOBAL role went
                     // to every session on the box -- other workspaces included, and
@@ -414,19 +422,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     // is the role-shaped notification with the member's CURRENT
                     // role -- what the client needs is "your permissions moved,
                     // drop your cache", and the role is how it identifies whose.
-                    let subject_role = kernel
-                        .get_user(user_id)
-                        .await
-                        .ok()
-                        .flatten()
-                        .map(|user| user.role);
-                    if let Some(new_role) = subject_role {
+                    if let Some(notification) = role_update_notice(kernel, user_id).await {
                         // Same reasoning as the site above.
                         kernel.broadcast_to_workspace(
-                            WorkspaceProtocolResponse::MemberRoleUpdated {
-                                user_id: user_id.clone(),
-                                new_role,
-                            },
+                            notification,
                             requester_cid,
                             crate::WORKSPACE_ROOT_ID.to_string(),
                         );
@@ -502,14 +501,15 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             // office and room, including ones they were never added to.
             // Bound OUTSIDE the guard block: the redaction below needs it too,
             // and recomputing it there would let the two answers drift.
-            let is_admin = {
-                use crate::handlers::domain::async_ops::AsyncDomainOperations;
-                kernel
-                    .domain_ops()
-                    .is_admin(actor_user_id)
-                    .await
-                    .unwrap_or(false)
-            };
+            //
+            // ManageRoles: assigning roles and grants needs every roster and
+            // every member's grants, so its holders see past membership and the
+            // redaction both.
+            let is_admin = kernel
+                .domain_ops()
+                .holds_workspace_permission(actor_user_id, Permission::ManageRoles)
+                .await
+                .unwrap_or(false);
 
             {
                 use crate::handlers::domain::async_ops::AsyncPermissionOperations;
@@ -565,11 +565,14 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 )
             };
             // An admin can switch the roster off for a node and everything
-            // below it; admins and owners still see it (members_visibility.rs).
+            // below it; whoever may switch it still sees it (members_visibility.rs).
             if super::members_visibility::hidden_on_path(&nodes, &path)
                 && !kernel
                     .domain_operations
-                    .is_admin_or_owner(actor_user_id)
+                    .holds_workspace_permission(
+                        actor_user_id,
+                        super::members_visibility::SWITCHES_ROSTER_VISIBILITY,
+                    )
                     .await
                     .unwrap_or(false)
             {
@@ -680,18 +683,17 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             use citadel_workspace_types::structs::Permission;
 
             // Check if requester has permission to view (must be admin or requesting own permissions)
-            let is_admin = {
-                use crate::handlers::domain::async_ops::AsyncDomainOperations;
-                kernel
-                    .domain_ops()
-                    .is_admin(actor_user_id)
-                    .await
-                    .unwrap_or(false)
-            };
+            // ManageRoles: the permission editor reads another member's set.
+            let may_read_others = kernel
+                .domain_ops()
+                .holds_workspace_permission(actor_user_id, Permission::ManageRoles)
+                .await
+                .unwrap_or(false);
 
-            if actor_user_id != user_id && !is_admin {
+            if actor_user_id != user_id && !may_read_others {
                 return Ok(WorkspaceProtocolResponse::Error(
-                    "Permission denied: Can only view own permissions or must be admin".to_string(),
+                    "Permission denied: Can only view own permissions without ManageRoles"
+                        .to_string(),
                 ));
             }
 
@@ -750,6 +752,9 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     Ok(WorkspaceProtocolResponse::UserPermissions {
                         domain_id: domain_id.clone(),
                         user_id: user_id.clone(),
+                        role_id: user
+                            .role_id_in(crate::WORKSPACE_ROOT_ID)
+                            .map(str::to_string),
                         role: user.role.clone(),
                         permissions,
                     })
@@ -872,14 +877,15 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 .await
             {
                 Ok(Some(msg)) => {
-                    // Check if user is sender or admin
-                    use crate::handlers::domain::async_ops::AsyncDomainOperations;
-                    let is_admin = kernel
+                    // The sender, or a moderator: BanUser is the moderation
+                    // permission, and acting on someone else's message is
+                    // moderating it.
+                    let may_moderate = kernel
                         .domain_ops()
-                        .is_admin(actor_user_id)
+                        .holds_workspace_permission(actor_user_id, Permission::BanUser)
                         .await
                         .unwrap_or(false);
-                    if msg.sender_id != actor_user_id && !is_admin {
+                    if msg.sender_id != actor_user_id && !may_moderate {
                         return Ok(WorkspaceProtocolResponse::Error(
                             "Permission denied: Can only edit own messages".to_string(),
                         ));
@@ -956,14 +962,15 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                 .await
             {
                 Ok(Some(msg)) => {
-                    // Check if user is sender or admin
-                    use crate::handlers::domain::async_ops::AsyncDomainOperations;
-                    let is_admin = kernel
+                    // The sender, or a moderator: BanUser is the moderation
+                    // permission, and acting on someone else's message is
+                    // moderating it.
+                    let may_moderate = kernel
                         .domain_ops()
-                        .is_admin(actor_user_id)
+                        .holds_workspace_permission(actor_user_id, Permission::BanUser)
                         .await
                         .unwrap_or(false);
-                    if msg.sender_id != actor_user_id && !is_admin {
+                    if msg.sender_id != actor_user_id && !may_moderate {
                         return Ok(WorkspaceProtocolResponse::Error(
                             "Permission denied: Can only delete own messages".to_string(),
                         ));
@@ -1093,12 +1100,14 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         }
 
         WorkspaceProtocolRequest::UpdateSignInSettings { settings } => {
-            // The Admin role, as SetMembersVisible: who may sign in at all is not a permission
-            // a Custom role can be granted.
-            use crate::handlers::domain::async_ops::AsyncDomainOperations;
-            let is_admin = kernel.domain_operations.is_admin(actor_user_id).await?;
+            // EditWorkspaceConfig: who may sign in at all is the workspace's
+            // configuration, as SetMembersVisible is.
+            let may_configure = kernel
+                .domain_operations
+                .holds_workspace_permission(actor_user_id, Permission::EditWorkspaceConfig)
+                .await?;
             Ok(
-                crate::kernel::sign_in::update(kernel.sign_in_settings(), is_admin, *settings)
+                crate::kernel::sign_in::update(kernel.sign_in_settings(), may_configure, *settings)
                     .await,
             )
         }
@@ -1277,6 +1286,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             super::messaging_trust::process(kernel, actor_user_id, requester_cid, request).await
         }
 
+        WorkspaceProtocolRequest::Roles(request) => {
+            super::roles::process(kernel, actor_user_id, requester_cid, request).await
+        }
+
         WorkspaceProtocolRequest::DeleteNode { node_id, cascade } => {
             use crate::handlers::domain::node_ops::AsyncNodeOperations;
             match kernel
@@ -1405,16 +1418,16 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         }
 
         WorkspaceProtocolRequest::UpdateTreeSchema { schema } => {
-            // Admin or Owner. The trait import that was here went with the
-            // `is_admin` call: `is_admin_or_owner` is an inherent method.
+            // EditTreeStructure: the schema is the tree's structure rules --
+            // which levels exist and what may hold what.
             let may_edit_schema = kernel
                 .domain_ops()
-                .is_admin_or_owner(actor_user_id)
+                .holds_workspace_permission(actor_user_id, Permission::EditTreeStructure)
                 .await
                 .unwrap_or(false);
             if !may_edit_schema {
                 return Ok(WorkspaceProtocolResponse::Error(
-                    "Permission denied: only an admin or the owner can update tree schema"
+                    "Permission denied: EditTreeStructure is required to update the tree schema"
                         .to_string(),
                 ));
             }
@@ -1449,18 +1462,19 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             icon,
             allowed_parents,
         } => {
-            use crate::handlers::domain::async_ops::AsyncDomainOperations;
             use citadel_workspace_types::structs::CustomNodeType;
 
-            // Check if user has ManageNodeTypes permission
-            let is_admin = kernel
+            // ManageNodeTypes, which the comment here always named while the
+            // check asked for the Admin role instead.
+            let may_manage_types = kernel
                 .domain_ops()
-                .is_admin(actor_user_id)
+                .holds_workspace_permission(actor_user_id, Permission::ManageNodeTypes)
                 .await
                 .unwrap_or(false);
-            if !is_admin {
+            if !may_manage_types {
                 return Ok(WorkspaceProtocolResponse::Error(
-                    "Permission denied: Only admins can create custom node types".to_string(),
+                    "Permission denied: ManageNodeTypes is required to create node types"
+                        .to_string(),
                 ));
             }
 
@@ -1538,4 +1552,20 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             Ok(WorkspaceProtocolResponse::NodeTypes(node_types))
         }
     }
+}
+
+/// `MemberRoleUpdated` for `user_id` as stored now: the role id they hold, and its legacy enum
+/// for clients that predate the table. None when the user no longer exists.
+async fn role_update_notice<R: Ratchet + Send + Sync + 'static>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    user_id: &str,
+) -> Option<WorkspaceProtocolResponse> {
+    let user = kernel.get_user(user_id).await.ok().flatten()?;
+    Some(WorkspaceProtocolResponse::MemberRoleUpdated {
+        user_id: user_id.to_string(),
+        role_id: user
+            .role_id_in(crate::WORKSPACE_ROOT_ID)
+            .map(str::to_string),
+        new_role: user.role,
+    })
 }

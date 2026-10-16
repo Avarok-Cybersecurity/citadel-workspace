@@ -48,7 +48,7 @@ async fn test_admin_can_add_multiple_users_to_office() {
     let add_user1_req = WorkspaceProtocolRequest::AddMember {
         user_id: user1_id.to_string(),
         domain_id: Some(node.id.clone()),
-        role: UserRole::Member,
+        role: UserRole::Member.into(),
         metadata: None,
     };
 
@@ -69,7 +69,7 @@ async fn test_admin_can_add_multiple_users_to_office() {
     let add_user2_req = WorkspaceProtocolRequest::AddMember {
         user_id: user2_id.to_string(),
         domain_id: Some(node.id.clone()),
-        role: UserRole::Member,
+        role: UserRole::Member.into(),
         metadata: None,
     };
 
@@ -157,7 +157,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
     let add_owner_req = WorkspaceProtocolRequest::AddMember {
         user_id: owner_id.to_string(),
         domain_id: Some(node.id.clone()),
-        role: UserRole::Owner,
+        role: UserRole::Owner.into(),
         metadata: None,
     };
 
@@ -178,7 +178,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
     let add_non_admin_req = WorkspaceProtocolRequest::AddMember {
         user_id: non_admin_id.to_string(),
         domain_id: Some(node.id.clone()),
-        role: UserRole::Member,
+        role: UserRole::Member.into(),
         metadata: None,
     };
 
@@ -195,10 +195,12 @@ async fn test_non_admin_cannot_add_user_to_office() {
     // a non-admin request differently
 
     // For now, we'll verify that the non-admin user exists and is not an admin
-    use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncDomainOperations;
     assert!(!kernel
         .domain_operations
-        .is_admin(non_admin_id)
+        .holds_workspace_permission(
+            non_admin_id,
+            citadel_workspace_types::structs::Permission::ManageRoles
+        )
         .await
         .unwrap());
 

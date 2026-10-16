@@ -20,6 +20,7 @@ pub fn create_test_user(id: &str, role: UserRole) -> User {
         id: id.to_string(),
         name: format!("Test {}", id),
         role,
+        workspace_roles: Default::default(),
         permissions: HashMap::new(),
         metadata: Default::default(),
     }

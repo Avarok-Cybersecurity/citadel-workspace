@@ -17,7 +17,7 @@
 use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncUserManagementOperations;
 use citadel_workspace_server_kernel::{connect_enrolment, ConnectEnrolment};
 use citadel_workspace_types::structs::{Permission, UserRole};
-use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
+use common::member_test_utils::{an_owner, insert_user_with_role, join_root, GateKernel as Kernel};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 
 const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
@@ -104,20 +104,22 @@ async fn a_removed_account_holds_no_permissions_on_the_root() {
     let kernel = create_test_kernel().await;
     insert_user_with_role(&kernel, "departing", UserRole::Admin).await;
     join_root(&kernel, "departing").await;
+    // The Owner: an Admin is not below another Admin, so only the Owner removes one.
+    an_owner(&kernel, "owner").await;
 
     kernel
         .domain_operations
-        .remove_user_from_domain(TEST_ADMIN_USER_ID, "departing", ROOT)
+        .remove_user_from_domain("owner", "departing", ROOT)
         .await
-        .expect("an admin may remove a member");
+        .expect("the Owner may remove an administrator");
 
     assert!(
         !kernel
             .domain_operations
-            .is_admin_or_owner("departing")
+            .holds_workspace_permission("departing", Permission::ManageRoles)
             .await
             .expect("backend read"),
-        "a removed administrator keeps every is_admin_or_owner gate if the role survives",
+        "a removed administrator keeps managing roles if the role survives",
     );
 }
 
@@ -144,7 +146,7 @@ async fn removal_takes_the_per_node_grants_too() {
             .expect("user exists");
         user.permissions.insert(
             "room-1".to_string(),
-            Permission::for_role(&UserRole::Member),
+            Permission::for_legacy_role(&UserRole::Member),
         );
         kernel
             .domain_operations

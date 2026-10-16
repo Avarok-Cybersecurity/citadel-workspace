@@ -62,6 +62,7 @@ fn create_test_user(id: &str, role: UserRole) -> citadel_workspace_types::struct
         id: id.to_string(),
         name: format!("Test {}", id),
         role,
+        workspace_roles: Default::default(),
         permissions: std::collections::HashMap::new(),
         metadata: Default::default(),
     }
@@ -257,7 +258,7 @@ async fn test_member_operations_errors() {
         &kernel,
         WorkspaceProtocolRequest::UpdateMemberRole {
             user_id: "non_existent_user".to_string(),
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: None,
         },
     )

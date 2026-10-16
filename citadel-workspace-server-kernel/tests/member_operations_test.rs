@@ -32,7 +32,7 @@ async fn test_member_operations() {
         WorkspaceProtocolRequest::AddMember {
             user_id: "test_user".to_string(),
             domain_id: None,
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: Some("workspace_metadata".to_string().into_bytes()),
         },
     )
@@ -81,7 +81,7 @@ async fn test_member_operations() {
         WorkspaceProtocolRequest::AddMember {
             user_id: "test_user".to_string(),
             domain_id: Some(office_id.clone()),
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: Some("test_metadata".to_string().into_bytes()),
         },
     )
@@ -136,7 +136,7 @@ async fn test_member_operations() {
         WorkspaceProtocolRequest::AddMember {
             user_id: "test_user".to_string(),
             domain_id: Some(room_id.clone()),
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: Some("test_metadata".to_string().into_bytes()),
         },
     )

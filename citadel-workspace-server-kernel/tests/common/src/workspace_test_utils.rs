@@ -61,6 +61,7 @@ pub async fn create_configured_test_kernel(
         id: TEST_ADMIN_USER_ID.to_string(),
         name: "Test Admin".to_string(),
         role: UserRole::Admin,
+        workspace_roles: Default::default(),
         permissions: HashMap::new(),
         metadata: Default::default(),
     };

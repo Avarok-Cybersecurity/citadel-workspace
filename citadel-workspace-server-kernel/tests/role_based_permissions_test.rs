@@ -3,7 +3,7 @@ use citadel_workspace_types::structs::{NodeEntityType, Permission, UserRole};
 use citadel_workspace_types::WorkspaceProtocolRequest;
 
 use common::async_test_helpers::*;
-use common::permissions_test_utils::create_test_user;
+use common::permissions_test_utils::{create_test_user, join_root_workspace};
 use common::workspace_test_utils::*;
 
 /// # Role-Based Permission Test Suite
@@ -43,6 +43,9 @@ async fn test_role_based_permissions() {
         .insert_user(owner_user.id.clone(), owner_user.clone())
         .await
         .unwrap();
+    // An administrator OF THIS workspace: a role confers nothing outside the workspace whose
+    // table it is in, where the old global check honoured an Admin record anywhere.
+    join_root_workspace(&kernel, &owner_user.id).await;
     kernel
         .domain_operations
         .backend_tx_manager

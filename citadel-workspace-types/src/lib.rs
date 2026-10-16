@@ -6,6 +6,12 @@
 pub mod dependency_agreement;
 pub mod ice;
 pub mod messaging_trust;
+/// A workspace's role table and its built-ins.
+pub mod roles;
+/// Records written before the role table, read into it.
+pub mod roles_legacy;
+/// Reading and editing the role table, and naming a member's role on the wire.
+pub mod roles_protocol;
 pub mod sign_in;
 pub mod structs;
 /// The build script's submodule-freshness rule, here so it can be tested.
@@ -121,7 +127,7 @@ pub enum WorkspaceProtocolRequest {
         user_id: String,
         /// Domain (node) to add the member to. None defaults to workspace root.
         domain_id: Option<String>,
-        role: UserRole,
+        role: roles_protocol::MemberRole,
         #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
     },
@@ -130,7 +136,7 @@ pub enum WorkspaceProtocolRequest {
     },
     UpdateMemberRole {
         user_id: String,
-        role: UserRole,
+        role: roles_protocol::MemberRole,
         #[debug(with = bytes_opt_debug_fmt)]
         metadata: Option<Vec<u8>>,
     },
@@ -418,6 +424,9 @@ pub enum WorkspaceProtocolRequest {
 
     /// Who connects without asking; see `messaging_trust`.
     MessagingTrust(messaging_trust::MessagingTrustRequest),
+
+    /// The workspace's role table; see `roles`.
+    Roles(roles_protocol::RolesRequest),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -463,13 +472,20 @@ pub enum WorkspaceProtocolResponse {
     UserPermissions {
         domain_id: String,
         user_id: String,
+        /// The legacy enum, for clients that predate the role table.
         role: UserRole,
+        /// The role this user holds in the workspace, from its table; `None` when banned or
+        /// not a member.
+        role_id: Option<String>,
         permissions: Vec<Permission>,
     },
     /// Confirmation that member role was updated
     MemberRoleUpdated {
         user_id: String,
+        /// The legacy enum, for clients that predate the role table.
         new_role: UserRole,
+        /// The role id the member now holds; `None` when banned.
+        role_id: Option<String>,
     },
 
     /// Response after user profile was updated
@@ -613,6 +629,8 @@ pub enum WorkspaceProtocolResponse {
     Telemetry(telemetry::TelemetryResponse),
 
     MessagingTrust(messaging_trust::MessagingTrustResponse),
+
+    Roles(roles_protocol::RolesResponse),
 }
 
 /// Type of group message

@@ -54,7 +54,7 @@ async fn try_set_role_as(
 ) -> Result<(), String> {
     kernel
         .domain_operations
-        .update_workspace_member_role(actor, target, role, None)
+        .update_workspace_member_role(actor, target, role.into(), None)
         .await
         .map_err(|e| e.to_string())
 }
@@ -75,7 +75,7 @@ async fn try_add_as(
 ) -> Result<(), String> {
     kernel
         .domain_operations
-        .add_user_to_domain(actor, target, ROOT, role)
+        .add_user_to_domain(actor, target, ROOT, role.into())
         .await
         .map_err(|e| e.to_string())
 }

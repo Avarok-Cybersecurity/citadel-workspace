@@ -574,7 +574,7 @@ pub fn resolve_first_connect_admin(
 /// What happens to the first account to join an empty workspace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FirstMemberOutcome {
-    /// Promote to Admin. Only ever when the operator asked for it by name.
+    /// Make them the Owner. Only ever when the operator asked for it by name.
     Promote,
     /// The workspace is empty and stays without an administrator until someone
     /// runs the initialize flow with the master password.

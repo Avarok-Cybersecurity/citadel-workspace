@@ -1,5 +1,4 @@
-use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncDomainOperations;
-use citadel_workspace_types::structs::UserRole;
+use citadel_workspace_types::structs::{Permission, UserRole};
 
 use common::permissions_test_utils::*;
 
@@ -24,8 +23,18 @@ async fn test_admin_check() {
     let admin_id = "custom_admin";
     let (kernel, domain_ops, _admin_id_str) = setup_custom_admin_test_environment(admin_id).await;
 
+    let manages_roles = |id: &'static str| {
+        let domain_ops = domain_ops.clone();
+        async move {
+            domain_ops
+                .holds_workspace_permission(id, Permission::ManageRoles)
+                .await
+                .unwrap()
+        }
+    };
+
     // Verify that the admin check works with custom admin ID
-    assert!(domain_ops.is_admin(admin_id).await.unwrap());
+    assert!(manages_roles("custom_admin").await);
 
     // Create a non-admin user for testing this specific check
     let non_admin_id = "non_admin_user";
@@ -38,7 +47,8 @@ async fn test_admin_check() {
         .unwrap();
 
     // Verify that non-admin users are recognized as such
-    assert!(!domain_ops.is_admin("non_admin_user").await.unwrap());
+    join_root_workspace(&kernel, non_admin_id).await;
+    assert!(!manages_roles("non_admin_user").await);
 
     // Create another user with admin role
     let second_admin_id = "second_admin";
@@ -52,6 +62,11 @@ async fn test_admin_check() {
         .await
         .unwrap();
 
-    // Verify that the second admin is recognized
-    assert!(domain_ops.is_admin(second_admin_id).await.unwrap());
+    // An Admin record outside the workspace is not an administrator of it: the role is a
+    // standing in that workspace's table. The old check read a global enum and said yes.
+    assert!(!manages_roles("second_admin").await);
+
+    // Verify that the second admin is recognized once they belong to the workspace
+    join_root_workspace(&kernel, second_admin_id).await;
+    assert!(manages_roles("second_admin").await);
 }

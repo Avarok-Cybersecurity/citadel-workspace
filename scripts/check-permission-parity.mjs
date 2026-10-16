@@ -7,13 +7,15 @@
  * could neither show nor grant them, and a server response carrying one had no
  * TypeScript value to land on.
  *
- * This checks three things:
+ * This checks five things:
  *   1. every Rust variant has a TS enum member with the same string value;
  *   2. every TS member has a human label;
  *   3. every permission appears in exactly one PERMISSION_CATEGORIES group, so
  *      the editor renders all of them.
  *   4. every permission the editor renders is ACTUALLY ENFORCED somewhere in the
  *      server, or is explicitly declared as gated by something else.
+ *   5. the seed roles name only real permissions, and the UI keeps no copy of
+ *      any role's permissions (the table is live server data).
  *
  * Check 4 exists because matching names are not the same as a working control.
  * `UploadFiles` and `DownloadFiles` passed checks 1-3 for their whole life --
@@ -85,76 +87,48 @@ for (const member of tsMembers.keys()) {
 }
 
 // ---------------------------------------------------------------------------
-// Role definitions. The server decides access; the admin UI only previews it.
-// Three copies of the role model existed and all three disagreed — the UI
-// offered Member "EditContent", which the server refuses, and offered Owner a
-// set that omitted permissions the server grants it.
+// Role definitions. The server decides access, and since roles became editable
+// the table is data: each workspace's lives on the server and the UI reads it
+// live. Three copies of the role model once existed and all three disagreed —
+// the UI offered Member "EditContent", which the server refused, and offered
+// Owner a set that omitted permissions the server granted it. So the UI keeps
+// NO copy now, and this checks that it does not grow one back.
+//
+// What remains to compare is the seed table every workspace starts with, which
+// `citadel-workspace-types/tests/role_table.rs` exports to bindings/seed_roles.json
+// (the bindings gate keeps it committed and current): every permission it names
+// must be a Rust variant, so a renamed variant cannot leave a seed granting
+// something that no longer exists.
 // ---------------------------------------------------------------------------
 
-/** A role holding the `All` wildcard effectively holds every permission. */
-const effective = (perms) =>
-  new Set(perms.includes('All') ? rustVariants : perms);
-
-const forRole = /pub fn for_role[\s\S]*?\n    \}/.exec(rust);
-if (!forRole) throw new Error('could not locate `Permission::for_role` in structs.rs');
-
-/** Variants excluded by a `!matches!(p, Self::A | Self::B)` filter. */
-const excludedBy = (text) => {
-  const m = /matches!\(\s*p\s*,([^)]*)\)/.exec(text);
-  return m ? [...m[1].matchAll(/Self::(\w+)/g)].map((x) => x[1]) : [];
-};
-
-const rustRoles = {};
-const armRe = /UserRole::(\w+) => \{([\s\S]*?)\n            \}/g;
-for (const [, role, body] of forRole[0].matchAll(armRe)) {
-  if (role === 'Custom') continue; // rank-derived, not a fixed role
-  if (body.includes('ALL_VARIANTS')) {
-    const excluded = excludedBy(body);
-    if (excluded.length === 0) {
-      throw new Error(`the ${role} arm derives from ALL_VARIANTS but no exclusion was parsed`);
+const SEEDS = 'citadel-workspace-types/bindings/seed_roles.json';
+const seeds = JSON.parse(readFileSync(SEEDS, 'utf8'));
+if (!Array.isArray(seeds) || seeds.length === 0) throw new Error(`${SEEDS} holds no roles`);
+for (const id of ['owner', 'admin', 'member', 'guest']) {
+  if (!seeds.some((role) => role.id === id)) problems.push(`seed ${id}: missing from ${SEEDS}`);
+}
+for (const role of seeds) {
+  for (const perm of role.permissions) {
+    if (!rustVariants.includes(perm)) {
+      problems.push(`seed ${role.id}: grants ${perm}, which is not a Rust Permission variant`);
     }
-    rustRoles[role] = rustVariants.filter((v) => !excluded.includes(v));
-  } else {
-    rustRoles[role] = [...body.matchAll(/permissions\.insert\(Self::(\w+)\)/g)].map((m) => m[1]);
   }
 }
 
-const tsRoleBlock = /ROLE_DEFAULT_PERMISSIONS[\s\S]*?\n\};/.exec(ts);
-if (!tsRoleBlock) throw new Error('could not locate ROLE_DEFAULT_PERMISSIONS in types.ts');
-
-const tsRoles = {};
-for (const [, role, body] of tsRoleBlock[0].matchAll(/^  (\w+): ([\s\S]*?),\n(?=  \w+:|\};)/gm)) {
-  if (body.includes('ALL_PERMISSIONS.filter')) {
-    const excluded = [...body.matchAll(/!==\s*Permission\.(\w+)/g)].map((m) => m[1]);
-    if (excluded.length === 0) {
-      throw new Error(`the ${role} entry filters ALL_PERMISSIONS but no exclusion was parsed`);
-    }
-    tsRoles[role] = rustVariants.filter((v) => !excluded.includes(v));
-  } else if (body.trim() === 'ALL_PERMISSIONS') {
-    tsRoles[role] = [...rustVariants];
-  } else {
-    tsRoles[role] = [...body.matchAll(/Permission\.(\w+)/g)].map((m) => m[1]);
+const uiFiles = execFileSync(
+  'find',
+  ['citadel-workspaces/src', '-name', '*.ts', '-o', '-name', '*.tsx'],
+  { encoding: 'utf8' },
+)
+  .split('\n')
+  .filter(Boolean);
+if (uiFiles.length === 0) throw new Error('found no UI sources under citadel-workspaces/src');
+for (const file of uiFiles) {
+  if (readFileSync(file, 'utf8').includes('ROLE_DEFAULT_PERMISSIONS')) {
+    problems.push(
+      `${file}: names ROLE_DEFAULT_PERMISSIONS — a role's permissions come from the live table, not a UI copy`,
+    );
   }
-}
-
-for (const [role, rustPerms] of Object.entries(rustRoles)) {
-  const tsPerms = tsRoles[role];
-  if (!tsPerms) {
-    problems.push(`role ${role}: defined in Rust, missing from ROLE_DEFAULT_PERMISSIONS`);
-    continue;
-  }
-  const a = effective(rustPerms);
-  const b = effective(tsPerms);
-  for (const perm of a) {
-    if (!b.has(perm)) problems.push(`role ${role}: server grants ${perm}, the UI does not`);
-  }
-  for (const perm of b) {
-    if (!a.has(perm)) problems.push(`role ${role}: the UI offers ${perm}, the server does not grant it`);
-  }
-}
-
-for (const role of Object.keys(tsRoles)) {
-  if (!rustRoles[role]) problems.push(`role ${role}: in ROLE_DEFAULT_PERMISSIONS but not a Rust UserRole arm`);
 }
 
 // --- 4. enforcement ---------------------------------------------------------
@@ -170,14 +144,9 @@ const GATED_BY = {
   EditContent: 'EditMdx / EditTreeStructure on the node being edited',
   // Reads are gated on ViewContent; group_access::authorize_group_read.
   ReadMessages: 'ViewContent in kernel::group_access',
-  // Deleting takes admin-or-owner plus the master password. (UpdateWorkspace is
-  // now enforced directly, by UpdateWorkspaceProfile.)
-  DeleteWorkspace: 'is_admin or workspace owner, plus the master password',
   ManageNodeMembers: 'AddUsers / RemoveUsers in async_domain_server_ops',
-  ManageNodeTypes: 'is_admin on CreateNodeType and UpdateTreeSchema',
   // No such operation exists in the server yet. Listed so the matrix showing a
   // toggle for it is a known, deliberate gap rather than an unnoticed one.
-  BanUser: 'NOT IMPLEMENTED - no ban operation exists',
   ManageDomains: 'NOT IMPLEMENTED - no domain-management operation exists',
   ConfigureSystem: 'NOT IMPLEMENTED - no system-configuration operation exists',
 };
@@ -235,5 +204,5 @@ if (problems.length > 0) {
 }
 
 console.log(
-  `Permission parity OK: ${rustVariants.length} variants and ${Object.keys(rustRoles).length} roles agree across Rust and TypeScript.`,
+  `Permission parity OK: ${rustVariants.length} variants agree across Rust and TypeScript; ${seeds.length} seed roles name only real variants.`,
 );

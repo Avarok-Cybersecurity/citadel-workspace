@@ -66,7 +66,7 @@ async fn test_permissions_inheritance() {
         WorkspaceProtocolRequest::AddMember {
             user_id: owner_id.to_string(),
             domain_id: None,
-            role: UserRole::Owner,
+            role: UserRole::Owner.into(),
             metadata: None,
         },
     )
@@ -79,7 +79,7 @@ async fn test_permissions_inheritance() {
         WorkspaceProtocolRequest::AddMember {
             user_id: member_id.to_string(),
             domain_id: None,
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: None,
         },
     )

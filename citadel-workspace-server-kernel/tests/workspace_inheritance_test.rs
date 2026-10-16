@@ -83,7 +83,7 @@ async fn test_workspace_add_no_explicit_office_perms() {
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
             domain_id: None, // Adding to workspace, not office
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: None,
         },
     )

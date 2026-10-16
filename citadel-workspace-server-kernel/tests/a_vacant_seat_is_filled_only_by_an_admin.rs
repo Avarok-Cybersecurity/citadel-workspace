@@ -51,7 +51,7 @@ async fn a_member_cannot_make_anyone_the_first_owner() {
     // Precondition: AddUsers is really held, so the grant rule is what refuses.
     let added = kernel
         .domain_operations
-        .add_user_to_domain("alice", "newcomer", ROOT, UserRole::Guest)
+        .add_user_to_domain("alice", "newcomer", ROOT, UserRole::Guest.into())
         .await;
     assert!(
         added.is_ok(),
@@ -60,7 +60,7 @@ async fn a_member_cannot_make_anyone_the_first_owner() {
 
     let outcome = kernel
         .domain_operations
-        .add_user_to_domain("alice", "newcomer", ROOT, UserRole::Owner)
+        .add_user_to_domain("alice", "newcomer", ROOT, UserRole::Owner.into())
         .await;
     assert!(outcome.is_err(), "a Member filled the vacant Owner seat");
     assert_ne!(role_of(&kernel, "newcomer").await, UserRole::Owner);
@@ -73,7 +73,7 @@ async fn a_member_cannot_make_themselves_the_first_owner() {
 
     let outcome = kernel
         .domain_operations
-        .add_user_to_domain("alice", "alice", ROOT, UserRole::Owner)
+        .add_user_to_domain("alice", "alice", ROOT, UserRole::Owner.into())
         .await;
     assert!(outcome.is_err(), "a Member made themselves Owner");
     assert_eq!(role_of(&kernel, "alice").await, UserRole::Member);
@@ -86,7 +86,7 @@ async fn an_admin_still_fills_the_vacant_owner_seat() {
 
     kernel
         .domain_operations
-        .add_user_to_domain(TEST_ADMIN_USER_ID, "newcomer", ROOT, UserRole::Owner)
+        .add_user_to_domain(TEST_ADMIN_USER_ID, "newcomer", ROOT, UserRole::Owner.into())
         .await
         .expect("an Admin appoints the first Owner");
     assert_eq!(role_of(&kernel, "newcomer").await, UserRole::Owner);

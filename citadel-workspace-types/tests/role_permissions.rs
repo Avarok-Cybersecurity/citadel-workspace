@@ -7,11 +7,19 @@
 //! ability to read the workspace and chat in it, and still could not edit a
 //! document. These tests state the hierarchy that was always intended.
 
+use citadel_workspace_types::roles::{
+    WorkspaceRoles, ADMIN_ROLE_ID, GUEST_ROLE_ID, MEMBER_ROLE_ID, OWNER_ROLE_ID,
+};
 use citadel_workspace_types::structs::{Permission, UserRole};
 use std::collections::HashSet;
 
-fn perms(role: UserRole) -> HashSet<Permission> {
-    Permission::for_role(&role)
+/// The built-ins as a fresh workspace's table holds them.
+fn perms(role_id: &str) -> HashSet<Permission> {
+    WorkspaceRoles::seeded()
+        .get(role_id)
+        .unwrap_or_else(|| panic!("the seeded table has no {role_id} role"))
+        .permissions
+        .clone()
 }
 
 #[test]
@@ -26,8 +34,8 @@ fn all_variants_is_complete_and_unique() {
 
 #[test]
 fn owner_is_a_superset_of_member() {
-    let owner = perms(UserRole::Owner);
-    for permission in perms(UserRole::Member) {
+    let owner = perms(OWNER_ROLE_ID);
+    for permission in perms(MEMBER_ROLE_ID) {
         assert!(
             owner.contains(&permission),
             "Owner is missing {permission:?}, which a plain Member holds — \
@@ -38,8 +46,8 @@ fn owner_is_a_superset_of_member() {
 
 #[test]
 fn member_is_a_superset_of_guest() {
-    let member = perms(UserRole::Member);
-    for permission in perms(UserRole::Guest) {
+    let member = perms(MEMBER_ROLE_ID);
+    for permission in perms(GUEST_ROLE_ID) {
         assert!(
             member.contains(&permission),
             "Member is missing {permission:?}"
@@ -49,7 +57,7 @@ fn member_is_a_superset_of_guest() {
 
 #[test]
 fn owner_can_run_the_workspace() {
-    let owner = perms(UserRole::Owner);
+    let owner = perms(OWNER_ROLE_ID);
     // The document editor gates on EditMdx; without it the owner of a workspace
     // cannot edit anything in it.
     for permission in [
@@ -69,7 +77,7 @@ fn owner_can_run_the_workspace() {
 
 #[test]
 fn owner_stops_short_of_admin() {
-    let owner = perms(UserRole::Owner);
+    let owner = perms(OWNER_ROLE_ID);
     assert!(
         !owner.contains(&Permission::All),
         "the All wildcard belongs to Admin alone"
@@ -82,10 +90,10 @@ fn owner_stops_short_of_admin() {
 
 #[test]
 fn admin_holds_the_wildcard() {
-    assert!(perms(UserRole::Admin).contains(&Permission::All));
+    assert!(perms(ADMIN_ROLE_ID).contains(&Permission::All));
 }
 
 #[test]
 fn banned_holds_nothing() {
-    assert!(perms(UserRole::Banned).is_empty());
+    assert!(Permission::for_legacy_role(&UserRole::Banned).is_empty());
 }

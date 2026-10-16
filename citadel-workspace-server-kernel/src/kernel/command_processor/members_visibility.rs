@@ -2,16 +2,15 @@
 //!
 //! The switch is the node's `default_permissions.view_members`. Every node has
 //! carried it since `ViewMembers` existed and nothing read it. Here it is
-//! written (`SetMembersVisible`, Admin only) and read (`ListMembers`, through
+//! written (`SetMembersVisible`, EditWorkspaceConfig) and read (`ListMembers`, through
 //! `kernel/roster.rs::roster_hidden`). No other node default is consulted, and
 //! nothing but the roster is hidden: the scope is `ViewMembers` alone.
 
-use crate::handlers::domain::async_ops::AsyncDomainOperations;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::platform::{SystemTime, UNIX_EPOCH};
 use crate::WorkspaceProtocolResponse;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use citadel_workspace_types::structs::DomainNode;
+use citadel_workspace_types::structs::{DomainNode, Permission};
 use std::collections::HashMap;
 
 /// Whether the roster at the end of `path` is hidden from a non-admin: some
@@ -25,11 +24,14 @@ pub(crate) fn hidden_on_path(nodes: &HashMap<String, DomainNode>, path: &[String
     })
 }
 
-/// Store the switch on `node_id` and announce the node to everyone on it.
+/// Who may switch a roster off, and so who still sees a hidden one.
 ///
-/// Gated on the Admin role, not on a permission: `ViewMembers` is what the
-/// switch takes away, and no permission a Custom role can be granted should
-/// let its holder decide who else sees the list.
+/// The workspace's configuration permission. It was the Admin role, on the grounds that no
+/// grantable permission should decide who sees the list; with roles editable, an Admin choosing
+/// to give this to a role is exactly that decision, made by someone entitled to make it.
+pub(super) const SWITCHES_ROSTER_VISIBILITY: Permission = Permission::EditWorkspaceConfig;
+
+/// Store the switch on `node_id` and announce the node to everyone on it.
 pub(super) async fn set_members_visible<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     actor_user_id: &str,
@@ -37,14 +39,15 @@ pub(super) async fn set_members_visible<R: Ratchet + Send + Sync + 'static>(
     node_id: &str,
     visible: bool,
 ) -> Result<WorkspaceProtocolResponse, NetworkError> {
-    let is_admin = kernel
+    let may_switch = kernel
         .domain_operations
-        .is_admin(actor_user_id)
+        .holds_workspace_permission(actor_user_id, SWITCHES_ROSTER_VISIBILITY)
         .await
         .unwrap_or(false);
-    if !is_admin {
+    if !may_switch {
         return Ok(WorkspaceProtocolResponse::Error(
-            "Permission denied: only an admin can change who sees the member list".to_string(),
+            "Permission denied: EditWorkspaceConfig is required to change who sees the member list"
+                .to_string(),
         ));
     }
 

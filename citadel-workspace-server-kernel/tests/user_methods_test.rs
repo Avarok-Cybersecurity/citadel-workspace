@@ -52,8 +52,11 @@ mod tests {
         assert!(!user.is_member_of_domain("office1"));
         assert_eq!(user.get_permissions("office1"), None);
 
-        // Test setting role-based permissions
-        user.set_role_permissions("office1");
+        // A role's permissions are no longer copied into the map (the role confers them
+        // in the workspace); granting the Member set by hand is still per-domain.
+        for permission in Permission::for_legacy_role(&UserRole::Member) {
+            user.grant_permission("office1", permission);
+        }
         assert!(user.is_member_of_domain("office1"));
         // Member role should have these permissions
         assert!(user.has_permission("office1", Permission::SendMessages));
@@ -71,8 +74,8 @@ mod tests {
             UserRole::Admin,
         );
 
-        // Set role permissions for a domain
-        admin.set_role_permissions("system");
+        // The admin wildcard, granted on a domain
+        admin.grant_permission("system", Permission::All);
 
         // Admin should have all permissions
         for permission in [
@@ -95,9 +98,6 @@ mod tests {
                 Permission::DeleteNode,
             ]
         ));
-
-        // Verify that admin role is correctly identified
-        assert!(admin.is_administrator());
     }
 
     #[test]

@@ -37,7 +37,7 @@ async fn kernel_with_two_members() -> std::sync::Arc<Kernel> {
             WorkspaceProtocolRequest::AddMember {
                 user_id: id.to_string(),
                 domain_id: None,
-                role: UserRole::Member,
+                role: UserRole::Member.into(),
                 metadata: None,
             },
         )

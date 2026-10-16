@@ -9,6 +9,8 @@ use crate::kernel::transaction::BackendTransactionManager;
 use async_trait::async_trait;
 use citadel_logging::info;
 use citadel_sdk::prelude::{NetworkError, NodeRemote, Ratchet};
+use citadel_workspace_types::roles::{owner_role, OWNER_ROLE_ID};
+use citadel_workspace_types::roles_protocol::MemberRole;
 use citadel_workspace_types::structs::{Domain, Permission, User, UserRole, Workspace};
 use citadel_workspace_types::UpdateOperation;
 use parking_lot::RwLock;
@@ -36,454 +38,6 @@ impl<R: Ratchet> Clone for AsyncDomainServerOperations<R> {
 }
 
 impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
-    /// Admin or Owner.
-    ///
-    /// `is_admin` is `role == Admin` exactly, so every gate written on it
-    /// refuses the workspace Owner — a role that `Permission::for_role` grants
-    /// everything except `All` and `ConfigureSystem`. `remove_user_from_domain`
-    /// already records this class of mistake ("the permission editor displayed
-    /// a grant that enforcement then refused"); it was fixed there and nowhere
-    /// else.
-    ///
-    /// Deliberately narrower than asking the permission — as a policy choice,
-    /// not as the only thing standing between a Custom role and an
-    /// administrator. It was written when that WAS the only thing: widening the
-    /// gate would then have let a holder of a member-management permission mint
-    /// an Admin.
-    ///
-    /// `ensure_may_grant_role` and `ensure_may_grant_permissions` closed that
-    /// independently — nobody grants authority they do not hold, whichever gate
-    /// admitted them — so the argument for keeping this narrow is now the
-    /// smaller one: role assignment is an administrative act, and Admin and
-    /// Owner are who the product means by administrator. Whether to widen it
-    /// remains open, and is no longer blocked on the escalation.
-    pub async fn is_admin_or_owner(&self, user_id: &str) -> Result<bool, NetworkError> {
-        match self.backend_tx_manager.get_user(user_id).await? {
-            Some(user) => Ok(matches!(user.role, UserRole::Admin | UserRole::Owner)),
-            None => Ok(false),
-        }
-    }
-
-    /// Refuse granting a role that holds a permission the grantor does not.
-    ///
-    /// `add_user_to_domain` writes a caller-supplied `UserRole` and was gated
-    /// only on `AddUsers`, which `Permission::for_role` gives every Custom role
-    /// above the editor threshold. Nothing looked at WHICH role was granted, and
-    /// the target may be the caller — so a Custom role could call it on itself
-    /// and climb. `update_workspace_member_role` is the same shape.
-    ///
-    /// This was first written as a rank comparison: grant what you outrank or
-    /// match. That was wrong, because rank does not track power. `Owner` is rank
-    /// 20 and holds 25 of the 27 permissions; `create_custom_role` permits ranks
-    /// 21-254, and a Custom role above the editor threshold holds 9. So a
-    /// rank-21 Custom outranked Owner while holding a third of its authority,
-    /// and the rank rule let it grant Owner — to itself.
-    ///
-    /// Comparing the permission sets is the property actually wanted. `All` is
-    /// the Admin wildcard and `has_permission` honours it, so an Admin still
-    /// grants anything; an Owner grants everything except Admin, whose `All`
-    /// they lack; and no role can hand out authority it does not itself hold.
-    async fn ensure_may_grant_role(
-        &self,
-        actor_user_id: &str,
-        role: &UserRole,
-    ) -> Result<(), NetworkError> {
-        let actor = match self.backend_tx_manager.get_user(actor_user_id).await? {
-            Some(user) => user,
-            None => return Err(NetworkError::msg("Permission denied: unknown actor")),
-        };
-        // The chain of command decides between built-in roles; permission-set
-        // containment decides everything else.
-        //
-        // Containment alone said an Owner may not grant Admin, because Admin
-        // holds the `All` wildcard that `for_role` withholds from Owner. That is
-        // the right answer to "what may this role DO" and the wrong answer to
-        // "whom may this role APPOINT": the Owner runs the workspace, and an
-        // Admin is someone they appoint. `command_authority` is the ladder, and
-        // it returns None for Custom roles precisely so they keep falling
-        // through to containment -- a rank-21 Custom holding nine of the
-        // twenty-seven permissions must not outrank Owner, and containment is
-        // what stops it.
-        if let (Some(mine), Some(granting)) =
-            (actor.role.command_authority(), role.command_authority())
-        {
-            if mine >= granting {
-                return Ok(());
-            }
-            // A vacant seat may be filled; an occupied one may not be taken.
-            //
-            // Without this the Owner role is UNREACHABLE. `UserRole::Owner` is
-            // never assigned anywhere in the kernel's production code -- it is
-            // only ever read -- so the only way a workspace gains an Owner is
-            // this grant, and a workspace begins with an Admin and no Owner. A
-            // strict ladder would therefore have made "Owner" a role nobody
-            // could ever hold, which is not a hierarchy, it is a dead branch.
-            //
-            // Scoped as tightly as it can be: it applies only while the
-            // workspace has NO member holding the role being granted, so it
-            // bootstraps the seat and closes behind itself. An Admin cannot use
-            // it to manufacture a confederate above them once an Owner exists,
-            // which is the lateral escalation that would otherwise be the point
-            // of allowing this at all.
-            //
-            // And only an Admin may fill it. The seat is vacant exactly when the
-            // workspace is as it began -- an Admin and no Owner -- and the Admin is
-            // who appoints the first Owner. Open to every caller, it let a Member
-            // an Admin had trusted with AddUsers (UpdateMemberPermissions grants it
-            // per domain) add anyone, themselves included, as the Owner.
-            if actor.role == UserRole::Admin && self.workspace_has_no_member_holding(role).await? {
-                return Ok(());
-            }
-            return Err(NetworkError::msg(format!(
-                "Permission denied: {} cannot grant {}, which is above them",
-                actor.role, role
-            )));
-        }
-
-        let granting: Vec<Permission> = Permission::for_role(role).into_iter().collect();
-        self.ensure_may_grant_permissions(actor_user_id, &granting)
-            .await
-            .map_err(|_| {
-                NetworkError::msg(format!(
-                    "Permission denied: {} cannot grant {}, which carries authority it does not hold",
-                    actor.role, role
-                ))
-            })
-    }
-
-    /// Refuse handing out a permission the actor does not itself hold.
-    ///
-    /// The role path was closed first, and `update_member_permissions` is the
-    /// same escalation through the other door: it was gated on
-    /// `is_admin_or_owner` and then wrote CALLER-SUPPLIED permissions straight
-    /// into the target's per-domain map, target possibly being the caller. So an
-    /// Owner could grant `Permission::All` — the Admin wildcard that
-    /// `check_entity_permission` honours before anything else — and with it the
-    /// `ConfigureSystem` that `for_role` deliberately withholds from Owner.
-    ///
-    /// Same rule as roles, since a role is only a bundle of these: grant what
-    /// you hold, never more. Admin holds `All` and `has_permission` honours it,
-    /// so an Admin may still grant anything.
-    async fn ensure_may_grant_permissions(
-        &self,
-        actor_user_id: &str,
-        granting: &[Permission],
-    ) -> Result<(), NetworkError> {
-        let actor = match self.backend_tx_manager.get_user(actor_user_id).await? {
-            Some(user) => user,
-            None => return Err(NetworkError::msg("Permission denied: unknown actor")),
-        };
-        let held = Permission::for_role(&actor.role);
-        if let Some(missing) = granting
-            .iter()
-            .find(|p| !Permission::has_permission(&held, p))
-        {
-            return Err(NetworkError::msg(format!(
-                "Permission denied: {} does not hold {missing:?} and cannot grant it",
-                actor.role
-            )));
-        }
-        Ok(())
-    }
-
-    /// Refuse acting ON someone whose authority the actor does not itself hold.
-    ///
-    /// `ensure_may_grant_role` closed one direction: you cannot hand out
-    /// authority you lack. This is the other, and it was open. Nothing anywhere
-    /// compared the actor against the target's CURRENT role, so the rule was
-    /// "you may not promote above yourself" with no matching "you may not
-    /// demote someone above you".
-    ///
-    /// `Permission::for_role(Banned)` is EMPTY, so the granting check passes
-    /// trivially for every actor: banning is granting nothing. An Owner holds 25
-    /// of the 27 permissions and lacks Admin's `All`, so an Owner could not
-    /// promote anyone to Admin — and could ban or demote an existing one. Three
-    /// paths reached it: `update_workspace_member_role`, `remove_user_from_domain`,
-    /// and `add_user_to_domain` with `role: Banned` at the workspace root.
-    ///
-    /// `ensure_not_last_admin` is not this guard. It refuses only the change
-    /// that empties the admin set; with two Admins present it permits either to
-    /// be removed by anyone who passed the entry gate.
-    ///
-    /// Same comparison as the granting side, pointed at the target's role, so
-    /// the two rules cannot drift: an Admin holds `All` and may act on anyone;
-    /// an actor may act on a peer of equal authority; nobody may act on someone
-    /// holding a permission they lack.
-    ///
-    /// Self-action is exempt. Demoting or removing YOURSELF hands nobody any
-    /// authority, and `ensure_not_last_admin` already refuses the one case that
-    /// matters — the workspace's last administrator standing down.
-    async fn ensure_may_act_on(
-        &self,
-        actor_user_id: &str,
-        target_user_id: &str,
-        action: &str,
-    ) -> Result<(), NetworkError> {
-        if actor_user_id == target_user_id {
-            return Ok(());
-        }
-        let target = match self.backend_tx_manager.get_user(target_user_id).await? {
-            Some(user) => user,
-            // Not a user yet. `add_user_to_domain` mints one, and there is no
-            // standing authority to protect.
-            None => return Ok(()),
-        };
-
-        // Only a MEMBER of this workspace holds authority in it.
-        //
-        // A `User` record can carry `UserRole::Owner` while belonging to no
-        // workspace at all -- roles live on the user, membership lives on the
-        // workspace -- and admitting such a person is not unseating anybody.
-        // Without this, an Admin could not `AddMember` anyone whose stored role
-        // outranked them, so a workspace could never admit its own Owner: the
-        // grant was permitted as a bootstrap and then refused one line later
-        // for acting on the very authority it was about to confer.
-        //
-        // Scoped to membership rather than skipped for AddMember, because
-        // AddMember at the root also WRITES the role: admitting a standing
-        // Owner as a Member is a demotion, and that must still be refused.
-        if !self
-            .is_member_of_domain(target_user_id, crate::WORKSPACE_ROOT_ID)
-            .await?
-        {
-            return Ok(());
-        }
-        let actor = match self.backend_tx_manager.get_user(actor_user_id).await? {
-            Some(user) => user,
-            None => return Err(NetworkError::msg("Permission denied: unknown actor")),
-        };
-
-        // Same ladder as the granting side, so the two rules cannot disagree:
-        // you may unseat someone you could have appointed.
-        if let (Some(mine), Some(theirs)) = (
-            actor.role.command_authority(),
-            target.role.command_authority(),
-        ) {
-            return if mine >= theirs {
-                Ok(())
-            } else {
-                Err(NetworkError::msg(format!(
-                    "Permission denied: {} cannot {action} {}, who is above them",
-                    actor.role, target.role
-                )))
-            };
-        }
-
-        let held = Permission::for_role(&actor.role);
-        if let Some(missing) = Permission::for_role(&target.role)
-            .into_iter()
-            .find(|p| !Permission::has_permission(&held, p))
-        {
-            return Err(NetworkError::msg(format!(
-                "Permission denied: {} cannot {action} {}, who holds {missing:?}",
-                actor.role, target.role
-            )));
-        }
-        Ok(())
-    }
-
-    /// Whether the workspace currently has nobody holding `role`.
-    ///
-    /// The same scan `ensure_not_last_admin` does, asked the other way round,
-    /// and used for one purpose only: letting an administrator fill a VACANT
-    /// seat above their own rank. See `ensure_may_grant_role`.
-    async fn workspace_has_no_member_holding(&self, role: &UserRole) -> Result<bool, NetworkError> {
-        let workspace = match self
-            .backend_tx_manager
-            .get_workspace(crate::WORKSPACE_ROOT_ID)
-            .await?
-        {
-            Some(ws) => ws,
-            // No workspace yet is as vacant as it gets.
-            None => return Ok(true),
-        };
-        for member_id in &workspace.members {
-            if let Some(member) = self.backend_tx_manager.get_user(member_id).await? {
-                if member.role == *role {
-                    return Ok(false);
-                }
-            }
-        }
-        Ok(true)
-    }
-
-    /// Refuse anything that would leave the workspace with nobody who can
-    /// administer it.
-    ///
-    /// Unrecoverable, because promotion itself requires that authority: there is
-    /// no way back from a workspace with none. The admin UI offers demote and
-    /// remove on the acting user's own row, which puts that state one click
-    /// away — and it is exactly the state that made the product read-only for
-    /// everyone before joining users were promoted.
-    ///
-    /// Counts Admin AND Owner, and fires for either as the target. It counted
-    /// only Admin, which was right while `update_workspace_member_role` was
-    /// gated on `is_admin`: an Owner could not promote, so an Owner was not an
-    /// escape from an empty admin set, and could not reach the demote path
-    /// either. Once the Owner gained that gate, the guard had to follow — an
-    /// Owner alone in a workspace with no Admin could demote themselves to
-    /// Member, and the guard would no-op because the target was not an Admin.
-    ///
-    /// A no-op when the target can administer nothing, so ordinary member
-    /// management is unaffected.
-    async fn ensure_not_last_admin(
-        &self,
-        target_user_id: &str,
-        action: &str,
-    ) -> Result<(), NetworkError> {
-        let target = match self.backend_tx_manager.get_user(target_user_id).await? {
-            Some(user) => user,
-            None => return Ok(()),
-        };
-        if !matches!(target.role, UserRole::Admin | UserRole::Owner) {
-            return Ok(());
-        }
-
-        let workspace = match self
-            .backend_tx_manager
-            .get_workspace(crate::WORKSPACE_ROOT_ID)
-            .await?
-        {
-            Some(ws) => ws,
-            None => return Ok(()),
-        };
-
-        let mut administrators = 0usize;
-        for member_id in &workspace.members {
-            if let Some(member) = self.backend_tx_manager.get_user(member_id).await? {
-                if matches!(member.role, UserRole::Admin | UserRole::Owner) {
-                    administrators += 1;
-                }
-            }
-        }
-
-        if administrators <= 1 {
-            return Err(NetworkError::msg(format!(
-                "Cannot {action} the only administrator. Promote another member to Admin or Owner \
-                 first — otherwise nobody could manage the workspace, and the change cannot be \
-                 undone."
-            )));
-        }
-        Ok(())
-    }
-
-    /// Set a user's role, refusing any write that would empty the admin set.
-    ///
-    /// The lock is taken HERE rather than at the call sites, because it is the
-    /// check and the write TOGETHER that have to be atomic, and leaving that to
-    /// each caller is what produced the bug twice. `update_workspace_member_role`
-    /// took no lock at all; `add_user_to_domain` took one, but scoped to its
-    /// workspace-root branch, so it had already been dropped by the time the
-    /// demote check ran. Two admins demoting each other both counted two, both
-    /// passed, and both wrote — leaving zero admins, which
-    /// `ensure_not_last_admin` documents as unrecoverable, since promotion
-    /// requires an admin.
-    ///
-    /// `create_if_missing` is the only real difference between the two callers:
-    /// adding a member may invent the user record, changing a role may not.
-    async fn write_user_role(
-        &self,
-        user_id: &str,
-        role: UserRole,
-        domain_id: &str,
-        create_if_missing: bool,
-    ) -> Result<(), NetworkError> {
-        let _workspace_guard = self.backend_tx_manager.lock_workspaces().await;
-        self.write_user_role_locked(user_id, role, domain_id, create_if_missing)
-            .await
-    }
-
-    /// The body of `write_user_role`, for a caller that ALREADY holds
-    /// `lock_workspaces`.
-    ///
-    /// `add_user_to_domain` needs the membership write and the role write to be
-    /// one atomic step. It used to take the lock for the first, drop it, and let
-    /// `write_user_role` take it again for the second — so a removal landing in
-    /// the gap produced a non-member holding an administrative role, which
-    /// `is_admin` honours (it reads the global role and never consults
-    /// membership) while `ensure_not_last_admin` cannot see (it counts admins
-    /// among `workspace.members`). A ghost admin, from two correct operations
-    /// interleaving.
-    ///
-    /// Split rather than made reentrant because `tokio::sync::Mutex` is not:
-    /// calling `write_user_role` while holding the guard would deadlock, which
-    /// is exactly the trap a caller reaching for atomicity would fall into.
-    async fn write_user_role_locked(
-        &self,
-        user_id: &str,
-        role: UserRole,
-        domain_id: &str,
-        create_if_missing: bool,
-    ) -> Result<(), NetworkError> {
-        // `user.role` is the WORKSPACE role — the one field `is_admin` reads — so only a
-        // change AT THE ROOT may touch it.
-        //
-        // This wrote it whatever domain it was given, so `AddMember { user_id: A, domain_id:
-        // <a room>, role: Guest }` did not grant A a guest's rights in that room: it made A a
-        // Guest everywhere. The gate above does not catch that. `ensure_may_grant_role`
-        // refuses only roles ABOVE the actor's own, so an Owner adding an Admin to a room as a
-        // Guest passes it, and `ensure_not_last_admin` passes while a second admin exists.
-        // Two admins, and either could silently strip the other.
-        let scopes_workspace_role: bool = domain_id == crate::WORKSPACE_ROOT_ID;
-
-        // Only a real demotion needs the last-admin guard. Adding the last admin to a room as
-        // a guest is not one, and refusing it as "cannot demote the last admin" would be a
-        // refusal nobody could act on.
-        if scopes_workspace_role && role != UserRole::Admin {
-            self.ensure_not_last_admin(user_id, "demote").await?;
-        }
-
-        let (mut user, is_new) = match self.backend_tx_manager.get_user(user_id).await? {
-            Some(u) => (u, false),
-            None if create_if_missing => (
-                // An account that does not exist yet has no workspace role to preserve, so the
-                // role it is created with is the one it was given.
-                User::new(user_id.to_string(), user_id.to_string(), role.clone()),
-                true,
-            ),
-            None => return Err(NetworkError::msg("User not found")),
-        };
-
-        if scopes_workspace_role || is_new {
-            user.role = role.clone();
-            user.set_role_permissions(domain_id);
-        } else {
-            // Per-node grant only: what this role may do IN THIS DOMAIN. Written directly
-            // rather than through `set_role_permissions`, which derives from `user.role` and
-            // would hand out the workspace role's permissions instead of the one granted.
-            user.permissions
-                .insert(domain_id.to_string(), Permission::for_role(&role));
-        }
-
-        // A role that grants nothing must grant nothing ANYWHERE.
-        //
-        // `set_role_permissions` writes exactly one key, so banning a member
-        // rewrote `permissions[WORKSPACE_ROOT_ID]` and left every per-node grant
-        // standing. `add_user_to_domain` writes one of those for each office or
-        // room the member is added to, and `check_entity_permission` honours a
-        // direct grant BEFORE it consults role or membership — so a banned
-        // account kept `ViewContent` and `SendMessages` in every room it had
-        // been added to, and could still read the roster and post in the chat.
-        //
-        // The node readers refused the same account, because
-        // `ensure_may_view_workspace` asks at the root. Two gates added in one
-        // round, disagreeing about one user.
-        //
-        // Scoped to roles whose permission set is empty — Banned, today — rather
-        // than recomputing every domain on every role change: a per-domain grant
-        // can also be set deliberately by `update_member_permissions`, and a
-        // promotion must not silently overwrite one. Revoking everything is what
-        // a ban means; redistributing everything is not what a promotion means.
-        if Permission::for_role(&user.role).is_empty() {
-            user.permissions.clear();
-        }
-
-        self.backend_tx_manager
-            .insert_user(user_id.to_string(), user)
-            .await?;
-        Ok(())
-    }
-
     /// Create a new AsyncDomainServerOperations instance
     pub fn new(
         backend_tx_manager: Arc<BackendTransactionManager<R>>,
@@ -501,14 +55,6 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainOperations<R>
     async fn init(&self) -> Result<(), NetworkError> {
         // Initialize the backend transaction manager
         self.backend_tx_manager.init().await
-    }
-
-    async fn is_admin(&self, user_id: &str) -> Result<bool, NetworkError> {
-        // Check if user exists and has admin role
-        match self.backend_tx_manager.get_user(user_id).await? {
-            Some(user) => Ok(user.role == UserRole::Admin),
-            None => Ok(false),
-        }
     }
 
     async fn get_user(&self, user_id: &str) -> Result<Option<User>, NetworkError> {
@@ -561,16 +107,17 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
         entity_id: &str,
         permission: Permission,
     ) -> Result<bool, NetworkError> {
-        // Check if user is admin first
-        if self.is_admin(user_id).await? {
-            return Ok(true);
-        }
-
-        // Get user from backend
+        // There is no administrator short-circuit. An Admin passes because the admin role holds
+        // the `All` wildcard, inside the workspace whose role it is; the short-circuit that was
+        // here read a global enum, so it also passed in workspaces the Admin did not belong to.
         let user = match self.backend_tx_manager.get_user(user_id).await? {
             Some(u) => u,
             None => return Ok(false),
         };
+        // A standing, not a role: a banned account holds nothing anywhere.
+        if user.is_banned() {
+            return Ok(false);
+        }
 
         // Check direct permission for this entity
         if let Some(perms) = user.permissions.get(entity_id) {
@@ -614,30 +161,23 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncPermissionOperations<R>
             }
         }
 
-        // Membership in a domain confers the permissions of the user's ROLE.
+        // Membership in a domain confers the permissions of the user's ROLE in the workspace
+        // the domain belongs to.
         //
-        // This used to confer exactly one, ViewContent, and consult the role
-        // for nothing. So a plain member of a workspace could read an office
-        // and never post to it: `Permission::for_role` grants Member
-        // SendMessages and ReadMessages, three separate role tables in this
-        // repo say the same, and enforcement read none of them. Three
-        // integration specs failed on it -- office chat, room chat and
-        // touch-controls -- each with the composer replaced by "You do not
-        // have permission to send messages here", which is how an unasked
-        // question reads on screen.
-        //
-        // Scoped to membership deliberately: `user.role` is global, so
-        // granting on it alone would let a member of one workspace act in
-        // another. It widens nothing beyond the role's own set, so a Guest
-        // still gets ViewContent and a Banned user still gets nothing -- the
-        // previous behaviour granted ViewContent to a banned member.
-        if Permission::for_role(&user.role).contains(&permission)
-            && self.is_member_of_domain(user_id, entity_id).await?
-        {
-            return Ok(true);
+        // Membership once conferred exactly one permission, ViewContent, and consulted the
+        // role for nothing, so a plain member could read an office and never post to it.
+        // Scoped to membership of THIS domain, which a member of the workspace has throughout
+        // it, and to that workspace's table: a role in one workspace confers nothing in another.
+        let Some(workspace_id) = self.workspace_of(entity_id, &nodes).await? else {
+            return Ok(false);
+        };
+        if !self.is_member_of_domain(user_id, entity_id).await? {
+            return Ok(false);
         }
-
-        Ok(false)
+        Ok(self
+            .role_in_table(&workspace_id, &user)
+            .await?
+            .is_some_and(|role| role.grants(permission)))
     }
 
     async fn is_member_of_domain(
@@ -704,22 +244,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         admin_id: &str,
         user_id_to_add: &str,
         domain_id: &str,
-        role: UserRole,
+        role: MemberRole,
     ) -> Result<(), NetworkError> {
-        // Asked as the permission, not as the role.
-        //
-        // `GetUserPermissions` reports what `Permission::for_role` grants, and
-        // an Owner is granted everything except `All` and `ConfigureSystem` --
-        // AddUsers included. This gate asked `is_admin`, so the permission editor
-        // displayed a grant that enforcement then refused, and any client that
-        // gated its controls on the reported set (which that endpoint's own doc
-        // invites) would ship dead buttons.
-        //
-        // `check_entity_permission` returns true for admins first, so this is a
-        // widening only to holders of AddUsers: Owner, and Custom roles above the
-        // editor rank. Member, Guest and Banned have it in no role table, and
-        // it is scoped by `is_member_of_domain`, so an Owner of one workspace
-        // gains nothing in another.
+        // Asked as the permission, not as the role, so the gate is what
+        // `GetUserPermissions` reports: any role holding AddUsers, within the
+        // workspace whose role it is.
         if !self
             .check_entity_permission(admin_id, domain_id, Permission::AddUsers)
             .await?
@@ -745,7 +274,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
 
         // AddUsers says they may add somebody; it says nothing about the role
         // they may hand out, and `user_id_to_add` may be the caller.
-        self.ensure_may_grant_role(admin_id, &role).await?;
+        let assignment = self.resolve_assignment(&role).await?;
+        self.ensure_may_grant_role(admin_id, &assignment).await?;
 
         // `AddMember` is also a role WRITE at the workspace root, so it is the
         // third door to the same demotion: `role: Banned` on a standing Admin
@@ -761,11 +291,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         // reads the workspace whole and writes it back, so without it those
         // fixes only exclude each other. But it was scoped to that branch, and
         // `write_user_role` then took the lock again for the role. A removal
-        // landing between the two left a non-member holding an administrative
-        // role: `is_admin` honours it (it reads the global role and never
-        // consults membership) while `ensure_not_last_admin` cannot see it (it
-        // counts admins among `workspace.members`). A ghost admin, produced by
-        // two correct operations interleaving.
+        // landing between the two left a non-member holding a role, which the
+        // guard that counts managers among `workspace.members` cannot see.
         //
         // Taken here rather than in the branch so the non-root path gets the
         // same atomicity — it writes a role too.
@@ -822,7 +349,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         // membership write above — `_locked`, because `tokio::sync::Mutex` is
         // not reentrant and `write_user_role` would deadlock on the guard we are
         // still holding.
-        self.write_user_role_locked(user_id_to_add, role, domain_id, true)
+        self.write_user_role_locked(user_id_to_add, &assignment, domain_id, true)
             .await?;
 
         Ok(())
@@ -834,20 +361,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         user_id_to_remove: &str,
         domain_id: &str,
     ) -> Result<(), NetworkError> {
-        // Asked as the permission, not as the role.
-        //
-        // `GetUserPermissions` reports what `Permission::for_role` grants, and
-        // an Owner is granted everything except `All` and `ConfigureSystem` --
-        // RemoveUsers included. This gate asked `is_admin`, so the permission editor
-        // displayed a grant that enforcement then refused, and any client that
-        // gated its controls on the reported set (which that endpoint's own doc
-        // invites) would ship dead buttons.
-        //
-        // `check_entity_permission` returns true for admins first, so this is a
-        // widening only to holders of RemoveUsers: Owner, and Custom roles above the
-        // editor rank. Member, Guest and Banned have it in no role table, and
-        // it is scoped by `is_member_of_domain`, so an Owner of one workspace
-        // gains nothing in another.
+        // Asked as the permission, not as the role, so the gate is what
+        // `GetUserPermissions` reports: any role holding RemoveUsers.
         if !self
             .check_entity_permission(admin_id, domain_id, Permission::RemoveUsers)
             .await?
@@ -861,8 +376,8 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         // in, so it is checked before the branch that selects one.
         //
         // This call sat inside the root branch only, so every office and room
-        // went through `RemoveUsers` alone. A Custom role at editor rank grants
-        // that, so its holder could remove the Owner from any office or room,
+        // went through `RemoveUsers` alone. Any role may be given that, so its
+        // holder could remove the Owner from any office or room,
         // while the identical request against the workspace root refused with
         // "cannot remove ..., who is above them". `add_user_to_domain` already
         // does it this way, and its own comment says why -- "taken here rather
@@ -887,13 +402,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         let mut listed_here = true;
         // If this is the workspace root, use the workspace storage
         if domain_id == crate::WORKSPACE_ROOT_ID {
-            // BEFORE the last-admin check, not after.
+            // BEFORE the managers check, not after.
             //
-            // `ensure_not_last_admin` counts admins and returns; the write
-            // happens separately. Two admins removing each other both counted
-            // 2, both passed, and both writes landed — leaving ZERO admins,
-            // which the check's own doc calls unrecoverable: "promotion
-            // requires an admin, so there is no way back".
+            // `ensure_managers_remain` counts and returns; the write happens
+            // separately. Two managers removing each other both counted 2, both
+            // passed, and both writes landed — leaving nobody able to assign a
+            // role, which is unrecoverable.
             //
             // Holding the lock across check AND write is what makes the guard
             // mean anything. It also covers the workspace read-modify-write
@@ -907,7 +421,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
             self.ensure_may_act_on(admin_id, user_id_to_remove, "remove")
                 .await?;
 
-            self.ensure_not_last_admin(user_id_to_remove, "remove")
+            self.ensure_managers_remain(user_id_to_remove, None, "remove")
                 .await?;
 
             let mut workspace = match self.backend_tx_manager.get_workspace(domain_id).await? {
@@ -937,72 +451,27 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
                 )
                 .await?;
 
-            // Drop the role as well as the membership, or the removed user is a
-            // "ghost admin": `is_admin` reads the GLOBAL `user.role` and never
-            // consults the member list, so a removed administrator keeps passing
-            // every permission gate — while ensure_not_last_admin, which counts
-            // admins among `workspace.members`, can no longer see them. Two
-            // admins could then remove each other down to zero and the next
-            // account to register would be promoted as "first member".
+            // Ban, as well as unlist, EVERY removed user.
             //
-            // Owner as well as Admin. `is_admin_or_owner` gates
-            // `update_workspace_member_role`, `update_member_permissions` and
-            // UpdateTreeSchema, and reads the same global `user.role` — so
-            // removing an Owner demoted nothing and revoked nothing, while
-            // removing an Admin (the case this block was written for) did. The
-            // comment above says a removed administrator must lose the role;
-            // "administrator" grew to include Owner and this did not follow.
-            //
-            // `Banned`, and for EVERY removed user, not only administrators.
-            //
-            // Demoting to Member recorded nothing: the connect handler enrols
+            // Unlisting alone recorded nothing: the connect handler enrols
             // anyone missing from `workspace.members`, and could not tell
-            // "never joined" from "removed". So a removed account reconnected
-            // -- which it does by itself -- and added itself straight back as
-            // a Member. Removal lasted until the next reconnect and nothing
-            // said so. Only administrators were touched here at all, so an
-            // ordinary member's removal left no trace whatsoever.
+            // "never joined" from "removed", so a removed account reconnected
+            // -- which it does by itself -- and added itself straight back.
+            // Re-admission is `AddMember`, which assigns an explicit role.
             //
-            // `Banned` grants no permissions and ranks 0, and it was a role
-            // the code defined but never assigned. Re-admission is `AddMember`,
-            // which writes an explicit role and clears it.
+            // `assign_workspace_role` with Banned also drops the role and clears
+            // every grant, not only the root one: a direct grant is honoured
+            // before the role, so a member added to room R and then removed
+            // would otherwise go on reading and posting in R.
+            //
+            // Not through `write_user_role_locked`: that re-runs the managers
+            // guard, and the membership write above has already removed this
+            // account, so the count differs and the removal would be refused.
             if let Some(mut removed) = self.backend_tx_manager.get_user(user_id_to_remove).await? {
-                //
-                // Through `write_user_role_locked`, not by hand.
-                //
-                // `set_role_permissions` writes exactly ONE key, so setting the
-                // role here and stopping left every per-node grant in place --
-                // and `check_entity_permission` honours a direct grant BEFORE
-                // it consults role or membership. A member added to room R and
-                // then removed from the workspace went on reading and posting
-                // in R, and receiving R's group broadcasts, while ListNodes
-                // refused them.
-                //
-                // That function already does the right thing twenty lines up:
-                // "Revoking everything is what a ban means", clearing every key
-                // when the role grants nothing. Banned grants nothing, so this
-                // is exactly the case it was written for.
-                removed.role = UserRole::Banned;
-                removed.set_role_permissions(crate::WORKSPACE_ROOT_ID);
-                // Every key, not just the root one.
-                //
-                // `set_role_permissions` writes exactly ONE key, so setting the
-                // role and stopping left every per-node grant in place -- and
-                // `check_entity_permission` honours a direct grant BEFORE it
-                // consults role or membership. A member added to room R and then
-                // removed from the workspace went on reading and posting in R,
-                // and receiving R's group broadcasts, while ListNodes refused
-                // them.
-                //
-                // `write_user_role_locked` already does this twenty lines up --
-                // "Revoking everything is what a ban means" -- but it cannot be
-                // reused here: it re-runs `ensure_not_last_admin`, and by this
-                // point the membership write above has already removed this
-                // account, so the count differs and removing an administrator
-                // is refused.
-                if Permission::for_role(&removed.role).is_empty() {
-                    removed.permissions.clear();
-                }
+                super::role_writes::assign_workspace_role(
+                    &mut removed,
+                    &super::role_authority::Assignment::Banned,
+                );
                 self.backend_tx_manager
                     .insert_user(user_id_to_remove.to_string(), removed)
                     .await?;
@@ -1065,30 +534,32 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         &self,
         actor_user_id: &str,
         target_user_id: &str,
-        role: UserRole,
+        role: MemberRole,
         metadata: Option<Vec<u8>>,
     ) -> Result<(), NetworkError> {
-        // Owner too: see `is_admin_or_owner`. Gated on `is_admin` alone, the
-        // workspace Owner could not change any member's role in their own
-        // workspace, while the permission editor showed them holding the grant.
-        if !self.is_admin_or_owner(actor_user_id).await? {
+        // Assigning roles is role management: ManageRoles, which the Owner and
+        // the admin role hold, and which an admin may give a role below theirs.
+        if !self
+            .holds_workspace_permission(actor_user_id, Permission::ManageRoles)
+            .await?
+        {
             return Err(NetworkError::msg(
-                "Permission denied: only an admin or the owner can update member roles",
+                "Permission denied: ManageRoles is required to change a member's role",
             ));
         }
 
-        // Same reach as `add_user_to_domain`: an Owner admitted by the gate
-        // above could otherwise grant Admin, which carries the ConfigureSystem
-        // an Owner is deliberately not granted.
-        self.ensure_may_grant_role(actor_user_id, &role).await?;
+        // The gate says they may assign roles; this says which.
+        let assignment = self.resolve_assignment(&role).await?;
+        self.ensure_may_grant_role(actor_user_id, &assignment)
+            .await?;
 
         // And the other direction: what the target currently holds.
         self.ensure_may_act_on(actor_user_id, target_user_id, "change the role of")
             .await?;
 
-        // See `write_user_role` — the lock, the last-admin check and the write
+        // See `write_user_role` — the lock, the managers check and the write
         // are one unit, and this was the writer that never took the lock.
-        self.write_user_role(target_user_id, role, crate::WORKSPACE_ROOT_ID, false)
+        self.write_user_role(target_user_id, &assignment, crate::WORKSPACE_ROOT_ID, false)
             .await?;
 
         // Handle metadata if provided
@@ -1107,10 +578,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         permissions: Vec<Permission>,
         operation: UpdateOperation,
     ) -> Result<(), NetworkError> {
-        // Owner too, as for `update_workspace_member_role`.
-        if !self.is_admin_or_owner(actor_user_id).await? {
+        // A member's grants are role management too, as for
+        // `update_workspace_member_role`.
+        if !self
+            .holds_workspace_permission(actor_user_id, Permission::ManageRoles)
+            .await?
+        {
             return Err(NetworkError::msg(
-                "Permission denied: only an admin or the owner can manage permissions",
+                "Permission denied: ManageRoles is required to change a member's permissions",
             ));
         }
 
@@ -1124,13 +599,13 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncUserManagementOperations<R>
         // And the other direction, which was open here alone. The three doors
         // `no_one_unseats_a_role_above_their_own` closed all write a ROLE;
         // this one writes the permission map, and the entry gate above admits
-        // any Admin. So an Admin could not demote or ban the Owner, and could
+        // any role with ManageRoles. So an Admin could not demote or ban the Owner, and could
         // `Set` the Owner's grants to nothing -- Remove is not even contained
         // by the granting check, because taking away grants nothing.
         //
         // The role's own permissions survive a stripped map (see
-        // `check_entity_permission`, which falls through to
-        // `Permission::for_role` for a member of the domain), so this does not
+        // `check_entity_permission`, which falls through to the member's role
+        // in the workspace), so this does not
         // strand the Owner in the root workspace. What it does take is every
         // EXPLICIT grant -- including access to a node the Owner holds by grant
         // rather than by membership, and any `Permission::All` written there.
@@ -1460,37 +935,36 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
 
         let mut user = match self.backend_tx_manager.get_user(user_id).await? {
             Some(u) => u,
-            None => User {
-                id: String::from(user_id),
-                name: String::from(user_id),
-                // Only the bootstrap branch below promotes; an unknown account
-                // cannot reach the other one, because `check_entity_permission`
-                // returns false for a user that does not exist.
-                role: UserRole::Member,
-                permissions: Default::default(),
-                metadata: Default::default(),
-            },
+            // Only the bootstrap branch below assigns a root role; an unknown
+            // account cannot reach the other one, because
+            // `check_entity_permission` returns false for a user that does not
+            // exist.
+            None => User::new(
+                String::from(user_id),
+                String::from(user_id),
+                UserRole::Member,
+            ),
         };
 
         if root_exists {
-            // An ADDITIONAL workspace: full authority over the thing just
-            // created, and nothing anywhere else.
+            // An ADDITIONAL workspace: its Owner, and nothing anywhere else.
             //
-            // `user.role` is a single global field — `is_admin` reads it and
-            // never asks which workspace — so setting it to Admin here made the
-            // creator an administrator of the ROOT workspace too. An Owner holds
-            // `CreateWorkspace`, so an Owner with the master password could
-            // create a throwaway workspace and come back a global Admin,
-            // carrying the `ConfigureSystem` that `for_role` withholds from
-            // Owner. That is the escalation the role and permission doors were
-            // closed against, arriving through a third one.
-            user.permissions
-                .insert(workspace_id.clone(), Permission::for_role(&UserRole::Admin));
+            // A role belongs to one workspace's table, so this confers nothing
+            // in the root. The old global role did: making the creator an Admin
+            // here made them an Admin of the root too, so an Owner with the
+            // master password could create a throwaway workspace and come back
+            // holding `All`.
+            user.workspace_roles
+                .insert(workspace_id.clone(), OWNER_ROLE_ID.to_string());
         } else {
             // Bootstrap: there was no workspace until now, so this account IS
-            // the administrator, globally and by definition.
-            user.role = UserRole::Admin;
-            user.set_role_permissions(&workspace_id);
+            // the Owner, by definition. Owner rather than Admin because nobody
+            // assigns a role at or above their own: an Admin alone could never
+            // appoint another, while the Owner is above the ladder.
+            super::role_writes::assign_workspace_role(
+                &mut user,
+                &super::role_authority::Assignment::Role(owner_role()),
+            );
         }
 
         self.backend_tx_manager
@@ -1523,7 +997,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         // Owner as well as admin, because a workspace's owner is not
         // necessarily a global admin and deleting their own workspace is the
         // ordinary case.
-        let is_admin = self.is_admin(user_id).await.unwrap_or(false);
+        // DeleteWorkspace across the root workspace: what the global Admin
+        // check meant, asked as the permission, so the Owner and any role given
+        // it qualify.
+        let is_admin = self
+            .holds_workspace_permission(user_id, Permission::DeleteWorkspace)
+            .await?;
         let is_owner = self
             .backend_tx_manager
             .get_workspace(workspace_id)
@@ -1608,19 +1087,28 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         // modified and written back across awaits needs the lock every other
         // user writer takes, or two updates each apply to their own copy and the
         // second write silently discards the first.
+        //
+        // The role a member held there goes the same way: it names a table that
+        // no longer exists.
         let users = self.backend_tx_manager.get_all_users().await?;
         let holders: Vec<String> = users
             .iter()
-            .filter(|(_, user)| user.permissions.contains_key(workspace_id))
+            .filter(|(_, user)| {
+                user.permissions.contains_key(workspace_id)
+                    || user.workspace_roles.contains_key(workspace_id)
+            })
             .map(|(id, _)| id.clone())
             .collect();
         for holder in holders {
             if let Some(mut user) = self.backend_tx_manager.get_user(&holder).await? {
-                if user.permissions.remove(workspace_id).is_some() {
+                let granted = user.permissions.remove(workspace_id).is_some();
+                let held = user.workspace_roles.remove(workspace_id).is_some();
+                if granted || held {
                     self.backend_tx_manager.insert_user(holder, user).await?;
                 }
             }
         }
+        self.backend_tx_manager.delete_roles(workspace_id).await?;
 
         Ok(())
     }
@@ -1674,7 +1162,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         // its own comment; this was its unguarded twin.
         let is_bootstrap = workspace.owner_id.is_empty();
         if !is_bootstrap {
-            let is_admin = self.is_admin(user_id).await.unwrap_or(false);
+            // UpdateWorkspace across the root workspace, as `delete_workspace`
+            // asks DeleteWorkspace.
+            let is_admin = self
+                .holds_workspace_permission(user_id, Permission::UpdateWorkspace)
+                .await?;
             let is_owner = workspace.owner_id == user_id;
             if !is_admin && !is_owner {
                 return Err(NetworkError::msg(
@@ -1757,39 +1249,36 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
             .insert_domain(workspace_id.to_string(), domain)
             .await?;
 
-        // Granting Admin is part of claiming an unowned workspace, and only that.
+        // Becoming the Owner is part of claiming an unowned workspace, and only
+        // that.
         //
         // It has to happen here rather than through add_user_to_domain, because
-        // during initialisation there is no admin yet to authorise it. That is
+        // during initialisation there is nobody yet to authorise it. That is
         // precisely why it must not run afterwards: once the workspace has an
-        // owner, this write would hand Admin to anyone who presented the shared
-        // master password. Renaming a workspace is not a reason to change
-        // anybody's role, so a later owner/admin edit leaves roles untouched.
+        // owner, this write would hand the seat to anyone who presented the
+        // shared master password. Renaming a workspace is not a reason to change
+        // anybody's role, so a later edit leaves roles untouched.
+        //
+        // Owner, not Admin, for the reason `create_workspace` gives: an Admin
+        // alone could never appoint a second, since nobody assigns their own
+        // position.
         if !is_bootstrap {
             return Ok(workspace);
         }
 
-        // We need to directly update the user's role since add_user_to_domain requires admin permissions
-        // but there might not be any admins yet during workspace initialization
         let mut user = match self.backend_tx_manager.get_user(user_id).await? {
             Some(u) => u,
-            None => {
-                // Create user if doesn't exist (shouldn't happen but handle it)
-                User {
-                    id: user_id.to_string(),
-                    name: user_id.to_string(),
-                    role: UserRole::Admin,
-                    permissions: Default::default(),
-                    metadata: Default::default(),
-                }
-            }
+            None => User::new(user_id.to_string(), user_id.to_string(), UserRole::Member),
         };
-
-        // Set user role to Admin
-        user.role = UserRole::Admin;
-
-        // Set permissions for this workspace using the role
-        user.set_role_permissions(workspace_id);
+        if workspace_id == crate::WORKSPACE_ROOT_ID {
+            super::role_writes::assign_workspace_role(
+                &mut user,
+                &super::role_authority::Assignment::Role(owner_role()),
+            );
+        } else {
+            user.workspace_roles
+                .insert(workspace_id.to_string(), OWNER_ROLE_ID.to_string());
+        }
 
         // Save updated user
         self.backend_tx_manager
@@ -1935,7 +1424,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceOperations<R>
         user_id: &str,
         workspace_id: &str,
         member_id: &str,
-        role: UserRole,
+        role: MemberRole,
     ) -> Result<(), NetworkError> {
         // Delegate to add_user_to_domain
         self.add_user_to_domain(user_id, member_id, workspace_id, role)

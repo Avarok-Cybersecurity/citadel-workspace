@@ -19,6 +19,24 @@ type Kernel = citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorksp
     citadel_sdk::prelude::MonoRatchet,
 >;
 
+/// Every workspace this user's record names: a grant there, or a role there. A deleted
+/// workspace must leave neither behind.
+async fn entries_of(kernel: &Kernel, id: &str) -> HashMap<String, Vec<String>> {
+    let mut entries = permissions_of(kernel, id).await;
+    let roles = kernel
+        .domain_operations
+        .backend_tx_manager
+        .get_user(id)
+        .await
+        .expect("read user")
+        .map(|u| u.workspace_roles)
+        .unwrap_or_default();
+    for (workspace_id, role_id) in roles {
+        entries.entry(workspace_id).or_default().push(role_id);
+    }
+    entries
+}
+
 async fn permissions_of(kernel: &Kernel, id: &str) -> HashMap<String, Vec<String>> {
     kernel
         .domain_operations
@@ -69,6 +87,7 @@ async fn seed_member_with_permissions(kernel: &Kernel, workspace_id: &str) {
                 id: MEMBER.to_string(),
                 name: MEMBER.to_string(),
                 role: UserRole::Member,
+                workspace_roles: Default::default(),
                 permissions,
                 metadata: Default::default(),
             },
@@ -86,7 +105,7 @@ async fn deleting_a_workspace_clears_every_members_permission_entry() {
     // Positive control: without this the assertions below would pass against a
     // workspace nobody ever held permissions for.
     assert!(
-        permissions_of(&kernel, TEST_ADMIN_USER_ID)
+        entries_of(&kernel, TEST_ADMIN_USER_ID)
             .await
             .contains_key(&id),
         "create_workspace should have granted the creator an entry",
@@ -112,7 +131,7 @@ async fn deleting_a_workspace_clears_every_members_permission_entry() {
     );
 
     assert!(
-        !permissions_of(&kernel, TEST_ADMIN_USER_ID)
+        !entries_of(&kernel, TEST_ADMIN_USER_ID)
             .await
             .contains_key(&id),
         "the creator kept a permissions entry for a workspace that no longer exists",
@@ -145,7 +164,7 @@ async fn deleting_one_workspace_leaves_another_workspaces_permissions_alone() {
         "the delete itself must succeed; got {response:?}"
     );
 
-    let perms = permissions_of(&kernel, TEST_ADMIN_USER_ID).await;
+    let perms = entries_of(&kernel, TEST_ADMIN_USER_ID).await;
     assert!(
         !perms.contains_key(&doomed),
         "the deleted workspace's entry survived"

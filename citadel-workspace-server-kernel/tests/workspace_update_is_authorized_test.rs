@@ -37,6 +37,7 @@ async fn add_member(kernel: &Kernel, id: &str) {
                 id: id.to_string(),
                 name: id.to_string(),
                 role: UserRole::Member,
+                workspace_roles: Default::default(),
                 permissions: HashMap::new(),
                 metadata: Default::default(),
             },
@@ -180,10 +181,24 @@ async fn the_first_claim_of_an_unowned_workspace_still_works() {
         "claiming an unowned workspace with the master password is the \
          documented bootstrap; got {response:?}"
     );
+    let claimant = kernel
+        .domain_operations
+        .backend_tx_manager
+        .get_user(OUTSIDER)
+        .await
+        .expect("read user")
+        .expect("user exists");
+    assert_eq!(
+        claimant.role_id_in(&unowned),
+        Some(citadel_workspace_types::roles::OWNER_ROLE_ID),
+        "the claimant becomes the Owner of what they claimed",
+    );
+    // And of nothing else. The claim wrote the old global enum, so claiming any unowned
+    // workspace made the claimant an Admin of the root as well.
     assert_eq!(
         role_of(&kernel, OUTSIDER).await,
-        UserRole::Admin,
-        "the claimant becomes the first admin",
+        UserRole::Member,
+        "claiming one workspace changed the claimant's standing in the root",
     );
 }
 
