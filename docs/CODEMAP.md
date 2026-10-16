@@ -45,7 +45,7 @@
 
 | Feature | Component(s) | Notes |
 |---|---|---|
-| Sidebar — Hierarchy tree | `HierarchySidebar` → `TreeNodesSection` → `TreeNodeItem` | Schema-driven Office/Room tree with expand/collapse |
+| Sidebar — Hierarchy tree | `HierarchySidebar` → `TreeNodesSection` → `FocusedTree` | Focused tree: ancestor stack, the selection with its peers, its children; peek and filter |
 | Sidebar — Members | `MembersSection` → `MemberListItems` + `MembersSectionModals` | List workspace members, invite, view roles |
 | Sidebar — Files | `FilesSection` → `FilePreviewDialog` | Quick file access from sidebar |
 | Sidebar — Admin | `AdminSettingsSection` | Admin-only section |

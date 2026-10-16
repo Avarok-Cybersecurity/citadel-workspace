@@ -5,6 +5,7 @@
 /// cleanly and fails at runtime.
 pub mod dependency_agreement;
 pub mod ice;
+pub mod messaging_trust;
 pub mod sign_in;
 pub mod structs;
 /// The build script's submodule-freshness rule, here so it can be tested.
@@ -15,6 +16,9 @@ pub mod structs;
 pub mod submodule_freshness;
 pub mod telemetry;
 pub mod terms;
+
+/// The id of the workspace every tree hangs from; the kernel and the UI read it from here.
+pub const WORKSPACE_ROOT_ID: &str = "workspace-root";
 
 use custom_debug::Debug;
 use ice::IceServer;
@@ -411,6 +415,9 @@ pub enum WorkspaceProtocolRequest {
 
     /// Terms, consent and the Telemetry Service; see `telemetry`.
     Telemetry(telemetry::TelemetryRequest),
+
+    /// Who connects without asking; see `messaging_trust`.
+    MessagingTrust(messaging_trust::MessagingTrustRequest),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -604,6 +611,8 @@ pub enum WorkspaceProtocolResponse {
     },
 
     Telemetry(telemetry::TelemetryResponse),
+
+    MessagingTrust(messaging_trust::MessagingTrustResponse),
 }
 
 /// Type of group message

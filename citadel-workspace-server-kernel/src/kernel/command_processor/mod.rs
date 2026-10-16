@@ -43,10 +43,13 @@ mod workspace_profile;
 pub mod workspace_logo;
 
 /// The one read-modify-write for a stored workspace record.
-mod workspace_record;
+pub(crate) mod workspace_record;
 
 /// "Members can see each other": SetMembersVisible, and the rule ListMembers reads.
 mod members_visibility;
 
 /// Terms, consent and the Telemetry Service.
 mod telemetry;
+
+/// Who connects without asking: the workspace's policy, a member's own, and the check.
+mod messaging_trust;

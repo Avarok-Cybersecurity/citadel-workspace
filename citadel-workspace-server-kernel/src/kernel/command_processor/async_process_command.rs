@@ -1273,6 +1273,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             super::telemetry::process(kernel, actor_user_id, request).await
         }
 
+        WorkspaceProtocolRequest::MessagingTrust(request) => {
+            super::messaging_trust::process(kernel, actor_user_id, requester_cid, request).await
+        }
+
         WorkspaceProtocolRequest::DeleteNode { node_id, cascade } => {
             use crate::handlers::domain::node_ops::AsyncNodeOperations;
             match kernel

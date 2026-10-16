@@ -15,7 +15,7 @@ pub mod handlers;
 pub mod kernel;
 mod platform;
 
-pub const WORKSPACE_ROOT_ID: &str = "workspace-root";
+pub use citadel_workspace_types::WORKSPACE_ROOT_ID;
 pub const WORKSPACE_MASTER_PASSWORD_KEY: &str = "workspace_master_password";
 /// The root workspace's name when the operator configured none (`ServerConfig::workspace_name`).
 pub const DEFAULT_ROOT_WORKSPACE_NAME: &str = "Root Workspace";

@@ -106,6 +106,7 @@ const UNSCOPED = new Map([
   ['TreeSchema', 'schema, not content'],
   ['NodeTypes', 'schema, not content'],
   ['Telemetry', 'only ever the answer to the requesting member (never fanned out); it carries consent state and agent logs'],
+  ['MessagingTrust', 'only ever the answer to the requesting member (never fanned out); a policy change reaches members as the Workspace record mutate_workspace announces'],
 ]);
 
 /**

@@ -12,6 +12,10 @@ export * from './types/workspace-types.js';
 export { WorkspaceClient } from './WorkspaceClient.js';
 export type { WorkspaceClientConfig } from './WorkspaceClient.js';
 
+// The u64-exact JSON codec: every receive path that parses workspace protocol bytes must use it,
+// or u64 fields arrive as lossy numbers where the types promise bigint.
+export { decodeWorkspacePayload, encodeWorkspacePayload } from './workspace-json.js';
+
 // Export auth module
 export { WorkspaceAuth } from './auth.js';
 export type { AuthSession } from './auth.js';
