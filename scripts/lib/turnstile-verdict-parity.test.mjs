@@ -53,6 +53,7 @@ for (const c of FIXTURE.admit) {
     const ctx = {
       required: c.required,
       turnstile: { secret: check.secret, hostnames: check.hostnames.join(',') },
+      siteKey: check.site_key,
       tenant: check.cdata,
       io,
       log: (detail) => logged.push(detail),

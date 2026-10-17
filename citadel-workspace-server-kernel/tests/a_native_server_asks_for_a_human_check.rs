@@ -22,6 +22,20 @@ use std::sync::{Arc, Mutex};
 /// Unique to this test binary; set before any server reads it, and holding no real secret.
 const SECRET_ENV: &str = "CITADEL_NATIVE_TURNSTILE_TEST_SECRET";
 const SECRET: &str = "1x0000000000000000000000000000000AA";
+/// Cloudflare's always-pass testing site key: public, as every site key is.
+const SITE_KEY: &str = "1x00000000000000000000AA";
+
+/// What each "check required" refusal publishes: the site key and the configured cData.
+fn published<T>(result: &Result<T, NetworkError>) -> Option<AdmissionChallenge> {
+    result.as_ref().err().and_then(challenge_of).cloned()
+}
+
+fn expected() -> Option<AdmissionChallenge> {
+    Some(AdmissionChallenge::turnstile(
+        SITE_KEY,
+        Some("acme".to_string()),
+    ))
+}
 
 #[derive(Default)]
 struct Siteverify {
@@ -82,8 +96,9 @@ async fn server(required: bool, siteverify: Arc<Siteverify>) -> std::net::Socket
 fn turnstile_config(dir: &Path, settings: &Path) -> String {
     format!(
         "[sign_in]\noprf_seed_file = \"{}\"\nksf = \"owasp-floor\"\nadmission = \"turnstile\"\n\
-         turnstile_secret_env = \"{SECRET_ENV}\"\nturnstile_hostnames = [\"example.com\"]\n\
-         turnstile_cdata = \"acme\"\nsettings_file = \"{}\"\n",
+         turnstile_secret_env = \"{SECRET_ENV}\"\nturnstile_site_key = \"{SITE_KEY}\"\n\
+         turnstile_hostnames = [\"example.com\"]\nturnstile_cdata = \"acme\"\n\
+         settings_file = \"{}\"\n",
         dir.join("oprf-seed").display(),
         settings.display()
     )
@@ -139,6 +154,7 @@ async fn with_the_switch_on_only_a_good_token_is_admitted() {
             "{:?}",
             missing.as_ref().err()
         );
+        assert_eq!(published(&missing), expected(), "register lost the check");
         assert!(
             seen.tokens().is_empty(),
             "siteverify was asked about no token"
@@ -159,6 +175,7 @@ async fn with_the_switch_on_only_a_good_token_is_admitted() {
 
         let missing = sign_in(&remote, &user, password()).await;
         assert_eq!(code(&missing), Some(ErrorCode::PqSignInAdmissionRequired));
+        assert_eq!(published(&missing), expected(), "sign-in lost the check");
         let other_action = sign_in(&remote, &user, password().with_admission("for-register")).await;
         assert_eq!(
             code(&other_action),

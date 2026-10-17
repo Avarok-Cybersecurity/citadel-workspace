@@ -51,8 +51,9 @@ fn none(seed: &Path) -> String {
 fn turnstile(dir: &Path) -> String {
     format!(
         "oprf_seed_file = \"{}\"\nksf = \"owasp-floor\"\nadmission = \"turnstile\"\n\
-         turnstile_secret_env = \"TS_SECRET\"\nturnstile_hostnames = [\"example.com\"]\n\
-         turnstile_cdata = \"acme\"\nsettings_file = \"{}\"\n",
+         turnstile_secret_env = \"TS_SECRET\"\nturnstile_site_key = \"1x00000000000000000000AA\"\n\
+         turnstile_hostnames = [\"example.com\"]\nturnstile_cdata = \"acme\"\n\
+         settings_file = \"{}\"\n",
         dir.join("oprf-seed").display(),
         dir.join("settings.json").display()
     )
@@ -164,6 +165,14 @@ fn admission_must_be_named_and_none_takes_no_turnstile_keys() {
         None,
     );
     assert!(stray.contains("nothing would read it"), "{stray}");
+    let stray_key = refusal(
+        &format!("{}turnstile_site_key = \"k\"\n", none(&seed)),
+        None,
+    );
+    assert!(
+        stray_key.contains("turnstile_site_key") && stray_key.contains("nothing would read it"),
+        "{stray_key}"
+    );
     assert!(toml::from_str::<NativeSignInConfig>("admission = \"maybe\"").is_err());
     assert!(
         toml::from_str::<NativeSignInConfig>("admision = \"none\"").is_err(),
@@ -183,6 +192,8 @@ fn turnstile_needs_its_secret_and_every_key() {
     for (key, broken) in [
         ("turnstile_hostnames", "turnstile_hostnames = []"),
         ("turnstile_cdata", "turnstile_cdata = \"work.example.com\""),
+        ("turnstile_site_key", "turnstile_site_key = \"\""),
+        ("turnstile_site_key", "turnstile_site_key = \"a key\""),
         ("turnstile_secret_env", "turnstile_secret_env = \"1X\""),
     ] {
         let toml: String = turnstile(&dir)

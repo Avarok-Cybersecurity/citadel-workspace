@@ -185,8 +185,15 @@ documents every key; none has a default).
   admin's "Require a human check" switch cannot be turned on. For
   `admission = "turnstile"`, set `turnstile_secret_env` to the NAME of an
   environment variable holding the Turnstile secret (pass it to the `server`
-  container), `turnstile_hostnames`, `turnstile_cdata` (the identity the sign-in
-  widget must render as its cData) and `settings_file`, where the switch is kept.
+  container), `turnstile_site_key`, `turnstile_hostnames`, `turnstile_cdata`
+  (the identity the sign-in widget must render as its cData) and
+  `settings_file`, where the switch is kept.
+- **`turnstile_site_key`** is the widget's public site key (Cloudflare gives it
+  to every visitor), so it is written inline. The browser reaches a
+  self-hosted server only through its local agent, with no HTTP discovery to
+  ask, so the server publishes the site key and `turnstile_cdata` on each
+  "check required" refusal; the sign-in form then renders the widget and
+  retries with its token. Never put the secret here.
 
 ## Audio and video calls
 

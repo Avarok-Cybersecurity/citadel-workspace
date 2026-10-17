@@ -81,6 +81,7 @@ ksf = "owasp-floor"
 # then needs every key below.
 admission = "none"
 # turnstile_secret_env = "TURNSTILE_SECRET"   # the NAME of the variable holding the secret, never the secret
+# turnstile_site_key = "0x4AAAAAAA..."        # the widget's PUBLIC site key: sent with each "check required" refusal
 # turnstile_hostnames = ["work.example.com"]  # hostnames the widget may be solved on
 # turnstile_cdata = "work-example"            # this server's identity: the widget's cData (A-Z a-z 0-9 _ -)
 # settings_file = "/data/server/sign-in/settings.json"  # where the admin's switch is kept

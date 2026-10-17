@@ -13,8 +13,8 @@ use citadel_workspace_server_kernel::kernel::sign_in::admission::{
 };
 use citadel_workspace_server_kernel::kernel::sign_in::pq::pq_sign_in_settings;
 use citadel_workspace_server_kernel::kernel::sign_in::{
-    AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal, KsfParams,
-    PqAuthServerSettings, SignInSettingsStore, SignInSettingsUnavailable,
+    AdmissionChallenge, AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal,
+    KsfParams, PqAuthServerSettings, SignInSettingsStore, SignInSettingsUnavailable,
 };
 use citadel_workspace_types::sign_in::SignInSettings;
 use serde::{Deserialize, Serialize};
@@ -97,8 +97,28 @@ struct AdmissionRequest<'a> {
 #[derive(Deserialize)]
 #[serde(tag = "refuse", rename_all = "snake_case")]
 enum HostRefusal {
-    AdmissionRequired,
-    AdmissionFailed { reason: String },
+    AdmissionRequired {
+        #[serde(default)]
+        challenge: Option<HostChallenge>,
+    },
+    AdmissionFailed {
+        reason: String,
+    },
+}
+
+/// The check a "required" answer publishes (admission.mjs `needsToken`): public values only.
+#[derive(Deserialize)]
+struct HostChallenge {
+    provider: String,
+    site_key: String,
+    identity: Option<String>,
+}
+
+/// The SDK's challenge for `host`'s, or none for a provider this side does not know: the
+/// refusal still stands, the window just shows no widget for it.
+fn challenge(host: HostChallenge) -> Option<AdmissionChallenge> {
+    (host.provider == "turnstile")
+        .then(|| AdmissionChallenge::turnstile(host.site_key, host.identity))
 }
 
 fn kind_name(kind: AdmissionKind) -> &'static str {
@@ -129,7 +149,9 @@ impl AdmissionPolicy for DurableObjectSignIn {
             return Ok(());
         }
         match parse::<HostRefusal>(&answer).map_err(check_failed)? {
-            HostRefusal::AdmissionRequired => Err(AdmissionRefusal::Required),
+            HostRefusal::AdmissionRequired { challenge: host } => {
+                Err(AdmissionRefusal::Required(host.and_then(challenge)))
+            }
             HostRefusal::AdmissionFailed { reason } => Err(AdmissionRefusal::Failed(reason)),
         }
     }

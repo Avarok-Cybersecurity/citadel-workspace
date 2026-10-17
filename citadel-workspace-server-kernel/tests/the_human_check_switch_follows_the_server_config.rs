@@ -15,8 +15,8 @@ use citadel_workspace_server_kernel::kernel::sign_in::turnstile::{
     SiteVerify, SiteVerifyUnreachable,
 };
 use citadel_workspace_server_kernel::kernel::sign_in::{
-    AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal, SignInSettingsStore,
-    SignInSettingsUnavailable,
+    AdmissionChallenge, AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal,
+    SignInSettingsStore, SignInSettingsUnavailable,
 };
 use citadel_workspace_types::sign_in::SignInSettings;
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
@@ -130,6 +130,7 @@ fn policy(
 ) -> TurnstileAdmission {
     let check = TurnstileCheck {
         secret: TurnstileSecret::new("a-secret".into()),
+        site_key: "a-site-key".into(),
         hostnames: vec!["example.com".into()],
         cdata: "acme".into(),
     };
@@ -151,7 +152,9 @@ async fn the_check_reads_the_switch_and_fails_closed_when_it_cannot() {
     assert_eq!(policy(Ok(OFF), seen.clone()).admit(ctx(None)).await, Ok(()));
     assert_eq!(
         policy(Ok(ON), seen.clone()).admit(ctx(None)).await,
-        Err(AdmissionRefusal::Required)
+        Err(AdmissionRefusal::Required(Some(
+            AdmissionChallenge::turnstile("a-site-key", Some("acme".into()))
+        )))
     );
     assert!(
         seen.0.lock().unwrap().is_empty(),

@@ -52,6 +52,7 @@ pub fn native_sign_in(
     );
     let check = TurnstileCheck {
         secret: TurnstileSecret::new(secret),
+        site_key: turnstile.site_key,
         hostnames: turnstile.hostnames,
         cdata: turnstile.cdata,
     };

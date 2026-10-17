@@ -7,7 +7,9 @@
 //! admits and asks no one.
 
 use super::turnstile::{bound_verdict, SiteVerify};
-use super::{AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal};
+use super::{
+    AdmissionChallenge, AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal,
+};
 use super::{SignInSettingsStore, SignInSettingsUnavailable};
 use citadel_workspace_types::sign_in::SignInSettings;
 use std::net::IpAddr;
@@ -47,12 +49,22 @@ impl std::fmt::Debug for TurnstileSecret {
 }
 
 /// What a token must have been obtained for: the configured secret's widget, solved on one of
-/// `hostnames`, rendered with `cdata` (the worker binds the tenant's slug).
+/// `hostnames`, rendered with `cdata` (the worker binds the tenant's slug). `site_key` is the
+/// widget's PUBLIC key, published on each `admission_required` refusal with `cdata` so a window
+/// that reaches this server only through its agent can render the check.
 #[derive(Clone, Debug)]
 pub struct TurnstileCheck {
     pub secret: TurnstileSecret,
+    pub site_key: String,
     pub hostnames: Vec<String>,
     pub cdata: String,
+}
+
+impl TurnstileCheck {
+    /// The check a refusal asks the window to show: public values only.
+    pub fn challenge(&self) -> AdmissionChallenge {
+        AdmissionChallenge::turnstile(self.site_key.clone(), Some(self.cdata.clone()))
+    }
 }
 
 fn failed(reason: &str) -> AdmissionRefusal {
@@ -95,7 +107,7 @@ pub async fn decide(
     }
     let token = match token {
         Some(token) if !token.is_empty() => token,
-        _ => return Err(AdmissionRefusal::Required),
+        _ => return Err(AdmissionRefusal::Required(Some(check.challenge()))),
     };
     if token.encode_utf16().count() > MAX_TOKEN_CHARS {
         return Err(failed("the check's token is malformed"));

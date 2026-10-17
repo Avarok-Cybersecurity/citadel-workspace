@@ -13,7 +13,9 @@ use citadel_workspace_server_kernel::kernel::sign_in::admission::{
 use citadel_workspace_server_kernel::kernel::sign_in::turnstile::{
     bound_verdict, SiteVerify, SiteVerifyUnreachable,
 };
-use citadel_workspace_server_kernel::kernel::sign_in::{AdmissionKind, AdmissionRefusal};
+use citadel_workspace_server_kernel::kernel::sign_in::{
+    AdmissionChallenge, AdmissionKind, AdmissionProvider, AdmissionRefusal,
+};
 use serde_json::{json, Value};
 use std::sync::Mutex;
 
@@ -73,11 +75,22 @@ impl SiteVerify for Fake {
 fn as_worker_answer(result: Result<(), AdmissionRefusal>) -> Value {
     match result {
         Ok(()) => Value::Null,
-        Err(AdmissionRefusal::Required) => json!({ "refuse": "admission_required" }),
+        Err(AdmissionRefusal::Required(None)) => json!({ "refuse": "admission_required" }),
+        Err(AdmissionRefusal::Required(Some(challenge))) => {
+            json!({ "refuse": "admission_required", "challenge": challenge_json(&challenge) })
+        }
         Err(AdmissionRefusal::Failed(reason)) => {
             json!({ "refuse": "admission_failed", "reason": reason })
         }
     }
+}
+
+/// The challenge as the worker writes it (admission.mjs `needsToken`).
+fn challenge_json(challenge: &AdmissionChallenge) -> Value {
+    let provider = match challenge.provider {
+        AdmissionProvider::Turnstile => "turnstile",
+    };
+    json!({ "provider": provider, "site_key": challenge.site_key, "identity": challenge.identity })
 }
 
 fn token_of(case: &Value) -> Option<String> {
@@ -117,6 +130,7 @@ async fn admission_answers_every_case_as_the_worker_does() {
     let ip = text(&fixture, "ip");
     let turnstile = TurnstileCheck {
         secret: TurnstileSecret::new(text(check, "secret")),
+        site_key: text(check, "site_key"),
         hostnames: strings(&check["hostnames"]),
         cdata: text(check, "cdata"),
     };

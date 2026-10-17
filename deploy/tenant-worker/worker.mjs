@@ -55,7 +55,7 @@ export class WorkspaceServer extends DurableObject {
     this.usageTable = new UsageTable(ctx.storage.sql);
     this.meter = null;
     // Sign-in (control/tenant-sign-in.mjs): the OPRF seed, the sign-in settings, the admission check.
-    this.signIn = new TenantSignIn(ctx.storage, { random: crypto, turnstile: () => config(env).turnstile, io: { fetch: (u, i) => fetch(u, i) } });
+    this.signIn = new TenantSignIn(ctx.storage, { random: crypto, turnstile: () => config(env).turnstile, siteKey: () => config(env).turnstileSiteKey, io: { fetch: (u, i) => fetch(u, i) } });
     // Relay credentials for the kernel's GetIceServers (control/ice.mjs), gated on this tenant's
     // plan and this period's metered relay.
     this.ice = new IceMinter(turnConfig(env), { fetch: (url, init) => fetch(url, init), nowMs: Date.now }, () => {

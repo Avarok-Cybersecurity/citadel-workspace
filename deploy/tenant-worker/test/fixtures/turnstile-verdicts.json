@@ -1,7 +1,7 @@
 {
   "//": "One set of Turnstile verdicts, run through the worker's control/turnstile.mjs + admission.mjs (scripts/lib/turnstile-verdict-parity.test.mjs) and the kernel's kernel::sign_in::{turnstile, admission} (tests/turnstile_verdicts_match_the_worker.rs). A case added here is checked on both sides.",
   "ip": "203.0.113.9",
-  "check": { "secret": "1x0000000000000000000000000000000AA", "hostnames": ["work.example.com", "example.com"], "cdata": "acme" },
+  "check": { "secret": "1x0000000000000000000000000000000AA", "site_key": "1x00000000000000000000AA", "hostnames": ["work.example.com", "example.com"], "cdata": "acme" },
   "bound_verdict": [
     { "name": "a real key's pass", "answer": { "success": true, "hostname": "example.com", "action": "sign-in", "cdata": "acme" }, "action": "sign-in", "expected": null },
     { "name": "the second configured hostname", "answer": { "success": true, "hostname": "work.example.com", "action": "register", "cdata": "acme" }, "action": "register", "expected": null },
@@ -27,8 +27,8 @@
   ],
   "admit": [
     { "name": "off: admitted without asking", "required": false, "kind": "SignIn", "token": null, "siteverify": { "answer": { "success": false } }, "expected": null, "asked": false },
-    { "name": "on: no token", "required": true, "kind": "SignIn", "token": null, "siteverify": { "answer": { "success": true } }, "expected": { "refuse": "admission_required" }, "asked": false },
-    { "name": "on: an empty token", "required": true, "kind": "Register", "token": "", "siteverify": { "answer": { "success": true } }, "expected": { "refuse": "admission_required" }, "asked": false },
+    { "name": "on: no token", "required": true, "kind": "SignIn", "token": null, "siteverify": { "answer": { "success": true } }, "expected": { "refuse": "admission_required", "challenge": { "provider": "turnstile", "site_key": "1x00000000000000000000AA", "identity": "acme" } }, "asked": false },
+    { "name": "on: an empty token", "required": true, "kind": "Register", "token": "", "siteverify": { "answer": { "success": true } }, "expected": { "refuse": "admission_required", "challenge": { "provider": "turnstile", "site_key": "1x00000000000000000000AA", "identity": "acme" } }, "asked": false },
     { "name": "on: a token too long", "required": true, "kind": "SignIn", "token_repeat": ["x", 2049], "siteverify": { "answer": { "success": true } }, "expected": { "refuse": "admission_failed", "reason": "the check's token is malformed" }, "asked": false },
     { "name": "on: the longest token", "required": true, "kind": "SignIn", "token_repeat": ["x", 2048], "siteverify": { "answer": { "success": true, "hostname": "example.com", "action": "sign-in", "cdata": "acme" } }, "expected": null, "asked": true },
     { "name": "on: a token of 1025 two-unit characters is too long", "required": true, "kind": "SignIn", "token_repeat": ["🔑", 1025], "siteverify": { "answer": { "success": true } }, "expected": { "refuse": "admission_failed", "reason": "the check's token is malformed" }, "asked": false },

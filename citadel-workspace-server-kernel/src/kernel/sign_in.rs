@@ -21,7 +21,8 @@ pub mod pq;
 pub mod turnstile;
 
 pub use citadel_user::auth::pq::admission::{
-    AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal, AdmissionToken,
+    AdmissionChallenge, AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionProvider,
+    AdmissionRefusal, AdmissionToken,
 };
 pub use citadel_user::auth::pq::oprf::OprfSeed;
 pub use citadel_user::auth::pq::record::KsfParams;
