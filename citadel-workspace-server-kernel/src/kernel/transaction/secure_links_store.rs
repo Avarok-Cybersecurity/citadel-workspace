@@ -1,5 +1,6 @@
-//! The secure-link store's I/O: each link under its token's digest, each member's list of
-//! digests, and one expiry index. Nothing is decided here (`kernel::secure_links::rules`).
+//! The secure-link store's I/O: each link under its token's digest, each member's index, the
+//! expiry buckets (one per hour) and the pool's list (`kernel::secure_links::records`). Nothing is
+//! decided here (`kernel::secure_links::rules`).
 //!
 //! Every read-modify-write is made under `LINKS_LOCK`, which the caller takes: an index is one
 //! record, so two writers interleaving would lose one's change, and a one-time link must be read
@@ -8,10 +9,11 @@
 use super::BackendTransactionManager;
 use crate::kernel::secure_links::quota::LinkUsage;
 use crate::kernel::secure_links::records::{
-    index_key, record_key, ExpiryEntry, LinkRecord, EXPIRY_KEY,
+    bucket_key, hour_of, index_key, record_key, ExpiryEntry, IndexEntry, LinkRecord, PoolEntry,
+    EXPIRY_HOURS_KEY, POOL_KEY,
 };
 use citadel_sdk::prelude::{NetworkError, Ratchet};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Serialises every secure-link read-modify-write. Links are made and opened by people, not
 /// machines, so one lock for all of them.
@@ -25,68 +27,146 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         self.backend_get(&record_key(digest)).await
     }
 
-    /// The digests of `owner`'s links, live or not yet purged.
-    pub(crate) async fn link_digests_of(&self, owner: &str) -> Result<Vec<String>, NetworkError> {
+    /// `owner`'s links, live or not yet purged.
+    pub(crate) async fn link_index(&self, owner: &str) -> Result<Vec<IndexEntry>, NetworkError> {
         Ok(self
             .backend_get(&index_key(owner))
             .await?
             .unwrap_or_default())
     }
 
-    pub(crate) async fn link_expiry(&self) -> Result<BTreeSet<ExpiryEntry>, NetworkError> {
-        let stored: Option<Vec<ExpiryEntry>> = self.backend_get(EXPIRY_KEY).await?;
+    async fn save_link_index(&self, owner: &str, index: &[IndexEntry]) -> Result<(), NetworkError> {
+        if index.is_empty() {
+            return self.backend_delete(&index_key(owner)).await;
+        }
+        self.backend_save(&index_key(owner), &index).await
+    }
+
+    async fn link_pool(&self) -> Result<BTreeSet<PoolEntry>, NetworkError> {
+        let stored: Option<Vec<PoolEntry>> = self.backend_get(POOL_KEY).await?;
         Ok(stored.unwrap_or_default().into_iter().collect())
     }
 
-    async fn save_link_expiry(&self, expiry: &BTreeSet<ExpiryEntry>) -> Result<(), NetworkError> {
-        let ordered: Vec<&ExpiryEntry> = expiry.iter().collect();
-        self.backend_save(EXPIRY_KEY, &ordered).await
+    async fn save_link_pool(&self, pool: &BTreeSet<PoolEntry>) -> Result<(), NetworkError> {
+        let ordered: Vec<&PoolEntry> = pool.iter().collect();
+        self.backend_save(POOL_KEY, &ordered).await
     }
 
-    async fn save_link_digests(&self, owner: &str, digests: &[String]) -> Result<(), NetworkError> {
-        if digests.is_empty() {
-            return self.backend_delete(&index_key(owner)).await;
-        }
-        self.backend_save(&index_key(owner), &digests).await
+    pub(crate) async fn link_hours(&self) -> Result<BTreeSet<u64>, NetworkError> {
+        let stored: Option<Vec<u64>> = self.backend_get(EXPIRY_HOURS_KEY).await?;
+        Ok(stored.unwrap_or_default().into_iter().collect())
     }
 
-    /// Every member's live links at `now_ms`, from the expiry index alone.
-    pub(crate) async fn link_usage(&self, now_ms: u64) -> Result<LinkUsage, NetworkError> {
-        let mut usage = LinkUsage::default();
-        for entry in self.link_expiry().await? {
-            if entry.expires_ms > now_ms {
-                usage.count(&entry.owner);
+    pub(crate) async fn link_bucket(
+        &self,
+        hour: u64,
+    ) -> Result<BTreeSet<ExpiryEntry>, NetworkError> {
+        let stored: Option<Vec<ExpiryEntry>> = self.backend_get(&bucket_key(hour)).await?;
+        Ok(stored.unwrap_or_default().into_iter().collect())
+    }
+
+    /// Store `bucket` as `hour`'s, deleting it and its hour once it is empty.
+    async fn save_link_bucket(
+        &self,
+        hour: u64,
+        bucket: &BTreeSet<ExpiryEntry>,
+    ) -> Result<(), NetworkError> {
+        let mut hours = self.link_hours().await?;
+        if bucket.is_empty() {
+            self.backend_delete(&bucket_key(hour)).await?;
+            if hours.remove(&hour) {
+                self.backend_save(EXPIRY_HOURS_KEY, &hours).await?;
             }
+            return Ok(());
         }
-        Ok(usage)
+        let ordered: Vec<&ExpiryEntry> = bucket.iter().collect();
+        self.backend_save(&bucket_key(hour), &ordered).await?;
+        if hours.insert(hour) {
+            self.backend_save(EXPIRY_HOURS_KEY, &hours).await?;
+        }
+        Ok(())
     }
 
-    /// Store a new link: the record, then its owner's index, then the expiry index.
+    async fn add_to_bucket(&self, entry: ExpiryEntry) -> Result<(), NetworkError> {
+        let hour = hour_of(entry.expires_ms);
+        let mut bucket = self.link_bucket(hour).await?;
+        bucket.insert(entry);
+        self.save_link_bucket(hour, &bucket).await
+    }
+
+    async fn remove_from_bucket(&self, entry: &ExpiryEntry) -> Result<(), NetworkError> {
+        let hour = hour_of(entry.expires_ms);
+        let mut bucket = self.link_bucket(hour).await?;
+        if bucket.remove(entry) {
+            self.save_link_bucket(hour, &bucket).await?;
+        }
+        Ok(())
+    }
+
+    /// What `owner` and the workspace hold at `now_ms`: their live own links, and the pool's.
+    pub(crate) async fn link_usage(
+        &self,
+        owner: &str,
+        now_ms: u64,
+    ) -> Result<LinkUsage, NetworkError> {
+        let own_live = self
+            .link_index(owner)
+            .await?
+            .iter()
+            .filter(|entry| !entry.from_pool && entry.expires_ms > now_ms)
+            .count();
+        let pool_used = self
+            .link_pool()
+            .await?
+            .iter()
+            .filter(|entry| entry.expires_ms > now_ms)
+            .count();
+        let count = |n: usize| u32::try_from(n).map_err(|_| NetworkError::msg("Too many links"));
+        Ok(LinkUsage {
+            own_live: count(own_live)?,
+            pool_used: count(pool_used)?,
+        })
+    }
+
+    /// Store a new link: the record first, then its owner's index, its bucket and the pool.
     pub(crate) async fn insert_link(&self, record: &LinkRecord) -> Result<(), NetworkError> {
         self.backend_save(&record_key(&record.digest), record)
             .await?;
-        let mut digests = self.link_digests_of(&record.owner).await?;
-        if !digests.contains(&record.digest) {
-            digests.push(record.digest.clone());
+        let mut index = self.link_index(&record.owner).await?;
+        index.retain(|entry| entry.digest != record.digest);
+        index.push(record.index_entry());
+        self.save_link_index(&record.owner, &index).await?;
+        self.add_to_bucket(record.expiry_entry()).await?;
+        if record.from_pool {
+            let mut pool = self.link_pool().await?;
+            pool.insert(record.pool_entry());
+            self.save_link_pool(&pool).await?;
         }
-        self.save_link_digests(&record.owner, &digests).await?;
-        let mut expiry = self.link_expiry().await?;
-        expiry.insert(record.expiry_entry());
-        self.save_link_expiry(&expiry).await
+        Ok(())
     }
 
-    /// Rewrite a link under the same digest, moving its expiry entry if that changed.
+    /// Rewrite a link under the same digest, moving its expiry wherever it is listed.
     pub(crate) async fn update_link(
         &self,
         before: &LinkRecord,
         after: &LinkRecord,
     ) -> Result<(), NetworkError> {
         self.backend_save(&record_key(&after.digest), after).await?;
-        if before.expires_ms != after.expires_ms {
-            let mut expiry = self.link_expiry().await?;
-            expiry.remove(&before.expiry_entry());
-            expiry.insert(after.expiry_entry());
-            self.save_link_expiry(&expiry).await?;
+        if before.expires_ms == after.expires_ms {
+            return Ok(());
+        }
+        let mut index = self.link_index(&after.owner).await?;
+        for entry in index.iter_mut().filter(|e| e.digest == after.digest) {
+            entry.expires_ms = after.expires_ms;
+        }
+        self.save_link_index(&after.owner, &index).await?;
+        self.remove_from_bucket(&before.expiry_entry()).await?;
+        self.add_to_bucket(after.expiry_entry()).await?;
+        if after.from_pool {
+            let mut pool = self.link_pool().await?;
+            pool.remove(&before.pool_entry());
+            pool.insert(after.pool_entry());
+            self.save_link_pool(&pool).await?;
         }
         Ok(())
     }
@@ -94,45 +174,73 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// Remove a link: its record first, so its token stops working before anything else.
     pub(crate) async fn remove_link(&self, record: &LinkRecord) -> Result<(), NetworkError> {
         self.backend_delete(&record_key(&record.digest)).await?;
-        let mut digests = self.link_digests_of(&record.owner).await?;
-        digests.retain(|d| *d != record.digest);
-        self.save_link_digests(&record.owner, &digests).await?;
-        let mut expiry = self.link_expiry().await?;
-        expiry.remove(&record.expiry_entry());
-        self.save_link_expiry(&expiry).await
+        let mut index = self.link_index(&record.owner).await?;
+        index.retain(|entry| entry.digest != record.digest);
+        self.save_link_index(&record.owner, &index).await?;
+        self.remove_from_bucket(&record.expiry_entry()).await?;
+        if record.from_pool {
+            let mut pool = self.link_pool().await?;
+            if pool.remove(&record.pool_entry()) {
+                self.save_link_pool(&pool).await?;
+            }
+        }
+        Ok(())
     }
 
-    /// Remove up to `max_entries` links expired at `now_ms`, earliest first. Returns how many
-    /// expired links remain for a later pass.
+    /// Remove up to `max_entries` links expired at `now_ms`, oldest bucket first. Returns how
+    /// many expired links remain for a later pass.
     pub(crate) async fn purge_expired_links(
         &self,
         now_ms: u64,
         max_entries: u32,
     ) -> Result<u32, NetworkError> {
-        let mut expiry = self.link_expiry().await?;
-        let expired: Vec<ExpiryEntry> = expiry
-            .iter()
-            .take_while(|entry| entry.expires_ms <= now_ms)
-            .cloned()
+        let mut budget = max_entries as usize;
+        let mut remaining = 0usize;
+        let mut purged: Vec<ExpiryEntry> = Vec::new();
+        let past: Vec<u64> = self
+            .link_hours()
+            .await?
+            .into_iter()
+            .take_while(|hour| *hour <= hour_of(now_ms))
             .collect();
-        let batch = expired.len().min(max_entries as usize);
-        let mut owners: BTreeSet<&str> = BTreeSet::new();
-        for entry in &expired[..batch] {
-            self.backend_delete(&record_key(&entry.digest)).await?;
-            owners.insert(&entry.owner);
+        for hour in past {
+            let mut bucket = self.link_bucket(hour).await?;
+            let expired: Vec<ExpiryEntry> = bucket
+                .iter()
+                .take_while(|entry| entry.expires_ms <= now_ms)
+                .cloned()
+                .collect();
+            let taken = expired.len().min(budget);
+            remaining += expired.len() - taken;
+            if taken == 0 {
+                continue;
+            }
+            budget -= taken;
+            for entry in &expired[..taken] {
+                self.backend_delete(&record_key(&entry.digest)).await?;
+                bucket.remove(entry);
+            }
+            self.save_link_bucket(hour, &bucket).await?;
+            purged.extend_from_slice(&expired[..taken]);
         }
-        for owner in owners {
-            let mut digests = self.link_digests_of(owner).await?;
-            digests.retain(|d| !expired[..batch].iter().any(|e| e.digest == *d));
-            self.save_link_digests(owner, &digests).await?;
+        let mut by_owner: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+        for entry in &purged {
+            by_owner
+                .entry(&entry.owner)
+                .or_default()
+                .insert(&entry.digest);
         }
-        for entry in &expired[..batch] {
-            expiry.remove(entry);
+        for (owner, digests) in &by_owner {
+            let mut index = self.link_index(owner).await?;
+            index.retain(|entry| !digests.contains(entry.digest.as_str()));
+            self.save_link_index(owner, &index).await?;
         }
-        if batch > 0 {
-            self.save_link_expiry(&expiry).await?;
+        let mut pool = self.link_pool().await?;
+        let before = pool.len();
+        pool.retain(|entry| entry.expires_ms > now_ms);
+        if pool.len() != before {
+            self.save_link_pool(&pool).await?;
         }
-        u32::try_from(expired.len() - batch)
-            .map_err(|_| NetworkError::msg("More expired links than a u32 counts"))
+        u32::try_from(remaining).map_err(|_| NetworkError::msg("More expired links than a u32"))
     }
 }

@@ -6,9 +6,9 @@
 //! there is no default limit.
 //!
 //! Each member has `per_member` links of their own. Links past that draw on one `pool` the whole
-//! workspace shares, so `pool_used` is the sum over members of what they hold beyond their own.
+//! workspace shares. A link is tagged with where it came from when it is made, and keeps the tag:
+//! `pool_used` counts the live links tagged as the pool's.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,32 +38,31 @@ impl LinkQuotaSource for FixedLinkQuota {
     }
 }
 
-/// What the workspace holds now: each member's live links.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// What a member and the workspace hold now: the member's live links from their own allowance,
+/// and the live links from the pool, everyone's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LinkUsage {
-    pub live_by_owner: BTreeMap<String, u32>,
+    pub own_live: u32,
+    pub pool_used: u32,
+}
+
+/// Where a new link comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkSource {
+    Own,
+    Pool,
 }
 
 impl LinkUsage {
-    /// Count one live link for `owner`.
-    pub fn count(&mut self, owner: &str) {
-        *self.live_by_owner.entry(owner.to_string()).or_insert(0) += 1;
-    }
-
-    pub fn live_of(&self, owner: &str) -> u32 {
-        self.live_by_owner.get(owner).copied().unwrap_or(0)
-    }
-
-    /// The pool taken: every member's links beyond their own allowance.
-    pub fn pool_used(&self, per_member: u32) -> u32 {
-        self.live_by_owner
-            .values()
-            .map(|live| live.saturating_sub(per_member))
-            .fold(0u32, u32::saturating_add)
-    }
-
-    /// Whether `owner` may make one more: from their own allowance first, else the pool.
-    pub fn admits_another(&self, owner: &str, quota: LinkQuota) -> bool {
-        self.live_of(owner) < quota.per_member || self.pool_used(quota.per_member) < quota.pool
+    /// Where the member's next link comes from: their own allowance first, then the pool, or
+    /// nowhere when both are used up.
+    pub fn draw(&self, quota: LinkQuota) -> Option<LinkSource> {
+        if self.own_live < quota.per_member {
+            Some(LinkSource::Own)
+        } else if self.pool_used < quota.pool {
+            Some(LinkSource::Pool)
+        } else {
+            None
+        }
     }
 }

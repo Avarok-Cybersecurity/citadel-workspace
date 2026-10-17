@@ -19,8 +19,11 @@ async fn live_links_of<R: Ratchet + Send + Sync + 'static>(
 ) -> Result<Vec<LinkRecord>, NetworkError> {
     let backend = &kernel.domain_operations.backend_tx_manager;
     let mut links = Vec::new();
-    for digest in backend.link_digests_of(owner).await? {
-        if let Some(record) = backend.link_by_digest(&digest).await? {
+    for entry in backend.link_index(owner).await? {
+        if entry.expires_ms <= now {
+            continue;
+        }
+        if let Some(record) = backend.link_by_digest(&entry.digest).await? {
             if record.owner == owner && record.live_at(now) {
                 links.push(record);
             }
@@ -55,15 +58,15 @@ pub(super) async fn list<R: Ratchet + Send + Sync + 'static>(
     let usage = kernel
         .domain_operations
         .backend_tx_manager
-        .link_usage(now)
+        .link_usage(actor, now)
         .await?;
     let links = live_links_of(kernel, actor, now).await?;
     answer(SecureLinksResponse::Links {
+        live: u32::try_from(links.len()).map_err(|_| NetworkError::msg("Too many links"))?,
         links: links.iter().map(LinkRecord::info).collect(),
-        live: usage.live_of(actor),
         per_member: quota.per_member,
         pool: quota.pool,
-        pool_used: usage.pool_used(quota.per_member),
+        pool_used: usage.pool_used,
     })
 }
 

@@ -68,6 +68,9 @@ pub fn decide_resolve(
     visitor: &Visitor,
     now_ms: u64,
 ) -> ResolveDecision {
+    // Timing: an unknown token skips the node-view lookups a found record's grants may need, so
+    // a miss can be faster than a refusal. That reveals nothing usable: tokens are 256 bits from
+    // the CSPRNG, so no timing difference narrows a search for a valid one.
     // The grant is checked before the token is compared, and both run whatever the record, so
     // a miss costs what a hit does. Every refusal is the same answer either way.
     let granted = record.is_some_and(|r| grant_admits(&r.grants, visitor));
@@ -120,7 +123,7 @@ pub const SHARE_DENIED: &str = "Permission denied: ShareSecureLinks required";
 
 /// Whether the link may be made, or an error fit to show its creator. Permission first, so a
 /// caller without it is refused the same way whatever they send; then the request's shape; then
-/// the target. The limit is the store's to check, under its lock (`LinkUsage::admits_another`).
+/// the target. The limit is the store's to check, under its lock (`LinkUsage::draw`).
 pub fn decide_create(input: &CreateInput<'_>) -> Result<NewLink, String> {
     if !input.may_share {
         return Err(SHARE_DENIED.to_string());

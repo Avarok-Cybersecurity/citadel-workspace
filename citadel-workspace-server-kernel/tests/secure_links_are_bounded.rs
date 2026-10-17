@@ -1,8 +1,7 @@
 //! How many secure links a member may hold, and for how long.
 //!
-//! A member makes links from their own allowance first, then from the pool the workspace shares;
-//! expired and spent links count against neither. A link lives at most 30 days however it is
-//! extended.
+//! Expired and spent links count against nobody's allowance (the pool's own tests are in
+//! secure_links_share_one_pool.rs). A link lives at most 30 days however it is extended.
 
 use citadel_workspace_types::secure_links::{
     SecureLinksRequest, SecureLinksResponse, SECURE_LINK_MAX_TTL_MS,
@@ -48,45 +47,6 @@ async fn a_member_holds_their_own_allowance_and_no_more_without_a_pool() {
                 pool: 0
             })
         );
-    }
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn past_their_own_members_share_one_pool() {
-    let kernel = links_kernel(2, 3).await;
-    for id in ["alice", "bob", "carol"] {
-        enrol(&kernel, id, UserRole::Member).await;
-    }
-    // Alice uses her own two, then two of the pool's three.
-    for _ in 0..4 {
-        assert!(!limited(&make(&kernel, "alice").await));
-    }
-    // Bob's own come first: his two do not touch the pool, his third takes its last place.
-    for _ in 0..3 {
-        assert!(!limited(&make(&kernel, "bob").await));
-    }
-    assert!(limited(&make(&kernel, "bob").await), "the pool is full");
-    assert!(limited(&make(&kernel, "alice").await), "for everyone");
-    // Carol has drawn nothing: her own allowance is hers whatever the pool holds.
-    for _ in 0..2 {
-        assert!(!limited(&make(&kernel, "carol").await));
-    }
-    assert!(limited(&make(&kernel, "carol").await));
-
-    match links(&kernel, "alice", SecureLinksRequest::List).await {
-        Ok(SecureLinksResponse::Links {
-            links,
-            live,
-            per_member,
-            pool,
-            pool_used,
-        }) => {
-            assert_eq!(
-                (links.len(), live, per_member, pool, pool_used),
-                (4, 4, 2, 3, 3)
-            );
-        }
-        other => panic!("{other:?}"),
     }
 }
 

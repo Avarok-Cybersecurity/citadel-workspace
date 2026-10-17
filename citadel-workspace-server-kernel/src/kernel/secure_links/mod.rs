@@ -17,7 +17,11 @@ pub mod target;
 pub mod token;
 
 #[cfg(test)]
+mod bucket_tests;
+#[cfg(test)]
 mod store_tests;
+#[cfg(test)]
+pub(crate) mod test_support;
 
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::transaction::secure_links_store::LINKS_LOCK;
