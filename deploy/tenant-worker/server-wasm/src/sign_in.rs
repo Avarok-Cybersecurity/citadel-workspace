@@ -8,8 +8,12 @@
 
 use crate::host_promise::{parse, HostPromise};
 use citadel_sdk::prelude::async_trait;
+use citadel_workspace_server_kernel::kernel::sign_in::admission::{
+    CHECK_UNAVAILABLE, RESUME_GRACE,
+};
+use citadel_workspace_server_kernel::kernel::sign_in::pq::pq_sign_in_settings;
 use citadel_workspace_server_kernel::kernel::sign_in::{
-    AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal, KsfParams, OprfSeed,
+    AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal, KsfParams,
     PqAuthServerSettings, SignInSettingsStore, SignInSettingsUnavailable,
 };
 use citadel_workspace_types::sign_in::SignInSettings;
@@ -35,6 +39,7 @@ extern "C" {
 
 /// Post-quantum sign-in for this tenant: its OPRF seed and the Argon2id cost clients stretch a
 /// password factor with. The seed is copied in once and never leaves; nothing here prints it.
+/// Built by the kernel's `pq_sign_in_settings`, the same builder a native server uses.
 #[wasm_bindgen]
 pub struct PqSignIn(PqAuthServerSettings);
 
@@ -47,17 +52,14 @@ impl PqSignIn {
         iterations: u32,
         lanes: u32,
     ) -> Result<PqSignIn, JsError> {
-        let seed: [u8; 32] = oprf_seed
-            .try_into()
-            .map_err(|_| JsError::new("the OPRF seed is not 32 bytes"))?;
         let ksf = KsfParams {
             mem_kib,
             iterations,
             lanes,
         };
-        PqAuthServerSettings::new(OprfSeed::from_bytes(seed), ksf)
+        pq_sign_in_settings(oprf_seed, ksf)
             .map(Self)
-            .map_err(|e| JsError::new(&format!("post-quantum sign-in settings: {e}")))
+            .map_err(|e| JsError::new(&e))
     }
 }
 
@@ -98,18 +100,6 @@ enum HostRefusal {
     AdmissionRequired,
     AdmissionFailed { reason: String },
 }
-
-/// Said to the client when the check could not be completed; the object logs the detail.
-const CHECK_UNAVAILABLE: &str = "the check could not be completed";
-
-/// How long after a session ends its client's reconnect is still not asked the check: the
-/// agent retries a dropped session for 600 s (`SERVER_RECONNECT.give_up_after` in
-/// citadel-internal-service), and its last attempt may take 30 s more to reach the check
-/// (`attempt_timeout`) after up to 30 s of backoff. 900 s covers that with five minutes
-/// spare for the gap between the server ending the session and the agent seeing the drop.
-/// It exempts only from the check; the reconnect still proves the password, and each
-/// ended session's token is honoured once, for its own account.
-const RESUME_GRACE: Duration = Duration::from_secs(900);
 
 fn kind_name(kind: AdmissionKind) -> &'static str {
     match kind {

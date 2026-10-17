@@ -4,13 +4,21 @@
 //! The settings are the host's, not the workspace record's. A hosted server's admission check
 //! reads them at every sign-in and registration, before any session or kernel request exists,
 //! and the host's public discovery endpoint reads them for a sign-in form that has no session at
-//! all. So the host keeps the one copy (a Durable Object, in its key-value storage) and the kernel
-//! reaches it through [`SignInSettingsStore`]. A kernel built without one answers
-//! [`NOT_SUPPORTED`]: there is no default value and no second copy to drift.
+//! all. So the host keeps the one copy (a Durable Object, in its key-value storage; a native
+//! server, in the file kernel.toml's `[sign_in]` names -- see [`native`]) and the kernel reaches
+//! it through [`SignInSettingsStore`]. A kernel built without one answers [`NOT_SUPPORTED`]: there
+//! is no default value and no second copy to drift.
 
 use citadel_workspace_types::sign_in::SignInSettings;
 use citadel_workspace_types::WorkspaceProtocolResponse;
 use std::sync::Arc;
+
+pub mod admission;
+pub mod config;
+#[cfg(not(target_family = "wasm"))]
+pub mod native;
+pub mod pq;
+pub mod turnstile;
 
 pub use citadel_user::auth::pq::admission::{
     AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal, AdmissionToken,
