@@ -129,6 +129,7 @@ async fn a_cascading_delete_drops_every_descendants_document() {
             &NodeEntityType::Child("Room".to_string()),
             "Draft",
             "",
+            None,
         )
         .await
         .expect("create child")

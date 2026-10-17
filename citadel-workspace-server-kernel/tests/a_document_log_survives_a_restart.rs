@@ -122,6 +122,7 @@ async fn the_log_and_its_snapshot_survive_a_restart() {
             &NodeEntityType::Child("Office".to_string()),
             "Doc",
             "",
+            None,
         )
         .await
         .expect("create node")

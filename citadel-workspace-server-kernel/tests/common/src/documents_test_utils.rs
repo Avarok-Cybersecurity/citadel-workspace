@@ -58,6 +58,7 @@ pub async fn document_node(kernel: &GateKernel) -> String {
             &NodeEntityType::Child("Office".to_string()),
             "Spec",
             "",
+            None,
         )
         .await
         .expect("the admin may create a node")
