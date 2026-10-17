@@ -12,6 +12,8 @@ pub mod roles;
 pub mod roles_legacy;
 /// Reading and editing the role table, and naming a member's role on the wire.
 pub mod roles_protocol;
+/// A role table as it is stored, and reading one stored before it named new members' role.
+pub mod roles_stored;
 pub mod sign_in;
 pub mod structs;
 /// The build script's submodule-freshness rule, here so it can be tested.

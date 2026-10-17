@@ -50,11 +50,15 @@ impl RoleDefinition {
     }
 }
 
-/// A workspace's role table, highest position first.
+/// A workspace's role table, highest position first, and the role new members are given.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct WorkspaceRoles {
     pub roles: Vec<RoleDefinition>,
+    /// The role an account joining on its own is given. Always a role in `roles`, never the
+    /// Owner: every edit keeps it so (`role_edits`), and a table stored before it existed is read
+    /// through `roles_stored`.
+    pub default_role_id: String,
 }
 
 impl WorkspaceRoles {
@@ -62,6 +66,7 @@ impl WorkspaceRoles {
     pub fn seeded() -> Self {
         Self {
             roles: seed_roles(),
+            default_role_id: MEMBER_ROLE_ID.to_string(),
         }
         .normalized()
     }
@@ -81,6 +86,13 @@ impl WorkspaceRoles {
 
     pub fn get(&self, role_id: &str) -> Option<&RoleDefinition> {
         self.roles.iter().find(|role| role.id == role_id)
+    }
+
+    /// The role new members are given. None only for a table that breaks the invariant on
+    /// `default_role_id`, which the caller refuses rather than guess at.
+    pub fn default_role(&self) -> Option<&RoleDefinition> {
+        self.get(&self.default_role_id)
+            .filter(|role| !role.is_owner())
     }
 
     /// What is stored: every role but the Owner, which is never written.

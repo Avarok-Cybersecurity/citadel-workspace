@@ -5,4 +5,4 @@ import type { Permission } from "./Permission";
  * One change to a role. `Update` carries only the changes the editor made, so two
  * administrators editing different fields of one role do not overwrite each other.
  */
-export type RoleChange = { "Rename": string } | { "Recolor": string | null } | { "Move": number } | { "Grant": Array<Permission> } | { "Revoke": Array<Permission> };
+export type RoleChange = { "Rename": string } | { "Recolor": string | null } | { "Move": number } | { "Grant": Array<Permission> } | { "Revoke": Array<Permission> } | "MakeDefault";

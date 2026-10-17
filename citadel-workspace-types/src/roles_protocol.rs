@@ -33,6 +33,9 @@ pub enum RoleChange {
     Move(u16),
     Grant(Vec<Permission>),
     Revoke(Vec<Permission>),
+    /// Make this the role new members are given. Like assigning it: the caller must hold
+    /// everything it carries.
+    MakeDefault,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -54,6 +57,7 @@ pub enum RolesRequest {
     },
     /// `ManageRoles`, on a role below the caller's own. Every holder moves to `reassign_to`,
     /// which the caller must be able to assign. Required, so nobody's role is chosen for them.
+    /// Deleting the default role makes `reassign_to` the default, so it cannot be the Owner.
     Delete { id: String, reassign_to: String },
 }
 

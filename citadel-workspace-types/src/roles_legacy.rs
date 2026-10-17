@@ -50,9 +50,14 @@ pub enum LegacyRoleRead {
 
 impl User {
     /// Bring a record written before the role table up to date. Idempotent: a record that
-    /// already names its root role is returned unchanged.
+    /// names a role in any workspace is current and returned unchanged.
+    ///
+    /// Any workspace, not only the root: a record written before the table names none at all,
+    /// while the creator of an additional workspace holds its Owner role and, until they join
+    /// the root, nothing there. Reading them as a legacy root Member gave them a role the
+    /// table's default for new members never chose.
     pub fn read_legacy_role(&mut self) -> LegacyRoleRead {
-        if self.workspace_roles.contains_key(WORKSPACE_ROOT_ID) {
+        if !self.workspace_roles.is_empty() {
             return LegacyRoleRead::Current;
         }
         let Some(role_id) = legacy_role_id(&self.role) else {

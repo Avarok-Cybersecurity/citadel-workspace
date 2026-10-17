@@ -106,6 +106,7 @@ fn a_stored_table_cannot_replace_the_owner() {
             role("usurper", OWNER_POSITION, &[Permission::ViewContent]),
             role("editor", 250, &[Permission::EditMdx]),
         ],
+        default_role_id: "editor".to_string(),
     };
     let table = stored.normalized();
 

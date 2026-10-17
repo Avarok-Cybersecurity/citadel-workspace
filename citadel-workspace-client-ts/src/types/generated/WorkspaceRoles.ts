@@ -2,6 +2,12 @@
 import type { RoleDefinition } from "./RoleDefinition";
 
 /**
- * A workspace's role table, highest position first.
+ * A workspace's role table, highest position first, and the role new members are given.
  */
-export type WorkspaceRoles = { roles: Array<RoleDefinition>, };
+export type WorkspaceRoles = { roles: Array<RoleDefinition>, 
+/**
+ * The role an account joining on its own is given. Always a role in `roles`, never the
+ * Owner: every edit keeps it so (`role_edits`), and a table stored before it existed is read
+ * through `roles_stored`.
+ */
+default_role_id: string, };

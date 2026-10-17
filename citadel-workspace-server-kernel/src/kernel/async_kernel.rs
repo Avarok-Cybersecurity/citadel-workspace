@@ -1680,7 +1680,6 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             .await;
 
                         // First ensure the user exists in the system
-                        use citadel_workspace_types::structs::{User, UserRole};
                         let existing = this.get_user(&user_id).await?;
 
                         // A removed member is not a new one.
@@ -1711,21 +1710,16 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             return Ok(());
                         }
 
-                        if existing.is_none() {
-                            // Create a basic user with Member role
-                            let user = User::new(
-                                user_id.clone(),
+                        // The role the table gives new members; see joiner_role.
+                        this.domain_operations
+                            .give_joiner_the_default_role(
+                                &user_id,
                                 crate::kernel::display_name::display_name_for(
                                     &user_id,
                                     registered_full_name.as_deref(),
                                 ),
-                                UserRole::Member,
-                            );
-                            this.domain_operations
-                                .backend_tx_manager
-                                .insert_user(user_id.clone(), user)
-                                .await?;
-                        }
+                            )
+                            .await?;
 
                         // Add user directly to workspace members (no admin required for initial connection)
                         //

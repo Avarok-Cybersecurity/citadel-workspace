@@ -79,6 +79,22 @@ fn check_color(color: &Option<String>) -> Result<(), String> {
     }
 }
 
+/// Refuse handing `role` to anyone the actor did not choose by name: holders of a deleted role,
+/// or every new member. Below the actor, and carrying nothing they lack.
+fn check_assignable(actor: &RoleDefinition, role: &RoleDefinition) -> Result<(), String> {
+    if !outranks(actor, role.position) {
+        return Err(format!(
+            "Permission denied: {} cannot assign {}",
+            actor.name, role.name
+        ));
+    }
+    if actor.is_owner() {
+        return Ok(());
+    }
+    let carried: Vec<Permission> = role.permissions.iter().copied().collect();
+    check_grant(actor, &carried)
+}
+
 /// The role `id`, if the actor may change it.
 fn editable<'a>(
     table: &'a WorkspaceRoles,
@@ -140,6 +156,7 @@ pub fn update(
     changes: &[RoleChange],
 ) -> Result<WorkspaceRoles, String> {
     let mut role = editable(table, actor, id)?.clone();
+    let mut make_default = false;
     for change in changes {
         match change {
             RoleChange::Rename(name) => role.name = check_name(table, name, Some(id))?,
@@ -156,12 +173,20 @@ pub fn update(
                 role.permissions.extend(granting.iter().copied());
             }
             RoleChange::Revoke(revoking) => revoke(&mut role.permissions, revoking),
+            RoleChange::MakeDefault => make_default = true,
         }
+    }
+    // Checked on the role as edited: every new member will be given it.
+    if make_default {
+        check_assignable(actor, &role)?;
     }
 
     let mut next = table.clone();
     next.roles.retain(|existing| existing.id != id);
     next.roles.push(role);
+    if make_default {
+        next.default_role_id = id.to_string();
+    }
     Ok(next.normalized())
 }
 
@@ -182,32 +207,35 @@ fn revoke(permissions: &mut HashSet<Permission>, revoking: &[Permission]) {
 }
 
 /// Remove role `id`. Its holders move to `reassign_to`, which the actor must be able to assign:
-/// below them, and holding nothing they lack.
+/// below them, and holding nothing they lack. When `id` is the role new members get,
+/// `reassign_to` becomes it, in the same table write.
 pub fn delete(
     table: &WorkspaceRoles,
     actor: &RoleDefinition,
     id: &str,
     reassign_to: &str,
 ) -> Result<WorkspaceRoles, String> {
-    editable(table, actor, id)?;
+    let deleting = editable(table, actor, id)?;
     if reassign_to == id {
         return Err("A role's holders cannot be moved to the role being deleted".to_string());
     }
     let target = table
         .get(reassign_to)
         .ok_or_else(|| format!("No role '{reassign_to}' exists to move its holders to"))?;
-    if !outranks(actor, target.position) {
+    check_assignable(actor, target)?;
+    let is_default = table.default_role_id == id;
+    if is_default && target.is_owner() {
         return Err(format!(
-            "Permission denied: {} cannot assign {}",
-            actor.name, target.name
+            "{} is the role new members get, and the role its holders move to takes its place; \
+             new members cannot be given the Owner role",
+            deleting.name
         ));
-    }
-    if !actor.is_owner() {
-        let carried: Vec<Permission> = target.permissions.iter().copied().collect();
-        check_grant(actor, &carried)?;
     }
 
     let mut next = table.clone();
     next.roles.retain(|role| role.id != id);
+    if is_default {
+        next.default_role_id = reassign_to.to_string();
+    }
     Ok(next.normalized())
 }

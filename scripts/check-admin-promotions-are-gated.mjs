@@ -23,6 +23,9 @@
 //     you cannot hand out authority you do not hold
 //   - `role_edits::delete` — moving a deleted role's holders to its
 //     replacement, which `delete` refuses unless the actor may assign it
+//   - `default_role()` — an account joining on its own gets the table's
+//     default, which only `RoleChange::MakeDefault` sets, refused by
+//     `role_edits::update` unless the actor may assign it (or the seed, Member)
 //
 // A ban is not a promotion: `Assignment::Banned` only takes authority away.
 // Since roles are editable, Member or Guest can carry anything, so writing them
@@ -58,6 +61,7 @@ const GATES = [
   'ensure_may_grant_role',
   'ensure_may_grant_permissions',
   'role_edits::delete',
+  'default_role()',
 ];
 // How far above the assignment the gate may sit. Generous, because the gate is
 // often an early `return` at the top of the function.
