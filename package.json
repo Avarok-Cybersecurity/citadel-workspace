@@ -27,6 +27,6 @@
     "check:stack": "node scripts/check-stack-reachable.mjs",
     "check:pointers": "node scripts/check-submodule-pointers-pushed.mjs",
     "prepush": "node scripts/check-submodule-pointers-pushed.mjs",
-    "prepare": "git config core.hooksPath .githooks || true"
+    "prepare": "git config core.hooksPath .githooks && git -C citadel-workspaces config core.hooksPath .githooks || true"
   }
 }

@@ -1,376 +1,187 @@
 #!/usr/bin/env node
 /**
- * Every CI gate that can run without Docker, in one command.
+ * Every CI gate that can run without Docker, in one command -- and the tiers the hooks run.
  *
- * The local loop was tsc + eslint + vitest + the submodule-pointer guard, while
- * CI runs eleven things. Three gates were found red by finally running them by
- * hand — the 250-line cap (twice), the stack-reachability guard, and
- * workspace-wide clippy — and the line cap was then broken twice MORE after
- * that failure had been written down. Recording a gap did not close it; a
- * runnable command might.
+ *   node scripts/preflight.mjs                     everything (what CI's Docker-free jobs run)
+ *   node scripts/preflight.mjs --tier pre-commit   staged paths only; the pre-commit hook
+ *   node scripts/preflight.mjs --tier pre-push     what the pushed commits changed; the pre-push hook
+ *   node scripts/preflight.mjs --print-plan        the full plan as JSON, run nothing
  *
- * Deliberately does NOT run: anything needing Docker or a live stack, or the
- * integration suites (they share one backend).
+ * `--repo ui` says the hook runs in the UI submodule (its paths are prefixed citadel-workspaces/);
+ * pre-push also takes `--remote <name>` and the refs on stdin, exactly as git hands them over.
+ * The hooks have one escape hatch, `git commit/push --no-verify`, and no silent one.
  *
- * It used to exclude the submodule-pointer check too, on the grounds that it
- * "is about pushing, not about the code being correct". That reasoning was
- * wrong and cost a whole CI run: an unpushed submodule commit makes
- * `actions/checkout` fail, so all 73 jobs died before compiling a line and the
- * run reported nothing at all about the code. Whether a push will produce a
- * meaningful run is exactly what a pre-push gate is for. The guard existed and
- * was correct; nothing invoked it.
+ * Thirty days of CI held 344 root-cause failures; ~190 were gates this file already ran, that
+ * nobody ran before pushing. Hence the hooks. The rest of this file's history, briefly:
  *
- * The script list is DERIVED from validate.yml, not written out here.
- *
- * It used to be a hand-maintained array, and it drifted: CI grew to twenty-one
- * `node scripts/*.mjs` gates while this file still listed ten, so eleven checks
- * a developer could have run in one second locally were only ever discovered by
- * pushing. That is the same failure this file was written to end, re-appearing
- * one gate at a time — which is what a hand-copied list does. Reading the
- * workflow means adding a gate to CI adds it here, with no second edit.
+ *  - The gate list is DERIVED from the workflows (lib/preflight-plan.mjs), now BOTH the parent's
+ *    validate.yml and the UI repo's. A hand-kept list drifted to ten gates while CI ran twenty-one,
+ *    and the UI's `npm run check:*` steps ran nowhere but UI CI.
+ *  - Arguments are part of a gate: `build-gates-index.mjs` without `--check` WRITES docs/GATES.md.
+ *  - The checkout is checked first and alone (ENVIRONMENT): on an uninitialised tree, 80 true
+ *    failures used to bury the one that named the cause a thousand lines down.
+ *  - The submodule-pointer guard is here because an unpushed submodule commit kills every CI job
+ *    at checkout, before it reports anything about the code.
+ *  - Cargo gates are hand-listed (the derivation reads node and npm gates only), behind a cargo
+ *    guard so a frontend-only checkout skips them by name instead of failing over an empty block.
+ *  - SKIP_WASM_BUILD is set for every check: a plain `cargo clippy` otherwise rebuilds the WASM
+ *    client and overwrites the committed artifacts the UI imports (lib/preflight-run.mjs).
+ *  - `rust wasm target compiles`: a cfg slip in ILM built on native, passed 71 tests and clippy,
+ *    and could not build for wasm32 at all. `cargo check` on the wasm CLIENT crate, not ILM
+ *    (uuid's randomness feature comes from the client), and a check, not a wasm-pack build.
  */
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { NOT_ON_PRE_COMMIT, derivedChecks, gateKey } from './lib/preflight-plan.mjs';
+import { crateOf, readsWholeRepo, selectChecks } from './lib/change-tiers.mjs';
+import { pushedPaths, stagedPaths } from './lib/changed-paths.mjs';
+import { printFailures, runChecks, runFatal } from './lib/preflight-run.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const UI = join(ROOT, 'citadel-workspaces');
 const IS = join(ROOT, 'citadel-internal-service');
 
-/**
- * Gates that genuinely cannot run here, with the reason. Anything NOT listed is
- * run — so a new CI gate is included by default and this file has to be edited
- * to exclude it, rather than edited to include it.
- */
-const NEEDS_MORE_THAN_A_CHECKOUT = new Map([
-  ['check-production-image.mjs', 'drives a real browser against a built production image'],
-]);
-
-/** Every `node scripts/<name>.mjs` step in the workflow, in file order. */
-function ciScriptGates() {
-  const path = join(ROOT, '.github/workflows/validate.yml');
-  let workflow;
-  try {
-    workflow = readFileSync(path, 'utf8');
-  } catch {
-    // An unreadable workflow means an empty gate list, and an empty gate list
-    // is a clean run over nothing. Say which file, rather than a stack trace.
-    console.error(`preflight: cannot read ${path}; the gate list would be empty.`);
-    process.exit(1);
+function option(name, allowed) {
+  const at = process.argv.indexOf(name);
+  if (at < 0) return null;
+  const value = process.argv[at + 1];
+  if (!allowed.includes(value)) {
+    console.error(`preflight: ${name} takes one of ${allowed.join(', ')}; got '${value ?? ''}'.`);
+    process.exit(2);
   }
-  // Each gate carries the DIRECTORY its step runs in.
-  //
-  // The regex version took the script path and ran everything from the repo
-  // root, which is right for most steps and wrong for any step with a
-  // `working-directory:`. The first such gate reported a module-not-found from
-  // preflight while passing in CI, which is the failure mode preflight exists to
-  // prevent, pointed the other way.
-  //
-  // Read line by line rather than with a YAML parser: preflight runs on a bare
-  // checkout too, and a gate that needs an install is a gate that does not run
-  // (see check-service-logs-are-captured, which took a whole CI job down for
-  // exactly that). A `working-directory:` belongs to the step above it, so the
-  // last one seen before a `node scripts/...` line is that step's.
-  // A step's `working-directory:` can sit either side of its `run:`, so each
-  // step is buffered and read whole. The first line-by-line version tracked the
-  // last directory seen and missed the one gate that declares it AFTERWARDS --
-  // which is the gate that motivated all of this.
-  const found = [];
-  const steps = [];
-  let buffer = [];
-  for (const line of workflow.split('\n')) {
-    if (/^\s{6}-\s/.test(line)) {
-      if (buffer.length > 0) steps.push(buffer);
-      buffer = [line];
-      continue;
-    }
-    buffer.push(line);
-  }
-  if (buffer.length > 0) steps.push(buffer);
-
-  for (const step of steps) {
-    const text = step.join('\n');
-    const directory = /^\s*working-directory:\s*(\S+)/m.exec(text)?.[1] ?? '.';
-    // The rest of the line, not just the script path.
-    //
-    // This captured the path alone and ran every gate with no arguments, which
-    // is right for all but two of them and silently wrong for the one that
-    // matters: CI runs `node scripts/build-gates-index.mjs --check`, and
-    // WITHOUT `--check` that script takes its else branch and WRITES
-    // docs/GATES.md. So preflight rewrote a tracked file in the developer's
-    // working tree and printed `build gates index … ok` -- a check-only
-    // command turned into a mutation, and a gate that could not fail. The CI
-    // job it stands in for then went red on a file preflight claimed to have
-    // checked.
-    for (const match of text.matchAll(/node\s+(scripts\/[a-z0-9-]+\.mjs)([^\n]*)/g)) {
-      const args = match[2]
-        .split('#')[0] // a trailing YAML comment is not an argument
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-      found.push([match[1], directory, args]);
-    }
-  }
-  const unique = [
-    ...new Map(
-      found.map(([script, dir, args]) => [`${dir}:${script}:${args.join(' ')}`, [script, dir, args]]),
-    ).values(),
-  ];
-  // A guard that silently checks nothing is the thing this repo keeps finding.
-  // If the workflow is renamed or its shape changes, say so rather than
-  // reporting a clean run over an empty list.
-  if (unique.length < 10) {
-    console.error(
-      `preflight: only ${unique.length} script gates found in validate.yml — ` +
-        'the workflow moved or changed shape, so this list cannot be trusted.',
-    );
-    process.exit(1);
-  }
-  return unique;
+  return value;
+}
+const tier = option('--tier', ['full', 'pre-commit', 'pre-push']) ?? 'full';
+const repo = option('--repo', ['parent', 'ui']) ?? 'parent';
+const remote = tier === 'pre-push' ? (process.argv[process.argv.indexOf('--remote') + 1] ?? null) : null;
+if (tier === 'pre-push' && (process.argv.indexOf('--remote') < 0 || !remote)) {
+  console.error('preflight: --tier pre-push needs --remote <name> (the hook passes "$1").');
+  process.exit(2);
 }
 
-const skipped = [];
-const derived = ciScriptGates().flatMap(([script, dir, args]) => {
-  const name = script.replace(/^scripts\//, '').replace(/\.mjs$/, '');
-  const reason = NEEDS_MORE_THAN_A_CHECKOUT.get(script.replace(/^scripts\//, ''));
-  if (reason) {
-    skipped.push([name, reason]);
-    return [];
-  }
-  const label = [name.replace(/^check-/, '').replace(/-/g, ' '), ...args].join(' ');
-  return [[label, 'node', [script, ...args], join(ROOT, dir)]];
-});
+const tag = (...tiers) => new Set(tiers);
+const check = (name, cmd, args, cwd, tiers) => ({ name, cmd, args, cwd, env: {}, tiers });
 
-/**
- * The cargo gates, which preflight ran none of.
- *
- * The header above named workspace-wide clippy as one of three gates found red
- * only by hand — and then omitted it, invisibly: the derived list matches
- * `node scripts/*.mjs` only, so the cargo steps never entered the list and so
- * never reached the skip report either. A Rust-only edit passed preflight
- * untouched and failed CI half an hour later. Both were red when this was
- * written: an unformatted file in intersession-layer-messaging, an orphaned doc
- * comment and four redundant field patterns in the server kernel.
- *
- * SKIP_WASM_BUILD is not a convenience. citadel-workspace-internal-service has
- * a build script that runs wasm-pack and copies the result over the tracked
- * artifacts in citadel-workspace-client-ts/pkg/ and citadel-workspaces/public/
- * wasm — so a plain `cargo clippy` silently replaces the committed WASM the UI
- * imports. A gate that mutates the tree it is checking is not one you can run
- * before every commit.
- *
- * Skipped rather than failed when cargo is absent: a frontend-only checkout is
- * a legitimate way to work here, and a missing toolchain is not a red gate.
- */
-const CARGO_WORKSPACES = [
-  ['rust workspace', ROOT],
-  ['rust internal-service workspace', join(ROOT, 'citadel-internal-service')],
+/** The checkout itself, first and fatal: every other check reads it. */
+const ENVIRONMENT = [
+  check('submodules are populated', 'node', ['scripts/check-submodules-are-populated.mjs'], ROOT, tag('env')),
+  check('hooks are installed', 'node', ['scripts/check-hooks-are-installed.mjs'], ROOT, tag('env')),
+  check('node matches CI', 'node', ['scripts/check-node-matches-ci.mjs'], ROOT, tag('env')),
 ];
 
-// spawnSync's default 1 MiB output buffer is smaller than the UI's vitest run prints, which made
-// the "unit tests" gate fail with ENOBUFS before a single test result was read.
-const OUTPUT_LIMIT = 256 * 1024 * 1024;
+let plan;
+try {
+  plan = derivedChecks(ROOT);
+} catch (error) {
+  console.error(`preflight: ${error.message}`);
+  process.exit(1);
+}
+const skipped = [...plan.skipped];
+
+const derived = plan.checks.map((c) => {
+  const ui = c.area === 'citadel-workspaces' || c.area === 'citadel-workspace-client-ts';
+  if (c.kind === 'heavy') return { ...c, tiers: tag() };
+  const source = c.script ? readFileSync(join(ROOT, c.script), 'utf8') : '';
+  const slow = NOT_ON_PRE_COMMIT.has(gateKey([c.cmd, ...c.args]));
+  return {
+    ...c,
+    tiers: tag(ui ? 'ui' : 'parent', ...(slow ? ['not-pre-commit'] : [])),
+    relevance: { script: c.script, source, cwdArea: c.area, wholeRepo: readsWholeRepo(source) },
+  };
+});
 
 const haveCargo = spawnSync('cargo', ['--version'], { stdio: 'ignore' }).status === 0;
+const ROOT_CRATES = /members\s*=\s*\[([^\]]*)\]/.exec(readFileSync(join(ROOT, 'Cargo.toml'), 'utf8'))[1]
+  .split(',').map((m) => m.trim().replace(/^"|"$/g, '')).filter(Boolean);
 
-// The wasm target, because nothing else local compiles it.
-//
-// Inside the cargo guard rather than beside it. This used to sit in CHECKS
-// unconditionally, so a frontend-only checkout -- which the comment above
-// CARGO_WORKSPACES calls a legitimate way to work here -- ran a `cargo` that is
-// not on PATH. spawnSync then returns `status: null` with stdout AND stderr
-// null, so the runner printed "rust wasm target compiles  FAILED" over an EMPTY
-// block, and the one line that would have explained it, the skip list, prints
-// after `process.exit(1)`.
-//
-// `cargo check` on the wasm CLIENT crate, not on ILM directly: a bare check of
-// ILM fails on uuid's randomness feature, which the client crate supplies. This
-// is a check, not a build -- it emits no pkg/ artifacts, so it cannot overwrite
-// the committed WASM the way a wasm-pack run would.
-const wasmCheck = haveCargo
-  ? [[
-      'rust wasm target compiles',
-      'cargo',
-      ['check', '-p', 'citadel-internal-service-wasm-client', '--target', 'wasm32-unknown-unknown'],
-      IS,
-    ]]
-  : [];
-if (!haveCargo) skipped.push(['rust wasm target compiles', 'cargo is not on PATH']);
-
-const cargoChecks = CARGO_WORKSPACES.flatMap(([label, cwd]) => {
-  if (!haveCargo) {
-    skipped.push([`${label} fmt + clippy`, 'cargo is not on PATH']);
-    return [];
+const cargo = [];
+if (haveCargo) {
+  cargo.push(check('rust wasm target compiles', 'cargo',
+    ['check', '-p', 'citadel-internal-service-wasm-client', '--target', 'wasm32-unknown-unknown'], IS, tag('rust:agent')));
+  for (const [label, cwd, tierName] of [['rust workspace', ROOT, 'rust:root'], ['rust internal-service workspace', IS, 'rust:agent']]) {
+    cargo.push(
+      check(`${label} fmt`, 'cargo', ['fmt', '--all', '--check'], cwd, tag(tierName)),
+      check(`${label} clippy`, 'cargo', ['clippy', '--workspace', '--all-targets', '--', '-D', 'warnings'], cwd, tag(tierName)),
+      check(`${label} tests`, 'cargo', ['test', '--workspace'], cwd, tag(tierName)),
+    );
   }
-  return [
-    [`${label} fmt`, 'cargo', ['fmt', '--all', '--check'], cwd],
-    [
-      `${label} clippy`,
-      'cargo',
-      ['clippy', '--workspace', '--all-targets', '--', '-D', 'warnings'],
-      cwd,
-    ],
-  ];
-});
+} else {
+  skipped.push(['rust wasm target compiles, fmt, clippy, tests', 'cargo is not on PATH']);
+}
 
-/**
- * Checks about the CHECKOUT ITSELF, run before anything else and fatal on their
- * own.
- *
- * Not in validate.yml, because by the time CI runs it is already too late:
- * checkout is what fails.
- *
- * These used to sit after `...derived`, and the comment claiming they came
- * "first among the local-only checks" was true and useless -- the 112 derived
- * gates ran ahead of all of them. Measured on a faithful fresh-clone
- * simulation: `npm run preflight` without `--recurse-submodules` produced **80
- * failures across 1279 lines**, and the block naming the actual cause was at
- * line 1154. Every one of the other 79 was a true statement about an
- * uninitialised tree and none of them said so.
- *
- * `check-submodules-are-populated.mjs` already prints the directories and the
- * exact `git submodule update --init --recursive` to run. It was simply
- * unreachable in practice.
- */
-const ENVIRONMENT = [
-  ['submodules are populated', 'node', ['scripts/check-submodules-are-populated.mjs'], ROOT],
-];
+/** Paths this hook judges, relative to the parent. */
+function changedPaths() {
+  const prefix = repo === 'ui' ? 'citadel-workspaces/' : '';
+  const dir = repo === 'ui' ? UI : ROOT;
+  if (tier === 'pre-commit') return { paths: stagedPaths(dir, prefix), refs: [] };
+  if (tier === 'pre-push') return pushedPaths(dir, prefix, remote, readFileSync(0, 'utf8'));
+  return { paths: [], refs: [] };
+}
+const { paths, refs } = changedPaths();
+
+/** Checks whose arguments ARE the staged files. */
+function preCommitOnly() {
+  if (tier !== 'pre-commit') return [];
+  const out = [];
+  const lintable = paths.filter((p) => p.startsWith('citadel-workspaces/') && /\.(ts|tsx|js|jsx|mjs)$/.test(p))
+    .map((p) => p.slice('citadel-workspaces/'.length));
+  if (lintable.length > 0) out.push(check(`eslint (${lintable.length} staged)`, 'npx', ['eslint', '--max-warnings', '0', '--no-warn-ignored', ...lintable], UI, tag('pre-commit-only')));
+  if (haveCargo) {
+    for (const crate of new Set(paths.filter((p) => p.endsWith('.rs')).map((p) => crateOf(p, ROOT_CRATES)).filter(Boolean))) {
+      const name = /^\s*name\s*=\s*"([^"]+)"/m.exec(readFileSync(join(ROOT, crate, 'Cargo.toml'), 'utf8'))[1];
+      out.push(check(`cargo fmt ${name}`, 'cargo', ['fmt', '-p', name, '--check'], ROOT, tag('pre-commit-only')));
+    }
+  }
+  return out;
+}
+
+/** Every UI branch push typechecks against the parent UI CI will resolve, not the local one -- changed paths or not. */
+const uiPushTypecheck = repo === 'ui' && tier === 'pre-push'
+  ? refs.filter((r) => r.remoteRef.startsWith('refs/heads/')).map((r) => {
+    const branch = r.remoteRef.slice('refs/heads/'.length);
+    return check(`UI typechecks against its CI parent (${branch})`, 'node',
+      ['scripts/check-ui-typechecks-against-its-ci-parent.mjs', '--branch', branch, '--ui-sha', r.localSha], ROOT, tag('push'));
+  })
+  : [];
 
 const CHECKS = [
   ...derived,
-  ['submodule pointers pushed', 'node', ['scripts/check-submodule-pointers-pushed.mjs'], ROOT],
-  // NOTE: gates that run in CI are DERIVED from validate.yml above -- do not add
-  // them here as well. Doing so runs them twice and reports them twice, which is
-  // how `deploys use the recorded pointers` appeared as two failures for one fault.
-  ['event listeners have emitters', 'node', ['scripts/check-event-listeners-have-emitters.mjs'], UI],
-  ['generated artefacts present', 'node', ['scripts/check-generated-artefacts-present.mjs'], ROOT],
-  // Ordered before typecheck deliberately: the three checks below all consume
-  // generated artefacts, and without them they fail in a way that reads as a
-  // defect in the source rather than a missing build step.
-  //
-  // A fresh clone running `npm run preflight` used to get eight errors of the
-  // form "Property 'id' does not exist on type 'GroupMessage'" plus "Cannot
-  // find module 'citadel-workspace-client-ts'". Both are true statements about
-  // an unbuilt tree and neither says so. CLAUDE.md documents the order --
-  // typescript-client (WASM types), then citadel-workspace-client-ts, then
-  // typecheck -- and this makes skipping it say its own name.
-  // The generated bindings type-check on their own, which CI does and this did
-  // not. ts-rs cannot see the types named inside a `#[ts(type = "...")]`
-  // override, so regenerating the bindings — the documented way to add a field —
-  // DROPS those imports while the files keep referencing the types. 36 files at
-  // once, and the only thing that said so was `tsc` in CI, a full cycle later.
-  ['generated bindings typecheck', 'npx', ['tsc', '--noEmit', '-p', 'tsconfig.json'],
-    join(ROOT, 'citadel-internal-service/typescript-client')],
-  // And the parent's own ts-rs bindings, which CI asserts with a bare
-  // `git diff --exit-code` — a shell step, invisible to
-  // check-preflight-runs-what-ci-runs, which compares `node scripts/*.mjs`
-  // invocations. So the ONLY thing that could report a stale binding was a red
-  // CI job, and with no open PR on the parent there were no CI jobs: a doc
-  // comment expanded on `DomainPermissions` sat stale for 103 commits.
-  ['committed bindings match the rust', 'node',
-    ['scripts/check-committed-bindings-match-the-rust.mjs'], ROOT],
-  ['typecheck', 'npx', ['tsc', '-p', 'tsconfig.app.json', '--noEmit'], UI],
-  ['eslint', 'npx', ['eslint', '.', '--max-warnings', '0'], UI],
-  ['unit tests', 'npx', ['vitest', 'run'], UI],
-  // The wasm target, because nothing else local compiles it.
-  //
-  // `store_value_inner` in ILM's testing.rs lost its
-  // `#[cfg(not(target_arch = "wasm32"))]` when its body was moved out of a
-  // trait impl. On NATIVE that is invisible: the wasm-only block is excluded,
-  // so the unguarded one still lands last and everything type-checks. The
-  // crate built, 71 tests passed, clippy was clean and this very script
-  // reported 75/75 -- while `wasm32-unknown-unknown` could not build at all.
-  // CI found it in the Production Docker Build, which is also what produces
-  // the browser's WASM, so the same slip took the Playwright shard down with
-  // it.
-  //
-  // `cargo check` on the wasm CLIENT crate, not on ILM directly: a bare check
-  // of ILM fails on uuid's randomness feature, which the client crate supplies.
-  // This is a check, not a build -- it emits no pkg/ artifacts, so it cannot
-  // overwrite the committed WASM the way a wasm-pack run would.
-  ...wasmCheck,
-  ...cargoChecks,
+  // Not in validate.yml: by the time CI runs, checkout has already succeeded or died.
+  // The parent's pointers; a UI push is what makes them pushable, so its hook does not ask.
+  ...(repo === 'parent' ? [check('submodule pointers pushed', 'node', ['scripts/check-submodule-pointers-pushed.mjs'], ROOT, tag('push'))] : []),
+  // Before the TypeScript checks: without these artefacts they fail as if the source were broken.
+  check('generated artefacts present', 'node', ['scripts/check-generated-artefacts-present.mjs'], ROOT, tag('ui', 'rust:agent')),
+  // ts-rs drops imports named inside `#[ts(type = "...")]`; CI type-checks the bindings alone.
+  check('generated bindings typecheck', 'npx', ['tsc', '--noEmit', '-p', 'tsconfig.json'], join(IS, 'typescript-client'), tag('ui', 'rust:agent')),
+  ...uiPushTypecheck,
+  // The local typecheck stands in for the CI-parent one everywhere but a UI push.
+  ...(uiPushTypecheck.length > 0 ? [] : [check('typecheck', 'npx', ['tsc', '-p', 'tsconfig.app.json', '--noEmit'], UI, tag('ui'))]),
+  check('eslint', 'npx', ['eslint', '.', '--max-warnings', '0'], UI, tag('ui')),
+  check('unit tests', 'npx', ['vitest', 'run'], UI, tag('ui')),
+  ...preCommitOnly(),
+  ...cargo,
 ];
 
-// `--print-plan` prints what preflight WOULD run, as JSON, and exits.
-//
-// It exists so check-preflight-runs-what-ci-runs.mjs can compare this plan
-// against validate.yml without re-implementing the workflow parse. A second
-// copy of that parse is a second thing to drift, which is the failure this
-// file's header already describes once.
 if (process.argv.includes('--print-plan')) {
-  // writeFileSync to fd 1, not console.log: `process.exit` immediately after a
-  // console.log truncates a PIPED write at the 8 KB pipe buffer, and this plan
-  // is ~40 KB. The reader got valid JSON that simply stopped mid-token. A
-  // synchronous write finishes before the exit.
-  writeFileSync(1, `${JSON.stringify(CHECKS.map(([name, cmd, args, cwd]) => ({ name, cmd, args, cwd })))}\n`);
+  // writeFileSync to fd 1: process.exit after console.log truncates a piped write at 8 KB.
+  writeFileSync(1, `${JSON.stringify(CHECKS.map(({ name, cmd, args, cwd }) => ({ name, cmd, args, cwd })))}\n`);
   process.exit(0);
 }
 
-const failed = [];
-// The checkout first, and nothing else if it is wrong. Running 112 gates over a
-// tree that has no submodules in it produces 80 true failures and buries the one
-// that matters a thousand lines down.
-for (const [name, cmd, args, cwd] of ENVIRONMENT) {
-  process.stdout.write(`  ${name} … `);
-  const run = spawnSync(cmd, args, { cwd, encoding: 'utf8', maxBuffer: OUTPUT_LIMIT, env: { ...process.env, SKIP_WASM_BUILD: '1' } });
-  if (run.status === 0) {
-    console.log('ok');
-    continue;
-  }
-  console.log('FAILED');
-  const output = run.error
-    ? `${run.error.message}\n(the command could not be started; nothing ran)`
-    : `${run.stdout ?? ''}${run.stderr ?? ''}`.trim();
-  console.error(`\n${output}\n`);
-  console.error(
-    'Stopping here. Every remaining check reads this tree, so they would all fail\n' +
-      'for this one reason and bury it.',
-  );
-  process.exit(1);
-}
-
-for (const [name, cmd, args, cwd] of CHECKS) {
-  process.stdout.write(`  ${name} … `);
-  // SKIP_WASM_BUILD keeps the cargo gates from rebuilding the WASM client and
-  // overwriting the tracked artifacts under it. Harmless for everything else.
-  const run = spawnSync(cmd, args, {
-    cwd,
-    encoding: 'utf8',
-    maxBuffer: OUTPUT_LIMIT,
-    env: { ...process.env, SKIP_WASM_BUILD: '1' },
-  });
-  if (run.status === 0) {
-    console.log('ok');
-  } else {
-    console.log('FAILED');
-    // `run.error` is the case where the command never STARTED -- a missing
-    // binary, an unreadable cwd. spawnSync then gives status: null and stdout
-    // and stderr BOTH null, so reporting only those two printed a failure
-    // header over an empty block and left the reader to guess. The reason is
-    // in `error.message`; say it.
-    const output = run.error
-      ? `${run.error.message}\n(the command could not be started; nothing ran)`
-      : `${run.stdout ?? ''}${run.stderr ?? ''}`.trim();
-    failed.push({ name, output });
-  }
-}
+const started = Date.now();
+console.log(`preflight --tier ${tier}${repo === 'ui' ? ' (UI repo)' : ''}${paths.length ? `: ${paths.length} changed path(s)` : ''}`);
+await runFatal(ENVIRONMENT);
+const selected = selectChecks(CHECKS, tier, paths, ROOT_CRATES);
+const failed = await runChecks(selected);
+const total = selected.length + ENVIRONMENT.length;
+const took = `${((Date.now() - started) / 1000).toFixed(1)}s`;
 
 if (failed.length > 0) {
-  for (const { name, output } of failed) {
-    console.error(`\n─── ${name} ───\n${output.split('\n').slice(-40).join('\n')}`);
-  }
-  console.error(`\n${failed.length} of ${CHECKS.length + ENVIRONMENT.length} checks failed.`);
+  printFailures(failed, total);
+  console.error(`(${took}; bypass for one commit or push, deliberately: --no-verify)`);
   process.exit(1);
 }
-
-if (skipped.length > 0) {
-  // Named, not hidden: an exclusion nobody can see is how a list starts lying.
-  for (const [name, reason] of skipped) {
-    console.log(`  ${name} … skipped here (${reason})`);
-  }
-}
-// `+ ENVIRONMENT.length`: those ran too, and a total that silently omitted them
-// would report a smaller number after this reordering than before it.
-console.log(`\nAll ${CHECKS.length + ENVIRONMENT.length} checks passed.`);
+for (const [name, reason] of skipped) console.log(`  ${name} … skipped here (${reason})`);
+console.log(`\nAll ${total} checks passed in ${took}.`);

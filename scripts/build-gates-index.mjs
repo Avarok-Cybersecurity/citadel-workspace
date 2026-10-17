@@ -78,6 +78,37 @@ out += `\`--check\` fails when this file is stale, so a new gate has to appear h
 out += `**Read this before writing a new guard.** Four times in one campaign a check\n`;
 out += `was written that already existed elsewhere and better, because nothing listed\n`;
 out += `what was already here.\n`;
+out += `
+## Running them before CI does
+
+\`node scripts/preflight.mjs\` runs every gate here that needs no Docker, in the directory and
+with the environment CI gives it. Its list is DERIVED from both repos' \`validate.yml\`
+(\`scripts/lib/preflight-plan.mjs\`, which is also the one place that lists what it skips, and
+why). It fails first if this clone or the UI submodule has no hooks installed, or if \`node\` is
+not the major CI's gate jobs pin (derived from their \`actions/setup-node\` steps; where CI pins
+two majors, the one covering more gates wins and the rest are printed).
+
+The hooks run tiers of it, installed by the root \`prepare\` script (\`npm install\`), and by the
+UI's own \`prepare\` in a standalone UI clone:
+
+| hook | runs |
+|---|---|
+| pre-commit (parent or UI) | static gates whose source reads the staged paths, eslint on staged files, \`cargo fmt\` for touched crates |
+| pre-push (parent or UI) | by what the pushed commits change: UI -> typecheck, eslint, vitest, UI gates; Rust -> fmt, clippy, tests of that workspace; scripts/workflows -> every parent gate. Always: submodule work committed, pointers pushed |
+| pre-push (UI) | also typechecks the PUSHED commit against the parent ref UI CI will resolve, and refuses when a same-name local parent branch is ahead of its remote: push the parent first |
+
+The only bypass is git's own, \`--no-verify\`, for one commit or push.
+
+\`node scripts/merge-preview.mjs --repo parent|ui|agent|cross\` merges every open PR into master
+in a scratch clone, names each one that conflicts (a PR that conflicts with its base gets no CI
+run at all), and runs the static gates and TypeScript build on the combination; \`cross\` moves
+both submodule pointers to their merged previews inside the parent's master.
+
+\`CI_PARITY=1\` on a geometry or harness run (\`npm run check:ui-sweep\`, \`check:chat-polish\`,
+\`check:mobile\`) makes Chromium report CI's runner (4 cores, deviceMemory 8) so Animations=Auto resolves as
+on CI, throttles the CPU 4x, and asserts the Node major. It reproduces neither the Docker stack
+nor Linux or Windows rendering; scenarios that pin a motion tier keep it.
+`;
 for (const [dir, list] of byDir) {
   out += `\n## \`${dir}/\`\n\n| gate | what it fails on |\n|---|---|\n`;
   for (const r of list) out += `| \`${r.name}\` | ${r.summary} |\n`;
