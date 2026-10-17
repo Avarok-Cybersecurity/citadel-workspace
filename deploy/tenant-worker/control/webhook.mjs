@@ -8,7 +8,8 @@
  *   3. the registry change and the event id are written in ONE D1 batch.
  * A failure at 2 or 3 answers 500 with nothing recorded, and Stripe retries the event.
  */
-import { entitlements, planOfItems } from "./plans.mjs";
+import { ADDONS, entitlements, planOfItems } from "./plans.mjs";
+import { noAddons } from "./addons.mjs";
 import { verifyWebhook } from "./stripe.mjs";
 import { reconcileUsageSubscription } from "./usage-subscription.mjs";
 import { json, readText, refuse } from "./http.mjs";
@@ -18,7 +19,7 @@ const WEBHOOK_BODY_LIMIT = 512 * 1024;
 const LIVE = new Set(["active", "trialing", "past_due"]);
 const ENDED = new Set(["canceled", "unpaid", "incomplete_expired"]);
 // Free meters by calendar month: no Stripe period.
-const FREE_PLAN = { tier: "free", interval: null, seats: 0, storage_blocks: 0, period_start: null, period_end: null };
+const FREE_PLAN = { tier: "free", interval: null, seats: 0, ...noAddons(ADDONS), period_start: null, period_end: null };
 
 export async function handleWebhook(io, cfg, request) {
   if (!cfg.webhookSecret) return refuse("billing-not-configured", "billing is not available yet", 503);

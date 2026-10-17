@@ -1,11 +1,16 @@
 /**
  * The tenant registry in D1. Every query the control plane makes is here.
  */
+import { ADDONS } from "./plans.mjs";
 
+/** One column per add-on quantity (control/addons.mjs), each added by its own migration. */
+const ADDON_COLUMNS = ADDONS.map((a) => a.quantityField);
 const COLUMNS =
-  "slug, tenant_id, display_name, status, tier, interval, seats, storage_blocks, stripe_customer, " +
+  `slug, tenant_id, display_name, status, tier, interval, seats, ${ADDON_COLUMNS.join(", ")}, stripe_customer, ` +
   "stripe_subscription, created_at, expires_at, claim_hash, checkout_hash, sub_event_created, reservation_hash, checkout_sealed, " +
   "period_start, period_end, usage_subscription";
+const INSERT_COLUMNS = ["slug", "tenant_id", "display_name", "status", "tier", "interval", "seats", ...ADDON_COLUMNS,
+  "created_at", "expires_at", "claim_hash", "reservation_hash"];
 
 export class Store {
   constructor(db) {
@@ -63,12 +68,9 @@ export class Store {
       await this.db.batch([
         clear,
         this.db
-          .prepare(
-            "INSERT INTO tenants (slug, tenant_id, display_name, status, tier, interval, seats, storage_blocks, " +
-              "created_at, expires_at, claim_hash, reservation_hash) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)",
-          )
+          .prepare(`INSERT INTO tenants (${INSERT_COLUMNS.join(", ")}) VALUES (${INSERT_COLUMNS.map(() => "?").join(", ")})`)
           .bind(
-            row.slug, row.tenant_id, row.display_name, row.tier, row.interval, row.seats, row.storage_blocks, now,
+            row.slug, row.tenant_id, row.display_name, "pending", row.tier, row.interval, row.seats, ...ADDON_COLUMNS.map((c) => row[c]), now,
             row.expires_at, row.claim_hash, row.reservation_hash,
           ),
         // The acceptance lands with the reservation or not at all.
@@ -149,6 +151,6 @@ export class Store {
 
 /** The columns an event may change, so `applyEvent` never builds SQL from anything else. */
 export const EVENT_FIELDS = new Set([
-  "status", "tier", "interval", "seats", "storage_blocks", "stripe_customer", "stripe_subscription",
+  "status", "tier", "interval", "seats", ...ADDON_COLUMNS, "stripe_customer", "stripe_subscription",
   "sub_event_created", "expires_at", "period_start", "period_end", "usage_subscription",
 ]);

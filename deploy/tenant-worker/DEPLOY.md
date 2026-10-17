@@ -136,7 +136,7 @@ Nothing here reaches live mode: `deploy.sh`'s catalogue audit refuses a live key
    - Invoices: show invoice history.
    - Subscriptions: allow cancelling (at the end of the period); allow updating quantities
      (seats); allow switching plans, with the Team and Business products and their monthly and
-     yearly prices, and the storage add-on's quantity.
+     yearly prices, and the quantities of the storage add-on and the secure-link packs.
    - Business information: the default redirect link `https://work.avarok.net/`.
    - Save.
 
