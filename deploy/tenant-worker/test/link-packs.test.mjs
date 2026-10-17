@@ -40,15 +40,15 @@ describe("link-pack entitlements", () => {
 
 describe("a subscription's pack items", () => {
   it("are read as the pack count, beside storage", () => {
-    expect(planOfItems([item("citadel-team-month", 3), item("citadel-secure_links-month", 4)])).toEqual({
+    expect(planOfItems([item("citadel-team-month", 3), item("citadel-secure-links-month", 4)])).toEqual({
       tier: "team", interval: "month", seats: 3, storage_blocks: 0, link_packs: 4,
     });
-    expect(planOfItems([item("citadel-business-year", 2), item("citadel-storage-year", 1), item("citadel-secure_links-year", 2)])).toEqual({
+    expect(planOfItems([item("citadel-business-year", 2), item("citadel-storage-year", 1), item("citadel-secure-links-year", 2)])).toEqual({
       tier: "business", interval: "year", seats: 2, storage_blocks: 1, link_packs: 2,
     });
   });
   it("on another interval than the tier are refused", () => {
-    expect(planOfItems([item("citadel-team-month", 1), item("citadel-secure_links-year", 1)]).error).toMatch(/secure_links and tier bill on different intervals/);
+    expect(planOfItems([item("citadel-team-month", 1), item("citadel-secure-links-year", 1)]).error).toMatch(/secure-links and tier bill on different intervals/);
   });
 });
 
@@ -61,7 +61,7 @@ describe("Checkout with packs", () => {
     const r = await post("/api/tenants", createBody(slug, { tier: "team", interval: "month", seats: 2, storage_blocks: 1, link_packs: 3 }));
     expect(r.status).toBe(201);
     const keys = calls.find((c) => c.url.endsWith("/v1/prices")).form.getAll("lookup_keys[]");
-    expect(keys).toEqual(["citadel-team-month", "citadel-storage-month", "citadel-secure_links-month", "citadel-relay-overage"]);
+    expect(keys).toEqual(["citadel-team-month", "citadel-storage-month", "citadel-secure-links-month", "citadel-relay-overage"]);
     expect(lineItems(calls.find((c) => c.url.endsWith("/v1/checkout/sessions")).form)).toEqual({
       "line_items[0][price]": "price_team_m",
       "line_items[0][quantity]": "2",
@@ -111,7 +111,7 @@ describe("the webhook with packs", () => {
     expect((await post("/api/tenants", createBody(slug, { tier: "team", interval: "month", seats: 3, storage_blocks: 2 }))).status).toBe(201);
     const row = await tenantRow(slug);
     const at = Math.floor(Date.now() / 1000);
-    const items = (packs) => [item("citadel-team-month", 3), item("citadel-storage-month", 2), item("citadel-secure_links-month", packs)];
+    const items = (packs) => [item("citadel-team-month", 3), item("citadel-storage-month", 2), item("citadel-secure-links-month", packs)];
     const send = (packs, created) => deliver(subscriptionEvent("customer.subscription.updated", row, { id: `evt_${crypto.randomUUID()}`, created, items: items(packs) }));
     expect((await send(2, at)).status).toBe(200);
     expect(await tenantRow(slug)).toMatchObject({ status: "active", storage_blocks: 2, link_packs: 2 });

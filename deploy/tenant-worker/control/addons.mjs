@@ -18,7 +18,7 @@ export const MAX_LINK_PACKS = 1000;
  */
 const QUANTITY = {
   storage: { field: "storage_blocks", max: MAX_STORAGE_BLOCKS },
-  secure_links: { field: "link_packs", max: MAX_LINK_PACKS },
+  "secure-links": { field: "link_packs", max: MAX_LINK_PACKS },
 };
 
 /**

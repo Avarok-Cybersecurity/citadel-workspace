@@ -29,8 +29,8 @@ describe("slug", () => {
 describe("lookup keys and plans", () => {
   it("derives every key from tiers.json through the catalogue", () => {
     expect([...PRICES.keys()].sort()).toEqual([
-      "citadel-business-month", "citadel-business-year", "citadel-relay-overage", "citadel-secure_links-month",
-      "citadel-secure_links-year", "citadel-storage-month", "citadel-storage-year", "citadel-team-month", "citadel-team-year",
+      "citadel-business-month", "citadel-business-year", "citadel-relay-overage", "citadel-secure-links-month",
+      "citadel-secure-links-year", "citadel-storage-month", "citadel-storage-year", "citadel-team-month", "citadel-team-year",
     ]);
     expect(tierKey("team", "month")).toBe("citadel-team-month");
     expect(storageKey("year")).toBe("citadel-storage-year");
