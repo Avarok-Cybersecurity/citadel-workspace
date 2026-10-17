@@ -14,11 +14,13 @@ test('the approved prices are what the table says', () => {
     'citadel-business-year': 12000,
     'citadel-storage-month': 200,
     'citadel-storage-year': 2000,
+    'citadel-secure_links-month': 200,
+    'citadel-secure_links-year': 2000,
   });
 });
 
 test('Free sells nothing, so it creates no Stripe product', () => {
-  assert.deepEqual(deriveCatalogue(table).map((p) => p.tier), ['team', 'business', 'storage']);
+  assert.deepEqual(deriveCatalogue(table).map((p) => p.tier), ['team', 'business', 'storage', 'secure_links']);
 });
 
 test('every paid price is per seat', () => {
@@ -60,6 +62,29 @@ test('extra storage is its own product, per 10 GB block, on paid tiers only', ()
   const bad = structuredClone(table);
   bad.addons[0].available_on.push('enterprise');
   assert.throws(() => deriveCatalogue(bad), /unknown tier enterprise/);
+});
+
+test('secure links are their own product, per 50-link pack at $2/month or $20/year, on paid tiers only', () => {
+  const links = deriveCatalogue(table).find((p) => p.tier === 'secure_links');
+  assert.equal(links.product.name, 'Citadel Workspace Secure Link Pack');
+  assert.equal(links.product.description, '50 secure links per pack, on team and business');
+  assert.deepEqual(links.prices.map((p) => [p.lookup_key, p.unit_amount, p.interval, p.usage_type]), [
+    ['citadel-secure_links-month', 200, 'month', 'licensed'],
+    ['citadel-secure_links-year', 2000, 'year', 'licensed'],
+  ]);
+});
+
+test('an add-on granting something the catalogue cannot describe is refused', () => {
+  const bad = structuredClone(table);
+  bad.addons[1].grants = { mystery: 1 };
+  assert.throws(() => deriveCatalogue(bad), /grants mystery/);
+  const zero = structuredClone(table);
+  zero.addons[1].grants.secure_links_pool = 0;
+  assert.throws(() => deriveCatalogue(zero), /positive integer/);
+});
+
+test('every tier states its own secure-link allowance per member', () => {
+  assert.deepEqual(Object.fromEntries(table.tiers.map((t) => [t.id, t.limits.secure_links_per_member])), { free: 5, team: 50, business: 50 });
 });
 
 test('relay overage is one metered price under citadel-relay-overage, on its own meter', () => {
