@@ -47,17 +47,24 @@ function remoteHeads() {
   }));
 }
 
-function localBranch(remoteSha) {
+/**
+ * The local parent branch of the same name, with the paths its commits change that the parent CI
+ * resolves lacks -- the remote branch, or the fallback when there is none. The UI pointer is
+ * dropped (parent-ref.mjs says why).
+ */
+function localBranch(remoteSha, fallbackSha) {
   let sha;
   try {
     sha = git(ROOT, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`);
   } catch {
     return null;
   }
-  if (remoteSha === null) return { sha, ahead: Number.NaN };
-  // The remote branch may hold commits this clone never fetched; ahead-ness needs them.
-  if (spawnSync('git', ['cat-file', '-e', `${remoteSha}^{commit}`], { cwd: ROOT }).status !== 0) git(ROOT, 'fetch', '--quiet', 'origin', branch);
-  return { sha, ahead: Number(git(ROOT, 'rev-list', '--count', `${remoteSha}..${sha}`)) };
+  const against = remoteSha ?? fallbackSha;
+  // The remote may hold commits this clone never fetched; the comparison needs them.
+  if (spawnSync('git', ['cat-file', '-e', `${against}^{commit}`], { cwd: ROOT }).status !== 0) git(ROOT, 'fetch', '--quiet', 'origin', against);
+  const base = git(ROOT, 'merge-base', against, sha);
+  const unpushed = git(ROOT, 'diff', '--name-only', base, sha).split('\n').filter((p) => p && p !== 'citadel-workspaces');
+  return { sha, unpushed };
 }
 
 const heads = remoteHeads();
@@ -67,7 +74,7 @@ if (!fallbackSha) {
   process.exit(1);
 }
 const remoteSha = heads.get(branch) ?? null;
-const decision = decideParentRef({ branch, fallback, remoteSha, fallbackSha, local: localBranch(remoteSha) });
+const decision = decideParentRef({ branch, fallback, remoteSha, fallbackSha, local: localBranch(remoteSha, fallbackSha) });
 if (decision.verdict === 'refuse') {
   console.error(`REFUSED: ${decision.why}`);
   process.exit(1);

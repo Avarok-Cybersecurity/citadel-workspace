@@ -44,20 +44,25 @@ test('CI falls back to PARENT_BRANCH when the parent has no such branch anywhere
 });
 
 test('a same-name local parent branch not on the remote refuses the push', () => {
-  const d = decideParentRef({ ...base, remoteSha: null, local: { sha: 'b'.repeat(40), ahead: Number.NaN } });
+  const d = decideParentRef({ ...base, remoteSha: null, local: { sha: 'b'.repeat(40), unpushed: ['citadel-workspace-client-ts/src/a.ts'] } });
   assert.equal(d.verdict, 'refuse');
-  assert.match(d.why, /not on its remote.*Push the parent first/s);
+  assert.match(d.why, /not on its remote.*client-ts\/src\/a\.ts.*Push the parent first/s);
 });
 
 test('a same-name local parent branch ahead of its remote refuses the push', () => {
-  const d = decideParentRef({ ...base, remoteSha: 'a'.repeat(40), local: { sha: 'b'.repeat(40), ahead: 2 } });
+  const d = decideParentRef({ ...base, remoteSha: 'a'.repeat(40), local: { sha: 'b'.repeat(40), unpushed: ['x', 'y'] } });
   assert.equal(d.verdict, 'refuse');
-  assert.match(d.why, /2 commit\(s\) ahead/);
+  assert.match(d.why, /ahead of its remote by 2 path/);
 });
 
 test('a local parent branch level with its remote is fine', () => {
-  const d = decideParentRef({ ...base, remoteSha: 'a'.repeat(40), local: { sha: 'a'.repeat(40), ahead: 0 } });
+  const d = decideParentRef({ ...base, remoteSha: 'a'.repeat(40), local: { sha: 'a'.repeat(40), unpushed: [] } });
   assert.equal(d.verdict, 'ok');
+});
+
+test('a local parent branch that only moves the UI pointer does not block the UI push', () => {
+  const d = decideParentRef({ ...base, remoteSha: null, local: { sha: 'b'.repeat(40), unpushed: [] } });
+  assert.deepEqual([d.verdict, d.ref], ['ok', 'master']);
 });
 
 test('PARENT_BRANCH must be a literal in the UI workflow env', () => {

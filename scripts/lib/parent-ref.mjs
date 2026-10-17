@@ -26,17 +26,21 @@ export function fallbackBranch(env) {
  * @param {string} input.fallback        PARENT_BRANCH from the UI workflow
  * @param {string|null} input.remoteSha  the parent remote's `branch`, or null when it has none
  * @param {string} input.fallbackSha     the parent remote's `fallback`
- * @param {{ sha: string, ahead: number } | null} input.local  the LOCAL parent branch of that
- *   name -- `ahead` counts its commits the remote branch lacks -- or null when there is none
+ * @param {{ sha: string, unpushed: string[] } | null} input.local  the LOCAL parent branch of
+ *   that name -- `unpushed` lists the paths its commits change that the parent CI resolves (the
+ *   remote branch, else the fallback) lacks, the UI pointer excluded -- or null when there is none
+ *
+ * The UI pointer does not count. UI CI checks THIS commit out over the parent's pointer, so a
+ * parent branch that only moves the pointer resolves the same either way -- and the pointer
+ * cannot be pushed first anyway: the parent's pre-push refuses a pointer the UI remote lacks.
  */
 export function decideParentRef({ branch, fallback, remoteSha, fallbackSha, local }) {
-  if (local !== null && branch !== fallback) {
+  if (local !== null && branch !== fallback && local.unpushed.length > 0) {
+    const what = `${local.unpushed.length} path(s) UI CI will not see (${local.unpushed.slice(0, 5).join(', ')}${local.unpushed.length > 5 ? ', ...' : ''})`;
     if (remoteSha === null) {
-      return refuse(branch, `the parent has a local '${branch}' that is not on its remote, so UI CI would resolve '${fallback}' instead`);
+      return refuse(branch, `the parent has a local '${branch}' that is not on its remote, so UI CI would resolve '${fallback}' instead and miss ${what}`);
     }
-    if (local.ahead > 0) {
-      return refuse(branch, `the parent's local '${branch}' is ${local.ahead} commit(s) ahead of its remote, so UI CI would build against the older parent`);
-    }
+    return refuse(branch, `the parent's local '${branch}' is ahead of its remote by ${what}`);
   }
   if (remoteSha !== null) return { verdict: 'ok', ref: branch, sha: remoteSha, why: `the parent has a '${branch}' branch` };
   return { verdict: 'ok', ref: fallback, sha: fallbackSha, why: `the parent has no '${branch}' branch, so CI falls back to '${fallback}'` };
@@ -47,7 +51,7 @@ function refuse(branch, why) {
     verdict: 'refuse',
     ref: null,
     sha: null,
-    why: `${why}.\n  Push the parent first: git -C <parent> push origin ${branch}\n  (the UI repo's CI resolves its parent when the run starts, so the order matters)`,
+    why: `${why}.\n  Push the parent first: git -C <parent> push origin ${branch}\n  (UI CI resolves its parent when the run starts, so the order matters. If that parent commit also\n  moves the UI pointer, push the parent's changes without the pointer bump, then this, then the bump.)`,
   };
 }
 

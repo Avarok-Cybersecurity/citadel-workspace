@@ -149,7 +149,8 @@ const uiPushTypecheck = repo === 'ui' && tier === 'pre-push'
 const CHECKS = [
   ...derived,
   // Not in validate.yml: by the time CI runs, checkout has already succeeded or died.
-  check('submodule pointers pushed', 'node', ['scripts/check-submodule-pointers-pushed.mjs'], ROOT, tag('push')),
+  // The parent's pointers; a UI push is what makes them pushable, so its hook does not ask.
+  ...(repo === 'parent' ? [check('submodule pointers pushed', 'node', ['scripts/check-submodule-pointers-pushed.mjs'], ROOT, tag('push'))] : []),
   // Before the TypeScript checks: without these artefacts they fail as if the source were broken.
   check('generated artefacts present', 'node', ['scripts/check-generated-artefacts-present.mjs'], ROOT, tag('ui', 'rust:agent')),
   // ts-rs drops imports named inside `#[ts(type = "...")]`; CI type-checks the bindings alone.
