@@ -1120,6 +1120,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             entity_type,
             name,
             description,
+            metadata,
         } => {
             use crate::handlers::domain::node_ops::AsyncNodeOperations;
             match kernel
@@ -1130,6 +1131,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     entity_type,
                     name,
                     description,
+                    metadata.as_deref(),
                 )
                 .await
             {
@@ -1288,6 +1290,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
 
         WorkspaceProtocolRequest::Roles(request) => {
             super::roles::process(kernel, actor_user_id, requester_cid, request).await
+        }
+
+        WorkspaceProtocolRequest::Documents(request) => {
+            super::documents::process(kernel, actor_user_id, requester_cid, request).await
         }
 
         WorkspaceProtocolRequest::DeleteNode { node_id, cascade } => {

@@ -35,6 +35,7 @@ async fn office_with_editor<R: citadel_sdk::prelude::Ratchet>(
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Engineering".to_string(),
             description: "where the work happens".to_string(),
+            metadata: None,
         },
     )
     .await

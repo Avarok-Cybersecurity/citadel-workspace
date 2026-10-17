@@ -44,6 +44,7 @@ async fn creating_a_node_is_broadcast_to_everyone_else() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Engineering".to_string(),
             description: String::new(),
+            metadata: None,
         },
         TEST_ADMIN_USER_ID,
     )
@@ -76,6 +77,7 @@ async fn deleting_a_node_is_broadcast_to_everyone_else() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Doomed".to_string(),
             description: String::new(),
+            metadata: None,
         },
         TEST_ADMIN_USER_ID,
     )
@@ -121,6 +123,7 @@ async fn renaming_a_node_is_broadcast_to_everyone_else() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Old Name".to_string(),
             description: String::new(),
+            metadata: None,
         },
         TEST_ADMIN_USER_ID,
     )
@@ -170,6 +173,7 @@ async fn a_pure_content_save_does_not_also_broadcast_a_structural_update() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Docs".to_string(),
             description: String::new(),
+            metadata: None,
         },
         TEST_ADMIN_USER_ID,
     )

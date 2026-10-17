@@ -32,6 +32,7 @@ pub async fn node(kernel: &Kernel, parent: &str, name: &str) -> String {
             &NodeEntityType::Child("Office".to_string()),
             name,
             "",
+            None,
         )
         .await
         .expect("an admin may create the node")

@@ -165,3 +165,24 @@ void test('SSOT: WORKSPACE_BIGINT_FIELDS matches the generated workspace types e
     Array.from(WORKSPACE_BIGINT_FIELDS).sort()
   );
 });
+
+void test('no field name is bigint in one generated type and something else in another', () => {
+  // The decoder converts by field NAME, wherever it appears. A name that is a u64 in one type and
+  // an array in another makes every message carrying the array fail to decode: a document
+  // refusal's size was once `bytes: bigint` beside a snapshot's `bytes: Array<number>`.
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const generatedDir = path.resolve(here, '../../src/types/generated');
+  const kinds = new Map<string, Set<string>>();
+  for (const file of fs.readdirSync(generatedDir)) {
+    if (!file.endsWith('.ts')) continue;
+    const source = fs.readFileSync(path.join(generatedDir, file), 'utf8');
+    for (const match of source.matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([^,}]+)/g)) {
+      if (!WORKSPACE_BIGINT_FIELDS.has(match[1])) continue;
+      const kind = match[2].trim().startsWith('bigint') ? 'bigint' : match[2].trim();
+      kinds.set(match[1], (kinds.get(match[1]) ?? new Set<string>()).add(kind));
+    }
+  }
+  const mixed = [...kinds].filter(([, seen]) => seen.size > 1).map(([name, seen]) => `${name}: ${[...seen].join(' | ')}`);
+  assert.ok(kinds.size > 0, 'no bigint field was found, so nothing was checked');
+  assert.deepEqual(mixed, []);
+});

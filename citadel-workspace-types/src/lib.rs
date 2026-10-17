@@ -4,6 +4,8 @@
 /// files and shared git dependencies. Updating one and not the other compiles
 /// cleanly and fails at runtime.
 pub mod dependency_agreement;
+/// A document node's CRDT update log, its snapshot, and the awareness relay.
+pub mod documents;
 pub mod ice;
 pub mod messaging_trust;
 /// A workspace's role table and its built-ins.
@@ -276,6 +278,12 @@ pub enum WorkspaceProtocolRequest {
         entity_type: NodeEntityType,
         name: String,
         description: String,
+        /// The node's metadata document: a JSON object whose top-level keys belong to
+        /// independent features (the Citadel App a document opens in is one). The client
+        /// already sent this field and serde dropped it, so every node was created with
+        /// empty metadata. Absent means empty; anything else must be a JSON object.
+        #[debug(with = bytes_opt_debug_fmt)]
+        metadata: Option<Vec<u8>>,
     },
 
     /// Get a specific node by ID
@@ -429,6 +437,9 @@ pub enum WorkspaceProtocolRequest {
 
     /// The workspace's role table; see `roles`.
     Roles(roles_protocol::RolesRequest),
+
+    /// A document node's update log, snapshot and awareness; see `documents`.
+    Documents(documents::DocumentsRequest),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -633,6 +644,8 @@ pub enum WorkspaceProtocolResponse {
     MessagingTrust(messaging_trust::MessagingTrustResponse),
 
     Roles(roles_protocol::RolesResponse),
+
+    Documents(documents::DocumentsResponse),
 }
 
 /// Type of group message

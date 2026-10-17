@@ -71,6 +71,7 @@ async fn test_member_command_processing() {
         entity_type: NodeEntityType::Child("Office".to_string()),
         name: "Test Office".to_string(),
         description: "Test Office Description".to_string(),
+        metadata: None,
     };
 
     let office_response = execute_command(&kernel, create_office_req).await.unwrap();

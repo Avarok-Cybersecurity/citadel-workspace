@@ -71,6 +71,9 @@ pub mod config {
         /// self-hosted server, whose users never saw them. No default: a server that does not
         /// say refuses to start. See `resolve_require_platform_terms`.
         pub require_platform_terms: Option<bool>,
+        /// The Documents relay's limits. No default: a server that does not say refuses to
+        /// start. See `resolve_documents_relay`.
+        pub documents: Option<crate::kernel::documents::DocumentsConfig>,
     }
 
     impl std::fmt::Debug for ServerConfig {
@@ -100,6 +103,7 @@ pub mod config {
                 .field("allow_first_connect_admin", &self.allow_first_connect_admin)
                 .field("workspace_name", &self.workspace_name)
                 .field("require_platform_terms", &self.require_platform_terms)
+                .field("documents", &self.documents)
                 .finish()
         }
     }
@@ -501,6 +505,20 @@ pub fn resolve_require_platform_terms(config: &ServerConfig) -> Result<bool, Net
     })
 }
 
+/// The Documents relay `config` describes. Unset is a configuration error: its bounds depend on
+/// where the server runs and what its clients send, so no value is right for every server.
+pub fn resolve_documents_relay(
+    config: &ServerConfig,
+) -> Result<kernel::documents::DocumentsRelay, NetworkError> {
+    let documents = config.documents.ok_or_else(|| {
+        NetworkError::msg(
+            "[documents] must be set: max_updates_per_pull, snapshot_min_updates, \
+             max_update_bytes, max_snapshot_bytes, max_awareness_bytes and awareness_per_second",
+        )
+    })?;
+    kernel::documents::DocumentsRelay::new(documents).map_err(NetworkError::msg)
+}
+
 /// The root workspace name `config` asks for, trimmed; `None` when it names none.
 ///
 /// A name that cannot be shown is a configuration error, not something to fall back from: a
@@ -686,6 +704,7 @@ async fn workspace_kernel(
     kernel.set_first_connect_admin(first_connect_admin);
     kernel.set_workspace_name(resolve_workspace_name(config)?);
     kernel.set_platform_terms_required(resolve_require_platform_terms(config)?);
+    kernel.set_documents_relay(resolve_documents_relay(config)?);
     if ice_servers.is_none() {
         info!(target: "citadel", "No relay-credential source: GetIceServers answers that no relay is available.");
     }
@@ -1203,6 +1222,7 @@ mod server_config_debug_tests {
             allow_first_connect_admin: None,
             workspace_name: Some("Admin Lab".to_string()),
             require_platform_terms: Some(false),
+            documents: None,
         }
     }
 

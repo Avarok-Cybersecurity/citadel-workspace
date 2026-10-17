@@ -49,6 +49,7 @@ async fn test_complete_user_removal() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "For Testing".to_string(),
+            metadata: None,
         },
     )
     .await;
