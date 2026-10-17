@@ -39,10 +39,12 @@ async fn a_table_from_before_secure_links_is_upgraded_once() {
         .backend_save("citadel_workspace.roles.workspace-root", &legacy_table())
         .await
         .expect("legacy table");
-    let mut climber = backend.get_user("climber").await.unwrap().expect("climber");
-    climber
-        .workspace_roles
-        .insert(WORKSPACE_ROOT_ID.to_string(), EDITOR.to_string());
+    // The climber holds the editor role, as a member added under the old table would.
+    let climber = User {
+        workspace_roles: std::iter::once((WORKSPACE_ROOT_ID.to_string(), EDITOR.to_string()))
+            .collect(),
+        ..backend.get_user("climber").await.unwrap().expect("climber")
+    };
     backend
         .insert_user("climber".to_string(), climber)
         .await
