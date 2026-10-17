@@ -28,5 +28,12 @@
 # the commit the pointer names, without them. A Rust fix and the gate enforcing
 # it landed in one wave that way; CI failed on the gate, naming the very fields
 # the fix had changed.
+#
+# Then the tier the pushed commits need, decided from what they change relative to the remote
+# (scripts/lib/change-tiers.mjs): UI paths -> typecheck, eslint, vitest and the UI's static
+# gates; Rust -> fmt, clippy and tests for that workspace; scripts and workflows -> the parent's
+# script gates. The pointer check above (#1) runs inside it, on every push.
+#
+# To skip it for one push, deliberately: git push --no-verify
 node scripts/check-submodule-work-is-committed.mjs || exit 1
-exec node scripts/check-submodule-pointers-pushed.mjs
+exec node scripts/preflight.mjs --tier pre-push --remote "$1"

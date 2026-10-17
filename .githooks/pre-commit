@@ -1,0 +1,11 @@
+#!/bin/sh
+#
+# The fast tier, on what is staged: file length, cargo fmt for the touched crates, eslint on
+# the staged TypeScript, and the static gates whose sources read the changed paths.
+#
+# ~190 of 344 CI failures in thirty days were gates preflight already ran that nobody ran
+# before pushing. A hook is the only version of "run it first" that does not depend on memory.
+#
+# Installed by the root `prepare` script (npm runs it on install); preflight refuses to run in
+# a clone where it is not. To skip it for one commit, deliberately: git commit --no-verify
+exec node scripts/preflight.mjs --tier pre-commit
