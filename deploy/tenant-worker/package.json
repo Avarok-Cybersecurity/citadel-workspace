@@ -9,7 +9,7 @@
     "@cloudflare/vitest-pool-workers": "0.22.0",
     "@vitest/runner": "4.1.0",
     "@vitest/snapshot": "4.1.0",
-    "vitest": "4.1.0",
+    "vitest": "4.1.11",
     "wrangler": "4.136.3"
   },
   "overrides": {
