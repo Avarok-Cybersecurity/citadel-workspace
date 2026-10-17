@@ -85,6 +85,7 @@ async fn test_role_operations() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "Office for role testing".to_string(),
+            metadata: None,
         },
     )
     .await

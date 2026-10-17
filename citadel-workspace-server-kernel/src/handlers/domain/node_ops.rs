@@ -59,6 +59,7 @@ pub trait AsyncNodeOperations<R: Ratchet + Send + Sync + 'static>: Send + Sync {
     /// * `entity_type` - Type of node (Workspace is only valid for root)
     /// * `name` - Node display name
     /// * `description` - Node description
+    /// * `metadata` - The node's metadata document (a JSON object), or None for empty
     ///
     /// # Returns
     /// The created DomainNode with generated ID and timestamps
@@ -69,6 +70,7 @@ pub trait AsyncNodeOperations<R: Ratchet + Send + Sync + 'static>: Send + Sync {
         entity_type: &NodeEntityType,
         name: &str,
         description: &str,
+        metadata: Option<&[u8]>,
     ) -> Result<DomainNode, NetworkError>;
 
     /// Get a specific node by ID.

@@ -64,6 +64,7 @@ async fn test_office_operations() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "A test office".to_string(),
+            metadata: None,
         },
     )
     .await

@@ -276,6 +276,12 @@ pub enum WorkspaceProtocolRequest {
         entity_type: NodeEntityType,
         name: String,
         description: String,
+        /// The node's metadata document: a JSON object whose top-level keys belong to
+        /// independent features (the Citadel App a document opens in is one). The client
+        /// already sent this field and serde dropped it, so every node was created with
+        /// empty metadata. Absent means empty; anything else must be a JSON object.
+        #[debug(with = bytes_opt_debug_fmt)]
+        metadata: Option<Vec<u8>>,
     },
 
     /// Get a specific node by ID
