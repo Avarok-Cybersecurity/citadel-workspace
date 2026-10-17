@@ -68,15 +68,15 @@ pub fn decide_resolve(
     visitor: &Visitor,
     now_ms: u64,
 ) -> ResolveDecision {
-    // Compared whether or not a record was found, so a miss costs what a hit does.
+    // The grant is checked before the token is compared, and both run whatever the record, so
+    // a miss costs what a hit does. Every refusal is the same answer either way.
+    let granted = record.is_some_and(|r| grant_admits(&r.grants, visitor));
     let matched = secrets_match(record.map_or("", |r| r.digest.as_str()), presented_digest);
     let Some(record) = record else {
         return ResolveDecision::Unavailable;
     };
-    let admitted = matched
-        && record.live_at(now_ms)
-        && grant_admits(&record.grants, visitor)
-        && validate_target(&record.target).is_ok();
+    let admitted =
+        granted && matched && record.live_at(now_ms) && validate_target(&record.target).is_ok();
     if admitted {
         ResolveDecision::Admit {
             burn: record.one_time,
