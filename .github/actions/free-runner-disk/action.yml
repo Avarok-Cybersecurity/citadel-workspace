@@ -1,0 +1,16 @@
+name: Free runner disk
+description: >
+  Removes toolchains a GitHub-hosted Ubuntu runner ships and these jobs never use, so a
+  Rust test build or the dev-stage images fit. The runner starts with about 14 GB free; the
+  agent workspace's debug test build alone filled it ("No space left on device", 2026-10-16).
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost /usr/local/.ghcup "$AGENT_TOOLSDIRECTORY"
+        # Best effort: this frees cache, it does not build anything. apt takes a lock, and
+        # unattended-upgrades holds one for minutes after boot -- the failure that killed
+        # test:crud in validate.yml. A cleanup that cannot run is not a reason to fail the build.
+        sudo apt-get clean || echo 'apt-get clean skipped (lock held)'
+        df -h /
