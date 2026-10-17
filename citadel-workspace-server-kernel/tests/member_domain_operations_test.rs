@@ -48,6 +48,7 @@ async fn test_add_user_to_domain() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "For Testing".to_string(),
+            metadata: None,
         },
     )
     .await;
@@ -113,6 +114,7 @@ async fn test_remove_user_from_domain() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "For Testing".to_string(),
+            metadata: None,
         },
     )
     .await;

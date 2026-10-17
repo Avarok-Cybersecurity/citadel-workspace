@@ -104,7 +104,14 @@ limit: number | null, } } | { "GetThreadMessages": { group_id: string,
 /**
  * The parent message ID
  */
-parent_message_id: string, } } | "GetServerCapabilities" | "GetIceServers" | "GetSignInSettings" | { "UpdateSignInSettings": { settings: SignInSettings, } } | { "CreateNode": { parent_id: string | null, entity_type: NodeEntityType, name: string, description: string, } } | { "GetNode": { node_id: string, } } | { "UpdateWorkspaceTheme": { 
+parent_message_id: string, } } | "GetServerCapabilities" | "GetIceServers" | "GetSignInSettings" | { "UpdateSignInSettings": { settings: SignInSettings, } } | { "CreateNode": { parent_id: string | null, entity_type: NodeEntityType, name: string, description: string, 
+/**
+ * The node's metadata document: a JSON object whose top-level keys belong to
+ * independent features (the Citadel App a document opens in is one). The client
+ * already sent this field and serde dropped it, so every node was created with
+ * empty metadata. Absent means empty; anything else must be a JSON object.
+ */
+metadata: Array<number> | null, } } | { "GetNode": { node_id: string, } } | { "UpdateWorkspaceTheme": { 
 /**
  * None targets the root workspace, matching UpdateWorkspace.
  */

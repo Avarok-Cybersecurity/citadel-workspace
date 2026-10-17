@@ -28,6 +28,7 @@ async fn node(kernel: &Kernel, parent: &str, kind: &str, name: &str) -> String {
             &NodeEntityType::Child(kind.to_string()),
             name,
             "",
+            None,
         )
         .await
         .expect("an admin may create the node")

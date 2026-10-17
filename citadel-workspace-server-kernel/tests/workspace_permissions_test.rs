@@ -94,6 +94,7 @@ async fn test_permissions_inheritance() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "Test Office Description".to_string(),
+            metadata: None,
         },
     )
     .await;
@@ -111,6 +112,7 @@ async fn test_permissions_inheritance() {
             entity_type: NodeEntityType::Child("Room".to_string()),
             name: "Test Room".to_string(),
             description: "Test Room Description".to_string(),
+            metadata: None,
         },
     )
     .await;

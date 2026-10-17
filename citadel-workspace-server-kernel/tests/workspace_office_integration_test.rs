@@ -33,6 +33,7 @@ async fn test_add_office_to_workspace() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: office_name.to_string(),
             description: "Test Office Description".to_string(),
+            metadata: None,
         },
     )
     .await;

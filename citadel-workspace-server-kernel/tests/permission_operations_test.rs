@@ -34,6 +34,7 @@ async fn test_permission_operations() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "Office for permission testing".to_string(),
+            metadata: None,
         },
     )
     .await

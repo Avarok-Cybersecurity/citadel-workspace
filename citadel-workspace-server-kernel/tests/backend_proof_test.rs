@@ -54,6 +54,7 @@ async fn test_backend_is_being_used() -> Result<(), Box<dyn std::error::Error>> 
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "An office in our test workspace".to_string(),
+            metadata: None,
         },
     )
     .await?;
@@ -87,6 +88,7 @@ async fn test_backend_is_being_used() -> Result<(), Box<dyn std::error::Error>> 
             entity_type: NodeEntityType::Child("Room".to_string()),
             name: "Test Room".to_string(),
             description: "A room in our test office".to_string(),
+            metadata: None,
         },
     )
     .await?;
@@ -235,6 +237,7 @@ async fn test_backend_persistence_across_instances() -> Result<(), Box<dyn std::
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Persistent Office".to_string(),
             description: "This office should persist".to_string(),
+            metadata: None,
         },
     )
     .await?;

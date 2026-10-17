@@ -28,6 +28,7 @@ async fn test_admin_can_add_multiple_users_to_office() {
         entity_type: NodeEntityType::Child("Office".to_string()),
         name: "test_office_multi_add".to_string(),
         description: String::new(),
+        metadata: None,
     };
 
     let node = match execute_command(&kernel, create_office_req).await.unwrap() {
@@ -137,6 +138,7 @@ async fn test_non_admin_cannot_add_user_to_office() {
         entity_type: NodeEntityType::Child("Office".to_string()),
         name: "test_office_non_admin".to_string(),
         description: String::new(),
+        metadata: None,
     };
 
     let node = match execute_command(&kernel, create_office_req).await.unwrap() {

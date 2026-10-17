@@ -34,6 +34,7 @@ async fn a_new_office_and_room_have_chat_on_with_their_own_channels() {
             &NodeEntityType::Child("Office".to_string()),
             "Ops",
             "",
+            None,
         )
         .await
         .expect("an admin may create an office");
@@ -46,6 +47,7 @@ async fn a_new_office_and_room_have_chat_on_with_their_own_channels() {
             &NodeEntityType::Child("Room".to_string()),
             "Standup",
             "",
+            None,
         )
         .await
         .expect("an admin may create a room");
