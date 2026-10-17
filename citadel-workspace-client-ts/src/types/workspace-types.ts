@@ -2,8 +2,14 @@
 // SSOT: citadel-workspace-types/bindings/ (generated from Rust types via ts-rs)
 // To regenerate: run `cargo test -p citadel-workspace-types` then copy bindings/ to src/types/generated/
 
+export type { CompactionRequested } from './generated/CompactionRequested.js';
 export type { CurrentTerms } from './generated/CurrentTerms.js';
 export type { CustomNodeType } from './generated/CustomNodeType.js';
+export type { DocumentRefusal } from './generated/DocumentRefusal.js';
+export type { DocumentSnapshot } from './generated/DocumentSnapshot.js';
+export type { DocumentUpdate } from './generated/DocumentUpdate.js';
+export type { DocumentsRequest } from './generated/DocumentsRequest.js';
+export type { DocumentsResponse } from './generated/DocumentsResponse.js';
 export type { Domain } from './generated/Domain.js';
 export type { DomainNode } from './generated/DomainNode.js';
 export type { DomainPermissions } from './generated/DomainPermissions.js';

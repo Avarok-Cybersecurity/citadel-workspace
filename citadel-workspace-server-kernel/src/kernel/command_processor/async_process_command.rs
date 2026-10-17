@@ -1290,6 +1290,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             super::roles::process(kernel, actor_user_id, requester_cid, request).await
         }
 
+        WorkspaceProtocolRequest::Documents(request) => {
+            super::documents::process(kernel, actor_user_id, requester_cid, request).await
+        }
+
         WorkspaceProtocolRequest::DeleteNode { node_id, cascade } => {
             use crate::handlers::domain::node_ops::AsyncNodeOperations;
             match kernel

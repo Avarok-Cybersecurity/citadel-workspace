@@ -77,6 +77,9 @@ const SCOPED = new Map([
   ['GroupMessageNotification', 'broadcast_to_group'],
   ['GroupMessageEdited', 'broadcast_to_group'],
   ['GroupMessageDeleted', 'broadcast_to_group'],
+  // A document's CRDT updates and its readers' cursors: the update IS the document, so it
+  // reaches exactly the sessions a Pull would answer.
+  ['Documents', 'broadcast_to_node'],
 ]);
 
 /**

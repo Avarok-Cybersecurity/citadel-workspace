@@ -477,6 +477,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
                 .await?;
         }
 
+        // And their document logs, before the save for the same reason. Their locks are held
+        // until this returns, past the save: an append racing the delete either lands before
+        // the purge and goes with it, or finds the node gone (`documents_store`).
+        let _document_guards = self.backend_tx_manager.lock_documents(&deleted_ids).await;
+        for id in &deleted_ids {
+            self.backend_tx_manager.delete_document_log(id).await?;
+        }
+
         // Remove all deleted nodes
         for id in &deleted_ids {
             nodes.remove(id);
