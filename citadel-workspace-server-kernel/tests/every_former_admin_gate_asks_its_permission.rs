@@ -205,6 +205,7 @@ async fn office(kernel: &Kernel) -> String {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Ops".to_string(),
             description: String::new(),
+            metadata: None,
         },
     )
     .await

@@ -58,6 +58,7 @@ async fn test_is_member_of_domain_behavior() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "For Testing".to_string(),
+            metadata: None,
         },
     )
     .await;
@@ -75,6 +76,7 @@ async fn test_is_member_of_domain_behavior() {
             entity_type: NodeEntityType::Child("Room".to_string()),
             name: "Test Room".to_string(),
             description: "Room for testing".to_string(),
+            metadata: None,
         },
     )
     .await;

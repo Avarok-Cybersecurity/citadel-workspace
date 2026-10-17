@@ -1120,6 +1120,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             entity_type,
             name,
             description,
+            metadata,
         } => {
             use crate::handlers::domain::node_ops::AsyncNodeOperations;
             match kernel
@@ -1130,6 +1131,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     entity_type,
                     name,
                     description,
+                    metadata.as_deref(),
                 )
                 .await
             {
