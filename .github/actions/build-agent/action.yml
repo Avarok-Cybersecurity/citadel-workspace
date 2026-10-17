@@ -51,6 +51,15 @@ runs:
         TARGET: ${{ inputs.target }}
       run: rustup target add "$TARGET"
 
+    # The dependency build (vendored OpenSSL, ring, pqcrypto, the SDK) was redone from nothing on
+    # every release leg; the Windows leg is ~16 minutes. Restored per target; SAVED only by master
+    # and agent-v* tag runs, so a dry run dispatched from a branch reads master's entry and writes
+    # none. rust-cache keeps registry and dependency artefacts, never this workspace's own crates.
+    - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      with:
+        key: release-agent-${{ inputs.target }}
+        save-if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/agent-v') }}
+
     # A musl target links statically against musl, whose C compiler wrapper the vendored
     # OpenSSL, ring and pqcrypto builds all need; the runner has only glibc's.
     - name: Install the musl toolchain
