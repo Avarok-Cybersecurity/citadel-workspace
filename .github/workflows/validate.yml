@@ -672,6 +672,8 @@ jobs:
         run: bash scripts/test-provision-tenant.sh
       - name: The Stripe catalogue is derived from the approved tier table
         run: node --test billing/catalogue.test.mjs
+      - name: The worker's Turnstile verdicts match the fixture the native server's are held to
+        run: node --test scripts/lib/turnstile-verdict-parity.test.mjs
       - name: The brand kit derivation refuses what the guidelines forbid
         run: node --test scripts/brand/brand-kit.test.mjs
       - name: The UI's icons, favicon, lockups and manifest match the brand kit
