@@ -751,6 +751,7 @@ dependencies = [
  "citadel_user",
  "clap 4.6.7",
  "futures",
+ "getrandom 0.3.4",
  "log",
  "parking_lot",
  "serde",

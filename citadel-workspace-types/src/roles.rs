@@ -161,6 +161,7 @@ pub fn seed_roles() -> Vec<RoleDefinition> {
                 ReadMessages,
                 UploadFiles,
                 DownloadFiles,
+                ShareSecureLinks,
             ],
         ),
         // Read-only.

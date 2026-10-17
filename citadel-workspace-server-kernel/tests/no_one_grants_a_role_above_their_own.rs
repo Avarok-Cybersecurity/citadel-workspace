@@ -27,6 +27,12 @@ use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_USER_ID};
 const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 
 /// What the old rank-16 Custom role held: AddUsers among them. Between Member and Admin.
+///
+/// Plus `ShareSecureLinks`, which the Member seed now carries: without it this role could not
+/// assign Member at all, by the same ladder rule this file tests.
+// @human-review: a custom role created before ShareSecureLinks existed lacks it, so after this
+// upgrade it can no longer assign Member. Decide whether stored custom roles holding every other
+// Member permission should be given it.
 const EDITOR: &[Permission] = &[
     Permission::ViewContent,
     Permission::ViewMembers,
@@ -39,6 +45,7 @@ const EDITOR: &[Permission] = &[
     Permission::RemoveUsers,
     Permission::EditMdx,
     Permission::ManageRoles,
+    Permission::ShareSecureLinks,
 ];
 
 async fn an_editor(kernel: &Kernel, id: &str) {

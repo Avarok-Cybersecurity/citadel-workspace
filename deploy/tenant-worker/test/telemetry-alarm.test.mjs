@@ -32,11 +32,12 @@ describe("the alarm's time", () => {
 describe("the purge alarm", () => {
   it("is armed a day out once a tenant is provisioned", async () => {
     const { slug, object } = await freeTenant("tp");
-    const { telemetry_purge, running } = await objectStats(slug);
+    const { telemetry_purge, links_purge, running } = await objectStats(slug);
     expect(running).toBe(false);
     expect(telemetry_purge).toMatchObject({ last: null });
     expect(telemetry_purge.due_ms - Date.now()).toBeGreaterThan(TELEMETRY_PURGE_INTERVAL_MS - 60_000);
-    expect(await alarmOf(object)).toBe(telemetry_purge.due_ms);
+    // The one alarm is the earliest purge: the hourly links purge (links-alarm.test.mjs) comes first.
+    expect(await alarmOf(object)).toBe(Math.min(telemetry_purge.due_ms, links_purge.due_ms));
   });
 
   it("purges when due: starts the node, asks the kernel, and re-arms a day later", async () => {
@@ -49,7 +50,7 @@ describe("the purge alarm", () => {
     expect(stats.telemetry_purge.last).toMatchObject({ removed: 0 });
     expect(stats.telemetry_purge.last.at_ms).toBeGreaterThanOrEqual(before);
     expect(stats.telemetry_purge.due_ms).toBe(stats.telemetry_purge.last.at_ms + TELEMETRY_PURGE_INTERVAL_MS);
-    expect(await alarmOf(object)).toBe(stats.telemetry_purge.due_ms);
+    expect(await alarmOf(object)).toBe(Math.min(stats.telemetry_purge.due_ms, stats.links_purge.due_ms));
   });
 
   it("does nothing before it is due, and leaves the node stopped", async () => {

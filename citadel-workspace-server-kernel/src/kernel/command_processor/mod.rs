@@ -56,3 +56,12 @@ mod messaging_trust;
 
 /// The workspace's role table: list, create, edit, delete.
 mod roles;
+
+/// Secure links: create, list, delete, regenerate, extend, resolve.
+mod secure_links;
+
+/// Opening a secure link: the grant check and the one-time burn.
+mod secure_links_resolve;
+
+/// A secure link's owner listing, deleting, regenerating and extending it.
+mod secure_links_owner;

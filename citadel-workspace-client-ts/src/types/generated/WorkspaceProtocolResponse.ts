@@ -6,6 +6,7 @@ import type { IceServer } from "./IceServer";
 import type { MessagingTrustResponse } from "./MessagingTrustResponse";
 import type { Permission } from "./Permission";
 import type { RolesResponse } from "./RolesResponse";
+import type { SecureLinksResponse } from "./SecureLinksResponse";
 import type { SignInSettings } from "./SignInSettings";
 import type { TelemetryResponse } from "./TelemetryResponse";
 import type { TreeNode } from "./TreeNode";
@@ -75,4 +76,4 @@ revfs_storage_quota_mb: bigint, } } | { "IceServers": { ice_servers: Array<IceSe
 /**
  * IDs of child nodes that were also deleted (if cascade was true)
  */
-children_deleted: Array<string>, } } | { "NodeMoved": { node_id: string, old_parent_id: string | null, new_parent_id: string | null, } } | { "ServerShutdown": { message: string, drain_seconds: bigint, } } | { "Telemetry": TelemetryResponse } | { "MessagingTrust": MessagingTrustResponse } | { "Roles": RolesResponse };
+children_deleted: Array<string>, } } | { "NodeMoved": { node_id: string, old_parent_id: string | null, new_parent_id: string | null, } } | { "ServerShutdown": { message: string, drain_seconds: bigint, } } | { "Telemetry": TelemetryResponse } | { "MessagingTrust": MessagingTrustResponse } | { "Roles": RolesResponse } | { "SecureLinks": SecureLinksResponse };

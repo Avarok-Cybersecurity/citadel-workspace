@@ -5,6 +5,11 @@ bind_addr = "0.0.0.0:12349"
 # False here: this server is self-hosted, so its users were never shown them. An Avarok-hosted
 # tenant sets it true (deploy/tenant-worker/control/provisioning.mjs).
 require_platform_terms = false
+# Secure links: how many live links each member may hold of their own, and how many more the
+# whole workspace shares once a member's own are used. Both required; 0 is allowed. A hosted
+# tenant reads these from its plan instead.
+secure_links_per_member = 50
+secure_links_pool = 0
 # TLS certificate verification — set to true ONLY for local development with self-signed certs.
 dangerous_skip_cert_verification = false
 

@@ -8,6 +8,7 @@
 mod auth_versions;
 mod host_promise;
 mod ice;
+mod links;
 mod sign_in;
 mod storage;
 mod support;
@@ -68,8 +69,9 @@ impl TenantServer {
     /// Start the node. `config_toml` is a `kernel.toml`; `storage` is the object's SQLite storage
     /// (see `storage::TenantStorage`); `ice` mints relay credentials for `GetIceServers` (see
     /// `ice::IceHost`); `pq` is post-quantum sign-in and `sign_in` the object's sign-in settings
-    /// (see `sign_in`). `support_grants` mirrors the support grant (see `support`). `on_exit` is called with a description of how the node ended, which for a
-    /// server that should run until eviction is always a failure.
+    /// (see `sign_in`). `support_grants` mirrors the support grant (see `support`). `links`
+    /// gives the secure-link limits (see `links`). `on_exit` is called with a description of how
+    /// the node ended, which for a server that should run until eviction is always a failure.
     #[allow(clippy::too_many_arguments)]
     #[wasm_bindgen(constructor)]
     pub fn start(
@@ -80,6 +82,7 @@ impl TenantServer {
         pq: sign_in::PqSignIn,
         sign_in: sign_in::SignInHost,
         support_grants: support::SupportGrantHost,
+        links: links::LinkQuotaHost,
         log_filter: &str,
         on_exit: js_sys::Function,
     ) -> Result<TenantServer, JsError> {
@@ -94,6 +97,7 @@ impl TenantServer {
         };
         let backend = BackendType::HostSql(storage::backend_handle(storage));
         let ice_servers = Some(ice::source(ice));
+        let link_quota = Some(links::source(links));
         let (settings, admission) = sign_in::host_capabilities(sign_in);
         let sign_in = HostedSignIn {
             pq_sign_in: Some(pq.into_settings()),
@@ -116,6 +120,7 @@ impl TenantServer {
                 ice_servers,
                 sign_in,
                 telemetry,
+                link_quota,
             )
             .await;
             let _ = on_exit.call1(&JsValue::NULL, &format!("{outcome:?}").into());
