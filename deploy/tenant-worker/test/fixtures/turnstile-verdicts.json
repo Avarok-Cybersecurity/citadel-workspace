@@ -1,0 +1,43 @@
+{
+  "//": "One set of Turnstile verdicts, run through the worker's control/turnstile.mjs + admission.mjs (scripts/lib/turnstile-verdict-parity.test.mjs) and the kernel's kernel::sign_in::{turnstile, admission} (tests/turnstile_verdicts_match_the_worker.rs). A case added here is checked on both sides.",
+  "ip": "203.0.113.9",
+  "check": { "secret": "1x0000000000000000000000000000000AA", "site_key": "1x00000000000000000000AA", "hostnames": ["work.example.com", "example.com"], "cdata": "acme" },
+  "bound_verdict": [
+    { "name": "a real key's pass", "answer": { "success": true, "hostname": "example.com", "action": "sign-in", "cdata": "acme" }, "action": "sign-in", "expected": null },
+    { "name": "the second configured hostname", "answer": { "success": true, "hostname": "work.example.com", "action": "register", "cdata": "acme" }, "action": "register", "expected": null },
+    { "name": "no action echoed", "answer": { "success": true, "hostname": "example.com", "cdata": "acme" }, "action": "sign-in", "expected": null },
+    { "name": "an empty action echoed", "answer": { "success": true, "hostname": "example.com", "action": "", "cdata": "acme" }, "action": "sign-in", "expected": null },
+    { "name": "refused, with codes", "answer": { "success": false, "error-codes": ["invalid-input-response", "timeout-or-duplicate"] }, "action": "sign-in", "expected": "Turnstile did not pass this request: invalid-input-response,timeout-or-duplicate" },
+    { "name": "refused, without codes", "answer": { "success": false }, "action": "sign-in", "expected": "Turnstile did not pass this request" },
+    { "name": "success that is not true", "answer": { "success": "true", "hostname": "example.com", "cdata": "acme" }, "action": "sign-in", "expected": "Turnstile did not pass this request" },
+    { "name": "error codes that are not a list", "answer": { "success": false, "error-codes": "bad" }, "action": "sign-in", "expected": "Turnstile did not pass this request" },
+    { "name": "another site", "answer": { "success": true, "hostname": "evil.example", "action": "sign-in", "cdata": "acme" }, "action": "sign-in", "expected": "the Turnstile answer is for another site" },
+    { "name": "a subdomain is another site", "answer": { "success": true, "hostname": "x.example.com", "action": "sign-in", "cdata": "acme" }, "action": "sign-in", "expected": "the Turnstile answer is for another site" },
+    { "name": "no hostname", "answer": { "success": true, "action": "sign-in", "cdata": "acme" }, "action": "sign-in", "expected": "the Turnstile answer is for another site" },
+    { "name": "a register token spent on a sign-in", "answer": { "success": true, "hostname": "example.com", "action": "register", "cdata": "acme" }, "action": "sign-in", "expected": "the Turnstile answer is for another action" },
+    { "name": "another workspace's token", "answer": { "success": true, "hostname": "example.com", "action": "sign-in", "cdata": "globex" }, "action": "sign-in", "expected": "the Turnstile answer is for another workspace" },
+    { "name": "a real key's answer without cdata", "answer": { "success": true, "hostname": "example.com", "action": "sign-in" }, "action": "sign-in", "expected": "the Turnstile answer is for another workspace" },
+    { "name": "a null cdata", "answer": { "success": true, "hostname": "example.com", "action": "sign-in", "cdata": null }, "action": "sign-in", "expected": "the Turnstile answer is for another workspace" },
+    { "name": "a testing key's answer carries no cdata", "answer": { "success": true, "hostname": "example.com", "metadata": { "result_with_testing_key": true } }, "action": "sign-in", "expected": null },
+    { "name": "a testing key's answer with the wrong cdata", "answer": { "success": true, "hostname": "example.com", "cdata": "globex", "metadata": { "result_with_testing_key": true } }, "action": "sign-in", "expected": "the Turnstile answer is for another workspace" },
+    { "name": "testing-key metadata that is not true", "answer": { "success": true, "hostname": "example.com", "metadata": { "result_with_testing_key": "true" } }, "action": "sign-in", "expected": "the Turnstile answer is for another workspace" },
+    { "name": "an answer that is not JSON", "answer": null, "action": "sign-in", "expected": "the Turnstile answer could not be read" },
+    { "name": "an answer that is a string", "answer": "success", "action": "sign-in", "expected": "the Turnstile answer could not be read" },
+    { "name": "an answer that is a list", "answer": [true], "action": "sign-in", "expected": "Turnstile did not pass this request" }
+  ],
+  "admit": [
+    { "name": "off: admitted without asking", "required": false, "kind": "SignIn", "token": null, "siteverify": { "answer": { "success": false } }, "expected": null, "asked": false },
+    { "name": "on: no token", "required": true, "kind": "SignIn", "token": null, "siteverify": { "answer": { "success": true } }, "expected": { "refuse": "admission_required", "challenge": { "provider": "turnstile", "site_key": "1x00000000000000000000AA", "identity": "acme" } }, "asked": false },
+    { "name": "on: an empty token", "required": true, "kind": "Register", "token": "", "siteverify": { "answer": { "success": true } }, "expected": { "refuse": "admission_required", "challenge": { "provider": "turnstile", "site_key": "1x00000000000000000000AA", "identity": "acme" } }, "asked": false },
+    { "name": "on: a token too long", "required": true, "kind": "SignIn", "token_repeat": ["x", 2049], "siteverify": { "answer": { "success": true } }, "expected": { "refuse": "admission_failed", "reason": "the check's token is malformed" }, "asked": false },
+    { "name": "on: the longest token", "required": true, "kind": "SignIn", "token_repeat": ["x", 2048], "siteverify": { "answer": { "success": true, "hostname": "example.com", "action": "sign-in", "cdata": "acme" } }, "expected": null, "asked": true },
+    { "name": "on: a token of 1025 two-unit characters is too long", "required": true, "kind": "SignIn", "token_repeat": ["🔑", 1025], "siteverify": { "answer": { "success": true } }, "expected": { "refuse": "admission_failed", "reason": "the check's token is malformed" }, "asked": false },
+    { "name": "on: 2048 characters of two UTF-8 bytes each are not too long", "required": true, "kind": "SignIn", "token_repeat": ["\u00e9", 2048], "siteverify": { "answer": { "success": true, "hostname": "example.com", "action": "sign-in", "cdata": "acme" } }, "expected": null, "asked": true },
+    { "name": "on: a pass for a sign-in", "required": true, "kind": "SignIn", "token": "0.good", "siteverify": { "answer": { "success": true, "hostname": "example.com", "action": "sign-in", "cdata": "acme" } }, "expected": null, "asked": true },
+    { "name": "on: a pass for a registration", "required": true, "kind": "Register", "token": "0.good", "siteverify": { "answer": { "success": true, "hostname": "example.com", "action": "register", "cdata": "acme" } }, "expected": null, "asked": true },
+    { "name": "on: a sign-in token spent on a registration", "required": true, "kind": "Register", "token": "0.good", "siteverify": { "answer": { "success": true, "hostname": "example.com", "action": "sign-in", "cdata": "acme" } }, "expected": { "refuse": "admission_failed", "reason": "the Turnstile answer is for another action" }, "asked": true },
+    { "name": "on: refused by siteverify", "required": true, "kind": "SignIn", "token": "0.bad", "siteverify": { "answer": { "success": false, "error-codes": ["invalid-input-response"] } }, "expected": { "refuse": "admission_failed", "reason": "Turnstile did not pass this request: invalid-input-response" }, "asked": true },
+    { "name": "on: an unreadable answer", "required": true, "kind": "SignIn", "token": "0.good", "siteverify": { "unreadable": true }, "expected": { "refuse": "admission_failed", "reason": "the Turnstile answer could not be read" }, "asked": true },
+    { "name": "on: siteverify unreachable", "required": true, "kind": "SignIn", "token": "0.good", "siteverify": { "unreachable": true }, "expected": { "refuse": "admission_failed", "reason": "the check could not be completed" }, "asked": true }
+  ]
+}

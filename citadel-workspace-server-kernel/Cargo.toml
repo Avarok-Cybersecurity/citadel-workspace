@@ -50,6 +50,11 @@ chrono = { workspace = true }
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { workspace = true, features = ["macros", "rt", "signal"] }
 citadel_sdk = { workspace = true, features = ["sql"] }
+# The OPRF seed as `--init-sign-in-seed` makes it and the server reads it (kernel::sign_in::native).
+zeroize = "1"
+# Turnstile's siteverify (kernel::sign_in::native::siteverify): rustls with Mozilla's roots, as the
+# agent's updater has it.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots"] }
 
 # wasm32: a server hosted by a JS runtime (a Workers Durable Object). No sqlx, no signals, no
 # threads; tokio contributes only its runtime-free sync primitives and macros, and every spawn,

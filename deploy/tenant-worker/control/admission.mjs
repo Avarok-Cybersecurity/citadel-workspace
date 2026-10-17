@@ -20,7 +20,15 @@ export const SIGN_IN_SETTINGS_KEY = "control:sign-in-settings";
  * node maps to the SDK's PqSignInAdmissionRequired (350) / PqSignInAdmissionFailed (351).
  */
 export const REFUSAL = Object.freeze({ required: "admission_required", failed: "admission_failed" });
-const NEEDS_TOKEN = Object.freeze({ refuse: REFUSAL.required });
+/**
+ * "A check is required": with the widget to show (the SDK's AdmissionChallenge), so a window that
+ * reaches the node only through its agent can render it without discovery. PUBLIC values only:
+ * the site key every visitor is sent, and the slug the token must be bound to (its cData).
+ */
+export const needsToken = (siteKey, tenant) =>
+  typeof siteKey === "string" && siteKey.length > 0
+    ? { refuse: REFUSAL.required, challenge: { provider: "turnstile", site_key: siteKey, identity: typeof tenant === "string" ? tenant : null } }
+    : { refuse: REFUSAL.required };
 const failed = (reason) => ({ refuse: REFUSAL.failed, reason });
 /** Said when the check itself could not be done; the detail goes to the log only. */
 export const CHECK_UNAVAILABLE = "the check could not be completed";
@@ -68,15 +76,16 @@ export class SignInSettings {
 }
 
 /**
- * The verdict for one admission: null to admit, else `{ refuse, reason? }` with a REFUSAL code
- * and, when failed, a reason fit to show. `required` is the setting, `turnstile` the configured
- * secret and hostnames (http.mjs `config().turnstile`, null when no secret is set), `tenant` the
- * slug the token must have been rendered for, `io.fetch` the way out, `log` where a failure's
- * detail goes (never the token).
+ * The verdict for one admission: null to admit, else `{ refuse, reason?, challenge? }` with a
+ * REFUSAL code, when failed a reason fit to show, and when required the check to show
+ * (`needsToken`). `required` is the setting, `turnstile` the configured secret and hostnames
+ * (http.mjs `config().turnstile`, null when no secret is set), `siteKey` the widget's public key
+ * (http.mjs `turnstileSiteKey`), `tenant` the slug the token must have been rendered for,
+ * `io.fetch` the way out, `log` where a failure's detail goes (never the token).
  */
-export async function admit({ required, turnstile, tenant, io, log }, { kind, token, ip }) {
+export async function admit({ required, turnstile, siteKey, tenant, io, log }, { kind, token, ip }) {
   if (!required) return null;
-  if (typeof token !== "string" || token.length === 0) return NEEDS_TOKEN;
+  if (typeof token !== "string" || token.length === 0) return needsToken(siteKey, tenant);
   const action = Object.hasOwn(ACTION, kind) ? ACTION[kind] : null;
   if (action === null) {
     log(`admission of an unknown kind ${JSON.stringify(kind)} refused`);

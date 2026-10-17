@@ -53,6 +53,19 @@ describe("the admission check", () => {
     expect(siteverifyCalls(calls)).toHaveLength(0);
   });
 
+  it("publishes the widget to show on a required refusal: the public site key, bound to the tenant", async () => {
+    const t = await freeTenant("ad");
+    outbound();
+    const answer = await inTenant(t, async (instance) => {
+      await instance.signIn.settings.set({ require_turnstile_sign_in: true });
+      return instance.signIn.host().admit(request("Register", null));
+    });
+    expect(answer).toEqual({
+      refuse: REFUSAL.required,
+      challenge: { provider: "turnstile", site_key: env.TURNSTILE_SITE_KEY, identity: t.slug },
+    });
+  });
+
   it("asks siteverify with the secret, the token and the client's address, and admits a pass", async () => {
     const t = await freeTenant("ad");
     const { calls } = outbound({ turnstile: pass(t.slug, ACTION.SignIn) });

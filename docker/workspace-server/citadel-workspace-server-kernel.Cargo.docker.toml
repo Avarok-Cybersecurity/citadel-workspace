@@ -66,3 +66,7 @@ subtle = "2.6"
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { workspace = true, features = ["macros", "rt", "signal"] }
 citadel_sdk = { workspace = true, features = ["sql"] }
+# The OPRF seed as `--init-sign-in-seed` makes it and the server reads it (kernel::sign_in::native).
+zeroize = "1"
+# Turnstile's siteverify (kernel::sign_in::native::siteverify).
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots"] }

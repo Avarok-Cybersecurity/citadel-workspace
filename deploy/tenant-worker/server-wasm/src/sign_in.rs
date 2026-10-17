@@ -8,9 +8,13 @@
 
 use crate::host_promise::{parse, HostPromise};
 use citadel_sdk::prelude::async_trait;
+use citadel_workspace_server_kernel::kernel::sign_in::admission::{
+    CHECK_UNAVAILABLE, RESUME_GRACE,
+};
+use citadel_workspace_server_kernel::kernel::sign_in::pq::pq_sign_in_settings;
 use citadel_workspace_server_kernel::kernel::sign_in::{
-    AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal, KsfParams, OprfSeed,
-    PqAuthServerSettings, SignInSettingsStore, SignInSettingsUnavailable,
+    AdmissionChallenge, AdmissionContext, AdmissionKind, AdmissionPolicy, AdmissionRefusal,
+    KsfParams, PqAuthServerSettings, SignInSettingsStore, SignInSettingsUnavailable,
 };
 use citadel_workspace_types::sign_in::SignInSettings;
 use serde::{Deserialize, Serialize};
@@ -35,6 +39,7 @@ extern "C" {
 
 /// Post-quantum sign-in for this tenant: its OPRF seed and the Argon2id cost clients stretch a
 /// password factor with. The seed is copied in once and never leaves; nothing here prints it.
+/// Built by the kernel's `pq_sign_in_settings`, the same builder a native server uses.
 #[wasm_bindgen]
 pub struct PqSignIn(PqAuthServerSettings);
 
@@ -47,17 +52,14 @@ impl PqSignIn {
         iterations: u32,
         lanes: u32,
     ) -> Result<PqSignIn, JsError> {
-        let seed: [u8; 32] = oprf_seed
-            .try_into()
-            .map_err(|_| JsError::new("the OPRF seed is not 32 bytes"))?;
         let ksf = KsfParams {
             mem_kib,
             iterations,
             lanes,
         };
-        PqAuthServerSettings::new(OprfSeed::from_bytes(seed), ksf)
+        pq_sign_in_settings(oprf_seed, ksf)
             .map(Self)
-            .map_err(|e| JsError::new(&format!("post-quantum sign-in settings: {e}")))
+            .map_err(|e| JsError::new(&e))
     }
 }
 
@@ -95,21 +97,29 @@ struct AdmissionRequest<'a> {
 #[derive(Deserialize)]
 #[serde(tag = "refuse", rename_all = "snake_case")]
 enum HostRefusal {
-    AdmissionRequired,
-    AdmissionFailed { reason: String },
+    AdmissionRequired {
+        #[serde(default)]
+        challenge: Option<HostChallenge>,
+    },
+    AdmissionFailed {
+        reason: String,
+    },
 }
 
-/// Said to the client when the check could not be completed; the object logs the detail.
-const CHECK_UNAVAILABLE: &str = "the check could not be completed";
+/// The check a "required" answer publishes (admission.mjs `needsToken`): public values only.
+#[derive(Deserialize)]
+struct HostChallenge {
+    provider: String,
+    site_key: String,
+    identity: Option<String>,
+}
 
-/// How long after a session ends its client's reconnect is still not asked the check: the
-/// agent retries a dropped session for 600 s (`SERVER_RECONNECT.give_up_after` in
-/// citadel-internal-service), and its last attempt may take 30 s more to reach the check
-/// (`attempt_timeout`) after up to 30 s of backoff. 900 s covers that with five minutes
-/// spare for the gap between the server ending the session and the agent seeing the drop.
-/// It exempts only from the check; the reconnect still proves the password, and each
-/// ended session's token is honoured once, for its own account.
-const RESUME_GRACE: Duration = Duration::from_secs(900);
+/// The SDK's challenge for `host`'s, or none for a provider this side does not know: the
+/// refusal still stands, the window just shows no widget for it.
+fn challenge(host: HostChallenge) -> Option<AdmissionChallenge> {
+    (host.provider == "turnstile")
+        .then(|| AdmissionChallenge::turnstile(host.site_key, host.identity))
+}
 
 fn kind_name(kind: AdmissionKind) -> &'static str {
     match kind {
@@ -139,7 +149,9 @@ impl AdmissionPolicy for DurableObjectSignIn {
             return Ok(());
         }
         match parse::<HostRefusal>(&answer).map_err(check_failed)? {
-            HostRefusal::AdmissionRequired => Err(AdmissionRefusal::Required),
+            HostRefusal::AdmissionRequired { challenge: host } => {
+                Err(AdmissionRefusal::Required(host.and_then(challenge)))
+            }
             HostRefusal::AdmissionFailed { reason } => Err(AdmissionRefusal::Failed(reason)),
         }
     }

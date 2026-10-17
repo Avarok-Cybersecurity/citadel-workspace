@@ -86,6 +86,9 @@ RUN cargo build --release --bin citadel-workspace-server-kernel
 # Copy binary to /usr/local/bin so it is not shadowed by the target_cache volume
 # mount the dev compose file attaches at /usr/src/app/target.
 RUN cp ./target/release/citadel-workspace-server-kernel /usr/local/bin/
+# Makes the sign-in seed on a data volume's first start, then runs the server (the dev stage's
+# CMD). After the build, so editing it does not recompile the server.
+COPY --chmod=0755 ./docker/workspace-server/start.sh /usr/local/bin/start-workspace-server
 
 # =============================================================================
 # Production runtime: binary + assets only. No toolchain, no source, no target/.
@@ -128,6 +131,8 @@ COPY --from=builder /usr/local/bin/citadel-workspace-server-kernel /usr/local/bi
 # unable to start.
 COPY ./docker/workspace-server/kernel.toml /usr/src/app/kernel.toml
 COPY ./docker/workspace-server/documents /usr/src/app/documents
+# Makes the sign-in seed on a data volume's first start, then runs the server.
+COPY --chmod=0755 ./docker/workspace-server/start.sh /usr/local/bin/start-workspace-server
 
 # Data directory for the filesystem backend (a volume is mounted here in production)
 RUN mkdir -p /data/server
@@ -143,7 +148,7 @@ USER appuser
 
 EXPOSE 12349
 
-CMD ["/usr/local/bin/citadel-workspace-server-kernel", "--config", "/usr/src/app/kernel.toml"]
+CMD ["/usr/local/bin/start-workspace-server"]
 
 # =============================================================================
 # Dev runtime: equivalent to the previous single-stage image. Retains the
@@ -167,5 +172,6 @@ RUN chown appuser /usr/local/bin/citadel-workspace-server-kernel && \
     chown -R appuser /data/server
 USER appuser
 
-# Run the workspace server from /usr/local/bin (not shadowed by volume mounts)
-CMD ["/usr/local/bin/citadel-workspace-server-kernel", "--config", "/usr/src/app/kernel.toml"]
+# Run the workspace server from /usr/local/bin (not shadowed by volume mounts), through the
+# start script that makes the sign-in seed on first start.
+CMD ["/usr/local/bin/start-workspace-server"]

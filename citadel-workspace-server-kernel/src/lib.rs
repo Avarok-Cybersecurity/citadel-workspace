@@ -78,6 +78,10 @@ pub mod config {
         /// Live secure links the whole workspace shares beyond each member's own. Required
         /// alongside `secure_links_per_member`; 0 is allowed.
         pub secure_links_pool: Option<u32>,
+        /// How people sign in: the OPRF seed file, the Argon2id cost and the admission check.
+        /// Required by the native server and refused by a hosted one, whose host supplies it.
+        /// See `kernel::sign_in::config`.
+        pub sign_in: Option<crate::kernel::sign_in::config::NativeSignInConfig>,
     }
 
     impl std::fmt::Debug for ServerConfig {
@@ -109,6 +113,7 @@ pub mod config {
                 .field("require_platform_terms", &self.require_platform_terms)
                 .field("secure_links_per_member", &self.secure_links_per_member)
                 .field("secure_links_pool", &self.secure_links_pool)
+                .field("sign_in", &self.sign_in)
                 .finish()
         }
     }
@@ -747,6 +752,11 @@ pub async fn run_server_on<T: PlatformOps>(
     link_quota: kernel::secure_links::quota::LinkQuotaSourceHandle,
 ) -> Result<(), NetworkError> {
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel on an injected listener...");
+    if config.sign_in.is_some() {
+        return Err(NetworkError::msg(
+            "[sign_in] is a native server's; a hosted server's host supplies its sign-in",
+        ));
+    }
     let bind_address: SocketAddr = config.bind_addr.parse().map_err(|e| {
         NetworkError::msg(format!(
             "Invalid bind address '{}': {}",
@@ -809,6 +819,18 @@ pub async fn run_server_with_base_path(
     config: ServerConfig,
     config_base_path: Option<&Path>,
 ) -> Result<(), NetworkError> {
+    let site_verify = kernel::sign_in::native::siteverify::CloudflareSiteVerify::new()
+        .map_err(NetworkError::msg)?;
+    run_server_with_site_verify(config, config_base_path, std::sync::Arc::new(site_verify)).await
+}
+
+/// `run_server_with_base_path`, asking `site_verify` for each Turnstile verdict.
+#[cfg(not(target_family = "wasm"))]
+pub async fn run_server_with_site_verify(
+    config: ServerConfig,
+    config_base_path: Option<&Path>,
+    site_verify: std::sync::Arc<dyn kernel::sign_in::turnstile::SiteVerify>,
+) -> Result<(), NetworkError> {
     setup_log();
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel...");
 
@@ -844,16 +866,23 @@ pub async fn run_server_with_base_path(
     )?;
 
     // The native server has no relay-credential minter: nothing here holds a TURN provider's
-    // key, so GetIceServers answers "unavailable" rather than inventing a list. Nor has it an
-    // admission check, so it keeps no sign-in settings: a switch nothing enforces would claim a
-    // protection that is not there. Its secure-link limits are kernel.toml's, and required.
+    // key, so GetIceServers answers "unavailable" rather than inventing a list. Its secure-link
+    // limits and its sign-in are kernel.toml's, and required. With `admission = "none"` its
+    // sign-in settings cannot require a human check: a switch nothing enforces would claim a
+    // protection that is not there.
     let link_quota = resolve_secure_link_quota(&config)?;
+    let sign_in = kernel::sign_in::native::native_sign_in(
+        config.sign_in.as_ref(),
+        &|name| std::env::var(name).ok(),
+        site_verify,
+    )
+    .map_err(NetworkError::msg)?;
     let kernel = workspace_kernel(
         &config,
         workspace_structure,
         first_connect_admin,
         None,
-        None,
+        sign_in.settings,
         Some(std::sync::Arc::new(
             kernel::secure_links::quota::FixedLinkQuota(link_quota),
         )),
@@ -871,7 +900,11 @@ pub async fn run_server_with_base_path(
     builder
         .with_node_type(node_type)
         .with_backend(backend_type_for_node_builder)
-        .with_server_misc_settings(production_server_misc_settings());
+        .with_server_misc_settings(ServerMiscSettings {
+            pq_sign_in: sign_in.pq_sign_in,
+            admission: sign_in.admission,
+            ..production_server_misc_settings()
+        });
 
     if config.dangerous_skip_cert_verification.unwrap_or(false) {
         citadel_logging::warn!(target: "citadel", "⚠️  SECURITY WARNING: TLS certificate verification is DISABLED. This should ONLY be used for local development with self-signed certificates. Never use in production!");
@@ -1281,6 +1314,7 @@ mod server_config_debug_tests {
             require_platform_terms: Some(false),
             secure_links_per_member: Some(5),
             secure_links_pool: Some(0),
+            sign_in: None,
         }
     }
 

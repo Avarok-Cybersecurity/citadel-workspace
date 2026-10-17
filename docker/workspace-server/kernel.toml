@@ -59,3 +59,29 @@ revfs_storage_quota_mb = 100
 # File transfer request TTL (in days)
 # Pending transfer requests expire after this period
 file_ttl_days = 7
+
+# =============================================================================
+# Sign-in (required): post-quantum sign-in, and whether fresh sign-ins and
+# registrations must pass a Cloudflare Turnstile check. No key has a default;
+# see citadel-workspace-server-kernel/src/kernel/sign_in/config.rs.
+# =============================================================================
+[sign_in]
+# The OPRF seed: 32 bytes, mode 0600, made ONCE with
+#   citadel-workspace-server-kernel --init-sign-in-seed <path>
+# The image's start script (docker/workspace-server/start.sh) runs that on the
+# first start. Never replace it: a new seed locks out every post-quantum account.
+# It lives on the data volume, beside the accounts it protects.
+oprf_seed_file = "/data/server/sign-in/oprf-seed"
+# The Argon2id cost clients stretch a password with: OWASP's minimum, the same
+# cost the hosted tenants use (deploy/tenant-worker/wrangler.toml PQ_KSF_*).
+# Or set all three of ksf_mem_kib, ksf_iterations and ksf_lanes instead.
+ksf = "owasp-floor"
+# "none": no human check, and the admin's "Require a human check" switch cannot
+# be turned on. "turnstile": the check runs whenever an admin turns it on; it
+# then needs every key below.
+admission = "none"
+# turnstile_secret_env = "TURNSTILE_SECRET"   # the NAME of the variable holding the secret, never the secret
+# turnstile_site_key = "0x4AAAAAAA..."        # the widget's PUBLIC site key: sent with each "check required" refusal
+# turnstile_hostnames = ["work.example.com"]  # hostnames the widget may be solved on
+# turnstile_cdata = "work-example"            # this server's identity: the widget's cData (A-Z a-z 0-9 _ -)
+# settings_file = "/data/server/sign-in/settings.json"  # where the admin's switch is kept
