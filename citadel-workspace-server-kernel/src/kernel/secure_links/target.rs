@@ -103,6 +103,10 @@ fn percent_decode(value: &str) -> Result<String, String> {
         match bytes[i] {
             b'%' => {
                 let hex = value.get(i + 1..i + 3).ok_or_else(bad)?;
+                // `from_str_radix` alone takes a leading `+`, which no escape has.
+                if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+                    return Err(bad());
+                }
                 out.push(u8::from_str_radix(hex, 16).map_err(|_| bad())?);
                 i += 3;
             }
