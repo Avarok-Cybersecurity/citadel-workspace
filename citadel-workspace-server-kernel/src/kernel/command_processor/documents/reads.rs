@@ -59,7 +59,7 @@ pub(super) async fn relay_awareness<R: Ratchet + Send + Sync + 'static>(
     if let Err((bytes, max_bytes)) = within(payload.len(), relay.config.max_awareness_bytes) {
         return refused(DocumentRefusal::AwarenessTooLarge {
             node_id: node_id.to_string(),
-            bytes,
+            size_bytes: bytes,
             max_bytes,
         });
     }

@@ -76,7 +76,7 @@ async fn an_update_one_byte_over_the_bound_is_refused_and_not_stored() {
         over,
         DocumentsResponse::Refused(DocumentRefusal::UpdateTooLarge {
             node_id: node.clone(),
-            bytes: max as u64 + 1,
+            size_bytes: max as u64 + 1,
             max_bytes: max as u64,
         })
     );
@@ -105,7 +105,7 @@ async fn snapshots_and_awareness_are_bounded_too() {
         matches!(
             refused,
             DocumentsResponse::Refused(DocumentRefusal::SnapshotTooLarge {
-                bytes: 9,
+                size_bytes: 9,
                 max_bytes: 8,
                 ..
             })
@@ -127,7 +127,7 @@ async fn snapshots_and_awareness_are_bounded_too() {
         matches!(
             refused,
             DocumentsResponse::Refused(DocumentRefusal::AwarenessTooLarge {
-                bytes: 5,
+                size_bytes: 5,
                 max_bytes: 4,
                 ..
             })

@@ -76,7 +76,7 @@ pub(in crate::kernel::command_processor) async fn process<R: Ratchet + Send + Sy
             if let Err((bytes, max_bytes)) = within(update.len(), config.max_update_bytes) {
                 return refused(DocumentRefusal::UpdateTooLarge {
                     node_id: node_id.clone(),
-                    bytes,
+                    size_bytes: bytes,
                     max_bytes,
                 });
             }
@@ -100,7 +100,7 @@ pub(in crate::kernel::command_processor) async fn process<R: Ratchet + Send + Sy
             if let Err((bytes, max_bytes)) = within(snapshot.len(), config.max_snapshot_bytes) {
                 return refused(DocumentRefusal::SnapshotTooLarge {
                     node_id: node_id.clone(),
-                    bytes,
+                    size_bytes: bytes,
                     max_bytes,
                 });
             }

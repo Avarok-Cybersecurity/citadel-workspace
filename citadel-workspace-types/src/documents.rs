@@ -149,7 +149,9 @@ pub enum DocumentsResponse {
     Refused(DocumentRefusal),
 }
 
-/// Why a documents request was not carried out. Missing permission is not here: that is the
+/// Why a documents request was not carried out. A size is `size_bytes`, never `bytes`: the client
+/// decodes u64 fields by NAME (`WORKSPACE_BIGINT_FIELDS`), and `DocumentSnapshot::bytes` is an
+/// array, which would then fail to decode. Missing permission is not here: that is the
 /// standard `Error("Permission denied: ...")` every request answers with.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -159,21 +161,21 @@ pub enum DocumentRefusal {
     UpdateTooLarge {
         node_id: String,
         #[ts(type = "bigint")]
-        bytes: u64,
+        size_bytes: u64,
         #[ts(type = "bigint")]
         max_bytes: u64,
     },
     SnapshotTooLarge {
         node_id: String,
         #[ts(type = "bigint")]
-        bytes: u64,
+        size_bytes: u64,
         #[ts(type = "bigint")]
         max_bytes: u64,
     },
     AwarenessTooLarge {
         node_id: String,
         #[ts(type = "bigint")]
-        bytes: u64,
+        size_bytes: u64,
         #[ts(type = "bigint")]
         max_bytes: u64,
     },
