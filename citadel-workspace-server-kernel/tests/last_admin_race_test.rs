@@ -1,9 +1,32 @@
 use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
-use citadel_workspace_types::structs::{User, UserRole};
+use citadel_workspace_types::structs::{Permission, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
 
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
+
+/// The server ops and the role writer they delegate to, scanned as one text. Each check
+/// attributes a line to the function it sits in, and no function spans the two files.
+const ROLE_SOURCE: &str = concat!(
+    include_str!("../src/handlers/domain/server_ops/async_domain_server_ops.rs"),
+    "\n",
+    include_str!("../src/handlers/domain/server_ops/role_writes.rs"),
+);
+
+/// Whether `line` opens a function, at any visibility.
+fn opens_a_function(line: &str) -> bool {
+    let t = line.trim_start();
+    [
+        "fn ",
+        "async fn ",
+        "pub fn ",
+        "pub async fn ",
+        "pub(crate) fn ",
+        "pub(crate) async fn ",
+    ]
+    .iter()
+    .any(|prefix| t.starts_with(prefix))
+}
 
 // # A workspace must never reach zero administrators
 //
@@ -26,37 +49,33 @@ use common::workspace_test_utils::*;
 // check AND the write, in all three role writers. The lock primitive itself has
 // a 25-way concurrency test in transaction/mod.rs.
 
-/// Two admins in the root workspace, plus the seeded test admin.
+/// Two admins in the root workspace, plus the seeded test admin. Written as records rather
+/// than through AddMember: an Admin may not assign the admin role, their own position.
 async fn seed_two_admins<R: citadel_sdk::prelude::Ratchet>(
     kernel: &citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorkspaceServerKernel<R>,
     names: [&str; 2],
 ) {
+    let mgr = &kernel.domain_operations.backend_tx_manager;
     for name in names {
-        kernel
-            .domain_operations
-            .backend_tx_manager
-            .insert_user(
-                name.to_string(),
-                User::new(name.to_string(), name.to_string(), UserRole::Admin),
-            )
-            .await
-            .expect("insert user");
-
-        execute_command(
-            kernel,
-            WorkspaceProtocolRequest::AddMember {
-                user_id: name.to_string(),
-                domain_id: None,
-                role: UserRole::Admin,
-                metadata: None,
-            },
+        mgr.insert_user(
+            name.to_string(),
+            User::new(name.to_string(), name.to_string(), UserRole::Admin),
         )
         .await
-        .expect("AddMember dispatch failed");
+        .expect("insert user");
+        let mut workspace = mgr
+            .get_workspace(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID)
+            .await
+            .expect("read workspace")
+            .expect("root workspace exists");
+        workspace.members.push(name.to_string());
+        mgr.insert_workspace(workspace.id.clone(), workspace)
+            .await
+            .expect("save workspace");
     }
 }
 
-/// How many members of the root workspace currently hold the Admin role.
+/// How many members of the root workspace can manage roles.
 async fn admin_count<R: citadel_sdk::prelude::Ratchet>(
     kernel: &citadel_workspace_server_kernel::kernel::async_kernel::AsyncWorkspaceServerKernel<R>,
 ) -> usize {
@@ -70,42 +89,54 @@ async fn admin_count<R: citadel_sdk::prelude::Ratchet>(
     let WorkspaceProtocolResponse::Members { members, .. } = listed else {
         panic!("expected Members, got {listed:?}");
     };
-    members.iter().filter(|m| m.role == UserRole::Admin).count()
+    let mut managers = 0;
+    for member in &members {
+        if kernel
+            .domain_operations
+            .holds_workspace_permission(&member.id, Permission::ManageRoles)
+            .await
+            .expect("permission check")
+        {
+            managers += 1;
+        }
+    }
+    managers
 }
 
+/// Each administrator stands down in turn. Standing down is exempt from the ladder, so the
+/// only thing that can refuse the last one is the managers guard.
 #[tokio::test]
 async fn removing_the_last_admin_is_refused_sequentially() {
     let kernel = create_test_kernel().await;
     seed_two_admins(&kernel, ["admin_a", "admin_b"]).await;
 
-    // Remove down to one admin, then try to remove that one.
     let before = admin_count(&kernel).await;
-    assert!(before >= 2, "the fixture should start with several admins");
+    assert_eq!(before, 3, "the fixture should start with three admins");
 
-    let mut removed = 0;
-    for name in ["admin_a", "admin_b"] {
+    let mut outcomes = Vec::new();
+    for name in ["admin_a", "admin_b", TEST_ADMIN_USER_ID] {
         let response = process_command_with_user(
             &kernel,
             &WorkspaceProtocolRequest::RemoveMember {
                 user_id: name.to_string(),
                 domain_id: None,
             },
-            "admin_a",
+            name,
         )
         .await
         .expect("RemoveMember dispatch failed");
-        if !matches!(response, WorkspaceProtocolResponse::Error(_)) {
-            removed += 1;
-        }
+        outcomes.push(!matches!(response, WorkspaceProtocolResponse::Error(_)));
     }
 
-    // Whatever the guard allows, it must never allow the count to hit zero —
-    // that state has no way back, because promotion itself requires an admin.
-    let after = admin_count(&kernel).await;
-    assert!(
-        after >= 1,
-        "the workspace reached {after} admins after {removed} removals; \
-         zero admins is unrecoverable"
+    assert_eq!(
+        outcomes,
+        [true, true, false],
+        "the first two may stand down; the last must be refused"
+    );
+    assert_eq!(
+        admin_count(&kernel).await,
+        1,
+        "zero members able to manage roles is unrecoverable"
     );
 }
 
@@ -137,7 +168,7 @@ async fn removing_the_last_admin_is_refused_sequentially() {
 /// adjacent. Neither test is sufficient alone.
 #[test]
 fn every_demoting_role_write_is_under_the_workspace_lock() {
-    let source = include_str!("../src/handlers/domain/server_ops/async_domain_server_ops.rs");
+    let source = ROLE_SOURCE;
 
     // Comments stripped first: this campaign has already produced one source
     // assertion that matched the comment explaining the code's absence.
@@ -150,33 +181,30 @@ fn every_demoting_role_write_is_under_the_workspace_lock() {
     let fn_starts: Vec<usize> = lines
         .iter()
         .enumerate()
-        .filter(|(_, l)| {
-            let t = l.trim_start();
-            t.starts_with("fn ")
-                || t.starts_with("async fn ")
-                || t.starts_with("pub fn ")
-                || t.starts_with("pub async fn ")
-        })
+        .filter(|(_, l)| opens_a_function(l))
         .map(|(i, _)| i)
         .collect();
 
     let mut checked = 0usize;
     for (i, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
-        // An assignment, not a comparison.
-        if !trimmed.contains(".role = ") {
+        // A role write: a call of the one helper that writes a role, or an assignment
+        // anywhere else. Not the helper's own definition, nor the assignments inside it,
+        // which is pure and leaves the lock to whoever calls it.
+        let calls_the_writer =
+            trimmed.contains("assign_workspace_role(") && !opens_a_function(trimmed);
+        if !calls_the_writer && !trimmed.contains(".role = ") {
             continue;
         }
-        // A promotion to Admin cannot empty the admin set.
-        if trimmed.contains(".role = UserRole::Admin;") {
-            continue;
-        }
-        checked += 1;
 
         let owner_idx = *fn_starts
             .iter()
             .rfind(|&&f| f < i)
             .expect("a role assignment outside any function");
+        if lines[owner_idx].contains("fn assign_workspace_role(") {
+            continue;
+        }
+        checked += 1;
         let end = fn_starts
             .iter()
             .find(|&&f| f > owner_idx)
@@ -197,17 +225,17 @@ fn every_demoting_role_write_is_under_the_workspace_lock() {
     }
 
     assert!(
-        checked >= 2,
-        "found only {checked} demoting role write(s). The two that exist are in \
-         write_user_role and remove_user_from_domain; finding fewer means this \
-         test's matcher has stopped seeing them and is asserting nothing."
+        checked >= 4,
+        "found only {checked} role write(s). They are in write_user_role_locked, \
+         remove_user_from_domain and the two bootstrap claims; finding fewer means \
+         this test's matcher has stopped seeing them and is asserting nothing."
     );
 }
 
 /// Every caller that changes a role must go through the one guarded writer.
 #[test]
 fn every_role_writer_calls_the_guarded_writer() {
-    let source = include_str!("../src/handlers/domain/server_ops/async_domain_server_ops.rs");
+    let source = ROLE_SOURCE;
     let code: String = source
         .lines()
         .filter(|line| !line.trim_start().starts_with("//"))
@@ -222,7 +250,7 @@ fn every_role_writer_calls_the_guarded_writer() {
             .find(writer)
             .unwrap_or_else(|| panic!("{writer} no longer exists; update this test"));
         let rest = &code[start + writer.len()..];
-        let end = rest.find("\n    async fn ").unwrap_or(rest.len());
+        let end = next_function(rest);
         let body = &rest[..end];
 
         assert!(
@@ -237,10 +265,7 @@ fn every_role_writer_calls_the_guarded_writer() {
         .find("async fn write_user_role")
         .expect("write_user_role no longer exists; update this test");
     let rest = &code[start..];
-    let end = rest[1..]
-        .find("\n    async fn ")
-        .map(|i| i + 1)
-        .unwrap_or(rest.len());
+    let end = next_function(rest);
     let body = &rest[..end];
     assert!(
         body.contains("lock_workspaces()") && body.contains("write_user_role_locked("),
@@ -253,13 +278,10 @@ fn every_role_writer_calls_the_guarded_writer() {
         .find("async fn write_user_role_locked")
         .expect("write_user_role_locked no longer exists; update this test");
     let rest = &code[start..];
-    let end = rest[1..]
-        .find("\n    async fn ")
-        .map(|i| i + 1)
-        .unwrap_or(rest.len());
+    let end = next_function(rest);
     assert!(
-        rest[..end].contains("ensure_not_last_admin"),
-        "write_user_role_locked must run the last-admin check; it is where the \
+        rest[..end].contains("ensure_managers_remain"),
+        "write_user_role_locked must run the managers check; it is where the \
          check and the write happen together under one guard."
     );
 }
@@ -278,7 +300,7 @@ fn every_role_writer_calls_the_guarded_writer() {
 /// that is what found these three, and it is what will find the eighth.
 #[test]
 fn every_user_write_is_under_the_workspace_lock() {
-    let source = include_str!("../src/handlers/domain/server_ops/async_domain_server_ops.rs");
+    let source = ROLE_SOURCE;
 
     let lines: Vec<&str> = source
         .lines()
@@ -288,13 +310,7 @@ fn every_user_write_is_under_the_workspace_lock() {
     let fn_starts: Vec<usize> = lines
         .iter()
         .enumerate()
-        .filter(|(_, l)| {
-            let t = l.trim_start();
-            t.starts_with("fn ")
-                || t.starts_with("async fn ")
-                || t.starts_with("pub fn ")
-                || t.starts_with("pub async fn ")
-        })
+        .filter(|(_, l)| opens_a_function(l))
         .map(|(i, _)| i)
         .collect();
 
@@ -333,6 +349,18 @@ fn every_user_write_is_under_the_workspace_lock() {
     );
 }
 
+/// Where the function after the one `rest` starts in ends: the next line opening another.
+fn next_function(rest: &str) -> usize {
+    let mut offset = 0;
+    for (index, line) in rest.split_inclusive('\n').enumerate() {
+        if index > 0 && opens_a_function(line) {
+            return offset;
+        }
+        offset += line.len();
+    }
+    rest.len()
+}
+
 /// A function satisfies the lock requirement if it takes the lock itself, or if
 /// it is a `_locked` helper whose contract is that the CALLER holds it.
 ///
@@ -356,7 +384,7 @@ fn holds_or_requires_the_lock(owner: &str, body: &str) -> bool {
 /// exemption is paid for here.
 #[test]
 fn every_locked_helper_is_called_under_the_lock() {
-    let source = include_str!("../src/handlers/domain/server_ops/async_domain_server_ops.rs");
+    let source = ROLE_SOURCE;
     let lines: Vec<&str> = source
         .lines()
         .filter(|line| !line.trim_start().starts_with("//"))
@@ -365,13 +393,7 @@ fn every_locked_helper_is_called_under_the_lock() {
     let fn_starts: Vec<usize> = lines
         .iter()
         .enumerate()
-        .filter(|(_, l)| {
-            let t = l.trim_start();
-            t.starts_with("fn ")
-                || t.starts_with("async fn ")
-                || t.starts_with("pub fn ")
-                || t.starts_with("pub async fn ")
-        })
+        .filter(|(_, l)| opens_a_function(l))
         .map(|(i, _)| i)
         .collect();
 
@@ -431,10 +453,7 @@ fn every_locked_helper_is_called_under_the_lock() {
 #[test]
 fn no_workspace_guard_is_released_early() {
     for (name, source) in [
-        (
-            "async_domain_server_ops.rs",
-            include_str!("../src/handlers/domain/server_ops/async_domain_server_ops.rs"),
-        ),
+        ("async_domain_server_ops.rs", ROLE_SOURCE),
         (
             "async_kernel.rs",
             include_str!("../src/kernel/async_kernel.rs"),

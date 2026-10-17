@@ -13,7 +13,7 @@ what was already here.
 | gate | what it fails on |
 |---|---|
 | `check-acting-on-a-member-is-guarded.mjs` | Every server op that writes another member's standing passes the authority ladder first. |
-| `check-admin-promotions-are-gated.mjs` | Every assignment that makes somebody an administrator must sit behind a gate. |
+| `check-admin-promotions-are-gated.mjs` | Every write that gives somebody a role must sit behind a gate. |
 | `check-agent-binds-loopback.mjs` | The agent may only ever listen on loopback — where its network namespace is the host's. |
 | `check-agent-docs-name-real-things.mjs` | The agent instructions in CLAUDE.md and .claude/agents/ are executed, not read. |
 | `check-agent-docs-name-real-ui.mjs` | A UI-testing agent must not be told to click something that does not exist. |

@@ -5,6 +5,7 @@ import type { GroupMessage } from "./GroupMessage";
 import type { IceServer } from "./IceServer";
 import type { MessagingTrustResponse } from "./MessagingTrustResponse";
 import type { Permission } from "./Permission";
+import type { RolesResponse } from "./RolesResponse";
 import type { SignInSettings } from "./SignInSettings";
 import type { TelemetryResponse } from "./TelemetryResponse";
 import type { TreeNode } from "./TreeNode";
@@ -21,7 +22,24 @@ export type WorkspaceProtocolResponse = { "Workspace": Workspace } | { "Workspac
  * node directly. `serde(default)` so a reply from a server that
  * predates the field still decodes, as a list of direct members.
  */
-inherited_from: { [key in string]?: string }, } } | { "MembersHidden": { domain_id: string, } } | { "Member": User } | { "UserPermissions": { domain_id: string, user_id: string, role: UserRole, permissions: Array<Permission>, } } | { "MemberRoleUpdated": { user_id: string, new_role: UserRole, } } | { "UserProfileUpdated": User } | { "NodeContentUpdated": { node_id: string, mdx_content: string, 
+inherited_from: { [key in string]?: string }, } } | { "MembersHidden": { domain_id: string, } } | { "Member": User } | { "UserPermissions": { domain_id: string, user_id: string, 
+/**
+ * The legacy enum, for clients that predate the role table.
+ */
+role: UserRole, 
+/**
+ * The role this user holds in the workspace, from its table; `None` when banned or
+ * not a member.
+ */
+role_id: string | null, permissions: Array<Permission>, } } | { "MemberRoleUpdated": { user_id: string, 
+/**
+ * The legacy enum, for clients that predate the role table.
+ */
+new_role: UserRole, 
+/**
+ * The role id the member now holds; `None` when banned.
+ */
+role_id: string | null, } } | { "UserProfileUpdated": User } | { "NodeContentUpdated": { node_id: string, mdx_content: string, 
 /**
  * The content's SHA-256, so a watcher can verify what it just received.
  *
@@ -57,4 +75,4 @@ revfs_storage_quota_mb: bigint, } } | { "IceServers": { ice_servers: Array<IceSe
 /**
  * IDs of child nodes that were also deleted (if cascade was true)
  */
-children_deleted: Array<string>, } } | { "NodeMoved": { node_id: string, old_parent_id: string | null, new_parent_id: string | null, } } | { "ServerShutdown": { message: string, drain_seconds: bigint, } } | { "Telemetry": TelemetryResponse } | { "MessagingTrust": MessagingTrustResponse };
+children_deleted: Array<string>, } } | { "NodeMoved": { node_id: string, old_parent_id: string | null, new_parent_id: string | null, } } | { "ServerShutdown": { message: string, drain_seconds: bigint, } } | { "Telemetry": TelemetryResponse } | { "MessagingTrust": MessagingTrustResponse } | { "Roles": RolesResponse };

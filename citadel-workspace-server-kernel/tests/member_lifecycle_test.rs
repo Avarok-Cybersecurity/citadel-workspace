@@ -64,7 +64,7 @@ async fn test_complete_user_removal() {
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
             domain_id: Some(office_id.clone()),
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: None,
         },
     )

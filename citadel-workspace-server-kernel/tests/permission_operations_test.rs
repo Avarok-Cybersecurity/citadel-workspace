@@ -48,7 +48,7 @@ async fn test_permission_operations() {
     let add_member_cmd = WorkspaceProtocolRequest::AddMember {
         user_id: "test_user".to_string(),
         domain_id: Some(office_id.clone()),
-        role: UserRole::Member,
+        role: UserRole::Member.into(),
         metadata: Some("test_metadata".to_string().into_bytes()),
     };
 

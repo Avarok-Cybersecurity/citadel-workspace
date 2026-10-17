@@ -169,7 +169,7 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     /// transfer cannot be attributed to a user, and so cannot be authorised.
     /// Shared across clones, like the rate limiter.
     connected_users: Arc<RwLock<HashMap<u64, String>>>,
-    /// Whether the first account to CONNECT is promoted to Admin.
+    /// Whether the first account to CONNECT is made the Owner.
     ///
     /// False unless the operator asks for it by name. See
     /// `crate::resolve_first_connect_admin` for the reasoning; in short, on a
@@ -302,23 +302,24 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     /// `GetIceServers` for `user_id`: an enrolled member's servers, from the host's source.
     pub async fn ice_servers_for(&self, user_id: &str) -> WorkspaceProtocolResponse {
-        use crate::handlers::domain::async_ops::AsyncPermissionOperations;
         use crate::kernel::ice_servers::{answer, may_have_ice_servers};
-        let user = match self.get_user(user_id).await {
-            Ok(user) => user,
-            Err(e) => return WorkspaceProtocolResponse::Error(e.to_string()),
-        };
-        let enrolled = match self
-            .domain_operations
-            .is_member_of_domain(user_id, crate::WORKSPACE_ROOT_ID)
-            .await
-        {
-            Ok(enrolled) => enrolled,
+        let role = match self.get_user(user_id).await {
+            Ok(Some(user)) => {
+                match self
+                    .domain_operations
+                    .role_of(crate::WORKSPACE_ROOT_ID, &user)
+                    .await
+                {
+                    Ok(role) => role,
+                    Err(e) => return WorkspaceProtocolResponse::Error(e.to_string()),
+                }
+            }
+            Ok(None) => None,
             Err(e) => return WorkspaceProtocolResponse::Error(e.to_string()),
         };
         answer(
             &self.ice_servers,
-            may_have_ice_servers(user.as_ref(), enrolled),
+            may_have_ice_servers(role.as_ref()),
             user_id,
         )
         .await
@@ -344,7 +345,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         self.first_connect_admin = allowed;
     }
 
-    /// Whether the first account to connect is promoted to Admin.
+    /// Whether the first account to connect is made the Owner.
     pub fn first_connect_admin(&self) -> bool {
         self.first_connect_admin
     }
@@ -1679,7 +1680,6 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             .await;
 
                         // First ensure the user exists in the system
-                        use citadel_workspace_types::structs::{User, UserRole};
                         let existing = this.get_user(&user_id).await?;
 
                         // A removed member is not a new one.
@@ -1710,21 +1710,16 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             return Ok(());
                         }
 
-                        if existing.is_none() {
-                            // Create a basic user with Member role
-                            let user = User::new(
-                                user_id.clone(),
+                        // The role the table gives new members; see joiner_role.
+                        this.domain_operations
+                            .give_joiner_the_default_role(
+                                &user_id,
                                 crate::kernel::display_name::display_name_for(
                                     &user_id,
                                     registered_full_name.as_deref(),
                                 ),
-                                UserRole::Member,
-                            );
-                            this.domain_operations
-                                .backend_tx_manager
-                                .insert_user(user_id.clone(), user)
-                                .await?;
-                        }
+                            )
+                            .await?;
 
                         // Add user directly to workspace members (no admin required for initial connection)
                         //
@@ -1734,10 +1729,10 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                         // two awaits. Two accounts connecting to a fresh workspace
                         // both observed `members == []`, so BOTH were promoted to
                         // Admin, and the second write erased the first's
-                        // membership. The promoted-but-unlisted admin still passes
-                        // every gate (`is_admin` reads the global role and never
-                        // consults membership) while `ensure_not_last_admin`, which
-                        // counts admins among `workspace.members`, cannot see them.
+                        // membership. The promoted-but-unlisted admin then passed
+                        // every gate (the role was global and never consulted
+                        // membership) while the last-admin guard, which counts
+                        // among `workspace.members`, could not see them.
                         //
                         // `lock_workspaces` was built for exactly this and its only
                         // caller was the theme handler. First-run is precisely when
@@ -1810,16 +1805,22 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                             .await?;
                         }
 
+                        // The first member becomes the Owner, as a workspace's creator
+                        // does (`create_workspace`): nobody assigns a role at or above
+                        // their own, so a first Admin could never appoint a second.
                         if outcome == crate::FirstMemberOutcome::Promote {
-                            use citadel_workspace_types::structs::UserRole;
                             if let Some(mut user) = this.get_user(&user_id).await? {
-                                user.role = UserRole::Admin;
-                                user.set_role_permissions(crate::WORKSPACE_ROOT_ID);
+                                crate::handlers::domain::server_ops::role_writes::assign_workspace_role(
+                                    &mut user,
+                                    &crate::handlers::domain::server_ops::role_authority::Assignment::Role(
+                                        citadel_workspace_types::roles::owner_role(),
+                                    ),
+                                );
                                 this.domain_operations
                                     .backend_tx_manager
                                     .insert_user(user_id.clone(), user)
                                     .await?;
-                                info!(target: "citadel", "[ASYNC_KERNEL] User {} is the first workspace member; promoted to Admin", user_id);
+                                info!(target: "citadel", "[ASYNC_KERNEL] User {} is the first workspace member; they are its Owner", user_id);
                             }
                         }
 

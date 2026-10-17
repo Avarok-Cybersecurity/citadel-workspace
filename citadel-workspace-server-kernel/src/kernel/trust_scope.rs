@@ -14,7 +14,7 @@ use crate::handlers::domain::tree_validator::TreeValidator;
 use citadel_workspace_types::messaging_trust::{
     MessagingTrustPolicy, DEFAULT_MESSAGING_TRUST_POLICY, MESSAGING_TRUST_POLICY_KEY,
 };
-use citadel_workspace_types::structs::{DomainNode, MetadataValue, User, UserRole};
+use citadel_workspace_types::structs::{DomainNode, MetadataValue, User};
 use std::collections::HashMap;
 
 /// `node` is `ancestor` or lies below it.
@@ -97,7 +97,7 @@ pub(crate) fn trusts(
     owner: &User,
     other: &User,
 ) -> bool {
-    if owner.role == UserRole::Banned || other.role == UserRole::Banned {
+    if owner.is_banned() || other.is_banned() {
         return false;
     }
     let personal = personal_policy(owner);

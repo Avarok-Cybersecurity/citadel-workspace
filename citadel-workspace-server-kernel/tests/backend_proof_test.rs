@@ -116,7 +116,7 @@ async fn test_backend_is_being_used() -> Result<(), Box<dyn std::error::Error>> 
         WorkspaceProtocolRequest::AddMember {
             user_id: "test_user".to_string(),
             domain_id: None,
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: None,
         },
     )

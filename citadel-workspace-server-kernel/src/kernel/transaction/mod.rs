@@ -20,6 +20,7 @@ mod accounts;
 pub mod backend_ops_simple;
 mod group_message_pages;
 mod records;
+mod roles_store;
 // Note: TransactionManager has been removed. Use BackendTransactionManager instead.
 
 /// How many message locks exist, total.
@@ -527,9 +528,27 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     }
 
     /// Get a single user by ID using per-entity key.
+    /// Read a user, with a record from before the role table brought up to date
+    /// (`User::read_legacy_role`).
+    ///
+    /// Here, at the one place a user record is decoded, so no reader can see the enum role
+    /// without its table id, or the old role write's copy of the role's permissions that would
+    /// outlive an edit to the role.
     pub async fn get_user_by_key(&self, id: &str) -> Result<Option<User>, NetworkError> {
         let key = format!("{KEY_PREFIX_USER}{id}");
-        self.backend_get(&key).await
+        let Some(mut user) = self.backend_get::<User>(&key).await? else {
+            return Ok(None);
+        };
+        if let citadel_workspace_types::roles_legacy::LegacyRoleRead::CustomBecameMember { name } =
+            user.read_legacy_role()
+        {
+            citadel_logging::warn!(
+                target: "citadel",
+                "{id} held the legacy custom role '{name}', which has no place in the role table; \
+                 reading it as Member. Create the role and assign it to restore anything more."
+            );
+        }
+        Ok(Some(user))
     }
 
     /// Save a single user by ID using per-entity key.

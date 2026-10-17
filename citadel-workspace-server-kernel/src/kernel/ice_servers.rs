@@ -6,7 +6,8 @@
 //! none answers `IceServersUnavailable`: there is no fallback list and no default provider.
 
 use citadel_workspace_types::ice::IceServer;
-use citadel_workspace_types::structs::{User, UserRole};
+use citadel_workspace_types::roles::RoleDefinition;
+use citadel_workspace_types::structs::Permission;
 use citadel_workspace_types::WorkspaceProtocolResponse;
 use std::sync::Arc;
 
@@ -37,14 +38,11 @@ pub trait IceServerSource: Send + Sync {
 /// The capability as the kernel holds it: absent unless the host passed one.
 pub type IceServerSourceHandle = Option<Arc<dyn IceServerSource>>;
 
-/// Whether this account may have relay servers: an enrolled member of the workspace, at Member
-/// standing or above. A Guest reads; relaying media is not reading. A removed account is left at
-/// `Banned` and a Custom role below Member ranks with the Guest, so both are refused.
-pub fn may_have_ice_servers(user: Option<&User>, enrolled: bool) -> bool {
-    match user {
-        Some(user) => enrolled && user.role.get_rank() >= UserRole::Member.get_rank(),
-        None => false,
-    }
+/// Whether an account holding `role` in the workspace may have relay servers: a role that may
+/// send messages. A Guest reads; relaying media is not reading. `None` is a removed account, a
+/// non-member, or one whose role no longer exists, and all are refused.
+pub fn may_have_ice_servers(role: Option<&RoleDefinition>) -> bool {
+    role.is_some_and(|role| role.grants(Permission::SendMessages))
 }
 
 /// Said to a Guest, a removed account or a non-member. `IceServersUnavailable`, not `Error`: the

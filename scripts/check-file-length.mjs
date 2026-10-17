@@ -94,7 +94,7 @@ const SKIP = new Map([
   // Two data-testid attributes, so the integration suite's readiness probe can
   // stop keying on button copy — see ROBUSTNESS round 168.
   ['types/messaging-layer.ts', 438],
-  ['types/workspace-protocol.ts', 292],
+  ['types/workspace-protocol.ts', 286],
 ]);
 
 if (!statSync(SRC, { throwIfNoEntry: false })) {

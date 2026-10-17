@@ -77,6 +77,7 @@ pub fn create_test_user(id: &str, role: UserRole) -> User {
         id: id.to_string(),
         name: format!("Test {}", id),
         role,
+        workspace_roles: Default::default(),
         permissions: Default::default(),
         metadata: Default::default(),
     }
@@ -291,4 +292,67 @@ pub async fn join_root(kernel: &GateKernel, id: &str) {
     mgr.insert_workspace(workspace.id.clone(), workspace)
         .await
         .expect("save workspace");
+}
+
+/// Add a role to the root workspace's table, as a fixture: the table as an earlier edit left it.
+/// The edits themselves are tested through `RolesRequest`.
+pub async fn seed_role(
+    kernel: &GateKernel,
+    id: &str,
+    position: u16,
+    permissions: &[citadel_workspace_types::structs::Permission],
+) {
+    let mgr = &kernel.domain_operations.backend_tx_manager;
+    let mut roles = mgr
+        .get_roles(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID)
+        .await
+        .expect("read roles");
+    roles
+        .roles
+        .push(citadel_workspace_types::roles::RoleDefinition {
+            id: id.to_string(),
+            name: id.to_string(),
+            permissions: permissions.iter().copied().collect(),
+            position,
+            color: None,
+        });
+    mgr.save_roles(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID, &roles)
+        .await
+        .expect("save roles");
+}
+
+/// A member of the root workspace holding table role `role_id`.
+pub async fn member_holding(kernel: &GateKernel, id: &str, role_id: &str) {
+    let mut user = create_test_user(id, UserRole::Member);
+    user.workspace_roles.insert(
+        citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string(),
+        role_id.to_string(),
+    );
+    kernel
+        .domain_operations
+        .backend_tx_manager
+        .insert_user(id.to_string(), user)
+        .await
+        .expect("insert user");
+    join_root(kernel, id).await;
+}
+
+/// The id of the role `id` holds in the root workspace, as stored.
+pub async fn role_id_of(kernel: &GateKernel, id: &str) -> Option<String> {
+    kernel
+        .domain_operations
+        .backend_tx_manager
+        .get_user(id)
+        .await
+        .expect("read user")
+        .and_then(|user| {
+            user.role_id_in(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID)
+                .map(str::to_string)
+        })
+}
+
+/// A member holding the Owner role, the only one above Admin: nobody else may act on an Admin.
+pub async fn an_owner(kernel: &GateKernel, id: &str) {
+    insert_user_with_role(kernel, id, UserRole::Owner).await;
+    join_root(kernel, id).await;
 }

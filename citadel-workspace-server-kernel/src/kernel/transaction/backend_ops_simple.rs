@@ -429,6 +429,7 @@ mod rollback_tests {
             id: id.to_string(),
             name: format!("user-{id}"),
             role: UserRole::Member,
+            workspace_roles: Default::default(),
             permissions: HashMap::new(),
             metadata: HashMap::new(),
         }

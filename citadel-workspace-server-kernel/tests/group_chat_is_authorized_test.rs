@@ -49,6 +49,7 @@ async fn add_user_with_role(kernel: &Kernel, id: &str, role: UserRole) {
                 id: id.to_string(),
                 name: id.to_string(),
                 role,
+                workspace_roles: Default::default(),
                 permissions: HashMap::new(),
                 metadata: Default::default(),
             },
@@ -63,7 +64,9 @@ async fn add_user_with_role(kernel: &Kernel, id: &str, role: UserRole) {
 async fn add_room_with_chat(kernel: &Kernel) {
     let node = DomainNode {
         id: ROOM_ID.to_string(),
-        parent_id: None,
+        // Hung from the workspace, as every top-level node is: a role confers its permissions
+        // within the workspace whose table it is in, so a node in no workspace confers none.
+        parent_id: Some(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string()),
         entity_type: NodeEntityType::Child("Room".to_string()),
         depth: 1,
         name: "Room".to_string(),
@@ -264,7 +267,7 @@ async fn membership_of_the_parent_still_grants_the_childs_chat() {
     let parent_id = "parent-office";
     let parent = DomainNode {
         id: parent_id.to_string(),
-        parent_id: None,
+        parent_id: Some(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string()),
         entity_type: NodeEntityType::Child("Office".to_string()),
         depth: 1,
         name: "Office".to_string(),

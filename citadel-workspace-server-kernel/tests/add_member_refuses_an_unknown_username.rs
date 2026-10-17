@@ -16,7 +16,7 @@ fn add(user_id: &str) -> WorkspaceProtocolRequest {
     WorkspaceProtocolRequest::AddMember {
         user_id: user_id.to_string(),
         domain_id: None,
-        role: UserRole::Member,
+        role: UserRole::Member.into(),
         metadata: None,
     }
 }

@@ -53,3 +53,6 @@ mod telemetry;
 
 /// Who connects without asking: the workspace's policy, a member's own, and the check.
 mod messaging_trust;
+
+/// The workspace's role table: list, create, edit, delete.
+mod roles;

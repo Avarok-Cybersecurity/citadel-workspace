@@ -2,11 +2,11 @@
  * Every server op that writes another member's standing passes the authority
  * ladder first.
  *
- * `ensure_may_act_on` compares the actor's `command_authority` against the
+ * `ensure_may_act_on` compares the position of the actor's role against the
  * TARGET's. Without it the rule is only "you may not promote above yourself",
- * with no matching "you may not unseat someone above you" -- and
- * `Permission::for_role(Banned)` is empty, so the granting check passes
- * trivially for every actor: banning grants nothing, and neither does removing.
+ * with no matching "you may not unseat someone above you" -- and a ban carries
+ * no permissions, so the granting check passes trivially for every actor:
+ * banning grants nothing, and neither does removing.
  *
  * The guard was added to three doors and a fourth stayed open for months,
  * because that one does not write a ROLE at all. `update_member_permissions`
@@ -34,14 +34,16 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const OPS = join(
-  ROOT,
-  'citadel-workspace-server-kernel/src/handlers/domain/server_ops/async_domain_server_ops.rs',
-);
+const SERVER_OPS = join(ROOT, 'citadel-workspace-server-kernel/src/handlers/domain/server_ops');
+const OPS = join(SERVER_OPS, 'async_domain_server_ops.rs');
+// The ladder lives beside the ops it guards, with the rest of the role authority.
+const GUARD_HOME = join(SERVER_OPS, 'role_authority.rs');
 
-if (!existsSync(OPS)) {
-  console.error(`FAIL: ${OPS} is missing — the server ops moved and this gate read nothing.`);
-  process.exit(1);
+for (const file of [OPS, GUARD_HOME]) {
+  if (!existsSync(file)) {
+    console.error(`FAIL: ${file} is missing — the server ops moved and this gate read nothing.`);
+    process.exit(1);
+  }
 }
 
 const GUARD = 'ensure_may_act_on';
@@ -50,7 +52,7 @@ const GUARD = 'ensure_may_act_on';
 const A_SECOND_USER = /^(target_user_id|user_id_to_add|user_id_to_remove|member_id|peer_user_id)$/;
 
 /** The guard itself, and the helpers it is built from — these may not call it. */
-const NOT_SUBJECT_TO_THE_RULE = new Set([GUARD, 'ensure_not_last_admin', 'ensure_may_grant_role']);
+const NOT_SUBJECT_TO_THE_RULE = new Set([GUARD, 'ensure_managers_remain', 'ensure_may_grant_role']);
 
 const source = readFileSync(OPS, 'utf8');
 const lines = source.split('\n');
@@ -81,9 +83,9 @@ if (all.length < 20) {
   process.exit(1);
 }
 
-if (!source.includes(`async fn ${GUARD}(`)) {
+if (!readFileSync(GUARD_HOME, 'utf8').includes(`async fn ${GUARD}(`)) {
   console.error(
-    `FAIL: \`${GUARD}\` is not defined in the server ops any more.\n` +
+    `FAIL: \`${GUARD}\` is not defined in role_authority.rs any more.\n` +
       'If the ladder moved, point this gate at its new home — do not delete the gate.',
   );
   process.exit(1);

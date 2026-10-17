@@ -1,0 +1,67 @@
+[
+  {
+    "id": "owner",
+    "name": "Owner",
+    "permissions": [
+      "CreateNode",
+      "DeleteNode",
+      "UpdateNode",
+      "CreateWorkspace",
+      "UpdateWorkspace",
+      "DeleteWorkspace",
+      "EditContent",
+      "AddUsers",
+      "RemoveUsers",
+      "EditMdx",
+      "EditNodeConfig",
+      "AddNode",
+      "UpdateNodeSettings",
+      "ViewContent",
+      "ViewMembers",
+      "ManageNodeMembers",
+      "SendMessages",
+      "ReadMessages",
+      "UploadFiles",
+      "DownloadFiles",
+      "ManageDomains",
+      "EditWorkspaceConfig",
+      "BanUser",
+      "EditTreeStructure",
+      "ManageNodeTypes",
+      "Themes",
+      "ViewTelemetry",
+      "ManageRoles"
+    ],
+    "position": 65535
+  },
+  {
+    "id": "admin",
+    "name": "Admin",
+    "permissions": [
+      "All"
+    ],
+    "position": 300
+  },
+  {
+    "id": "member",
+    "name": "Member",
+    "permissions": [
+      "ViewContent",
+      "ViewMembers",
+      "SendMessages",
+      "ReadMessages",
+      "UploadFiles",
+      "DownloadFiles"
+    ],
+    "position": 200
+  },
+  {
+    "id": "guest",
+    "name": "Guest",
+    "permissions": [
+      "ViewContent",
+      "ViewMembers"
+    ],
+    "position": 100
+  }
+]

@@ -43,7 +43,7 @@ async fn office_with(kernel: &Kernel, user: &str, role: UserRole) -> String {
 
     kernel
         .domain_operations
-        .add_user_to_domain(TEST_ADMIN_USER_ID, user, &office.id, role)
+        .add_user_to_domain(TEST_ADMIN_USER_ID, user, &office.id, role.into())
         .await
         .expect("an admin may add a member to an office");
 
@@ -78,7 +78,7 @@ async fn a_ban_revokes_the_room_grants_too() {
 
     kernel
         .domain_operations
-        .update_workspace_member_role(TEST_ADMIN_USER_ID, "outcast", UserRole::Banned, None)
+        .update_workspace_member_role(TEST_ADMIN_USER_ID, "outcast", UserRole::Banned.into(), None)
         .await
         .expect("an admin may set a role to Banned");
 
@@ -131,7 +131,7 @@ async fn a_demotion_that_is_not_a_ban_leaves_a_deliberate_grant_alone() {
 
     kernel
         .domain_operations
-        .update_workspace_member_role(TEST_ADMIN_USER_ID, "member", UserRole::Guest, None)
+        .update_workspace_member_role(TEST_ADMIN_USER_ID, "member", UserRole::Guest.into(), None)
         .await
         .expect("an admin may set a role to Guest");
 
@@ -152,7 +152,7 @@ async fn a_banned_member_is_refused_the_tree_as_well() {
 
     kernel
         .domain_operations
-        .update_workspace_member_role(TEST_ADMIN_USER_ID, "outcast", UserRole::Banned, None)
+        .update_workspace_member_role(TEST_ADMIN_USER_ID, "outcast", UserRole::Banned.into(), None)
         .await
         .expect("an admin may set a role to Banned");
 
@@ -186,7 +186,7 @@ async fn a_banned_member_is_not_listed_the_workspace_either() {
 
     kernel
         .domain_operations
-        .update_workspace_member_role(TEST_ADMIN_USER_ID, "outcast", UserRole::Banned, None)
+        .update_workspace_member_role(TEST_ADMIN_USER_ID, "outcast", UserRole::Banned.into(), None)
         .await
         .expect("an admin may set a role to Banned");
 

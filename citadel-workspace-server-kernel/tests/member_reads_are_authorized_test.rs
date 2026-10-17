@@ -38,6 +38,7 @@ async fn add_user(
                 id: id.to_string(),
                 name: id.to_string(),
                 role: UserRole::Member,
+                workspace_roles: Default::default(),
                 permissions: HashMap::new(),
                 metadata: Default::default(),
             },

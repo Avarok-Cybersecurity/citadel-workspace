@@ -91,7 +91,7 @@ async fn test_member_command_processing() {
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
             domain_id: Some(office_id.clone()),
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: None,
         },
     )

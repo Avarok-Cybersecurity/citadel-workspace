@@ -44,8 +44,8 @@ pub struct HostedSignIn {
 }
 
 pub const NOT_SUPPORTED: &str = "this workspace server has no sign-in settings";
-pub(crate) const ADMIN_ONLY: &str =
-    "Permission denied: only an admin can change how people sign in to this workspace";
+pub(crate) const CONFIGURATION_ONLY: &str =
+    "Permission denied: EditWorkspaceConfig is required to change how people sign in to this workspace";
 
 fn unavailable(
     SignInSettingsUnavailable(reason): SignInSettingsUnavailable,
@@ -64,18 +64,18 @@ pub async fn read(store: &SignInSettingsHandle) -> WorkspaceProtocolResponse {
     }
 }
 
-/// `UpdateSignInSettings`, once the caller's role is known. The answer is what the host holds
+/// `UpdateSignInSettings`, once it is known whether the caller may configure the workspace. The answer is what the host holds
 /// after the write, read back, so an admin is never shown a value nobody stored.
 pub async fn update(
     store: &SignInSettingsHandle,
-    is_admin: bool,
+    may_configure: bool,
     settings: SignInSettings,
 ) -> WorkspaceProtocolResponse {
     let Some(store) = store else {
         return WorkspaceProtocolResponse::Error(NOT_SUPPORTED.to_string());
     };
-    if !is_admin {
-        return WorkspaceProtocolResponse::Error(ADMIN_ONLY.to_string());
+    if !may_configure {
+        return WorkspaceProtocolResponse::Error(CONFIGURATION_ONLY.to_string());
     }
     if let Err(e) = store.store(settings).await {
         return unavailable(e);

@@ -29,7 +29,7 @@
 # EVERY ASSET IS SIGNED with ML-DSA-65 as well as checksummed and attested: `sign` writes
 # `<asset>.mldsa.sig` with the CITADEL_RELEASE_MLDSA_KEY secret (tools/release-sign) and verifies
 # each against the public key the agent embeds before anything is uploaded; the agent's updater
-# refuses an update without it. `release-key` fails a publishing run before anything builds when
+# refuses an update without it. `version` (its key gate) fails a publishing run before anything builds when
 # the secret is missing, the embedded key is the placeholder, or the two are not one pair. A dry
 # run signs with a throwaway key, labelled. docs/plans/agent-auto-update.md has the format.
 #
@@ -73,22 +73,35 @@ env:
 jobs:
   # The version every artefact is built as and checked against: Cargo.toml's, which a tag must
   # repeat (a dispatch builds Cargo's). First, so a mismatched tag fails before anything builds.
+  # Then the release key, before 45 minutes of builds: see the release-sign-tool action. One job,
+  # not two in a row: the second only ever waited for the first's few seconds, plus a queue.
   version:
+    name: Version and release signing key
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     outputs:
       version: ${{ steps.version.outputs.version }}
       # Whether this run publishes: the publish job's own condition, for the jobs that sign.
-      publishes: ${{ startsWith(github.ref, 'refs/tags/agent-v') || inputs.publish == true }}
+      publishes: ${{ steps.version.outputs.publishes }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Recursive: the key gate also tests citadel-release-signature, a member of the agent's
+          # workspace, and cargo loads that whole workspace, intersession-layer-messaging included.
+          submodules: recursive
       - id: version
         name: The version, and the tag agrees with it
+        env:
+          PUBLISHES: ${{ startsWith(github.ref, 'refs/tags/agent-v') || inputs.publish == true }}
         run: |
           set -euo pipefail
           v="$(./scripts/release-version.sh citadel-workspace-internal-service/Cargo.toml "$RELEASE_REF")"
-          echo "version=$v" >> "$GITHUB_OUTPUT"
-          echo "Building citadel-agent $v"
+          { echo "version=$v"; echo "publishes=$PUBLISHES"; } >> "$GITHUB_OUTPUT"
+          echo "Building citadel-agent $v (publishes: $PUBLISHES)"
+      - uses: ./.github/actions/release-sign-tool
+        with:
+          publishes: ${{ steps.version.outputs.publishes }}
+          mldsa-key: ${{ secrets.CITADEL_RELEASE_MLDSA_KEY }}
 
   # This release's certificate, issued once for every leg: the action says why.
   certificate:
@@ -101,25 +114,8 @@ jobs:
           cloudflare-dns-api-token: ${{ secrets.CLOUDFLARE_DNS_API_TOKEN }}
           issue: ${{ startsWith(env.RELEASE_REF, 'refs/tags/agent-v') }}
 
-  # The release key, before 45 minutes of builds: see the action.
-  release-key:
-    name: Release signing key
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: [version]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # Recursive: the action also tests citadel-release-signature, a member of the agent's
-          # workspace, and cargo loads that whole workspace, intersession-layer-messaging included.
-          submodules: recursive
-      - uses: ./.github/actions/release-sign-tool
-        with:
-          publishes: ${{ needs.version.outputs.publishes }}
-          mldsa-key: ${{ secrets.CITADEL_RELEASE_MLDSA_KEY }}
-
   build:
-    needs: [certificate, version, release-key]
+    needs: [certificate, version]
     # Bounds a hang, not performance. Without it a stuck job holds a runner for
     # GitHub's 360-minute default, and the observed worst case is the Windows
     # target at about 16 minutes.
@@ -307,7 +303,7 @@ jobs:
   # <asset>.mldsa.sig for every release asset, verified before it is uploaded (the action says how).
   sign:
     name: Sign release assets (ML-DSA-65)
-    needs: [version, release-key, build, macos-app, linux-packages, windows-msi]
+    needs: [version, build, macos-app, linux-packages, windows-msi]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

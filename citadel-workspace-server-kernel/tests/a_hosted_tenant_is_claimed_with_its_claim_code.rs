@@ -142,8 +142,8 @@ async fn the_claim_code_makes_the_creator_admin_and_the_tenant_carries_p2p(
     println!("ROLE after claim: {after:?}");
     assert_eq!(
         after,
-        UserRole::Admin,
-        "the claim did not make the creator Admin"
+        UserRole::Owner,
+        "the claim did not make the creator the Owner"
     );
 
     // The teammate joins the same tenant and is a plain member.
@@ -186,7 +186,7 @@ async fn the_claim_code_makes_the_creator_admin_and_the_tenant_carries_p2p(
     );
     assert_eq!(
         role_of(&to_a, &mut from_a, cid_a, &creator).await?,
-        UserRole::Admin
+        UserRole::Owner
     );
 
     drain(&mut from_a, "creator").await;

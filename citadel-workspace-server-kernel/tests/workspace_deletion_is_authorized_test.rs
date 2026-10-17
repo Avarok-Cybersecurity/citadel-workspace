@@ -31,6 +31,7 @@ async fn add_member(kernel: &Kernel, id: &str) {
                 id: id.to_string(),
                 name: id.to_string(),
                 role: UserRole::Member,
+                workspace_roles: Default::default(),
                 permissions: HashMap::new(),
                 metadata: Default::default(),
             },

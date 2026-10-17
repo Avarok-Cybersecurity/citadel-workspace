@@ -134,7 +134,7 @@ async fn only_a_registered_account_can_be_added() {
         let add = |user_id: &str| WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
             domain_id: None,
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: None,
         };
         let registered = ask(&mut tx, &mut rx, add(REGISTERED)).await?;

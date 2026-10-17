@@ -13,9 +13,6 @@ pub trait AsyncDomainOperations<R: Ratchet + Send + Sync + 'static>: Send + Sync
     /// Initializes the domain operations system
     async fn init(&self) -> Result<(), NetworkError>;
 
-    /// Checks if a user has administrative privileges
-    async fn is_admin(&self, user_id: &str) -> Result<bool, NetworkError>;
-
     /// Retrieves a user entity by their unique identifier
     async fn get_user(&self, user_id: &str) -> Result<Option<User>, NetworkError>;
 

@@ -172,7 +172,8 @@ async fn test_first_user_with_master_password_becomes_owner() {
         "User should be a member of the workspace"
     );
 
-    // Verify user has Admin role
+    // The claimant is the workspace's Owner: the one role above the ladder, so they can
+    // appoint the administrators a lone Admin never could.
     let user_record = kernel
         .get_user(test_user_id)
         .await
@@ -180,9 +181,14 @@ async fn test_first_user_with_master_password_becomes_owner() {
         .expect("User should exist");
 
     assert_eq!(
+        user_record.role_id_in(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID),
+        Some(citadel_workspace_types::roles::OWNER_ROLE_ID),
+        "User should hold the Owner role after providing master password"
+    );
+    assert_eq!(
         user_record.role,
-        UserRole::Admin,
-        "User should have Admin role after providing master password"
+        UserRole::Owner,
+        "and the enum an older client reads says so too"
     );
 }
 

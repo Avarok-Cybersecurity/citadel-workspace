@@ -64,6 +64,9 @@ const SCOPED = new Map([
   // including a member set to Banned, whose socket nothing closes. That is
   // verbatim the disclosure the `Node` variant's doc comment describes.
   ['MemberRoleUpdated', 'broadcast_to_workspace'],
+  // The role table. A change can move any member's permissions, so every
+  // member of THAT workspace hears it; another workspace's sessions must not.
+  ['Roles', 'broadcast_to_workspace'],
   ['NodeDeleted', 'broadcast_to_workspace'],
   ['NodeMoved', 'broadcast_to_workspace'],
   // The three that carry actual message TEXT. Their call sites already use

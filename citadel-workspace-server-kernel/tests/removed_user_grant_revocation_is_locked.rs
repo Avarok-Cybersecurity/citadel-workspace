@@ -79,6 +79,7 @@ async fn grant_revocation_waits_for_the_user_record_lock() {
                 id: "victim".to_string(),
                 name: "Victim".to_string(),
                 role: UserRole::Member,
+                workspace_roles: Default::default(),
                 permissions,
                 metadata: HashMap::new(),
             },

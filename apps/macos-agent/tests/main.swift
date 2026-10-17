@@ -117,7 +117,7 @@ if args.count == 3 {
     try! FileManager.default.createDirectory(at: content, withIntermediateDirectories: true)
     let image = scratch.appendingPathComponent("Citadel-Agent.dmg")
     let copied = try! UpdateSteps.run("/usr/bin/ditto", [source.path, app.path])
-    let made = try! UpdateSteps.run("/usr/bin/hdiutil", ["create", "-quiet", "-srcfolder", content.path, "-format", "UDZO", image.path])
+    let made = try! UpdateSteps.run("/usr/bin/hdiutil", ["create", "-srcfolder", content.path, "-format", "UDZO", image.path])
     check(copied.status == 0 && made.status == 0, "a scratch disk image of the app" + outcome("ditto", copied) + outcome("hdiutil", made))
     let out = scratch.appendingPathComponent("incoming.app")
     do { try UpdateSteps.extract(image: image, to: out) } catch { fail("extract: \(error)") }

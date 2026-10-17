@@ -16,7 +16,9 @@
 //! existence that account IS the administrator — and that case is asserted
 //! here, since a fix that broke it would otherwise look like a pass.
 
-use citadel_workspace_server_kernel::handlers::domain::async_ops::AsyncWorkspaceOperations;
+use citadel_workspace_server_kernel::handlers::domain::async_ops::{
+    AsyncPermissionOperations, AsyncWorkspaceOperations,
+};
 use citadel_workspace_types::structs::{Permission, UserRole};
 use common::member_test_utils::{insert_user_with_role, join_root, GateKernel as Kernel};
 use common::workspace_test_utils::{create_test_kernel, TEST_ADMIN_PASSWORD};
@@ -88,21 +90,31 @@ async fn the_creator_still_holds_full_authority_over_what_they_created() {
             .await
             .expect("read user")
             .expect("user exists");
-        let scoped = user
-            .permissions
-            .get(&workspace.id)
-            .expect("the creator holds a grant on the workspace they created");
+        assert_eq!(
+            user.role_id_in(&workspace.id),
+            Some(citadel_workspace_types::roles::OWNER_ROLE_ID),
+            "the creator holds the Owner role in the workspace they created"
+        );
+        let may = |entity: String, permission: Permission| {
+            let kernel = kernel.clone();
+            async move {
+                kernel
+                    .domain_operations
+                    .check_entity_permission("owner", &entity, permission)
+                    .await
+                    .expect("permission check")
+            }
+        };
         assert!(
-            Permission::has_permission(scoped, &Permission::EditTreeStructure),
+            may(workspace.id.clone(), Permission::EditTreeStructure).await,
             "scoped authority must be real, or the fix has only removed rights",
         );
         assert!(
-            !Permission::has_permission(
-                user.permissions
-                    .get(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID)
-                    .unwrap_or(&Default::default()),
-                &Permission::ConfigureSystem
-            ),
+            !may(
+                citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string(),
+                Permission::ConfigureSystem
+            )
+            .await,
             "and it must not have leaked onto the root workspace",
         );
     }

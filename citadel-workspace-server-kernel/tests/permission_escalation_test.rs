@@ -84,7 +84,7 @@ async fn test_permission_escalation() {
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
             domain_id: Some(office_id.clone()),
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: None,
         },
     )
@@ -96,7 +96,7 @@ async fn test_permission_escalation() {
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
             domain_id: Some(room_id.clone()),
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: None,
         },
     )
@@ -123,7 +123,12 @@ async fn test_permission_escalation() {
         .unwrap()
         .expect("User should exist");
 
-    user_from_db.role = UserRole::Admin;
+    // The role is the user's entry in the workspace's role table; the enum is only what an
+    // older client reads.
+    user_from_db.workspace_roles.insert(
+        citadel_workspace_server_kernel::WORKSPACE_ROOT_ID.to_string(),
+        citadel_workspace_types::roles::ADMIN_ROLE_ID.to_string(),
+    );
     kernel
         .domain_operations
         .backend_tx_manager

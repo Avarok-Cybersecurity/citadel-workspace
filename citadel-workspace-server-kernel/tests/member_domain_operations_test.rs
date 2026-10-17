@@ -63,7 +63,7 @@ async fn test_add_user_to_domain() {
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
             domain_id: Some(office_id.clone()),
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: None,
         },
     )
@@ -128,7 +128,7 @@ async fn test_remove_user_from_domain() {
         WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
             domain_id: Some(office_id.clone()),
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: None,
         },
     )

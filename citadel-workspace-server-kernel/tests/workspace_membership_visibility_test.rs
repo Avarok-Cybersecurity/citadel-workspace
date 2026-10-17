@@ -48,7 +48,7 @@ async fn added_member_appears_in_the_roster() {
         WorkspaceProtocolRequest::AddMember {
             user_id: "roster_probe_user".to_string(),
             domain_id: None, // workspace root
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: None,
         },
     )
@@ -91,7 +91,7 @@ async fn removed_member_leaves_the_roster() {
         WorkspaceProtocolRequest::AddMember {
             user_id: "departing_user".to_string(),
             domain_id: None,
-            role: UserRole::Member,
+            role: UserRole::Member.into(),
             metadata: None,
         },
     )

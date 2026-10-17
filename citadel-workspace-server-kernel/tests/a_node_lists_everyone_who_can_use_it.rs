@@ -102,7 +102,7 @@ async fn a_room_marks_each_person_with_the_nearest_level() {
     let room = node(&kernel, &office, "Room", "Standup").await;
     kernel
         .domain_operations
-        .add_user_to_domain(TEST_ADMIN_USER_ID, "bea", &office, UserRole::Member)
+        .add_user_to_domain(TEST_ADMIN_USER_ID, "bea", &office, UserRole::Member.into())
         .await
         .expect("an admin may add bea to the office");
 
@@ -191,7 +191,7 @@ async fn removing_someone_who_only_inherits_access_says_so() {
     // The control: someone listed on the office itself is removed as before.
     kernel
         .domain_operations
-        .add_user_to_domain(TEST_ADMIN_USER_ID, "ann", &office, UserRole::Member)
+        .add_user_to_domain(TEST_ADMIN_USER_ID, "ann", &office, UserRole::Member.into())
         .await
         .expect("an admin may add ann to the office");
     kernel

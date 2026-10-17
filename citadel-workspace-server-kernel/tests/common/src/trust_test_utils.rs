@@ -44,7 +44,7 @@ pub async fn member(kernel: &Kernel, id: &str, on: Option<&str>) {
     if let Some(node_id) = on {
         kernel
             .domain_operations
-            .add_user_to_domain(TEST_ADMIN_USER_ID, id, node_id, UserRole::Member)
+            .add_user_to_domain(TEST_ADMIN_USER_ID, id, node_id, UserRole::Member.into())
             .await
             .expect("an admin may add a member to a node");
     }

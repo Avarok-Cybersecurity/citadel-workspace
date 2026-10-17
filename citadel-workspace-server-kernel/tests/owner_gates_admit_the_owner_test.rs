@@ -41,7 +41,7 @@ async fn try_set_role(kernel: &Kernel, actor: &str, target: &str) -> Result<(), 
     join_root(kernel, target).await;
     kernel
         .domain_operations
-        .update_workspace_member_role(actor, target, UserRole::Guest, None)
+        .update_workspace_member_role(actor, target, UserRole::Guest.into(), None)
         .await
         .map_err(|e| e.to_string())
 }

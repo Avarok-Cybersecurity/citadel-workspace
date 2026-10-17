@@ -46,7 +46,7 @@ async fn a_banned_member_cannot_read_the_workspace() {
 
     kernel
         .domain_operations
-        .update_workspace_member_role(TEST_ADMIN_USER_ID, "outcast", UserRole::Banned, None)
+        .update_workspace_member_role(TEST_ADMIN_USER_ID, "outcast", UserRole::Banned.into(), None)
         .await
         .expect("an admin may set a role to Banned");
 

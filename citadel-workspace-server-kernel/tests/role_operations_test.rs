@@ -1,6 +1,7 @@
 use common::async_test_helpers::*;
 use common::workspace_test_utils::*;
 
+use citadel_workspace_server_kernel::kernel::command_processor::async_process_command::process_command_with_user;
 use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::structs::{NodeEntityType, Permission, User, UserRole};
 use citadel_workspace_types::{WorkspaceProtocolRequest, WorkspaceProtocolResponse};
@@ -51,6 +52,31 @@ async fn test_role_operations() {
         .await
         .unwrap();
 
+    // The Owner, above the admin role.
+    kernel
+        .domain_operations
+        .backend_tx_manager
+        .insert_user(
+            "owner".to_string(),
+            User::new("owner".to_string(), "Owner".to_string(), UserRole::Owner),
+        )
+        .await
+        .unwrap();
+    let mut workspace = kernel
+        .domain_operations
+        .backend_tx_manager
+        .get_workspace(WORKSPACE_ROOT_ID)
+        .await
+        .unwrap()
+        .expect("root workspace");
+    workspace.members.push("owner".to_string());
+    kernel
+        .domain_operations
+        .backend_tx_manager
+        .insert_workspace(WORKSPACE_ROOT_ID.to_string(), workspace)
+        .await
+        .unwrap();
+
     // Create an office
     let create_office_response = execute_command(
         &kernel,
@@ -85,16 +111,19 @@ async fn test_role_operations() {
         let add_member_cmd = WorkspaceProtocolRequest::AddMember {
             user_id: user_id.to_string(),
             domain_id: Some(office_id.clone()),
-            role: role.clone(),
+            role: role.clone().into(),
             metadata: None,
         };
 
-        let response = execute_command(&kernel, add_member_cmd).await.unwrap();
+        // The Owner adds them: an Admin may not hand out the admin role, its own position.
+        let response = process_command_with_user(&kernel, &add_member_cmd, "owner")
+            .await
+            .unwrap();
         match response {
             WorkspaceProtocolResponse::Success(_) => {
                 println!("{} user added with {} role", user_id, role_name);
             }
-            _ => panic!("Expected Success response"),
+            other => panic!("Expected Success response, got {other:?}"),
         }
     }
 

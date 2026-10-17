@@ -20,6 +20,7 @@ pub fn create_test_user(id: &str, role: UserRole) -> User {
         id: id.to_string(),
         name: format!("Test {}", id),
         role,
+        workspace_roles: Default::default(),
         permissions: HashMap::new(),
         metadata: Default::default(),
     }
@@ -103,7 +104,25 @@ pub async fn setup_custom_admin_test_environment(
         .await
         .expect("Failed to insert admin user");
 
+    // A role is authority in the workspace it belongs to, so the admin is a member of it.
+    join_root_workspace(&kernel, admin_id).await;
+
     let domain_ops = kernel.domain_ops().clone();
 
     (Arc::new(kernel), domain_ops, admin_id.to_string())
+}
+
+/// Put `id` in the root workspace's member list: a role confers nothing outside the workspace
+/// whose table it is in.
+pub async fn join_root_workspace(kernel: &AsyncWorkspaceServerKernel<MonoRatchet>, id: &str) {
+    let mgr = &kernel.domain_operations.backend_tx_manager;
+    let mut workspace = mgr
+        .get_workspace(citadel_workspace_server_kernel::WORKSPACE_ROOT_ID)
+        .await
+        .expect("read workspace")
+        .expect("root workspace exists");
+    workspace.members.push(id.to_string());
+    mgr.insert_workspace(workspace.id.clone(), workspace)
+        .await
+        .expect("save workspace");
 }

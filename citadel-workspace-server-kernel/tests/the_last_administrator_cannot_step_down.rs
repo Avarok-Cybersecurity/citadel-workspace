@@ -40,7 +40,7 @@ async fn only_members(kernel: &Kernel, ids: &[&str]) {
 async fn try_demote(kernel: &Kernel, actor: &str, target: &str) -> Result<(), String> {
     kernel
         .domain_operations
-        .update_workspace_member_role(actor, target, UserRole::Member, None)
+        .update_workspace_member_role(actor, target, UserRole::Member.into(), None)
         .await
         .map_err(|e| e.to_string())
 }
