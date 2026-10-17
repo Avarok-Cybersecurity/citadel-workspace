@@ -21,6 +21,8 @@ pub mod backend_ops_simple;
 mod group_message_pages;
 mod records;
 mod roles_store;
+#[cfg(test)]
+mod roles_upgrade_tests;
 pub(crate) mod secure_links_store;
 // Note: TransactionManager has been removed. Use BackendTransactionManager instead.
 

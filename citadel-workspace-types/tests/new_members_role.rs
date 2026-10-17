@@ -101,6 +101,7 @@ fn a_stored_default_naming_the_owner_or_nothing_is_not_trusted() {
         let stored = StoredRoles {
             roles: vec![seed(MEMBER_ROLE_ID), seed(GUEST_ROLE_ID)],
             default_role_id: Some(named.to_string()),
+            version: citadel_workspace_types::roles_stored::ROLE_TABLE_VERSION,
         };
         let (table, how) = stored.into_table();
         assert_eq!(

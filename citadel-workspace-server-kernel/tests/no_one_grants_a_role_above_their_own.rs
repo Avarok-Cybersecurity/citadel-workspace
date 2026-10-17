@@ -28,11 +28,11 @@ const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 
 /// What the old rank-16 Custom role held: AddUsers among them. Between Member and Admin.
 ///
-/// Plus `ShareSecureLinks`, which the Member seed now carries: without it this role could not
-/// assign Member at all, by the same ladder rule this file tests.
-// @human-review: a custom role created before ShareSecureLinks existed lacks it, so after this
-// upgrade it can no longer assign Member. Decide whether stored custom roles holding every other
-// Member permission should be given it.
+/// Plus `ShareSecureLinks`, which the Member seed now carries. `seed_role` saves this role into
+/// a table written today, so it is a role made after secure links existed, which the stored-table
+/// upgrade (roles_stored.rs, version 1) rightly leaves alone; without the permission it could not
+/// assign Member, by the same ladder rule this file tests. A role stored before the upgrade gets
+/// it when read: kernel/transaction/roles_upgrade_tests.rs.
 const EDITOR: &[Permission] = &[
     Permission::ViewContent,
     Permission::ViewMembers,
