@@ -1,0 +1,90 @@
+{
+  "$comment": "The upstream unit costs Citadel pays, one entry per figure: the SSOT billing/derive.mjs prices from (x billing/pricing-model.json -> the DERIVED prices in billing/tiers.json). Written only by scripts/rates/update-rates.mjs (weekly, .github/workflows/rates.yml), never by hand. `raw` is the exact text the parser matched on `source`; an entry's `fetched_at` is when its value last changed, and the top-level one is the last run that changed any.",
+  "fetched_at": "2026-10-18T20:41:21.274Z",
+  "rates": {
+    "cloudflare.do.rows_written_usd_per_million": {
+      "value": 1,
+      "unit": "USD per million rows written",
+      "source": "https://developers.cloudflare.com/durable-objects/platform/pricing/",
+      "raw": "| Rows written <sup>1,2,3,4</sup> | 100,000 / day | First 50 million / month included + $1.00 / million rows",
+      "fetched_at": "2026-10-18T20:41:21.274Z"
+    },
+    "cloudflare.do.requests_usd_per_million": {
+      "value": 0.15,
+      "unit": "USD per million requests",
+      "source": "https://developers.cloudflare.com/durable-objects/platform/pricing/",
+      "raw": "| Requests | 100,000 / day | 1 million / month, + $0.15/million",
+      "fetched_at": "2026-10-18T20:41:21.274Z"
+    },
+    "cloudflare.do.sqlite_usd_per_gb_month": {
+      "value": 0.2,
+      "unit": "USD per GB-month (SQLite)",
+      "source": "https://developers.cloudflare.com/durable-objects/platform/pricing/",
+      "raw": "| SQL Stored data <sup>5</sup> | 5 GB (total) | 5 GB-month, + $0.20/ GB-month",
+      "fetched_at": "2026-10-18T20:41:21.274Z"
+    },
+    "cloudflare.do.duration_usd_per_million_gbs": {
+      "value": 12.5,
+      "unit": "USD per million GB-s",
+      "source": "https://developers.cloudflare.com/durable-objects/platform/pricing/",
+      "raw": "| Duration<sup>3</sup> | 13,000 GB-s / day | 400,000 GB-s / month, + $12.50/million GB-s",
+      "fetched_at": "2026-10-18T20:41:21.274Z"
+    },
+    "cloudflare.do.ws_messages_per_request": {
+      "value": 20,
+      "unit": "incoming WebSocket messages per billed request",
+      "source": "https://developers.cloudflare.com/workers/platform/pricing/",
+      "raw": "a 20:1 ratio is applied to incoming WebSocket messages",
+      "fetched_at": "2026-10-18T20:41:21.274Z"
+    },
+    "cloudflare.r2.storage_usd_per_gb_month": {
+      "value": 0.015,
+      "unit": "USD per GB-month (Standard)",
+      "source": "https://developers.cloudflare.com/r2/pricing/",
+      "raw": "| Storage | $0.015 / GB-month |",
+      "fetched_at": "2026-10-18T20:41:21.274Z"
+    },
+    "cloudflare.turn.usd_per_gb": {
+      "value": 0.05,
+      "unit": "USD per GB outbound",
+      "source": "https://developers.cloudflare.com/realtime/turn/",
+      "raw": "costs $0.05/real-time GB outbound",
+      "fetched_at": "2026-10-18T20:41:21.274Z"
+    },
+    "cloudflare.email.usd_per_thousand": {
+      "value": 0.35,
+      "unit": "USD per 1,000 emails beyond the included",
+      "source": "https://developers.cloudflare.com/email-service/platform/pricing/",
+      "raw": "then $0.35 per 1,000 emails",
+      "fetched_at": "2026-10-18T20:41:21.274Z"
+    },
+    "stripe.card.percent": {
+      "value": 2.9,
+      "unit": "percent per domestic card charge",
+      "source": "https://stripe.com/pricing",
+      "raw": "online payments. 2.9% + 30¢ per successful transaction for domestic cards",
+      "fetched_at": "2026-10-18T20:41:21.274Z"
+    },
+    "stripe.card.fixed_usd": {
+      "value": 0.3,
+      "unit": "USD per domestic card charge",
+      "source": "https://stripe.com/pricing",
+      "raw": "online payments. 2.9% + 30¢ per successful transaction for domestic cards",
+      "fetched_at": "2026-10-18T20:41:21.274Z"
+    },
+    "stripe.billing.percent": {
+      "value": 0.7,
+      "unit": "percent of Billing volume (pay as you go)",
+      "source": "https://stripe.com/billing/pricing",
+      "raw": "0.7% of Billing volume",
+      "fetched_at": "2026-10-18T20:41:21.274Z"
+    },
+    "stripe.tax.percent": {
+      "value": 0.5,
+      "unit": "percent per transaction where registered (no-code)",
+      "source": "https://stripe.com/tax/pricing",
+      "raw": "No-code integration 0.5% per transaction",
+      "fetched_at": "2026-10-18T20:41:21.274Z"
+    }
+  }
+}

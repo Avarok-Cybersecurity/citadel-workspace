@@ -1,0 +1,70 @@
+name: Rates
+# The rates agent: once a week, re-read what Cloudflare and Stripe charge us from their own pricing
+# pages (scripts/rates/update-rates.mjs -- regexes, no model), re-derive every DERIVED price in
+# billing/tiers.json, and offer any change as ONE pull request from the fixed branch bot/rates.
+# Nothing is written, and this job fails, when a page cannot be fetched or parsed, when a derived
+# price would move more than pricing-model max_change_percent_per_run (unless dispatched with
+# owner_approved), or when a list seat price would fall below its cost floor.
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      owner_approved:
+        description: 'The owner approves derived price moves beyond max_change_percent_per_run'
+        type: boolean
+        required: true
+        default: false
+
+concurrency:
+  group: rates
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    # Eight page fetches bounded at 30 s each plus a commit: observed well under a minute.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Fetch the rates and re-derive the prices
+        env:
+          OWNER_APPROVED: ${{ inputs.owner_approved }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "${OWNER_APPROVED:-false}" = "true" ]; then args+=(--owner-approved); fi
+          node scripts/rates/update-rates.mjs "${args[@]}" > "$RUNNER_TEMP/rates-change-log.md"
+          cat "$RUNNER_TEMP/rates-change-log.md"
+      - name: Offer the change as one pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain -- billing/)" ]; then
+            echo "No change; nothing to offer."
+            exit 0
+          fi
+          git config user.name 'citadel-rates-bot'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -C bot/rates
+          git add billing/rates.json billing/tiers.json
+          git commit -m "billing: rates update $(date -u +%Y-%m-%d)" -m "$(cat "$RUNNER_TEMP/rates-change-log.md")"
+          git push --force origin bot/rates
+          pr=$(gh pr list --head bot/rates --base master --state open --json number --jq '.[0].number // empty')
+          if [ -n "$pr" ]; then
+            gh pr edit "$pr" --title "billing: weekly rates update" --body-file "$RUNNER_TEMP/rates-change-log.md"
+          else
+            gh pr create --base master --head bot/rates --title "billing: weekly rates update" --body-file "$RUNNER_TEMP/rates-change-log.md"
+          fi

@@ -1,0 +1,37 @@
+rounded up to the next billable unit before the corresponding rate is applied. For example, 500,000 GB-s of billable compute duration is rounded up to 1,000,000 GB-s and billed accordingly.
+
+|  | Free plan | Paid plan |
+| --- | --- | --- |
+| Requests | 100,000 / day | 1 million / month, + $0.15/million<br> Includes HTTP requests, RPC sessions<sup>1</sup>, WebSocket messages<sup>2</sup>, and alarm invocations |
+| Duration<sup>3</sup> | 13,000 GB-s / day | 400,000 GB-s / month, + $12.50/million GB-s<sup>4,5</sup> |
+
+<details>
+
+<summary>
+
+Footnotes
+
+</summary>
+
+<sup>1</sup> Each <a href="https://developers.cloudflare.com/workers/runtime-apis/rpc/lifecycle/">RPC session</a> is billed as one request to your Durable Object. Every <a href=
+
+[...]
+
+angelog/post/2025-12-12-durable-objects-sqlite-storage-billing/).
+
+|  | Workers Free plan | Workers Paid plan |
+| --- | --- | --- |
+| Rows reads <sup>1,2</sup> | 5 million / day | First 25 billion / month included + $0.001 / million rows |
+| Rows written <sup>1,2,3,4</sup> | 100,000 / day | First 50 million / month included + $1.00 / million rows |
+| SQL Stored data <sup>5</sup> | 5 GB (total) | 5 GB-month, + $0.20/ GB-month |
+
+<details>
+
+<summary>
+
+Footnotes
+
+</summary>
+
+<sup>1</sup> Rows read and rows written included limits and rates match <a href="https://developers.cloudflare.com/d1/platform/pricing/">D1 pricing</a>, Cloudflare's serverless SQL database.
+

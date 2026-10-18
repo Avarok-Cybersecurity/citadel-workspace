@@ -1,0 +1,10 @@
+ of public IP addresses and ports for each session, ensuring connectivity even in restrictive network environments.
+
+Using Cloudflare Realtime TURN service is available free of charge when used together with the Realtime SFU. Otherwise, it costs $0.05/real-time GB outbound from Cloudflare to the TURN client.
+
+## Service address and ports
+
+| Protocol | Primary address | Primary port | Alternate port |
+| --- | --- | --- | --- |
+| STUN over UDP | stun.cloudflare.com | 3478/udp | |
+| TURN over UDP | turn.cloudfl

@@ -672,8 +672,10 @@ jobs:
 
       - name: Tenant provisioning refuses what it must
         run: bash scripts/test-provision-tenant.sh
-      - name: The Stripe catalogue is derived from the approved tier table
-        run: node --test billing/catalogue.test.mjs
+      - name: The Stripe catalogue, derived prices and rates agent hold to the tier table and rates
+        # Every *.test.mjs under both directories (node 20 --test takes a directory): the catalogue,
+        # the derivation drift test, the Stripe reconcile plans, and the rates parsers + guardrails.
+        run: node --test billing/catalogue.test.mjs billing/derive.test.mjs billing/reconcile.test.mjs scripts/rates/fetch-rates.test.mjs scripts/rates/parse-rates.test.mjs scripts/rates/update-rates.test.mjs
       - name: The worker's Turnstile verdicts match the fixture the native server's are held to
         run: node --test scripts/lib/turnstile-verdict-parity.test.mjs
       - name: The brand kit derivation refuses what the guidelines forbid
