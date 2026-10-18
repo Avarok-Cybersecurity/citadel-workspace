@@ -7,15 +7,15 @@ import { enforcedEntitlements, entitlements, MAX_LINK_PACKS, planOfItems } from 
 import { createBody, deliver, freshSlug, item, objectStats, outbound, post, subscriptionEvent, tenantRow } from "./helpers.mjs";
 
 const noPeriod = { period_start: null, period_end: null };
-const plan = (extra) => ({ status: "active", storage_blocks: 0, link_packs: 0, ...noPeriod, ...extra });
+const plan = (extra) => ({ status: "active", storage_blocks: 0, link_packs: 0, overage_billing: 0, ...noPeriod, ...extra });
 
 describe("link-pack entitlements", () => {
   it("give each member the tier's own allowance and the workspace 50 shared links per pack", () => {
     expect(entitlements(plan({ tier: "team", interval: "month", seats: 3, link_packs: 2 }))).toMatchObject({
-      link_packs: 2, secure_links_per_member: 50, secure_links_pool: 100, storage_gb: 30, storage_blocks: 0,
+      link_packs: 2, secure_links_per_member: 50, secure_links_pool: 100, storage_gb: 6, storage_blocks: 0,
     });
     expect(entitlements(plan({ tier: "business", interval: "year", seats: 1, storage_blocks: 1, link_packs: 3 }))).toMatchObject({
-      link_packs: 3, secure_links_pool: 150, storage_gb: 35, storage_blocks: 1,
+      link_packs: 3, secure_links_pool: 150, storage_gb: 15, storage_blocks: 1,
     });
   });
   it("count no packs on Free, whose members hold 5 links each and share no pool", () => {
@@ -30,7 +30,7 @@ describe("link-pack entitlements", () => {
   });
   it("are filled in for a record stored before links existed, never overriding what it holds", () => {
     const old = { status: "active", tier: "team", interval: "month", seats: 2, storage_blocks: 1, members_max: 2 };
-    expect(enforcedEntitlements(old)).toMatchObject({ secure_links_per_member: 50, secure_links_pool: 0, link_packs: 0, storage_gb: 30 });
+    expect(enforcedEntitlements(old)).toMatchObject({ secure_links_per_member: 50, secure_links_pool: 0, link_packs: 0, storage_gb: 14 });
     const oldFree = { status: "active", tier: "free", interval: null, seats: 0, storage_blocks: 0 };
     expect(enforcedEntitlements(oldFree)).toMatchObject({ secure_links_per_member: 5, secure_links_pool: 0 });
     expect(enforcedEntitlements({ ...old, link_packs: 2 })).toMatchObject({ secure_links_pool: 100 });
@@ -115,9 +115,9 @@ describe("the webhook with packs", () => {
     const send = (packs, created) => deliver(subscriptionEvent("customer.subscription.updated", row, { id: `evt_${crypto.randomUUID()}`, created, items: items(packs) }));
     expect((await send(2, at)).status).toBe(200);
     expect(await tenantRow(slug)).toMatchObject({ status: "active", storage_blocks: 2, link_packs: 2 });
-    expect((await objectStats(slug)).entitlements).toMatchObject({ storage_gb: 50, link_packs: 2, secure_links_pool: 100 });
+    expect((await objectStats(slug)).entitlements).toMatchObject({ storage_gb: 26, link_packs: 2, secure_links_pool: 100 });
     // Packs bought later in the portal reach the object through the same parse.
     expect((await send(5, at + 1)).status).toBe(200);
-    expect((await objectStats(slug)).entitlements).toMatchObject({ storage_gb: 50, secure_links_pool: 250 });
+    expect((await objectStats(slug)).entitlements).toMatchObject({ storage_gb: 26, secure_links_pool: 250 });
   });
 });

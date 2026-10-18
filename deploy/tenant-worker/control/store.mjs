@@ -8,7 +8,7 @@ const ADDON_COLUMNS = ADDONS.map((a) => a.quantityField);
 const COLUMNS =
   `slug, tenant_id, display_name, status, tier, interval, seats, ${ADDON_COLUMNS.join(", ")}, stripe_customer, ` +
   "stripe_subscription, created_at, expires_at, claim_hash, checkout_hash, sub_event_created, reservation_hash, checkout_sealed, " +
-  "period_start, period_end, usage_subscription";
+  "period_start, period_end, usage_subscription, overage_billing";
 const INSERT_COLUMNS = ["slug", "tenant_id", "display_name", "status", "tier", "interval", "seats", ...ADDON_COLUMNS,
   "created_at", "expires_at", "claim_hash", "reservation_hash"];
 

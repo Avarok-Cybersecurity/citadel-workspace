@@ -28,6 +28,7 @@ import { newInstance, nodeStorage, startNode } from "./control/tenant-node.mjs";
 import { nextAlarm, TenantTelemetry } from "./control/tenant-telemetry.mjs";
 import { linkQuotaHost, TenantLinks } from "./control/tenant-links.mjs";
 import { SupportStore } from "./control/support-store.mjs";
+import { currentOf, TenantBilling } from "./control/tenant-billing.mjs";
 
 const FLUSH_MS = METERING.flush_seconds * 1000;
 /** Periods `usage()` reports: the current one and the one before, whose final totals the monitor may not have seen. */
@@ -56,13 +57,10 @@ export class WorkspaceServer extends DurableObject {
     this.meter = null;
     // Sign-in (control/tenant-sign-in.mjs): the OPRF seed, the sign-in settings, the admission check.
     this.signIn = new TenantSignIn(ctx.storage, { random: crypto, turnstile: () => config(env).turnstile, siteKey: () => config(env).turnstileSiteKey, io: { fetch: (u, i) => fetch(u, i) } });
-    // Relay credentials for the kernel's GetIceServers (control/ice.mjs), gated on this tenant's
-    // plan and this period's metered relay.
-    this.ice = new IceMinter(turnConfig(env), { fetch: (url, init) => fetch(url, init), nowMs: Date.now }, () => {
-      const now = Date.now();
-      this.#roll(now);
-      return { limits: enforcedEntitlements(this.provisioning.summary().entitlements), bytesIn: this.meter.snapshot(now).bytes_in };
-    });
+    // Each dimension's billing state this period (control/tenant-billing.mjs), and relay credentials
+    // for the kernel's GetIceServers (control/ice.mjs), gated on the plan, the meter and that state.
+    this.billing = new TenantBilling(ctx.storage, { nowMs: Date.now }, () => currentOf(this, (now) => this.#roll(now)));
+    this.ice = new IceMinter(turnConfig(env), { fetch: (url, init) => fetch(url, init), nowMs: Date.now }, () => this.billing.iceTenant());
     // The purge alarm, support reads and the grant mirror (control/tenant-telemetry.mjs).
     this.telemetry = new TenantTelemetry(ctx.storage, {
       server: () => this.#running(), tenantId: () => this.provisioning.tenantId(), grants: new SupportStore(env.CONTROL_DB),
@@ -74,6 +72,7 @@ export class WorkspaceServer extends DurableObject {
     ctx.blockConcurrencyWhile(async () => {
       await this.provisioning.load();
       await this.signIn.load();
+      await this.billing.load();
       for (const purge of this.purges) await purge.load();
       const now = Date.now();
       const period = periodAt(this.provisioning.summary().entitlements, now);
@@ -113,13 +112,17 @@ export class WorkspaceServer extends DurableObject {
     await this.#arm(false);
   }
 
-  /** RPC for the monitor: the entitlements this object enforces and its recent periods' totals, flushed now. */
-  usage() {
+  /** RPC for the monitor: the entitlements enforced, the recent periods' totals (flushed now), the dimensions. */
+  async usage() {
     const now = Date.now();
     this.#roll(now);
     this.#flush(now);
-    return { entitlements: this.provisioning.summary().entitlements, periods: this.usageTable.recent(REPORTED_PERIODS) };
+    return { entitlements: this.provisioning.summary().entitlements, periods: this.usageTable.recent(REPORTED_PERIODS), ...(await this.meters()) };
   }
+
+  /** RPCs (control/tenant-billing.mjs): this period's dimensions; whether documents take appends. */
+  meters() { return this.billing.meters(); }
+  documentsWritable() { return this.billing.documentsWritable(); }
 
   /** RPC for the monitor: the stored accounts counted by auth-record version (read-only; no HTTP route). */
   authVersions() {

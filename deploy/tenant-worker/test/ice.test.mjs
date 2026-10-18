@@ -15,7 +15,7 @@ const TTL = 600;
 const T0 = Date.UTC(2026, 8, 23, 12, 0, 0);
 const turn = { keyId: env.TURN_KEY_ID, token: env.TURN_KEY_API_TOKEN, ttl: TTL };
 const plan = (tier, extra = {}) =>
-  entitlements({ tier, interval: tier === "free" ? null : "month", seats: tier === "free" ? 0 : 3, storage_blocks: 0, link_packs: 0, status: "active", period_start: null, period_end: null, ...extra });
+  entitlements({ tier, interval: tier === "free" ? null : "month", seats: tier === "free" ? 0 : 3, storage_blocks: 0, link_packs: 0, overage_billing: 0, status: "active", period_start: null, period_end: null, ...extra });
 const FREE_RELAY_BYTES = plan("free").relay_gb_included * METERING.gb_bytes;
 
 /** A minter on a clock the test moves, for a tenant on `tier` that has relayed `bytesIn`. */
