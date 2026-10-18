@@ -85,6 +85,20 @@ export class Store {
     }
   }
 
+  /** The highest Customer Terms version the tenant has accepted, or null when it has accepted none. */
+  async latestCustomerTermsVersion(tenantId) {
+    const row = await this.db.prepare("SELECT MAX(version) AS version FROM customer_terms_acceptances WHERE tenant_id = ?").bind(tenantId).first();
+    return row?.version ?? null;
+  }
+
+  /** Records a later acceptance; the same version accepted twice (two racing requests) is one row. */
+  async acceptCustomerTerms(tenantId, slug, version, now) {
+    await this.db
+      .prepare("INSERT OR IGNORE INTO customer_terms_acceptances (tenant_id, slug, version, accepted_at) VALUES (?, ?, ?, ?)")
+      .bind(tenantId, slug, version, now)
+      .run();
+  }
+
   /** Undoes a reservation this request made and could not complete. */
   async release(slug, tenantId) {
     await this.db.prepare("DELETE FROM tenants WHERE slug = ? AND tenant_id = ? AND status = 'pending'").bind(slug, tenantId).run();

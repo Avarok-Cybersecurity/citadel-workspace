@@ -27,7 +27,8 @@
     "countdown_hours": [48, 24, 0]
   },
   "terms": {
-    "$comment": "The terms people accept render these values and, as the owner instructed, say they may change at any time without notice. docs/plans/billing-automation.md section G notes that this clause may be unenforceable for consumers in some jurisdictions and recommends legal review.",
-    "change_without_notice": true
+    "$comment": "The terms people accept render these values: change_notice verbatim into both the Customer Terms and the Terms of Use, effective_date as the 'Version N · Effective <date>' header of both (scripts/render-billing-terms.mjs; the UI's parity test reads the same value). The release PR sets this to its deploy date; the value here is the day the text was written and is provisional. docs/plans/billing-automation.md section G notes that a change-without-notice clause may be unenforceable for consumers in some jurisdictions and recommends legal review.",
+    "change_notice": "We may change these grace periods, thresholds and terms at any time, without prior notice, to the extent permitted by the law of the applicable jurisdiction.",
+    "effective_date": "2026-10-18"
   }
 }

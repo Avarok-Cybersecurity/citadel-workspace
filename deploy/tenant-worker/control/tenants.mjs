@@ -9,7 +9,7 @@ import { CLAIM_SEAL, digestsEqual, randomHex, RESERVATION_SEAL, seal, sha256Hex,
 import { CREATE_ACTION, verifyTurnstile } from "./turnstile.mjs";
 import { priceIds, stripe, StripeError } from "./stripe.mjs";
 import { json, refuse } from "./http.mjs";
-import { readAcceptedTerms } from "./customer-terms.mjs";
+import { portalTermsRefusal, readAcceptedTerms } from "./customer-terms.mjs";
 
 /** How long a free tenant's reservation holds its slug should the request die mid-way. */
 const FREE_RESERVATION_SECONDS = 300;
@@ -227,6 +227,8 @@ export async function openPortal(io, cfg, slug, body) {
   if (!row || !presented || !digestsEqual(await sha256Hex(presented), row.claim_hash)) {
     return refuse("not-owner", "that claim code does not own this workspace", 403);
   }
+  const stale = await portalTermsRefusal(io, row, body);
+  if (stale) return stale;
   if (!row.stripe_customer) return refuse("no-subscription", "this workspace has no subscription to manage", 404);
   if (!cfg.portalConfiguration) return refuse("portal-not-configured", "managing a subscription is not available yet", 503);
   const session = await stripe(io, cfg.stripeKey, "POST", "/billing_portal/sessions", {
