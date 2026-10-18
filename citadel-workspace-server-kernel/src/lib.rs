@@ -513,7 +513,10 @@ pub fn resolve_documents_relay(
     let documents = config.documents.ok_or_else(|| {
         NetworkError::msg(
             "[documents] must be set: max_updates_per_pull, snapshot_min_updates, \
-             max_update_bytes, max_snapshot_bytes, max_awareness_bytes and awareness_per_second",
+             max_update_bytes, max_snapshot_bytes, max_awareness_bytes, awareness_per_second, \
+             appends_per_second, pulls_per_second, compact_at_pending_bytes, \
+             max_pending_log_bytes, retain_covered_updates_seqs, max_clients_per_document and \
+             max_request_frame_bytes",
         )
     })?;
     kernel::documents::DocumentsRelay::new(documents).map_err(NetworkError::msg)

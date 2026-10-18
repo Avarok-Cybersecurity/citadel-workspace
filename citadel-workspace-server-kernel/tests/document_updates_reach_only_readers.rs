@@ -48,7 +48,8 @@ async fn an_update_reaches_readers_and_never_anyone_else() {
     audience(&kernel).await;
     let mut rx = kernel.subscribe_broadcast();
 
-    let seq = append(&kernel, TEST_ADMIN_USER_ID, AUTHOR_CID, &node, b"hello").await;
+    let hello = Replica::new(70).typed("hello");
+    let seq = append(&kernel, TEST_ADMIN_USER_ID, AUTHOR_CID, &node, &hello).await;
 
     let msg = documents_broadcast(drain(&mut rx).await);
     let WorkspaceProtocolResponse::Documents(DocumentsResponse::DocumentUpdated {
@@ -63,7 +64,7 @@ async fn an_update_reaches_readers_and_never_anyone_else() {
     };
     assert_eq!(
         (node_id, *announced, update.as_slice(), *author_cid),
-        (&node, seq, b"hello".as_slice(), AUTHOR_CID)
+        (&node, seq, hello.as_slice(), AUTHOR_CID)
     );
     assert_eq!(
         msg.exclude_cid,
@@ -144,7 +145,8 @@ async fn non_readers_cannot_pull_or_be_present() {
     let kernel = documents_kernel().await;
     let node = document_node(&kernel).await;
     audience(&kernel).await;
-    append(&kernel, TEST_ADMIN_USER_ID, AUTHOR_CID, &node, b"secret").await;
+    let secret = Replica::new(70).typed("secret");
+    append(&kernel, TEST_ADMIN_USER_ID, AUTHOR_CID, &node, &secret).await;
 
     for user in ["stranger", "banned"] {
         let pulled = send(

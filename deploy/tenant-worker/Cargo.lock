@@ -577,6 +577,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "cdoc-crdt"
+version = "0.1.0"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-docs?rev=980437a458c74d5ae1cf487cb07630b3905b9b8c#980437a458c74d5ae1cf487cb07630b3905b9b8c"
+dependencies = [
+ "cdoc-model",
+ "serde",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "cdoc-model"
+version = "0.1.0"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-docs?rev=980437a458c74d5ae1cf487cb07630b3905b9b8c#980437a458c74d5ae1cf487cb07630b3905b9b8c"
+dependencies = [
+ "serde",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "cexpr"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -742,6 +761,7 @@ dependencies = [
  "base64 0.22.1",
  "bcrypt",
  "bincode",
+ "cdoc-crdt",
  "chrono",
  "citadel-workspace-types",
  "citadel_io",
