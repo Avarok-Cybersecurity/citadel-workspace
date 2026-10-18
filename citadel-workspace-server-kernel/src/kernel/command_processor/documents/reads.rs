@@ -4,17 +4,29 @@
 use super::{answer, no_such_node, node_exists, refused, within, Answer};
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::documents::log::plan_pull;
-use crate::kernel::documents::{DocumentsConfig, DocumentsRelay};
+use crate::kernel::documents::DocumentsRelay;
 use crate::WorkspaceProtocolResponse;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::documents::{DocumentRefusal, DocumentSnapshot, DocumentsResponse};
 
 pub(super) async fn pull<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
-    config: &DocumentsConfig,
+    relay: &DocumentsRelay,
+    requester_cid: Option<u64>,
     node_id: &str,
     since_seq: u64,
 ) -> Answer {
+    let Some(reader_cid) = requester_cid else {
+        return refused(DocumentRefusal::NoSession);
+    };
+    if !relay
+        .pull_limiter
+        .try_consume(reader_cid, crate::platform::Instant::now())
+    {
+        return refused(DocumentRefusal::PullRateLimited {
+            node_id: node_id.to_string(),
+        });
+    }
     let backend = &kernel.domain_operations.backend_tx_manager;
     // Held so a compaction cannot drop the updates this is reading.
     let _log = backend.lock_document(node_id).await;
@@ -22,7 +34,7 @@ pub(super) async fn pull<R: Ratchet + Send + Sync + 'static>(
         return no_such_node(node_id);
     }
     let head = backend.document_head(node_id).await?;
-    let plan = plan_pull(&head, since_seq, config.max_updates_per_pull);
+    let plan = plan_pull(&head, since_seq, relay.config.max_updates_per_pull);
     let snapshot = if plan.with_snapshot {
         let stored = backend.document_snapshot(node_id).await?.ok_or_else(|| {
             NetworkError::msg(format!(

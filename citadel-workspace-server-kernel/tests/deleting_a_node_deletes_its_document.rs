@@ -37,16 +37,20 @@ async fn restore(kernel: &GateKernel, records: Vec<DomainNode>) {
 }
 
 async fn write_a_document(kernel: &GateKernel, node: &str) {
-    for body in [b"u1".as_slice(), b"u2", b"u3"] {
+    let bodies = edits(70, 3);
+    for body in &bodies {
         append(kernel, TEST_ADMIN_USER_ID, 7, node, body).await;
     }
     let snapshot = DocumentsRequest::StoreSnapshot {
         node_id: node.to_string(),
         doc_version: 1,
-        snapshot: b"S2".to_vec(),
+        snapshot: replayed(&bodies[..2]).snapshot(),
         upto_seq: 2,
     };
-    documents(send(kernel, TEST_ADMIN_USER_ID, 7, snapshot).await);
+    assert!(matches!(
+        documents(send(kernel, TEST_ADMIN_USER_ID, 7, snapshot).await),
+        DocumentsResponse::SnapshotStored { .. }
+    ));
 }
 
 fn refused(answer: &WorkspaceProtocolResponse) -> bool {
@@ -75,7 +79,8 @@ async fn deleting_a_node_drops_its_updates_and_snapshot() {
     let node = document_node(&kernel).await;
     let other = document_node(&kernel).await;
     write_a_document(&kernel, &node).await;
-    append(&kernel, TEST_ADMIN_USER_ID, 7, &other, b"keep").await;
+    let keep = Replica::new(71).typed("keep");
+    append(&kernel, TEST_ADMIN_USER_ID, 7, &other, &keep).await;
     let record = node_record(&kernel, &node).await;
 
     kernel
@@ -94,7 +99,7 @@ async fn deleting_a_node_drops_its_updates_and_snapshot() {
         DocumentsRequest::Append {
             node_id: node.clone(),
             doc_version: 1,
-            update: vec![1],
+            update: Replica::new(70).typed("late"),
             client_seq: 1,
         },
     ] {
@@ -112,7 +117,7 @@ async fn deleting_a_node_drops_its_updates_and_snapshot() {
     );
     assert_eq!(
         pulled(&pull(&kernel, TEST_ADMIN_USER_ID, &other, 0).await),
-        vec![b"keep".to_vec()],
+        vec![keep],
         "deleting one node touched another's document"
     );
 }

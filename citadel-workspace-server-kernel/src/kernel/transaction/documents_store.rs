@@ -31,11 +31,24 @@ fn snapshot_key(node_id: &str) -> String {
     format!("citadel_workspace.documents.{node_id}.snapshot")
 }
 
-/// The snapshot's bytes. What it covers is the head's `snapshot_upto`, the one record of it.
+/// The snapshot's bytes, and who stored it when. What it covers is the head's `snapshot_upto`,
+/// the one record of it.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StoredSnapshot {
     pub doc_version: u32,
     pub bytes: Vec<u8>,
+    pub stored_by: SnapshotAuthor,
+    /// When, in milliseconds since the Unix epoch.
+    pub stored_at_ms: u64,
+}
+
+/// Who stored a snapshot.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SnapshotAuthor {
+    /// A writer's session, by CID, through `StoreSnapshot`.
+    Session(u64),
+    /// The server, compacting the log itself.
+    Server,
 }
 
 impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {

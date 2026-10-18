@@ -5,6 +5,7 @@
 /// cleanly and fails at runtime.
 pub mod dependency_agreement;
 /// A document node's CRDT update log, its snapshot, and the awareness relay.
+pub mod document_refusal;
 pub mod documents;
 pub mod ice;
 pub mod messaging_trust;
