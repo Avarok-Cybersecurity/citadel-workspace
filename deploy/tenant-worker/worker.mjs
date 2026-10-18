@@ -13,8 +13,7 @@
  */
 import { DurableObject } from "cloudflare:workers";
 import { dispatch, ioFor, tenantFor } from "./control/dispatch.mjs";
-import { config, isWebSocketUpgrade, json, turnConfig, upgradeRequired } from "./control/http.mjs";
-import { IceMinter } from "./control/ice.mjs";
+import { config, connectionLimit, isWebSocketUpgrade, upgradeRequired } from "./control/http.mjs";
 import { Provisioning } from "./control/provisioning.mjs";
 import { Meter, periodAt } from "./control/meter.mjs";
 import { UsageTable } from "./control/usage-table.mjs";
@@ -25,9 +24,10 @@ import { objectStats } from "./control/object-stats.mjs";
 import { authVersions } from "./control/auth-versions.mjs";
 import { TenantSignIn } from "./control/tenant-sign-in.mjs";
 import { newInstance, nodeStorage, startNode } from "./control/tenant-node.mjs";
-import { nextAlarm, TenantTelemetry } from "./control/tenant-telemetry.mjs";
-import { linkQuotaHost, TenantLinks } from "./control/tenant-links.mjs";
-import { SupportStore } from "./control/support-store.mjs";
+import { nextAlarm } from "./control/tenant-telemetry.mjs";
+import { linkQuotaHost } from "./control/tenant-links.mjs";
+import { withAppendsIncluded } from "./control/tenant-documents.mjs";
+import { objectParts } from "./control/object-parts.mjs";
 
 const FLUSH_MS = METERING.flush_seconds * 1000;
 /** Periods `usage()` reports: the current one and the one before, whose final totals the monitor may not have seen. */
@@ -56,21 +56,8 @@ export class WorkspaceServer extends DurableObject {
     this.meter = null;
     // Sign-in (control/tenant-sign-in.mjs): the OPRF seed, the sign-in settings, the admission check.
     this.signIn = new TenantSignIn(ctx.storage, { random: crypto, turnstile: () => config(env).turnstile, siteKey: () => config(env).turnstileSiteKey, io: { fetch: (u, i) => fetch(u, i) } });
-    // Relay credentials for the kernel's GetIceServers (control/ice.mjs), gated on this tenant's
-    // plan and this period's metered relay.
-    this.ice = new IceMinter(turnConfig(env), { fetch: (url, init) => fetch(url, init), nowMs: Date.now }, () => {
-      const now = Date.now();
-      this.#roll(now);
-      return { limits: enforcedEntitlements(this.provisioning.summary().entitlements), bytesIn: this.meter.snapshot(now).bytes_in };
-    });
-    // The purge alarm, support reads and the grant mirror (control/tenant-telemetry.mjs).
-    this.telemetry = new TenantTelemetry(ctx.storage, {
-      server: () => this.#running(), tenantId: () => this.provisioning.tenantId(), grants: new SupportStore(env.CONTROL_DB),
-      nowMs: Date.now, wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    });
-    // The secure-links purge (control/tenant-links.mjs), on the same alarm; telemetry's then links'.
-    this.links = new TenantLinks(ctx.storage, { ready: () => this.telemetry.ready() });
-    this.purges = [this.telemetry, this.links];
+    // Relay credentials, the purges on the alarm, document appends (control/object-parts.mjs).
+    Object.assign(this, objectParts(this, ctx, env, { roll: (now) => this.#roll(now), running: () => this.#running() }));
     ctx.blockConcurrencyWhile(async () => {
       await this.provisioning.load();
       await this.signIn.load();
@@ -118,7 +105,24 @@ export class WorkspaceServer extends DurableObject {
     const now = Date.now();
     this.#roll(now);
     this.#flush(now);
-    return { entitlements: this.provisioning.summary().entitlements, periods: this.usageTable.recent(REPORTED_PERIODS) };
+    const { entitlements } = this.provisioning.summary();
+    const included = enforcedEntitlements(entitlements).document_appends_included;
+    return { entitlements, periods: withAppendsIncluded(this.usageTable.recent(REPORTED_PERIODS), included) };
+  }
+
+  /** The host the Citadel Docs kernel counts its stored appends through (control/tenant-documents.mjs). */
+  documentsHost() {
+    return this.documents.host();
+  }
+
+  /** Whether documents take appends. Always, until builder B3's control/termination.mjs is its source. */
+  documentsWritable() {
+    return true;
+  }
+
+  /** RPC (tests, the proof): `n` appends stored, as the kernel reports them through `documentsHost()`. */
+  recordAppends(n) {
+    this.documents.appended(n);
   }
 
   /** RPC for the monitor: the stored accounts counted by auth-record version (read-only; no HTTP route). */
@@ -211,11 +215,7 @@ export class WorkspaceServer extends DurableObject {
     this.signIn.serving(tenantFor(new URL(request.url), config(this.env)));
     const limits = enforcedEntitlements(this.provisioning.summary().entitlements);
     this.#roll(Date.now());
-    if (!this.meter.admits(limits.connections_max)) {
-      return json({ error: "connection-limit", detail: `this workspace allows ${limits.connections_max} connections at once` }, 503, {
-        "retry-after": "30",
-      });
-    }
+    if (!this.meter.admits(limits.connections_max)) return connectionLimit(limits.connections_max);
     await this.#running();
 
     const [client, server] = Object.values(new WebSocketPair());

@@ -29,7 +29,7 @@ describe("slug", () => {
 describe("lookup keys and plans", () => {
   it("derives every key from tiers.json through the catalogue", () => {
     expect([...PRICES.keys()].sort()).toEqual([
-      "citadel-business-month", "citadel-business-year", "citadel-relay-overage", "citadel-secure-links-month",
+      "citadel-business-month", "citadel-business-year", "citadel-document-appends", "citadel-relay-overage", "citadel-secure-links-month",
       "citadel-secure-links-year", "citadel-storage-month", "citadel-storage-year", "citadel-team-month", "citadel-team-year",
     ]);
     expect(tierKey("team", "month")).toBe("citadel-team-month");
@@ -56,27 +56,40 @@ describe("lookup keys and plans", () => {
   });
   it("grants storage per seat plus 10 GB per block, and members up to the seats bought", () => {
     const noPeriod = { period_start: null, period_end: null };
-    expect(entitlements({ tier: "team", interval: "month", seats: 3, storage_blocks: 2, link_packs: 0, status: "active", ...noPeriod })).toEqual({
+    expect(entitlements({ tier: "team", interval: "month", seats: 3, storage_blocks: 2, link_packs: 0, status: "active", overage_billing: true, ...noPeriod })).toEqual({
       status: "active", tier: "team", interval: "month", seats: 3, storage_blocks: 2, link_packs: 0,
-      members_max: 3, storage_gb: 50, workspaces_max: 1, priority_support: false,
+      members_max: 3, storage_gb: 26, workspaces_max: 1, priority_support: false,
       connections_max: 9, relay_gb_included: 60, max_frame_bytes: 4194304, secure_links_per_member: 50, secure_links_pool: 0, ...noPeriod,
+      overage_billing: true, document_appends_included: 750000,
     });
-    const business = entitlements({ tier: "business", interval: "year", seats: 2000, storage_blocks: 0, link_packs: 0, status: "active", ...noPeriod });
-    expect([business.members_max, business.storage_gb, business.priority_support]).toEqual([1000, 50000, true]);
+    const business = entitlements({ tier: "business", interval: "year", seats: 2000, storage_blocks: 0, link_packs: 0, status: "active", overage_billing: 0, ...noPeriod });
+    expect([business.members_max, business.storage_gb, business.priority_support]).toEqual([1000, 10000, true]);
+    expect([business.overage_billing, business.document_appends_included]).toEqual([false, 500000000]);
     expect([business.connections_max, business.relay_gb_included]).toEqual([500, 100000]);
     expect(entitlements({ tier: "free", interval: null, seats: 0, storage_blocks: 0, link_packs: 0, status: "active", ...noPeriod })).toMatchObject({
       members_max: 5, storage_gb: 1, seats: 0, storage_blocks: 0, connections_max: 15, relay_gb_included: 2,
+      overage_billing: false, document_appends_included: 50000,
     });
+    // Free is always off, whatever a record claims: it has no payment method.
+    expect(entitlements({ tier: "free", interval: null, seats: 0, storage_blocks: 0, link_packs: 0, status: "active", overage_billing: 1, ...noPeriod }).overage_billing).toBe(false);
     const period = { period_start: 1000, period_end: 2000 };
-    expect(entitlements({ tier: "team", interval: "month", seats: 1, storage_blocks: 0, link_packs: 0, status: "active", ...period })).toMatchObject(period);
+    expect(entitlements({ tier: "team", interval: "month", seats: 1, storage_blocks: 0, link_packs: 0, status: "active", overage_billing: false, ...period })).toMatchObject(period);
+  });
+  it("refuses a paid plan whose overage-billing choice is absent or not a boolean (or the registry's 0/1)", () => {
+    const plan = { tier: "team", interval: "month", seats: 1, storage_blocks: 0, link_packs: 0, status: "active", period_start: null, period_end: null };
+    for (const bad of [undefined, null, "true", 2]) expect(() => entitlements({ ...plan, overage_billing: bad })).toThrow(/overage_billing/);
+    expect(entitlements({ ...plan, overage_billing: 1 }).overage_billing).toBe(true);
   });
   it("an object enforces its stored entitlements, deriving from its plan only the limits they lack", () => {
     const old = { status: "active", tier: "business", interval: "year", seats: 4, storage_blocks: 1, members_max: 4 };
     expect(enforcedEntitlements(old)).toMatchObject({ connections_max: 12, relay_gb_included: 200, max_frame_bytes: 4194304, period_start: null, period_end: null, members_max: 4 });
     expect(enforcedEntitlements({ ...old, connections_max: 2, period_start: 10, period_end: 20 })).toMatchObject({ connections_max: 2, period_start: 10, period_end: 20 });
+    // One stored before overage billing was a choice: off, and its plan's included appends.
+    expect(enforcedEntitlements(old)).toMatchObject({ overage_billing: false, document_appends_included: 1000000 });
+    expect(enforcedEntitlements({ ...old, overage_billing: true, document_appends_included: 7 })).toMatchObject({ overage_billing: true, document_appends_included: 7 });
   });
   it("refuses entitlements whose billing period was not stated, even as none", () => {
-    expect(() => entitlements({ tier: "team", interval: "month", seats: 1, storage_blocks: 0, link_packs: 0, status: "active" })).toThrow(/billing period/);
+    expect(() => entitlements({ tier: "team", interval: "month", seats: 1, storage_blocks: 0, link_packs: 0, status: "active", overage_billing: true })).toThrow(/billing period/);
   });
 });
 

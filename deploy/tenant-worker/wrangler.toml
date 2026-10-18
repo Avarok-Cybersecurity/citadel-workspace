@@ -92,6 +92,10 @@ TURNSTILE_SITE_KEY = "0x4AAAAAAFAR1uNZSc7lTBiy"
 # product on the same Stripe account. Created with features: plan/seat change between the Team and
 # Business prices, cancel at period end, payment method, invoices, return to PUBLIC_ORIGIN.
 STRIPE_PORTAL_CONFIGURATION = "bpc_1UIbClCgLMkhvcEsvf9lxARd"
+# Stripe Tax (automatic_tax) on every Checkout and usage subscription: "on" or "off", required.
+# off until the owner activates Stripe Tax (Dashboard → Tax: head office address, default tax
+# behaviour exclusive, registrations) — then flip to on; DEPLOY.md step.
+STRIPE_TAX = "off"
 # Tenants are reached by subdomain only. `/<slug>` routing exists for machines without subdomains.
 TENANT_PATH_ROUTING = "off"
 # A tenant host answers WebSocket upgrades and nothing else (426). "on" makes a plain GET answer

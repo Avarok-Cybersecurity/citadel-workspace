@@ -23,6 +23,10 @@ function onOff(env, name) {
   return value === "on";
 }
 
+/** A tenant object at its plan's connection limit (worker.mjs). */
+export const connectionLimit = (max) =>
+  json({ error: "connection-limit", detail: `this workspace allows ${max} connections at once` }, 503, { "retry-after": "30" });
+
 /** Whether `request` asks to become a WebSocket (the only thing a tenant host answers). */
 export const isWebSocketUpgrade = (request) => (request.headers.get("upgrade") ?? "").toLowerCase() === "websocket";
 
@@ -126,6 +130,10 @@ export function config(env) {
     // account is shared with another product, whose default portal would then be shown to
     // Citadel customers. Unset, the portal route answers 503.
     portalConfiguration: optional(env, "STRIPE_PORTAL_CONFIGURATION"),
+    // Stripe Tax on every Checkout and usage subscription. Stripe refuses automatic_tax until Tax
+    // is activated on the account (head office address, default tax behaviour, registrations), so
+    // it is a required switch the deployment flips once the owner has done that, never a default.
+    stripeTax: onOff(env, "STRIPE_TAX"),
     supportPublicKey: supportPublicKey(env),
   };
 }

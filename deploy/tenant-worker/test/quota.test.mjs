@@ -140,6 +140,6 @@ describe("storage quota", () => {
     const { entitlements } = await objectStats(slug);
     const { storage_gb: _dropped, ...old } = { ...entitlements, tier: "team", interval: "month", seats: 2, storage_blocks: 1 };
     await object.setEntitlements(old);
-    expect(await quotaBytes(object)).toBe((10 * 2 + 10) * METERING.gb_bytes); // 10 GB/seat + one 10 GB block
+    expect(await quotaBytes(object)).toBe((2 * 2 + 10) * METERING.gb_bytes); // 2 GB/seat + one 10 GB block
   });
 });

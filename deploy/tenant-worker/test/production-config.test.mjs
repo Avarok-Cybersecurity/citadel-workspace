@@ -47,6 +47,11 @@ describe("wrangler.toml, as wrangler reads it", () => {
     expect(() => config(productionEnv({ TENANT_DIAGNOSTICS: "yes" }))).toThrow(/TENANT_DIAGNOSTICS/);
     expect(() => config(productionEnv({ TENANT_DIAGNOSTICS: undefined }))).toThrow(/TENANT_DIAGNOSTICS/);
   });
+  it("ships Stripe Tax as on or off, nothing else, and refuses any other value", () => {
+    expect(["on", "off"]).toContain(production().vars.STRIPE_TAX);
+    expect(config(productionEnv())).toMatchObject({ stripeTax: production().vars.STRIPE_TAX === "on" });
+    for (const bad of ["yes", "", undefined]) expect(() => config(productionEnv({ STRIPE_TAX: bad }))).toThrow(/STRIPE_TAX/);
+  });
 });
 
 describe("a tenant host under the production configuration", () => {

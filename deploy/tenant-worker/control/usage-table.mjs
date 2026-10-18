@@ -6,7 +6,7 @@
 
 /** Periods kept in the object; the monitor copies each into D1 long before it would be pruned. */
 const KEEP_PERIODS = 24;
-const FIELDS = ["period_end", "bytes_in", "bytes_out", "frames_in", "active_seconds", "peak_connections"];
+const FIELDS = ["period_end", "bytes_in", "bytes_out", "frames_in", "active_seconds", "peak_connections", "appends"];
 
 export class UsageTable {
   constructor(sql) {
@@ -14,8 +14,12 @@ export class UsageTable {
     sql.exec(
       "CREATE TABLE IF NOT EXISTS quota_usage (period_start INTEGER PRIMARY KEY, period_end INTEGER NOT NULL, " +
         "bytes_in INTEGER NOT NULL, bytes_out INTEGER NOT NULL, frames_in INTEGER NOT NULL, " +
-        "active_seconds INTEGER NOT NULL, peak_connections INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+        "active_seconds INTEGER NOT NULL, peak_connections INTEGER NOT NULL, updated_at INTEGER NOT NULL, " +
+        "appends INTEGER NOT NULL DEFAULT 0)",
     );
+    // Objects whose table predates document appends: added in place, their periods counted none.
+    const columns = [...sql.exec("PRAGMA table_info(quota_usage)")].map((c) => c.name);
+    if (!columns.includes("appends")) sql.exec("ALTER TABLE quota_usage ADD COLUMN appends INTEGER NOT NULL DEFAULT 0");
   }
 
   load(periodStart) {

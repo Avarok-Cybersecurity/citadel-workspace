@@ -1,5 +1,5 @@
 {
-  "$comment": "The one source of the paid tiers. scripts/stripe-catalogue.mjs makes Stripe match this file and audits it; the tenant control plane reads the same limits. Amounts are in cents; a paid price is per seat (quantity = seats). Tiers approved 2026-09-22; the storage add-on (per 10 GB block, quantity = blocks) proposed the same day. secure_links_per_member is each member's own allowance of live secure links; the secure-links add-on (per 50-link pack, quantity = packs, team and business only, approved 2026-10-17) adds 50 links per pack to ONE pool the whole workspace shares (secure_links_pool). Storage grants cut to 2/5 GB per seat and the storage add-on, relay overage and document-appends prices re-derived from billing/rates.json on 2026-10-18 (docs/plans/billing-automation.md); every DERIVED entry is written by scripts/update-rates.mjs and checked by billing/derive.test.mjs, never edited by hand.",
+  "$comment": "The one source of the paid tiers. scripts/stripe-catalogue.mjs makes Stripe match this file and audits it; the tenant control plane reads the same limits. Amounts are in cents; a paid price is per seat (quantity = seats). Tiers approved 2026-09-22; the storage add-on (per 10 GB block, quantity = blocks) proposed the same day. secure_links_per_member is each member's own allowance of live secure links; the secure-links add-on (per 50-link pack, quantity = packs, team and business only, approved 2026-10-17) adds 50 links per pack to ONE pool the whole workspace shares (secure_links_pool). Storage grants cut to 2/5 GB per seat and the storage add-on, relay overage and document-appends prices re-derived from billing/rates.json on 2026-10-18 (docs/plans/billing-automation.md); every entry marked \"derived\": true is written by scripts/rates/update-rates.mjs and checked by billing/derive.test.mjs, never edited by hand.",
   "currency": "usd",
   "lookup_prefix": "citadel",
   "tiers": [
@@ -70,6 +70,7 @@
   "addons": [
     {
       "id": "storage",
+      "derived": true,
       "name": "Citadel Workspace Extra Storage",
       "unit": "10 GB block",
       "available_on": [
@@ -126,6 +127,7 @@
     {
       "$comment": "DERIVED (billing/derive.mjs): the dearer relay path (Cloudflare Realtime TURN, $0.05/GB; the tenant object itself relays at <= $0.006/GB) x the multiplier, rounded up to the cent. One price whichever path carried it, since customers do not choose the path. Approved at 10 cents on 2026-09-23 (2x TURN); re-derived 2026-10-18 pending the owner (docs/plans/billing-automation.md decision 5).",
       "id": "relay-overage",
+      "derived": true,
       "name": "Citadel Workspace Relay Overage",
       "unit": "GB",
       "status": "approved",
@@ -147,8 +149,10 @@
     {
       "$comment": "DERIVED (billing/derive.mjs). Proposed 2026-10-18, pending the owner (docs/plans/billing-automation.md decisions 2-4). A document append writes 3 DO rows over its life (update + log head, then the compaction delete) at $1.00/M rows plus 1/20 of a $0.15/M request: $3.01 per million. Per paid seat the plan includes document_appends_per_seat per period; beyond that, whole thousands are billed through a Stripe Billing Meter at this price x the multiplier, rounded up to the cent.",
       "id": "document-appends",
+      "derived": true,
       "name": "Citadel Workspace Document Edits Overage",
       "unit": "1,000 appends",
+      "quantity_per_unit": 1000,
       "status": "proposed",
       "available_on": [
         "team",

@@ -50,7 +50,8 @@ describe("the monitor", () => {
   it("reports whole GB over the included relay once, and only what is new on later runs", async () => {
     const { row, period } = await activeTeam();
     const run = monitorOf(row.slug);
-    await relay(row.slug, 62.5e9);
+    // 5.5 GB over the 60 included: whole GB, and at pricing-model.json's 5 GB forgiven minimum.
+    await relay(row.slug, 65.5e9);
     const { calls } = outbound();
     await run();
     const [first, ...more] = meterEvents(calls, row.tenant_id);
@@ -58,12 +59,12 @@ describe("the monitor", () => {
     expect(Object.fromEntries(first.form)).toEqual({
       event_name: "citadel_relay_gb",
       "payload[stripe_customer_id]": "cus_test_1",
-      "payload[value]": "2",
-      identifier: `relay-${row.tenant_id}-${period.start}-0-2`,
+      "payload[value]": "5",
+      identifier: `relay-${row.tenant_id}-${period.start}-0-5`,
     });
     expect(first.headers["idempotency-key"]).toBe(first.form.get("identifier"));
     expect(await usageRow(row.tenant_id, period.start)).toMatchObject({
-      bytes_in: 62.5e9, relay_gb_included: 60, overage_gb: 2, overage_gb_reported: 2, overage_gb_pending: null, period_end: period.end,
+      bytes_in: 65.5e9, relay_gb_included: 60, overage_gb: 5, overage_gb_reported: 5, overage_gb_pending: null, period_end: period.end,
     });
 
     await run();
@@ -73,27 +74,36 @@ describe("the monitor", () => {
     await run();
     const events = meterEvents(calls, row.tenant_id);
     expect(events).toHaveLength(2);
-    expect([events[1].form.get("payload[value]"), events[1].form.get("identifier")]).toEqual(["1", `relay-${row.tenant_id}-${period.start}-2-3`]);
+    expect([events[1].form.get("payload[value]"), events[1].form.get("identifier")]).toEqual(["1", `relay-${row.tenant_id}-${period.start}-5-6`]);
   });
 
   it("a report Stripe refused is not recorded, and the next run sends the identical one", async () => {
     const { row, period } = await activeTeam();
     const run = monitorOf(row.slug);
-    await relay(row.slug, 61e9);
+    await relay(row.slug, 65e9);
     const { calls } = outbound({ meterEvents: { failures: 1 } });
     await expect(run()).rejects.toThrow(/1 tenant\(s\) failed/);
-    expect(await usageRow(row.tenant_id, period.start)).toMatchObject({ overage_gb_reported: 0, overage_gb_pending: 1 });
+    expect(await usageRow(row.tenant_id, period.start)).toMatchObject({ overage_gb_reported: 0, overage_gb_pending: 5 });
 
     await relay(row.slug, 1e9); // more usage meanwhile: the report in flight is finished first, unchanged
     await run();
     const events = meterEvents(calls, row.tenant_id);
     expect(events.map((e) => [e.form.get("identifier"), e.form.get("payload[value]")])).toEqual([
-      [`relay-${row.tenant_id}-${period.start}-0-1`, "1"],
-      [`relay-${row.tenant_id}-${period.start}-0-1`, "1"],
+      [`relay-${row.tenant_id}-${period.start}-0-5`, "5"],
+      [`relay-${row.tenant_id}-${period.start}-0-5`, "5"],
     ]);
-    expect(await usageRow(row.tenant_id, period.start)).toMatchObject({ overage_gb: 2, overage_gb_reported: 1, overage_gb_pending: null });
+    expect(await usageRow(row.tenant_id, period.start)).toMatchObject({ overage_gb: 6, overage_gb_reported: 5, overage_gb_pending: null });
     await run();
-    expect(meterEvents(calls, row.tenant_id).at(-1).form.get("identifier")).toBe(`relay-${row.tenant_id}-${period.start}-1-2`);
+    expect(meterEvents(calls, row.tenant_id).at(-1).form.get("identifier")).toBe(`relay-${row.tenant_id}-${period.start}-5-6`);
+  });
+
+  it("forgives relay overage below pricing-model.json's minimum (5 GB): recorded, never reported", async () => {
+    const { row, period } = await activeTeam();
+    await relay(row.slug, 64.9e9);
+    const { calls } = outbound();
+    await monitorOf(row.slug)();
+    expect(meterEvents(calls, row.tenant_id)).toEqual([]);
+    expect(await usageRow(row.tenant_id, period.start)).toMatchObject({ overage_gb: 4, overage_gb_reported: 0, overage_gb_pending: null });
   });
 
   it("records a free tenant's overage without billing it", async () => {
