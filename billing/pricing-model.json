@@ -1,0 +1,49 @@
+{
+  "$comment": "The owner's pricing decisions: what turns billing/rates.json (what we pay) into billing/tiers.json (what we charge), through billing/derive.mjs. Proposed 2026-10-18 in docs/plans/billing-automation.md; each value is an owner decision and changes no code. Nothing here is a default: a missing key fails derivation.",
+  "multiplier": {
+    "$comment": "Price = unit cost x this, rounded up. Covers Stripe's 4.1% + $0.30 per charge (6.6-9.1% of a monthly seat), the Free tier's $4.05/month of always-on duration per tenant, a Cloudflare price rise between weekly rate runs, international cards (+2.5%) and support. Decision 1.",
+    "value": 3
+  },
+  "storage_backend": {
+    "$comment": "Where sold storage lives, which decides the storage add-on's cost: do_sqlite (today; 10 GB hard cap per object) or r2 (once RE-VFS files stream to R2). Decision 3/6.",
+    "value": "do_sqlite"
+  },
+  "relay_cost_path": {
+    "$comment": "Which relay path's cost prices relay overage: turn (Cloudflare Realtime TURN, the dearer path) or object (the tenant object's own relay, <= $0.006/GB). Customers do not choose the path, so the dearer one prices it. Decision 5.",
+    "value": "turn"
+  },
+  "rows_written_per_document_append": {
+    "$comment": "DO rows one document append writes over its life: the update and the log head at append time, and the compaction delete later (Cloudflare counts deletes as rows written). From transaction/documents_store.rs on feat/citadel-docs-r1.",
+    "value": 3
+  },
+  "rounding": {
+    "$comment": "Derived amounts are rounded UP to these steps (cents): a metered unit to the cent, an add-on's monthly price to a half-dollar, a seat's monthly price to a dollar. The yearly price is ten months.",
+    "metered_cents": 1,
+    "addon_month_cents": 50,
+    "seat_month_cents": 100,
+    "year_months": 10
+  },
+  "seat_prices": {
+    "$comment": "list: the tier seat prices in tiers.json are the owner's list prices, and derivation only proves list >= the cost floor (worst case: the seat's whole grant used) x multiplier. derived: the seat prices are rewritten to that floor. Decision 8.",
+    "value": "list"
+  },
+  "max_change_percent_per_run": {
+    "$comment": "The rates agent refuses to move any derived price by more than this in one run unless invoked with --owner-approved. Decision 11.",
+    "value": 25
+  },
+  "overage_min": {
+    "$comment": "Overage below this many billed units in a period is forgiven, not reported: a usage-only invoice under $0.31 costs more in Stripe's fixed fee than it collects. Keyed by metered id, in that price's own unit (GB; thousands of appends). Decision 7.",
+    "relay-overage": 5,
+    "document-appends": 50
+  },
+  "dunning": {
+    "$comment": "Days after the first failed payment on which the owner is emailed; the final warning goes this many hours before the purge. The grace period itself is the deployment's BILLING_GRACE_DAYS (wrangler.toml), with no default. Decision 10.",
+    "reminder_days": [0, 7, 21],
+    "final_warning_hours": 48
+  },
+  "tax": {
+    "$comment": "Stripe Tax. Prices are created tax-exclusive (USD convention; immutable once set, so a change means a new price). product_tax_code is null until the owner confirms the exact code against Stripe's Tax Codes list (candidate: txcd_10103001, 'Software as a service (SaaS) - business use'); null means the account's preset product tax code applies. Decision 9.",
+    "behavior": "exclusive",
+    "product_tax_code": null
+  }
+}

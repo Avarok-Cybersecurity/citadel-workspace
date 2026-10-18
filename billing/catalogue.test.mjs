@@ -12,8 +12,8 @@ test('the approved prices are what the table says', () => {
     'citadel-team-year': 6000,
     'citadel-business-month': 1200,
     'citadel-business-year': 12000,
-    'citadel-storage-month': 200,
-    'citadel-storage-year': 2000,
+    'citadel-storage-month': 600,
+    'citadel-storage-year': 6000,
     'citadel-secure-links-month': 200,
     'citadel-secure-links-year': 2000,
   });
@@ -58,6 +58,7 @@ test('a bad amount or a duplicate lookup key is refused, not written', () => {
 test('extra storage is its own product, per 10 GB block, on paid tiers only', () => {
   const storage = deriveCatalogue(table).find((p) => p.tier === 'storage');
   assert.equal(storage.product.description, '10 GB per block, on team and business');
+  assert.deepEqual(storage.prices.map((p) => p.unit_amount), [600, 6000]);
   assert.ok(storage.prices.every((p) => p.usage_type === 'licensed'));
   const bad = structuredClone(table);
   bad.addons[0].available_on.push('enterprise');
@@ -83,14 +84,22 @@ test('an add-on granting something the catalogue cannot describe is refused', ()
   assert.throws(() => deriveCatalogue(zero), /positive integer/);
 });
 
+test('every paid seat carries its storage and document-append grants; Free has totals', () => {
+  assert.deepEqual(Object.fromEntries(table.tiers.map((t) => [t.id, [t.limits.storage_gb_per_seat ?? t.limits.storage_gb_total, t.limits.document_appends_per_seat ?? t.limits.document_appends_total]])), {
+    free: [1, 50000], team: [2, 250000], business: [5, 250000],
+  });
+});
+
 test('every tier states its own secure-link allowance per member', () => {
   assert.deepEqual(Object.fromEntries(table.tiers.map((t) => [t.id, t.limits.secure_links_per_member])), { free: 5, team: 50, business: 50 });
 });
 
 test('relay overage is one metered price under citadel-relay-overage, on its own meter', () => {
-  const [overage, ...rest] = deriveMetered(table);
+  const [overage, appends, ...rest] = deriveMetered(table);
   assert.equal(rest.length, 0);
   assert.equal(overage.meter.event_name, 'citadel_relay_gb');
+  assert.equal(overage.prices[0].unit_amount, 15);
+  assert.deepEqual([appends.tier, appends.meter.event_name, appends.prices[0].unit_amount], ['document-appends', 'citadel_document_appends', 1]);
   assert.deepEqual(overage.prices.map((p) => [p.lookup_key, p.usage_type, p.interval]), [['citadel-relay-overage', 'metered', 'month']]);
   // Not a tier's product: the licensed catalogue is untouched by it.
   assert.ok(!deriveCatalogue(table).some((p) => p.tier === overage.tier));
