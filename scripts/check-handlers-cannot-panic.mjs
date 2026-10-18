@@ -83,9 +83,16 @@ function testModuleFiles(files) {
     const base = file.endsWith('/mod.rs') || file.endsWith('/lib.rs') || file.endsWith('/main.rs')
       ? dirname(file)
       : file.replace(/\.rs$/, '');
-    for (const m of source.matchAll(/#\[cfg\(test\)\]\s*(?:#\[[^\]]*\]\s*)*mod\s+(\w+)\s*;/g)) {
-      out.add(`${base}/${m[1]}.rs`);
-      out.add(`${base}/${m[1]}/mod.rs`);
+    for (const m of source.matchAll(/#\[cfg\(test\)\]\s*((?:#\[[^\]]*\]\s*)*)mod\s+(\w+)\s*;/g)) {
+      // `#[path = "x_tests.rs"]` names the file outright, relative to the
+      // declaring file's directory (2026-10-18: requests/file/read_pulled_tests.rs).
+      const path = /#\[path\s*=\s*"([^"]+)"\s*\]/.exec(m[1]);
+      if (path) {
+        out.add(join(dirname(file), path[1]));
+        continue;
+      }
+      out.add(`${base}/${m[2]}.rs`);
+      out.add(`${base}/${m[2]}/mod.rs`);
     }
   }
   return out;
