@@ -16,9 +16,15 @@ import { serveUi } from "./ui.mjs";
 import { serveSupport, supportRoute } from "./support.mjs";
 import { SupportStore } from "./support-store.mjs";
 import { verifySupportRequest } from "./support-verifier.mjs";
+import { mailTransport } from "./mail.mjs";
+import { AlertStore } from "./alert-store.mjs";
+import { usageAnswer } from "./usage-answer.mjs";
+import { PUBLIC_POLICY } from "./policy.mjs";
 
 /** Creation and portal bodies are a handful of short fields. */
 const API_BODY_LIMIT = 4096;
+/** Seconds a browser may reuse the billing policy: it changes only with a deploy. */
+const POLICY_MAX_AGE = 300;
 
 export const objectFor = (env, slug) => env.WORKSPACE.get(env.WORKSPACE.idFromName(slug));
 
@@ -34,6 +40,8 @@ export function ioFor(env) {
     tenant: (slug) => objectFor(env, slug),
     support: new SupportStore(env.CONTROL_DB),
     verifySupport: verifySupportRequest,
+    mail: mailTransport(env),
+    alerts: new AlertStore(env.CONTROL_DB),
   };
 }
 
@@ -92,6 +100,14 @@ async function api(io, cfg, request, url) {
     }
     if (method === "GET" && parts.length === 3 && parts[0] === "tenants" && parts[2] === "status") {
       return await tenantStatus(io, cfg, parts[1], url.searchParams.get("session_id"));
+    }
+    if (method === "GET" && parts.length === 2 && parts[0] === "billing" && parts[1] === "policy") {
+      return json(PUBLIC_POLICY, 200, { "cache-control": `public, max-age=${POLICY_MAX_AGE}` });
+    }
+    if (method === "POST" && parts.length === 3 && parts[0] === "tenants" && parts[2] === "usage") {
+      const body = await readJson(request, cfg, API_BODY_LIMIT);
+      if (body.error) return body.error;
+      return await usageAnswer(io, parts[1], body.value);
     }
     if (method === "POST" && parts.length === 3 && parts[0] === "tenants" && parts[2] === "portal") {
       const body = await readJson(request, cfg, API_BODY_LIMIT);

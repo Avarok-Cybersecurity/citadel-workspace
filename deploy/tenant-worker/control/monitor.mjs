@@ -9,12 +9,14 @@
  *      an outbox row is opened, the event sent under an identifier naming the GB it covers, and
  *      only then is the report recorded (the webhook's rule: record AFTER the write it guards);
  *   4. takes the census of the object's accounts by auth-record version (control/auth-versions.mjs):
- *      counts only, logged and kept in D1, warning while any legacy Argon2 account remains.
+ *      counts only, logged and kept in D1, warning while any legacy Argon2 account remains;
+ *   5. announces each usage threshold reached once per period (control/alerts.mjs).
  * The object is authoritative for its own limits; a missed run delays a report, nothing more.
  */
 import { AUTH_VERSION_KEYS } from "./auth-versions.mjs";
 import { entitlements, METERING, OVERAGE_EVENT, overageBilledOn, overageSoldWith } from "./plans.mjs";
 import { stripe } from "./stripe.mjs";
+import { sendAlerts } from "./alerts.mjs";
 
 /** Whole GB of metered usage beyond what the tier includes. */
 export const overageGb = (bytes, includedGb) => Math.max(0, Math.floor(bytes / METERING.gb_bytes) - includedGb);
@@ -52,6 +54,7 @@ async function monitorTenant(io, cfg, row) {
     await report(io, cfg, row, period.period_start, overage);
   }
   await census(io, row, object);
+  await sendAlerts(io, cfg, row, await object.meters());
 }
 
 /** The tenant's accounts by auth-record version: counts only, never a username or a CID. */

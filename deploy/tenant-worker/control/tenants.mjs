@@ -10,6 +10,8 @@ import { CREATE_ACTION, verifyTurnstile } from "./turnstile.mjs";
 import { priceIds, stripe, StripeError } from "./stripe.mjs";
 import { json, refuse } from "./http.mjs";
 import { portalTermsRefusal, readAcceptedTerms } from "./customer-terms.mjs";
+import { ownedRow } from "./owner.mjs";
+import { billingAnswer } from "./billing-answer.mjs";
 
 /** How long a free tenant's reservation holds its slug should the request die mid-way. */
 const FREE_RESERVATION_SECONDS = 300;
@@ -105,7 +107,8 @@ export async function createTenant(io, cfg, body, ip) {
       tenant_id: row.tenant_id,
       master_password: claim,
       display_name: plan.display_name,
-      entitlements: entitlements({ ...plan, status: paid ? "pending" : "active", period_start: null, period_end: null }),
+      // overage_billing: what the reserved row holds (migration 0009's 0) until creation names it.
+      entitlements: entitlements({ ...plan, overage_billing: 0, status: paid ? "pending" : "active", period_start: null, period_end: null }),
     });
     if (!paid) {
       await io.store.activateFree(plan.slug, row.tenant_id);
@@ -204,7 +207,7 @@ export async function tenantStatus(io, cfg, slug, sessionId) {
   if (!checkSlug(slug).ok) return refuse("not-found", "no such workspace", 404);
   const row = await io.store.holder(slug, io.now());
   if (!row) return refuse("not-found", "no such workspace", 404);
-  const answer = { slug, status: row.status, tier: row.tier, workspace_host: hostOf(cfg, slug) };
+  const answer = { slug, status: row.status, tier: row.tier, workspace_host: hostOf(cfg, slug), billing: await billingAnswer(io, row) };
   if (row.status !== "active" || typeof sessionId !== "string" || sessionId.length < 8 || sessionId.length > 255) {
     return json(answer);
   }
@@ -220,13 +223,9 @@ export async function tenantStatus(io, cfg, slug, sessionId) {
 
 export async function openPortal(io, cfg, slug, body) {
   if (!cfg.stripeKey) return refuse("billing-not-configured", "billing is not available yet", 503);
-  if (!checkSlug(slug).ok) return refuse("not-found", "no such workspace", 404);
-  const row = await io.store.holder(slug, io.now());
-  const presented = typeof body.claim_code === "string" && /^[0-9a-f]{64}$/.test(body.claim_code) ? body.claim_code : null;
-  // One answer for "no such workspace" and "wrong code", so the route is no oracle for either.
-  if (!row || !presented || !digestsEqual(await sha256Hex(presented), row.claim_hash)) {
-    return refuse("not-owner", "that claim code does not own this workspace", 403);
-  }
+  const owned = await ownedRow(io, slug, body);
+  if (owned.error) return owned.error;
+  const { row } = owned;
   const stale = await portalTermsRefusal(io, row, body);
   if (stale) return stale;
   if (!row.stripe_customer) return refuse("no-subscription", "this workspace has no subscription to manage", 404);

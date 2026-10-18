@@ -26,10 +26,13 @@ export const REFRESH_AT = 0.8;
 export { UNAVAILABLE };
 
 /**
- * Whether the tenant's plan still grants relay: a free plan has only what it includes and is
- * barred once that is used; a paid one is billed for relay beyond it (control/monitor.mjs).
+ * Whether the tenant's plan still grants relay: none once the relay is terminated (its quota
+ * crossed with overage billing off, control/termination.mjs); a free plan has only what it
+ * includes and is barred once that is used; a paid one is billed for relay beyond it
+ * (control/monitor.mjs).
  */
-export function relayAllowed(limits, bytesIn) {
+export function relayAllowed(limits, bytesIn, relayState) {
+  if (relayState === "terminated") return false;
   if (isPaid(limits.tier)) return true;
   return bytesIn < limits.relay_gb_included * METERING.gb_bytes;
 }
@@ -51,8 +54,9 @@ function iceServersOf(body) {
 export class IceMinter {
   /**
    * `turn`: `{keyId, token, ttl}` from http.mjs `turnConfig`, or null when unset.
-   * `io`: `{fetch, nowMs}`. `tenant()`: `{limits, bytesIn}`, the object's enforced entitlements
-   * and this period's metered relay, read when a mint is asked for.
+   * `io`: `{fetch, nowMs}`. `tenant()`: `{limits, bytesIn, relayState}` (or a promise of it), the
+   * object's enforced entitlements, this period's metered relay and the relay's billing state
+   * (control/tenant-billing.mjs), read when a mint is asked for.
    */
   constructor(turn, io, tenant) {
     this.turn = turn;
@@ -64,8 +68,10 @@ export class IceMinter {
 
   async mint(memberId) {
     if (this.turn === null) return { unavailable: UNAVAILABLE.notConfigured };
-    const { limits, bytesIn } = this.tenant();
-    if (!relayAllowed(limits, bytesIn)) return { unavailable: UNAVAILABLE.relayUsed };
+    const { limits, bytesIn, relayState } = await this.tenant();
+    if (!relayAllowed(limits, bytesIn, relayState)) {
+      return { unavailable: relayState === "terminated" ? UNAVAILABLE.relayTerminated : UNAVAILABLE.relayUsed };
+    }
     const now = this.io.nowMs();
     this.#prune(now);
     const cached = this.cache.get(memberId);

@@ -100,7 +100,7 @@ export function turnConfig(env) {
  */
 export function config(env) {
   const pendingTtl = Number(required(env, "CHECKOUT_TTL_SECONDS"));
-  // Stripe accepts a Checkout expiry between 30 minutes and 24 hours from creation.
+  // Stripe accepts a Checkout expiry between 30 minutes and 24 hours from creation (not-policy: Stripe's own bounds).
   if (!Number.isInteger(pendingTtl) || pendingTtl < 1800 || pendingTtl > 86400) {
     throw new Error("CHECKOUT_TTL_SECONDS is an integer from 1800 to 86400");
   }

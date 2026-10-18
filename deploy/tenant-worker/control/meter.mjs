@@ -8,7 +8,8 @@
  * alarm that runs twice) changes nothing.
  */
 
-const EMPTY = { bytes_in: 0, bytes_out: 0, frames_in: 0, active_seconds: 0, peak_connections: 0 };
+// `appends`: document appends this period. B2 owns the counter and what feeds it (the lead merges).
+const EMPTY = { bytes_in: 0, bytes_out: 0, frames_in: 0, active_seconds: 0, peak_connections: 0, appends: 0 };
 
 /** The UTC calendar month holding `nowMs`, as `{start, end}` in seconds. */
 export function calendarMonth(nowMs) {
@@ -83,6 +84,12 @@ export class Meter {
     if (!conn) return;
     conn.bytes_out += bytes;
     this.totals.bytes_out += bytes;
+  }
+
+  /** `count` more document appends this period (B2 wires the kernel to it). */
+  appended(count) {
+    if (!Number.isInteger(count) || count < 0) throw new Error("appends are counted in whole appends");
+    this.totals.appends += count;
   }
 
   /** The open connections' own counters, for the object's stats. */

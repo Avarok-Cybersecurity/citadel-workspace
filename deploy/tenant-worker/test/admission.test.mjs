@@ -170,11 +170,11 @@ describe("GET /api/admission/<slug>", () => {
     const off = await get(`/api/admission/${slug}`);
     expect(off.status).toBe(200);
     expect(off.headers.get("cache-control")).toBe(`public, max-age=${DISCOVERY_MAX_AGE}`);
-    expect(await off.json()).toEqual({ turnstile: { required: false, siteKey: env.TURNSTILE_SITE_KEY } });
+    expect(await off.json()).toEqual({ turnstile: { required: false, siteKey: env.TURNSTILE_SITE_KEY }, alert: "none" });
 
     await runInDurableObject(object, (instance) => instance.signIn.settings.set({ require_turnstile_sign_in: true }));
     const on = await get(`/api/admission/${slug}`);
-    expect(await on.json()).toEqual({ turnstile: { required: true, siteKey: env.TURNSTILE_SITE_KEY } });
+    expect(await on.json()).toEqual({ turnstile: { required: true, siteKey: env.TURNSTILE_SITE_KEY }, alert: "none" });
   });
 
   it("for no workspace, gives the site key and claims nothing about any workspace", async () => {

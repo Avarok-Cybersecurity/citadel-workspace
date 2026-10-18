@@ -75,7 +75,8 @@ for (const a of ADDONS) {
  * connections and included relay scale with seats the same way. Each member may hold the tier's
  * own allowance of live secure links; packs add to one pool the workspace shares. An add-on's
  * quantity counts only on a paid tier. The billing period is Stripe's (null until a subscription
- * event names it: the object then meters by calendar month).
+ * event names it: the object then meters by calendar month). `overage_billing` is the tenant
+ * row's choice, required for a paid plan.
  */
 export function entitlements(plan) {
   const { tier, interval, seats, status, period_start, period_end } = plan;
@@ -105,12 +106,22 @@ export function entitlements(plan) {
     priority_support: Boolean(limits.priority_support),
     connections_max: paid ? Math.min(limits.connections_per_seat * seats, limits.connections) : limits.connections,
     relay_gb_included: paid ? limits.relay_gb_per_seat * seats : limits.relay_gb_total,
+    // B2 owns these two (the lead merges): what a period's appends include, and the owner's
+    // "Enable overage billing" (billing/policy.json overage_billing). Free has no payment method.
+    document_appends_included: paid ? limits.document_appends_per_seat * seats : limits.document_appends_total,
+    overage_billing: paid ? overageChoice(plan.overage_billing) : false,
     secure_links_per_member: limits.secure_links_per_member,
     secure_links_pool: granted.secure_links_pool,
     max_frame_bytes: METERING.max_frame_bytes,
     period_start,
     period_end,
   };
+}
+
+/** The tenant row's overage_billing (0 or 1, migration 0009) or a stored boolean; nothing else. */
+function overageChoice(v) {
+  if (v === 0 || v === 1 || typeof v === "boolean") return Boolean(v);
+  throw new Error(`entitlements need overage_billing as 0/1 or true/false (given ${JSON.stringify(v)})`);
 }
 
 /**
@@ -124,6 +135,8 @@ export function entitlements(plan) {
 export function enforcedEntitlements(stored) {
   const period = { period_start: stored.period_start ?? null, period_end: stored.period_end ?? null };
   const predating = Object.fromEntries(ADDONS.filter((a) => !(a.quantityField in stored)).map((a) => [a.quantityField, 0]));
+  // Stored before the overage choice existed: no overage was bought (migration 0009's own rule).
+  if (!("overage_billing" in stored)) predating.overage_billing = false;
   return { ...entitlements({ ...stored, ...predating, ...period }), ...stored };
 }
 

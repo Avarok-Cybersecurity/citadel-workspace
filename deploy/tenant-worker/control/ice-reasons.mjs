@@ -5,6 +5,7 @@
 export const UNAVAILABLE = {
   notConfigured: "relay servers are not configured for this workspace",
   relayUsed: "this workspace's plan has used its included relay",
+  relayTerminated: "this workspace's relay is stopped until its billing period resets: its quota was used with overage billing off",
   rateLimited: "relay servers were requested too often; try again later",
   failed: "the relay service did not answer",
 };
