@@ -904,6 +904,7 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "wayland-backend",
+ "windows-sys 0.61.2",
  "zeroize",
 ]
 
