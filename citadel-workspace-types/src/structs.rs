@@ -214,6 +214,8 @@ pub enum Permission {
     ViewTelemetry,
     /// Create, edit and delete the workspace's roles, and assign them to members
     ManageRoles,
+    /// Make secure links: tokens that open an in-app page for the people the creator names
+    ShareSecureLinks,
 }
 
 impl Permission {
@@ -224,7 +226,7 @@ impl Permission {
     /// when reporting a user's effective permissions. `exhaustiveness_guard`
     /// below stops compiling when a variant is added to the enum, which is what
     /// keeps this list honest.
-    pub const ALL_VARIANTS: [Permission; 30] = [
+    pub const ALL_VARIANTS: [Permission; 31] = [
         Self::All,
         Self::CreateNode,
         Self::DeleteNode,
@@ -255,6 +257,7 @@ impl Permission {
         Self::Themes,
         Self::ViewTelemetry,
         Self::ManageRoles,
+        Self::ShareSecureLinks,
     ];
 
     /// Not called at runtime. Adding a variant to `Permission` fails to compile
@@ -292,6 +295,7 @@ impl Permission {
             Self::Themes => (),
             Self::ViewTelemetry => (),
             Self::ManageRoles => (),
+            Self::ShareSecureLinks => (),
         }
     }
 
@@ -597,6 +601,8 @@ impl DomainPermissions {
             Permission::ViewTelemetry => false,
             // Workspace-wide as well: a node cannot hand out the authority to edit roles.
             Permission::ManageRoles => false,
+            // Workspace-wide: making links is a member's standing, not something a node grants.
+            Permission::ShareSecureLinks => false,
         }
     }
 }

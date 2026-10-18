@@ -38,7 +38,8 @@ fn required_permission(request: &TelemetryRequest) -> Option<Permission> {
     }
 }
 
-fn now_ms() -> Result<u64, NetworkError> {
+/// The server's clock, in Unix ms.
+pub(super) fn now_ms() -> Result<u64, NetworkError> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|elapsed| elapsed.as_millis() as u64)

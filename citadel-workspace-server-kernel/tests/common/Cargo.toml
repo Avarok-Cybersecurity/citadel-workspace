@@ -24,3 +24,5 @@ serde_json = { workspace = true }
 futures = { workspace = true }
 toml = "0.8"
 uuid = { workspace = true }
+# Each test server's sign-in seed (production_server.rs), in a directory of its own.
+tempfile = "3.10.1"

@@ -45,9 +45,12 @@ if (!existsSync(KERNEL)) {
 /** The secret comparison this gate is about. */
 const SECRET_COMPARE = /\bsecrets_match\s*\(/;
 
-/** Anything that establishes the caller may act. */
+/**
+ * Anything that establishes the caller may act. `grant_admits` is a secure link's grant check
+ * (kernel/secure_links/rules.rs): whether the visitor is someone the link was made for.
+ */
 const AUTHORIZATION =
-  /\b(check_entity_permission|is_admin|is_owner|ensure_may_|requires_owned_session|is_member_of_domain)\b/;
+  /\b(check_entity_permission|is_admin|is_owner|ensure_may_|requires_owned_session|is_member_of_domain|grant_admits)\b/;
 
 /**
  * A site that says, in words, why no authorization precedes it.

@@ -5,6 +5,8 @@ pub mod permission_test_utils;
 pub mod permissions_test_utils;
 pub mod production_client;
 pub mod production_server;
+pub mod secure_links_test_utils;
+pub mod sign_in_client;
 pub mod telemetry_test_utils;
 pub mod trust_test_utils;
 pub mod workspace_test_utils;

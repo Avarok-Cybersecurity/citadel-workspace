@@ -21,6 +21,8 @@ pub mod rate_limiter;
 pub mod role_edits;
 pub(crate) mod roster;
 pub mod secret_eq;
+/// Secure links: tokens the server maps to in-app deep links.
+pub mod secure_links;
 pub mod sign_in;
 pub mod telemetry;
 pub mod transaction;

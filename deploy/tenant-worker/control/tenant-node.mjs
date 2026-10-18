@@ -44,9 +44,10 @@ export function nodeStorage(storage, entitlements) {
 /**
  * Starts the node in `wasm` (the object's own instance) with the object's capabilities: `ice`
  * mints relay credentials, `signIn` is the object's TenantSignIn, `grants` the support-grant
- * mirror; `onExit(outcome)` is told how the node ended.
+ * mirror, `links` the secure-link limits (control/tenant-links.mjs); `onExit(outcome)` is told
+ * how the node ended.
  */
-export function startNode(wasm, env, { config, storage, ice, signIn, grants, onExit }) {
+export function startNode(wasm, env, { config, storage, ice, signIn, grants, links, onExit }) {
   const argon = new wasm.ArgonCost(
     Number(required(env, "ARGON_LANES")),
     Number(required(env, "ARGON_MEM_KIB")),
@@ -54,5 +55,5 @@ export function startNode(wasm, env, { config, storage, ice, signIn, grants, onE
   );
   const ksf = ksfParams(env);
   const pq = new wasm.PqSignIn(signIn.takeSeed(), ksf.memKib, ksf.iterations, ksf.lanes);
-  return new wasm.TenantServer(config, storage, argon, ice, pq, signIn.host(), grants, required(env, "LOG_FILTER"), onExit);
+  return new wasm.TenantServer(config, storage, argon, ice, pq, signIn.host(), grants, links, required(env, "LOG_FILTER"), onExit);
 }

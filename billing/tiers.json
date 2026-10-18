@@ -1,5 +1,5 @@
 {
-  "$comment": "The one source of the paid tiers. scripts/stripe-catalogue.mjs makes Stripe match this file and audits it; the tenant control plane reads the same limits. Amounts are in cents; a paid price is per seat (quantity = seats). Tiers approved 2026-09-22; the storage add-on (per 10 GB block, quantity = blocks) proposed the same day.",
+  "$comment": "The one source of the paid tiers. scripts/stripe-catalogue.mjs makes Stripe match this file and audits it; the tenant control plane reads the same limits. Amounts are in cents; a paid price is per seat (quantity = seats). Tiers approved 2026-09-22; the storage add-on (per 10 GB block, quantity = blocks) proposed the same day. secure_links_per_member is each member's own allowance of live secure links; the secure-links add-on (per 50-link pack, quantity = packs, team and business only, approved 2026-10-17) adds 50 links per pack to ONE pool the whole workspace shares (secure_links_pool).",
   "currency": "usd",
   "lookup_prefix": "citadel",
   "tiers": [
@@ -11,7 +11,8 @@
         "members": 5,
         "storage_gb_total": 1,
         "connections": 15,
-        "relay_gb_total": 2
+        "relay_gb_total": 2,
+        "secure_links_per_member": 5
       },
       "prices": []
     },
@@ -24,7 +25,8 @@
         "storage_gb_per_seat": 10,
         "connections": 300,
         "connections_per_seat": 3,
-        "relay_gb_per_seat": 20
+        "relay_gb_per_seat": 20,
+        "secure_links_per_member": 50
       },
       "prices": [
         {
@@ -47,7 +49,8 @@
         "priority_support": true,
         "connections": 500,
         "connections_per_seat": 3,
-        "relay_gb_per_seat": 50
+        "relay_gb_per_seat": 50,
+        "secure_links_per_member": 50
       },
       "prices": [
         {
@@ -72,6 +75,28 @@
       ],
       "grants": {
         "storage_gb": 10
+      },
+      "prices": [
+        {
+          "interval": "month",
+          "unit_amount": 200
+        },
+        {
+          "interval": "year",
+          "unit_amount": 2000
+        }
+      ]
+    },
+    {
+      "id": "secure-links",
+      "name": "Citadel Workspace Secure Link Pack",
+      "unit": "50-link pack",
+      "available_on": [
+        "team",
+        "business"
+      ],
+      "grants": {
+        "secure_links_pool": 50
       },
       "prices": [
         {

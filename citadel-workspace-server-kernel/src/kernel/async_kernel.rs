@@ -182,6 +182,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     sign_in_settings: crate::kernel::sign_in::SignInSettingsHandle,
     /// Told when an admin changes the support grant: the host's mirror of it, or none.
     support_grants: crate::kernel::telemetry::SupportGrantObserverHandle,
+    /// How many secure links members may hold: the host's answer, or none, which makes none.
+    link_quota: crate::kernel::secure_links::quota::LinkQuotaSourceHandle,
 }
 
 /// Removes a CID's account attribution when its connection task ends.
@@ -220,6 +222,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             ice_servers: self.ice_servers.clone(),
             sign_in_settings: self.sign_in_settings.clone(),
             support_grants: self.support_grants.clone(),
+            link_quota: self.link_quota.clone(),
             // RateLimiter::Clone shares the same Arc<Mutex<HashMap>>,
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
@@ -266,7 +269,21 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             ice_servers: None,
             sign_in_settings: None,
             support_grants: None,
+            link_quota: None,
         }
+    }
+
+    /// Set by the server bootstrap: the host's secure-link limits, or none, in which case no
+    /// secure link can be made or listed.
+    pub fn set_link_quota_source(
+        &mut self,
+        source: crate::kernel::secure_links::quota::LinkQuotaSourceHandle,
+    ) {
+        self.link_quota = source;
+    }
+
+    pub fn link_quota_source(&self) -> &crate::kernel::secure_links::quota::LinkQuotaSourceHandle {
+        &self.link_quota
     }
 
     /// Set by the server bootstrap: what to tell when the support grant changes, or none.

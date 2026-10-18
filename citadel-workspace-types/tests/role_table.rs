@@ -13,8 +13,9 @@ fn set(permissions: &[Permission]) -> HashSet<Permission> {
 
 /// The fixed sets as `Permission::for_role` granted them before roles were editable, written
 /// out by name rather than derived, so a change to a seed cannot also change what it is
-/// compared with. The one addition is `ManageRoles`, which did not exist: the Owner holds every
-/// permission but `All` and `ConfigureSystem`, so it holds the new one too.
+/// compared with. The additions are `ManageRoles`, which did not exist: the Owner holds every
+/// permission but `All` and `ConfigureSystem`, so it holds the new one too; and
+/// `ShareSecureLinks`, which the Owner holds the same way and the Member seed is given.
 #[test]
 fn the_seeds_are_the_roles_every_workspace_had() {
     use Permission::*;
@@ -47,6 +48,7 @@ fn the_seeds_are_the_roles_every_workspace_had() {
         Themes,
         ViewTelemetry,
         ManageRoles,
+        ShareSecureLinks,
     ]);
     let expected = [
         (OWNER_ROLE_ID, owner),
@@ -60,6 +62,7 @@ fn the_seeds_are_the_roles_every_workspace_had() {
                 ReadMessages,
                 UploadFiles,
                 DownloadFiles,
+                ShareSecureLinks,
             ]),
         ),
         (GUEST_ROLE_ID, set(&[ViewContent, ViewMembers])),

@@ -21,6 +21,9 @@ pub mod backend_ops_simple;
 mod group_message_pages;
 mod records;
 mod roles_store;
+#[cfg(test)]
+mod roles_upgrade_tests;
+pub(crate) mod secure_links_store;
 // Note: TransactionManager has been removed. Use BackendTransactionManager instead.
 
 /// How many message locks exist, total.
@@ -249,6 +252,16 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     #[cfg(test)]
     pub(crate) fn saved_keys(&self) -> Vec<String> {
         self.saved_keys.read().clone()
+    }
+
+    /// Every key and value the in-memory store holds, for a test that reads what was written.
+    #[cfg(test)]
+    pub(crate) fn stored_entries(&self) -> Vec<(String, Vec<u8>)> {
+        self.test_storage
+            .read()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
     /// Set the NodeRemote instance

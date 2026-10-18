@@ -71,6 +71,17 @@ pub mod config {
         /// self-hosted server, whose users never saw them. No default: a server that does not
         /// say refuses to start. See `resolve_require_platform_terms`.
         pub require_platform_terms: Option<bool>,
+        /// Live secure links each member may hold of their own. Required by the native server,
+        /// which has no plan to read it from; 0 is allowed. See `resolve_secure_link_quota`.
+        /// A hosted tenant's limits come from its plan instead (`LinkQuotaSource`).
+        pub secure_links_per_member: Option<u32>,
+        /// Live secure links the whole workspace shares beyond each member's own. Required
+        /// alongside `secure_links_per_member`; 0 is allowed.
+        pub secure_links_pool: Option<u32>,
+        /// How people sign in: the OPRF seed file, the Argon2id cost and the admission check.
+        /// Required by the native server and refused by a hosted one, whose host supplies it.
+        /// See `kernel::sign_in::config`.
+        pub sign_in: Option<crate::kernel::sign_in::config::NativeSignInConfig>,
     }
 
     impl std::fmt::Debug for ServerConfig {
@@ -100,6 +111,9 @@ pub mod config {
                 .field("allow_first_connect_admin", &self.allow_first_connect_admin)
                 .field("workspace_name", &self.workspace_name)
                 .field("require_platform_terms", &self.require_platform_terms)
+                .field("secure_links_per_member", &self.secure_links_per_member)
+                .field("secure_links_pool", &self.secure_links_pool)
+                .field("sign_in", &self.sign_in)
                 .finish()
         }
     }
@@ -501,6 +515,23 @@ pub fn resolve_require_platform_terms(config: &ServerConfig) -> Result<bool, Net
     })
 }
 
+/// The secure-link limits `config` sets. Both keys are required: a native server has no plan to
+/// read them from, and a default would be a limit nobody chose.
+pub fn resolve_secure_link_quota(
+    config: &ServerConfig,
+) -> Result<kernel::secure_links::quota::LinkQuota, NetworkError> {
+    match (config.secure_links_per_member, config.secure_links_pool) {
+        (Some(per_member), Some(pool)) => {
+            Ok(kernel::secure_links::quota::LinkQuota { per_member, pool })
+        }
+        _ => Err(NetworkError::msg(
+            "secure_links_per_member and secure_links_pool must both be set in kernel.toml: \
+             the live secure links each member may hold, and how many more the workspace shares \
+             (0 is allowed for either)",
+        )),
+    }
+}
+
 /// The root workspace name `config` asks for, trimmed; `None` when it names none.
 ///
 /// A name that cannot be shown is a configuration error, not something to fall back from: a
@@ -659,6 +690,7 @@ async fn workspace_kernel(
     first_connect_admin: bool,
     ice_servers: kernel::ice_servers::IceServerSourceHandle,
     sign_in_settings: kernel::sign_in::SignInSettingsHandle,
+    link_quota: kernel::secure_links::quota::LinkQuotaSourceHandle,
 ) -> Result<kernel::async_kernel::AsyncWorkspaceServerKernel<StackedRatchet>, NetworkError> {
     if first_connect_admin {
         citadel_logging::warn!(target: "citadel", "⚠️  WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN is on: the first account to connect becomes the workspace administrator. Intended for local development. On a reachable deployment this hands ownership to whoever registers first.");
@@ -691,6 +723,7 @@ async fn workspace_kernel(
     }
     kernel.set_ice_server_source(ice_servers);
     kernel.set_sign_in_settings(sign_in_settings);
+    kernel.set_link_quota_source(link_quota);
     Ok(kernel)
 }
 
@@ -705,6 +738,9 @@ async fn workspace_kernel(
 /// (`GetIceServers`), or `None` for a host that has none. `sign_in` is what the host gives
 /// sign-in: the post-quantum settings and the workspace's sign-in settings store. `telemetry` is
 /// the host's support-grant mirror and the callback that receives the built kernel.
+/// `link_quota` is the host's secure-link limits (its plan); the host also runs the purge
+/// (`purge_expired_links`), through the kernel `telemetry.kernel_ready` hands it.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_server_on<T: PlatformOps>(
     config: ServerConfig,
     listener: T::Listener,
@@ -713,8 +749,14 @@ pub async fn run_server_on<T: PlatformOps>(
     ice_servers: kernel::ice_servers::IceServerSourceHandle,
     sign_in: kernel::sign_in::HostedSignIn,
     telemetry: kernel::telemetry::HostedTelemetry<StackedRatchet>,
+    link_quota: kernel::secure_links::quota::LinkQuotaSourceHandle,
 ) -> Result<(), NetworkError> {
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel on an injected listener...");
+    if config.sign_in.is_some() {
+        return Err(NetworkError::msg(
+            "[sign_in] is a native server's; a hosted server's host supplies its sign-in",
+        ));
+    }
     let bind_address: SocketAddr = config.bind_addr.parse().map_err(|e| {
         NetworkError::msg(format!(
             "Invalid bind address '{}': {}",
@@ -729,6 +771,7 @@ pub async fn run_server_on<T: PlatformOps>(
         first_connect_admin,
         ice_servers,
         sign_in.settings,
+        link_quota,
     )
     .await?;
     kernel.set_support_grant_observer(telemetry.support_grants);
@@ -776,6 +819,18 @@ pub async fn run_server_with_base_path(
     config: ServerConfig,
     config_base_path: Option<&Path>,
 ) -> Result<(), NetworkError> {
+    let site_verify = kernel::sign_in::native::siteverify::CloudflareSiteVerify::new()
+        .map_err(NetworkError::msg)?;
+    run_server_with_site_verify(config, config_base_path, std::sync::Arc::new(site_verify)).await
+}
+
+/// `run_server_with_base_path`, asking `site_verify` for each Turnstile verdict.
+#[cfg(not(target_family = "wasm"))]
+pub async fn run_server_with_site_verify(
+    config: ServerConfig,
+    config_base_path: Option<&Path>,
+    site_verify: std::sync::Arc<dyn kernel::sign_in::turnstile::SiteVerify>,
+) -> Result<(), NetworkError> {
     setup_log();
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel...");
 
@@ -811,17 +866,29 @@ pub async fn run_server_with_base_path(
     )?;
 
     // The native server has no relay-credential minter: nothing here holds a TURN provider's
-    // key, so GetIceServers answers "unavailable" rather than inventing a list. Nor has it an
-    // admission check, so it keeps no sign-in settings: a switch nothing enforces would claim a
+    // key, so GetIceServers answers "unavailable" rather than inventing a list. Its secure-link
+    // limits and its sign-in are kernel.toml's, and required. With `admission = "none"` its
+    // sign-in settings cannot require a human check: a switch nothing enforces would claim a
     // protection that is not there.
+    let link_quota = resolve_secure_link_quota(&config)?;
+    let sign_in = kernel::sign_in::native::native_sign_in(
+        config.sign_in.as_ref(),
+        &|name| std::env::var(name).ok(),
+        site_verify,
+    )
+    .map_err(NetworkError::msg)?;
     let kernel = workspace_kernel(
         &config,
         workspace_structure,
         first_connect_admin,
         None,
-        None,
+        sign_in.settings,
+        Some(std::sync::Arc::new(
+            kernel::secure_links::quota::FixedLinkQuota(link_quota),
+        )),
     )
     .await?;
+    spawn_link_purge(kernel.clone());
 
     // `NodeType::server` and `NodeBuilder::build` now return `anyhow::Error`
     // (newer citadel_sdk); map into this fn's `NetworkError`, which no longer
@@ -833,7 +900,11 @@ pub async fn run_server_with_base_path(
     builder
         .with_node_type(node_type)
         .with_backend(backend_type_for_node_builder)
-        .with_server_misc_settings(production_server_misc_settings());
+        .with_server_misc_settings(ServerMiscSettings {
+            pq_sign_in: sign_in.pq_sign_in,
+            admission: sign_in.admission,
+            ..production_server_misc_settings()
+        });
 
     if config.dangerous_skip_cert_verification.unwrap_or(false) {
         citadel_logging::warn!(target: "citadel", "⚠️  SECURITY WARNING: TLS certificate verification is DISABLED. This should ONLY be used for local development with self-signed certificates. Never use in production!");
@@ -882,6 +953,44 @@ pub async fn run_server_with_base_path(
         .await?;
 
     Ok(())
+}
+
+/// Purge expired secure links hourly, for as long as the process runs. A pass that leaves some
+/// behind is followed by another straight away, each bounded by `PURGE_BATCH`. Nothing is purged
+/// before the node has started: until then the kernel's backend is not the server's storage.
+#[cfg(not(target_family = "wasm"))]
+fn spawn_link_purge(kernel: kernel::async_kernel::AsyncWorkspaceServerKernel<StackedRatchet>) {
+    use kernel::secure_links::{PURGE_BATCH, PURGE_INTERVAL_MS};
+    tokio::spawn(async move {
+        let mut hourly = tokio::time::interval(std::time::Duration::from_millis(PURGE_INTERVAL_MS));
+        loop {
+            hourly.tick().await;
+            if kernel.node_remote.read().is_none() {
+                continue;
+            }
+            loop {
+                let now_ms = match std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                {
+                    Ok(elapsed) => elapsed.as_millis() as u64,
+                    Err(e) => {
+                        warn!(target: "citadel", "Secure-link purge skipped: the clock is before the epoch: {e}");
+                        break;
+                    }
+                };
+                match kernel.purge_expired_links(now_ms, PURGE_BATCH).await {
+                    Ok(0) => break,
+                    Ok(remaining) => {
+                        info!(target: "citadel", "Secure-link purge: {remaining} expired link(s) left for the next pass");
+                    }
+                    Err(e) => {
+                        warn!(target: "citadel", "Secure-link purge failed: {e:?}");
+                        break;
+                    }
+                }
+            }
+        }
+    });
 }
 
 /// Resolves when the process is asked to terminate.
@@ -1203,6 +1312,9 @@ mod server_config_debug_tests {
             allow_first_connect_admin: None,
             workspace_name: Some("Admin Lab".to_string()),
             require_platform_terms: Some(false),
+            secure_links_per_member: Some(5),
+            secure_links_pool: Some(0),
+            sign_in: None,
         }
     }
 

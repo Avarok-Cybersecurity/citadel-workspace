@@ -167,6 +167,34 @@ agent. Nothing on the public host can see a user's keys or decrypted
 messages. That is why the agent is never hosted for other people, and never
 proxied.
 
+## Sign-in: post-quantum, security keys, Turnstile
+
+The server's `kernel.toml` must carry a `[sign_in]` section, and the server
+refuses to start without one (`citadel-workspace-server-kernel/src/kernel/sign_in/config.rs`
+documents every key; none has a default).
+
+- **The OPRF seed** (`oprf_seed_file`) is 32 random bytes, mode 0600, made once
+  with `citadel-workspace-server-kernel --init-sign-in-seed <path>`. The image's
+  start script (`docker/workspace-server/start.sh`) runs that on a data volume's
+  first start; the server itself never makes one. **Back it up with the
+  volume and never replace it**: every post-quantum account's password check
+  depends on it, so a new seed locks all of them out.
+- **`ksf = "owasp-floor"`** is the Argon2id cost browsers stretch passwords
+  with, the same as the hosted tenants'.
+- **`admission = "none"`** (the shipped value) means no human check, and the
+  admin's "Require a human check" switch cannot be turned on. For
+  `admission = "turnstile"`, set `turnstile_secret_env` to the NAME of an
+  environment variable holding the Turnstile secret (pass it to the `server`
+  container), `turnstile_site_key`, `turnstile_hostnames`, `turnstile_cdata`
+  (the identity the sign-in widget must render as its cData) and
+  `settings_file`, where the switch is kept.
+- **`turnstile_site_key`** is the widget's public site key (Cloudflare gives it
+  to every visitor), so it is written inline. The browser reaches a
+  self-hosted server only through its local agent, with no HTTP discovery to
+  ask, so the server publishes the site key and `turnstile_cdata` on each
+  "check required" refusal; the sign-in form then renders the widget and
+  retries with its token. Never put the secret here.
+
 ## Audio and video calls
 
 Calls are peer to peer. There is no SFU, no TURN server and no media relay — the
