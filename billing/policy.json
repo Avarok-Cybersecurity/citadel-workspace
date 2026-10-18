@@ -14,20 +14,33 @@
   "dunning": {
     "$comment": "With overage billing on, a failed payment puts the workspace in payment_required: the host refuses connections, the object is not started. Emails go out on reminder_days after the failure; the final warning goes final_warning_hours before the purge at grace_days. Payment restores the workspace at once.",
     "grace_days": 30,
-    "reminder_days": [0, 7, 21],
+    "reminder_days": [
+      0,
+      7,
+      21
+    ],
     "final_warning_hours": 48
   },
   "alerts": {
     "$comment": "When the workspace's admins are told. usage_percent: of the included quota, per dimension, once each per period. overage_step_units: with overage billing on, every this many billed units beyond the quota (GB; thousands of appends). countdown_hours: with it off, this many hours before the termination (0 is the termination itself).",
-    "usage_percent": [50, 80, 100],
+    "usage_percent": [
+      50,
+      80,
+      100
+    ],
     "overage_step_units": {
       "relay-overage": 10,
       "document-appends": 100
     },
-    "countdown_hours": [48, 24, 0]
+    "countdown_hours": [
+      48,
+      24,
+      0
+    ]
   },
   "terms": {
-    "$comment": "The terms people accept render these values and, as the owner instructed, say they may change at any time without notice. docs/plans/billing-automation.md section G notes that this clause may be unenforceable for consumers in some jurisdictions and recommends legal review.",
-    "change_without_notice": true
+    "$comment": "change_notice is the one source of the clause both legal documents (Customer Terms, Platform Terms) render verbatim; the owner chose this qualified wording on 2026-10-18 and docs/plans/billing-automation.md G7 keeps the legal-review recommendation. effective_date is the one source of the bumped documents' Effective date: the release PR sets it to its deploy date; the value here is the day the text was written and is provisional.",
+    "change_notice": "We may change these grace periods, thresholds and terms at any time, without prior notice, to the extent permitted by the law of the applicable jurisdiction.",
+    "effective_date": "2026-10-18"
   }
 }

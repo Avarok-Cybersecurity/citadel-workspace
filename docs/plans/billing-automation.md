@@ -121,6 +121,8 @@ Part 2 is being built against the proposed values; every number above lives in o
 
 ## G. Overage billing toggle, terminations, alerts and terms (owner requirements of 2026-10-18)
 
+Owner answers, 2026-10-18: G1–G6 approved as proposed; G7 with the qualified wording below. The effective date of the bumped terms is set by the release PR (`policy.json` `terms.effective_date`).
+
 Every value in this section lives in `billing/policy.json` (one file, required keys, no code
 defaults); the Worker, the tenant objects, the UI's copy, the emails and the legal terms render it.
 
@@ -132,4 +134,4 @@ defaults); the Worker, the tenant objects, the UI's copy, the emails and the leg
 | G4 | Alerts | 50 / 80 / 100 % of the included quota per dimension, once per period; with overage on, every 10 GB / 100k appends of overage; with it off, 48 h and 24 h before termination and at termination | `alerts.*` |
 | G5 | Alert channels | email to the Stripe customer's address (paid; Free has no address until PR #166 lands → in-app only); in-app: a coarse level (`none/warn/over/terminating/terminated`, no numbers) on the public status and discovery answers, and the full meters on `POST /api/tenants/<slug>/usage` to the claim-code holder | decision: is a coarse level on a public answer acceptable (discovery today says "no plan, no counts")? |
 | G6 | Terms | Customer Terms and Platform Terms render the grace days, TTL, thresholds and termination rules from policy.json, plus "may change at any time without notice"; both versions bump 1 → 2; platform terms re-acceptance on next sign-in uses the existing GetTerms machinery; Customer Terms have no re-acceptance site after creation today → proposed: re-acceptance when the claim-code holder next opens Plan & billing | a parity check holds every rendered value to policy.json |
-| G7 | Legal note | "may change at any time without warning" may be unenforceable for consumers in some jurisdictions (EU unfair-terms rules; US auto-renewal laws); implemented as instructed, **legal review recommended** | |
+| G7 | Change clause | Owner 2026-10-18: "We may change these grace periods, thresholds and terms at any time, without prior notice, to the extent permitted by the law of the applicable jurisdiction." — one source (`policy.json` `terms.change_notice`), rendered into both Customer and Platform Terms | the unqualified "without warning" wording may be unenforceable for consumers in some jurisdictions (EU unfair-terms rules; US auto-renewal laws): **legal review still recommended** |
