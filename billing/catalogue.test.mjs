@@ -29,20 +29,20 @@ test('every paid price is per seat', () => {
 
 test('a price Stripe holds exactly as wanted has no differences', () => {
   const want = deriveCatalogue(table)[0].prices[0];
-  const have = { active: true, unit_amount: 600, currency: 'usd', product: 'prod_1', recurring: { interval: 'month', usage_type: 'licensed' }, metadata: { citadel_tier: 'team' } };
-  assert.deepEqual(priceDiffs(want, have, 'prod_1'), []);
+  const have = { active: true, unit_amount: 600, currency: 'usd', product: 'prod_1', recurring: { interval: 'month', usage_type: 'licensed' }, metadata: { citadel_tier: 'team' }, tax_behavior: 'exclusive' };
+  assert.deepEqual(priceDiffs(want, have, 'prod_1', undefined, 'exclusive'), []);
 });
 
 test('an amount, an archived price and a missing price are all reported', () => {
   const want = deriveCatalogue(table)[0].prices[0];
-  const have = { active: false, unit_amount: 500, currency: 'usd', product: 'prod_1', recurring: { interval: 'month', usage_type: 'licensed' }, metadata: { citadel_tier: 'team' } };
-  assert.deepEqual(priceDiffs(want, have, 'prod_1'), ['unit_amount 500 ≠ 600', 'archived']);
-  assert.deepEqual(priceDiffs(want, undefined, 'prod_1'), ['missing']);
+  const have = { active: false, unit_amount: 500, currency: 'usd', product: 'prod_1', recurring: { interval: 'month', usage_type: 'licensed' }, metadata: { citadel_tier: 'team' }, tax_behavior: 'exclusive' };
+  assert.deepEqual(priceDiffs(want, have, 'prod_1', undefined, 'exclusive'), ['unit_amount 500 ≠ 600', 'archived']);
+  assert.deepEqual(priceDiffs(want, undefined, 'prod_1', undefined, 'exclusive'), ['missing']);
 });
 
 test('a product whose description drifted from its limits is reported', () => {
   const want = deriveCatalogue(table)[0].product;
-  assert.deepEqual(productDiffs(want, { name: want.name, description: 'old', active: true }), ['description']);
+  assert.deepEqual(productDiffs(want, { name: want.name, description: 'old', active: true }, null), ['description']);
   assert.equal(describeLimits({ members: 1000, storage_gb_per_seat: 25, priority_support: true }), 'Up to 1,000 members · 25 GB per seat · priority support');
 });
 
@@ -107,11 +107,28 @@ test('relay overage is one metered price under citadel-relay-overage, on its own
 
 test('a metered price on another meter, or a meter that does not sum, differs', () => {
   const [want] = deriveMetered(table)[0].prices;
-  const have = { active: true, unit_amount: want.unit_amount, currency: 'usd', product: 'prod_o', recurring: { interval: 'month', usage_type: 'metered', meter: 'mtr_1' }, metadata: { citadel_tier: 'relay-overage' } };
-  assert.deepEqual(priceDiffs(want, have, 'prod_o', 'mtr_1'), []);
-  assert.deepEqual(priceDiffs(want, have, 'prod_o', 'mtr_2'), ['meter mtr_1 ≠ mtr_2']);
+  const have = { active: true, unit_amount: want.unit_amount, currency: 'usd', product: 'prod_o', recurring: { interval: 'month', usage_type: 'metered', meter: 'mtr_1' }, metadata: { citadel_tier: 'relay-overage' }, tax_behavior: 'exclusive' };
+  assert.deepEqual(priceDiffs(want, have, 'prod_o', 'mtr_1', 'exclusive'), []);
+  assert.deepEqual(priceDiffs(want, have, 'prod_o', 'mtr_2', 'exclusive'), ['meter mtr_1 ≠ mtr_2']);
   const meter = { status: 'active', default_aggregation: { formula: 'sum' }, customer_mapping: { event_payload_key: 'stripe_customer_id' }, value_settings: { event_payload_key: 'value' } };
   assert.deepEqual(meterDiffs({}, meter), []);
   assert.deepEqual(meterDiffs({}, { ...meter, default_aggregation: { formula: 'count' } }), ['aggregation is not sum']);
   assert.deepEqual(meterDiffs({}, undefined), ['missing']);
+});
+
+test('a price with another tax behaviour differs, and the behaviour is required', () => {
+  const want = deriveCatalogue(table)[0].prices[0];
+  const have = { active: true, unit_amount: 600, currency: 'usd', product: 'prod_1', recurring: { interval: 'month', usage_type: 'licensed' }, metadata: { citadel_tier: 'team' }, tax_behavior: 'unspecified' };
+  assert.deepEqual(priceDiffs(want, have, 'prod_1', undefined, 'exclusive'), ['tax_behavior unspecified ≠ exclusive']);
+  assert.throws(() => priceDiffs(want, have, 'prod_1', undefined), /needs taxBehavior/);
+});
+
+test('a product tax code is compared only when the model names one', () => {
+  const want = deriveCatalogue(table)[0].product;
+  const have = { name: want.name, description: want.description, active: true, tax_code: 'txcd_10000000' };
+  assert.deepEqual(productDiffs(want, have, null), []);
+  assert.deepEqual(productDiffs(want, have, 'txcd_10103001'), ['tax_code txcd_10000000 ≠ txcd_10103001']);
+  assert.deepEqual(productDiffs(want, { ...have, tax_code: { id: 'txcd_10103001' } }, 'txcd_10103001'), []);
+  assert.throws(() => productDiffs(want, have), /needs taxCode/);
+  assert.throws(() => productDiffs(want, have, 'saas'), /needs taxCode/);
 });

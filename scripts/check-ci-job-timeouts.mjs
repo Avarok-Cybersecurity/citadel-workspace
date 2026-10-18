@@ -69,6 +69,7 @@ const WORKFLOWS = [
   '.github/workflows/validate.yml',
   '.github/workflows/publish-images.yml',
   '.github/workflows/release-agent.yml',
+  '.github/workflows/rates.yml',
   'citadel-workspaces/.github/workflows/validate.yml',
 ];
 

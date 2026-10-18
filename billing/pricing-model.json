@@ -12,6 +12,14 @@
     "$comment": "Which relay path's cost prices relay overage: turn (Cloudflare Realtime TURN, the dearer path) or object (the tenant object's own relay, <= $0.006/GB). Customers do not choose the path, so the dearer one prices it. Decision 5.",
     "value": "turn"
   },
+  "object_relay_frame_bytes": {
+    "$comment": "The frame size the object relay path is costed at: a relayed GB (tiers.json metering.gb_bytes) arrives as gb_bytes / this many incoming WebSocket messages, each 1/ws_messages_per_request of a billed request. 1,400 B is a typical relayed datagram under a 1,500 B MTU; a smaller frame makes the object path dearer. Used when relay_cost_path or seat_floor_relay_path is object.",
+    "value": 1400
+  },
+  "seat_floor_relay_path": {
+    "$comment": "Which relay path costs the relay GB a seat includes, in the seat floor (docs/plans/billing-automation.md rows 10-11 price it on the object path: Team $3.81, Business $6.15 before rounding). On turn the floors would be $7 / $13, above the $6 / $12 list prices. Open with the owner alongside decision 5.",
+    "value": "object"
+  },
   "rows_written_per_document_append": {
     "$comment": "DO rows one document append writes over its life: the update and the log head at append time, and the compaction delete later (Cloudflare counts deletes as rows written). From transaction/documents_store.rs on feat/citadel-docs-r1.",
     "value": 3
