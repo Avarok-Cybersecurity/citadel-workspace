@@ -129,16 +129,18 @@ Nothing here reaches live mode: `deploy.sh`'s catalogue audit refuses a live key
      -d "enabled_events[]=customer.subscription.updated" -d "enabled_events[]=customer.subscription.deleted"
    ```
 
-3. **Customer portal.** Dashboard (test mode), Settings, Billing, Customer portal. The Worker
-   opens portal sessions with the default configuration and `return_url=https://work.avarok.net/`,
-   so that configuration is the one that applies:
-   - Payment methods: allow updating.
-   - Invoices: show invoice history.
-   - Subscriptions: allow cancelling (at the end of the period); allow updating quantities
-     (seats); allow switching plans, with the Team and Business products and their monthly and
-     yearly prices, and the quantities of the storage add-on and the secure-link packs.
-   - Business information: the default redirect link `https://work.avarok.net/`.
-   - Save.
+3. **Customer portal.** The Stripe account is shared with another product, so the Worker never
+   opens Stripe's default portal (that one is the other product's). It opens the Citadel-only
+   configuration named by `STRIPE_PORTAL_CONFIGURATION` in `wrangler.toml`
+   (`bpc_1UIbClCgLMkhvcEsvf9lxARd`, metadata `product=citadel-workspace`); unset, the portal route
+   answers 503. That configuration allows:
+   - payment methods: updating; invoices: history;
+   - subscriptions: cancelling at period end; switching between the Team and Business monthly
+     and yearly prices; changing quantities: seats, storage blocks and secure-link packs
+     (add-ons 1 to 1000, the Worker's `MAX_STORAGE_BLOCKS` / `MAX_LINK_PACKS`).
+   Stripe's portal cannot add an item a subscription does not have, nor take an add-on below 1:
+   a workspace first buys packs or storage at checkout. A new add-on in `tiers.json` needs its
+   product and prices added to this configuration (`features[subscription_update][products]`).
 
 ### 6. Usage metering and relay overage (PROPOSED, awaiting owner approval)
 
