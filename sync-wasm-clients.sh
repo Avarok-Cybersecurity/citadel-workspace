@@ -279,7 +279,10 @@ if [ -d "$DEST2" ]; then
     # By this line wasm-pack has succeeded, so replacing the previous artifacts
     # is safe -- there is something to replace them WITH.
     print_status "Cleaning $DEST2 now that a build exists..."
-    rm -rf "$DEST2"/* 2>/dev/null || true
+    # Everything but cdoc/: the Citadel Docs binary there is VENDORED and committed in the UI
+    # repo (citadel-workspaces/scripts/sync-cdoc-wasm.sh, pinned by its PROVENANCE.json), not
+    # built here, so wiping it would delete a tracked file and 404 every document open.
+    find "$DEST2" -mindepth 1 -maxdepth 1 ! -name cdoc -exec rm -rf {} + 2>/dev/null || true
 
     print_status "Copying to $DEST2..."
     cp "$INTERNAL_SERVICE_ROOT/citadel-internal-service-wasm-client/pkg/"*.wasm "$DEST2/"
