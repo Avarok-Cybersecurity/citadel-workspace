@@ -728,6 +728,8 @@ jobs:
         run: node scripts/check-dockerfiles-copy-every-crate.mjs
       - name: Check the sync image has every script the WASM sync runs
         run: node scripts/check-sync-image-has-its-scripts.mjs
+      - name: Check the dev UI container mounts everything Citadel Docs loads
+        run: node scripts/check-ui-mounts-serve-cdoc.mjs
       - name: Check the inline-upload byte cap agrees across the wire
         run: node scripts/check-transfer-cap-parity.mjs
       - name: Check the Worker requires the crate's Customer Terms version
