@@ -1,5 +1,5 @@
 {
-  "$comment": "The owner's pricing decisions: what turns billing/rates.json (what we pay) into billing/tiers.json (what we charge), through billing/derive.mjs. Proposed 2026-10-18 in docs/plans/billing-automation.md; each value is an owner decision and changes no code. Nothing here is a default: a missing key fails derivation.",
+  "$comment": "The owner's pricing decisions: what turns billing/rates.json (what we pay) into billing/tiers.json (what we charge), through billing/derive.mjs. Proposed 2026-10-18 in docs/plans/billing-automation.md; each value is an owner decision and changes no code. Time limits and thresholds live in billing/policy.json, not here. Nothing here is a default: a missing key fails derivation.",
   "multiplier": {
     "$comment": "Price = unit cost x this, rounded up. Covers Stripe's 4.1% + $0.30 per charge (6.6-9.1% of a monthly seat), the Free tier's $4.05/month of always-on duration per tenant, a Cloudflare price rise between weekly rate runs, international cards (+2.5%) and support. Decision 1.",
     "value": 3
@@ -35,11 +35,6 @@
     "$comment": "Overage below this many billed units in a period is forgiven, not reported: a usage-only invoice under $0.31 costs more in Stripe's fixed fee than it collects. Keyed by metered id, in that price's own unit (GB; thousands of appends). Decision 7.",
     "relay-overage": 5,
     "document-appends": 50
-  },
-  "dunning": {
-    "$comment": "Days after the first failed payment on which the owner is emailed; the final warning goes this many hours before the purge. The grace period itself is the deployment's BILLING_GRACE_DAYS (wrangler.toml), with no default. Decision 10.",
-    "reminder_days": [0, 7, 21],
-    "final_warning_hours": 48
   },
   "tax": {
     "$comment": "Stripe Tax. Prices are created tax-exclusive (USD convention; immutable once set, so a change means a new price). product_tax_code is null until the owner confirms the exact code against Stripe's Tax Codes list (candidate: txcd_10103001, 'Software as a service (SaaS) - business use'); null means the account's preset product tax code applies. Decision 9.",
