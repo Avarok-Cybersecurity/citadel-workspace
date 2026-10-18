@@ -102,25 +102,10 @@ if (!statSync(SRC, { throwIfNoEntry: false })) {
   process.exit(1);
 }
 
-/**
- * Tool output vendored with its provenance, not modules anyone writes: wasm-bindgen's glue and
- * declarations are as long as the API they bind. Exact paths, and each only while it still holds
- * the PROVENANCE.json that pins it (scripts/sync-cdoc-wasm.sh writes both), so the exemption
- * cannot quietly start covering hand-written code.
- */
-const GENERATED_DIRS = new Set(['lib/cdoc/generated']);
-for (const rel of GENERATED_DIRS) {
-  if (!statSync(join(SRC, rel, 'PROVENANCE.json'), { throwIfNoEntry: false })) {
-    console.error(`check-file-length: ${rel} is exempt as generated output but has no PROVENANCE.json.`);
-    process.exit(1);
-  }
-}
-
 function* walk(dir) {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) {
-      if (GENERATED_DIRS.has(relative(SRC, full))) continue;
       // Tests are excluded on purpose. The cap exists to stop a MODULE
       // accreting responsibilities; a test file's length measures how many
       // cases are covered, which is the opposite signal.
