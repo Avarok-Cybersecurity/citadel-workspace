@@ -154,7 +154,9 @@ pub enum DocumentsResponse {
     },
     /// The server compacted the log itself: it stored a snapshot it built from the log, covering
     /// every update up to `upto_seq`. Announced to every session that may view the node; a
-    /// writer refused `LogFull` may append again.
+    /// writer refused `LogFull` may append again. The server compacts at the newest update it
+    /// read, so `upto_seq` is also the log's latest sequence number at that moment: there is no
+    /// separate snapshot sequence number.
     DocumentCompacted {
         node_id: String,
         #[ts(type = "bigint")]
