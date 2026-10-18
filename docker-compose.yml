@@ -255,6 +255,8 @@ services:
       - ./citadel-workspaces/src:/app/src:rw
       - ./citadel-workspaces/public:/app/public:rw
       - ./citadel-workspaces/index.html:/app/index.html:rw
+      # The vendored cdoc glue (vendor/cdoc), outside src: without it opening a document fails to import.
+      - ./citadel-workspaces/vendor:/app/vendor:ro
 
       # Mount config files (read-write for hot reload)
       - ./citadel-workspaces/vite.config.ts:/app/vite.config.ts:rw
