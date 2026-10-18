@@ -1,15 +1,18 @@
 //! Documents: the collaborative-editing relay for a document node.
 //!
 //! The server holds each document node's CRDT update log and its latest snapshot, and relays
-//! awareness (cursors, selections, presence) without storing it. The bytes are opaque here: the
-//! server orders, stores, bounds and forwards them, and never decodes them. `doc_version` names
-//! the format the client encoded them in, so a reader can tell bytes it cannot decode from
-//! bytes that are damaged.
+//! awareness (cursors, selections, presence) without storing it. The server decodes every update
+//! and snapshot with `cdoc-crdt` (format v2) before it stores one, but never applies them:
+//! decoding refuses damaged bytes, binds each CRDT client id to the author that first wrote as it,
+//! and lets the server check that a snapshot holds everything it compacts. Awareness payloads stay
+//! opaque. `doc_version` names the format the client encoded them in, so a reader can tell bytes
+//! it cannot decode from bytes that are damaged.
 //!
 //! Sequence numbers are per node, assigned by the server, start at 1 and never repeat. A
-//! snapshot covers every update up to and including its `upto_seq`; once it is stored those
-//! updates are dropped, so a reader whose state is older than the snapshot is sent the snapshot
-//! and the updates after it.
+//! snapshot covers every update up to and including its `upto_seq`, and is stored only if its
+//! state vector holds every clock those updates write. Once it is stored, a reader whose state
+//! is older than the snapshot is sent the snapshot and the updates after it; the covered updates
+//! are kept for a configured number of sequence numbers (`retain_covered_updates`), then dropped.
 //!
 //! Every request is debug-logged by the command processor, so every byte field prints its length
 //! only: the bytes are the document.
@@ -19,6 +22,8 @@ use citadel_internal_service_types::plaintext_debug_fmt;
 use custom_debug::Debug;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+
+pub use crate::document_refusal::DocumentRefusal;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -43,7 +48,8 @@ pub enum DocumentsRequest {
         since_seq: u64,
     },
     /// Needs `EditMdx` on the node. `snapshot` must hold the effect of every update up to and
-    /// including `upto_seq`; those updates are dropped once it is stored.
+    /// including `upto_seq` (`SnapshotIncomplete` otherwise); those updates are dropped once the
+    /// configured retention window has passed them.
     StoreSnapshot {
         node_id: String,
         doc_version: u32,
@@ -146,62 +152,15 @@ pub enum DocumentsResponse {
         #[debug(with = plaintext_debug_fmt)]
         payload: Vec<u8>,
     },
+    /// The server compacted the log itself: it stored a snapshot it built from the log, covering
+    /// every update up to `upto_seq`. Announced to every session that may view the node; a
+    /// writer refused `LogFull` may append again.
+    DocumentCompacted {
+        node_id: String,
+        #[ts(type = "bigint")]
+        upto_seq: u64,
+    },
     Refused(DocumentRefusal),
-}
-
-/// Why a documents request was not carried out. A size is `size_bytes`, never `bytes`: the client
-/// decodes u64 fields by NAME (`WORKSPACE_BIGINT_FIELDS`), and `DocumentSnapshot::bytes` is an
-/// array, which would then fail to decode. Missing permission is not here: that is the
-/// standard `Error("Permission denied: ...")` every request answers with.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub enum DocumentRefusal {
-    /// The node does not exist, or no longer does.
-    NoSuchNode { node_id: String },
-    UpdateTooLarge {
-        node_id: String,
-        #[ts(type = "bigint")]
-        size_bytes: u64,
-        #[ts(type = "bigint")]
-        max_bytes: u64,
-    },
-    SnapshotTooLarge {
-        node_id: String,
-        #[ts(type = "bigint")]
-        size_bytes: u64,
-        #[ts(type = "bigint")]
-        max_bytes: u64,
-    },
-    AwarenessTooLarge {
-        node_id: String,
-        #[ts(type = "bigint")]
-        size_bytes: u64,
-        #[ts(type = "bigint")]
-        max_bytes: u64,
-    },
-    /// `upto_seq` names an update the log does not hold yet.
-    SnapshotAhead {
-        node_id: String,
-        #[ts(type = "bigint")]
-        upto_seq: u64,
-        #[ts(type = "bigint")]
-        latest_seq: u64,
-    },
-    /// A snapshot at least this recent is already stored.
-    SnapshotBehind {
-        node_id: String,
-        #[ts(type = "bigint")]
-        upto_seq: u64,
-        #[ts(type = "bigint")]
-        stored_upto_seq: u64,
-    },
-    /// Too many awareness payloads from this session; send fewer.
-    AwarenessRateLimited { node_id: String },
-    /// Appends and awareness are attributed to the session that sent them; this request came
-    /// with none.
-    NoSession,
-    /// This server was started without a `[documents]` configuration.
-    NotConfigured,
 }
 
 /// What each request needs on its node, named once for the handler and its callers.

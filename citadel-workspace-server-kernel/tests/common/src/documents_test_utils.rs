@@ -4,6 +4,7 @@
 //! cannot pass under bounds no server runs with. A test that needs a bound small enough to
 //! reach says so with `with_limits`.
 
+pub use crate::crdt_test_utils::*;
 use crate::member_test_utils::{create_test_user, insert_user_with_role, join_root, GateKernel};
 use crate::workspace_test_utils::{create_configured_test_kernel, TEST_ADMIN_USER_ID};
 use citadel_workspace_server_kernel::handlers::domain::node_ops::AsyncNodeOperations;
