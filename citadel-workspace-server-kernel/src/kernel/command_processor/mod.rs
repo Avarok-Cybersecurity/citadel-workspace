@@ -59,3 +59,11 @@ mod roles;
 
 /// A document node's update log, snapshot and awareness relay.
 mod documents;
+/// Secure links: create, list, delete, regenerate, extend, resolve.
+mod secure_links;
+
+/// Opening a secure link: the grant check and the one-time burn.
+mod secure_links_resolve;
+
+/// A secure link's owner listing, deleting, regenerating and extending it.
+mod secure_links_owner;

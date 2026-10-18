@@ -7,7 +7,7 @@ import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { freeTenant, objectStats, openSocket, unfinishedFrame, until } from "./helpers.mjs";
 import { METERING } from "../control/plans.mjs";
-import { TELEMETRY_PURGE_INTERVAL_MS } from "../control/tenant-telemetry.mjs";
+import { LINKS_PURGE_INTERVAL_MS } from "../control/tenant-links.mjs";
 
 async function limit(slug, object, overrides) {
   const { entitlements } = await objectStats(slug);
@@ -89,12 +89,12 @@ describe("flush and rollover", () => {
     s.ws.close(1000, "done");
     await until("the socket to be released", async () => (await openCount(slug)) === 0);
     expect(await runDurableObjectAlarm(object)).toBe(true);
-    // No socket open: the alarm is re-armed only for the next telemetry purge, a day out, not
-    // for another flush (control/tenant-telemetry.mjs).
-    const { telemetry_purge } = await objectStats(slug);
+    // No socket open: the alarm is re-armed only for the next purge -- the hourly links purge
+    // comes before the daily telemetry one -- not for another flush (control/tenant-telemetry.mjs).
+    const { telemetry_purge, links_purge } = await objectStats(slug);
     const alarm = await runInDurableObject(object, (_i, state) => state.storage.getAlarm());
-    expect(alarm).toBe(telemetry_purge.due_ms);
-    expect(alarm - Date.now()).toBeGreaterThan(TELEMETRY_PURGE_INTERVAL_MS - 60_000);
+    expect(alarm).toBe(Math.min(telemetry_purge.due_ms, links_purge.due_ms));
+    expect(alarm - Date.now()).toBeGreaterThan(LINKS_PURGE_INTERVAL_MS - 60_000);
   });
 
   it("a billing period that ends closes its row and opens the next, once", async () => {

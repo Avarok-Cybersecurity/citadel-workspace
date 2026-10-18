@@ -30,7 +30,8 @@
       "ManageNodeTypes",
       "Themes",
       "ViewTelemetry",
-      "ManageRoles"
+      "ManageRoles",
+      "ShareSecureLinks"
     ],
     "position": 65535
   },
@@ -51,7 +52,8 @@
       "SendMessages",
       "ReadMessages",
       "UploadFiles",
-      "DownloadFiles"
+      "DownloadFiles",
+      "ShareSecureLinks"
     ],
     "position": 200
   },

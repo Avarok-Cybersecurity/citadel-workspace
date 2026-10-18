@@ -21,11 +21,12 @@ import { UsageTable } from "./control/usage-table.mjs";
 import { meterSocket } from "./control/sockets.mjs";
 import { enforcedEntitlements, METERING } from "./control/plans.mjs";
 import { runMonitor } from "./control/monitor.mjs";
-import { storedRows } from "./control/stored-rows.mjs";
+import { objectStats } from "./control/object-stats.mjs";
 import { authVersions } from "./control/auth-versions.mjs";
 import { TenantSignIn } from "./control/tenant-sign-in.mjs";
-import { newInstance, nodeStorage, startNode, wasmStats } from "./control/tenant-node.mjs";
+import { newInstance, nodeStorage, startNode } from "./control/tenant-node.mjs";
 import { nextAlarm, TenantTelemetry } from "./control/tenant-telemetry.mjs";
+import { linkQuotaHost, TenantLinks } from "./control/tenant-links.mjs";
 import { SupportStore } from "./control/support-store.mjs";
 
 const FLUSH_MS = METERING.flush_seconds * 1000;
@@ -54,7 +55,7 @@ export class WorkspaceServer extends DurableObject {
     this.usageTable = new UsageTable(ctx.storage.sql);
     this.meter = null;
     // Sign-in (control/tenant-sign-in.mjs): the OPRF seed, the sign-in settings, the admission check.
-    this.signIn = new TenantSignIn(ctx.storage, { random: crypto, turnstile: () => config(env).turnstile, io: { fetch: (u, i) => fetch(u, i) } });
+    this.signIn = new TenantSignIn(ctx.storage, { random: crypto, turnstile: () => config(env).turnstile, siteKey: () => config(env).turnstileSiteKey, io: { fetch: (u, i) => fetch(u, i) } });
     // Relay credentials for the kernel's GetIceServers (control/ice.mjs), gated on this tenant's
     // plan and this period's metered relay.
     this.ice = new IceMinter(turnConfig(env), { fetch: (url, init) => fetch(url, init), nowMs: Date.now }, () => {
@@ -67,10 +68,13 @@ export class WorkspaceServer extends DurableObject {
       server: () => this.#running(), tenantId: () => this.provisioning.tenantId(), grants: new SupportStore(env.CONTROL_DB),
       nowMs: Date.now, wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     });
+    // The secure-links purge (control/tenant-links.mjs), on the same alarm; telemetry's then links'.
+    this.links = new TenantLinks(ctx.storage, { ready: () => this.telemetry.ready() });
+    this.purges = [this.telemetry, this.links];
     ctx.blockConcurrencyWhile(async () => {
       await this.provisioning.load();
       await this.signIn.load();
-      await this.telemetry.load();
+      for (const purge of this.purges) await purge.load();
       const now = Date.now();
       const period = periodAt(this.provisioning.summary().entitlements, now);
       this.meter = new Meter(period, this.usageTable.load(period.start), now);
@@ -122,7 +126,7 @@ export class WorkspaceServer extends DurableObject {
     return authVersions(this.ctx.storage.sql, (this.wasm ??= newInstance()));
   }
 
-  /** The usage flush (while a socket is open) and the telemetry purge. Errors are logged; it re-arms. */
+  /** The usage flush (while a socket is open) and the purges. Errors are logged; it re-arms. */
   async alarm() {
     const now = Date.now();
     try {
@@ -131,14 +135,15 @@ export class WorkspaceServer extends DurableObject {
     } catch (e) {
       console.error(`[tenant] usage flush failed: ${e?.stack ?? e}`);
     }
-    await this.telemetry.purgeIfDue(now, this.provisioning.ready());
+    for (const purge of this.purges) await purge.purgeIfDue(now, this.provisioning.ready());
     await this.#arm(true);
   }
 
-  /** The one alarm, at the earlier of the next flush and the next purge; `replace` or when that is sooner. */
+  /** The one alarm, at the earliest of the next flush and each next purge; `replace` or when that is sooner. */
   async #arm(replace) {
     const now = Date.now();
-    const at = nextAlarm(now, this.meter.openCount > 0 ? FLUSH_MS : null, await this.telemetry.purgeDue(this.provisioning.ready(), now));
+    const due = await Promise.all(this.purges.map((purge) => purge.purgeDue(this.provisioning.ready(), now)));
+    const at = nextAlarm(now, this.meter.openCount > 0 ? FLUSH_MS : null, ...due);
     const current = replace ? null : await this.ctx.storage.getAlarm();
     if (at !== null && (current === null || current > at)) await this.ctx.storage.setAlarm(at);
   }
@@ -173,6 +178,7 @@ export class WorkspaceServer extends DurableObject {
       ice: { mint: (memberId) => this.ice.mint(memberId) },
       signIn: this.signIn,
       grants: this.telemetry.grantHost(),
+      links: linkQuotaHost(() => enforcedEntitlements(this.provisioning.summary().entitlements)),
       onExit: (outcome) => {
         this.exit = outcome;
         console.error(`[tenant] node exited: ${outcome}`);
@@ -188,17 +194,7 @@ export class WorkspaceServer extends DurableObject {
 
   /** RPC, for the local proofs only: the Worker calls it when TENANT_DIAGNOSTICS is on (dispatch.mjs). */
   stats() {
-    return {
-      accepted: this.accepted,
-      running: this.server !== null && this.exit === null,
-      exit: this.exit,
-      ...wasmStats(this.wasm),
-      stored: storedRows(this.ctx.storage.sql),
-      connections: this.meter.connections(),
-      telemetry_purge: this.telemetry.summary(),
-      usage: this.meter.snapshot(Date.now()),
-      ...this.provisioning.summary(),
-    };
+    return objectStats(this);
   }
 
   async fetch(request) {

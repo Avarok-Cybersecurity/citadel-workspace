@@ -1077,9 +1077,11 @@ dependencies = [
  "citadel_user",
  "clap 4.5.59",
  "futures",
+ "getrandom 0.3.4",
  "libc",
  "log",
  "parking_lot",
+ "reqwest",
  "rstest",
  "serde",
  "serde_json",
@@ -1091,6 +1093,7 @@ dependencies = [
  "tokio-stream 0.1.18",
  "toml",
  "uuid",
+ "zeroize",
 ]
 
 [[package]]
@@ -1108,6 +1111,7 @@ dependencies = [
  "citadel_sdk",
  "futures",
  "serde_json",
+ "tempfile",
  "tokio 1.49.0",
  "toml",
  "uuid",

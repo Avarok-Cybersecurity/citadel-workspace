@@ -3,9 +3,8 @@
  */
 import { checkSlug } from "./slug.mjs";
 import { displayNameOf, MAX_DISPLAY_NAME } from "./display-name.mjs";
-import {
-  entitlements, intervalsOf, isPaid, maxSeats, MAX_STORAGE_BLOCKS, overageKey, overageSoldWith, storageKey, storageOfferedOn, tierIds, tierKey,
-} from "./plans.mjs";
+import { ADDONS, entitlements, intervalsOf, isPaid, maxSeats, overageKey, overageSoldWith, tierIds, tierKey } from "./plans.mjs";
+import { noAddons } from "./addons.mjs";
 import { CLAIM_SEAL, digestsEqual, randomHex, RESERVATION_SEAL, seal, sha256Hex, unseal } from "./secrets.mjs";
 import { CREATE_ACTION, verifyTurnstile } from "./turnstile.mjs";
 import { priceIds, stripe, StripeError } from "./stripe.mjs";
@@ -16,7 +15,11 @@ import { readAcceptedTerms } from "./customer-terms.mjs";
 const FREE_RESERVATION_SECONDS = 300;
 /** Past the Checkout's own expiry, so a payment completed at the last second still finds its row. */
 const CHECKOUT_GRACE_SECONDS = 600;
-const CREATE_FIELDS = new Set(["slug", "display_name", "tier", "interval", "seats", "storage_blocks", "turnstile_token", "reservation_token", "accepted_customer_terms_version"]);
+const CREATE_FIELDS = new Set([
+  "slug", "display_name", "tier", "interval", "seats", ...ADDONS.map((a) => a.quantityField), "turnstile_token", "reservation_token",
+  "accepted_customer_terms_version",
+]);
+const PAID_ONLY = ["interval", "seats", ...ADDONS.map((a) => a.quantityField)];
 const TOKEN = /^[0-9a-f]{64}$/;
 
 const isCount = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
@@ -41,20 +44,24 @@ export function readCreate(body) {
   }
   const retry = body.reservation_token ?? null;
   const plan = {
-    slug: body.slug, customer_terms_version: terms.version, display_name: name, tier: body.tier, interval: null, seats: 0, storage_blocks: 0,
+    slug: body.slug, customer_terms_version: terms.version, display_name: name, tier: body.tier, interval: null, seats: 0, ...noAddons(ADDONS),
   };
   if (!isPaid(body.tier)) {
-    if (body.interval !== undefined || body.seats !== undefined || body.storage_blocks !== undefined) {
-      return bad("the free tier takes no interval, seats or storage_blocks");
-    }
+    const named = PAID_ONLY.filter((k) => body[k] !== undefined);
+    if (named.length) return bad(`the free tier takes no ${PAID_ONLY.join(", ")} (given ${named.join(", ")})`);
     return { plan, token: body.turnstile_token, retry };
   }
   if (!intervalsOf(body.tier).includes(body.interval)) return bad(`interval is one of ${intervalsOf(body.tier).join(", ")}`);
   if (!isCount(body.seats, 1, maxSeats(body.tier))) return bad(`seats is an integer from 1 to ${maxSeats(body.tier)}`);
-  const blocks = body.storage_blocks ?? 0;
-  if (!isCount(blocks, 0, MAX_STORAGE_BLOCKS)) return bad(`storage_blocks is an integer from 0 to ${MAX_STORAGE_BLOCKS}`);
-  if (blocks > 0 && !storageOfferedOn(body.tier)) return bad(`extra storage is not sold on ${body.tier}`);
-  return { plan: { ...plan, interval: body.interval, seats: body.seats, storage_blocks: blocks }, token: body.turnstile_token, retry };
+  const quantities = {};
+  for (const a of ADDONS) {
+    // Leaving an add-on out of the request is buying none of it.
+    const n = body[a.quantityField] ?? 0;
+    if (!isCount(n, 0, a.max)) return bad(`${a.quantityField} is an integer from 0 to ${a.max}`);
+    if (n > 0 && !a.offeredOn(body.tier)) return bad(`${a.id} is not sold on ${body.tier}`);
+    quantities[a.quantityField] = n;
+  }
+  return { plan: { ...plan, interval: body.interval, seats: body.seats, ...quantities }, token: body.turnstile_token, retry };
 }
 
 const hostOf = (cfg, slug) => `${slug}.${cfg.controlHost}`;
@@ -163,7 +170,8 @@ async function expireCheckout(io, cfg, sessionId) {
 async function openCheckout(io, cfg, row, now) {
   const tierLookup = tierKey(row.tier, row.interval);
   const withOverage = overageSoldWith(row.tier, row.interval);
-  const keys = [tierLookup, ...(row.storage_blocks > 0 ? [storageKey(row.interval)] : []), ...(withOverage ? [overageKey()] : [])];
+  const bought = ADDONS.filter((a) => row[a.quantityField] > 0);
+  const keys = [tierLookup, ...bought.map((a) => a.priceKey(row.interval)), ...(withOverage ? [overageKey()] : [])];
   const ids = await priceIds(io, cfg.stripeKey, keys);
   const back = (path) => `${cfg.publicOrigin}${path}?tenant=${encodeURIComponent(row.slug)}`;
   const form = {
@@ -181,9 +189,9 @@ async function openCheckout(io, cfg, row, now) {
     expires_at: String(now + cfg.checkoutTtl),
   };
   let next = 1;
-  if (row.storage_blocks > 0) {
-    form[`line_items[${next}][price]`] = ids.get(storageKey(row.interval));
-    form[`line_items[${next}][quantity]`] = String(row.storage_blocks);
+  for (const a of bought) {
+    form[`line_items[${next}][price]`] = ids.get(a.priceKey(row.interval));
+    form[`line_items[${next}][quantity]`] = String(row[a.quantityField]);
     next += 1;
   }
   // Metered: billed by what the meter records, so Stripe refuses a quantity on it.

@@ -11,6 +11,22 @@ export function describeLimits(limits) {
   return parts.join(' · ');
 }
 
+/** How each grant an add-on may carry reads in its product description, by grant name. */
+const GRANT_PHRASES = {
+  storage_gb: (n) => `${n} GB`,
+  secure_links_pool: (n) => `${n} secure links`,
+};
+
+/** "10 GB" for the storage add-on; a grant with no phrase is refused, not described blank. */
+function describeGrants(addon) {
+  return Object.entries(addon.grants).map(([grant, n]) => {
+    const phrase = GRANT_PHRASES[grant];
+    if (!phrase) throw new Error(`add-on ${addon.id} grants ${grant}, which the catalogue cannot describe`);
+    if (!Number.isInteger(n) || n <= 0) throw new Error(`add-on ${addon.id}: ${grant} is a positive integer`);
+    return phrase(n);
+  }).join(' and ');
+}
+
 /** `citadel-team-month` */
 export function lookupKey(prefix, tierId, interval) {
   return `${prefix}-${tierId}-${interval}`;
@@ -88,7 +104,7 @@ export function deriveCatalogue(table) {
     return {
       id: addon.id,
       name: addon.name,
-      description: `${addon.grants.storage_gb} GB per ${addon.unit.replace(/^\d+ GB /, '')}, on ${addon.available_on.join(' and ')}`,
+      description: `${describeGrants(addon)} per ${addon.unit.split(' ').at(-1)}, on ${addon.available_on.join(' and ')}`,
       prices: addon.prices,
     };
   });

@@ -5,12 +5,14 @@
  */
 import table from "../../../billing/tiers.json";
 import { lookupKey, meteredLookupKey } from "../../../billing/catalogue.mjs";
+import { addonsOf } from "./addons.mjs";
 
-/** Input bound, not a business rule: no tier grants more blocks than a request may ask for. */
-export const MAX_STORAGE_BLOCKS = 1000;
+export { MAX_LINK_PACKS, MAX_STORAGE_BLOCKS } from "./addons.mjs";
 
 const tiers = new Map(table.tiers.map((t) => [t.id, t]));
-const storage = table.addons.find((a) => a.id === "storage");
+/** Every add-on a paid plan may buy (control/addons.mjs). */
+export const ADDONS = addonsOf(table);
+const storage = ADDONS.find((a) => a.id === "storage");
 if (!storage) throw new Error("tiers.json has no storage add-on");
 const overage = (table.metered ?? []).find((m) => m.id === "relay-overage");
 if (!overage) throw new Error("tiers.json has no relay-overage metered price");
@@ -27,21 +29,18 @@ export const PRICES = new Map([
   ...table.tiers.flatMap((t) =>
     t.prices.map((p) => [lookupKey(table.lookup_prefix, t.id, p.interval), { kind: "tier", id: t.id, interval: p.interval }]),
   ),
-  ...storage.prices.map((p) => [
-    lookupKey(table.lookup_prefix, storage.id, p.interval),
-    { kind: "storage", id: storage.id, interval: p.interval },
-  ]),
+  ...ADDONS.flatMap((a) => a.intervals.map((interval) => [a.priceKey(interval), { kind: "addon", id: a.id, interval }])),
   [meteredLookupKey(table.lookup_prefix, overage.id), { kind: "metered", id: overage.id, interval: overage.prices[0].interval }],
 ]);
 
 export const tierKey = (tier, interval) => lookupKey(table.lookup_prefix, tier, interval);
-export const storageKey = (interval) => lookupKey(table.lookup_prefix, storage.id, interval);
+export const storageKey = (interval) => storage.priceKey(interval);
 
 export const tierIds = () => [...tiers.keys()];
 export const isPaid = (tier) => (tiers.get(tier)?.prices.length ?? 0) > 0;
 export const intervalsOf = (tier) => (tiers.get(tier)?.prices ?? []).map((p) => p.interval);
 export const maxSeats = (tier) => tiers.get(tier)?.limits.members ?? 0;
-export const storageOfferedOn = (tier) => storage.available_on.includes(tier);
+export const storageOfferedOn = (tier) => storage.offeredOn(tier);
 export const overageBilledOn = (tier) => overage.available_on.includes(tier);
 export const overageKey = () => meteredLookupKey(table.lookup_prefix, overage.id);
 /**
@@ -57,32 +56,57 @@ export const overageSoldWith = (tier, interval) => overageBilledOn(tier) && inte
 export const needsUsageSubscription = (tier, interval) => overageBilledOn(tier) && interval !== null && interval !== overage.prices[0].interval;
 
 /**
+ * What each add-on grant adds to, before any add-on: the tier's own storage, and a shared
+ * secure-link pool that only packs fill. A grant with no base here is refused when this loads.
+ */
+const grantBases = (limits, seats, paid) => ({
+  storage_gb: paid ? limits.storage_gb_per_seat * seats : limits.storage_gb_total,
+  secure_links_pool: 0,
+});
+for (const a of ADDONS) {
+  for (const grant of Object.keys(a.grants)) {
+    if (!(grant in grantBases({}, 0, false))) throw new Error(`add-on ${a.id} grants ${grant}, which no entitlement adds up`);
+  }
+}
+
+/**
  * What a tenant may use, from its plan. Paid members are capped by the seats bought (and the
  * tier's ceiling); storage is the tier's per-seat grant times seats plus the add-on blocks;
- * connections and included relay scale with seats the same way. The billing period is Stripe's
- * (null until a subscription event names it: the object then meters by calendar month).
+ * connections and included relay scale with seats the same way. Each member may hold the tier's
+ * own allowance of live secure links; packs add to one pool the workspace shares. An add-on's
+ * quantity counts only on a paid tier. The billing period is Stripe's (null until a subscription
+ * event names it: the object then meters by calendar month).
  */
-export function entitlements({ tier, interval, seats, storage_blocks, status, period_start, period_end }) {
+export function entitlements(plan) {
+  const { tier, interval, seats, status, period_start, period_end } = plan;
   const t = tiers.get(tier);
   if (!t) throw new Error(`unknown tier ${tier}`);
   if (period_start === undefined || period_end === undefined) throw new Error("entitlements need the billing period (null when none)");
   const limits = t.limits;
   const paid = t.prices.length > 0;
-  const storageGb = paid
-    ? limits.storage_gb_per_seat * seats + storage.grants.storage_gb * storage_blocks
-    : limits.storage_gb_total;
+  const granted = grantBases(limits, seats, paid);
+  const quantities = {};
+  for (const a of ADDONS) {
+    const n = plan[a.quantityField];
+    if (!Number.isInteger(n) || n < 0) throw new Error(`entitlements need ${a.quantityField} (0 when none was bought)`);
+    quantities[a.quantityField] = paid ? n : 0;
+    for (const [grant, per] of Object.entries(a.grants)) granted[grant] += per * quantities[a.quantityField];
+  }
+  if (!Number.isInteger(limits.secure_links_per_member)) throw new Error(`tiers.json ${tier} has no secure_links_per_member`);
   return {
     status,
     tier,
     interval: paid ? interval : null,
     seats: paid ? seats : 0,
-    storage_blocks: paid ? storage_blocks : 0,
+    ...quantities,
     members_max: paid ? Math.min(seats, limits.members) : limits.members,
-    storage_gb: storageGb,
+    storage_gb: granted.storage_gb,
     workspaces_max: limits.workspaces,
     priority_support: Boolean(limits.priority_support),
     connections_max: paid ? Math.min(limits.connections_per_seat * seats, limits.connections) : limits.connections,
     relay_gb_included: paid ? limits.relay_gb_per_seat * seats : limits.relay_gb_total,
+    secure_links_per_member: limits.secure_links_per_member,
+    secure_links_pool: granted.secure_links_pool,
     max_frame_bytes: METERING.max_frame_bytes,
     period_start,
     period_end,
@@ -90,25 +114,27 @@ export function entitlements({ tier, interval, seats, storage_blocks, status, pe
 }
 
 /**
- * The plan a subscription's items describe, by the lookup keys of their prices:
- * `{tier, interval, seats, storage_blocks}`, or `{error}` for items this catalogue did not sell.
- */
-/**
  * The entitlements a tenant's object enforces: what the control plane stored, with any limit it
  * lacks derived from the same stored plan (tier, interval, seats, blocks) through this table. An
  * object provisioned before a limit existed so enforces the limit its plan grants, with no
  * refusal while the monitor's drift repair catches up; a value it does hold is never overridden.
- * A stored record with no billing period had none: `null`, which meters by calendar month.
+ * A stored record with no billing period had none: `null`, which meters by calendar month. One
+ * stored before an add-on existed bought none of it: 0.
  */
 export function enforcedEntitlements(stored) {
   const period = { period_start: stored.period_start ?? null, period_end: stored.period_end ?? null };
-  return { ...entitlements({ ...stored, ...period }), ...stored };
+  const predating = Object.fromEntries(ADDONS.filter((a) => !(a.quantityField in stored)).map((a) => [a.quantityField, 0]));
+  return { ...entitlements({ ...stored, ...predating, ...period }), ...stored };
 }
+
+/**
+ * The plan a subscription's items describe, by the lookup keys of their prices:
+ * `{tier, interval, seats, storage_blocks, link_packs}`, or `{error}` for items this catalogue did not sell.
+ */
 
 export function planOfItems(items) {
   let plan = null;
-  let blocks = 0;
-  let blocksInterval = null;
+  const bought = new Map(ADDONS.map((a) => [a.id, { addon: a, quantity: 0, interval: null }]));
   for (const item of items) {
     const key = item?.price?.lookup_key;
     const sold = key ? PRICES.get(key) : undefined;
@@ -120,12 +146,17 @@ export function planOfItems(items) {
       if (plan) return { error: "a subscription holds more than one tier" };
       plan = { tier: sold.id, interval: sold.interval, seats: quantity };
     } else {
-      blocks += quantity;
-      blocksInterval = sold.interval;
+      const held = bought.get(sold.id);
+      held.quantity += quantity;
+      held.interval = sold.interval;
     }
   }
   if (!plan) return { error: "a subscription holds no tier" };
-  if (blocks > 0 && !storageOfferedOn(plan.tier)) return { error: `storage is not sold on ${plan.tier}` };
-  if (blocks > 0 && blocksInterval !== plan.interval) return { error: "storage and tier bill on different intervals" };
-  return { ...plan, storage_blocks: blocks };
+  const quantities = {};
+  for (const { addon, quantity, interval } of bought.values()) {
+    if (quantity > 0 && !addon.offeredOn(plan.tier)) return { error: `${addon.id} is not sold on ${plan.tier}` };
+    if (quantity > 0 && interval !== plan.interval) return { error: `${addon.id} and tier bill on different intervals` };
+    quantities[addon.quantityField] = quantity;
+  }
+  return { ...plan, ...quantities };
 }

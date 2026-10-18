@@ -78,7 +78,7 @@ impl TenantServer {
         self.kernel.borrow().clone()
     }
 
-    fn ready_kernel(&self) -> Result<Kernel, JsValue> {
+    pub(crate) fn ready_kernel(&self) -> Result<Kernel, JsValue> {
         if !self.telemetry_ready() {
             return Err(error(
                 "the node has not started: its storage is not reachable yet",

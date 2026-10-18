@@ -3,9 +3,18 @@
 //! The stored form is the wire form without the Owner, which is never written. One field may be
 //! missing: `default_role_id`, which tables stored before it existed do not carry. Such a table
 //! is read with the legacy-load rule, `legacy_default_role`, and nothing else is filled in.
+//!
+//! A table also records which upgrades it has had (`version`). One stored before an upgrade is
+//! given it when read, and written with the current version by the next edit, so an upgrade
+//! happens once and whatever an administrator does after it stands.
 
-use crate::roles::{seed_roles, RoleDefinition, WorkspaceRoles, MEMBER_ROLE_ID};
+use crate::roles::{seed_roles, RoleDefinition, WorkspaceRoles, GUEST_ROLE_ID, MEMBER_ROLE_ID};
+use crate::structs::Permission;
 use serde::{Deserialize, Serialize};
+
+/// The upgrades a stored table has had:
+/// - 1: `ShareSecureLinks` for every role that can view the workspace, except the Guest.
+pub const ROLE_TABLE_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredRoles {
@@ -13,6 +22,30 @@ pub struct StoredRoles {
     /// None in a table stored before new members' role was part of it.
     #[serde(default)]
     pub default_role_id: Option<String>,
+    /// The upgrades this table has had. 0 in a table stored before upgrades were recorded,
+    /// which has had none.
+    #[serde(default)]
+    pub version: u32,
+}
+
+/// Bring a table stored at `version` up to `ROLE_TABLE_VERSION`.
+///
+/// 1: a role that could view the workspace before secure links existed would have been given
+/// `ShareSecureLinks` had it been made after, as the Member seed is. Without it, such a role also
+/// could not assign Member, which now carries it. The Guest is read-only and stays so; the Owner
+/// is not stored and holds everything already.
+fn upgrade(roles: &mut [RoleDefinition], version: u32) {
+    if version < 1 {
+        for role in roles.iter_mut() {
+            if !role.is_owner()
+                && role.id != GUEST_ROLE_ID
+                && role.grants(Permission::ViewContent)
+                && !role.grants(Permission::ShareSecureLinks)
+            {
+                role.permissions.insert(Permission::ShareSecureLinks);
+            }
+        }
+    }
 }
 
 /// How the stored table's default was read.
@@ -45,6 +78,7 @@ impl StoredRoles {
         Self {
             roles: table.editable(),
             default_role_id: Some(table.default_role_id.clone()),
+            version: ROLE_TABLE_VERSION,
         }
     }
 
@@ -55,8 +89,10 @@ impl StoredRoles {
     /// must be given some role, and the Owner is never that role.
     pub fn into_table(self) -> (WorkspaceRoles, DefaultRoleRead) {
         let stored_default = self.default_role_id;
+        let mut roles = self.roles;
+        upgrade(&mut roles, self.version);
         let mut table = WorkspaceRoles {
-            roles: self.roles,
+            roles,
             default_role_id: stored_default.clone().unwrap_or_default(),
         }
         .normalized();

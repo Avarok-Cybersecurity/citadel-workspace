@@ -17,6 +17,8 @@ pub mod roles_legacy;
 pub mod roles_protocol;
 /// A role table as it is stored, and reading one stored before it named new members' role.
 pub mod roles_stored;
+/// Secure links: tokens the server maps to in-app deep links for the people named.
+pub mod secure_links;
 pub mod sign_in;
 pub mod structs;
 /// The build script's submodule-freshness rule, here so it can be tested.
@@ -441,6 +443,8 @@ pub enum WorkspaceProtocolRequest {
 
     /// A document node's update log, snapshot and awareness; see `documents`.
     Documents(documents::DocumentsRequest),
+    /// Secure links; see `secure_links`.
+    SecureLinks(secure_links::SecureLinksRequest),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -647,6 +651,7 @@ pub enum WorkspaceProtocolResponse {
     Roles(roles_protocol::RolesResponse),
 
     Documents(documents::DocumentsResponse),
+    SecureLinks(secure_links::SecureLinksResponse),
 }
 
 /// Type of group message

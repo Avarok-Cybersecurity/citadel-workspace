@@ -6,6 +6,7 @@ import type { MessagingTrustRequest } from "./MessagingTrustRequest";
 import type { NodeEntityType } from "./NodeEntityType";
 import type { Permission } from "./Permission";
 import type { RolesRequest } from "./RolesRequest";
+import type { SecureLinksRequest } from "./SecureLinksRequest";
 import type { SignInSettings } from "./SignInSettings";
 import type { TelemetryRequest } from "./TelemetryRequest";
 import type { TreeSchema } from "./TreeSchema";
@@ -142,4 +143,4 @@ logo: WorkspaceLogoChange | null, } } | { "UpdateNode": { node_id: string, name:
  *
  * Exactly one node is the default, so setting it clears the others.
  */
-is_default: boolean | null, } } | { "SetMembersVisible": { node_id: string, visible: boolean, } } | { "DeleteNode": { node_id: string, cascade: boolean, } } | { "MoveNode": { node_id: string, new_parent_id: string | null, } } | { "ListNodes": { parent_id: string | null, depth: number | null, entity_types: Array<NodeEntityType> | null, } } | { "GetTreeStructure": { root_id: string | null, max_depth: number | null, } } | "GetTreeSchema" | { "UpdateTreeSchema": { schema: TreeSchema, } } | { "CreateNodeType": { name: string, display_name: string, icon: string | null, allowed_parents: Array<string>, } } | "ListNodeTypes" | { "Telemetry": TelemetryRequest } | { "MessagingTrust": MessagingTrustRequest } | { "Roles": RolesRequest } | { "Documents": DocumentsRequest };
+is_default: boolean | null, } } | { "SetMembersVisible": { node_id: string, visible: boolean, } } | { "DeleteNode": { node_id: string, cascade: boolean, } } | { "MoveNode": { node_id: string, new_parent_id: string | null, } } | { "ListNodes": { parent_id: string | null, depth: number | null, entity_types: Array<NodeEntityType> | null, } } | { "GetTreeStructure": { root_id: string | null, max_depth: number | null, } } | "GetTreeSchema" | { "UpdateTreeSchema": { schema: TreeSchema, } } | { "CreateNodeType": { name: string, display_name: string, icon: string | null, allowed_parents: Array<string>, } } | "ListNodeTypes" | { "Telemetry": TelemetryRequest } | { "MessagingTrust": MessagingTrustRequest } | { "Roles": RolesRequest } | { "Documents": DocumentsRequest } | { "SecureLinks": SecureLinksRequest };

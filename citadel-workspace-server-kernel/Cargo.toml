@@ -44,12 +44,19 @@ sha2 = "0.10"
 subtle = "2.6"
 # The Documents relay decodes CRDT updates and snapshots, and builds its own (see the root).
 cdoc-crdt = { workspace = true }
+# Secure-link tokens (kernel::secure_links::token): 32 bytes from the OS CSPRNG.
+getrandom = "0.3"
 chrono = { workspace = true }
 
 # Native: the production server — SQLite backend, SIGTERM drain.
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { workspace = true, features = ["macros", "rt", "signal"] }
 citadel_sdk = { workspace = true, features = ["sql"] }
+# The OPRF seed as `--init-sign-in-seed` makes it and the server reads it (kernel::sign_in::native).
+zeroize = "1"
+# Turnstile's siteverify (kernel::sign_in::native::siteverify): rustls with Mozilla's roots, as the
+# agent's updater has it.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots"] }
 
 # wasm32: a server hosted by a JS runtime (a Workers Durable Object). No sqlx, no signals, no
 # threads; tokio contributes only its runtime-free sync primitives and macros, and every spawn,
@@ -57,6 +64,8 @@ citadel_sdk = { workspace = true, features = ["sql"] }
 # `citadel_sdk` without its default `std`/`filesystem` features, as its own wasm tests build it.
 [target.'cfg(target_family = "wasm")'.dependencies]
 tokio = { version = "1.44.1", default-features = false, features = ["macros", "sync"] }
+# `crypto.getRandomValues`, with the `getrandom_backend="wasm_js"` cfg the tenant worker sets.
+getrandom = { version = "0.3", features = ["wasm_js"] }
 citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
 
 [dev-dependencies]

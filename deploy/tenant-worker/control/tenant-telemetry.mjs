@@ -21,10 +21,11 @@ const KEY = "telemetry_purge";
 
 /**
  * The object has one alarm. Its time: the next usage flush (`flushMs` from now while a socket is
- * open, else null) or the next purge (while the tenant is provisioned), whichever is earlier.
+ * open, else null) or the earliest due purge -- telemetry's, then secure links' (each null while
+ * the tenant is not provisioned) -- whichever is earliest.
  */
-export function nextAlarm(nowMs, flushMs, purgeDueMs) {
-  const times = [flushMs === null ? null : nowMs + flushMs, purgeDueMs].filter((t) => t !== null);
+export function nextAlarm(nowMs, flushMs, ...purgeDueMs) {
+  const times = [flushMs === null ? null : nowMs + flushMs, ...purgeDueMs].filter((t) => t !== null);
   return times.length === 0 ? null : Math.min(...times);
 }
 
@@ -84,6 +85,11 @@ export class TenantTelemetry {
         await this.io.grants.recordGrant(tenantId, enabled ? untilMs : null, this.io.nowMs());
       },
     };
+  }
+
+  /** The running node once its storage is reachable; the links purge waits on it too. */
+  ready() {
+    return this.#ready();
   }
 
   async #ready() {

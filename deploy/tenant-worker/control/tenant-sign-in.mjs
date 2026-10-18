@@ -11,7 +11,8 @@
  *       the SDK's AdmissionContext for a FRESH sign-in or registration (a recovery-code sign-in
  *       and a resume-token reconnect are never asked),
  *       `{"username","kind":"SignIn"|"Register","token":string|null,"remote_addr":"100.64.x.y"|null}`.
- *       null admits; `{refuse:"admission_required"}` / `{refuse:"admission_failed",reason}`.
+ *       null admits; `{refuse:"admission_required",challenge?}` / `{refuse:"admission_failed",reason}`,
+ *       `challenge` being `{provider:"turnstile",site_key,identity}` (public; admission.mjs `needsToken`).
  */
 import { admit, SignInSettings } from "./admission.mjs";
 import { required } from "./http.mjs";
@@ -36,11 +37,16 @@ export function ksfParams(env) {
 }
 
 export class TenantSignIn {
-  /** `random` is the CSPRNG (`crypto`); `turnstile()` the configured check (http.mjs config). */
-  constructor(storage, { random, turnstile, io }) {
+  /**
+   * `random` is the CSPRNG (`crypto`); `turnstile()` the configured check and `siteKey()` the
+   * widget's public site key (http.mjs config).
+   */
+  constructor(storage, { random, turnstile, siteKey, io }) {
+    if (typeof siteKey !== "function") throw new Error("TenantSignIn needs siteKey(): the widget's public site key");
     this.storage = storage;
     this.random = random;
     this.turnstile = turnstile;
+    this.siteKey = siteKey;
     this.io = io;
     this.settings = new SignInSettings(storage);
     this.seed = null;
@@ -96,6 +102,7 @@ export class TenantSignIn {
     const ctx = {
       required: this.required(),
       turnstile: this.turnstile(),
+      siteKey: this.siteKey(),
       tenant: this.tenant,
       io: this.io,
       log: (detail) => console.error(`[tenant] admission: ${detail}`),
