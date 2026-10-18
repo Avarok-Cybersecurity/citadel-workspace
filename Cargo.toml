@@ -42,7 +42,7 @@ citadel-workspace-executor = { path = "./citadel-workspace-executor" }
 # Citadel Docs' CRDT: the kernel's Documents relay decodes every update and snapshot it stores
 # (never applies them), and builds a snapshot itself when it compacts a log. Pure Rust, no I/O;
 # pinned to a reviewed commit of citadel-docs main.
-cdoc-crdt = { git = "https://github.com/Avarok-Cybersecurity/citadel-docs", rev = "980437a458c74d5ae1cf487cb07630b3905b9b8c" }
+cdoc-crdt = { git = "https://github.com/Avarok-Cybersecurity/citadel-docs", rev = "5f514c5605db871bc0ba693f97606eb6defef659" }
 
 # Secondary packages
 

@@ -771,7 +771,7 @@ dependencies = [
 [[package]]
 name = "cdoc-crdt"
 version = "0.1.0"
-source = "git+https://github.com/Avarok-Cybersecurity/citadel-docs?rev=980437a458c74d5ae1cf487cb07630b3905b9b8c#980437a458c74d5ae1cf487cb07630b3905b9b8c"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-docs?rev=5f514c5605db871bc0ba693f97606eb6defef659#5f514c5605db871bc0ba693f97606eb6defef659"
 dependencies = [
  "cdoc-model",
  "serde",
@@ -781,7 +781,7 @@ dependencies = [
 [[package]]
 name = "cdoc-model"
 version = "0.1.0"
-source = "git+https://github.com/Avarok-Cybersecurity/citadel-docs?rev=980437a458c74d5ae1cf487cb07630b3905b9b8c#980437a458c74d5ae1cf487cb07630b3905b9b8c"
+source = "git+https://github.com/Avarok-Cybersecurity/citadel-docs?rev=5f514c5605db871bc0ba693f97606eb6defef659#5f514c5605db871bc0ba693f97606eb6defef659"
 dependencies = [
  "serde",
  "thiserror 2.0.18",
