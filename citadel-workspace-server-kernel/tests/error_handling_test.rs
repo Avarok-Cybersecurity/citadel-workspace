@@ -112,6 +112,7 @@ async fn test_command_invalid_access() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Office 1".to_string(),
             description: "Office 1 Description".to_string(),
+            metadata: None,
         },
     )
     .await

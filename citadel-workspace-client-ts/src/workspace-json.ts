@@ -34,22 +34,33 @@ import { parseWithU64, stringifyWithU64 } from './json-u64.js';
  */
 export const WORKSPACE_BIGINT_FIELDS: ReadonlySet<string> = new Set([
   'at_ms',
+  'author_cid',
   'before_timestamp',
+  'client_seq',
   'created_at',
   'drain_seconds',
   'edited_at',
   'expires_at',
+  'from_cid',
+  'latest_seq',
+  'max_bytes',
   'max_file_transfer_size_mb',
   'max_per_user_bytes',
   'peer_cid',
+  'pending',
   'per_user_bytes',
   'received_at_ms',
   'revfs_storage_quota_mb',
+  'seq',
   'since_ms',
+  'since_seq',
+  'size_bytes',
+  'stored_upto_seq',
   'time_ms',
   'timestamp',
   'until_ms',
   'updated_at',
+  'upto_seq',
 ]);
 
 /**

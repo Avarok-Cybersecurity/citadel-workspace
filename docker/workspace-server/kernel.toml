@@ -54,3 +54,20 @@ revfs_storage_quota_mb = 100
 # File transfer request TTL (in days)
 # Pending transfer requests expire after this period
 file_ttl_days = 7
+
+# =============================================================================
+# Documents (collaborative editing relay)
+# =============================================================================
+# Every key is required: the server refuses to start without this section.
+[documents]
+# The most updates one Pull returns; the client pulls again for the rest.
+max_updates_per_pull = 64
+# Updates held since the last snapshot before Appended asks a writer to compact.
+snapshot_min_updates = 256
+# The largest single CRDT update, and the largest snapshot, accepted (bytes).
+max_update_bytes = 65536
+max_snapshot_bytes = 4194304
+# The largest awareness payload (cursor, selection, presence) relayed (bytes).
+max_awareness_bytes = 4096
+# Awareness payloads one session may send per second.
+awareness_per_second = 20

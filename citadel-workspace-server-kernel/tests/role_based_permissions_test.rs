@@ -67,6 +67,7 @@ async fn test_role_based_permissions() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "Test Description".to_string(),
+            metadata: None,
         },
     )
     .await

@@ -30,6 +30,7 @@ async fn office(kernel: &Kernel) -> String {
             &NodeEntityType::Child("Office".to_string()),
             "Ops",
             "",
+            None,
         )
         .await
         .expect("an admin may create an office")

@@ -39,6 +39,7 @@ async fn a_room(kernel: &Kernel) -> String {
             &NodeEntityType::Child("Office".to_string()),
             "Ops",
             "",
+            None,
         )
         .await
         .expect("an admin may create an office");
@@ -50,6 +51,7 @@ async fn a_room(kernel: &Kernel) -> String {
             &NodeEntityType::Child("Room".to_string()),
             "Standup",
             "",
+            None,
         )
         .await
         .expect("an admin may create a room in an office")

@@ -36,6 +36,7 @@ async fn test_permission_set() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "Test office for permissions".to_string(),
+            metadata: None,
         },
     )
     .await
@@ -86,6 +87,7 @@ async fn test_permission_set() {
             entity_type: NodeEntityType::Child("Room".to_string()),
             name: "Test Room".to_string(),
             description: "Test room created by member".to_string(),
+            metadata: None,
         },
     )
     .await
@@ -111,6 +113,7 @@ async fn test_permission_inheritance() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "Office for admin member test".to_string(),
+            metadata: None,
         },
     )
     .await
@@ -161,6 +164,7 @@ async fn test_permission_inheritance() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Admin Created Office".to_string(),
             description: "Office created by admin member".to_string(),
+            metadata: None,
         },
     )
     .await
@@ -185,6 +189,7 @@ async fn test_permission_denial() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Guest Test Office".to_string(),
             description: "Office for guest member test".to_string(),
+            metadata: None,
         },
     )
     .await

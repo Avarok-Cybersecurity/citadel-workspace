@@ -56,3 +56,6 @@ mod messaging_trust;
 
 /// The workspace's role table: list, create, edit, delete.
 mod roles;
+
+/// A document node's update log, snapshot and awareness relay.
+mod documents;

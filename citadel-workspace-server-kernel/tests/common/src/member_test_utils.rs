@@ -254,6 +254,7 @@ pub async fn create_test_room(
         entity_type: citadel_workspace_types::structs::NodeEntityType::Child("Room".to_string()),
         name: "Test Room".to_string(),
         description: "A test room".to_string(),
+        metadata: None,
     };
 
     match send_workspace_command(to_service, from_service, cid, create_room_command).await? {

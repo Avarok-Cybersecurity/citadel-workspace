@@ -59,6 +59,7 @@ async fn test_workspace_add_no_explicit_office_perms() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "OfficeInWsPermTest".to_string(),
             description: "Test Office".to_string(),
+            metadata: None,
         },
     )
     .await;
