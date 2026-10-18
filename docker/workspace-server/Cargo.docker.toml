@@ -42,6 +42,9 @@ citadel-workspace-server-kernel = { path = "./citadel-workspace-server-kernel" }
 citadel-workspace-internal-service = { path = "./citadel-workspace-internal-service" }
 citadel-workspace-types = { path = "./citadel-workspace-types" }
 
+# The Documents relay's CRDT; MUST match the root Cargo.toml this file replaces.
+cdoc-crdt = { git = "https://github.com/Avarok-Cybersecurity/citadel-docs", rev = "980437a458c74d5ae1cf487cb07630b3905b9b8c" }
+
 # Secondary packages
 
 # Secondary package (for dev purposes, use the local path at ./citadel-internal-service)

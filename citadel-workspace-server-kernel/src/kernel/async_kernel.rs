@@ -1893,7 +1893,8 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                     continue;
                                 }
 
-                                match serde_json::from_slice::<WorkspaceProtocolPayload>(msg.as_ref()) {
+                                let max_frame = this.documents_relay().map(|relay| relay.config.max_request_frame_bytes);
+                                match crate::kernel::documents::frame::decode_request(msg.as_ref(), max_frame) {
                                     Ok(command_payload) => {
                                         if let WorkspaceProtocolPayload::Request(request) = command_payload
                                         {
@@ -1924,11 +1925,8 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                         }
                                     }
                                     Err(e) => {
-                                        error!(target: "citadel", "[ASYNC_KERNEL] Failed to deserialize command with serde_json: {:?}. Message (first 50 bytes): {:?}", e, msg.as_ref().iter().take(50).collect::<Vec<_>>());
-                                        let error_response = WorkspaceProtocolResponse::Error(format!(
-                                            "Invalid command. Failed serde_json deserialization: {}",
-                                            e
-                                        ));
+                                        error!(target: "citadel", "[ASYNC_KERNEL] Refused a request frame: {}. Message (first 50 bytes): {:?}", e, msg.as_ref().iter().take(50).collect::<Vec<_>>());
+                                        let error_response = WorkspaceProtocolResponse::Error(e.to_string());
                                         let response_wrapped =
                                             WorkspaceProtocolPayload::Response(Box::new(error_response));
                                         match serde_json::to_vec(&response_wrapped) {

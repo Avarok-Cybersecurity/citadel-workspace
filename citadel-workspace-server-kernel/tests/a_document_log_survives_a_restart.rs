@@ -15,7 +15,9 @@ use citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 use citadel_workspace_types::documents::{DocumentsRequest, DocumentsResponse};
 use citadel_workspace_types::structs::{NodeEntityType, User, UserRole};
 use citadel_workspace_types::WorkspaceProtocolRequest;
-use common::documents_test_utils::{documents, pulled, shipped_documents_config};
+use common::documents_test_utils::{
+    documents, pulled, replayed, shipped_documents_config, Replica,
+};
 use std::time::Duration;
 
 type Kernel = AsyncWorkspaceServerKernel<StackedRatchet>;
@@ -127,15 +129,18 @@ async fn the_log_and_its_snapshot_survive_a_restart() {
         .await
         .expect("create node")
         .id;
-    for body in [b"u1".as_slice(), b"u2", b"u3"] {
+    let mut author = Replica::new(70);
+    let bodies: Vec<Vec<u8>> = ["u1", "u2", "u3"].map(|t| author.typed(t)).into();
+    for body in &bodies {
         append(&kernel, &node, body).await;
     }
+    let s2 = replayed(&bodies[..2]).snapshot();
     let stored = ask(
         &kernel,
         DocumentsRequest::StoreSnapshot {
             node_id: node.clone(),
             doc_version: 1,
-            snapshot: b"S2".to_vec(),
+            snapshot: s2.clone(),
             upto_seq: 2,
         },
     )
@@ -168,12 +173,12 @@ async fn the_log_and_its_snapshot_survive_a_restart() {
     };
     assert_eq!(
         snapshot.as_ref().map(|s| (s.bytes.clone(), s.upto_seq)),
-        Some((b"S2".to_vec(), 2))
+        Some((s2, 2))
     );
-    assert_eq!(pulled(&after), vec![b"u3".to_vec()]);
+    assert_eq!(pulled(&after), vec![bodies[2].clone()]);
     assert_eq!(*latest_seq, 3);
     assert_eq!(
-        append(&kernel, &node, b"u4").await,
+        append(&kernel, &node, &author.typed("u4")).await,
         4,
         "numbering restarted after a restart"
     );

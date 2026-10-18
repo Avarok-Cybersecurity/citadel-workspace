@@ -7,21 +7,27 @@
 //! `broadcast_to_node`, so they reach exactly the sessions a `Pull` would answer.
 //!
 //! Each write is persisted before it is acknowledged or announced, and announced under the log's
-//! lock, so the broadcast order of a node's updates is their sequence order.
+//! lock, so the broadcast order of a node's updates is their sequence order. Every request is
+//! attributed to its session, which the per-session rates count against; the cheap refusals
+//! (session, rate, size) come before the CRDT bytes are decoded, and decoding before the log is
+//! locked.
 
+mod append;
+mod commit;
+mod compact;
 mod reads;
-mod writes;
+mod snapshot;
 
 use crate::handlers::domain::async_ops::AsyncPermissionOperations;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
-use crate::kernel::transaction::documents_store::StoredSnapshot;
 use crate::WorkspaceProtocolResponse;
+use append::{append, Written};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::documents::{
     required_permission, DocumentRefusal, DocumentsRequest, DocumentsResponse,
 };
 use reads::{pull, relay_awareness};
-use writes::{append, store_snapshot, Written};
+use snapshot::{store_snapshot, Offered};
 
 pub(super) type Answer = Result<WorkspaceProtocolResponse, NetworkError>;
 
@@ -62,7 +68,6 @@ pub(in crate::kernel::command_processor) async fn process<R: Ratchet + Send + Sy
             "Permission denied: {permission:?} required"
         )));
     }
-    let config = &relay.config;
     match request {
         DocumentsRequest::Append {
             node_id,
@@ -70,26 +75,15 @@ pub(in crate::kernel::command_processor) async fn process<R: Ratchet + Send + Sy
             update,
             client_seq,
         } => {
-            let Some(author_cid) = requester_cid else {
-                return refused(DocumentRefusal::NoSession);
-            };
-            if let Err((bytes, max_bytes)) = within(update.len(), config.max_update_bytes) {
-                return refused(DocumentRefusal::UpdateTooLarge {
-                    node_id: node_id.clone(),
-                    size_bytes: bytes,
-                    max_bytes,
-                });
-            }
             let written = Written {
                 doc_version: *doc_version,
                 update,
-                author_cid,
                 client_seq: *client_seq,
             };
-            append(kernel, config, node_id, written).await
+            append(kernel, relay, requester_cid, node_id, written).await
         }
         DocumentsRequest::Pull { node_id, since_seq } => {
-            pull(kernel, config, node_id, *since_seq).await
+            pull(kernel, relay, requester_cid, node_id, *since_seq).await
         }
         DocumentsRequest::StoreSnapshot {
             node_id,
@@ -97,18 +91,12 @@ pub(in crate::kernel::command_processor) async fn process<R: Ratchet + Send + Sy
             snapshot,
             upto_seq,
         } => {
-            if let Err((bytes, max_bytes)) = within(snapshot.len(), config.max_snapshot_bytes) {
-                return refused(DocumentRefusal::SnapshotTooLarge {
-                    node_id: node_id.clone(),
-                    size_bytes: bytes,
-                    max_bytes,
-                });
-            }
-            let stored = StoredSnapshot {
+            let offered = Offered {
                 doc_version: *doc_version,
-                bytes: snapshot.clone(),
+                snapshot,
+                upto_seq: *upto_seq,
             };
-            store_snapshot(kernel, node_id, stored, *upto_seq).await
+            store_snapshot(kernel, relay, requester_cid, node_id, offered).await
         }
         DocumentsRequest::Awareness { node_id, payload } => {
             relay_awareness(kernel, relay, requester_cid, node_id, payload).await

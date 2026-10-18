@@ -15,7 +15,7 @@ fn append_of(node: &str, bytes: usize) -> DocumentsRequest {
     DocumentsRequest::Append {
         node_id: node.to_string(),
         doc_version: 1,
-        update: vec![0xAB; bytes],
+        update: update_of_size(70, bytes),
         client_seq: 1,
     }
 }
@@ -35,11 +35,11 @@ async fn a_reader_cannot_write_and_a_granted_editor_can() {
     writer(&kernel, "editor", &node).await;
 
     for request in [
-        append_of(&node, 4),
+        append_of(&node, 64),
         DocumentsRequest::StoreSnapshot {
             node_id: node.clone(),
             doc_version: 1,
-            snapshot: vec![1],
+            snapshot: Replica::new(70).snapshot(),
             upto_seq: 0,
         },
     ] {
@@ -55,7 +55,8 @@ async fn a_reader_cannot_write_and_a_granted_editor_can() {
         "a refused write was stored"
     );
 
-    assert_eq!(append(&kernel, "editor", 6, &node, b"mine").await, 1);
+    let mine = Replica::new(71).typed("mine");
+    assert_eq!(append(&kernel, "editor", 6, &node, &mine).await, 1);
 }
 
 #[tokio::test]
@@ -92,7 +93,14 @@ async fn snapshots_and_awareness_are_bounded_too() {
     })
     .await;
     let node = document_node(&kernel).await;
-    append(&kernel, TEST_ADMIN_USER_ID, 7, &node, b"u1").await;
+    append(
+        &kernel,
+        TEST_ADMIN_USER_ID,
+        7,
+        &node,
+        &Replica::new(70).typed("u1"),
+    )
+    .await;
 
     let snapshot = DocumentsRequest::StoreSnapshot {
         node_id: node.clone(),
@@ -179,7 +187,7 @@ async fn a_write_without_a_session_is_not_attributed_to_nobody() {
     let node = document_node(&kernel).await;
     let answer = process_command_with_user(
         &kernel,
-        &WorkspaceProtocolRequest::Documents(append_of(&node, 1)),
+        &WorkspaceProtocolRequest::Documents(append_of(&node, 64)),
         TEST_ADMIN_USER_ID,
     )
     .await
@@ -199,7 +207,7 @@ async fn a_write_without_a_session_is_not_attributed_to_nobody() {
 async fn a_kernel_without_limits_refuses_rather_than_guessing() {
     let kernel = create_test_kernel().await;
     let node = document_node(&kernel).await;
-    let answer = documents(send(&kernel, TEST_ADMIN_USER_ID, 7, append_of(&node, 1)).await);
+    let answer = documents(send(&kernel, TEST_ADMIN_USER_ID, 7, append_of(&node, 64)).await);
     assert_eq!(
         answer,
         DocumentsResponse::Refused(DocumentRefusal::NotConfigured)

@@ -23,7 +23,8 @@
 # pull it -- is untenable; the slim stage lands at roughly 150 MB instead.
 # =============================================================================
 
-FROM rust:1.92.0 AS builder
+# 1.99: the kernel links cdoc-crdt (the Documents relay's CRDT), whose rust-version is 1.99.
+FROM rust:1.99.0 AS builder
 
 WORKDIR /usr/src/app
 

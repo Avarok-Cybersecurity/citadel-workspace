@@ -4,6 +4,7 @@
 //! order, so a pull that skipped, repeated or reordered an update would leave two readers
 //! holding different documents with no error anywhere.
 
+use citadel_workspace_server_kernel::kernel::documents::DocumentsConfig;
 use citadel_workspace_types::documents::{DocumentsRequest, DocumentsResponse};
 use common::documents_test_utils::*;
 use common::workspace_test_utils::TEST_ADMIN_USER_ID;
@@ -13,17 +14,15 @@ async fn appends_are_numbered_from_one_and_pulled_back_in_order() {
     let kernel = documents_kernel().await;
     let node = document_node(&kernel).await;
 
+    let bodies = edits(70, 3);
     let mut seqs = Vec::new();
-    for body in [b"alpha".as_slice(), b"beta", b"gamma"] {
+    for body in &bodies {
         seqs.push(append(&kernel, TEST_ADMIN_USER_ID, 7, &node, body).await);
     }
     assert_eq!(seqs, vec![1, 2, 3]);
 
     let all = pull(&kernel, TEST_ADMIN_USER_ID, &node, 0).await;
-    assert_eq!(
-        pulled(&all),
-        vec![b"alpha".to_vec(), b"beta".to_vec(), b"gamma".to_vec()]
-    );
+    assert_eq!(pulled(&all), bodies);
     let DocumentsResponse::Updates {
         updates,
         snapshot,
@@ -48,12 +47,13 @@ async fn appends_are_numbered_from_one_and_pulled_back_in_order() {
 async fn a_pull_returns_only_what_follows_the_readers_state() {
     let kernel = documents_kernel().await;
     let node = document_node(&kernel).await;
-    for body in [b"one".as_slice(), b"two", b"three", b"four"] {
+    let bodies = edits(70, 4);
+    for body in &bodies {
         append(&kernel, TEST_ADMIN_USER_ID, 7, &node, body).await;
     }
 
     let tail = pull(&kernel, TEST_ADMIN_USER_ID, &node, 2).await;
-    assert_eq!(pulled(&tail), vec![b"three".to_vec(), b"four".to_vec()]);
+    assert_eq!(pulled(&tail), bodies[2..].to_vec());
 
     let current = pull(&kernel, TEST_ADMIN_USER_ID, &node, 4).await;
     assert!(
@@ -69,7 +69,7 @@ async fn the_appender_learns_which_of_its_updates_was_stored() {
     let request = DocumentsRequest::Append {
         node_id: node.clone(),
         doc_version: 3,
-        update: b"x".to_vec(),
+        update: Replica::new(70).typed("x"),
         client_seq: 41,
     };
     let answer = documents(send(&kernel, TEST_ADMIN_USER_ID, 7, request).await);
@@ -90,11 +90,16 @@ async fn the_appender_learns_which_of_its_updates_was_stored() {
 async fn a_long_log_is_paged_at_the_configured_size() {
     let limits = shipped_documents_config();
     let page = u64::from(limits.max_updates_per_pull);
-    let kernel = documents_kernel().await;
-    let node = document_node(&kernel).await;
     let total = page * 2 + 3;
-    for i in 0..total {
-        append(&kernel, TEST_ADMIN_USER_ID, 7, &node, &i.to_be_bytes()).await;
+    // Every append in one burst: the rate is not what this tests, so it admits them all.
+    let kernel = with_limits(DocumentsConfig {
+        appends_per_second: total as u32,
+        ..limits
+    })
+    .await;
+    let node = document_node(&kernel).await;
+    for body in edits(70, total as usize) {
+        append(&kernel, TEST_ADMIN_USER_ID, 7, &node, &body).await;
     }
 
     let mut since = 0;

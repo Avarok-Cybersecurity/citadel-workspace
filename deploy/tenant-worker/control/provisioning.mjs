@@ -93,6 +93,13 @@ export class Provisioning {
       "max_snapshot_bytes = 4194304",
       "max_awareness_bytes = 4096",
       "awareness_per_second = 20",
+      "appends_per_second = 50",
+      "pulls_per_second = 20",
+      "compact_at_pending_bytes = 8388608",
+      "max_pending_log_bytes = 33554432",
+      "retain_covered_updates_seqs = 256",
+      "max_clients_per_document = 4096",
+      "max_request_frame_bytes = 17825792",
     );
     return lines.join("\n");
   }

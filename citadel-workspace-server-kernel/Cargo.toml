@@ -42,6 +42,8 @@ tempfile = "3.10.1"
 bcrypt = "0.17.0"
 sha2 = "0.10"
 subtle = "2.6"
+# The Documents relay decodes CRDT updates and snapshots, and builds its own (see the root).
+cdoc-crdt = { workspace = true }
 chrono = { workspace = true }
 
 # Native: the production server — SQLite backend, SIGTERM drain.
