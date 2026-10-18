@@ -732,6 +732,10 @@ jobs:
         run: node scripts/check-transfer-cap-parity.mjs
       - name: Check the Worker requires the crate's Customer Terms version
         run: node scripts/check-customer-terms-version-parity.mjs
+      - name: Check the terms state the billing policy as rendered from it
+        run: node scripts/check-billing-terms-render.mjs
+      - name: The billing terms renderer refuses a policy it cannot word
+        run: node --test scripts/lib/billing-terms.test.mjs
       - name: Check the browser outwaits the agent on peer discovery
         run: node scripts/check-peer-list-timeout-parity.mjs
       - name: No gate needs a newer Node than its job runs

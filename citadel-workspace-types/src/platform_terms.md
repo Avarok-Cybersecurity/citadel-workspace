@@ -1,6 +1,6 @@
 # Citadel Workspace Terms of Use
 
-**Version 1 · Effective October 14, 2026**
+**Version 2 · Effective October 18, 2026**
 
 These Terms of Use ("Terms") are a binding agreement between you and **Avarok Corp**, a Delaware corporation ("Avarok", "we", "us"). They govern your use of Citadel Workspace, including the web application, the Citadel Agent software you install on your device, the hosted workspace servers, and related services (together, the "Service").
 
@@ -82,6 +82,17 @@ If you believe content on the Service infringes your copyright, send a notice me
 
 You may stop using the Service at any time. The Workspace Owner may remove you from its workspace. Avarok may suspend or terminate your access, with or without notice, if you breach these Terms, if required by law, or to protect the Service, its users, or others. Sections 3 (license to Your Content, to the extent needed to finish deleting it), 9, and 12 through 17 survive termination.
 
+<!-- billing-policy:begin suspension -->
+**Your workspace's plan.** What the Service provides in a workspace depends on the Workspace Owner's plan and payments, and these consequences apply to you as a member:
+
+- **Payment failure.** If the Workspace Owner's payment fails, the workspace is paused: you cannot connect to it until the payment is made. If the payment is still outstanding 30 days after the failure, the workspace's data stored on the workspace server is deleted and cannot be recovered.
+- **Usage limits.** If the Workspace Owner has not enabled overage billing, the service a usage quota pays for is terminated 48 hours after the workspace crosses that quota, until the billing period resets. For each service, termination means the following, and where a service's description says otherwise it governs:
+  - **Relay.** Relay is refused: no relay credentials are minted and the object carries no relayed traffic. Direct peer connections, messaging and the workspace itself continue.
+  - **Document appends.** Documents become read-only: appends are refused, reading and pulling continue.
+  - **Storage.** Uploads are refused at the quota, at once and whatever the toggle: the object holds at most 10 GB, so storage is a hard cap, never an overage.
+- **No deletion on termination.** No data is deleted by these terminations.
+<!-- billing-policy:end suspension -->
+
 ## 12. Disclaimers
 
 **THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE". TO THE FULLEST EXTENT PERMITTED BY LAW, AVAROK DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. AVAROK DOES NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR SECURE, THAT MESSAGES OR FILES WILL BE DELIVERED, OR THAT DATA WILL NOT BE LOST. YOU ARE RESPONSIBLE FOR KEEPING YOUR OWN BACKUPS OF IMPORTANT DATA.**
@@ -115,6 +126,9 @@ These Terms are governed by the laws of the State of Delaware, without regard to
 ## 17. General
 
 - **Changes.** We may update these Terms. When we make material changes, we will update the version and ask you to accept the new version in the app. Until you do, optional features such as diagnostic logs are paused. If you do not accept, you must stop using the Service.
+  <!-- billing-policy:begin changes -->
+  - **Billing rules.** We may change these grace periods, thresholds and terms at any time, without prior notice, to the extent permitted by the law of the applicable jurisdiction.
+  <!-- billing-policy:end changes -->
 - **Entire agreement.** These Terms, together with any Workspace Terms you accept and our Privacy Notice, are the entire agreement between you and Avarok about the Service.
 - **Assignment.** You may not assign these Terms without our consent. We may assign them in connection with a merger, acquisition, or sale of assets.
 - **Severability and waiver.** If any provision is unenforceable, the rest remains in effect. A failure to enforce a provision is not a waiver.

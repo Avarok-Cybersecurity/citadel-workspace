@@ -1,6 +1,6 @@
 # Citadel Workspace Customer Terms
 
-**Version 1 · Effective October 14, 2026**
+**Version 2 · Effective October 18, 2026**
 
 These Customer Terms ("Agreement") are a binding agreement between **Avarok Corp**, a Delaware corporation ("Avarok", "we", "us"), and the person or organization that creates a workspace ("Customer", "you"). They govern Customer's subscription to and use of Citadel Workspace, including the hosted workspace server, the web application, the Citadel Agent software, and related services (the "Service").
 
@@ -26,7 +26,18 @@ Customer will ensure its Members comply with the Terms of Use and will promptly 
 - **Fees.** Customer will pay the fees for its plan, plus any usage-based charges, such as overage beyond included quotas, at the rates shown in the Service. Fees are in U.S. dollars and exclude taxes.
 - **Billing.** Payments are processed by Avarok's payment processor. Customer authorizes Avarok and its processor to charge the payment method on file for all fees when due. **Paid subscriptions renew automatically** for successive periods equal to the current billing period unless Customer cancels before renewal through the billing portal.
 - **Taxes.** Customer is responsible for all sales, use, value-added, and similar taxes, other than taxes on Avarok's net income.
-- **Late or failed payment.** If payment fails or is overdue, Avarok may, after notice, suspend paid features or the workspace until payment is made.
+  <!-- billing-policy:begin payment -->
+- **Late or failed payment.** If a payment fails, the workspace is paused at once: it refuses connections until the payment is made. Avarok sends reminders to Customer's billing contact on the day of the failure and 7 and 21 days after it, and a final warning 48 hours before deletion. If the payment is still outstanding 30 days after the failure, Avarok deletes the workspace's Customer Data stored on the workspace server, and it cannot be recovered. Payment at any time before then restores the workspace at once.
+- **Usage limits, overage, and termination.** Customer chooses, for each paid workspace, whether overage billing is enabled, and may change that choice in the Service.
+  - **With overage billing enabled**, usage beyond the plan's included quotas is billed at the rates shown in the Service.
+  - **With overage billing disabled**, nothing beyond the included quotas is billed. Instead, the service a quota pays for is terminated 48 hours after the quota is crossed, until the billing period resets. For each service, termination means the following, and where a service's description says otherwise it governs:
+    - **Relay.** Relay is refused: no relay credentials are minted and the object carries no relayed traffic. Direct peer connections, messaging and the workspace itself continue.
+    - **Document appends.** Documents become read-only: appends are refused, reading and pulling continue.
+    - **Storage.** Uploads are refused at the quota, at once and whatever the toggle: the object holds at most 10 GB, so storage is a hard cap, never an overage.
+  - **No deletion on termination.** No Customer Data is deleted by a termination under this Section. Customer Data is deleted for non-payment only, as described under "Late or failed payment".
+  - **Usage alerts.** Avarok notifies the workspace's Admins when usage reaches 50%, 80%, and 100% of an included quota, once for each in every billing period.
+- **Changes to these billing rules.** We may change these grace periods, thresholds and terms at any time, without prior notice, to the extent permitted by the law of the applicable jurisdiction.
+  <!-- billing-policy:end payment -->
 - **Price changes.** Avarok may change prices with at least 30 days' notice. Changes take effect at the next renewal.
 - **No refunds.** Except where required by law or stated otherwise in writing by Avarok, fees are non-refundable, including for partial periods and unused seats or storage.
 
