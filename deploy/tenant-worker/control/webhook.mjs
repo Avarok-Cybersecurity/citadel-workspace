@@ -13,11 +13,14 @@ import { noAddons } from "./addons.mjs";
 import { verifyWebhook } from "./stripe.mjs";
 import { reconcileUsageSubscription } from "./usage-subscription.mjs";
 import { json, readText, refuse } from "./http.mjs";
+import { dunningChange, eventTime, invoiceEvent, invoiceOf, sendAfterBatch } from "./dunning.mjs";
 
 /** Stripe's events are well under this; a larger body is not one of them. */
 const WEBHOOK_BODY_LIMIT = 512 * 1024;
 const LIVE = new Set(["active", "trialing", "past_due"]);
 const ENDED = new Set(["canceled", "unpaid", "incomplete_expired"]);
+/** Ended for want of payment, or (canceled) by whatever cancellation_details.reason says: billing/dunning.mjs decides. */
+const DUNNED = new Set(["canceled", "unpaid"]);
 // Free meters by calendar month: no Stripe period.
 const FREE_PLAN = { tier: "free", interval: null, seats: 0, ...noAddons(ADDONS), period_start: null, period_end: null };
 
@@ -41,10 +44,14 @@ export async function handleWebhook(io, cfg, request) {
   }
   if (outcome.change) {
     // Before anything is recorded, so a Stripe failure here is retried with the event.
-    Object.assign(outcome.change.fields, await reconcileUsageSubscription(io, cfg, outcome.after, { cancelled: outcome.cancelledUsage }));
+    // Not while payment is required: the usage subscription may hold the very invoice that is owed.
+    if (!outcome.inDunning) {
+      Object.assign(outcome.change.fields, await reconcileUsageSubscription(io, cfg, outcome.after, { cancelled: outcome.cancelledUsage }));
+    }
     await io.tenant(outcome.change.slug).setEntitlements(outcome.entitlements);
   }
   await io.store.applyEvent(event, io.now(), outcome.change);
+  await sendAfterBatch(io, cfg, outcome.mails);
   return json({ received: true, applied: Boolean(outcome.change), note: outcome.note ?? null, tenant: outcome.change?.slug ?? null });
 }
 
@@ -58,6 +65,9 @@ export async function interpret(io, event) {
     case "customer.subscription.updated":
     case "customer.subscription.deleted":
       return subscriptionChanged(io, event, object);
+    case "invoice.payment_failed":
+    case "invoice.paid":
+      return invoiceEvent(io, event, object, change);
     default:
       return { note: `ignored ${event.type}` };
   }
@@ -97,17 +107,30 @@ async function subscriptionChanged(io, event, sub) {
 
   const fields = { stripe_customer: sub.customer ?? row.stripe_customer, stripe_subscription: sub.id ?? row.stripe_subscription, sub_event_created: created };
   const status = event.type === "customer.subscription.deleted" ? "canceled" : sub.status;
+  if (DUNNED.has(status) && row.status !== "pending") {
+    const at = eventTime(io, event);
+    const invoice = invoiceOf({ id: sub.latest_invoice?.id ?? sub.latest_invoice });
+    // Unpaid: Stripe stopped retrying; the plan stays, closed, on the purge clock.
+    if (status === "unpaid") return dunningChange(io, row, { type: "payment_failed", at, invoice }, fields, change);
+    // A cancelled subscription is gone, whyever it ended: the plan is Free from here on.
+    const reason = sub.cancellation_details?.reason ?? null;
+    return dunningChange(io, row, { type: "canceled", reason, at, invoice }, { ...fields, ...FREE_PLAN }, change);
+  }
   if (ENDED.has(status)) {
     // Downgrade, not deletion: the workspace and its data stay, on the free tier's limits. A
     // tenant that never became active has nothing to downgrade and simply lapses.
     if (row.status !== "pending") Object.assign(fields, FREE_PLAN, { status: "active" });
     return change(row, fields);
   }
+  // While payment is required the workspace stays closed whatever the subscription says; only
+  // the invoice's payment (dunning.mjs) opens it.
+  const owing = row.status === "suspended" && (await io.dunning.get(row.tenant_id)) !== null;
   if (status === "paused") return change(row, { ...fields, status: "suspended" });
   if (!LIVE.has(status)) return change(row, fields); // incomplete: nothing is granted yet
   const plan = planOfItems(sub.items?.data ?? []);
   if (plan.error) return { error: plan.error };
-  return change(row, { ...fields, ...plan, ...periodOf(sub), status: "active", expires_at: null });
+  const granted = change(row, { ...fields, ...plan, ...periodOf(sub), status: owing ? "suspended" : "active", expires_at: null });
+  return { ...granted, inDunning: owing };
 }
 
 /**

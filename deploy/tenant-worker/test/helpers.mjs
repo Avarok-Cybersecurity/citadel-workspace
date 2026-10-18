@@ -48,18 +48,24 @@ export const PRICES = {
  * `turn` is how Cloudflare Realtime TURN answers `generate-ice-servers`: `{status, body}`, by
  * default a 201 with a STUN and a TURN server whose credentials are numbered by call.
  */
-export function outbound({ turnstile = { success: true, hostname: "example.com" }, checkout, expire = {}, meterEvents = { failures: 0 }, subscriptions = { failures: 0 }, turn } = {}) {
+export function outbound({ turnstile = { success: true, hostname: "example.com" }, checkout, expire = {}, meterEvents = { failures: 0 }, subscriptions = { failures: 0 }, turn, mailStatus = 202 } = {}) {
   let turnCalls = 0;
   let meterFailures = meterEvents.failures;
   let subscriptionFailures = subscriptions.failures;
   let subscriptionCount = 0;
   const calls = [];
+  const mails = [];
   const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init = {}) => {
     const url = new URL(typeof input === "string" ? input : input.url);
     const method = init.method ?? "GET";
     const form = init.body instanceof URLSearchParams ? init.body : new URLSearchParams(url.search);
     calls.push({ url: url.origin + url.pathname, method, form, headers: init.headers ?? {}, body: init.body });
     if (url.hostname === "challenges.cloudflare.com") return Response.json(turnstile);
+    // The MAIL_ENDPOINT sink (vitest.config.mjs): what the control plane would have emailed.
+    if (url.hostname === MAIL_SINK_HOST) {
+      if (mailStatus < 300) mails.push(JSON.parse(init.body));
+      return new Response(null, { status: mailStatus });
+    }
     if (url.hostname === "rtc.live.cloudflare.com") {
       turnCalls += 1;
       if (turn) return Response.json(turn.body, { status: turn.status });
@@ -121,7 +127,7 @@ export function outbound({ turnstile = { success: true, hostname: "example.com" 
     }
     return new Response("unexpected outbound request in a test", { status: 599 });
   });
-  return { calls, spy };
+  return { calls, mails, spy };
 }
 
 export const post = (path, body, headers = {}) =>
@@ -132,6 +138,12 @@ export const post = (path, body, headers = {}) =>
   });
 
 export const get = (path) => SELF.fetch(`${ORIGIN}${path}`);
+
+/** Host of the MAIL_ENDPOINT the suite sets (vitest.config.mjs). */
+export const MAIL_SINK_HOST = "mail.sink.test";
+/** The messages the sink received, from an `outbound()` call log. */
+export const mailsIn = (calls) =>
+  calls.filter((c) => c.url.startsWith(`https://${MAIL_SINK_HOST}`)).map((c) => JSON.parse(c.body));
 
 export const createBody = (slug, extra = {}) => ({ slug, display_name: "Acme Ltd", tier: "free", turnstile_token: "tok", accepted_customer_terms_version: CUSTOMER_TERMS_VERSION, ...extra });
 
@@ -247,6 +259,8 @@ export const relay = (slug, bytes) =>
 /** The monitor over these tenants only: the suite's D1 holds every other test's tenants too. */
 export function monitorOf(...slugs) {
   const io = ioFor(env);
-  const only = { ...io, store: Object.assign(Object.create(io.store), { active: async () => (await io.store.active()).filter((r) => slugs.includes(r.slug)) }) };
+  const mine = (rows) => rows.filter((r) => slugs.includes(r.slug));
+  const store = Object.assign(Object.create(io.store), { active: async () => mine(await io.store.active()), suspended: async () => mine(await io.store.suspended()) });
+  const only = { ...io, store };
   return () => runMonitor(only, config(env));
 }

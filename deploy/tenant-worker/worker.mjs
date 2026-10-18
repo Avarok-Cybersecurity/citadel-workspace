@@ -28,6 +28,7 @@ import { newInstance, nodeStorage, startNode } from "./control/tenant-node.mjs";
 import { nextAlarm, TenantTelemetry } from "./control/tenant-telemetry.mjs";
 import { linkQuotaHost, TenantLinks } from "./control/tenant-links.mjs";
 import { SupportStore } from "./control/support-store.mjs";
+import { eraseObject, OpenSockets, PAYMENT_REQUIRED } from "./control/suspension.mjs";
 
 const FLUSH_MS = METERING.flush_seconds * 1000;
 /** Periods `usage()` reports: the current one and the one before, whose final totals the monitor may not have seen. */
@@ -48,6 +49,7 @@ export class WorkspaceServer extends DurableObject {
     this.server = null;
     this.exit = null;
     this.accepted = 0;
+    this.sockets = new OpenSockets(); // closed when payment is required (control/suspension.mjs)
     // What the control plane gave this tenant (its master password, its entitlements), read before
     // any request is delivered. One key-value entry, apart from the node's `citadel_*` SQL tables.
     this.provisioning = new Provisioning(ctx.storage);
@@ -109,8 +111,14 @@ export class WorkspaceServer extends DurableObject {
   /** RPC from the control plane: the plan changed (a new billing period among it). */
   async setEntitlements(entitlements) {
     await this.provisioning.setEntitlements(entitlements);
+    if (!this.provisioning.ready()) this.sockets.closeAll(PAYMENT_REQUIRED);
     this.#roll(Date.now());
     await this.#arm(false);
+  }
+
+  /** RPC from the purge (control/purge.mjs): erases this object for `tenantId`, then resets it. */
+  async purge(tenantId) {
+    await eraseObject(this.ctx, this.provisioning, this.sockets, tenantId);
   }
 
   /** RPC for the monitor: the entitlements this object enforces and its recent periods' totals, flushed now. */
@@ -199,15 +207,9 @@ export class WorkspaceServer extends DurableObject {
 
   async fetch(request) {
     // Stats are an RPC the Worker gates (dispatch.mjs); a request is served only as a socket.
-    if (!isWebSocketUpgrade(request)) {
-      return upgradeRequired();
-    }
-    if (this.exit !== null) {
-      return new Response(`node exited: ${this.exit}`, { status: 503 });
-    }
-    if (!this.provisioning.ready()) {
-      return new Response("this workspace has not been provisioned", { status: 503 });
-    }
+    if (!isWebSocketUpgrade(request)) return upgradeRequired();
+    if (this.exit !== null) return new Response(`node exited: ${this.exit}`, { status: 503 });
+    if (!this.provisioning.ready()) return new Response("this workspace has not been provisioned", { status: 503 });
     this.signIn.serving(tenantFor(new URL(request.url), config(this.env)));
     const limits = enforcedEntitlements(this.provisioning.summary().entitlements);
     this.#roll(Date.now());
@@ -220,6 +222,7 @@ export class WorkspaceServer extends DurableObject {
 
     const [client, server] = Object.values(new WebSocketPair());
     server.accept();
+    this.sockets.add(server);
     this.accepted += 1;
     const n = this.accepted;
     // Frames and bytes per connection and per period (control/meter.mjs). CPU is measured outside

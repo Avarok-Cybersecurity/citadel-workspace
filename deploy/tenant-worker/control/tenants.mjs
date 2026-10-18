@@ -10,6 +10,7 @@ import { CREATE_ACTION, verifyTurnstile } from "./turnstile.mjs";
 import { priceIds, stripe, StripeError } from "./stripe.mjs";
 import { json, refuse } from "./http.mjs";
 import { readAcceptedTerms } from "./customer-terms.mjs";
+import { billingOf } from "./billing-status.mjs";
 
 /** How long a free tenant's reservation holds its slug should the request die mid-way. */
 const FREE_RESERVATION_SECONDS = 300;
@@ -204,7 +205,7 @@ export async function tenantStatus(io, cfg, slug, sessionId) {
   if (!checkSlug(slug).ok) return refuse("not-found", "no such workspace", 404);
   const row = await io.store.holder(slug, io.now());
   if (!row) return refuse("not-found", "no such workspace", 404);
-  const answer = { slug, status: row.status, tier: row.tier, workspace_host: hostOf(cfg, slug) };
+  const answer = { slug, status: row.status, tier: row.tier, workspace_host: hostOf(cfg, slug), billing: await billingOf(io, row) };
   if (row.status !== "active" || typeof sessionId !== "string" || sessionId.length < 8 || sessionId.length > 255) {
     return json(answer);
   }

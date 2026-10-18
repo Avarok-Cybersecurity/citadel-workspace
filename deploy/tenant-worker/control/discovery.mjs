@@ -15,6 +15,7 @@
 import { checkSlug } from "./slug.mjs";
 import { discovery } from "./admission.mjs";
 import { json, refuse } from "./http.mjs";
+import { suspendedAnswer } from "./billing-status.mjs";
 
 /** Seconds a browser may reuse an answer: an admin's change reaches new forms within this. */
 export const DISCOVERY_MAX_AGE = 30;
@@ -29,6 +30,6 @@ export async function admissionOf(io, cfg, slug) {
   if (!checkSlug(slug).ok) return refuse("not-found", "no such workspace", 404);
   const row = await io.store.holder(slug, io.now());
   if (!row || row.status === "pending") return refuse("not-found", "no such workspace", 404);
-  if (row.status === "suspended") return refuse("suspended", "this workspace is suspended", 403);
+  if (row.status === "suspended") return suspendedAnswer(io, row);
   return answer(await io.tenant(slug).admissionRequired(), cfg);
 }
