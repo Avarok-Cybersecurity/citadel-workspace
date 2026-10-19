@@ -672,8 +672,12 @@ jobs:
 
       - name: Tenant provisioning refuses what it must
         run: bash scripts/test-provision-tenant.sh
-      - name: The Stripe catalogue is derived from the approved tier table
-        run: node --test billing/catalogue.test.mjs
+      - name: The Stripe catalogue, derived prices and rates agent hold to the tier table and rates
+        # Named one by one (preflight reads the first file after --test): the catalogue,
+        # the derivation drift test, the Stripe reconcile plans, and the rates parsers + guardrails.
+        run: node --test billing/catalogue.test.mjs billing/derive.test.mjs billing/dunning.test.mjs billing/reconcile.test.mjs billing/thresholds.test.mjs scripts/rates/fetch-rates.test.mjs scripts/rates/parse-rates.test.mjs scripts/rates/update-rates.test.mjs
+      - name: No billing code carries its own copy of a policy value
+        run: node scripts/check-billing-policy-consumers.mjs
       - name: The worker's Turnstile verdicts match the fixture the native server's are held to
         run: node --test scripts/lib/turnstile-verdict-parity.test.mjs
       - name: The brand kit derivation refuses what the guidelines forbid
@@ -732,6 +736,10 @@ jobs:
         run: node scripts/check-transfer-cap-parity.mjs
       - name: Check the Worker requires the crate's Customer Terms version
         run: node scripts/check-customer-terms-version-parity.mjs
+      - name: Check the terms state the billing policy as rendered from it
+        run: node scripts/check-billing-terms-render.mjs
+      - name: The billing terms renderer refuses a policy it cannot word
+        run: node --test scripts/lib/billing-terms.test.mjs
       - name: Check the browser outwaits the agent on peer discovery
         run: node scripts/check-peer-list-timeout-parity.mjs
       - name: No gate needs a newer Node than its job runs

@@ -8,9 +8,9 @@ const ADDON_COLUMNS = ADDONS.map((a) => a.quantityField);
 const COLUMNS =
   `slug, tenant_id, display_name, status, tier, interval, seats, ${ADDON_COLUMNS.join(", ")}, stripe_customer, ` +
   "stripe_subscription, created_at, expires_at, claim_hash, checkout_hash, sub_event_created, reservation_hash, checkout_sealed, " +
-  "period_start, period_end, usage_subscription";
+  "period_start, period_end, usage_subscription, usage_subscription_ended, overage_billing";
 const INSERT_COLUMNS = ["slug", "tenant_id", "display_name", "status", "tier", "interval", "seats", ...ADDON_COLUMNS,
-  "created_at", "expires_at", "claim_hash", "reservation_hash"];
+  "overage_billing", "created_at", "expires_at", "claim_hash", "reservation_hash"];
 
 export class Store {
   constructor(db) {
@@ -27,6 +27,17 @@ export class Store {
   /** Every active tenant, for the usage monitor. */
   async active() {
     return (await this.db.prepare(`SELECT ${COLUMNS} FROM tenants WHERE status = 'active'`).all()).results;
+  }
+
+  /** Every suspended tenant: those whose payment is required, those mid-purge, and paused ones. */
+  async suspended() {
+    return (await this.db.prepare(`SELECT ${COLUMNS} FROM tenants WHERE status = 'suspended'`).all()).results;
+  }
+
+  /** The tenants holding `subscriptionId` as their plan's or their usage-only subscription (one, or none). */
+  async bySubscription(subscriptionId) {
+    const sql = `SELECT ${COLUMNS} FROM tenants WHERE stripe_subscription = ? OR usage_subscription = ?`;
+    return (await this.db.prepare(sql).bind(subscriptionId, subscriptionId).all()).results;
   }
 
   async byTenantId(tenantId) {
@@ -70,7 +81,8 @@ export class Store {
         this.db
           .prepare(`INSERT INTO tenants (${INSERT_COLUMNS.join(", ")}) VALUES (${INSERT_COLUMNS.map(() => "?").join(", ")})`)
           .bind(
-            row.slug, row.tenant_id, row.display_name, "pending", row.tier, row.interval, row.seats, ...ADDON_COLUMNS.map((c) => row[c]), now,
+            row.slug, row.tenant_id, row.display_name, "pending", row.tier, row.interval, row.seats, ...ADDON_COLUMNS.map((c) => row[c]),
+            overageColumn(row.overage_billing), now,
             row.expires_at, row.claim_hash, row.reservation_hash,
           ),
         // The acceptance lands with the reservation or not at all.
@@ -83,6 +95,20 @@ export class Store {
       if (/UNIQUE|PRIMARY KEY|constraint/i.test(String(e?.message))) return false;
       throw e;
     }
+  }
+
+  /** The highest Customer Terms version the tenant has accepted, or null when it has accepted none. */
+  async latestCustomerTermsVersion(tenantId) {
+    const row = await this.db.prepare("SELECT MAX(version) AS version FROM customer_terms_acceptances WHERE tenant_id = ?").bind(tenantId).first();
+    return row?.version ?? null;
+  }
+
+  /** Records a later acceptance; the same version accepted twice (two racing requests) is one row. */
+  async acceptCustomerTerms(tenantId, slug, version, now) {
+    await this.db
+      .prepare("INSERT OR IGNORE INTO customer_terms_acceptances (tenant_id, slug, version, accepted_at) VALUES (?, ?, ?, ?)")
+      .bind(tenantId, slug, version, now)
+      .run();
   }
 
   /** Undoes a reservation this request made and could not complete. */
@@ -121,6 +147,21 @@ export class Store {
     return done.meta.changes === 1;
   }
 
+  /**
+   * The owner's overage-billing choice and the usage subscription it led to
+   * (control/overage-billing.mjs). False when the row is no longer that tenant's.
+   */
+  async setOverageBilling(slug, tenantId, fields) {
+    const unknown = Object.keys(fields).filter((k) => !OVERAGE_FIELDS.has(k));
+    if (unknown.length || !("overage_billing" in fields)) throw new Error(`an overage change sets overage_billing and may set ${[...OVERAGE_FIELDS].join(", ")}`);
+    const values = { ...fields, overage_billing: overageColumn(fields.overage_billing) };
+    const done = await this.db
+      .prepare(`UPDATE tenants SET ${Object.keys(values).map((k) => `${k} = ?`).join(", ")} WHERE slug = ? AND tenant_id = ?`)
+      .bind(...Object.values(values), slug, tenantId)
+      .run();
+    return done.meta.changes === 1;
+  }
+
   async eventSeen(id) {
     return (await this.db.prepare("SELECT 1 AS seen FROM stripe_events WHERE id = ?").bind(id).first()) !== null;
   }
@@ -128,7 +169,8 @@ export class Store {
   /**
    * Applies a tenant change and records the event that caused it in ONE batch (a D1 transaction):
    * either both land or neither does, so a failed change leaves the event unrecorded for Stripe
-   * to retry. `change` is null for an event that changes nothing but is still handled.
+   * to retry. `change` is null for an event that changes nothing but is still handled;
+   * `change.statements` are more of the change, prepared elsewhere (dunning-store.mjs).
    */
   async applyEvent(event, now, change) {
     const statements = [];
@@ -140,6 +182,7 @@ export class Store {
         this.db
           .prepare(`UPDATE tenants SET ${sets} WHERE slug = ? AND tenant_id = ?`)
           .bind(...Object.values(change.fields), change.slug, change.tenant_id),
+        ...(change.statements ?? []),
       );
     }
     statements.push(
@@ -152,5 +195,13 @@ export class Store {
 /** The columns an event may change, so `applyEvent` never builds SQL from anything else. */
 export const EVENT_FIELDS = new Set([
   "status", "tier", "interval", "seats", ...ADDON_COLUMNS, "stripe_customer", "stripe_subscription",
-  "sub_event_created", "expires_at", "period_start", "period_end", "usage_subscription",
+  "sub_event_created", "expires_at", "period_start", "period_end", "usage_subscription", "usage_subscription_ended",
 ]);
+
+const OVERAGE_FIELDS = new Set(["overage_billing", "usage_subscription", "usage_subscription_ended"]);
+
+/** The `overage_billing` column (0/1, migration 0009) for a plan's boolean; nothing else is stored. */
+function overageColumn(v) {
+  if (typeof v !== "boolean") throw new Error("overage_billing is true or false");
+  return v ? 1 : 0;
+}

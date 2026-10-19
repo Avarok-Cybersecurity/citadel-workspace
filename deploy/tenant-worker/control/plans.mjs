@@ -4,7 +4,7 @@
  * a key renamed there is renamed here without a line changing. Pure.
  */
 import table from "../../../billing/tiers.json";
-import { lookupKey, meteredLookupKey } from "../../../billing/catalogue.mjs";
+import { deriveCatalogue, deriveMetered, lookupKey, meteredLookupKey } from "../../../billing/catalogue.mjs";
 import { addonsOf } from "./addons.mjs";
 
 export { MAX_LINK_PACKS, MAX_STORAGE_BLOCKS } from "./addons.mjs";
@@ -14,24 +14,43 @@ const tiers = new Map(table.tiers.map((t) => [t.id, t]));
 export const ADDONS = addonsOf(table);
 const storage = ADDONS.find((a) => a.id === "storage");
 if (!storage) throw new Error("tiers.json has no storage add-on");
-const overage = (table.metered ?? []).find((m) => m.id === "relay-overage");
-if (!overage) throw new Error("tiers.json has no relay-overage metered price");
+/**
+ * The metered prices (tiers.json `metered`: relay overage, document appends), each billed through
+ * a Stripe Billing Meter on the tenant's usage-only subscription (usage-subscription.mjs). Only an
+ * `approved` entry is `sold` (billing/catalogue.mjs deriveMetered): a `proposed` one is offered on
+ * no tier, so it has no Stripe price, no usage-subscription item and no meter event.
+ */
+export const METERED = Object.freeze((table.metered ?? []).map((m) => Object.freeze({
+  id: m.id,
+  key: meteredLookupKey(table.lookup_prefix, m.id),
+  eventName: m.meter.event_name,
+  unit: m.unit,
+  // How many of the measured thing one billed unit covers, where tiers.json states it (appends).
+  quantityPerUnit: "quantity_per_unit" in m ? m.quantity_per_unit : null,
+  interval: m.prices[0].interval,
+  sold: m.status === "approved",
+  offeredOn: (tier) => m.status === "approved" && m.available_on.includes(tier),
+})));
+if (!METERED.some((m) => m.id === "relay-overage")) throw new Error("tiers.json has no relay-overage metered price");
 /** How usage is metered (tiers.json `metering`): GB size, frame cap, flush interval. */
 export const METERING = table.metering;
 for (const k of ["gb_bytes", "max_frame_bytes", "flush_seconds"]) {
   if (!Number.isInteger(METERING?.[k]) || METERING[k] <= 0) throw new Error(`tiers.json metering.${k} is a positive integer`);
 }
-/** The Billing Meter relay overage is reported to. */
-export const OVERAGE_EVENT = overage.meter.event_name;
-
 /** Every price this Worker may sell or read back, by lookup key. */
 export const PRICES = new Map([
   ...table.tiers.flatMap((t) =>
     t.prices.map((p) => [lookupKey(table.lookup_prefix, t.id, p.interval), { kind: "tier", id: t.id, interval: p.interval }]),
   ),
   ...ADDONS.flatMap((a) => a.intervals.map((interval) => [a.priceKey(interval), { kind: "addon", id: a.id, interval }])),
-  [meteredLookupKey(table.lookup_prefix, overage.id), { kind: "metered", id: overage.id, interval: overage.prices[0].interval }],
+  ...METERED.filter((m) => m.sold).map((m) => [m.key, { kind: "metered", id: m.id, interval: m.interval }]),
 ]);
+
+/** What Stripe must hold under each lookup key (billing/catalogue.mjs), for the price sync at sale. */
+export const WANTED_PRICES = new Map(
+  [...deriveCatalogue(table), ...deriveMetered(table)].flatMap((w) => w.prices.map((p) => [p.lookup_key, p])),
+);
+for (const k of PRICES.keys()) if (!WANTED_PRICES.has(k)) throw new Error(`the catalogue derives no price for ${k}`);
 
 export const tierKey = (tier, interval) => lookupKey(table.lookup_prefix, tier, interval);
 export const storageKey = (interval) => storage.priceKey(interval);
@@ -41,19 +60,8 @@ export const isPaid = (tier) => (tiers.get(tier)?.prices.length ?? 0) > 0;
 export const intervalsOf = (tier) => (tiers.get(tier)?.prices ?? []).map((p) => p.interval);
 export const maxSeats = (tier) => tiers.get(tier)?.limits.members ?? 0;
 export const storageOfferedOn = (tier) => storage.offeredOn(tier);
-export const overageBilledOn = (tier) => overage.available_on.includes(tier);
-export const overageKey = () => meteredLookupKey(table.lookup_prefix, overage.id);
-/**
- * Whether a Checkout for `tier` on `interval` carries the metered overage price. A Stripe
- * subscription bills all its items on one interval and the overage price is monthly, so a yearly
- * plan cannot hold it; a yearly tenant gets a usage-only subscription instead (needsUsageSubscription).
- */
-export const overageSoldWith = (tier, interval) => overageBilledOn(tier) && interval === overage.prices[0].interval;
-/**
- * Whether a paid tenant needs the separate usage-only subscription (usage-subscription.mjs): its
- * tier bills overage but its plan's interval cannot carry the monthly metered price.
- */
-export const needsUsageSubscription = (tier, interval) => overageBilledOn(tier) && interval !== null && interval !== overage.prices[0].interval;
+/** The metered prices `tier` is billed overage on (none on Free). */
+export const meteredOn = (tier) => METERED.filter((m) => m.offeredOn(tier));
 
 /**
  * What each add-on grant adds to, before any add-on: the tier's own storage, and a shared
@@ -75,7 +83,8 @@ for (const a of ADDONS) {
  * connections and included relay scale with seats the same way. Each member may hold the tier's
  * own allowance of live secure links; packs add to one pool the workspace shares. An add-on's
  * quantity counts only on a paid tier. The billing period is Stripe's (null until a subscription
- * event names it: the object then meters by calendar month).
+ * event names it: the object then meters by calendar month). `overage_billing` is the tenant
+ * row's choice, required for a paid plan.
  */
 export function entitlements(plan) {
   const { tier, interval, seats, status, period_start, period_end } = plan;
@@ -93,6 +102,8 @@ export function entitlements(plan) {
     for (const [grant, per] of Object.entries(a.grants)) granted[grant] += per * quantities[a.quantityField];
   }
   if (!Number.isInteger(limits.secure_links_per_member)) throw new Error(`tiers.json ${tier} has no secure_links_per_member`);
+  const appendsIncluded = paid ? limits.document_appends_per_seat * seats : limits.document_appends_total;
+  if (!Number.isInteger(appendsIncluded) || appendsIncluded < 0) throw new Error(`tiers.json ${tier} has no document_appends allowance`);
   return {
     status,
     tier,
@@ -105,6 +116,9 @@ export function entitlements(plan) {
     priority_support: Boolean(limits.priority_support),
     connections_max: paid ? Math.min(limits.connections_per_seat * seats, limits.connections) : limits.connections,
     relay_gb_included: paid ? limits.relay_gb_per_seat * seats : limits.relay_gb_total,
+    // Free is always off: it has no payment method (billing/policy.json overage_billing).
+    overage_billing: paid ? overageBillingOf(plan.overage_billing) : false,
+    document_appends_included: appendsIncluded,
     secure_links_per_member: limits.secure_links_per_member,
     secure_links_pool: granted.secure_links_pool,
     max_frame_bytes: METERING.max_frame_bytes,
@@ -113,17 +127,26 @@ export function entitlements(plan) {
   };
 }
 
+/** The plan's overage-billing choice: a boolean, or the registry's 0/1; anything else is refused. */
+function overageBillingOf(v) {
+  if (v === true || v === 1) return true;
+  if (v === false || v === 0) return false;
+  throw new Error("entitlements of a paid plan need overage_billing (true or false)");
+}
+
 /**
  * The entitlements a tenant's object enforces: what the control plane stored, with any limit it
  * lacks derived from the same stored plan (tier, interval, seats, blocks) through this table. An
  * object provisioned before a limit existed so enforces the limit its plan grants, with no
  * refusal while the monitor's drift repair catches up; a value it does hold is never overridden.
  * A stored record with no billing period had none: `null`, which meters by calendar month. One
- * stored before an add-on existed bought none of it: 0.
+ * stored before an add-on existed bought none of it: 0. One stored before overage billing was a
+ * choice had it off (and its included appends are then its plan's, derived like any other limit).
  */
 export function enforcedEntitlements(stored) {
   const period = { period_start: stored.period_start ?? null, period_end: stored.period_end ?? null };
   const predating = Object.fromEntries(ADDONS.filter((a) => !(a.quantityField in stored)).map((a) => [a.quantityField, 0]));
+  if (!("overage_billing" in stored)) predating.overage_billing = false;
   return { ...entitlements({ ...stored, ...predating, ...period }), ...stored };
 }
 

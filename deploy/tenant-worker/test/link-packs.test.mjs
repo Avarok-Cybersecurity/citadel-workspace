@@ -7,7 +7,7 @@ import { enforcedEntitlements, entitlements, MAX_LINK_PACKS, planOfItems } from 
 import { createBody, deliver, freshSlug, item, objectStats, outbound, post, subscriptionEvent, tenantRow } from "./helpers.mjs";
 
 const noPeriod = { period_start: null, period_end: null };
-const plan = (extra) => ({ status: "active", storage_blocks: 0, link_packs: 0, ...noPeriod, ...extra });
+const plan = (extra) => ({ status: "active", storage_blocks: 0, link_packs: 0, overage_billing: false, ...noPeriod, ...extra });
 
 describe("link-pack entitlements", () => {
   it("give each member the tier's own allowance and the workspace 50 shared links per pack", () => {
@@ -61,7 +61,7 @@ describe("Checkout with packs", () => {
     const r = await post("/api/tenants", createBody(slug, { tier: "team", interval: "month", seats: 2, storage_blocks: 1, link_packs: 3 }));
     expect(r.status).toBe(201);
     const keys = calls.find((c) => c.url.endsWith("/v1/prices")).form.getAll("lookup_keys[]");
-    expect(keys).toEqual(["citadel-team-month", "citadel-storage-month", "citadel-secure-links-month", "citadel-relay-overage"]);
+    expect(keys).toEqual(["citadel-team-month", "citadel-storage-month", "citadel-secure-links-month"]);
     expect(lineItems(calls.find((c) => c.url.endsWith("/v1/checkout/sessions")).form)).toEqual({
       "line_items[0][price]": "price_team_m",
       "line_items[0][quantity]": "2",
@@ -69,7 +69,6 @@ describe("Checkout with packs", () => {
       "line_items[1][quantity]": "1",
       "line_items[2][price]": "price_links_m",
       "line_items[2][quantity]": "3",
-      "line_items[3][price]": "price_relay_overage",
     });
     expect(await tenantRow(slug)).toMatchObject({ tier: "team", seats: 2, storage_blocks: 1, link_packs: 3 });
   });

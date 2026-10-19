@@ -11,14 +11,23 @@ import { AuthVersionStore } from "./auth-versions.mjs";
 import { config, isWebSocketUpgrade, json, upgradeRequired, readJson, refuse } from "./http.mjs";
 import { createTenant, openPortal, slugAvailability, tenantStatus } from "./tenants.mjs";
 import { handleWebhook } from "./webhook.mjs";
+import { setOverageBilling } from "./overage-billing.mjs";
 import { admissionAnywhere, admissionOf } from "./discovery.mjs";
 import { serveUi } from "./ui.mjs";
 import { serveSupport, supportRoute } from "./support.mjs";
 import { SupportStore } from "./support-store.mjs";
 import { verifySupportRequest } from "./support-verifier.mjs";
+import { mailTransport } from "./mail.mjs";
+import { AlertStore } from "./alert-store.mjs";
+import { usageAnswer } from "./usage-answer.mjs";
+import { PUBLIC_POLICY } from "./policy.mjs";
+import { DunningStore } from "./dunning-store.mjs";
+import { suspendedAnswer } from "./billing-status.mjs";
 
-/** Creation and portal bodies are a handful of short fields. */
+/** Creation, portal and overage bodies are a handful of short fields. */
 const API_BODY_LIMIT = 4096;
+/** Seconds a browser may reuse the billing policy: it changes only with a deploy. */
+const POLICY_MAX_AGE = 300;
 
 export const objectFor = (env, slug) => env.WORKSPACE.get(env.WORKSPACE.idFromName(slug));
 
@@ -34,6 +43,9 @@ export function ioFor(env) {
     tenant: (slug) => objectFor(env, slug),
     support: new SupportStore(env.CONTROL_DB),
     verifySupport: verifySupportRequest,
+    mail: mailTransport(env),
+    alerts: new AlertStore(env.CONTROL_DB),
+    dunning: new DunningStore(env.CONTROL_DB),
   };
 }
 
@@ -66,7 +78,7 @@ async function toTenant(io, cfg, slug, request) {
   if (!checkSlug(slug).ok) return refuse("not-found", "no such workspace", 404);
   const row = await io.store.holder(slug, io.now());
   if (!row || row.status === "pending") return refuse("not-found", "no such workspace", 404);
-  if (row.status === "suspended") return refuse("suspended", "this workspace is suspended", 403);
+  if (row.status === "suspended") return suspendedAnswer(io, row);
   const object = io.tenant(slug);
   // Objects provisioned before names were passed on hold none; D1 has it (see adoptDisplayName).
   if (row.display_name) await object.adoptDisplayName(row.display_name);
@@ -93,10 +105,23 @@ async function api(io, cfg, request, url) {
     if (method === "GET" && parts.length === 3 && parts[0] === "tenants" && parts[2] === "status") {
       return await tenantStatus(io, cfg, parts[1], url.searchParams.get("session_id"));
     }
+    if (method === "GET" && parts.length === 2 && parts[0] === "billing" && parts[1] === "policy") {
+      return json(PUBLIC_POLICY, 200, { "cache-control": `public, max-age=${POLICY_MAX_AGE}` });
+    }
+    if (method === "POST" && parts.length === 3 && parts[0] === "tenants" && parts[2] === "usage") {
+      const body = await readJson(request, cfg, API_BODY_LIMIT);
+      if (body.error) return body.error;
+      return await usageAnswer(io, parts[1], body.value);
+    }
     if (method === "POST" && parts.length === 3 && parts[0] === "tenants" && parts[2] === "portal") {
       const body = await readJson(request, cfg, API_BODY_LIMIT);
       if (body.error) return body.error;
       return await openPortal(io, cfg, parts[1], body.value);
+    }
+    if (method === "POST" && parts.length === 3 && parts[0] === "tenants" && parts[2] === "overage") {
+      const body = await readJson(request, cfg, API_BODY_LIMIT);
+      if (body.error) return body.error;
+      return await setOverageBilling(io, cfg, parts[1], body.value);
     }
     if (method === "POST" && parts.length === 2 && parts[0] === "stripe" && parts[1] === "webhook") {
       return await handleWebhook(io, cfg, request);

@@ -118,7 +118,8 @@ Nothing here reaches live mode: `deploy.sh`'s catalogue audit refuses a live key
 2. **Webhook endpoint.** Dashboard (test mode), Developers, Webhooks, Add destination:
    - Endpoint URL: `https://work.avarok.net/api/stripe/webhook`
    - Events: `checkout.session.completed`, `customer.subscription.created`,
-     `customer.subscription.updated`, `customer.subscription.deleted`
+     `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`,
+     `invoice.paid` (the last two drive the pay-required state and its release, section 6)
    - Reveal the signing secret and set it as `STRIPE_WEBHOOK_SECRET` (step 4).
 
    The same with the Stripe CLI, if preferred:
@@ -126,7 +127,8 @@ Nothing here reaches live mode: `deploy.sh`'s catalogue audit refuses a live key
    ```sh
    stripe webhook_endpoints create --url https://work.avarok.net/api/stripe/webhook \
      -d "enabled_events[]=checkout.session.completed" -d "enabled_events[]=customer.subscription.created" \
-     -d "enabled_events[]=customer.subscription.updated" -d "enabled_events[]=customer.subscription.deleted"
+     -d "enabled_events[]=customer.subscription.updated" -d "enabled_events[]=customer.subscription.deleted" \
+     -d "enabled_events[]=invoice.payment_failed" -d "enabled_events[]=invoice.paid"
    ```
 
 3. **Customer portal.** The Stripe account is shared with another product, so the Worker never
@@ -142,33 +144,63 @@ Nothing here reaches live mode: `deploy.sh`'s catalogue audit refuses a live key
    a workspace first buys packs or storage at checkout. A new add-on in `tiers.json` needs its
    product and prices added to this configuration (`features[subscription_update][products]`).
 
-### 6. Usage metering and relay overage (PROPOSED, awaiting owner approval)
+### 6. Automatic billing: overage, dunning, terminations, alerts, the rates agent
 
-The quota numbers and the overage price in `billing/tiers.json` (`metering`, `metered`, and each
-tier's `connections*` / `relay_gb_*`) are proposals. Until they are approved and applied, the
-catalogue audit reports the relay-overage meter, product and price (`citadel-relay-overage`) as
-missing, and `deploy.sh` stops there -- deliberately. Once approved:
+Everything in this section reads two files and nothing else: `billing/tiers.json` (what is sold,
+with the `derived: true` prices written from `billing/rates.json` × `billing/pricing-model.json`
+by `scripts/rates/update-rates.mjs`) and `billing/policy.json` (every grace period, TTL and alert
+threshold). `docs/plans/billing-automation.md` is the decision record. The pricing rows there are
+still proposals awaiting the owner; the values ship in those files and change without code.
 
-1. `node scripts/stripe-catalogue.mjs <key file> --apply` creates the Billing Meter
-   (`citadel_relay_gb`, sum of `value`, customer by `stripe_customer_id`) and the metered price.
-   A restricted key needs write on Billing Meters and Meter Events besides what it has.
-2. `deploy.sh` then applies D1 migration `0003_usage.sql` (billing period on `tenants`,
-   `tenant_usage`) and deploys the Cron trigger (`*/15 * * * *`, the usage monitor).
-3. Objects provisioned before this deploy keep serving: a limit their stored entitlements lack
-   is derived from their stored plan (tier, seats) through `billing/tiers.json`
-   (`control/plans.mjs` `enforcedEntitlements`). The monitor's first run then pushes the full
-   entitlements as drift repair. Nothing is refused and nothing needs doing by hand.
-
-Monthly Team and Business Checkouts carry the metered `citadel-relay-overage` price as a second
-line item (no quantity), so their overage is billed on the monthly invoice.
-
-**Yearly overage: a usage-only subscription** (decided 2026-09-23, `control/usage-subscription.mjs`).
-A Stripe subscription bills every item on one interval, so a yearly plan cannot hold the monthly
-metered price. When a yearly Team or Business plan becomes active, the webhook creates a second
-subscription holding only the overage price (idempotency key `usage-sub-<tenant_id>`), records it
-in `tenants.usage_subscription` (migration 0004) in the same batch as the event, cancels it when
-the plan ends, and replaces it if the customer cancels it. The monitor bills a yearly tenant once
-it exists; until then its overage is recorded and logged as unbilled.
+0. **Approval first.** `billing/tiers.json` holds only APPROVED prices and is what production
+   sells. Proposals (docs/plans/billing-automation.md section B) are computed by `billing/derive.mjs`
+   and only reported until the owner sets `billing/pricing-model.json` `approval.status` to
+   `approved` (with `approved_on`/`approved_by`); then `scripts/rates/update-rates.mjs` writes the
+   derived amounts into tiers.json, and that change ships like any other. `--apply`, the rates
+   agent's tiers write and the Worker's price repair at Checkout all refuse while `proposed`.
+   **Stripe is written only from origin/master at deploy, never from a branch**: the account is
+   shared and its TEST mode is what production bills on (incident H8).
+1. **Catalogue (step 5.1 again).** `--apply` creates or replaces every price with
+   `tax_behavior` from `pricing-model.json` (exclusive), both Billing Meters (`citadel_relay_gb`,
+   `citadel_document_appends`) and their metered prices, and brings Citadel's portal configuration
+   up to date with the licensed products. A restricted key needs write on Billing Meters, Meter
+   Events, Prices, Products and Billing Portal configurations, and read on the configuration for
+   the deploy-time audit. Prices that still differ at the first sale are replaced by the Worker
+   itself (`control/price-sync.mjs`); a missing product or price is not — run the script.
+2. **Webhook events (step 5.2).** Add `invoice.payment_failed` and `invoice.paid` to the
+   destination's events: they drive the pay-required state and its release.
+3. **Migrations.** `deploy.sh` applies `0009_billing.sql` (the overage choice, dunning, purge
+   audit, alerts) and `0011_document_appends.sql` (the appends outbox).
+4. **`STRIPE_TAX`** (`wrangler.toml`, exactly `on` or `off`, no default). It ships `off`: the
+   account's Stripe Tax is not activated (status `pending`), and Stripe refuses a Checkout that
+   asks for automatic tax before it is. Once the owner activates Tax in the Dashboard (head office
+   address, default tax behaviour exclusive, registrations for every jurisdiction that must be
+   collected), set it to `on`: Checkout then collects a billing address and tax, and the
+   usage-only subscriptions are taxed too.
+5. **Email.** The `MAIL` binding (`[[send_email]]`) and `MAIL_FROM` send the dunning and alert
+   emails through Cloudflare Email Sending from `mail.avarok.net`, which must be onboarded
+   (SPF/DKIM under that subdomain only; the apex is ProtonMail). PR #166 uses the same binding
+   for the claim-code email. Until the domain verifies, sends fail and are logged; the monitor
+   retries dunning mail on its next run.
+6. **Overage billing is a per-workspace choice** (`tenants.overage_billing`, made at Checkout and
+   in Plan & billing). On: every metered dimension bills through the usage-only subscription
+   (`control/usage-subscription.mjs`, now for monthly plans too; the plan's Checkout carries no
+   metered item), reported by the monitor in whole units once a period's overage reaches
+   `pricing-model.json` `overage_min`. Off: nothing beyond the quota is billed; the object
+   terminates that dimension's service `termination_ttl_hours` after the quota is crossed
+   (relay refused; documents read-only) until the period resets. No termination deletes data.
+7. **Pay required.** `invoice.payment_failed` suspends the workspace (sockets closed with 4002,
+   the host answers 403 `payment-required` with the purge date, the object is not started) and
+   emails the Stripe customer; reminders go out on the policy's days, the final warning
+   `final_warning_hours` before `grace_days`, and the purge then deletes the object's storage and
+   the registry row (audit in `tenant_purges`, resumable). `invoice.paid` restores at once.
+8. **The rates agent** (`.github/workflows/rates.yml`, Mondays 06:00 UTC) re-reads the
+   Cloudflare and Stripe pricing pages, rewrites `billing/rates.json` and the derived prices, and
+   opens or updates ONE pull request on `bot/rates`. It refuses a change over
+   `max_change_percent_per_run` unless dispatched with `owner_approved`, never prices below cost ×
+   multiplier, and writes nothing if any page fails to parse. The PR is opened with
+   `GITHUB_TOKEN`, which does not start the validate workflow on it; add a PAT or App token
+   secret if it must run CI before review.
 
 ## Post-quantum sign-in: the OPRF seed
 

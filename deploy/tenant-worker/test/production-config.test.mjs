@@ -29,6 +29,13 @@ async function expectNothingSaid(response) {
 }
 
 describe("wrangler.toml, as wrangler reads it", () => {
+  it("mails through the Email Sending binding, from the mail subdomain, and never through a sink", () => {
+    const deployed = production();
+    expect(deployed.send_email?.map((b) => b.name)).toEqual(["MAIL"]);
+    expect(deployed.vars.MAIL_FROM).toBe("Citadel Workspace <claim@mail.avarok.net>");
+    expect(deployed.vars.MAIL_ENDPOINT).toBeUndefined();
+  });
+
   it("turns diagnostics and path routing off", () => {
     const { vars } = production();
     expect(vars.TENANT_DIAGNOSTICS).toBe("off");
@@ -46,6 +53,11 @@ describe("wrangler.toml, as wrangler reads it", () => {
   it("refuses a diagnostics switch that is neither on nor off", () => {
     expect(() => config(productionEnv({ TENANT_DIAGNOSTICS: "yes" }))).toThrow(/TENANT_DIAGNOSTICS/);
     expect(() => config(productionEnv({ TENANT_DIAGNOSTICS: undefined }))).toThrow(/TENANT_DIAGNOSTICS/);
+  });
+  it("ships Stripe Tax as on or off, nothing else, and refuses any other value", () => {
+    expect(["on", "off"]).toContain(production().vars.STRIPE_TAX);
+    expect(config(productionEnv())).toMatchObject({ stripeTax: production().vars.STRIPE_TAX === "on" });
+    for (const bad of ["yes", "", undefined]) expect(() => config(productionEnv({ STRIPE_TAX: bad }))).toThrow(/STRIPE_TAX/);
   });
 });
 

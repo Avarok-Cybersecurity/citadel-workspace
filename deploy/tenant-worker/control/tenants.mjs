@@ -3,13 +3,16 @@
  */
 import { checkSlug } from "./slug.mjs";
 import { displayNameOf, MAX_DISPLAY_NAME } from "./display-name.mjs";
-import { ADDONS, entitlements, intervalsOf, isPaid, maxSeats, overageKey, overageSoldWith, tierIds, tierKey } from "./plans.mjs";
+import { ADDONS, entitlements, intervalsOf, isPaid, maxSeats, tierIds } from "./plans.mjs";
 import { noAddons } from "./addons.mjs";
 import { CLAIM_SEAL, digestsEqual, randomHex, RESERVATION_SEAL, seal, sha256Hex, unseal } from "./secrets.mjs";
 import { CREATE_ACTION, verifyTurnstile } from "./turnstile.mjs";
-import { priceIds, stripe, StripeError } from "./stripe.mjs";
+import { stripe } from "./stripe.mjs";
 import { json, refuse } from "./http.mjs";
-import { readAcceptedTerms } from "./customer-terms.mjs";
+import { portalTermsRefusal, readAcceptedTerms } from "./customer-terms.mjs";
+import { expireCheckout, openCheckout } from "./checkout.mjs";
+import { ownedRow } from "./owner.mjs";
+import { billingAnswer } from "./billing-answer.mjs";
 
 /** How long a free tenant's reservation holds its slug should the request die mid-way. */
 const FREE_RESERVATION_SECONDS = 300;
@@ -17,9 +20,9 @@ const FREE_RESERVATION_SECONDS = 300;
 const CHECKOUT_GRACE_SECONDS = 600;
 const CREATE_FIELDS = new Set([
   "slug", "display_name", "tier", "interval", "seats", ...ADDONS.map((a) => a.quantityField), "turnstile_token", "reservation_token",
-  "accepted_customer_terms_version",
+  "accepted_customer_terms_version", "overage_billing",
 ]);
-const PAID_ONLY = ["interval", "seats", ...ADDONS.map((a) => a.quantityField)];
+const PAID_ONLY = ["interval", "seats", "overage_billing", ...ADDONS.map((a) => a.quantityField)];
 const TOKEN = /^[0-9a-f]{64}$/;
 
 const isCount = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
@@ -45,6 +48,7 @@ export function readCreate(body) {
   const retry = body.reservation_token ?? null;
   const plan = {
     slug: body.slug, customer_terms_version: terms.version, display_name: name, tier: body.tier, interval: null, seats: 0, ...noAddons(ADDONS),
+    overage_billing: false,
   };
   if (!isPaid(body.tier)) {
     const named = PAID_ONLY.filter((k) => body[k] !== undefined);
@@ -53,6 +57,8 @@ export function readCreate(body) {
   }
   if (!intervalsOf(body.tier).includes(body.interval)) return bad(`interval is one of ${intervalsOf(body.tier).join(", ")}`);
   if (!isCount(body.seats, 1, maxSeats(body.tier))) return bad(`seats is an integer from 1 to ${maxSeats(body.tier)}`);
+  // The owner's choice, made at creation with no pre-selection (billing/policy.json overage_billing).
+  if (typeof body.overage_billing !== "boolean") return bad("overage_billing is required: true or false");
   const quantities = {};
   for (const a of ADDONS) {
     // Leaving an add-on out of the request is buying none of it.
@@ -61,7 +67,7 @@ export function readCreate(body) {
     if (n > 0 && !a.offeredOn(body.tier)) return bad(`${a.id} is not sold on ${body.tier}`);
     quantities[a.quantityField] = n;
   }
-  return { plan: { ...plan, interval: body.interval, seats: body.seats, ...quantities }, token: body.turnstile_token, retry };
+  return { plan: { ...plan, interval: body.interval, seats: body.seats, overage_billing: body.overage_billing, ...quantities }, token: body.turnstile_token, retry };
 }
 
 const hostOf = (cfg, slug) => `${slug}.${cfg.controlHost}`;
@@ -154,57 +160,12 @@ async function supersede(io, cfg, token, row, now) {
   return (await io.store.supersede(held, row, now)) ? null : SLUG_TAKEN();
 }
 
-/** True once `sessionId` can no longer be paid: expired now, or already. */
-async function expireCheckout(io, cfg, sessionId) {
-  const path = `/checkout/sessions/${encodeURIComponent(sessionId)}`;
-  try {
-    await stripe(io, cfg.stripeKey, "POST", `${path}/expire`, {}, `expire-${sessionId}`);
-    return true;
-  } catch (e) {
-    // Stripe refuses to expire a session that is not open; ask it which state that is.
-    if (!(e instanceof StripeError) || e.status >= 500) throw e;
-    return (await stripe(io, cfg.stripeKey, "GET", path)).status === "expired";
-  }
-}
-
-async function openCheckout(io, cfg, row, now) {
-  const tierLookup = tierKey(row.tier, row.interval);
-  const withOverage = overageSoldWith(row.tier, row.interval);
-  const bought = ADDONS.filter((a) => row[a.quantityField] > 0);
-  const keys = [tierLookup, ...bought.map((a) => a.priceKey(row.interval)), ...(withOverage ? [overageKey()] : [])];
-  const ids = await priceIds(io, cfg.stripeKey, keys);
-  const back = (path) => `${cfg.publicOrigin}${path}?tenant=${encodeURIComponent(row.slug)}`;
-  const form = {
-    mode: "subscription",
-    client_reference_id: row.tenant_id,
-    "line_items[0][price]": ids.get(tierLookup),
-    "line_items[0][quantity]": String(row.seats),
-    "metadata[tenant]": row.slug,
-    "metadata[tenant_id]": row.tenant_id,
-    // On the subscription too, so every event about it for its whole life says whose it is.
-    "subscription_data[metadata][tenant]": row.slug,
-    "subscription_data[metadata][tenant_id]": row.tenant_id,
-    success_url: `${back("/create/done")}&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${back("/create")}&canceled=1`,
-    expires_at: String(now + cfg.checkoutTtl),
-  };
-  let next = 1;
-  for (const a of bought) {
-    form[`line_items[${next}][price]`] = ids.get(a.priceKey(row.interval));
-    form[`line_items[${next}][quantity]`] = String(row[a.quantityField]);
-    next += 1;
-  }
-  // Metered: billed by what the meter records, so Stripe refuses a quantity on it.
-  if (withOverage) form[`line_items[${next}][price]`] = ids.get(overageKey());
-  return stripe(io, cfg.stripeKey, "POST", "/checkout/sessions", form, `checkout-${row.tenant_id}`);
-}
-
 /** Pending or active; and, once active, to the caller holding the Checkout Session id, the claim code once. */
 export async function tenantStatus(io, cfg, slug, sessionId) {
   if (!checkSlug(slug).ok) return refuse("not-found", "no such workspace", 404);
   const row = await io.store.holder(slug, io.now());
   if (!row) return refuse("not-found", "no such workspace", 404);
-  const answer = { slug, status: row.status, tier: row.tier, workspace_host: hostOf(cfg, slug) };
+  const answer = { slug, status: row.status, tier: row.tier, workspace_host: hostOf(cfg, slug), billing: await billingAnswer(io, row) };
   if (row.status !== "active" || typeof sessionId !== "string" || sessionId.length < 8 || sessionId.length > 255) {
     return json(answer);
   }
@@ -220,13 +181,11 @@ export async function tenantStatus(io, cfg, slug, sessionId) {
 
 export async function openPortal(io, cfg, slug, body) {
   if (!cfg.stripeKey) return refuse("billing-not-configured", "billing is not available yet", 503);
-  if (!checkSlug(slug).ok) return refuse("not-found", "no such workspace", 404);
-  const row = await io.store.holder(slug, io.now());
-  const presented = typeof body.claim_code === "string" && /^[0-9a-f]{64}$/.test(body.claim_code) ? body.claim_code : null;
-  // One answer for "no such workspace" and "wrong code", so the route is no oracle for either.
-  if (!row || !presented || !digestsEqual(await sha256Hex(presented), row.claim_hash)) {
-    return refuse("not-owner", "that claim code does not own this workspace", 403);
-  }
+  const owned = await ownedRow(io, slug, body);
+  if (owned.error) return owned.error;
+  const { row } = owned;
+  const stale = await portalTermsRefusal(io, row, body);
+  if (stale) return stale;
   if (!row.stripe_customer) return refuse("no-subscription", "this workspace has no subscription to manage", 404);
   if (!cfg.portalConfiguration) return refuse("portal-not-configured", "managing a subscription is not available yet", 503);
   const session = await stripe(io, cfg.stripeKey, "POST", "/billing_portal/sessions", {

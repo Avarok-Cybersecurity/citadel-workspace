@@ -1,5 +1,5 @@
 /**
- * Stripe over fetch (no SDK in a Worker): the API helper, price ids by lookup key, and webhook
+ * Stripe over fetch (no SDK in a Worker): the API helper (price ids by lookup key: price-sync.mjs), and webhook
  * signature verification (the rMazing `cc-tiers::stripe::verified` rule, over WebCrypto).
  */
 import { fromHex } from "./secrets.mjs";
@@ -31,17 +31,6 @@ export async function stripe(io, key, method, path, form, idempotencyKey) {
   const answer = await response.json().catch(() => ({}));
   if (!response.ok) throw new StripeError(response.status, answer?.error?.message ?? "unknown");
   return answer;
-}
-
-/** Active price ids for `keys` (lookup keys), as a Map; throws naming any key Stripe lacks. */
-export async function priceIds(io, key, keys) {
-  const form = new URLSearchParams({ active: "true", limit: "100" });
-  for (const k of keys) form.append("lookup_keys[]", k);
-  const list = await stripe(io, key, "GET", "/prices", form);
-  const found = new Map((list.data ?? []).map((p) => [p.lookup_key, p.id]));
-  const missing = keys.filter((k) => !found.has(k));
-  if (missing.length) throw new Error(`Stripe holds no active price under ${missing.join(", ")}`);
-  return found;
 }
 
 /**

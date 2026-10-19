@@ -37,13 +37,21 @@ export function meteredLookupKey(prefix, id) {
   return `${prefix}-${id}`;
 }
 
+const METERED_STATUSES = ['proposed', 'approved'];
+
 /**
- * The metered products (billed by usage through a Stripe Billing Meter, never by quantity): one
- * meter, one product and one price each. A subscription item on such a price carries no quantity.
+ * The metered products SOLD (billed by usage through a Stripe Billing Meter, never by quantity):
+ * one meter, one product and one price each. A subscription item on such a price carries no
+ * quantity. Every entry states `status`; only an approved one is sold: a proposed entry is no
+ * Stripe meter, product or price, and no Checkout or usage-subscription item.
  */
 export function deriveMetered(table) {
   const tierIds = new Set(table.tiers.map((t) => t.id));
-  return (table.metered ?? []).map((m) => {
+  const metered = table.metered ?? [];
+  for (const m of metered) {
+    if (!METERED_STATUSES.includes(m.status)) throw new Error(`metered ${m.id}: status is ${METERED_STATUSES.join(' | ')}, got ${m.status}`);
+  }
+  return metered.filter((m) => m.status === 'approved').map((m) => {
     for (const t of m.available_on) {
       if (!tierIds.has(t)) throw new Error(`metered ${m.id} is offered on unknown tier ${t}`);
     }
@@ -141,8 +149,15 @@ export function deriveCatalogue(table) {
     }));
 }
 
-/** Differences between a wanted price and the one Stripe holds under its lookup key. */
-export function priceDiffs(want, have, productId, meterId) {
+const TAX_BEHAVIORS = ['exclusive', 'inclusive', 'unspecified'];
+
+/**
+ * Differences between a wanted price and the one Stripe holds under its lookup key. `taxBehavior`
+ * is required (billing/pricing-model.json tax.behavior): Stripe fixes it at creation, so a price
+ * with another one is replaced like any other difference.
+ */
+export function priceDiffs(want, have, productId, meterId, taxBehavior) {
+  if (!TAX_BEHAVIORS.includes(taxBehavior)) throw new Error(`priceDiffs needs taxBehavior (${TAX_BEHAVIORS.join(' | ')}), got ${taxBehavior}`);
   if (!have) return ['missing'];
   const diffs = [];
   if (have.unit_amount !== want.unit_amount) diffs.push(`unit_amount ${have.unit_amount} ≠ ${want.unit_amount}`);
@@ -153,16 +168,24 @@ export function priceDiffs(want, have, productId, meterId) {
   if (productId && haveProduct !== productId) diffs.push(`product ${haveProduct} ≠ ${productId}`);
   if (want.usage_type === 'metered' && have.recurring?.meter !== meterId) diffs.push(`meter ${have.recurring?.meter} ≠ ${meterId}`);
   if (have.metadata?.citadel_tier !== want.metadata.citadel_tier) diffs.push('metadata.citadel_tier');
+  if (have.tax_behavior !== taxBehavior) diffs.push(`tax_behavior ${have.tax_behavior} ≠ ${taxBehavior}`);
   if (!have.active) diffs.push('archived');
   return diffs;
 }
 
-/** Differences between a wanted product and the one Stripe holds for that tier. */
-export function productDiffs(want, have) {
+/**
+ * Differences between a wanted product and the one Stripe holds for that tier. `taxCode` is
+ * required: billing/pricing-model.json tax.product_tax_code, where null leaves the product's code
+ * to the account preset (and is not compared) and `txcd_...` must be the product's code.
+ */
+export function productDiffs(want, have, taxCode) {
+  if (taxCode !== null && !/^txcd_\d{8}$/.test(taxCode ?? '')) throw new Error(`productDiffs needs taxCode: null | txcd_########, got ${taxCode}`);
   if (!have) return ['missing'];
   const diffs = [];
   if (have.name !== want.name) diffs.push('name');
   if ((have.description ?? '') !== want.description) diffs.push('description');
+  const haveCode = typeof have.tax_code === 'string' ? have.tax_code : have.tax_code?.id ?? null;
+  if (taxCode !== null && haveCode !== taxCode) diffs.push(`tax_code ${haveCode} ≠ ${taxCode}`);
   if (!have.active) diffs.push('archived');
   return diffs;
 }

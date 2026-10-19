@@ -1,0 +1,8 @@
+ion-addresses) in your account is free on all plans, including when only Email Routing is configured.
+
+|  | Workers Free | Workers Paid |
+| --- | --- | --- |
+| **Outbound emails (Email Sending)** | Not available | 3,000 included per month, then $0.35 per 1,000 emails |
+| **Inbound emails (Email Routing)** | Unlimited | Unlimited |
+
+The 3,000 included emails apply per account, per month, aligned with your Cloudflare subscription billing cycle. Emails that hard-bounce or are otherwise accepted by Email S

@@ -53,7 +53,7 @@ describe("activation", () => {
     expect(stats.entitlements).toEqual({
       status: "active", tier: "team", interval: "month", seats: 3, storage_blocks: 2, members_max: 3, storage_gb: 50, workspaces_max: 1, priority_support: false,
       connections_max: 9, relay_gb_included: 60, max_frame_bytes: 4194304, period_start: null, period_end: null,
-      link_packs: 0, secure_links_per_member: 50, secure_links_pool: 0,
+      link_packs: 0, secure_links_per_member: 50, secure_links_pool: 0, overage_billing: true, document_appends_included: 750000,
     });
 
     // The claim code: only to the holder of the session id, exactly once, and it is the object's password.

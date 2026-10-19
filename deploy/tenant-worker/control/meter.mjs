@@ -1,6 +1,7 @@
 /**
  * What one tenant's object measures, per billing period: bytes and frames in, bytes out, the
- * seconds during which any socket was open, and the most sockets open at once. Pure: the object
+ * seconds during which any socket was open, the most sockets open at once, and the document
+ * appends stored (control/tenant-documents.mjs). Pure: the object
  * reports each event with the time it happened (ms) and persists `snapshot()` itself
  * (usage-table.mjs); nothing here reads a clock or touches storage.
  *
@@ -8,7 +9,7 @@
  * alarm that runs twice) changes nothing.
  */
 
-const EMPTY = { bytes_in: 0, bytes_out: 0, frames_in: 0, active_seconds: 0, peak_connections: 0 };
+const EMPTY = { bytes_in: 0, bytes_out: 0, frames_in: 0, active_seconds: 0, peak_connections: 0, appends: 0 };
 
 /** The UTC calendar month holding `nowMs`, as `{start, end}` in seconds. */
 export function calendarMonth(nowMs) {
@@ -83,6 +84,12 @@ export class Meter {
     if (!conn) return;
     conn.bytes_out += bytes;
     this.totals.bytes_out += bytes;
+  }
+
+  /** `n` document appends stored this period: a positive integer, else a caller's bug, refused. */
+  appended(n) {
+    if (!Number.isSafeInteger(n) || n < 1) throw new TypeError(`appended(n): n is a positive integer, not ${n}`);
+    this.totals.appends += n;
   }
 
   /** The open connections' own counters, for the object's stats. */
