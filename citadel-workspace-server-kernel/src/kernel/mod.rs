@@ -27,6 +27,8 @@ pub(crate) mod roster;
 pub mod secret_eq;
 /// Secure links: tokens the server maps to in-app deep links.
 pub mod secure_links;
+/// What the server advertises, derived from the backend it runs on.
+pub mod server_capabilities;
 pub mod sign_in;
 pub mod telemetry;
 pub mod transaction;

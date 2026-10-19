@@ -454,9 +454,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .unwrap_or(false)
     }
 
-    /// Check if server RE-VFS storage is enabled
+    /// Whether this server can store RE-VFS files: configured on AND backed by storage the SDK
+    /// will stream objects into.
     pub fn is_server_revfs_enabled(&self) -> bool {
-        self.file_transfer_config.allow_server_revfs_storage
+        let node_remote = self.node_remote.read();
+        crate::kernel::server_capabilities::revfs_storage_available(
+            self.file_transfer_config.allow_server_revfs_storage,
+            node_remote
+                .as_ref()
+                .map(|nr| nr.account_manager().get_backend_type()),
+        )
     }
 
     /// Health check: returns true if the kernel is operational
