@@ -14,10 +14,11 @@ const [P1, , P3] = POLICY.alerts.usage_percent;
 const [C1] = POLICY.alerts.countdown_hours;
 const now = () => Math.floor(Date.now() / 1000);
 
+/** An active Team tenant, 3 seats (60 GB relay included), overage billing off: crossings count down. */
 async function activeTeam() {
   const slug = freshSlug("alr");
   outbound();
-  expect((await post("/api/tenants", createBody(slug, { tier: "team", interval: "month", seats: 3 }))).status).toBe(201);
+  expect((await post("/api/tenants", createBody(slug, { tier: "team", interval: "month", seats: 3, overage_billing: false }))).status).toBe(201);
   const row = await tenantRow(slug);
   const period = { start: now() - 86400, end: now() + 29 * 86400 };
   const event = subscriptionEvent("customer.subscription.created", row, { id: `evt_${crypto.randomUUID()}`, created: now(), items: [item("citadel-team-month", 3)], period });

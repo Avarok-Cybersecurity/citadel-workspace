@@ -1,7 +1,7 @@
 /**
- * The claim-code proof the owner's routes share (the billing portal, the usage meters): the
- * workspace's row when `body.claim_code` is its claim code. One refusal for "no such workspace"
- * and "wrong code", so no route here is an oracle for either.
+ * The claim-code proof the owner's routes share (the billing portal, the usage meters, the
+ * overage-billing switch): the workspace's row when `body.claim_code` is its claim code. One
+ * refusal for "no such workspace" and "wrong code", so no route here is an oracle for either.
  */
 import { checkSlug } from "./slug.mjs";
 import { digestsEqual, sha256Hex } from "./secrets.mjs";

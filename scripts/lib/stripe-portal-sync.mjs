@@ -2,15 +2,21 @@
  * Citadel's customer-portal configuration (deploy/tenant-worker/wrangler.toml
  * STRIPE_PORTAL_CONFIGURATION -- never the account default: the account is shared with another
  * product) must offer every licensed Citadel product with all its active licensed prices as a plan
- * change. Audits, and writes under `apply`. The decisions are billing/reconcile.mjs planPortal.
+ * change. Audits, and writes under `apply` -- never while billing/pricing-model.json `model`
+ * approval.status is proposed (billing/approval.mjs). The decisions are billing/reconcile.mjs
+ * planPortal.
  */
 import { readFileSync } from 'node:fs';
+import { stripeWriteRefusal } from '../../billing/approval.mjs';
 import { planPortal, portalConfigurationFrom } from '../../billing/reconcile.mjs';
 
 const WRANGLER = new URL('../../deploy/tenant-worker/wrangler.toml', import.meta.url);
 
 /** Returns the number of differences found (0 or 1). */
-export async function syncPortal({ stripe, mode, apply, productIds }) {
+export async function syncPortal({ stripe, mode, apply, model, productIds }) {
+  if (typeof apply !== 'boolean') throw new Error('syncPortal needs apply: true | false');
+  const refusal = apply ? stripeWriteRefusal(model) : null;
+  if (refusal) throw new Error(`portal: ${refusal}`);
   const id = portalConfigurationFrom(readFileSync(WRANGLER, 'utf8'));
   const config = await stripe.call('GET', `billing_portal/configurations/${id}?expand[]=features.subscription_update.products`);
   const products = [];

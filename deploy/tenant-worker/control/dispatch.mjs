@@ -11,6 +11,7 @@ import { AuthVersionStore } from "./auth-versions.mjs";
 import { config, isWebSocketUpgrade, json, upgradeRequired, readJson, refuse } from "./http.mjs";
 import { createTenant, openPortal, slugAvailability, tenantStatus } from "./tenants.mjs";
 import { handleWebhook } from "./webhook.mjs";
+import { setOverageBilling } from "./overage-billing.mjs";
 import { admissionAnywhere, admissionOf } from "./discovery.mjs";
 import { serveUi } from "./ui.mjs";
 import { serveSupport, supportRoute } from "./support.mjs";
@@ -21,7 +22,7 @@ import { AlertStore } from "./alert-store.mjs";
 import { usageAnswer } from "./usage-answer.mjs";
 import { PUBLIC_POLICY } from "./policy.mjs";
 
-/** Creation and portal bodies are a handful of short fields. */
+/** Creation, portal and overage bodies are a handful of short fields. */
 const API_BODY_LIMIT = 4096;
 /** Seconds a browser may reuse the billing policy: it changes only with a deploy. */
 const POLICY_MAX_AGE = 300;
@@ -113,6 +114,11 @@ async function api(io, cfg, request, url) {
       const body = await readJson(request, cfg, API_BODY_LIMIT);
       if (body.error) return body.error;
       return await openPortal(io, cfg, parts[1], body.value);
+    }
+    if (method === "POST" && parts.length === 3 && parts[0] === "tenants" && parts[2] === "overage") {
+      const body = await readJson(request, cfg, API_BODY_LIMIT);
+      if (body.error) return body.error;
+      return await setOverageBilling(io, cfg, parts[1], body.value);
     }
     if (method === "POST" && parts.length === 2 && parts[0] === "stripe" && parts[1] === "webhook") {
       return await handleWebhook(io, cfg, request);

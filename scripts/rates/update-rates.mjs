@@ -2,6 +2,9 @@
 /**
  * The rates agent: fetch every rate page, parse it, run the guardrails, then write
  * billing/rates.json and the DERIVED unit_amounts in billing/tiers.json -- or nothing.
+ * tiers.json is written ONLY when billing/pricing-model.json approval.status is approved; while it
+ * is proposed, rates.json may still be refreshed and each derived figure that differs is printed as
+ * "PROPOSED (not written): <key> <tiers amount> → <derived amount>", with tiers.json untouched.
  *
  *   node scripts/rates/update-rates.mjs                   # the weekly run (.github/workflows/rates.yml)
  *   node scripts/rates/update-rates.mjs --owner-approved  # lets a derived price move past the cap
@@ -26,7 +29,8 @@ const json = (o) => `${JSON.stringify(o, null, 2)}\n`;
 
 /**
  * One run against the given ports: fetchText(url) -> text, readText(path), writeText(path, text).
- * Returns { log, wrote } -- `wrote` lists the paths written (none on an unchanged run).
+ * Returns { log, proposals, approval, explanations, wrote } -- `wrote` lists the paths written
+ * (none on an unchanged run).
  */
 export async function runUpdate({ fetchText, readText, writeText, ownerApproved, now }) {
   const results = await Promise.all(SOURCES.map(async (source) => {
@@ -48,7 +52,7 @@ export async function runUpdate({ fetchText, readText, writeText, ownerApproved,
   const wrote = [];
   if (plan.rates) { writeText(PATHS.rates, json(plan.rates)); wrote.push(PATHS.rates); }
   if (plan.tiers) { writeText(PATHS.tiers, json(plan.tiers)); wrote.push(PATHS.tiers); }
-  return { log: plan.log, explanations: plan.explanations, wrote };
+  return { log: plan.log, proposals: plan.proposals, approval: plan.approval, explanations: plan.explanations, wrote };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -61,7 +65,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   }
   const { fetchText } = await import('./fetch-rates.mjs');
   try {
-    const { log, explanations, wrote } = await runUpdate({
+    const { log, proposals, approval, explanations, wrote } = await runUpdate({
       fetchText,
       readText: (p) => readFileSync(join(root, p), 'utf8'),
       writeText: (p, text) => writeFileSync(join(root, p), text),
@@ -69,9 +73,15 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
       now: new Date().toISOString(),
     });
     if (!wrote.length) {
-      console.log('No change: every rate and derived price is as recorded.');
+      console.log('No change: every rate is as recorded.');
     } else {
       console.log(`## Rate changes\n\n${log.map((l) => `- ${l}`).join('\n')}\n\nWrote ${wrote.join(', ')}.`);
+    }
+    if (approval !== 'approved') {
+      console.log(`\n## Proposals (pricing-model.json approval.status: ${approval}; billing/tiers.json untouched)\n`);
+      console.log(proposals.length ? proposals.map((l) => `- ${l}`).join('\n') : '- none: every derived figure equals tiers.json');
+    }
+    if (wrote.length || proposals.length) {
       console.log(`\n<details><summary>Derivation</summary>\n\n${explanations.map((l) => `- ${l}`).join('\n')}\n\n</details>`);
     }
   } catch (e) {

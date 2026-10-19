@@ -1,5 +1,11 @@
 {
   "$comment": "The owner's pricing decisions: what turns billing/rates.json (what we pay) into billing/tiers.json (what we charge), through billing/derive.mjs. Proposed 2026-10-18 in docs/plans/billing-automation.md; each value is an owner decision and changes no code. Time limits and thresholds live in billing/policy.json, not here. Nothing here is a default: a missing key fails derivation.",
+  "approval": {
+    "$comment": "The owner's gate on every value in this file. The owner sets status to approved (with approved_on as YYYY-MM-DD and approved_by as their name) once the pricing rows in docs/plans/billing-automation.md are decided. Until then every derived price and grant is computed and reported but never written to billing/tiers.json, never applied to Stripe and never repaired at checkout: tiers.json holds only approved prices. status is exactly proposed or approved; anything else, or a missing key, fails (billing/approval.mjs).",
+    "status": "proposed",
+    "approved_on": null,
+    "approved_by": null
+  },
   "multiplier": {
     "$comment": "Price = unit cost x this, rounded up. Covers Stripe's 4.1% + $0.30 per charge (6.6-9.1% of a monthly seat), the Free tier's $4.05/month of always-on duration per tenant, a Cloudflare price rise between weekly rate runs, international cards (+2.5%) and support. Decision 1.",
     "value": 3
@@ -19,6 +25,11 @@
   "seat_floor_relay_path": {
     "$comment": "Which relay path costs the relay GB a seat includes, in the seat floor (docs/plans/billing-automation.md rows 10-11 price it on the object path: Team $3.81, Business $6.15 before rounding). On turn the floors would be $7 / $13, above the $6 / $12 list prices. Open with the owner alongside decision 5.",
     "value": "object"
+  },
+  "seat_storage_gb": {
+    "$comment": "Storage each paid seat includes (tiers.json limits.storage_gb_per_seat), by tier. The seat floor is costed at it, and once approved the rates agent writes it into tiers.json. Proposed 2 / 5 GB (docs/plans/billing-automation.md row 10, decision 3); 10 / 25 GB is what is approved and sold today.",
+    "team": 2,
+    "business": 5
   },
   "rows_written_per_document_append": {
     "$comment": "DO rows one document append writes over its life: the update and the log head at append time, and the compaction delete later (Cloudflare counts deletes as rows written). From transaction/documents_store.rs on feat/citadel-docs-r1.",

@@ -99,7 +99,7 @@ if (mode === "free") {
 }
 
 if (mode === "paid") {
-  const plan = { tier: "team", interval: "month", seats: 3, storage_blocks: 2 };
+  const plan = { tier: "team", interval: "month", seats: 3, storage_blocks: 2, overage_billing: true };
   const initial = await create(plan);
   const redactToken = (b) => ({ ...b, reservation_token: b?.reservation_token ? `${b.reservation_token.slice(0, 4)}…` : b?.reservation_token });
   say("create", { status: initial.status, body: redactToken(initial.body) });
@@ -126,9 +126,9 @@ if (mode === "paid") {
   say("line items", lines);
   const want = [
     { lookup_key: "citadel-team-month", quantity: 3, unit_amount: 600, amount_total: 1800, interval: "month" },
-    { lookup_key: "citadel-storage-month", quantity: 2, unit_amount: 200, amount_total: 400, interval: "month" },
+    { lookup_key: "citadel-storage-month", quantity: 2, unit_amount: 600, amount_total: 1200, interval: "month" },
   ];
-  if (session.livemode !== false || session.amount_total !== 2200 || JSON.stringify(lines) !== JSON.stringify(want)) fail("the session is not what was asked for");
+  if (session.livemode !== false || session.amount_total !== 3000 || JSON.stringify(lines) !== JSON.stringify(want)) fail("the session is not what was asked for");
   const tenantId = session.metadata.tenant_id;
 
   // NEGATIVE CONTROL: the same event under a secret that is not the Worker's.
@@ -168,8 +168,8 @@ if (mode === "paid") {
   if (first.body.status !== "active" || !/^[0-9a-f]{64}$/.test(first.body.claim_code ?? "") || second.body.claim_code !== undefined) fail("claim not returned exactly once");
   if ((await sha256(first.body.claim_code)).slice(0, 8) !== s.master_password_sha256_prefix) fail("claim code is not the object's password");
   const e = s.entitlements;
-  if (e.status !== "active" || e.tier !== "team" || e.seats !== 3 || e.storage_blocks !== 2 || e.storage_gb !== 50 || e.members_max !== 3) fail("wrong entitlements");
-  console.log(`PROOF PASS (paid): real test-mode Checkout matched; ${slug} active with team x3 + 2 blocks (50 GB); claim once`);
+  if (e.status !== "active" || e.tier !== "team" || e.seats !== 3 || e.storage_blocks !== 2 || e.storage_gb !== 26 || e.members_max !== 3) fail("wrong entitlements");
+  console.log(`PROOF PASS (paid): real test-mode Checkout matched; ${slug} active with team x3 + 2 blocks (26 GB); claim once`);
   process.exit(0);
 }
 fail(`unknown mode ${mode}`);

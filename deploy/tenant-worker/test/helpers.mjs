@@ -11,6 +11,7 @@ import { CUSTOMER_TERMS_VERSION } from "../control/customer-terms.mjs";
 import { config } from "../control/http.mjs";
 import { runMonitor } from "../control/monitor.mjs";
 import { signLikeStripe } from "./stripe-sign.mjs";
+import { customerEmail, MAIL_SINK_HOST, mailsIn, outbound, PRICES } from "./outbound.mjs";
 
 export const ORIGIN = "https://work.avarok.net";
 export const WEBHOOK_SECRET = "whsec_vitest_only";
@@ -19,115 +20,7 @@ let counter = 0;
 /** A slug no other test uses: tests share one D1 file. */
 export const freshSlug = (stem = "t") => `${stem}-${Date.now().toString(36)}-${(counter++).toString(36)}`;
 
-export const PRICES = {
-  "citadel-team-month": "price_team_m",
-  "citadel-team-year": "price_team_y",
-  "citadel-business-month": "price_business_m",
-  "citadel-business-year": "price_business_y",
-  "citadel-storage-month": "price_storage_m",
-  "citadel-storage-year": "price_storage_y",
-  "citadel-secure-links-month": "price_links_m",
-  "citadel-secure-links-year": "price_links_y",
-  "citadel-relay-overage": "price_relay_overage",
-};
-
-/**
- * Answers siteverify (with `turnstile`, an answer object) and Stripe. Records every call as
- * `{url, method, form}` so a test can assert what was sent.
- */
-/**
- * `expire` is how Stripe answers `POST /v1/checkout/sessions/<id>/expire`: open sessions expire
- * (200) unless `expire.refuse` names the state the session is really in ("complete", "expired"),
- * in which case the expire is a 400 and a GET of the session reports that state.
- */
-/**
- * `meterEvents.failures` is how many `POST /v1/billing/meter_events` Stripe refuses (500) before
- * it accepts them.
- */
-/**
- * `turn` is how Cloudflare Realtime TURN answers `generate-ice-servers`: `{status, body}`, by
- * default a 201 with a STUN and a TURN server whose credentials are numbered by call.
- */
-export function outbound({ turnstile = { success: true, hostname: "example.com" }, checkout, expire = {}, meterEvents = { failures: 0 }, subscriptions = { failures: 0 }, turn, mailStatus = 202 } = {}) {
-  let turnCalls = 0;
-  let meterFailures = meterEvents.failures;
-  let subscriptionFailures = subscriptions.failures;
-  let subscriptionCount = 0;
-  const calls = [];
-  const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init = {}) => {
-    const url = new URL(typeof input === "string" ? input : input.url);
-    const method = init.method ?? "GET";
-    const form = init.body instanceof URLSearchParams ? init.body : new URLSearchParams(url.search);
-    calls.push({ url: url.origin + url.pathname, method, form, headers: init.headers ?? {}, body: init.body });
-    if (url.hostname === "challenges.cloudflare.com") return Response.json(turnstile);
-    // The MAIL_ENDPOINT sink (vitest.config.mjs): what the control plane would have emailed.
-    if (url.hostname === MAIL_SINK_HOST) return new Response(null, { status: mailStatus });
-    if (url.hostname === "rtc.live.cloudflare.com") {
-      turnCalls += 1;
-      if (turn) return Response.json(turn.body, { status: turn.status });
-      return Response.json(
-        {
-          iceServers: [
-            { urls: ["stun:stun.cloudflare.com:3478", "stun:stun.cloudflare.com:53"] },
-            {
-              urls: ["turn:turn.cloudflare.com:3478?transport=udp", "turns:turn.cloudflare.com:443?transport=tcp"],
-              username: `user-${turnCalls}`,
-              credential: `credential-${turnCalls}`,
-            },
-          ],
-        },
-        { status: 201 },
-      );
-    }
-    if (url.hostname === "api.stripe.com") {
-      if (url.pathname === "/v1/prices") {
-        const data = form.getAll("lookup_keys[]").filter((k) => PRICES[k]).map((k) => ({ id: PRICES[k], lookup_key: k }));
-        return Response.json({ data });
-      }
-      const expiring = url.pathname.match(/^\/v1\/checkout\/sessions\/(cs_[A-Za-z0-9_]+)\/expire$/);
-      if (expiring) {
-        if (expire.refuse) return Response.json({ error: { message: "Only Checkout Sessions with a status in [open] can be expired." } }, { status: 400 });
-        return Response.json({ id: expiring[1], status: "expired" });
-      }
-      const reading = url.pathname.match(/^\/v1\/checkout\/sessions\/(cs_[A-Za-z0-9_]+)$/);
-      if (reading && method === "GET") return Response.json({ id: reading[1], status: expire.refuse ?? "open" });
-      if (url.pathname === "/v1/checkout/sessions") {
-        const id = checkout?.id ?? `cs_test_${crypto.randomUUID().replaceAll("-", "")}`;
-        return Response.json({ id, url: `https://checkout.stripe.com/c/pay/${id}` });
-      }
-      if (url.pathname === "/v1/billing/meter_events" && method === "POST") {
-        if (meterFailures > 0) {
-          meterFailures -= 1;
-          return Response.json({ error: { message: "test: meter event refused" } }, { status: 500 });
-        }
-        return Response.json({ object: "billing.meter_event", event_name: form.get("event_name"), identifier: form.get("identifier") });
-      }
-      // The usage-only subscription (control/usage-subscription.mjs): created, and cancelled.
-      if (url.pathname === "/v1/subscriptions" && method === "POST") {
-        if (subscriptionFailures > 0) {
-          subscriptionFailures -= 1;
-          return Response.json({ error: { message: "test: subscription refused" } }, { status: 500 });
-        }
-        subscriptionCount += 1;
-        return Response.json({ id: `sub_usage_${subscriptionCount}`, object: "subscription", status: "active" });
-      }
-      const cancelling = url.pathname.match(/^\/v1\/subscriptions\/(sub_[A-Za-z0-9_]+)$/);
-      if (cancelling && method === "DELETE") return Response.json({ id: cancelling[1], object: "subscription", status: "canceled" });
-      // The billing address the alerts read at send time (control/alerts.mjs).
-      const customer = method === "GET" && url.pathname.match(/^\/v1\/customers\/(cus_[A-Za-z0-9_]+)$/);
-      if (customer) return Response.json({ id: customer[1], object: "customer", email: customerEmail(customer[1]) });
-      if (url.pathname === "/v1/billing_portal/sessions") {
-        // Never the account's default portal: it belongs to another product on the same account.
-        if (form.get("configuration") !== "bpc_test_citadel") {
-          return Response.json({ error: { message: "test: portal opened without Citadel's configuration" } }, { status: 400 });
-        }
-        return Response.json({ id: "bps_1", url: "https://billing.stripe.com/p/session/test_1" });
-      }
-    }
-    return new Response("unexpected outbound request in a test", { status: 599 });
-  });
-  return { calls, spy };
-}
+export { customerEmail, MAIL_SINK_HOST, mailsIn, outbound, PRICES };
 
 export const post = (path, body, headers = {}) =>
   SELF.fetch(`${ORIGIN}${path}`, {
@@ -138,15 +31,15 @@ export const post = (path, body, headers = {}) =>
 
 export const get = (path) => SELF.fetch(`${ORIGIN}${path}`);
 
-/** The address outbound() gives the Stripe customer `id`. */
-export const customerEmail = (id) => `billing+${id}@example.com`;
-/** Host of the MAIL_ENDPOINT the suite sets (vitest.config.mjs). */
-export const MAIL_SINK_HOST = "mail.sink.test";
-/** The messages the sink received, from an `outbound()` call log. */
-export const mailsIn = (calls) =>
-  calls.filter((c) => c.url.startsWith(`https://${MAIL_SINK_HOST}`)).map((c) => JSON.parse(c.body));
-
-export const createBody = (slug, extra = {}) => ({ slug, display_name: "Acme Ltd", tier: "free", turnstile_token: "tok", accepted_customer_terms_version: CUSTOMER_TERMS_VERSION, ...extra });
+/**
+ * A creation body. A paid tier must name overage_billing; unnamed, the tests take it on (the path
+ * most of them exercise: overage billed through the usage subscription). A test of the choice
+ * itself names it, or names it `undefined` to leave it out.
+ */
+export const createBody = (slug, extra = {}) => ({
+  slug, display_name: "Acme Ltd", tier: "free", turnstile_token: "tok", accepted_customer_terms_version: CUSTOMER_TERMS_VERSION,
+  ...(extra.tier !== undefined && extra.tier !== "free" ? { overage_billing: true } : {}), ...extra,
+});
 
 export const tenantRow = (slug) => env.CONTROL_DB.prepare("SELECT * FROM tenants WHERE slug = ?").bind(slug).first();
 export const eventRecorded = async (id) =>

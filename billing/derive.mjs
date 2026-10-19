@@ -1,6 +1,9 @@
 // What we charge, derived from what we pay: billing/rates.json (upstream unit costs) x
 // billing/pricing-model.json (the owner's multiplier, rounding and choices) -> the DERIVED prices
 // in billing/tiers.json, plus each paid tier's seat floor. Pure: no I/O. A missing key fails.
+// Every result is a PROPOSAL until pricing-model.json approval.status is approved (approval.mjs):
+// only then may anything write it into tiers.json.
+import { approvalOf } from './approval.mjs';
 import { lookupKey, meteredLookupKey } from './catalogue.mjs';
 
 function need(value, where) {
@@ -97,10 +100,12 @@ function formula(table, entry, kind) {
 }
 
 /**
- * Every DERIVED price (lookup key -> cents), the unrounded cost x multiplier behind each (`costs`),
- * each paid tier's seat floor (cents per seat-month) and one explanation line per figure.
+ * Every DERIVED price as `proposed` (lookup key -> cents), the unrounded cost x multiplier behind
+ * each (`costs`), each paid tier's seat floor (cents per seat-month), the storage each paid seat
+ * includes (`grants`, GB by tier), the model's approval status and one explanation line per figure.
  */
 export function derive({ rates, model, tiers }) {
+  const approval = approvalOf(model);
   const basis = costBasis(rates, model, tiers);
   const round = rounding(model);
   const mult = positive(modelValue(model, 'multiplier'), 'pricing-model.json multiplier.value');
@@ -108,6 +113,8 @@ export function derive({ rates, model, tiers }) {
   const prices = {};
   const costs = {};
   const floors = {};
+  const grants = {};
+  const seatStorage = need(model?.seat_storage_gb, 'pricing-model.json seat_storage_gb');
   const explanations = [];
   const put = (key, cost, step, why) => {
     prices[key] = ceilTo(cost, step);
@@ -137,7 +144,8 @@ export function derive({ rates, model, tiers }) {
   if (!['list', 'derived'].includes(seatMode)) throw new Error(`pricing-model.json seat_prices is list | derived, got ${seatMode}`);
   for (const tier of need(tiers.tiers, 'tiers.json tiers').filter((t) => t.prices.length > 0)) {
     const l = tier.limits;
-    const storageGb = need(l.storage_gb_per_seat, `tier ${tier.id} limits.storage_gb_per_seat`);
+    const storageGb = positive(seatStorage[tier.id], `pricing-model.json seat_storage_gb.${tier.id}`);
+    grants[tier.id] = storageGb;
     const relayGb = need(l.relay_gb_per_seat, `tier ${tier.id} limits.relay_gb_per_seat`);
     const appends = need(l.document_appends_per_seat, `tier ${tier.id} limits.document_appends_per_seat`);
     const seatUsd = storageGb * basis.storageUsdPerGbMonth + relayGb * basis.relay(floorPath) + appends * basis.appendUsd;
@@ -154,7 +162,7 @@ export function derive({ rates, model, tiers }) {
       }
     }
   }
-  return { prices, costs, floors, explanations };
+  return { approval, proposed: prices, costs, floors, grants, explanations };
 }
 
 /** Every licensed price in `tiers` priced under its seat floor (month) or ten floors (year). */
@@ -179,17 +187,54 @@ export function belowCost(prices, costs) {
   return Object.entries(costs).filter(([k, c]) => !(prices[k] >= Number(c.toFixed(9)))).map(([k, c]) => `${k}: ${prices[k]}¢ < cost x multiplier ${c.toFixed(4)}¢`);
 }
 
-/** `tiers` with every derived price written in. A key that names no entry is refused, not dropped. */
-export function applyDerived(tiers, prices) {
-  const out = structuredClone(tiers);
+/** Lookup key -> the price object in `tiers` for every price it lists, sold or proposed. */
+function slotsOf(tiers) {
   const slots = new Map();
-  const prefix = out.lookup_prefix;
-  for (const e of [...out.tiers, ...out.addons]) for (const p of e.prices) slots.set(lookupKey(prefix, e.id, p.interval), p);
-  for (const m of out.metered) for (const p of m.prices) slots.set(meteredLookupKey(prefix, m.id), p);
-  for (const [key, cents] of Object.entries(prices)) {
+  const prefix = need(tiers?.lookup_prefix, 'tiers.json lookup_prefix');
+  for (const e of [...tiers.tiers, ...tiers.addons]) for (const p of e.prices) slots.set(lookupKey(prefix, e.id, p.interval), p);
+  for (const m of tiers.metered) for (const p of m.prices) slots.set(meteredLookupKey(prefix, m.id), p);
+  return slots;
+}
+
+/** Lookup key -> unit_amount for every price tiers.json lists, whatever its status. */
+export function amountsOf(tiers) {
+  return Object.fromEntries([...slotsOf(tiers)].map(([key, p]) => [key, p.unit_amount]));
+}
+
+const GRANT_LIMIT = 'storage_gb_per_seat';
+
+/**
+ * `tiers` with every derived price (`proposed`) and seat grant (`grants`) written in. Both are
+ * required; a key or tier that names no entry is refused, not dropped.
+ */
+export function applyDerived(tiers, { proposed, grants }) {
+  if (!proposed || !grants) throw new Error('applyDerived needs { proposed, grants } from derive()');
+  const out = structuredClone(tiers);
+  const slots = slotsOf(out);
+  for (const [key, cents] of Object.entries(proposed)) {
     const slot = slots.get(key);
     if (!slot) throw new Error(`derived price ${key} names no entry in tiers.json`);
     slot.unit_amount = cents;
+  }
+  for (const [id, gb] of Object.entries(grants)) {
+    const tier = out.tiers.find((t) => t.id === id);
+    if (!tier) throw new Error(`derived grant for ${id} names no tier in tiers.json`);
+    tier.limits[GRANT_LIMIT] = gb;
+  }
+  return out;
+}
+
+/**
+ * Every derived figure whose tiers.json value differs from the computation:
+ * [{ key, tiers, derived }]. Empty once an approved model has been written in.
+ */
+export function driftOf({ rates, model, tiers }) {
+  const d = derive({ rates, model, tiers });
+  const have = amountsOf(tiers);
+  const out = Object.entries(d.proposed).filter(([key, cents]) => have[key] !== cents).map(([key, cents]) => ({ key, tiers: have[key], derived: cents }));
+  for (const [id, gb] of Object.entries(d.grants)) {
+    const was = tiers.tiers.find((t) => t.id === id).limits[GRANT_LIMIT];
+    if (was !== gb) out.push({ key: `${id} limits.${GRANT_LIMIT}`, tiers: was, derived: gb });
   }
   return out;
 }

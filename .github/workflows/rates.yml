@@ -56,6 +56,22 @@ jobs:
             echo "No change; nothing to offer."
             exit 0
           fi
+          # The body says whether this run wrote prices: tiers.json changes only under an approved
+          # model (scripts/rates/plan-update.mjs (e)); a proposed run carries rates and proposals.
+          approval=$(node -p "require('./billing/pricing-model.json').approval.status")
+          body="$RUNNER_TEMP/rates-pr-body.md"
+          if [ "$approval" = "approved" ] && [ -n "$(git status --porcelain -- billing/tiers.json)" ]; then
+            echo "**Prices written:** this run wrote derived prices into billing/tiers.json (pricing-model.json approval.status is approved)." > "$body"
+          elif [ "$approval" = "approved" ]; then
+            echo "**No price changed:** pricing-model.json approval.status is approved and every derived price already equals billing/tiers.json; this run refreshed billing/rates.json only." > "$body"
+          elif [ -z "$(git status --porcelain -- billing/tiers.json)" ]; then
+            echo "**No price written:** pricing-model.json approval.status is $approval, so billing/tiers.json is untouched; every PROPOSED line below is a report for the owner, not a price." > "$body"
+          else
+            echo "billing/tiers.json changed while approval.status is $approval: refusing to offer it" >&2
+            exit 1
+          fi
+          printf '\n' >> "$body"
+          cat "$RUNNER_TEMP/rates-change-log.md" >> "$body"
           git config user.name 'citadel-rates-bot'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git switch -C bot/rates
@@ -64,7 +80,7 @@ jobs:
           git push --force origin bot/rates
           pr=$(gh pr list --head bot/rates --base master --state open --json number --jq '.[0].number // empty')
           if [ -n "$pr" ]; then
-            gh pr edit "$pr" --title "billing: weekly rates update" --body-file "$RUNNER_TEMP/rates-change-log.md"
+            gh pr edit "$pr" --title "billing: weekly rates update" --body-file "$body"
           else
-            gh pr create --base master --head bot/rates --title "billing: weekly rates update" --body-file "$RUNNER_TEMP/rates-change-log.md"
+            gh pr create --base master --head bot/rates --title "billing: weekly rates update" --body-file "$body"
           fi

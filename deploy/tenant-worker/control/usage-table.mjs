@@ -14,12 +14,12 @@ export class UsageTable {
     sql.exec(
       "CREATE TABLE IF NOT EXISTS quota_usage (period_start INTEGER PRIMARY KEY, period_end INTEGER NOT NULL, " +
         "bytes_in INTEGER NOT NULL, bytes_out INTEGER NOT NULL, frames_in INTEGER NOT NULL, " +
-        "active_seconds INTEGER NOT NULL, peak_connections INTEGER NOT NULL, updated_at INTEGER NOT NULL, appends INTEGER NOT NULL DEFAULT 0)",
+        "active_seconds INTEGER NOT NULL, peak_connections INTEGER NOT NULL, updated_at INTEGER NOT NULL, " +
+        "appends INTEGER NOT NULL DEFAULT 0)",
     );
-    // A table made before appends were metered (B2 owns this column; the lead merges): its periods had none.
-    if (![...sql.exec("SELECT name FROM pragma_table_info('quota_usage') WHERE name = 'appends'")].length) {
-      sql.exec("ALTER TABLE quota_usage ADD COLUMN appends INTEGER NOT NULL DEFAULT 0");
-    }
+    // Objects whose table predates document appends: added in place, their periods counted none.
+    const columns = [...sql.exec("PRAGMA table_info(quota_usage)")].map((c) => c.name);
+    if (!columns.includes("appends")) sql.exec("ALTER TABLE quota_usage ADD COLUMN appends INTEGER NOT NULL DEFAULT 0");
   }
 
   load(periodStart) {

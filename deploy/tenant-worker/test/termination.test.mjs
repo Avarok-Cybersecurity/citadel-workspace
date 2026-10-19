@@ -47,11 +47,11 @@ describe("terminationOf", () => {
   });
 });
 
-/** An active Team tenant, 3 seats (60 GB relay included), overage billing as the row says (off). */
+/** An active Team tenant, 3 seats (60 GB relay included), overage billing off at creation. */
 async function activeTeam() {
   const slug = freshSlug("term");
   outbound();
-  expect((await post("/api/tenants", createBody(slug, { tier: "team", interval: "month", seats: 3 }))).status).toBe(201);
+  expect((await post("/api/tenants", createBody(slug, { tier: "team", interval: "month", seats: 3, overage_billing: false }))).status).toBe(201);
   const row = await tenantRow(slug);
   const period = { start: now() - 86400, end: now() + 29 * 86400 };
   const event = subscriptionEvent("customer.subscription.created", row, { id: `evt_${crypto.randomUUID()}`, created: now(), items: [item("citadel-team-month", 3)], period });
@@ -117,11 +117,14 @@ describe("the tenant object, overage billing off", () => {
     await onClock(object, clock);
     const { included } = await dimension(object, "document-appends");
     expect(included).toBe(3 * 250000);
-    await runInDurableObject(object, (i) => i.meter.appended(included));
+    // Through the host the Docs kernel is given, which then asks the same billing state.
+    await runInDurableObject(object, (i) => i.documentsHost().appended(included));
     expect(await dimension(object, "document-appends")).toMatchObject({ state: "terminating", terminate_at: T0 + TTL_MS });
     expect(await object.documentsWritable()).toBe(true);
+    expect(await runInDurableObject(object, (i) => i.documentsHost().writable())).toBe(true);
     clock.now = T0 + TTL_MS;
     expect(await object.documentsWritable()).toBe(false);
+    expect(await runInDurableObject(object, (i) => i.documentsHost().writable())).toBe(false);
     outbound();
     expect((await mint(object)).ice_servers).toBeDefined(); // relay is its own dimension
   });
@@ -131,7 +134,7 @@ describe("the tenant object, overage billing off", () => {
     const storage = await dimension(object, "storage");
     expect(storage.unit).toBe("bytes");
     expect(storage.used).toBeGreaterThan(0);
-    expect(storage.included).toBe(3 * 2 * 1e9);
+    expect(storage.included).toBe(3 * 10 * 1e9);
     expect(storage.terminate_at).toBeNull();
   });
 

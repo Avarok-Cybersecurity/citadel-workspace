@@ -2,6 +2,12 @@
 /**
  * Make Stripe hold exactly the paid tiers in billing/tiers.json, or audit that it does.
  *
+ * THE RULE (docs/plans/billing-automation.md): applies happen only from origin/master at deploy,
+ * after the owner's approval. --apply is refused (exit 2, before any key is read) while
+ * billing/pricing-model.json approval.status is "proposed"; the audit runs either way and checks
+ * Stripe against tiers.json as it stands, which holds approved prices only. Running from master is
+ * enforced operationally: the deploy job runs from master, and no other job holds a write key.
+ *
  *   node scripts/stripe-catalogue.mjs <key-file>            # audit (read-only; the default)
  *   node scripts/stripe-catalogue.mjs <key-file> --apply    # create or correct what differs
  *
@@ -27,6 +33,7 @@
  * the account default) is made to offer every licensed product with all its active prices.
  */
 import { readFileSync } from 'node:fs';
+import { stripeWriteRefusal } from '../billing/approval.mjs';
 import { deriveCatalogue, deriveMetered, meterDiffs, priceDiffs, productDiffs } from '../billing/catalogue.mjs';
 import { planPriceSync } from '../billing/reconcile.mjs';
 import { readKey, stripeClient } from './lib/stripe-api.mjs';
@@ -36,6 +43,18 @@ const [keyFile, ...flags] = process.argv.slice(2);
 const APPLY = flags.includes('--apply');
 if (!keyFile) {
   console.error('usage: stripe-catalogue.mjs <file with STRIPE_SECRET_KEY=...> [--apply] [--live]');
+  process.exit(2);
+}
+const readJson = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
+const model = readJson('../billing/pricing-model.json');
+try {
+  const refusal = APPLY ? stripeWriteRefusal(model) : null;
+  if (refusal) {
+    console.error(refusal);
+    process.exit(2);
+  }
+} catch (e) {
+  console.error(e.message);
   process.exit(2);
 }
 let key;
@@ -48,9 +67,8 @@ try {
 }
 const stripe = stripeClient(key);
 
-const readJson = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'));
 const table = readJson('../billing/tiers.json');
-const tax = readJson('../billing/pricing-model.json').tax;
+const tax = model.tax;
 if (!tax || tax.behavior === undefined || tax.product_tax_code === undefined) {
   console.error('billing/pricing-model.json needs tax.behavior and tax.product_tax_code (null is a value)');
   process.exit(2);
@@ -136,7 +154,7 @@ for (const w of wanted) {
 
 const portalProducts = licensed.map((w) => productIdByTier[w.tier]).filter(Boolean);
 if (portalProducts.length === licensed.length) {
-  drift += await syncPortal({ stripe, mode, apply: APPLY, productIds: portalProducts });
+  drift += await syncPortal({ stripe, mode, apply: APPLY, model, productIds: portalProducts });
 } else {
   drift += 1;
   console.log(`DIFF ${mode} portal: skipped until every licensed product exists`);

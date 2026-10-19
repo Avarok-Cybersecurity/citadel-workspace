@@ -98,3 +98,17 @@ test('the account default portal is refused, as is an unexpanded list or a produ
   assert.throws(() => planPortal({ id: 'bpc_1', is_default: false, features: { subscription_update: {} } }, products), /expand/);
   assert.throws(() => planPortal(portal([]), [{ product: 'prod_t', prices: [] }]), /no active price/);
 });
+
+test('the portal sync never writes while the pricing model is proposed, and reaches Stripe once approved', async () => {
+  const { syncPortal } = await import('../scripts/lib/stripe-portal-sync.mjs');
+  const model = JSON.parse(readFileSync(new URL('./pricing-model.json', import.meta.url), 'utf8'));
+  // An in-memory port standing in for the Stripe API: it records that it was reached and stops.
+  const calls = [];
+  const stripe = { call: async (method, path) => { calls.push([method, path]); throw new Error('reached stripe'); } };
+  await assert.rejects(syncPortal({ stripe, mode: 'test', apply: true, model, productIds: [] }), /portal: refusing to write to Stripe/);
+  assert.deepEqual(calls, []);
+  const approved = { ...model, approval: { status: 'approved', approved_on: '2026-10-19', approved_by: 'Owner' } };
+  await assert.rejects(syncPortal({ stripe, mode: 'test', apply: true, model: approved, productIds: [] }), /reached stripe/);
+  await assert.rejects(syncPortal({ stripe, mode: 'test', apply: false, model, productIds: [] }), /reached stripe/, 'the audit runs while proposed');
+  await assert.rejects(syncPortal({ stripe, mode: 'test', model, productIds: [] }), /needs apply/);
+});

@@ -37,13 +37,21 @@ export function meteredLookupKey(prefix, id) {
   return `${prefix}-${id}`;
 }
 
+const METERED_STATUSES = ['proposed', 'approved'];
+
 /**
- * The metered products (billed by usage through a Stripe Billing Meter, never by quantity): one
- * meter, one product and one price each. A subscription item on such a price carries no quantity.
+ * The metered products SOLD (billed by usage through a Stripe Billing Meter, never by quantity):
+ * one meter, one product and one price each. A subscription item on such a price carries no
+ * quantity. Every entry states `status`; only an approved one is sold: a proposed entry is no
+ * Stripe meter, product or price, and no Checkout or usage-subscription item.
  */
 export function deriveMetered(table) {
   const tierIds = new Set(table.tiers.map((t) => t.id));
-  return (table.metered ?? []).map((m) => {
+  const metered = table.metered ?? [];
+  for (const m of metered) {
+    if (!METERED_STATUSES.includes(m.status)) throw new Error(`metered ${m.id}: status is ${METERED_STATUSES.join(' | ')}, got ${m.status}`);
+  }
+  return metered.filter((m) => m.status === 'approved').map((m) => {
     for (const t of m.available_on) {
       if (!tierIds.has(t)) throw new Error(`metered ${m.id} is offered on unknown tier ${t}`);
     }

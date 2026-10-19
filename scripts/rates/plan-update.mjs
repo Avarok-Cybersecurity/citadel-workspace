@@ -6,11 +6,13 @@
  *   (b) no derived price moves more than pricing-model max_change_percent_per_run without
  *       ownerApproved;
  *   (c) no price is written below cost x multiplier, and no list seat price below its floor;
- *   (d) an unchanged run writes nothing (rates keep their fetched_at).
+ *   (d) an unchanged run writes nothing (rates keep their fetched_at);
+ *   (e) the derived prices and grants are written into tiers.json ONLY when pricing-model.json
+ *       approval.status is approved; while proposed, rates.json may still be refreshed, and every
+ *       derived figure that differs from tiers.json is reported as a proposal, never written.
  */
 import { parseSource } from './parse-rates.mjs';
-import { applyDerived, belowCost, derive, floorViolations } from '../../billing/derive.mjs';
-import { deriveCatalogue, deriveMetered } from '../../billing/catalogue.mjs';
+import { applyDerived, belowCost, derive, driftOf, floorViolations } from '../../billing/derive.mjs';
 
 /** results: [{ source, body } | { source, error }] -> { rateId: { value, unit, source, raw } }. */
 export function collectRates(sources, results) {
@@ -31,14 +33,11 @@ export function collectRates(sources, results) {
   return out;
 }
 
-/** lookup key -> unit_amount for every price tiers.json sells. */
-function amountsOf(tiers) {
-  return Object.fromEntries([...deriveCatalogue(tiers), ...deriveMetered(tiers)].flatMap((w) => w.prices).map((p) => [p.lookup_key, p.unit_amount]));
-}
-
 /**
- * { rates, tiers, log }: `rates` / `tiers` are the files' new contents, or null when that file must
- * not be written. Throws (with every reason) when a guardrail refuses.
+ * { rates, tiers, log, proposals, approval, explanations }: `rates` / `tiers` are the files' new
+ * contents, or null when that file must not be written (`tiers` is always null while the model is
+ * proposed). `proposals`: one "PROPOSED (not written)" line per derived figure that differs, while
+ * proposed. Throws (with every reason) when a guardrail refuses.
  */
 export function planUpdate({ oldRates, fetched, model, tiers, ownerApproved, now }) {
   if (typeof ownerApproved !== 'boolean') throw new Error('planUpdate needs ownerApproved: true | false');
@@ -59,20 +58,24 @@ export function planUpdate({ oldRates, fetched, model, tiers, ownerApproved, now
   const newRates = { ...oldRates, fetched_at: ratesChanged ? now : oldRates.fetched_at, rates: merged };
 
   const d = derive({ rates: newRates, model, tiers });
-  const before = amountsOf(tiers);
+  const drift = driftOf({ rates: newRates, model, tiers });
+  for (const { key, tiers: was } of drift) if (was === undefined) throw new Error(`derived ${key} is not listed in tiers.json`);
+  const rates = ratesChanged ? newRates : null;
+  if (d.approval !== 'approved') {
+    if (refusals.length) throw new Error(`refused, nothing written:\n  ${refusals.join('\n  ')}`);
+    const proposals = drift.map((x) => `PROPOSED (not written): ${x.key} ${x.tiers} → ${x.derived}`);
+    return { rates, tiers: null, log, proposals, approval: d.approval, explanations: d.explanations };
+  }
   const max = model?.max_change_percent_per_run?.value;
   if (!(typeof max === 'number' && max > 0)) throw new Error('missing pricing-model.json max_change_percent_per_run.value');
-  for (const [key, cents] of Object.entries(d.prices)) {
-    const was = before[key];
-    if (was === undefined) throw new Error(`derived ${key} is not sold in tiers.json`);
-    if (was === cents) continue;
+  for (const { key, tiers: was, derived: cents } of drift) {
     const pct = (Math.abs(cents - was) / was) * 100;
     log.push(`${key}: ${was} → ${cents} (derived, ${pct.toFixed(1)}%)`);
     if (pct > max && !ownerApproved) refusals.push(`${key}: ${was} → ${cents} moves ${pct.toFixed(1)}% > ${max}% (re-run with --owner-approved)`);
   }
-  const newTiers = applyDerived(tiers, d.prices);
-  refusals.push(...belowCost(d.prices, d.costs), ...floorViolations(newTiers, d.floors, model));
+  const newTiers = applyDerived(tiers, d);
+  refusals.push(...belowCost(d.proposed, d.costs), ...floorViolations(newTiers, d.floors, model));
   if (refusals.length) throw new Error(`refused, nothing written:\n  ${refusals.join('\n  ')}`);
   const tiersChanged = JSON.stringify(newTiers) !== JSON.stringify(tiers);
-  return { rates: ratesChanged ? newRates : null, tiers: tiersChanged ? newTiers : null, log, explanations: d.explanations };
+  return { rates, tiers: tiersChanged ? newTiers : null, log, proposals: [], approval: d.approval, explanations: d.explanations };
 }

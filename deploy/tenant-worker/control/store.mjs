@@ -8,9 +8,9 @@ const ADDON_COLUMNS = ADDONS.map((a) => a.quantityField);
 const COLUMNS =
   `slug, tenant_id, display_name, status, tier, interval, seats, ${ADDON_COLUMNS.join(", ")}, stripe_customer, ` +
   "stripe_subscription, created_at, expires_at, claim_hash, checkout_hash, sub_event_created, reservation_hash, checkout_sealed, " +
-  "period_start, period_end, usage_subscription, overage_billing";
+  "period_start, period_end, usage_subscription, usage_subscription_ended, overage_billing";
 const INSERT_COLUMNS = ["slug", "tenant_id", "display_name", "status", "tier", "interval", "seats", ...ADDON_COLUMNS,
-  "created_at", "expires_at", "claim_hash", "reservation_hash"];
+  "overage_billing", "created_at", "expires_at", "claim_hash", "reservation_hash"];
 
 export class Store {
   constructor(db) {
@@ -70,7 +70,8 @@ export class Store {
         this.db
           .prepare(`INSERT INTO tenants (${INSERT_COLUMNS.join(", ")}) VALUES (${INSERT_COLUMNS.map(() => "?").join(", ")})`)
           .bind(
-            row.slug, row.tenant_id, row.display_name, "pending", row.tier, row.interval, row.seats, ...ADDON_COLUMNS.map((c) => row[c]), now,
+            row.slug, row.tenant_id, row.display_name, "pending", row.tier, row.interval, row.seats, ...ADDON_COLUMNS.map((c) => row[c]),
+            overageColumn(row.overage_billing), now,
             row.expires_at, row.claim_hash, row.reservation_hash,
           ),
         // The acceptance lands with the reservation or not at all.
@@ -135,6 +136,21 @@ export class Store {
     return done.meta.changes === 1;
   }
 
+  /**
+   * The owner's overage-billing choice and the usage subscription it led to
+   * (control/overage-billing.mjs). False when the row is no longer that tenant's.
+   */
+  async setOverageBilling(slug, tenantId, fields) {
+    const unknown = Object.keys(fields).filter((k) => !OVERAGE_FIELDS.has(k));
+    if (unknown.length || !("overage_billing" in fields)) throw new Error(`an overage change sets overage_billing and may set ${[...OVERAGE_FIELDS].join(", ")}`);
+    const values = { ...fields, overage_billing: overageColumn(fields.overage_billing) };
+    const done = await this.db
+      .prepare(`UPDATE tenants SET ${Object.keys(values).map((k) => `${k} = ?`).join(", ")} WHERE slug = ? AND tenant_id = ?`)
+      .bind(...Object.values(values), slug, tenantId)
+      .run();
+    return done.meta.changes === 1;
+  }
+
   async eventSeen(id) {
     return (await this.db.prepare("SELECT 1 AS seen FROM stripe_events WHERE id = ?").bind(id).first()) !== null;
   }
@@ -166,5 +182,13 @@ export class Store {
 /** The columns an event may change, so `applyEvent` never builds SQL from anything else. */
 export const EVENT_FIELDS = new Set([
   "status", "tier", "interval", "seats", ...ADDON_COLUMNS, "stripe_customer", "stripe_subscription",
-  "sub_event_created", "expires_at", "period_start", "period_end", "usage_subscription",
+  "sub_event_created", "expires_at", "period_start", "period_end", "usage_subscription", "usage_subscription_ended",
 ]);
+
+const OVERAGE_FIELDS = new Set(["overage_billing", "usage_subscription", "usage_subscription_ended"]);
+
+/** The `overage_billing` column (0/1, migration 0009) for a plan's boolean; nothing else is stored. */
+function overageColumn(v) {
+  if (typeof v !== "boolean") throw new Error("overage_billing is true or false");
+  return v ? 1 : 0;
+}

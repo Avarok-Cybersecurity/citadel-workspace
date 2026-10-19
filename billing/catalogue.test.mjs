@@ -12,8 +12,8 @@ test('the approved prices are what the table says', () => {
     'citadel-team-year': 6000,
     'citadel-business-month': 1200,
     'citadel-business-year': 12000,
-    'citadel-storage-month': 600,
-    'citadel-storage-year': 6000,
+    'citadel-storage-month': 200,
+    'citadel-storage-year': 2000,
     'citadel-secure-links-month': 200,
     'citadel-secure-links-year': 2000,
   });
@@ -58,7 +58,7 @@ test('a bad amount or a duplicate lookup key is refused, not written', () => {
 test('extra storage is its own product, per 10 GB block, on paid tiers only', () => {
   const storage = deriveCatalogue(table).find((p) => p.tier === 'storage');
   assert.equal(storage.product.description, '10 GB per block, on team and business');
-  assert.deepEqual(storage.prices.map((p) => p.unit_amount), [600, 6000]);
+  assert.deepEqual(storage.prices.map((p) => p.unit_amount), [200, 2000]);
   assert.ok(storage.prices.every((p) => p.usage_type === 'licensed'));
   const bad = structuredClone(table);
   bad.addons[0].available_on.push('enterprise');
@@ -86,7 +86,7 @@ test('an add-on granting something the catalogue cannot describe is refused', ()
 
 test('every paid seat carries its storage and document-append grants; Free has totals', () => {
   assert.deepEqual(Object.fromEntries(table.tiers.map((t) => [t.id, [t.limits.storage_gb_per_seat ?? t.limits.storage_gb_total, t.limits.document_appends_per_seat ?? t.limits.document_appends_total]])), {
-    free: [1, 50000], team: [2, 250000], business: [5, 250000],
+    free: [1, 50000], team: [10, 250000], business: [25, 250000],
   });
 });
 
@@ -95,11 +95,10 @@ test('every tier states its own secure-link allowance per member', () => {
 });
 
 test('relay overage is one metered price under citadel-relay-overage, on its own meter', () => {
-  const [overage, appends, ...rest] = deriveMetered(table);
+  const [overage, ...rest] = deriveMetered(table);
   assert.equal(rest.length, 0);
   assert.equal(overage.meter.event_name, 'citadel_relay_gb');
-  assert.equal(overage.prices[0].unit_amount, 15);
-  assert.deepEqual([appends.tier, appends.meter.event_name, appends.prices[0].unit_amount], ['document-appends', 'citadel_document_appends', 1]);
+  assert.equal(overage.prices[0].unit_amount, 10);
   assert.deepEqual(overage.prices.map((p) => [p.lookup_key, p.usage_type, p.interval]), [['citadel-relay-overage', 'metered', 'month']]);
   // Not a tier's product: the licensed catalogue is untouched by it.
   assert.ok(!deriveCatalogue(table).some((p) => p.tier === overage.tier));
@@ -131,4 +130,21 @@ test('a product tax code is compared only when the model names one', () => {
   assert.deepEqual(productDiffs(want, { ...have, tax_code: { id: 'txcd_10103001' } }, 'txcd_10103001'), []);
   assert.throws(() => productDiffs(want, have), /needs taxCode/);
   assert.throws(() => productDiffs(want, have, 'saas'), /needs taxCode/);
+});
+
+test('a proposed metered entry is not sold: no meter, product or price until its status is approved', () => {
+  assert.equal(table.metered.find((m) => m.id === 'document-appends').status, 'proposed');
+  assert.deepEqual(deriveMetered(table).map((w) => w.tier), ['relay-overage']);
+  const approved = structuredClone(table);
+  approved.metered.find((m) => m.id === 'document-appends').status = 'approved';
+  const appends = deriveMetered(approved).find((w) => w.tier === 'document-appends');
+  assert.deepEqual([appends.meter.event_name, appends.prices[0].lookup_key, appends.prices[0].unit_amount], ['citadel_document_appends', 'citadel-document-appends', 1]);
+});
+
+test('every metered entry states its status: missing or unknown throws', () => {
+  for (const status of [undefined, 'Approved', 'sold']) {
+    const bad = structuredClone(table);
+    bad.metered[0].status = status;
+    assert.throws(() => deriveMetered(bad), /metered relay-overage: status is proposed \| approved/);
+  }
 });

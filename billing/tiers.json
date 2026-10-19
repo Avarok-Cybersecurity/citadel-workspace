@@ -23,7 +23,7 @@
       "limits": {
         "workspaces": 1,
         "members": 100,
-        "storage_gb_per_seat": 2,
+        "storage_gb_per_seat": 10,
         "connections": 300,
         "connections_per_seat": 3,
         "relay_gb_per_seat": 20,
@@ -47,7 +47,7 @@
       "limits": {
         "workspaces": 1,
         "members": 1000,
-        "storage_gb_per_seat": 5,
+        "storage_gb_per_seat": 25,
         "priority_support": true,
         "connections": 500,
         "connections_per_seat": 3,
@@ -83,14 +83,14 @@
       "prices": [
         {
           "interval": "month",
-          "unit_amount": 600
+          "unit_amount": 200
         },
         {
           "interval": "year",
-          "unit_amount": 6000
+          "unit_amount": 2000
         }
       ],
-      "$comment": "DERIVED (billing/derive.mjs): DO SQLite $0.20/GB-month x 10 GB x the multiplier, rounded up to the addon step; the year is 10 months. The 2026-09-22 price of $2 was 1x cost. billing/derive.test.mjs fails if this drifts from rates.json x pricing-model.json."
+      "$comment": "APPROVED 2026-09-22 at $2 per 10 GB block (1x DO SQLite cost). derived: true means billing/derive.mjs computes this price from rates.json x pricing-model.json (today: $6 while storage lives in DO SQLite) and the rates agent writes it here ONLY once pricing-model.json approval.status is approved; until then the proposal is reported, never written (docs/plans/billing-automation.md row 9)."
     },
     {
       "id": "secure-links",
@@ -125,7 +125,7 @@
   },
   "metered": [
     {
-      "$comment": "DERIVED (billing/derive.mjs): the dearer relay path (Cloudflare Realtime TURN, $0.05/GB; the tenant object itself relays at <= $0.006/GB) x the multiplier, rounded up to the cent. One price whichever path carried it, since customers do not choose the path. Approved at 10 cents on 2026-09-23 (2x TURN); re-derived 2026-10-18 pending the owner (docs/plans/billing-automation.md decision 5).",
+      "$comment": "APPROVED 2026-09-23 at 10 cents/GB (2x Cloudflare Realtime TURN). derived: true means billing/derive.mjs computes this price (today: 15 cents, TURN x 3) and the rates agent writes it here ONLY once pricing-model.json approval.status is approved (docs/plans/billing-automation.md row 7/decision 5).",
       "id": "relay-overage",
       "derived": true,
       "name": "Citadel Workspace Relay Overage",
@@ -142,12 +142,12 @@
       "prices": [
         {
           "interval": "month",
-          "unit_amount": 15
+          "unit_amount": 10
         }
       ]
     },
     {
-      "$comment": "DERIVED (billing/derive.mjs). Proposed 2026-10-18, pending the owner (docs/plans/billing-automation.md decisions 2-4). A document append writes 3 DO rows over its life (update + log head, then the compaction delete) at $1.00/M rows plus 1/20 of a $0.15/M request: $3.01 per million. Per paid seat the plan includes document_appends_per_seat per period; beyond that, whole thousands are billed through a Stripe Billing Meter at this price x the multiplier, rounded up to the cent.",
+      "$comment": "PROPOSED 2026-10-18, not sold: status proposed keeps it out of the Stripe catalogue, Checkout and the usage subscription until the owner approves (docs/plans/billing-automation.md decisions 2-4). A document append writes 3 DO rows over its life (update + log head, then the compaction delete) at $1.00/M rows plus 1/20 of a $0.15/M request: $3.01 per million. Per paid seat the plan includes document_appends_per_seat per period; beyond that, whole thousands are billed through a Stripe Billing Meter at this price x the multiplier, rounded up to the cent.",
       "id": "document-appends",
       "derived": true,
       "name": "Citadel Workspace Document Edits Overage",
