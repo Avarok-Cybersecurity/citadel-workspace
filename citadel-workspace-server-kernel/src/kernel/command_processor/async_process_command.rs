@@ -1086,7 +1086,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         WorkspaceProtocolRequest::GetServerCapabilities => {
             let config = kernel.file_transfer_config();
             Ok(WorkspaceProtocolResponse::ServerCapabilities {
-                allow_server_file_transfer: config.allow_server_file_transfer,
+                allow_server_file_transfer: kernel.is_server_file_transfer_enabled(),
                 allow_server_revfs_storage: kernel.is_server_revfs_enabled(),
                 max_file_transfer_size_mb: config.max_file_transfer_size_mb,
                 revfs_storage_quota_mb: config.revfs_storage_quota_mb,

@@ -399,9 +399,21 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         &self.file_transfer_config
     }
 
-    /// Check if server file transfer is enabled
+    /// Whether clients can transfer files to this server: configured on AND backed by storage
+    /// the SDK will stream objects into.
     pub fn is_server_file_transfer_enabled(&self) -> bool {
-        self.file_transfer_config.allow_server_file_transfer
+        self.streamed_objects_available(self.file_transfer_config.allow_server_file_transfer)
+    }
+
+    /// `configured`, narrowed to what the backend this node runs on can actually store.
+    fn streamed_objects_available(&self, configured: bool) -> bool {
+        let node_remote = self.node_remote.read();
+        crate::kernel::server_capabilities::streamed_objects_available(
+            configured,
+            node_remote
+                .as_ref()
+                .map(|nr| nr.account_manager().get_backend_type()),
+        )
     }
 
     /// Which permission a transfer needs, taken from which way the bytes flow.
@@ -457,13 +469,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
     /// Whether this server can store RE-VFS files: configured on AND backed by storage the SDK
     /// will stream objects into.
     pub fn is_server_revfs_enabled(&self) -> bool {
-        let node_remote = self.node_remote.read();
-        crate::kernel::server_capabilities::revfs_storage_available(
-            self.file_transfer_config.allow_server_revfs_storage,
-            node_remote
-                .as_ref()
-                .map(|nr| nr.account_manager().get_backend_type()),
-        )
+        self.streamed_objects_available(self.file_transfer_config.allow_server_revfs_storage)
     }
 
     /// Health check: returns true if the kernel is operational
