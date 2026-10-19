@@ -34,7 +34,8 @@ fn workspace_terms_are_required_only_when_the_workspace_has_them() {
 /// number stored with their consent, and nothing below the current version is current.
 #[test]
 fn a_member_who_accepted_the_previous_platform_version_owes_the_current_one() {
-    assert!(
+    // Checked when the test compiles, not at run time (clippy: assertions_on_constants).
+    const _: () = assert!(
         PLATFORM_TERMS_VERSION >= 2,
         "the terms have been bumped at least once"
     );

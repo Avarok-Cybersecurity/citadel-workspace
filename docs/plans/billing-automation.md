@@ -116,7 +116,9 @@ verbatim (same path, same bytes, so the two PRs merge cleanly). Owner approved m
 12. Still open from the quotas plan: Free-tier duration ($4.05/always-on Free tenant) — cap hours,
     cap count, or accept.
 
-Part 2 is being built against the proposed values; every number above lives in one config file
+**How the owner approves the pricing rows:** in `billing/pricing-model.json` set `"approval": { "status": "approved", "approved_on": "<YYYY-MM-DD>", "approved_by": "<name>" }` (keep the `$comment`), then dispatch the Rates workflow with `owner_approved: true` (the first write moves storage +200 % and relay +50 %, past the 25 % cap); merge that PR; the deploy from master applies it to Stripe. Until then every proposal is computed and reported, never sold.
+
+Part 2 was built against the proposed values; every number above lives in one config file
 (`billing/pricing-model.json`) so a different answer changes no code.
 
 ## G. Overage billing toggle, terminations, alerts and terms (owner requirements of 2026-10-18)
