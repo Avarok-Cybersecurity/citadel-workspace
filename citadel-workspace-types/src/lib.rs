@@ -19,6 +19,7 @@ pub mod roles_protocol;
 pub mod roles_stored;
 /// Secure links: tokens the server maps to in-app deep links for the people named.
 pub mod secure_links;
+pub mod server_feature_refusal;
 pub mod sign_in;
 pub mod structs;
 /// The build script's submodule-freshness rule, here so it can be tested.
@@ -571,8 +572,16 @@ pub enum WorkspaceProtocolResponse {
     ServerCapabilities {
         /// Whether server-mediated file transfers are enabled
         allow_server_file_transfer: bool,
+        /// Why `allow_server_file_transfer` is false; absent when it is true.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        file_transfer_refusal: Option<server_feature_refusal::ServerFeatureRefusal>,
         /// Whether RE-VFS (server-side encrypted storage) is enabled
         allow_server_revfs_storage: bool,
+        /// Why `allow_server_revfs_storage` is false; absent when it is true.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        revfs_storage_refusal: Option<server_feature_refusal::ServerFeatureRefusal>,
         /// Maximum file size for transfers (in megabytes)
         #[ts(type = "bigint")]
         max_file_transfer_size_mb: u64,

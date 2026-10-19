@@ -10,6 +10,7 @@ use crate::kernel::transaction::BackendTransactionManager;
 use crate::WorkspaceProtocolResponse;
 use citadel_logging::{debug, error, info, warn};
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, ObjectTransferStatus, Ratchet};
+use citadel_workspace_types::server_feature_refusal::ServerFeatureRefusal;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -399,16 +400,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         &self.file_transfer_config
     }
 
-    /// Whether clients can transfer files to this server: configured on AND backed by storage
-    /// the SDK will stream objects into.
-    pub fn is_server_file_transfer_enabled(&self) -> bool {
-        self.streamed_objects_available(self.file_transfer_config.allow_server_file_transfer)
+    /// Why clients cannot transfer files to this server, or `None` when they can: configured on
+    /// AND backed by storage the SDK will stream objects into.
+    pub fn server_file_transfer_refusal(&self) -> Option<ServerFeatureRefusal> {
+        self.streamed_objects_refusal(self.file_transfer_config.allow_server_file_transfer)
     }
 
     /// `configured`, narrowed to what the backend this node runs on can actually store.
-    fn streamed_objects_available(&self, configured: bool) -> bool {
+    fn streamed_objects_refusal(&self, configured: bool) -> Option<ServerFeatureRefusal> {
         let node_remote = self.node_remote.read();
-        crate::kernel::server_capabilities::streamed_objects_available(
+        crate::kernel::server_capabilities::streamed_objects_refusal(
             configured,
             node_remote
                 .as_ref()
@@ -466,10 +467,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .unwrap_or(false)
     }
 
-    /// Whether this server can store RE-VFS files: configured on AND backed by storage the SDK
-    /// will stream objects into.
-    pub fn is_server_revfs_enabled(&self) -> bool {
-        self.streamed_objects_available(self.file_transfer_config.allow_server_revfs_storage)
+    /// Why this server cannot store RE-VFS files, or `None` when it can: configured on AND backed
+    /// by storage the SDK will stream objects into.
+    pub fn server_revfs_refusal(&self) -> Option<ServerFeatureRefusal> {
+        self.streamed_objects_refusal(self.file_transfer_config.allow_server_revfs_storage)
     }
 
     /// Health check: returns true if the kernel is operational

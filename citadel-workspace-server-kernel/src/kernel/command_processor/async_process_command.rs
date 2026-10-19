@@ -1085,9 +1085,13 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         // ========== Server Capabilities ==========
         WorkspaceProtocolRequest::GetServerCapabilities => {
             let config = kernel.file_transfer_config();
+            let file_transfer_refusal = kernel.server_file_transfer_refusal();
+            let revfs_storage_refusal = kernel.server_revfs_refusal();
             Ok(WorkspaceProtocolResponse::ServerCapabilities {
-                allow_server_file_transfer: kernel.is_server_file_transfer_enabled(),
-                allow_server_revfs_storage: kernel.is_server_revfs_enabled(),
+                allow_server_file_transfer: file_transfer_refusal.is_none(),
+                file_transfer_refusal,
+                allow_server_revfs_storage: revfs_storage_refusal.is_none(),
+                revfs_storage_refusal,
                 max_file_transfer_size_mb: config.max_file_transfer_size_mb,
                 revfs_storage_quota_mb: config.revfs_storage_quota_mb,
             })

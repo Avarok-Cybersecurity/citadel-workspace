@@ -8,6 +8,7 @@ import type { MessagingTrustResponse } from "./MessagingTrustResponse";
 import type { Permission } from "./Permission";
 import type { RolesResponse } from "./RolesResponse";
 import type { SecureLinksResponse } from "./SecureLinksResponse";
+import type { ServerFeatureRefusal } from "./ServerFeatureRefusal";
 import type { SignInSettings } from "./SignInSettings";
 import type { TelemetryResponse } from "./TelemetryResponse";
 import type { TreeNode } from "./TreeNode";
@@ -63,9 +64,17 @@ mdx_content_hash: string | null, updated_by: string, timestamp: bigint, } } | { 
  */
 allow_server_file_transfer: boolean, 
 /**
+ * Why `allow_server_file_transfer` is false; absent when it is true.
+ */
+file_transfer_refusal?: ServerFeatureRefusal, 
+/**
  * Whether RE-VFS (server-side encrypted storage) is enabled
  */
 allow_server_revfs_storage: boolean, 
+/**
+ * Why `allow_server_revfs_storage` is false; absent when it is true.
+ */
+revfs_storage_refusal?: ServerFeatureRefusal, 
 /**
  * Maximum file size for transfers (in megabytes)
  */
