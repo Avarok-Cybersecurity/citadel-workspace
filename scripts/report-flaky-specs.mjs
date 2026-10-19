@@ -33,7 +33,9 @@ if (!existsSync(report)) {
   // Loudly, not silently: a missing report means this check verified nothing,
   // and "no flaky specs" would be a lie told by an absent file.
   console.error(`::error::${report} not found — the flaky-spec report could not be read.`);
-  console.error('The Playwright json reporter writes it in CI; if that changed, this check is blind.');
+  console.error('The Playwright json reporter writes it in CI, at the END of the run: a test step killed by\n' +
+    'its timeout-minutes never writes it (keep --global-timeout under the step budget). If the reporter\n' +
+    'config changed instead, this check is blind.');
   process.exit(1);
 }
 

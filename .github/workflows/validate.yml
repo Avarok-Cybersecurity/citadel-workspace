@@ -2004,6 +2004,13 @@ jobs:
       - name: Run Playwright Tests
         # See Run Integration Test: a step budget keeps the report upload and the
         # log dump alive when a shard hangs. Observed maximum 11 minutes.
+        #
+        # `--global-timeout` (22 min) sits UNDER that budget. When the runner
+        # kills the step, Playwright dies before its json reporter's onEnd, so
+        # reports/results.json is never written and the flaky-spec report below
+        # had no input -- on exactly the slow, retry-heavy shards it exists for
+        # (#246, shard 1/3: killed at 25 min mid-retry). Stopping itself first,
+        # Playwright marks what did not run and still writes every report.
         timeout-minutes: 25
         env:
           IN_CI: 'true'
@@ -2014,7 +2021,7 @@ jobs:
           # silently won.
           WORKSPACE_MASTER_PASSWORD: 'ci-test-password'
           INTERNAL_SERVICE_PORT: '12345'
-        run: npx playwright test --shard=${{ matrix.shard }}/3
+        run: npx playwright test --shard=${{ matrix.shard }}/3 --global-timeout=1320000
         working-directory: citadel-workspaces/integration-tests
 
       # `if: always()`, because a retry-pass EXITS ZERO. This step exists for the
