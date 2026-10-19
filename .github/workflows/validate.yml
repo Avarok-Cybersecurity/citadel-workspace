@@ -2753,7 +2753,7 @@ jobs:
           echo "Smoke test passed: server, internal-service, ui all up"
       - name: Persistence - restarting the server must not duplicate the workspace tree
         # THE gap that let the structure-duplication bug ship. Every other test runs the server
-        # on the IN-MEMORY backend, where each boot legitimately starts from an empty store - so
+        # on an EPHEMERAL store (dev compose: a tmpfs), where each boot legitimately starts empty - so
         # seeding-on-every-boot is indistinguishable from correct behaviour and no unit test can
         # see the bug. Only a real restart against a real filesystem backend exposes it, and
         # `docker-compose.production.yml` is the only place the server runs that way.

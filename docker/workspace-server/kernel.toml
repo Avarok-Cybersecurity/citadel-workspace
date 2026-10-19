@@ -14,12 +14,13 @@ secure_links_pool = 0
 dangerous_skip_cert_verification = false
 
 # Backend type:
-#   * Omit (default) for in-memory storage - this is the development
-#     contract documented in CLAUDE.md (ephemeral state across `tilt`
-#     reloads).
+#   * Omit (default) for in-memory storage. The SDK streams no objects
+#     into it, so Server Storage (RE-VFS) is not offered on it.
 #   * Set `WORKSPACE_BACKEND=filesystem` and `WORKSPACE_DATA_DIR=/path`
-#     env vars to enable persistent storage. Production deployments do
-#     this in `docker-compose.production.yml`.
+#     env vars for a backend that stores files. Dev (`docker-compose.yml`)
+#     points it at a tmpfs, which keeps the ephemeral contract documented
+#     in CLAUDE.md; production uses a volume in
+#     `docker-compose.production.yml`.
 #
 # A previous version of this file hard-coded `backend = "filesystem"`,
 # which broke the ephemeral-dev contract because dev and prod share
