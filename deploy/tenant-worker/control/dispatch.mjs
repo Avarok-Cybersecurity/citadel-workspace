@@ -21,6 +21,8 @@ import { mailTransport } from "./mail.mjs";
 import { AlertStore } from "./alert-store.mjs";
 import { usageAnswer } from "./usage-answer.mjs";
 import { PUBLIC_POLICY } from "./policy.mjs";
+import { DunningStore } from "./dunning-store.mjs";
+import { suspendedAnswer } from "./billing-status.mjs";
 
 /** Creation, portal and overage bodies are a handful of short fields. */
 const API_BODY_LIMIT = 4096;
@@ -43,6 +45,7 @@ export function ioFor(env) {
     verifySupport: verifySupportRequest,
     mail: mailTransport(env),
     alerts: new AlertStore(env.CONTROL_DB),
+    dunning: new DunningStore(env.CONTROL_DB),
   };
 }
 
@@ -75,7 +78,7 @@ async function toTenant(io, cfg, slug, request) {
   if (!checkSlug(slug).ok) return refuse("not-found", "no such workspace", 404);
   const row = await io.store.holder(slug, io.now());
   if (!row || row.status === "pending") return refuse("not-found", "no such workspace", 404);
-  if (row.status === "suspended") return refuse("suspended", "this workspace is suspended", 403);
+  if (row.status === "suspended") return suspendedAnswer(io, row);
   const object = io.tenant(slug);
   // Objects provisioned before names were passed on hold none; D1 has it (see adoptDisplayName).
   if (row.display_name) await object.adoptDisplayName(row.display_name);

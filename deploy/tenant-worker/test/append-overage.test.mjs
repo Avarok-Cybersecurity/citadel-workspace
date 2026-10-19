@@ -5,7 +5,7 @@
  * real objects. Stripe is the one mock (helpers.mjs outbound()).
  */
 import { env, runInDurableObject } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { UsageTable } from "../control/usage-table.mjs";
 import { createBody, deliver, freshSlug, item, monitorOf, outbound, post, subscriptionEvent, tenantObject, tenantRow } from "./helpers.mjs";
 
@@ -69,7 +69,10 @@ describe("the monitor reports append overage", () => {
     const run = monitorOf(row.slug);
     await object.recordAppends(INCLUDED + 60_500);
     const { calls } = outbound({ meterEvents: { failures: 1 } });
+    const warn = vi.spyOn(console, "warn");
     await run();
+    const notApproved = warn.mock.calls.map(([line]) => String(line)).filter((l) => l.includes(row.slug) && l.includes("price is not approved"));
+    expect(notApproved).toEqual([`[monitor] ${row.slug}: overage not billed (its price is not approved in billing/tiers.json): document-appends 60`]);
     await run();
     expect(meterEvents(calls, row.tenant_id)).toEqual([]);
     expect(await usageRow(row.tenant_id, period.start)).toMatchObject({

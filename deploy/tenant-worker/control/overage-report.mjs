@@ -62,6 +62,7 @@ export const periodFigures = (period, want) =>
 /** Records the tenant's periods and reports what is new and billable; one log line when it is not billed. */
 export async function reportOverage(io, cfg, row, want, periods) {
   const unbilled = new Set();
+  const unapproved = new Set();
   for (const period of periods) {
     const figures = periodFigures(period, want);
     const sent = await io.usage.record(row.tenant_id, period, figures, io.now());
@@ -69,13 +70,19 @@ export async function reportOverage(io, cfg, row, want, periods) {
       const dim = DIMENSIONS.find((d) => d.id === f.id);
       if (sent[f.id].pending === null && f.billable <= sent[f.id].reported) continue;
       // Recorded, never reported, while tiers.json holds the entry proposed (plans.mjs METERED).
-      if (!dim.sold) continue;
+      if (!dim.sold) {
+        unapproved.add(`${f.id} ${f.billable}`);
+        continue;
+      }
       if (!dim.offeredOn(row.tier) || !overageBilled(row)) {
         unbilled.add(`${f.id} ${f.billable}`);
         continue;
       }
       await report(io, cfg, row, dim, period.period_start, f.billable);
     }
+  }
+  if (unapproved.size) {
+    console.warn(`[monitor] ${row.slug}: overage not billed (its price is not approved in billing/tiers.json): ${[...unapproved].join(", ")}`);
   }
   if (unbilled.size) {
     console.warn(`[monitor] ${row.slug}: overage not billed (${row.tier}, overage billing ${row.overage_billing ? "on, no usage subscription" : "off"}): ${[...unbilled].join(", ")}`);

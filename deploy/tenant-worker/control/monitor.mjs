@@ -13,24 +13,29 @@
  *      counts only, logged and kept in D1, warning while any legacy Argon2 account remains;
  *   5. announces each usage threshold reached once per period (control/alerts.mjs).
  * The object is authoritative for its own limits; a missed run delays a report, nothing more.
+ * Then, for every active and every suspended tenant, dunning's reminders and purge (dunning-tick.mjs).
  */
 import { AUTH_VERSION_KEYS } from "./auth-versions.mjs";
 import { entitlements, METERING } from "./plans.mjs";
 import { overageUnits, reportOverage } from "./overage-report.mjs";
 import { sendAlerts } from "./alerts.mjs";
+import { dunningTick } from "./dunning-tick.mjs";
 
 /** Whole GB of metered usage beyond what the tier includes. */
 export const overageGb = (bytes, includedGb) => overageUnits(bytes, includedGb * METERING.gb_bytes, METERING.gb_bytes);
 
 export async function runMonitor(io, cfg) {
   const failures = [];
-  for (const row of await io.store.active()) {
+  const visit = async (row, work) => {
     try {
-      await monitorTenant(io, cfg, row);
+      await work();
     } catch (e) {
       failures.push(`${row.slug}: ${e?.message ?? e}`);
     }
-  }
+  };
+  const active = await io.store.active();
+  for (const row of active) await visit(row, () => monitorTenant(io, cfg, row));
+  for (const row of [...active, ...(await io.store.suspended())]) await visit(row, () => dunningTick(io, cfg, row, io.now()));
   // Every tenant is visited whatever one of them does; the run still fails, loudly, if any did.
   if (failures.length) throw new Error(`usage monitor: ${failures.length} tenant(s) failed: ${failures.join("; ")}`);
 }

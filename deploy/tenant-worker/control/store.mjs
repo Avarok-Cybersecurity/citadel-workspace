@@ -29,6 +29,17 @@ export class Store {
     return (await this.db.prepare(`SELECT ${COLUMNS} FROM tenants WHERE status = 'active'`).all()).results;
   }
 
+  /** Every suspended tenant: those whose payment is required, those mid-purge, and paused ones. */
+  async suspended() {
+    return (await this.db.prepare(`SELECT ${COLUMNS} FROM tenants WHERE status = 'suspended'`).all()).results;
+  }
+
+  /** The tenants holding `subscriptionId` as their plan's or their usage-only subscription (one, or none). */
+  async bySubscription(subscriptionId) {
+    const sql = `SELECT ${COLUMNS} FROM tenants WHERE stripe_subscription = ? OR usage_subscription = ?`;
+    return (await this.db.prepare(sql).bind(subscriptionId, subscriptionId).all()).results;
+  }
+
   async byTenantId(tenantId) {
     return this.db.prepare(`SELECT ${COLUMNS} FROM tenants WHERE tenant_id = ?`).bind(tenantId).first();
   }
@@ -158,7 +169,8 @@ export class Store {
   /**
    * Applies a tenant change and records the event that caused it in ONE batch (a D1 transaction):
    * either both land or neither does, so a failed change leaves the event unrecorded for Stripe
-   * to retry. `change` is null for an event that changes nothing but is still handled.
+   * to retry. `change` is null for an event that changes nothing but is still handled;
+   * `change.statements` are more of the change, prepared elsewhere (dunning-store.mjs).
    */
   async applyEvent(event, now, change) {
     const statements = [];
@@ -170,6 +182,7 @@ export class Store {
         this.db
           .prepare(`UPDATE tenants SET ${sets} WHERE slug = ? AND tenant_id = ?`)
           .bind(...Object.values(change.fields), change.slug, change.tenant_id),
+        ...(change.statements ?? []),
       );
     }
     statements.push(

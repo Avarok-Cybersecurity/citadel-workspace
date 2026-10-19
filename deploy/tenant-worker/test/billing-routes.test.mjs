@@ -44,7 +44,7 @@ describe("POST /api/tenants/<slug>/usage", () => {
     const body = await r.json();
     expect(body.overage_billing).toBe(false);
     expect(body.period.end).toBeGreaterThan(body.period.start);
-    expect(body.billing).toEqual({ state: "ok", alert: "none", overage_billing: false });
+    expect(body.billing).toEqual({ state: "active", alert: "none", overage_billing: false });
     expect(body.dimensions.map((d) => d.id)).toEqual(["relay-overage", "document-appends", "storage"]);
     expect(body.dimensions[0]).toEqual({ id: "relay-overage", unit: "GB", used: 1.5, included: 2, percent: 75, state: "ok", terminate_at: null });
     await relay(slug, 0.5e9);
@@ -72,7 +72,7 @@ describe("the public answers carry the level and no numbers", () => {
     const { slug } = await freeWithCode("lvl");
     const status = async () => (await get(`/api/tenants/${slug}/status`)).json();
     const discovery = async () => (await get(`/api/admission/${slug}`)).json();
-    expect((await status()).billing).toEqual({ state: "ok", alert: "none", overage_billing: false });
+    expect((await status()).billing).toEqual({ state: "active", alert: "none", overage_billing: false });
     expect((await discovery()).alert).toBe("none");
 
     await relay(slug, 2e9);

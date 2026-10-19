@@ -60,7 +60,8 @@ function stripePrice(lookupKey, drift) {
  * catalogue's (a drifted amount, an unspecified tax behaviour). A created price is `price_new_<n>`.
  */
 /**
- * `mailStatus` is the status the MAIL_ENDPOINT sink answers every message with.
+ * `mailStatus` is the status the MAIL_ENDPOINT sink answers every message with; `mails` (returned)
+ * holds the messages it accepted.
  */
 /**
  * `turn` is how Cloudflare Realtime TURN answers `generate-ice-servers`: `{status, body}`, by
@@ -73,6 +74,7 @@ export function outbound({ turnstile = { success: true, hostname: "example.com" 
   let subscriptionFailures = subscriptions.failures;
   let subscriptionCount = 0;
   const calls = [];
+  const mails = [];
   const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init = {}) => {
     const url = new URL(typeof input === "string" ? input : input.url);
     const method = init.method ?? "GET";
@@ -80,7 +82,10 @@ export function outbound({ turnstile = { success: true, hostname: "example.com" 
     calls.push({ url: url.origin + url.pathname, method, form, headers: init.headers ?? {}, body: init.body });
     if (url.hostname === "challenges.cloudflare.com") return Response.json(turnstile);
     // The MAIL_ENDPOINT sink (vitest.config.mjs): what the control plane would have emailed.
-    if (url.hostname === MAIL_SINK_HOST) return new Response(null, { status: mailStatus });
+    if (url.hostname === MAIL_SINK_HOST) {
+      if (mailStatus < 300) mails.push(JSON.parse(init.body));
+      return new Response(null, { status: mailStatus });
+    }
     if (url.hostname === "rtc.live.cloudflare.com") {
       turnCalls += 1;
       if (turn) return Response.json(turn.body, { status: turn.status });
@@ -151,5 +156,5 @@ export function outbound({ turnstile = { success: true, hostname: "example.com" 
     }
     return new Response("unexpected outbound request in a test", { status: 599 });
   });
-  return { calls, spy };
+  return { calls, mails, spy };
 }

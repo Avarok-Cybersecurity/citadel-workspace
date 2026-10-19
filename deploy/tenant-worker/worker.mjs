@@ -28,6 +28,7 @@ import { nextAlarm } from "./control/tenant-telemetry.mjs";
 import { linkQuotaHost } from "./control/tenant-links.mjs";
 import { withAppendsIncluded } from "./control/tenant-documents.mjs";
 import { objectParts } from "./control/object-parts.mjs";
+import { eraseObject, PAYMENT_REQUIRED } from "./control/suspension.mjs";
 
 const FLUSH_MS = METERING.flush_seconds * 1000;
 /** Periods `usage()` reports: the current one and the one before, whose final totals the monitor may not have seen. */
@@ -56,7 +57,7 @@ export class WorkspaceServer extends DurableObject {
     this.meter = null;
     // Sign-in (control/tenant-sign-in.mjs): the OPRF seed, the sign-in settings, the admission check.
     this.signIn = new TenantSignIn(ctx.storage, { random: crypto, turnstile: () => config(env).turnstile, siteKey: () => config(env).turnstileSiteKey, io: { fetch: (u, i) => fetch(u, i) } });
-    // Billing state, relay credentials, the purges on the alarm, document appends (control/object-parts.mjs).
+    // Billing state, relay, the purges on the alarm, appends, open sockets (control/object-parts.mjs).
     Object.assign(this, objectParts(this, ctx, env, { roll: (now) => this.#roll(now), running: () => this.#running() }));
     ctx.blockConcurrencyWhile(async () => {
       await this.provisioning.load();
@@ -97,8 +98,14 @@ export class WorkspaceServer extends DurableObject {
   /** RPC from the control plane: the plan changed (a new billing period among it). */
   async setEntitlements(entitlements) {
     await this.provisioning.setEntitlements(entitlements);
+    if (!this.provisioning.ready()) this.sockets.closeAll(PAYMENT_REQUIRED);
     this.#roll(Date.now());
     await this.#arm(false);
+  }
+
+  /** RPC from the purge (control/purge.mjs): erases this object for `tenantId`, then resets it. */
+  async purge(tenantId) {
+    await eraseObject(this.ctx, this.provisioning, this.sockets, tenantId);
   }
 
   /** RPC for the monitor: the entitlements enforced, the recent periods' totals (flushed now), the dimensions. */
@@ -203,15 +210,9 @@ export class WorkspaceServer extends DurableObject {
 
   async fetch(request) {
     // Stats are an RPC the Worker gates (dispatch.mjs); a request is served only as a socket.
-    if (!isWebSocketUpgrade(request)) {
-      return upgradeRequired();
-    }
-    if (this.exit !== null) {
-      return new Response(`node exited: ${this.exit}`, { status: 503 });
-    }
-    if (!this.provisioning.ready()) {
-      return new Response("this workspace has not been provisioned", { status: 503 });
-    }
+    if (!isWebSocketUpgrade(request)) return upgradeRequired();
+    if (this.exit !== null) return new Response(`node exited: ${this.exit}`, { status: 503 });
+    if (!this.provisioning.ready()) return new Response("this workspace has not been provisioned", { status: 503 });
     this.signIn.serving(tenantFor(new URL(request.url), config(this.env)));
     const limits = enforcedEntitlements(this.provisioning.summary().entitlements);
     this.#roll(Date.now());
@@ -220,6 +221,7 @@ export class WorkspaceServer extends DurableObject {
 
     const [client, server] = Object.values(new WebSocketPair());
     server.accept();
+    this.sockets.add(server);
     this.accepted += 1;
     const n = this.accepted;
     // Frames and bytes per connection and per period (control/meter.mjs). CPU is measured outside

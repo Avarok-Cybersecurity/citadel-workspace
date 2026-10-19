@@ -1,12 +1,14 @@
 /**
  * The tenant object's parts that act on its plan and meter (worker.mjs's constructor): each
- * dimension's billing state, relay credentials, the purges on its alarm, and document appends.
+ * dimension's billing state, relay credentials, the purges on its alarm, document appends, and
+ * the open sockets a suspension closes (control/suspension.mjs).
  * `object` is the WorkspaceServer; `roll(nowMs)` moves its meter onto the current period and
  * `running()` starts its node -- both private to it, so passed in.
  */
 import { IceMinter } from "./ice.mjs";
 import { turnConfig } from "./http.mjs";
 import { SupportStore } from "./support-store.mjs";
+import { OpenSockets } from "./suspension.mjs";
 import { currentOf, TenantBilling } from "./tenant-billing.mjs";
 import { TenantDocuments } from "./tenant-documents.mjs";
 import { TenantLinks } from "./tenant-links.mjs";
@@ -27,5 +29,5 @@ export function objectParts(object, ctx, env, { roll, running }) {
   // Document appends (control/tenant-documents.mjs), counted on this period's meter; refused once
   // the billing state has terminated them (control/termination.mjs).
   const documents = new TenantDocuments({ meter: () => object.meter, roll, writable: () => billing.documentsWritable(), nowMs: Date.now });
-  return { billing, ice, telemetry, links, purges: [telemetry, links], documents };
+  return { billing, ice, telemetry, links, purges: [telemetry, links], documents, sockets: new OpenSockets() };
 }

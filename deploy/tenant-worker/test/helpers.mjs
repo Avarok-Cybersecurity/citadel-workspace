@@ -153,6 +153,8 @@ export const relay = (slug, bytes) =>
 /** The monitor over these tenants only: the suite's D1 holds every other test's tenants too. */
 export function monitorOf(...slugs) {
   const io = ioFor(env);
-  const only = { ...io, store: Object.assign(Object.create(io.store), { active: async () => (await io.store.active()).filter((r) => slugs.includes(r.slug)) }) };
+  const mine = (rows) => rows.filter((r) => slugs.includes(r.slug));
+  const store = Object.assign(Object.create(io.store), { active: async () => mine(await io.store.active()), suspended: async () => mine(await io.store.suspended()) });
+  const only = { ...io, store };
   return () => runMonitor(only, config(env));
 }
