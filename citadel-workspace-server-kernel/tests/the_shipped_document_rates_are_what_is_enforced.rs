@@ -1,5 +1,5 @@
-//! The shipped `[documents]` rates: ten appends, ten pulls and ten awareness payloads per
-//! session per second (owner decision, 19 Oct 2026).
+//! The shipped `[documents]` rates, per session per second: 50 appends, 10 pulls and 10
+//! awareness payloads (owner decision, 19 Oct 2026, appends revised to 50 on 20 Oct).
 //!
 //! Measured, not read: each test drives the relay built from the SHIPPED kernel.toml and counts
 //! how many requests one session gets through before the first refusal, so a value in the file
@@ -10,7 +10,9 @@ use common::documents_test_utils::*;
 use common::member_test_utils::GateKernel;
 use common::workspace_test_utils::TEST_ADMIN_USER_ID;
 
-const SHIPPED_PER_SECOND: usize = 10;
+const SHIPPED_APPENDS_PER_SECOND: usize = 50;
+const SHIPPED_PULLS_PER_SECOND: usize = 10;
+const SHIPPED_AWARENESS_PER_SECOND: usize = 10;
 /// Far above any rate the file could plausibly ship, so a missing limit still terminates.
 const CEILING: usize = 1_000;
 
@@ -35,7 +37,7 @@ async fn admitted_before_refusal(
 }
 
 #[tokio::test]
-async fn ten_appends_a_second() {
+async fn fifty_appends_a_second() {
     let kernel = with_limits(shipped_documents_config()).await;
     let node = document_node(&kernel).await;
     let mut author = Replica::new(90);
@@ -56,7 +58,7 @@ async fn ten_appends_a_second() {
         },
     )
     .await;
-    assert_eq!(admitted, SHIPPED_PER_SECOND);
+    assert_eq!(admitted, SHIPPED_APPENDS_PER_SECOND);
 }
 
 #[tokio::test]
@@ -78,7 +80,7 @@ async fn ten_pulls_a_second() {
         },
     )
     .await;
-    assert_eq!(admitted, SHIPPED_PER_SECOND);
+    assert_eq!(admitted, SHIPPED_PULLS_PER_SECOND);
 }
 
 #[tokio::test]
@@ -100,5 +102,5 @@ async fn ten_awareness_payloads_a_second() {
         },
     )
     .await;
-    assert_eq!(admitted, SHIPPED_PER_SECOND);
+    assert_eq!(admitted, SHIPPED_AWARENESS_PER_SECOND);
 }

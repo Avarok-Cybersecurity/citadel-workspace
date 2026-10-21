@@ -104,7 +104,7 @@ max_awareness_bytes = 4096
 # Awareness payloads one session may send per second.
 awareness_per_second = 10
 # Appends and pulls one session may send per second.
-appends_per_second = 10
+appends_per_second = 50
 pulls_per_second = 10
 # Bytes of updates held since the last snapshot. At compact_at_pending_bytes the server builds
 # and stores a snapshot itself; at max_pending_log_bytes appends are refused (LogFull) until one
