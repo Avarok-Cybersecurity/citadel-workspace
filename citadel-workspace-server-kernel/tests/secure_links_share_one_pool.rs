@@ -59,7 +59,7 @@ async fn past_their_own_members_share_one_pool() {
         }) => {
             assert_eq!(
                 (links.len(), live, per_member, pool, pool_used),
-                (4, 4, 2, 3, 3)
+                (4, 4, Some(2), Some(3), 3)
             );
         }
         other => panic!("{other:?}"),

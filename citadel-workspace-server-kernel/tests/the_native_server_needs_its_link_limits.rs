@@ -2,7 +2,7 @@
 //! both: it has no plan to read them from, and a default would be a limit nobody chose.
 
 use citadel_workspace_server_kernel::config::ServerConfig;
-use citadel_workspace_server_kernel::kernel::secure_links::quota::LinkQuota;
+use citadel_workspace_server_kernel::kernel::secure_links::quota::{Limit, LinkQuota};
 use citadel_workspace_server_kernel::{resolve_secure_link_quota, run_server_with_base_path};
 
 fn config(extra: &str) -> ServerConfig {
@@ -27,8 +27,8 @@ fn both_keys_are_required_and_zero_is_a_limit() {
         ))
         .unwrap(),
         LinkQuota {
-            per_member: 0,
-            pool: 0
+            per_member: Limit::At(0),
+            pool: Limit::At(0)
         }
     );
     assert_eq!(
@@ -37,8 +37,8 @@ fn both_keys_are_required_and_zero_is_a_limit() {
         ))
         .unwrap(),
         LinkQuota {
-            per_member: 50,
-            pool: 100
+            per_member: Limit::At(50),
+            pool: Limit::At(100)
         }
     );
 }

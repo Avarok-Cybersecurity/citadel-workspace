@@ -64,8 +64,8 @@ pub(super) async fn list<R: Ratchet + Send + Sync + 'static>(
     answer(SecureLinksResponse::Links {
         live: u32::try_from(links.len()).map_err(|_| NetworkError::msg("Too many links"))?,
         links: links.iter().map(LinkRecord::info).collect(),
-        per_member: quota.per_member,
-        pool: quota.pool,
+        per_member: quota.per_member.ceiling(),
+        pool: quota.pool.ceiling(),
         pool_used: usage.pool_used,
     })
 }

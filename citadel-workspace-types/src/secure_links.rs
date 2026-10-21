@@ -117,12 +117,12 @@ pub enum SecureLinksResponse {
     },
     /// The caller's live links. `live` is how many they hold; each member has `per_member` of
     /// their own, and links past that draw on the workspace's shared `pool`, of which
-    /// `pool_used` is taken.
+    /// `pool_used` is taken. `None` (JSON `null`) is no limit: only an unlimited workspace has it.
     Links {
         links: Vec<SecureLinkInfo>,
         live: u32,
-        per_member: u32,
-        pool: u32,
+        per_member: Option<u32>,
+        pool: Option<u32>,
         pool_used: u32,
     },
     Resolved {

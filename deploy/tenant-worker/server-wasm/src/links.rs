@@ -1,13 +1,15 @@
 //! Secure links: the object's link limits, and its purge alarm's entry into the kernel.
 //!
 //! The object passes an object whose `quota()` returns `{per_member, pool}` from the tenant's
-//! entitlements, or throws when it cannot (control/tenant-links.mjs). The kernel asks on every
-//! create and list, so a plan change applies at once.
+//! entitlements, or throws when it cannot (control/tenant-links.mjs). Each is a count, or `null`
+//! for no limit (an unlimited tenant, entitlements v2); a field missing or anything else makes the
+//! answer unreadable, and the kernel then makes no links (kernel `limit::Limit`). The kernel asks
+//! on every create and list, so a plan change applies at once.
 
 use crate::support::millis;
 use crate::TenantServer;
 use citadel_workspace_server_kernel::kernel::secure_links::quota::{
-    LinkQuota, LinkQuotaSource, LinkQuotaUnavailable,
+    Limit, LinkQuota, LinkQuotaSource, LinkQuotaUnavailable,
 };
 use citadel_workspace_server_kernel::kernel::secure_links::PURGE_BATCH;
 use js_sys::Promise;
@@ -25,9 +27,10 @@ extern "C" {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct HostQuota {
-    per_member: u32,
-    pool: u32,
+    per_member: Limit,
+    pool: Limit,
 }
 
 struct DurableObjectLinkQuota(LinkQuotaHost);
@@ -48,8 +51,8 @@ impl LinkQuotaSource for DurableObjectLinkQuota {
             .0
             .quota()
             .map_err(|e| LinkQuotaUnavailable(format!("{e:?}")))?;
-        let HostQuota { per_member, pool } = crate::host_promise::parse(&value)
-            .map_err(LinkQuotaUnavailable)?;
+        let HostQuota { per_member, pool } =
+            crate::host_promise::parse(&value).map_err(LinkQuotaUnavailable)?;
         Ok(LinkQuota { per_member, pool })
     }
 }

@@ -17,6 +17,8 @@ pub mod display_name;
 pub mod documents;
 pub mod group_access;
 pub mod ice_servers;
+/// A usage limit as the host states it: a count, or explicitly none.
+pub mod limit;
 pub mod profile_limits;
 pub mod profile_update;
 pub mod profile_visibility;
