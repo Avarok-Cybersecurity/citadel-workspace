@@ -1,3 +1,19 @@
+/// Citadel Apps: capabilities, install scopes and audiences.
+pub mod apps;
+/// An app install as stored, and why an apps request is refused.
+pub mod apps_install;
+/// An app's strict `manifest.json`.
+pub mod apps_manifest;
+/// Reading and validating a manifest, and its text and identity limits.
+pub mod apps_manifest_check;
+/// The manifest's capability, limit and artifact checks, and their limits.
+pub mod apps_manifest_check_parts;
+/// A document's hidden required-apps header.
+pub mod apps_md_header;
+/// The apps requests.
+pub mod apps_protocol;
+/// The answers to apps requests, and the apps audit log.
+pub mod apps_responses;
 /// The build script's cross-workspace dependency rule, here so it can be tested.
 ///
 /// The parent and the agent are separate cargo workspaces with separate lock

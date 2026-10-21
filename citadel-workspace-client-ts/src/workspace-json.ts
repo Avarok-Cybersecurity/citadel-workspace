@@ -35,7 +35,10 @@ import { parseWithU64, stringifyWithU64 } from './json-u64.js';
 export const WORKSPACE_BIGINT_FIELDS: ReadonlySet<string> = new Set([
   'at_ms',
   'author_cid',
+  'before_ms',
   'before_timestamp',
+  'catalogue_version',
+  'cid',
   'client_seq',
   'crdt_client',
   'created_at',
@@ -46,6 +49,7 @@ export const WORKSPACE_BIGINT_FIELDS: ReadonlySet<string> = new Set([
   'expires_ms',
   'from_cid',
   'held_clock',
+  'installed_at_ms',
   'last_used_ms',
   'latest_seq',
   'max_bytes',
