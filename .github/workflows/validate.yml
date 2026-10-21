@@ -1149,6 +1149,12 @@ jobs:
         # describing the failure. The set is derived from the Rust.
         run: node scripts/check-connect-awaiters-handle-every-answer.mjs
         working-directory: citadel-workspaces
+      - name: The global app catalogue lists only apps the kernel would install
+        # In the LINT job because it imports typescript to read the catalogue
+        # with the UI's own rules; the crate-coverage job installs nothing.
+        run: node scripts/check-app-catalogue.mjs
+      - name: The app catalogue checks refuse what they must
+        run: node --test scripts/lib/app-catalogue.test.mjs
 
       - name: A failing test leaves a backend log
         # `if: failure()` does not mean "at the end". Steps run in order, so a

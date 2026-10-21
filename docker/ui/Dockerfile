@@ -128,6 +128,8 @@ RUN npm run build --workspace=citadel-workspace-client-ts
 # Now build the UI itself. NODE_ENV is set only now: before the install it would skip the
 # devDependencies the builds need.
 COPY citadel-workspaces citadel-workspaces
+# The global app catalogue, which the build ships at /apps/catalogue.json (src/build/app-catalogue-asset.ts).
+COPY apps/catalogue apps/catalogue
 ENV NODE_ENV=production
 RUN npm run build --workspace=citadel-workspaces
 

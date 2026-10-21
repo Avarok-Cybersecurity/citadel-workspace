@@ -268,6 +268,8 @@ services:
       - ./citadel-workspaces/index.html:/app/index.html:rw
       # The vendored cdoc glue (vendor/cdoc), outside src: without it opening a document fails to import.
       - ./citadel-workspaces/vendor:/app/vendor:ro
+      # The global app catalogue, served at /apps/catalogue.json (src/build/app-catalogue-asset.ts).
+      - ./apps/catalogue:/apps/catalogue:ro
 
       # Mount config files (read-write for hot reload)
       - ./citadel-workspaces/vite.config.ts:/app/vite.config.ts:rw
