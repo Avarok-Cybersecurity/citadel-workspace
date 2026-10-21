@@ -70,9 +70,14 @@ const optional = (env, name) => (env[name] === undefined || env[name] === "" ? n
  * carries no value for it; unset, the support routes answer 503, and deploy.sh refuses to deploy.
  */
 function supportPublicKey(env) {
-  const key = optional(env, "CITADEL_SUPPORT_MLDSA_PUBLIC_KEY");
+  return mldsaPublicKey(env, "CITADEL_SUPPORT_MLDSA_PUBLIC_KEY");
+}
+
+/** An ML-DSA-65 public key secret (3904 lowercase hex characters), or null when it is unset. */
+function mldsaPublicKey(env, name) {
+  const key = optional(env, name);
   if (key !== null && !/^[0-9a-f]{3904}$/.test(key.trim())) {
-    throw new Error("CITADEL_SUPPORT_MLDSA_PUBLIC_KEY is an ML-DSA-65 public key: 3904 lowercase hex characters");
+    throw new Error(`${name} is an ML-DSA-65 public key: 3904 lowercase hex characters`);
   }
   return key === null ? null : key.trim();
 }
@@ -127,6 +132,9 @@ export function config(env) {
     // Citadel customers. Unset, the portal route answers 503.
     portalConfiguration: optional(env, "STRIPE_PORTAL_CONFIGURATION"),
     supportPublicKey: supportPublicKey(env),
+    // The coupon admin's key (control/coupon-admin.mjs), separate from support's, so a support-read
+    // key can never issue a coupon. Unset, the admin routes answer 503.
+    adminPublicKey: mldsaPublicKey(env, "CITADEL_ADMIN_MLDSA_PUBLIC_KEY"),
   };
 }
 

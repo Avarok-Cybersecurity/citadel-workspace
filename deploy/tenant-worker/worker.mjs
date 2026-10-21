@@ -20,6 +20,7 @@ import { Meter, periodAt } from "./control/meter.mjs";
 import { UsageTable } from "./control/usage-table.mjs";
 import { meterSocket } from "./control/sockets.mjs";
 import { enforcedEntitlements, METERING } from "./control/plans.mjs";
+import { limitOf } from "./control/entitlement-limits.mjs";
 import { runMonitor } from "./control/monitor.mjs";
 import { objectStats } from "./control/object-stats.mjs";
 import { authVersions } from "./control/auth-versions.mjs";
@@ -113,12 +114,13 @@ export class WorkspaceServer extends DurableObject {
     await this.#arm(false);
   }
 
-  /** RPC for the monitor: the entitlements this object enforces and its recent periods' totals, flushed now. */
+  /** RPC for the monitor: what this object enforces, its recent periods' totals (flushed now) and its stored bytes. */
   usage() {
     const now = Date.now();
     this.#roll(now);
     this.#flush(now);
-    return { entitlements: this.provisioning.summary().entitlements, periods: this.usageTable.recent(REPORTED_PERIODS) };
+    const { entitlements } = this.provisioning.summary();
+    return { entitlements, periods: this.usageTable.recent(REPORTED_PERIODS), storage_bytes: this.ctx.storage.sql.databaseSize };
   }
 
   /** RPC for the monitor: the stored accounts counted by auth-record version (read-only; no HTTP route). */
@@ -211,7 +213,7 @@ export class WorkspaceServer extends DurableObject {
     this.signIn.serving(tenantFor(new URL(request.url), config(this.env)));
     const limits = enforcedEntitlements(this.provisioning.summary().entitlements);
     this.#roll(Date.now());
-    if (!this.meter.admits(limits.connections_max)) {
+    if (!this.meter.admits(limitOf(limits, "connections_max"))) {
       return json({ error: "connection-limit", detail: `this workspace allows ${limits.connections_max} connections at once` }, 503, {
         "retry-after": "30",
       });

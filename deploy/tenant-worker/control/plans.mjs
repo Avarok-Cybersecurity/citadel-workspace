@@ -5,7 +5,9 @@
  */
 import table from "../../../billing/tiers.json";
 import { lookupKey, meteredLookupKey } from "../../../billing/catalogue.mjs";
-import { addonsOf } from "./addons.mjs";
+import { couponCatalogue } from "../../../billing/coupons-catalogue.mjs";
+import { addonsOf, noAddons } from "./addons.mjs";
+import { clampToTrial, UNLIMITED_LIMITS } from "./entitlement-limits.mjs";
 
 export { MAX_LINK_PACKS, MAX_STORAGE_BLOCKS } from "./addons.mjs";
 
@@ -21,6 +23,12 @@ export const METERING = table.metering;
 for (const k of ["gb_bytes", "max_frame_bytes", "flush_seconds"]) {
   if (!Number.isInteger(METERING?.[k]) || METERING[k] <= 0) throw new Error(`tiers.json metering.${k} is a positive integer`);
 }
+/** Coupon templates, trial caps and comp grants (tiers.json `coupons`), checked as this loads. */
+export const COUPONS = couponCatalogue(table);
+/** The entitlements' shape: 2 added `unlimited` (every usage limit null), `relay_unmetered` and `trial_clamped`. */
+export const ENTITLEMENTS_VERSION = 2;
+/** The plan a tenant falls back to when its subscription ends (or its grant is revoked): Free, by calendar month. */
+export const FREE_PLAN = Object.freeze({ tier: "free", interval: null, seats: 0, ...noAddons(ADDONS), period_start: null, period_end: null });
 /** The Billing Meter relay overage is reported to. */
 export const OVERAGE_EVENT = overage.meter.event_name;
 
@@ -69,6 +77,9 @@ for (const a of ADDONS) {
   }
 }
 
+/** The coupon inputs every plan states (null, or 0, when it has none). */
+const COUPON_INPUTS = ["grant_id", "grant_unlimited", "trial_end", "stripe_status"];
+
 /**
  * What a tenant may use, from its plan. Paid members are capped by the seats bought (and the
  * tier's ceiling); storage is the tier's per-seat grant times seats plus the add-on blocks;
@@ -76,37 +87,59 @@ for (const a of ADDONS) {
  * own allowance of live secure links; packs add to one pool the workspace shares. An add-on's
  * quantity counts only on a paid tier. The billing period is Stripe's (null until a subscription
  * event names it: the object then meters by calendar month).
+ *
+ * A comp grant (`grant_id`) replaces the plan: its `tier_as` at its seats and storage, no add-on;
+ * one redeemed as unlimited (`grant_unlimited`, kept on the row as it was at redemption) lifts
+ * every usage limit to null. A trial (`trial_end`) is clamped to tiers.json `trial_caps` until
+ * Stripe calls its subscription active.
  */
 export function entitlements(plan) {
-  const { tier, interval, seats, status, period_start, period_end } = plan;
+  const { status, period_start, period_end } = plan;
+  if (period_start === undefined || period_end === undefined) throw new Error("entitlements need the billing period (null when none)");
+  const missing = COUPON_INPUTS.filter((k) => plan[k] === undefined);
+  if (missing.length) throw new Error(`entitlements need ${missing.join(", ")} (null, or 0, when none)`);
+  if (plan.grant_unlimited !== 0 && plan.grant_unlimited !== 1) throw new Error("grant_unlimited is 0 or 1");
+  const grant = plan.grant_id === null ? null : COUPONS.grants.get(plan.grant_id);
+  if (grant === undefined) throw new Error(`no coupon grant ${plan.grant_id} in tiers.json`);
+  if (grant === null && plan.grant_unlimited === 1) throw new Error("an unlimited grant needs its grant_id");
+  if (grant !== null && plan.trial_end !== null) throw new Error("a comp grant is not a trial");
+  const { tier, interval, seats } = grant === null ? plan : { tier: grant.tier_as, interval: null, seats: grant.seats };
   const t = tiers.get(tier);
   if (!t) throw new Error(`unknown tier ${tier}`);
-  if (period_start === undefined || period_end === undefined) throw new Error("entitlements need the billing period (null when none)");
   const limits = t.limits;
   const paid = t.prices.length > 0;
   const granted = grantBases(limits, seats, paid);
   const quantities = {};
   for (const a of ADDONS) {
-    const n = plan[a.quantityField];
+    const n = grant === null ? plan[a.quantityField] : 0;
     if (!Number.isInteger(n) || n < 0) throw new Error(`entitlements need ${a.quantityField} (0 when none was bought)`);
     quantities[a.quantityField] = paid ? n : 0;
-    for (const [grant, per] of Object.entries(a.grants)) granted[grant] += per * quantities[a.quantityField];
+    for (const [g, per] of Object.entries(a.grants)) granted[g] += per * quantities[a.quantityField];
   }
   if (!Number.isInteger(limits.secure_links_per_member)) throw new Error(`tiers.json ${tier} has no secure_links_per_member`);
+  const usage = {
+    members_max: paid ? Math.min(seats, limits.members) : limits.members,
+    storage_gb: grant === null ? granted.storage_gb : grant.storage_gb,
+    connections_max: paid ? Math.min(limits.connections_per_seat * seats, limits.connections) : limits.connections,
+    relay_gb_included: paid ? limits.relay_gb_per_seat * seats : limits.relay_gb_total,
+    secure_links_per_member: limits.secure_links_per_member,
+    secure_links_pool: granted.secure_links_pool,
+  };
+  const unlimited = plan.grant_unlimited === 1;
+  const trial = plan.trial_end !== null && plan.stripe_status !== "active";
   return {
+    v: ENTITLEMENTS_VERSION,
     status,
     tier,
     interval: paid ? interval : null,
     seats: paid ? seats : 0,
     ...quantities,
-    members_max: paid ? Math.min(seats, limits.members) : limits.members,
-    storage_gb: granted.storage_gb,
+    ...(unlimited ? UNLIMITED_LIMITS : trial ? clampToTrial(usage, COUPONS.trialCaps) : usage),
     workspaces_max: limits.workspaces,
     priority_support: Boolean(limits.priority_support),
-    connections_max: paid ? Math.min(limits.connections_per_seat * seats, limits.connections) : limits.connections,
-    relay_gb_included: paid ? limits.relay_gb_per_seat * seats : limits.relay_gb_total,
-    secure_links_per_member: limits.secure_links_per_member,
-    secure_links_pool: granted.secure_links_pool,
+    unlimited,
+    relay_unmetered: unlimited || (grant !== null && grant.unmetered_relay),
+    trial_clamped: trial,
     max_frame_bytes: METERING.max_frame_bytes,
     period_start,
     period_end,
@@ -124,7 +157,10 @@ export function entitlements(plan) {
 export function enforcedEntitlements(stored) {
   const period = { period_start: stored.period_start ?? null, period_end: stored.period_end ?? null };
   const predating = Object.fromEntries(ADDONS.filter((a) => !(a.quantityField in stored)).map((a) => [a.quantityField, 0]));
-  return { ...entitlements({ ...stored, ...predating, ...period }), ...stored };
+  // A stored record carries its limits, not the coupon inputs that shaped them: whatever it lacks
+  // is derived as for a plan with none (a record stored before coupons existed had none).
+  const plain = { grant_id: null, grant_unlimited: 0, trial_end: null, stripe_status: null };
+  return { ...entitlements({ ...stored, ...predating, ...period, ...plain }), ...stored };
 }
 
 /**

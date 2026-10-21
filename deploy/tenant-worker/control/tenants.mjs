@@ -3,13 +3,18 @@
  */
 import { checkSlug } from "./slug.mjs";
 import { displayNameOf, MAX_DISPLAY_NAME } from "./display-name.mjs";
-import { ADDONS, entitlements, intervalsOf, isPaid, maxSeats, overageKey, overageSoldWith, tierIds, tierKey } from "./plans.mjs";
+import { ADDONS, COUPONS, entitlements, isPaid, tierIds } from "./plans.mjs";
 import { noAddons } from "./addons.mjs";
 import { CLAIM_SEAL, digestsEqual, randomHex, RESERVATION_SEAL, seal, sha256Hex, unseal } from "./secrets.mjs";
 import { CREATE_ACTION, verifyTurnstile } from "./turnstile.mjs";
-import { priceIds, stripe, StripeError } from "./stripe.mjs";
+import { stripe } from "./stripe.mjs";
 import { json, refuse } from "./http.mjs";
 import { readAcceptedTerms } from "./customer-terms.mjs";
+import { expireCheckout, openCheckout } from "./checkout.mjs";
+import { couponFor, couponUnavailable } from "./coupons.mjs";
+import { normaliseCode } from "./coupon-rules.mjs";
+import { malformed, readPaidPlan } from "./plan-request.mjs";
+import { EXHAUSTED, RESERVED } from "./store.mjs";
 
 /** How long a free tenant's reservation holds its slug should the request die mid-way. */
 const FREE_RESERVATION_SECONDS = 300;
@@ -17,16 +22,19 @@ const FREE_RESERVATION_SECONDS = 300;
 const CHECKOUT_GRACE_SECONDS = 600;
 const CREATE_FIELDS = new Set([
   "slug", "display_name", "tier", "interval", "seats", ...ADDONS.map((a) => a.quantityField), "turnstile_token", "reservation_token",
-  "accepted_customer_terms_version",
+  "accepted_customer_terms_version", "coupon_code",
 ]);
-const PAID_ONLY = ["interval", "seats", ...ADDONS.map((a) => a.quantityField)];
+const PAID_ONLY = ["interval", "seats", ...ADDONS.map((a) => a.quantityField), "coupon_code"];
 const TOKEN = /^[0-9a-f]{64}$/;
+const DAY_SECONDS = 86400;
 
-const isCount = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
-
-/** The creation request, checked field by field: `{plan}` or `{error: Response}`. */
+/**
+ * The creation request, checked field by field: `{plan, token, retry, coupon}` or `{error:
+ * Response}`. `coupon` is the normalised code, null when none was given, or the uniform refusal
+ * for a value of the wrong shape (the shape is public, so refusing it early tells nothing).
+ */
 export function readCreate(body) {
-  const bad = (detail) => ({ error: refuse("malformed-request", detail, 400) });
+  const bad = malformed;
   const extra = Object.keys(body).filter((k) => !CREATE_FIELDS.has(k));
   if (extra.length) return bad(`unknown fields: ${extra.join(", ")}`);
   const terms = readAcceptedTerms(body);
@@ -49,19 +57,14 @@ export function readCreate(body) {
   if (!isPaid(body.tier)) {
     const named = PAID_ONLY.filter((k) => body[k] !== undefined);
     if (named.length) return bad(`the free tier takes no ${PAID_ONLY.join(", ")} (given ${named.join(", ")})`);
-    return { plan, token: body.turnstile_token, retry };
+    return { plan, token: body.turnstile_token, retry, coupon: null };
   }
-  if (!intervalsOf(body.tier).includes(body.interval)) return bad(`interval is one of ${intervalsOf(body.tier).join(", ")}`);
-  if (!isCount(body.seats, 1, maxSeats(body.tier))) return bad(`seats is an integer from 1 to ${maxSeats(body.tier)}`);
-  const quantities = {};
-  for (const a of ADDONS) {
-    // Leaving an add-on out of the request is buying none of it.
-    const n = body[a.quantityField] ?? 0;
-    if (!isCount(n, 0, a.max)) return bad(`${a.quantityField} is an integer from 0 to ${a.max}`);
-    if (n > 0 && !a.offeredOn(body.tier)) return bad(`${a.id} is not sold on ${body.tier}`);
-    quantities[a.quantityField] = n;
-  }
-  return { plan: { ...plan, interval: body.interval, seats: body.seats, ...quantities }, token: body.turnstile_token, retry };
+  const paid = readPaidPlan(body);
+  if (paid.error) return paid;
+  if (body.coupon_code !== undefined && typeof body.coupon_code !== "string") return bad("coupon_code is a string");
+  const coupon = body.coupon_code === undefined ? null : normaliseCode(body.coupon_code);
+  if (body.coupon_code !== undefined && coupon === null) return { error: couponUnavailable() };
+  return { plan: { ...plan, ...paid.fields }, token: body.turnstile_token, retry, coupon };
 }
 
 const hostOf = (cfg, slug) => `${slug}.${cfg.controlHost}`;
@@ -84,34 +87,57 @@ export async function createTenant(io, cfg, body, ip) {
   const failed = await verifyTurnstile(io, cfg.turnstile, read.token, CREATE_ACTION, ip);
   if (failed) return refuse("turnstile", failed, 403);
 
+  let coupon = null;
+  if (read.coupon !== null) {
+    const found = await couponFor(io, read.coupon, plan);
+    if (found.error) return found.error;
+    coupon = found.coupon;
+  }
+  // A comp grant needs no payment: the tenant is activated at once, on the grant's own plan.
+  const grant = coupon?.kind === "comp" ? COUPONS.grants.get(coupon.grant_id) : null;
+  const checkoutBound = paid && grant === null;
+
   const now = io.now();
   const claim = randomHex(32);
-  // Only a paid creation is left pending for its creator to come back to.
-  const reservation = paid ? randomHex(32) : null;
+  // Only a creation that waits on Checkout is left pending for its creator to come back to.
+  const reservation = checkoutBound ? randomHex(32) : null;
+  const trialDays = coupon?.kind === "trial" ? COUPONS.templates.get(coupon.template).trial_days : null;
   const row = {
     ...plan,
+    ...(grant === null ? {} : { tier: grant.tier_as, interval: null, seats: grant.seats, ...noAddons(ADDONS) }),
     tenant_id: randomHex(16),
     claim_hash: await sha256Hex(claim),
     reservation_hash: reservation === null ? null : await sha256Hex(reservation),
-    expires_at: now + (paid ? cfg.checkoutTtl + CHECKOUT_GRACE_SECONDS : FREE_RESERVATION_SECONDS),
+    expires_at: now + (checkoutBound ? cfg.checkoutTtl + CHECKOUT_GRACE_SECONDS : FREE_RESERVATION_SECONDS),
+    coupon_hash: coupon?.code_hash ?? null,
+    // Granted when it activates; until Stripe names the trial's end, the end it was offered.
+    grant_id: null,
+    grant_unlimited: 0,
+    trial_end: trialDays === null ? null : now + trialDays * DAY_SECONDS,
+    stripe_status: null,
   };
-  if (!(await io.store.reserve(row, now))) {
-    const refused = read.retry === null ? SLUG_TAKEN() : await supersede(io, cfg, read.retry, row, now);
+  const couponStatements = (replacing) => io.coupons.reservation({ coupon, row, nowSec: now, nowMs: io.nowMs(), replacing });
+  const reserved = await io.store.reserve(row, now, couponStatements(null));
+  if (reserved === EXHAUSTED) return couponUnavailable();
+  if (reserved !== RESERVED) {
+    const refused = read.retry === null ? SLUG_TAKEN() : await supersede(io, cfg, read.retry, row, now, couponStatements);
     if (refused) return refused;
   }
 
   try {
+    const active = grant === null ? {} : { grant_id: grant.id, grant_unlimited: grant.unlimited ? 1 : 0 };
     await io.tenant(plan.slug).provision({
       tenant_id: row.tenant_id,
       master_password: claim,
       display_name: plan.display_name,
-      entitlements: entitlements({ ...plan, status: paid ? "pending" : "active", period_start: null, period_end: null }),
+      entitlements: entitlements({ ...row, ...active, status: checkoutBound ? "pending" : "active", period_start: null, period_end: null }),
     });
-    if (!paid) {
-      await io.store.activateFree(plan.slug, row.tenant_id);
+    if (!checkoutBound) {
+      if (grant === null) await io.store.activateFree(plan.slug, row.tenant_id);
+      else await io.coupons.activateComp(plan.slug, row.tenant_id, grant.id, grant.unlimited, io.nowMs());
       return json({ slug: plan.slug, status: "active", workspace_host: hostOf(cfg, plan.slug), claim_code: claim }, 201);
     }
-    const checkout = await openCheckout(io, cfg, row, now);
+    const checkout = await openCheckout(io, cfg, row, now, coupon);
     await io.store.attachCheckout(
       plan.slug,
       row.tenant_id,
@@ -124,7 +150,7 @@ export async function createTenant(io, cfg, body, ip) {
       201,
     );
   } catch (e) {
-    await io.store.release(plan.slug, row.tenant_id);
+    await io.store.release(plan.slug, row.tenant_id, io.coupons.releasing(row.tenant_id, io.nowMs()));
     console.error(`[control] creating ${plan.slug} failed: ${e?.message ?? e}`);
     return refuse("provisioning-failed", "the workspace could not be created; nothing was charged", 502);
   }
@@ -137,9 +163,10 @@ const SLUG_TAKEN = () => refuse("slug-taken", "that address is taken", 409);
  * back): `token` is the reservation token its 201 returned. The pending reservation it matches
  * is replaced by `row`, after its Checkout Session is expired at Stripe so it can no longer be
  * paid. Null when `row` now holds the slug, else the refusal: a wrong token, or a slug that is not
- * a pending reservation, is the same 409 as no token at all.
+ * a pending reservation, is the same 409 as no token at all. `couponStatements(replacing)` are the
+ * coupon statements of the replacing batch, which drops the replaced reservation's redemption.
  */
-async function supersede(io, cfg, token, row, now) {
+async function supersede(io, cfg, token, row, now, couponStatements) {
   const held = await io.store.holder(row.slug, now);
   if (!held || held.status !== "pending" || !digestsEqual(held.reservation_hash ?? "", await sha256Hex(token))) return SLUG_TAKEN();
   if (held.checkout_sealed) {
@@ -151,52 +178,9 @@ async function supersede(io, cfg, token, row, now) {
     }
   }
   // A late webhook for the old session names the old tenant_id, which no row holds any more.
-  return (await io.store.supersede(held, row, now)) ? null : SLUG_TAKEN();
-}
-
-/** True once `sessionId` can no longer be paid: expired now, or already. */
-async function expireCheckout(io, cfg, sessionId) {
-  const path = `/checkout/sessions/${encodeURIComponent(sessionId)}`;
-  try {
-    await stripe(io, cfg.stripeKey, "POST", `${path}/expire`, {}, `expire-${sessionId}`);
-    return true;
-  } catch (e) {
-    // Stripe refuses to expire a session that is not open; ask it which state that is.
-    if (!(e instanceof StripeError) || e.status >= 500) throw e;
-    return (await stripe(io, cfg.stripeKey, "GET", path)).status === "expired";
-  }
-}
-
-async function openCheckout(io, cfg, row, now) {
-  const tierLookup = tierKey(row.tier, row.interval);
-  const withOverage = overageSoldWith(row.tier, row.interval);
-  const bought = ADDONS.filter((a) => row[a.quantityField] > 0);
-  const keys = [tierLookup, ...bought.map((a) => a.priceKey(row.interval)), ...(withOverage ? [overageKey()] : [])];
-  const ids = await priceIds(io, cfg.stripeKey, keys);
-  const back = (path) => `${cfg.publicOrigin}${path}?tenant=${encodeURIComponent(row.slug)}`;
-  const form = {
-    mode: "subscription",
-    client_reference_id: row.tenant_id,
-    "line_items[0][price]": ids.get(tierLookup),
-    "line_items[0][quantity]": String(row.seats),
-    "metadata[tenant]": row.slug,
-    "metadata[tenant_id]": row.tenant_id,
-    // On the subscription too, so every event about it for its whole life says whose it is.
-    "subscription_data[metadata][tenant]": row.slug,
-    "subscription_data[metadata][tenant_id]": row.tenant_id,
-    success_url: `${back("/create/done")}&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${back("/create")}&canceled=1`,
-    expires_at: String(now + cfg.checkoutTtl),
-  };
-  let next = 1;
-  for (const a of bought) {
-    form[`line_items[${next}][price]`] = ids.get(a.priceKey(row.interval));
-    form[`line_items[${next}][quantity]`] = String(row[a.quantityField]);
-    next += 1;
-  }
-  // Metered: billed by what the meter records, so Stripe refuses a quantity on it.
-  if (withOverage) form[`line_items[${next}][price]`] = ids.get(overageKey());
-  return stripe(io, cfg.stripeKey, "POST", "/checkout/sessions", form, `checkout-${row.tenant_id}`);
+  const replaced = await io.store.supersede(held, row, now, couponStatements(held.tenant_id));
+  if (replaced === EXHAUSTED) return couponUnavailable();
+  return replaced === RESERVED ? null : SLUG_TAKEN();
 }
 
 /** Pending or active; and, once active, to the caller holding the Checkout Session id, the claim code once. */

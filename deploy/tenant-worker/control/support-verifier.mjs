@@ -19,3 +19,13 @@ export function verifySupportRequest(publicKey, body, audience, nowMs) {
   instance ??= instantiate(wasm);
   return instance.verify_support_request(publicKey, body, audience, nowMs);
 }
+
+/**
+ * The same check of a signed coupon-admin request, under the admin signing domain:
+ * `{ ok: true, payload }` or `{ ok: false, reason }` (control/coupon-admin.mjs reads the payload).
+ */
+export function verifyAdminRequest(publicKey, body, audience, nowMs) {
+  instance ??= instantiate(wasm);
+  if (typeof instance.verify_admin_request !== "function") throw new Error("this server-wasm build has no verify_admin_request");
+  return instance.verify_admin_request(publicKey, body, audience, nowMs);
+}

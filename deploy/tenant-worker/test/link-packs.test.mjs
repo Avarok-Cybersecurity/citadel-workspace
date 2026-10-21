@@ -7,7 +7,8 @@ import { enforcedEntitlements, entitlements, MAX_LINK_PACKS, planOfItems } from 
 import { createBody, deliver, freshSlug, item, objectStats, outbound, post, subscriptionEvent, tenantRow } from "./helpers.mjs";
 
 const noPeriod = { period_start: null, period_end: null };
-const plan = (extra) => ({ status: "active", storage_blocks: 0, link_packs: 0, ...noPeriod, ...extra });
+// No coupon: a plan states it, as it states its billing period (entitlements v2).
+const plan = (extra) => ({ status: "active", storage_blocks: 0, link_packs: 0, ...noPeriod, grant_id: null, grant_unlimited: 0, trial_end: null, stripe_status: null, ...extra });
 
 describe("link-pack entitlements", () => {
   it("give each member the tier's own allowance and the workspace 50 shared links per pack", () => {

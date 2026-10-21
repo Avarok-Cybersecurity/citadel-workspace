@@ -56,19 +56,21 @@ describe("lookup keys and plans", () => {
   });
   it("grants storage per seat plus 10 GB per block, and members up to the seats bought", () => {
     const noPeriod = { period_start: null, period_end: null };
-    expect(entitlements({ tier: "team", interval: "month", seats: 3, storage_blocks: 2, link_packs: 0, status: "active", ...noPeriod })).toEqual({
+    const noCoupon = { grant_id: null, grant_unlimited: 0, trial_end: null, stripe_status: null };
+    expect(entitlements({ tier: "team", interval: "month", seats: 3, storage_blocks: 2, link_packs: 0, status: "active", ...noPeriod, ...noCoupon })).toEqual({
       status: "active", tier: "team", interval: "month", seats: 3, storage_blocks: 2, link_packs: 0,
       members_max: 3, storage_gb: 50, workspaces_max: 1, priority_support: false,
       connections_max: 9, relay_gb_included: 60, max_frame_bytes: 4194304, secure_links_per_member: 50, secure_links_pool: 0, ...noPeriod,
+      v: 2, unlimited: false, relay_unmetered: false, trial_clamped: false,
     });
-    const business = entitlements({ tier: "business", interval: "year", seats: 2000, storage_blocks: 0, link_packs: 0, status: "active", ...noPeriod });
+    const business = entitlements({ tier: "business", interval: "year", seats: 2000, storage_blocks: 0, link_packs: 0, status: "active", ...noPeriod, ...noCoupon });
     expect([business.members_max, business.storage_gb, business.priority_support]).toEqual([1000, 50000, true]);
     expect([business.connections_max, business.relay_gb_included]).toEqual([500, 100000]);
-    expect(entitlements({ tier: "free", interval: null, seats: 0, storage_blocks: 0, link_packs: 0, status: "active", ...noPeriod })).toMatchObject({
+    expect(entitlements({ tier: "free", interval: null, seats: 0, storage_blocks: 0, link_packs: 0, status: "active", ...noPeriod, ...noCoupon })).toMatchObject({
       members_max: 5, storage_gb: 1, seats: 0, storage_blocks: 0, connections_max: 15, relay_gb_included: 2,
     });
     const period = { period_start: 1000, period_end: 2000 };
-    expect(entitlements({ tier: "team", interval: "month", seats: 1, storage_blocks: 0, link_packs: 0, status: "active", ...period })).toMatchObject(period);
+    expect(entitlements({ tier: "team", interval: "month", seats: 1, storage_blocks: 0, link_packs: 0, status: "active", ...period, ...noCoupon })).toMatchObject(period);
   });
   it("an object enforces its stored entitlements, deriving from its plan only the limits they lack", () => {
     const old = { status: "active", tier: "business", interval: "year", seats: 4, storage_blocks: 1, members_max: 4 };

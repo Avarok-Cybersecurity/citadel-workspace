@@ -9,11 +9,17 @@
  *      an outbox row is opened, the event sent under an identifier naming the GB it covers, and
  *      only then is the report recorded (the webhook's rule: record AFTER the write it guards);
  *   4. takes the census of the object's accounts by auth-record version (control/auth-versions.mjs):
- *      counts only, logged and kept in D1, warning while any legacy Argon2 account remains.
+ *      counts only, logged and kept in D1, warning while any legacy Argon2 account remains;
+ *   5. for a comp grant, records each spend-alarm threshold reached (control/coupon-alarm.mjs) once
+ *      per period and metric, and logs it. Nothing is cut: an unmetered grant's relay is neither
+ *      reported nor billed, and a trial's is recorded but not billed, as a free tenant's is.
  * The object is authoritative for its own limits; a missed run delays a report, nothing more.
+ * The registry's entitlements include a grant's `unlimited`, so drift repair keeps a grant.
  */
 import { AUTH_VERSION_KEYS } from "./auth-versions.mjs";
-import { entitlements, METERING, OVERAGE_EVENT, overageBilledOn, overageSoldWith } from "./plans.mjs";
+import { COUPONS, entitlements, METERING, OVERAGE_EVENT, overageBilledOn, overageSoldWith } from "./plans.mjs";
+import { alarmsOf } from "./coupon-alarm.mjs";
+import { periodAt } from "./meter.mjs";
 import { stripe } from "./stripe.mjs";
 
 /** Whole GB of metered usage beyond what the tier includes. */
@@ -40,18 +46,32 @@ async function monitorTenant(io, cfg, row) {
     console.warn(`[monitor] ${row.slug}: the object's entitlements differ from the registry's; pushing them`);
     await object.setEntitlements(want);
   }
+  const counts = await census(io, row, object);
+  if (row.grant_id !== null) await alarms(io, row, want, seen, counts);
+  if (want.relay_unmetered) return;
   for (const period of seen.periods) {
     const overage = overageGb(period.bytes_in, want.relay_gb_included);
     const sent = await io.usage.record(row.tenant_id, period, want.relay_gb_included, overage, io.now());
     if (sent.pending === null && overage <= sent.reported) continue;
-    if (!overageSoldWith(row.tier, row.interval) && !(row.usage_subscription && overageBilledOn(row.tier))) {
-      // Free, or a yearly plan whose usage-only subscription does not exist yet.
+    if (want.trial_clamped || (!overageSoldWith(row.tier, row.interval) && !(row.usage_subscription && overageBilledOn(row.tier)))) {
+      // Free, a trial, or a yearly plan whose usage-only subscription does not exist yet.
       console.warn(`[monitor] ${row.slug}: ${overage} GB over the ${row.tier}/${row.interval} relay, which is not billed`);
       continue;
     }
     await report(io, cfg, row, period.period_start, overage);
   }
-  await census(io, row, object);
+}
+
+/** A comp grant's spend alarm: each threshold reached, recorded once per period and logged. */
+async function alarms(io, row, want, seen, counts) {
+  const grant = COUPONS.grants.get(row.grant_id);
+  const members = AUTH_VERSION_KEYS.reduce((n, k) => n + counts[k], 0);
+  const periodStart = periodAt(want, io.nowMs()).start;
+  for (const alarm of alarmsOf(grant.alarm, { periods: seen.periods, storage_bytes: seen.storage_bytes, members }, periodStart)) {
+    if (await io.coupons.alarm(row.tenant_id, row.coupon_hash, alarm, io.nowMs())) {
+      console.warn(`[monitor] ALARM ${row.slug} ${alarm.metric} ${alarm.value}`);
+    }
+  }
 }
 
 /** The tenant's accounts by auth-record version: counts only, never a username or a CID. */
@@ -61,6 +81,7 @@ async function census(io, row, object) {
   console.log(`[monitor] ${row.slug}: auth records ${AUTH_VERSION_KEYS.map((k) => `${k}=${counts[k]}`).join(" ")}`);
   if (counts.legacy_argon > 0) console.warn(`[monitor] ${row.slug}: ${counts.legacy_argon} legacy Argon2 account(s) remain`);
   if (counts.undecodable > 0) console.warn(`[monitor] ${row.slug}: ${counts.undecodable} account record(s) could not be read for the census`);
+  return counts;
 }
 
 async function report(io, cfg, row, periodStart, overage) {

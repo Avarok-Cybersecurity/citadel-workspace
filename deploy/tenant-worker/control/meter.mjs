@@ -49,9 +49,9 @@ export class Meter {
     return this.open.size;
   }
 
-  /** Whether one more socket fits under `max`. */
+  /** Whether one more socket fits under `max` (null: no limit, an unlimited grant's). */
   admits(max) {
-    return this.open.size < max;
+    return max === null || this.open.size < max;
   }
 
   connect(id, nowMs) {
