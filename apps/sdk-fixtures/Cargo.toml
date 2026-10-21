@@ -1,0 +1,44 @@
+# Hostile test fixtures for the Citadel app sandbox, and the one well-behaved control
+# (hello-canvas). Built for wasm32-unknown-unknown only, deterministically, by
+# scripts/build-app-fixtures.mjs into wasm/ (committed; `--check` rebuilds and compares).
+# fixtures.json is what each one declares and what a host must observe; harness/ asserts it
+# with the inspector and a reference host.
+[workspace]
+resolver = "2"
+members = [
+    "report",
+    "hello-canvas",
+    "undeclared-import",
+    "foreign-import",
+    "over-memory",
+    "slow-frame",
+    "ungranted-calls",
+    "panics",
+    "huge-reply",
+    "exfil-attempts",
+    "ihttp-stream-client",
+]
+exclude = ["harness", "sdk"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[workspace.dependencies]
+# Through sdk/'s symlinks, never "../../citadel-internal-service/...": Cargo hashes a path
+# package's identity by its path relative to the workspace root when it lies inside that root,
+# and by its ABSOLUTE path otherwise, and that hash reaches the codegen. Reached from outside,
+# the SDK made the bytes depend on where the repository is checked out, and `--check` could
+# never pass on a CI runner. `exclude` keeps the symlinked crates from becoming members.
+citadel-app-sdk = { path = "sdk/citadel-app-sdk" }
+fixture-report = { path = "report" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+strip = true
