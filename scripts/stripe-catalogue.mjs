@@ -18,9 +18,16 @@
  * Meter: the meter is found by its event name and created when missing; one it holds with other
  * settings is reported, never edited (Stripe allows almost no edits to a meter). Its price is a
  * `usage_type=metered` price on that meter, found and replaced by lookup key like any other.
+ *
+ * Coupons (tiers.json `coupons.templates`, scripts/lib/stripe-coupons.mjs): one per discount
+ * template under a content-addressed id, created when missing. A coupon's terms cannot be edited,
+ * so one that differs is reported, never rewritten. A coupon of ours (metadata.citadel_coupon)
+ * whose template is gone is deleted; existing discounts keep it. Nobody else's is ever touched.
  */
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { deriveCatalogue, deriveMetered, meterDiffs, priceDiffs, productDiffs } from '../billing/catalogue.mjs';
+import { couponDiffs, couponForm, deriveCoupons, staleCoupons } from './lib/stripe-coupons.mjs';
 
 const [keyFile, ...flags] = process.argv.slice(2);
 const APPLY = flags.includes('--apply');
@@ -71,6 +78,8 @@ const priceQuery = keys.map((k) => `lookup_keys[]=${encodeURIComponent(k)}`).joi
 const pricesByKey = Object.fromEntries((await stripe('GET', `prices?${priceQuery}&limit=100`)).data.map((p) => [p.lookup_key, p]));
 
 let drift = 0;
+/** Each tier's product id as this run leaves it (created under --apply), for the coupons' applies_to. */
+const productByTier = new Map();
 /** The id of the meter `w` bills through (created under --apply when missing), or null. */
 async function meterFor(w) {
   let meter = meters.find((m) => m.event_name === w.meter.event_name);
@@ -110,6 +119,7 @@ for (const w of wanted) {
   } else {
     console.log(`ok   ${mode} product ${w.tier} ${product.id}`);
   }
+  productByTier.set(w.tier, product?.id);
   for (const p of w.prices) {
     const have = pricesByKey[p.lookup_key];
     const d = priceDiffs(p, have, product?.id, meterId);
@@ -137,6 +147,37 @@ for (const w of wanted) {
         console.log(`  ${have.id} archived (existing subscriptions keep it)`);
       }
     }
+  }
+}
+
+const wantedCoupons = await deriveCoupons(table, async (text) => createHash('sha256').update(text).digest('hex'));
+const coupons = await listAll('coupons?expand[]=data.applies_to');
+for (const w of wantedCoupons) {
+  const productIds = w.tiers.map((t) => productByTier.get(t));
+  if (productIds.some((id) => !id)) {
+    drift += 1;
+    console.log(`DIFF ${mode} coupon ${w.id}: a tier it discounts has no product yet`);
+    continue;
+  }
+  const have = coupons.find((c) => c.id === w.id);
+  const d = couponDiffs(w, have, productIds);
+  if (!d.length) {
+    console.log(`ok   ${mode} coupon ${w.id}`);
+    continue;
+  }
+  drift += 1;
+  console.log(`DIFF ${mode} coupon ${w.id}: ${d.join(', ')}`);
+  if (APPLY && !have) {
+    await stripe('POST', 'coupons', couponForm(w, productIds));
+    console.log(`  ${w.id} created`);
+  }
+}
+for (const c of staleCoupons(wantedCoupons, coupons)) {
+  drift += 1;
+  console.log(`DIFF ${mode} coupon ${c.id}: its template ${c.metadata.citadel_coupon} is no longer in tiers.json`);
+  if (APPLY) {
+    await stripe('DELETE', `coupons/${encodeURIComponent(c.id)}`);
+    console.log(`  ${c.id} deleted (existing discounts keep it)`);
   }
 }
 

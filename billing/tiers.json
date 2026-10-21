@@ -140,5 +140,109 @@
         }
       ]
     }
-  ]
+  ],
+  "coupons": {
+    "$comment": "Every discount shape Stripe holds (templates), the trial caps, the comp grant shapes, and the public codes. Comp codes themselves are NEVER here (this file is public): they are issued into D1 by the signed admin tool, and a static code may never name an unlimited grant. A dynamic code is an instance of a template or a grant, so the Worker never asks Stripe for a new object (scripts/stripe-catalogue.mjs creates one Stripe coupon per discount template at deploy). trial_caps clamp a trial tenant to free-tier size until its subscription is active. A grant with unlimited: true lifts every usage limit (entitlements v2, null = no limit); its alarm thresholds (null = none) only log and record, they never cut. Checked when it loads: billing/coupons-catalogue.mjs.",
+    "code_shape": "^[A-Z0-9][A-Z0-9-]{3,31}$",
+    "flat_max_cents": 10000,
+    "trial_caps": {
+      "max_days": 30,
+      "members": 5,
+      "storage_gb": 1,
+      "connections": 15,
+      "relay_gb": 2,
+      "secure_links_per_member": 5,
+      "secure_links_pool": 0
+    },
+    "templates": [
+      {
+        "id": "pct-10-once",
+        "discount": {
+          "kind": "percent",
+          "percent_off": 10
+        },
+        "duration": "once",
+        "intervals": [
+          "month",
+          "year"
+        ]
+      },
+      {
+        "id": "pct-20-3mo",
+        "discount": {
+          "kind": "percent",
+          "percent_off": 20
+        },
+        "duration": "repeating",
+        "months": 3,
+        "intervals": [
+          "month"
+        ]
+      },
+      {
+        "id": "usd-10-once",
+        "discount": {
+          "kind": "amount",
+          "amount_off": 1000
+        },
+        "duration": "once",
+        "intervals": [
+          "month",
+          "year"
+        ]
+      },
+      {
+        "id": "trial-14",
+        "trial_days": 14,
+        "intervals": [
+          "month",
+          "year"
+        ]
+      }
+    ],
+    "grants": [
+      {
+        "id": "design-partner",
+        "tier_as": "business",
+        "seats": 25,
+        "storage_gb": 500,
+        "unmetered_relay": true,
+        "unlimited": true,
+        "alarm": {
+          "relay_gb_per_period": 500,
+          "storage_gb": 100,
+          "members": 250
+        }
+      },
+      {
+        "id": "owner-internal",
+        "tier_as": "business",
+        "seats": 100,
+        "storage_gb": 1000,
+        "unmetered_relay": true,
+        "unlimited": true,
+        "alarm": {
+          "relay_gb_per_period": 500,
+          "storage_gb": 100,
+          "members": 250
+        }
+      }
+    ],
+    "static": [
+      {
+        "code": "LAUNCH10",
+        "template": "pct-10-once",
+        "available_on": [
+          "team",
+          "business"
+        ],
+        "intervals": [
+          "month",
+          "year"
+        ],
+        "max_redemptions": 500,
+        "redeem_by": "2026-12-31T23:59:59Z"
+      }
+    ]
+  }
 }

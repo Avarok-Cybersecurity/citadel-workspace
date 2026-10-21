@@ -674,6 +674,8 @@ jobs:
         run: bash scripts/test-provision-tenant.sh
       - name: The Stripe catalogue is derived from the approved tier table
         run: node --test billing/catalogue.test.mjs
+      - name: Coupons are the shapes the tier table allows, and Stripe's are derived from them
+        run: node --test billing/coupons-catalogue.test.mjs scripts/lib/stripe-coupons.test.mjs
       - name: The worker's Turnstile verdicts match the fixture the native server's are held to
         run: node --test scripts/lib/turnstile-verdict-parity.test.mjs
       - name: The brand kit derivation refuses what the guidelines forbid
