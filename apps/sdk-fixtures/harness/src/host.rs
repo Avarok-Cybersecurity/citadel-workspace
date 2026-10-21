@@ -7,6 +7,8 @@
 //! released by the first complete read. Fuel stands in for the watchdog, and the memory the host
 //! constructs has the hard maximum.
 
+pub use crate::remote::IhttpRemote;
+use crate::remote::Remote;
 use crate::state::{group_call, reply_len, reply_read};
 pub use crate::state::{Limits, State};
 use citadel_app_sdk_types::abi::{MEMORY, NAMESPACE, REPLY_LEN, REPLY_READ};
@@ -57,6 +59,8 @@ impl Instance {
             replies: BTreeMap::new(),
             to_resolve: vec![],
             next_handle: 1,
+            remote: limits.ihttp_remote.map(Remote::new),
+            inbound: vec![],
             log: vec![],
             calls: vec![],
         };
@@ -131,17 +135,24 @@ impl Instance {
         frame.call(&mut self.store, dt_ms).map_err(trap)
     }
 
-    /// Resolve every pending reply and deliver its `ReplyReady`, until none is left (a
-    /// continuation may start more). Stops at the first trap.
+    /// Resolve every pending reply and deliver its `ReplyReady`, then every inbound event,
+    /// until neither is left (a continuation may start more). Stops at the first trap.
     pub fn pump(&mut self) -> Result<(), Trap> {
-        while !self.store.data().to_resolve.is_empty() {
-            let batch = std::mem::take(&mut self.store.data_mut().to_resolve);
-            for (handle, reply) in batch {
+        loop {
+            let state = self.store.data_mut();
+            let replies = std::mem::take(&mut state.to_resolve);
+            let inbound = std::mem::take(&mut state.inbound);
+            if replies.is_empty() && inbound.is_empty() {
+                return Ok(());
+            }
+            for (handle, reply) in replies {
                 self.store.data_mut().replies.insert(handle, Some(reply));
                 self.event(&AppEvent::ReplyReady { handle })?;
             }
+            for event in inbound {
+                self.event(&event)?;
+            }
         }
-        Ok(())
     }
 
     pub fn state(&self) -> &State {

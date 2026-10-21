@@ -1,6 +1,6 @@
 //! Every fixture's run, in the reference host, as fixtures.json states.
 
-use app_fixture_harness::host::{Instance, Limits, Trap};
+use app_fixture_harness::host::{IhttpRemote, Instance, Limits, Trap};
 use app_fixture_harness::{caps, context, manifest, wasm};
 use citadel_app_abi_inspect::inspect;
 use citadel_app_sdk_types::calls::DrawCommand;
@@ -24,6 +24,10 @@ fn start(name: &str, run: &Value) -> Instance {
             .as_u64()
             .map_or(DEFAULT_IO_BYTES, |n| n as u32),
         fuel_per_call: FUEL,
+        ihttp_remote: host.get("ihttp_remote").map(|r| IhttpRemote {
+            chunks: r["chunks"].as_u64().unwrap() as u32,
+            chunk_bytes: r["chunk_bytes"].as_u64().unwrap() as u32,
+        }),
     };
     Instance::new(&bytes, initial, &caps(&run["granted"]), limits)
 }
@@ -163,4 +167,29 @@ fn a_pending_reply_reaches_the_app_only_through_reply_ready() {
     );
     inst.pump().unwrap();
     assert_eq!(inst.report().len(), 3);
+}
+
+#[test]
+fn a_call_only_client_streams_past_the_initial_credit_by_returning_it() {
+    use citadel_app_sdk_types::abi::IHTTP_INITIAL_CREDIT;
+    use citadel_app_sdk_types::ops::IhttpOps;
+    let m = manifest();
+    let run = &m["fixtures"]["ihttp-stream-client"]["run"];
+    let chunks = run["host"]["ihttp_remote"]["chunks"].as_u64().unwrap() as usize;
+    assert!(
+        chunks > IHTTP_INITIAL_CREDIT as usize,
+        "the run must outlast the initial credit"
+    );
+    let inst = play("ihttp-stream-client", run);
+    let consumed = inst
+        .state()
+        .calls
+        .iter()
+        .filter(|c| matches!(c, HostCall::Ihttp(IhttpOps::IhttpConsumed(_))))
+        .count();
+    assert_eq!(consumed, chunks, "one IhttpConsumed per chunk read");
+    assert_eq!(
+        inst.report()["stream"],
+        format!("complete:{chunks}:{}", chunks * 1000)
+    );
 }

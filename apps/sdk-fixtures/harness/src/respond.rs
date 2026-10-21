@@ -3,7 +3,9 @@
 
 use crate::state::State;
 use citadel_app_sdk_types::calls::*;
-use citadel_app_sdk_types::ops::{CanvasOps, EventsOps, FilesOps, LogOps, NavigateOps, UiOps};
+use citadel_app_sdk_types::ops::{
+    CanvasOps, EventsOps, FilesOps, IhttpOps, LogOps, NavigateOps, UiOps,
+};
 use citadel_app_sdk_types::{encode, Bytes, HostCall, HostReply, Refused};
 
 fn ok<T: serde::Serialize>(value: T) -> Vec<u8> {
@@ -15,6 +17,19 @@ pub fn refused(r: Refused) -> Vec<u8> {
 }
 
 pub fn respond(state: &mut State, call: &HostCall) -> Vec<u8> {
+    if let (HostCall::Ihttp(op), Some(remote)) = (call, state.remote.as_mut()) {
+        match op {
+            IhttpOps::IhttpCall(c) => {
+                remote.on_call(c, &mut state.inbound);
+                return ok(());
+            }
+            IhttpOps::IhttpConsumed(c) => {
+                remote.on_consumed(c, &mut state.inbound);
+                return ok(());
+            }
+            IhttpOps::IhttpServe(_) | IhttpOps::IhttpRespond(_) => {}
+        }
+    }
     match call {
         HostCall::Log(LogOps::LogWrite(w)) => {
             state.log.push(w.message.clone());

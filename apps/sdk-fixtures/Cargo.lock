@@ -108,6 +108,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ihttp-stream-client"
+version = "0.1.0"
+dependencies = [
+ "citadel-app-sdk",
+ "fixture-report",
+]
+
+[[package]]
 name = "over-memory"
 version = "0.1.0"
 dependencies = [

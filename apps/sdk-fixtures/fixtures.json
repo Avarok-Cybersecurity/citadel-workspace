@@ -164,6 +164,7 @@
           "net_host_stream": "ungranted",
           "ihttp_call": "ungranted",
           "ihttp_serve": "ungranted",
+          "ihttp_consumed": "ungranted",
           "storage_scope_set": "ungranted",
           "storage_local_list": "ungranted",
           "storage_blob_put": "ungranted",
@@ -188,6 +189,23 @@
           "reply_read_out_of_bounds": "code:-1",
           "log_ok": "ok"
         }
+      }
+    },
+    "ihttp-stream-client": {
+      "about": "A client holding only ihttp.call streams a 10-chunk response, more than the initial credit of 4: chunks 5-10 come only because the SDK returns credit with IhttpConsumed, which either ihttp capability admits. A host that admits IhttpConsumed for ihttp.serve alone stalls it after 4 chunks and `stream` is never reported. host.ihttp_remote is the far end the host must play: status 200, `chunks` body frames of `chunk_bytes` bytes, sent under the caller's credit (4, plus one per IhttpConsumed), then End. The control run holds only ihttp.serve, which must not admit the call itself.",
+      "declared": ["ihttp.call", "log"],
+      "inspect": {"accepted": true},
+      "run": {
+        "granted": ["ihttp.call", "log"],
+        "host": {"max_memory_pages": 64, "ihttp_remote": {"chunks": 10, "chunk_bytes": 1000}},
+        "init": 0,
+        "report": {"head": "200", "stream": "complete:10:10000"}
+      },
+      "control_run": {
+        "granted": ["ihttp.serve", "log"],
+        "host": {"max_memory_pages": 64, "ihttp_remote": {"chunks": 10, "chunk_bytes": 1000}},
+        "init": 0,
+        "report": {"stream": "failed:ungranted"}
       }
     }
   }

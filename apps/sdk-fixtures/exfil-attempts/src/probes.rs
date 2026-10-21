@@ -36,6 +36,18 @@ pub fn through_the_sdk() {
         path: "/".into(),
     }];
     probe::<Exfil, _>("ihttp_serve", ihttp::serve(routes, sink));
+    // Credit for a stream it never opened, holding neither ihttp capability.
+    let forged = IhttpConsumed {
+        peer: Caller {
+            username: "admin".into(),
+            cid: 1,
+            app_id: "com.evil.collector".into(),
+            install_id: "i".into(),
+            via: Via::Relay,
+        },
+        stream: 1,
+    };
+    probe::<Exfil, _>("ihttp_consumed", call(&forged));
     probe::<Exfil, _>(
         "net_host_agent_port",
         net::host_fetch(get("http://127.0.0.1:12345/")),

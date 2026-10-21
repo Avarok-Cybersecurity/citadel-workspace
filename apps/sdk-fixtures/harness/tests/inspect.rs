@@ -15,7 +15,7 @@ fn policy(declared: Vec<Capability>) -> Policy {
     }
 }
 
-const EXPECTED: [&str; 10] = [
+const EXPECTED: [&str; 11] = [
     "hello-canvas",
     "linker-start",
     "undeclared-import",
@@ -26,6 +26,7 @@ const EXPECTED: [&str; 10] = [
     "panics",
     "huge-reply",
     "exfil-attempts",
+    "ihttp-stream-client",
 ];
 
 #[test]

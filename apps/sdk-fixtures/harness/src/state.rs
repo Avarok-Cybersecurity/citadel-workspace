@@ -1,10 +1,11 @@
 //! The host's per-instance state and the ABI's import functions: the groups, `reply_len`
 //! and `reply_read`. See [`crate::host`] for the semantics they implement.
 
+use crate::remote::{IhttpRemote, Remote};
 use crate::respond::{refused, respond};
 use citadel_app_sdk_types::abi::{self, AbiError};
 use citadel_app_sdk_types::ops::CallDecodeError;
-use citadel_app_sdk_types::{Capability, Group, HostCall, Refused};
+use citadel_app_sdk_types::{AppEvent, Capability, Group, HostCall, Refused};
 use std::collections::BTreeMap;
 use wasmi::{Caller, Memory};
 
@@ -15,6 +16,8 @@ pub struct Limits {
     pub max_request_bytes: u32,
     pub max_reply_bytes: u32,
     pub fuel_per_call: u64,
+    /// The far end of the app's ihttp client calls; None: there is none (`unavailable`).
+    pub ihttp_remote: Option<IhttpRemote>,
 }
 
 pub struct State {
@@ -26,6 +29,9 @@ pub struct State {
     /// Pending handles and the reply each will resolve to, in issue order.
     pub(crate) to_resolve: Vec<(i32, Vec<u8>)>,
     pub(crate) next_handle: i32,
+    pub(crate) remote: Option<Remote>,
+    /// Events for the app that `pump` delivers after the replies (the remote's ihttp frames).
+    pub(crate) inbound: Vec<AppEvent>,
     pub log: Vec<String>,
     pub calls: Vec<HostCall>,
 }
@@ -100,7 +106,7 @@ pub(crate) fn group_call(
         }
     };
     state.calls.push(call.clone());
-    if !state.holds(call.capability()) {
+    if !call.is_granted(|c| state.holds(c)) {
         return state.issue(Some(refused(Refused::Ungranted)));
     }
     let reply = respond(state, &call);

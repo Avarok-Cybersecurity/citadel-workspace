@@ -1,6 +1,7 @@
 //! The fixtures' contract (`fixtures.json`) and a reference host for running them.
 
 pub mod host;
+mod remote;
 mod respond;
 mod state;
 

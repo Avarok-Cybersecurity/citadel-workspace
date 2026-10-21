@@ -16,6 +16,7 @@ members = [
     "panics",
     "huge-reply",
     "exfil-attempts",
+    "ihttp-stream-client",
 ]
 exclude = ["harness", "sdk"]
 
