@@ -1,0 +1,13 @@
+[package]
+name = "hello-canvas"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+citadel-app-sdk.workspace = true
+fixture-report.workspace = true

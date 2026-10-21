@@ -164,6 +164,59 @@ jobs:
       - run: cargo clippy --locked --all-targets --manifest-path tools/telemetry-read/Cargo.toml -- -D warnings
       - run: cargo test --locked --manifest-path tools/telemetry-read/Cargo.toml
 
+  # The Citadel Apps SDK. citadel-app-sdk-types and citadel-app-abi-inspect are members of the
+  # agent's workspace, linted and tested with it above; this job covers what that cannot reach:
+  # the guest SDK (its own workspace, wasm32-unknown-unknown only), the TypeScript bindings the
+  # host consumes, the committed hostile fixtures and the reference host that judges them.
+  # Fuel, not wall-clock time, bounds the harness's guests, so the Mac pool is fine for it.
+  app-sdk:
+    name: Apps SDK - guest SDK, TS bindings, reproducible fixtures, reference host
+    timeout-minutes: 30
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/rust-toolchain
+      - uses: taiki-e/install-action@nextest
+      # The compiler apps/sdk-fixtures/rust-toolchain.toml pins (it also governs harness/): the
+      # committed .wasm files are byte-for-byte its output. The guest SDK is linted with it too.
+      - name: Install the fixtures' pinned toolchain
+        run: rustup toolchain install 1.99.0 --profile minimal --target wasm32-unknown-unknown --component clippy,rustfmt
+      - name: Guest SDK - fmt, clippy for wasm32 and for its native tests, tests
+        working-directory: citadel-internal-service/citadel-app-sdk
+        run: |
+          cargo +1.99.0 fmt --check
+          cargo +1.99.0 clippy --locked --target wasm32-unknown-unknown -- -D warnings
+          cargo +1.99.0 clippy --locked --tests -- -D warnings
+          cargo +1.99.0 nextest run --locked
+      # The bindings are written by the types crate's tests; regenerating them must change
+      # nothing, or the committed TypeScript the host builds on is not what the Rust says.
+      - name: The committed TS bindings are what citadel-app-sdk-types generates
+        working-directory: citadel-internal-service
+        run: |
+          cargo nextest run --locked -p citadel-app-sdk-types --features ts
+          git diff --exit-code -- citadel-app-sdk-types/bindings
+          untracked="$(git ls-files --others --exclude-standard -- citadel-app-sdk-types/bindings)"
+          if [ -n "$untracked" ]; then echo "::error::bindings not committed: $untracked"; exit 1; fi
+      - name: Fixtures - fmt and clippy for wasm32
+        working-directory: apps/sdk-fixtures
+        run: |
+          cargo fmt --all --check
+          cargo clippy --locked --workspace --target wasm32-unknown-unknown -- -D warnings
+      - name: The committed fixtures rebuild byte-for-byte from their source
+        run: node scripts/build-app-fixtures.mjs --check
+      - name: Reference host - fmt, clippy, every fixture judged and run as fixtures.json says
+        working-directory: apps/sdk-fixtures/harness
+        run: |
+          cargo fmt --check
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo nextest run --locked
+
   # The agent as Windows people get it. Every other Rust job here runs on Linux or macOS, where
   # `cfg(windows)` code (the tray icon, the log routing, the login entry) is not even compiled,
   # and no PR job built for Windows at all: the release pipeline was the first to find out.
@@ -1486,7 +1539,7 @@ jobs:
     # Measured: a full parent run is ~1,281 runner-min and the integration
     # matrix is 87% of it. Gating on every cheap job means a lint-red PR costs
     # ~25 jobs instead of 74.
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, integration-stack]
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, app-sdk, integration-stack]
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
@@ -1850,7 +1903,7 @@ jobs:
           path: citadel-workspaces/integration-tests/screenshots/
 
   playwright-tests:
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, integration-stack]
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, app-sdk, integration-stack]
     # The @playwright/test suite under integration-tests/src/tests-pw. It existed
     # but ran in NO job, so those specs were dead weight: written, compiled by the
     # typecheck job, and never executed against a running stack.
@@ -2108,7 +2161,7 @@ jobs:
             citadel-workspaces/integration-tests/test-results/
 
   deploy-gate-tests:
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read]
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, app-sdk]
     # Regression coverage for the release-consistency gate that stands between a `docker
     # compose pull` and a production restart. It is the mechanism that stops a partially
     # promoted `latest` from restarting production on two backend images that never shipped
@@ -2376,7 +2429,7 @@ jobs:
     # Measured: a full parent run is ~1,281 runner-min and the integration
     # matrix is 87% of it. Gating on every cheap job means a lint-red PR costs
     # ~25 jobs instead of 74.
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read]
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, app-sdk]
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
@@ -2875,6 +2928,7 @@ jobs:
       - windows-agent
       - release-sign
       - telemetry-read
+      - app-sdk
       - unit-tests
       - typecheck
       - lint

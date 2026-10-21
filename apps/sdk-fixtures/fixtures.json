@@ -1,0 +1,194 @@
+{
+  "abi": "citadel-app-abi-1",
+  "about": "What each fixture in wasm/ declares, how an inspector must judge it, and what a host must observe running it. Rejection codes are citadel-app-abi-inspect's Rejection::code(). A run's `report` is the fixture's `log` lines `<probe>=<answer>`; answers are ok | ungranted | unavailable:<r> | limit:<w> | policy:<r> | remote:<n> | code:<abi error>. Refusals answer at once; a host may make any other granted call except canvas and log pending, and the fixture then reports it when its reply_ready arrives, so compare reports after every pending reply has been delivered. The intrinsic capabilities (canvas, ui, events, navigate, log) are held by every install. `host` is the reference host's policy for the run; the TS host must be configured the same to compare.",
+  "fixtures": {
+    "hello-canvas": {
+      "about": "The control. Subscribes to pointer events, asks for frames, paints a card.",
+      "declared": ["canvas", "events", "log"],
+      "inspect": {"accepted": true},
+      "run": {
+        "granted": ["canvas", "events", "log"],
+        "host": {"max_memory_pages": 64},
+        "init": 0,
+        "frame": "ok",
+        "log": ["hello-canvas started"]
+      }
+    },
+    "linker-start": {
+      "about": "hello-canvas linked with only --import-memory: wasm-ld adds a start function to zero .bss. Negative control for the fixtures' link flags.",
+      "declared": ["canvas", "events", "log"],
+      "inspect": {"rejects": ["start_function"]}
+    },
+    "undeclared-import": {
+      "about": "Imports net (a server fetch) while declaring no net.* capability.",
+      "declared": ["log"],
+      "inspect": {"rejects": ["undeclared_group:net"]},
+      "control": {"declared": ["log", "net.server"]}
+    },
+    "foreign-import": {
+      "about": "Imports env.fetch, wasm-bindgen glue and a WASI function.",
+      "declared": ["log"],
+      "inspect": {
+        "rejects": [
+          "foreign_import:env.fetch",
+          "foreign_import:__wbindgen_placeholder__.__wbindgen_describe",
+          "foreign_import:wasi_snapshot_preview1.fd_write"
+        ]
+      }
+    },
+    "over-memory": {
+      "about": "Grows past the ceiling (2 GiB at once, then page by page), then allocates 64 MiB infallibly and dies.",
+      "declared": ["log"],
+      "inspect": {"accepted": true},
+      "run": {
+        "granted": ["log"],
+        "host": {"max_memory_pages": 32},
+        "init": "trap",
+        "memory_pages_after": 32,
+        "report": {
+          "grow_2gib": "code:-1",
+          "pages_at_ceiling": "32",
+          "one_more_page": "code:-1",
+          "try_reserve_64mib": "refused"
+        }
+      }
+    },
+    "slow-frame": {
+      "about": "app_frame never returns.",
+      "declared": ["log"],
+      "inspect": {"accepted": true},
+      "run": {"granted": ["log"], "host": {"max_memory_pages": 64}, "init": 0, "frame": "trap"}
+    },
+    "ungranted-calls": {
+      "about": "Calls every group an install must be granted (all but the intrinsic ones), and an ungranted group raw with a bogus op, garbage and an out-of-bounds pointer. init answers 0 only if every answer was exactly {refused: \"ungranted\"} at once; 100 + group index of the first that was not; 200/201 for the raw probes.",
+      "declared": [
+        "canvas",
+        "ui",
+        "events",
+        "navigate",
+        "log",
+        "nodes.read",
+        "nodes.write",
+        "md.edit",
+        "files.read",
+        "files.write",
+        "chat.read",
+        "chat.send",
+        "members.list",
+        "storage.user",
+        "storage.scope",
+        "storage.node",
+        "storage.blob",
+        "storage.files",
+        "storage.local",
+        "net.host",
+        "net.host.private",
+        "net.server",
+        "ihttp.serve",
+        "ihttp.call",
+        "clipboard.read",
+        "clipboard.write",
+        "notifications",
+        "documents"
+      ],
+      "inspect": {"accepted": true},
+      "run": {"granted": [], "host": {"max_memory_pages": 64}, "init": 0},
+      "control_run": {"granted": ["nodes.read"], "host": {"max_memory_pages": 64}, "init": 104}
+    },
+    "panics": {
+      "about": "Panics in app_event on UiAction{id:\"panic\"}; handles every other event.",
+      "declared": ["log"],
+      "inspect": {"accepted": true},
+      "run": {
+        "granted": ["log"],
+        "host": {"max_memory_pages": 64},
+        "init": 0,
+        "events": [
+          {"event": "init", "outcome": "ok"},
+          {"event": {"ui_action": {"id": "panic"}}, "outcome": "trap"}
+        ],
+        "log_contains": "boom from app_event"
+      }
+    },
+    "huge-reply": {
+      "about": "Asks for a 4 GiB read (host limit), an 8 MiB read its 4 MiB memory cannot hold (SDK limit, no trap), and 16 bytes (the control).",
+      "declared": ["files.read", "log"],
+      "inspect": {"accepted": true},
+      "run": {
+        "granted": ["files.read", "log"],
+        "host": {"max_memory_pages": 64, "max_reply_bytes": 16777216},
+        "init": 0,
+        "report": {"read_4gib": "limit:read_len", "read_8mib": "limit:reply", "read_16b": "ok"}
+      }
+    },
+    "exfil-attempts": {
+      "about": "Granted only log, tries every way out through the SDK and at the raw boundary.",
+      "declared": [
+        "canvas",
+        "ui",
+        "events",
+        "navigate",
+        "log",
+        "nodes.read",
+        "nodes.write",
+        "md.edit",
+        "files.read",
+        "files.write",
+        "chat.read",
+        "chat.send",
+        "members.list",
+        "storage.user",
+        "storage.scope",
+        "storage.node",
+        "storage.blob",
+        "storage.files",
+        "storage.local",
+        "net.host",
+        "net.host.private",
+        "net.server",
+        "ihttp.serve",
+        "ihttp.call",
+        "clipboard.read",
+        "clipboard.write",
+        "notifications",
+        "documents"
+      ],
+      "inspect": {"accepted": true},
+      "run": {
+        "granted": ["log"],
+        "host": {"max_memory_pages": 64},
+        "init": 0,
+        "report": {
+          "net_host_agent_port": "ungranted",
+          "net_server_metadata": "ungranted",
+          "net_host_stream": "ungranted",
+          "ihttp_call": "ungranted",
+          "ihttp_serve": "ungranted",
+          "storage_scope_set": "ungranted",
+          "storage_local_list": "ungranted",
+          "storage_blob_put": "ungranted",
+          "storage_files_list": "ungranted",
+          "files_read": "ungranted",
+          "nodes_read_mdx": "ungranted",
+          "nodes_create": "ungranted",
+          "md_replace_zone": "ungranted",
+          "chat_send": "ungranted",
+          "members_list": "ungranted",
+          "clipboard_read": "ungranted",
+          "notify": "ungranted",
+          "documents_open": "ungranted",
+          "navigate_external": "policy:not_an_internal_link",
+          "log_unknown_op": "policy:unknown_op",
+          "log_out_of_bounds": "code:-1",
+          "log_malformed": "policy:bad_arguments",
+          "reply_len_forged": "code:-2",
+          "reply_read_small_buffer": "code:-4",
+          "reply_read_after_small": "ok",
+          "reply_read_released": "code:-2",
+          "reply_read_out_of_bounds": "code:-1",
+          "log_ok": "ok"
+        }
+      }
+    }
+  }
+}
