@@ -46,6 +46,7 @@ const ASPIRATIONAL = [
   /^docs\/PLUGINS-ROADMAP\.md$/,
   /^docs\/TODO_FUTURE\.md$/,
   /^docs\/review\//,           // historical PR notes
+  /^docs\/plans\/citadel-apps-and-coupons-design/, // the build plan: names the files the work will create
 ];
 
 const DOCS = ['README.md', 'ARCHITECTURE.md', 'CLAUDE.md', ...docsUnder('docs')]
