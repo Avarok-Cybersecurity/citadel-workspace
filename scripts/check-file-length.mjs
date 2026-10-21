@@ -87,7 +87,6 @@ const SKIP = new Map([
   ['lib/p2p/message-handler.ts', 259],
   ['lib/server-auto-connect-service/service.ts', 252],
   ['lib/revfs/revfs-retry.ts', 254],
-  ['lib/multi-instance/instance-channel.ts', 251],
 
   ['components/ui/sidebar.tsx', 487],
   ['lib/file-transfer/service.ts', 276],

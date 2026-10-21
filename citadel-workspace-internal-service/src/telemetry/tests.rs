@@ -208,3 +208,7 @@ fn batches_split_at_the_entry_and_byte_limits() {
         .split(vec![line("x".repeat(MAX_TELEMETRY_BATCH_BYTES))])
         .is_err());
 }
+
+#[cfg(test)]
+#[path = "browser_tests.rs"]
+mod browser;

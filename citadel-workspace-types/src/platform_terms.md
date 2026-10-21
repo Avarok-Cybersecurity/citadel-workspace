@@ -1,6 +1,6 @@
 # Citadel Workspace Terms of Use
 
-**Version 1 · Effective October 14, 2026**
+**Version 2 · Effective October 21, 2026**
 
 These Terms of Use ("Terms") are a binding agreement between you and **Avarok Corp**, a Delaware corporation ("Avarok", "we", "us"). They govern your use of Citadel Workspace, including the web application, the Citadel Agent software you install on your device, the hosted workspace servers, and related services (together, the "Service").
 
@@ -34,7 +34,7 @@ You keep all rights you have in Your Content. You grant Avarok a worldwide, non-
 
 Sharing diagnostic logs is **off unless you turn it on**, and you can change your choice at any time in Settings → Privacy.
 
-When it is on, your Citadel Agent periodically sends **warning and error log lines** about your use of that workspace, together with the agent version and operating system, to that workspace's server. Before sending, the agent removes usernames, names, file names and paths, network addresses, host names, and secrets. **Peer identifiers (numeric account IDs) are kept**, so connection problems between members can be diagnosed. Message content, file content, and encryption keys are never included.
+When it is on, your Citadel Agent periodically sends **warning and error log lines** about your use of that workspace, together with the agent version and operating system, to that workspace's server. These include the **warnings and errors the Citadel web app writes to your browser's console** (for example, an error message and where in the app's code it occurred), which the web app passes to your Citadel Agent; lines raised by browser extensions are left out. Before sending, the agent removes usernames, names, file names and paths, network addresses, host names, and secrets from every line. **Peer identifiers (numeric account IDs) are kept**, so connection problems between members can be diagnosed. Message content, file content, and encryption keys are never deliberately included, although an error message can occasionally quote text the app was handling when the error occurred.
 
 The logs are stored on that workspace's server for the retention period its Admins set, up to 90 days, and within a per-member size limit. They can be read by the workspace's Admins and by Avarok **only while an Admin has granted Avarok support access**, and every read is recorded in an access log the Admins can see. Turning diagnostic logs off stops sending and deletes the logs stored for you in that workspace.
 

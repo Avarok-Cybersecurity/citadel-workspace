@@ -1030,9 +1030,10 @@ dependencies = [
 
 [[package]]
 name = "citadel-workspace-internal-service"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "citadel-internal-service",
+ "citadel-internal-service-types",
  "citadel-workspace-types",
  "citadel_logging 0.14.0 (git+https://github.com/Avarok-Cybersecurity/Citadel-Protocol?rev=eb9c0b75)",
  "citadel_sdk",

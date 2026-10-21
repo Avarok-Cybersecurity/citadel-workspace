@@ -1,6 +1,6 @@
 [package]
 name = "citadel-workspace-internal-service"
-version = "0.10.3"
+version = "0.10.4"
 edition = "2021"
 license.workspace = true
 
@@ -39,6 +39,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 parking_lot = { workspace = true, optional = true }
 lazy_static = { workspace = true, optional = true }
+
+[dev-dependencies]
+# The request a window forwards its console in, built by the telemetry tests.
+citadel-internal-service-types = { path = "../citadel-internal-service/citadel-internal-service-types" }
 
 # The Windows tray icon and its supporting Win32 calls (src/windows_shell). Windows only: the
 # Mac has its own menu-bar app (apps/macos-agent) and Linux has a launcher, so neither links these.
