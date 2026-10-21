@@ -217,6 +217,30 @@ jobs:
           cargo clippy --locked --all-targets -- -D warnings
           cargo nextest run --locked
 
+  # tools/coupon-admin (the owner's signed coupon issue and revoke) and tools/control-request (the
+  # origin, flags and post-quantum HTTPS it shares with telemetry-read) are their own workspaces
+  # too; coupon-admin reads billing/tiers.json and control/ice.mjs at build time.
+  coupon-admin:
+    name: coupon-admin and control-request build and pass their tests
+    timeout-minutes: 20
+    # The Mac pool when it is on (a cargo-only job: no Docker, no apt); the hosted pool otherwise.
+    runs-on: >-
+      ${{ vars.CITADEL_MAC_RUNNER == '1'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && fromJSON('["self-hosted","macOS","ARM64","apple-48gb-metal"]')
+          || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/rust-toolchain
+      - run: cargo fmt --manifest-path tools/control-request/Cargo.toml --check
+      - run: cargo clippy --locked --all-targets --manifest-path tools/control-request/Cargo.toml -- -D warnings
+      - run: cargo test --locked --manifest-path tools/control-request/Cargo.toml
+      - run: cargo fmt --manifest-path tools/coupon-admin/Cargo.toml --check
+      - run: cargo clippy --locked --all-targets --manifest-path tools/coupon-admin/Cargo.toml -- -D warnings
+      - run: cargo test --locked --manifest-path tools/coupon-admin/Cargo.toml
+
   # The agent as Windows people get it. Every other Rust job here runs on Linux or macOS, where
   # `cfg(windows)` code (the tray icon, the log routing, the login entry) is not even compiled,
   # and no PR job built for Windows at all: the release pipeline was the first to find out.
@@ -1547,7 +1571,7 @@ jobs:
     # Measured: a full parent run is ~1,281 runner-min and the integration
     # matrix is 87% of it. Gating on every cheap job means a lint-red PR costs
     # ~25 jobs instead of 74.
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, app-sdk, integration-stack]
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, app-sdk, coupon-admin, integration-stack]
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
@@ -1911,7 +1935,7 @@ jobs:
           path: citadel-workspaces/integration-tests/screenshots/
 
   playwright-tests:
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, app-sdk, integration-stack]
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, app-sdk, coupon-admin, integration-stack]
     # The @playwright/test suite under integration-tests/src/tests-pw. It existed
     # but ran in NO job, so those specs were dead weight: written, compiled by the
     # typecheck job, and never executed against a running stack.
@@ -2169,7 +2193,7 @@ jobs:
             citadel-workspaces/integration-tests/test-results/
 
   deploy-gate-tests:
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, app-sdk]
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, app-sdk, coupon-admin]
     # Regression coverage for the release-consistency gate that stands between a `docker
     # compose pull` and a production restart. It is the mechanism that stops a partially
     # promoted `latest` from restarting production on two backend images that never shipped
@@ -2437,7 +2461,7 @@ jobs:
     # Measured: a full parent run is ~1,281 runner-min and the integration
     # matrix is 87% of it. Gating on every cheap job means a lint-red PR costs
     # ~25 jobs instead of 74.
-    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, app-sdk]
+    needs: [crate-coverage, lint, typecheck, fmt, clippy, rust-tests, internal-service-rust-lint, release-sign, telemetry-read, app-sdk, coupon-admin]
     # A hung job otherwise runs to GitHub's 360-minute default: six hours of a
     # runner, and six hours before anyone learns anything. The longest observed
     # here is 26m; this is generous headroom over it, not a target.
@@ -2937,6 +2961,7 @@ jobs:
       - release-sign
       - telemetry-read
       - app-sdk
+      - coupon-admin
       - unit-tests
       - typecheck
       - lint

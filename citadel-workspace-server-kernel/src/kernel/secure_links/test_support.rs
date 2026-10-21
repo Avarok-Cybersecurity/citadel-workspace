@@ -14,10 +14,7 @@ pub(crate) type Kernel = AsyncWorkspaceServerKernel<MonoRatchet>;
 
 pub(crate) async fn kernel_with_member(id: &str) -> Kernel {
     let mut kernel = Kernel::new(None);
-    kernel.set_link_quota_source(Some(Arc::new(FixedLinkQuota(LinkQuota {
-        per_member: 50,
-        pool: 0,
-    }))));
+    kernel.set_link_quota_source(Some(Arc::new(FixedLinkQuota(LinkQuota::counts(50, 0)))));
     let backend = &kernel.domain_operations.backend_tx_manager;
     backend.init().await.expect("init");
     kernel

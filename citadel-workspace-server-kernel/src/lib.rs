@@ -542,9 +542,9 @@ pub fn resolve_secure_link_quota(
     config: &ServerConfig,
 ) -> Result<kernel::secure_links::quota::LinkQuota, NetworkError> {
     match (config.secure_links_per_member, config.secure_links_pool) {
-        (Some(per_member), Some(pool)) => {
-            Ok(kernel::secure_links::quota::LinkQuota { per_member, pool })
-        }
+        (Some(per_member), Some(pool)) => Ok(kernel::secure_links::quota::LinkQuota::counts(
+            per_member, pool,
+        )),
         _ => Err(NetworkError::msg(
             "secure_links_per_member and secure_links_pool must both be set in kernel.toml: \
              the live secure links each member may hold, and how many more the workspace shares \

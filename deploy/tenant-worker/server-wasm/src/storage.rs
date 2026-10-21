@@ -8,6 +8,7 @@
 use citadel_sdk::prelude::{
     async_trait, HostSqlHandle, SqlHost, SqlRow, SqlStatement, SqlValue, StorageQuota,
 };
+use citadel_workspace_server_kernel::kernel::limit::{storage_quota, StorageAnswer};
 use js_sys::{Array, ArrayBuffer, Uint8Array};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -20,7 +21,7 @@ extern "C" {
     #[wasm_bindgen(method, catch)]
     fn run(this: &TenantStorage, statements: Array) -> Result<Array, JsValue>;
 
-    /// The tenant's storage entitlement in bytes, as its plan grants it now.
+    /// The tenant's storage entitlement in bytes as its plan grants it now, or `null` for none.
     #[wasm_bindgen(method, catch, js_name = quotaBytes)]
     fn quota_bytes(this: &TenantStorage) -> Result<JsValue, JsValue>;
 }
@@ -110,15 +111,24 @@ impl SqlHost for DurableObjectSql {
         decode(results)
     }
 
-    /// A tenant always has a plan, and every plan names its storage: there is no unlimited case.
+    /// The plan's storage in bytes, or `null` for an unlimited tenant (entitlements v2); anything
+    /// else, `undefined` included, refuses the upload (kernel `limit::storage_quota`).
     fn storage_quota(&self) -> Result<StorageQuota, String> {
         let bytes = self
             .0
             .quota_bytes()
             .map_err(|e| format!("durable object entitlements: {e:?}"))?;
-        match from_js(bytes)? {
-            SqlValue::Integer(n) if n >= 0 => Ok(StorageQuota::Bytes(n as u64)),
-            other => Err(format!("storage entitlement {other:?} is not a byte count")),
-        }
+        let answer = if bytes.is_undefined() {
+            StorageAnswer::Missing
+        } else if bytes.is_null() {
+            StorageAnswer::Null
+        } else {
+            match from_js(bytes) {
+                Ok(SqlValue::Integer(n)) => StorageAnswer::Integer(n),
+                Ok(other) => StorageAnswer::Unreadable(format!("{other:?}")),
+                Err(why) => StorageAnswer::Unreadable(why),
+            }
+        };
+        storage_quota(answer)
     }
 }

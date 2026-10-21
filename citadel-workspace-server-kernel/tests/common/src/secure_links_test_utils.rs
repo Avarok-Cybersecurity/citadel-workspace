@@ -18,11 +18,13 @@ pub const HOUR_MS: u64 = 60 * 60 * 1000;
 
 /// A kernel whose members may each hold `per_member` links, sharing `pool` more.
 pub async fn links_kernel(per_member: u32, pool: u32) -> Arc<GateKernel> {
+    links_kernel_with(LinkQuota::counts(per_member, pool)).await
+}
+
+/// A kernel with the link limits `quota`, either of which may be none.
+pub async fn links_kernel_with(quota: LinkQuota) -> Arc<GateKernel> {
     create_configured_test_kernel(|kernel| {
-        kernel.set_link_quota_source(Some(Arc::new(FixedLinkQuota(LinkQuota {
-            per_member,
-            pool,
-        }))))
+        kernel.set_link_quota_source(Some(Arc::new(FixedLinkQuota(quota))))
     })
     .await
 }
