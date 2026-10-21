@@ -21,10 +21,14 @@ function packages(lock) {
 /** Every package reachable from `root`, as "name version source checksum", sorted. */
 export function lockClosure(lock, root) {
   const all = packages(lock);
-  // A dependency is written "name", "name version" or "name version (source)".
+  // A dependency is written "name", "name version" or "name version (source)". The source is
+  // written without the `#commit` the package's own entry carries; it is what tells apart one
+  // crate pinned two ways (two git refs of one repository at the same version).
   const resolve = (ref) => {
     const [name, version] = ref.split(" ");
-    const hits = all.filter((p) => p.name === name && (version === undefined || p.version === version));
+    const source = /\((.*)\)$/.exec(ref)?.[1];
+    const hits = all.filter((p) => p.name === name && (version === undefined || p.version === version)
+      && (source === undefined || p.source === source || p.source.startsWith(`${source}#`)));
     if (hits.length !== 1) throw new Error(`Cargo.lock: cannot resolve dependency "${ref}" (${hits.length} matches)`);
     return hits[0];
   };

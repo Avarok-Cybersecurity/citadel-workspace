@@ -78,3 +78,43 @@ test("a version change inside the agent's closure changes it", () => {
 test("a root the lock does not hold is an error, not an empty closure", () => {
   assert.throws(() => lockClosure(LOCK, "nobody"), /nobody/);
 });
+
+test("one crate pinned by two git refs resolves by the ref the dependency names", () => {
+  const lock = `
+[[package]]
+name = "agent"
+version = "0.8.0"
+dependencies = [
+ "logging 0.14.0 (git+https://example.org/repo?rev=eb9c0b75)",
+]
+
+[[package]]
+name = "logging"
+version = "0.14.0"
+source = "git+https://example.org/repo?branch=master#eb9c0b7503f5"
+
+[[package]]
+name = "logging"
+version = "0.14.0"
+source = "git+https://example.org/repo?rev=eb9c0b75#eb9c0b7503f5"
+`;
+  assert.deepEqual(lockClosure(lock, "agent"), [
+    "agent 0.8.0  ",
+    "logging 0.14.0 git+https://example.org/repo?rev=eb9c0b75#eb9c0b7503f5 ",
+  ]);
+});
+
+const TWO_SOURCES =
+  '[[package]]\nname = "agent"\nversion = "1.0.0"\ndependencies = [\n "shared 0.1.0 (git+https://example.org/r?rev=abc)",\n]\n\n' +
+  '[[package]]\nname = "shared"\nversion = "0.1.0"\nsource = "git+https://example.org/r?rev=abc#111"\n\n' +
+  '[[package]]\nname = "shared"\nversion = "0.1.0"\nsource = "git+https://example.org/r?branch=master#222"\n';
+
+test("a source that no package carries is an error, not a guess", () => {
+  const missing = TWO_SOURCES.replace("?rev=abc)", "?rev=zzz)");
+  assert.throws(() => lockClosure(missing, "agent"), /shared/);
+});
+
+test("a source that is only the start of another rev does not name it", () => {
+  const shorter = TWO_SOURCES.replace("?rev=abc)", "?rev=ab)");
+  assert.throws(() => lockClosure(shorter, "agent"), /shared/);
+});
