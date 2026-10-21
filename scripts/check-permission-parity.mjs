@@ -142,8 +142,9 @@ const GATED_BY = {
   UpdateNodeSettings: 'EditTreeStructure / EditMdx in async_node_ops::update_node',
   AddNode: 'CreateNode in async_domain_server_ops',
   EditContent: 'EditMdx / EditTreeStructure on the node being edited',
-  // Reads are gated on ViewContent; group_access::authorize_group_read.
-  ReadMessages: 'ViewContent in kernel::group_access',
+  // ReadMessages has no entry since kernel::apps::rules named it: an app's `chat.read` takes it
+  // (enforced once the apps call handler dispatches through those rules). A member's own reads
+  // are still gated on ViewContent (group_access::authorize_group_read), not on this toggle.
   ManageNodeMembers: 'AddUsers / RemoveUsers in async_domain_server_ops',
   // No such operation exists in the server yet. Listed so the matrix showing a
   // toggle for it is a known, deliberate gap rather than an unnoticed one.

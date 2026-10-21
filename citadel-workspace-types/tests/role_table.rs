@@ -15,7 +15,9 @@ fn set(permissions: &[Permission]) -> HashSet<Permission> {
 /// out by name rather than derived, so a change to a seed cannot also change what it is
 /// compared with. The additions are `ManageRoles`, which did not exist: the Owner holds every
 /// permission but `All` and `ConfigureSystem`, so it holds the new one too; and
-/// `ShareSecureLinks`, which the Owner holds the same way and the Member seed is given.
+/// `ShareSecureLinks`, which the Owner holds the same way and the Member seed is given; and the
+/// apps permissions, which the Owner holds the same way, of which the Member seed is given only
+/// `AppInstall` (installing for themselves) and never anything an app could be granted.
 #[test]
 fn the_seeds_are_the_roles_every_workspace_had() {
     use Permission::*;
@@ -49,6 +51,24 @@ fn the_seeds_are_the_roles_every_workspace_had() {
         ViewTelemetry,
         ManageRoles,
         ShareSecureLinks,
+        AppInstall,
+        AppInstallScoped,
+        AppPublish,
+        AppManage,
+        AppInstallAllowNodeRead,
+        AppInstallAllowNodeWrite,
+        AppInstallAllowMdEdit,
+        AppInstallAllowFiles,
+        AppInstallAllowChat,
+        AppInstallAllowMembers,
+        AppInstallAllowStorage,
+        AppInstallAllowClipboard,
+        AppInstallAllowNotifications,
+        AppInstallAllowHostNetwork,
+        AppInstallAllowPrivateNetwork,
+        AppInstallAllowServerNetwork,
+        AppInstallAllowInternalServe,
+        AppInstallAllowInternalCall,
     ]);
     let expected = [
         (OWNER_ROLE_ID, owner),
@@ -63,6 +83,7 @@ fn the_seeds_are_the_roles_every_workspace_had() {
                 UploadFiles,
                 DownloadFiles,
                 ShareSecureLinks,
+                AppInstall,
             ]),
         ),
         (GUEST_ROLE_ID, set(&[ViewContent, ViewMembers])),

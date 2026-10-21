@@ -1,0 +1,130 @@
+[
+  {
+    "body": "# Notes\nhello",
+    "content": "# Notes\nhello",
+    "header": null,
+    "joined": "# Notes\nhello",
+    "name": "no header",
+    "valid": true
+  },
+  {
+    "body": "",
+    "content": "",
+    "header": null,
+    "joined": "",
+    "name": "empty document",
+    "valid": true
+  },
+  {
+    "body": "# Board",
+    "content": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\n# Board",
+    "header": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}",
+    "joined": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\n# Board",
+    "name": "one requirement",
+    "valid": true
+  },
+  {
+    "body": "",
+    "content": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"},{\"app\":\"com.acme.lint\",\"min\":\"0.9.0\",\"surface\":\"none\"}]} */}\n",
+    "header": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"},{\"app\":\"com.acme.lint\",\"min\":\"0.9.0\",\"surface\":\"none\"}]} */}",
+    "joined": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"},{\"app\":\"com.acme.lint\",\"min\":\"0.9.0\",\"surface\":\"none\"}]} */}\n",
+    "name": "two requirements",
+    "valid": true
+  },
+  {
+    "body": "",
+    "content": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}",
+    "header": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}",
+    "joined": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\n",
+    "name": "header only, no newline",
+    "valid": true
+  },
+  {
+    "body": "\nx",
+    "content": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\n\nx",
+    "header": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}",
+    "joined": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\n\nx",
+    "name": "header then blank body line",
+    "valid": true
+  },
+  {
+    "body": " {/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\nx",
+    "content": " {/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\nx",
+    "header": null,
+    "joined": " {/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\nx",
+    "name": "leading space is body",
+    "valid": false
+  },
+  {
+    "body": "# Title\n{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}",
+    "content": "# Title\n{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}",
+    "header": null,
+    "joined": "# Title\n{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}",
+    "name": "second line header",
+    "valid": false
+  },
+  {
+    "body": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}",
+    "content": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\n{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}",
+    "header": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}",
+    "joined": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\n{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}",
+    "name": "two headers",
+    "valid": false
+  },
+  {
+    "body": "x",
+    "content": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\r\nx",
+    "header": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\r",
+    "joined": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\r\nx",
+    "name": "crlf after header",
+    "valid": false
+  },
+  {
+    "body": "x",
+    "content": "{/* @citadel-apps 2 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\nx",
+    "header": "{/* @citadel-apps 2 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}",
+    "joined": "{/* @citadel-apps 2 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\nx",
+    "name": "other version",
+    "valid": false
+  },
+  {
+    "body": "x",
+    "content": "{/* @citadel-apps 1 {\"require\": [{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\nx",
+    "header": "{/* @citadel-apps 1 {\"require\": [{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}",
+    "joined": "{/* @citadel-apps 1 {\"require\": [{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\nx",
+    "name": "spaced json",
+    "valid": false
+  },
+  {
+    "body": "x",
+    "content": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.zzz\",\"min\":\"1.2.0\",\"surface\":\"none\"},{\"app\":\"com.acme.lint\",\"min\":\"0.9.0\",\"surface\":\"none\"}]} */}\nx",
+    "header": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.zzz\",\"min\":\"1.2.0\",\"surface\":\"none\"},{\"app\":\"com.acme.lint\",\"min\":\"0.9.0\",\"surface\":\"none\"}]} */}",
+    "joined": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.zzz\",\"min\":\"1.2.0\",\"surface\":\"none\"},{\"app\":\"com.acme.lint\",\"min\":\"0.9.0\",\"surface\":\"none\"}]} */}\nx",
+    "name": "unsorted",
+    "valid": false
+  },
+  {
+    "body": "x",
+    "content": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0*/\",\"surface\":\"none\"}]} */}\nx",
+    "header": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0*/\",\"surface\":\"none\"}]} */}",
+    "joined": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0*/\",\"surface\":\"none\"}]} */}\nx",
+    "name": "comment end inside",
+    "valid": false
+  },
+  {
+    "body": "x",
+    "content": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"Kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\nx",
+    "header": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"Kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}",
+    "joined": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"Kanban\",\"min\":\"1.2.0\",\"surface\":\"none\"}]} */}\nx",
+    "name": "bad app id",
+    "valid": false
+  },
+  {
+    "body": "x",
+    "content": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"grant\":1,\"surface\":\"none\"}]} */}\nx",
+    "header": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"grant\":1,\"surface\":\"none\"}]} */}",
+    "joined": "{/* @citadel-apps 1 {\"require\":[{\"app\":\"com.acme.kanban\",\"min\":\"1.2.0\",\"grant\":1,\"surface\":\"none\"}]} */}\nx",
+    "name": "unknown field",
+    "valid": false
+  }
+]

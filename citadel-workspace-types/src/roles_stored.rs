@@ -14,7 +14,8 @@ use serde::{Deserialize, Serialize};
 
 /// The upgrades a stored table has had:
 /// - 1: `ShareSecureLinks` for every role that can view the workspace, except the Guest.
-pub const ROLE_TABLE_VERSION: u32 = 1;
+/// - 2: `AppInstall` for every role that can view the workspace, except the Guest.
+pub const ROLE_TABLE_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredRoles {
@@ -34,16 +35,30 @@ pub struct StoredRoles {
 /// `ShareSecureLinks` had it been made after, as the Member seed is. Without it, such a role also
 /// could not assign Member, which now carries it. The Guest is read-only and stays so; the Owner
 /// is not stored and holds everything already.
+///
+/// 2: the same for `AppInstall` (installing an app for oneself), which the Member seed carries
+/// since apps existed. Nothing an app could be granted comes with it: every `AppInstallAllow*`,
+/// and installing for anyone else, stays an administrator's decision.
 fn upgrade(roles: &mut [RoleDefinition], version: u32) {
-    if version < 1 {
-        for role in roles.iter_mut() {
-            if !role.is_owner()
-                && role.id != GUEST_ROLE_ID
-                && role.grants(Permission::ViewContent)
-                && !role.grants(Permission::ShareSecureLinks)
-            {
-                role.permissions.insert(Permission::ShareSecureLinks);
-            }
+    for (since, permission) in [
+        (1, Permission::ShareSecureLinks),
+        (2, Permission::AppInstall),
+    ] {
+        if version < since {
+            give_every_viewer(roles, permission);
+        }
+    }
+}
+
+/// `permission` for every stored role that can view the workspace, bar the Guest.
+fn give_every_viewer(roles: &mut [RoleDefinition], permission: Permission) {
+    for role in roles.iter_mut() {
+        if !role.is_owner()
+            && role.id != GUEST_ROLE_ID
+            && role.grants(Permission::ViewContent)
+            && !role.grants(permission)
+        {
+            role.permissions.insert(permission);
         }
     }
 }

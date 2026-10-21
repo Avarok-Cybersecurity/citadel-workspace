@@ -216,6 +216,42 @@ pub enum Permission {
     ManageRoles,
     /// Make secure links: tokens that open an in-app page for the people the creator names
     ShareSecureLinks,
+    /// Install apps for yourself ("Just for me")
+    AppInstall,
+    /// Install apps for the workspace, a node, a node and everything below it, or named members; also needs `UpdateNodeSettings` on the scope's node
+    AppInstallScoped,
+    /// Publish apps to this workspace's own registry
+    AppPublish,
+    /// Uninstall or suspend any install, roll one back, read the apps audit log, and write a document's required-apps header
+    AppManage,
+    /// Grant an app `nodes.read`
+    AppInstallAllowNodeRead,
+    /// Grant an app `nodes.write`
+    AppInstallAllowNodeWrite,
+    /// Grant an app `md.edit`
+    AppInstallAllowMdEdit,
+    /// Grant an app `files.read` and `files.write`
+    AppInstallAllowFiles,
+    /// Grant an app `chat.read` and `chat.send`
+    AppInstallAllowChat,
+    /// Grant an app `members.list` and `members.presence`
+    AppInstallAllowMembers,
+    /// Grant an app its storage backends (`storage.*`)
+    AppInstallAllowStorage,
+    /// Grant an app `clipboard.read` and `clipboard.write`
+    AppInstallAllowClipboard,
+    /// Grant an app `notifications`
+    AppInstallAllowNotifications,
+    /// Grant an app `net.host`: HTTPS from the member's own machine to the hosts it lists
+    AppInstallAllowHostNetwork,
+    /// Grant an app `net.host.private`: http, and private and loopback addresses, from the member's machine
+    AppInstallAllowPrivateNetwork,
+    /// Grant an app `net.server`: HTTPS from the workspace server to the hosts it lists
+    AppInstallAllowServerNetwork,
+    /// Grant an app `ihttp.serve`: serve internal HTTP to other members
+    AppInstallAllowInternalServe,
+    /// Grant an app `ihttp.call`: call other members' internal HTTP servers
+    AppInstallAllowInternalCall,
 }
 
 impl Permission {
@@ -226,7 +262,7 @@ impl Permission {
     /// when reporting a user's effective permissions. `exhaustiveness_guard`
     /// below stops compiling when a variant is added to the enum, which is what
     /// keeps this list honest.
-    pub const ALL_VARIANTS: [Permission; 31] = [
+    pub const ALL_VARIANTS: [Permission; 49] = [
         Self::All,
         Self::CreateNode,
         Self::DeleteNode,
@@ -258,6 +294,24 @@ impl Permission {
         Self::ViewTelemetry,
         Self::ManageRoles,
         Self::ShareSecureLinks,
+        Self::AppInstall,
+        Self::AppInstallScoped,
+        Self::AppPublish,
+        Self::AppManage,
+        Self::AppInstallAllowNodeRead,
+        Self::AppInstallAllowNodeWrite,
+        Self::AppInstallAllowMdEdit,
+        Self::AppInstallAllowFiles,
+        Self::AppInstallAllowChat,
+        Self::AppInstallAllowMembers,
+        Self::AppInstallAllowStorage,
+        Self::AppInstallAllowClipboard,
+        Self::AppInstallAllowNotifications,
+        Self::AppInstallAllowHostNetwork,
+        Self::AppInstallAllowPrivateNetwork,
+        Self::AppInstallAllowServerNetwork,
+        Self::AppInstallAllowInternalServe,
+        Self::AppInstallAllowInternalCall,
     ];
 
     /// Not called at runtime. Adding a variant to `Permission` fails to compile
@@ -296,6 +350,24 @@ impl Permission {
             Self::ViewTelemetry => (),
             Self::ManageRoles => (),
             Self::ShareSecureLinks => (),
+            Self::AppInstall => (),
+            Self::AppInstallScoped => (),
+            Self::AppPublish => (),
+            Self::AppManage => (),
+            Self::AppInstallAllowNodeRead => (),
+            Self::AppInstallAllowNodeWrite => (),
+            Self::AppInstallAllowMdEdit => (),
+            Self::AppInstallAllowFiles => (),
+            Self::AppInstallAllowChat => (),
+            Self::AppInstallAllowMembers => (),
+            Self::AppInstallAllowStorage => (),
+            Self::AppInstallAllowClipboard => (),
+            Self::AppInstallAllowNotifications => (),
+            Self::AppInstallAllowHostNetwork => (),
+            Self::AppInstallAllowPrivateNetwork => (),
+            Self::AppInstallAllowServerNetwork => (),
+            Self::AppInstallAllowInternalServe => (),
+            Self::AppInstallAllowInternalCall => (),
         }
     }
 
@@ -603,6 +675,26 @@ impl DomainPermissions {
             Permission::ManageRoles => false,
             // Workspace-wide: making links is a member's standing, not something a node grants.
             Permission::ShareSecureLinks => false,
+            // Workspace-wide: which apps a member may install, publish, manage or grant is their
+            // standing in the workspace; no node's defaults hand it out.
+            Permission::AppInstall
+            | Permission::AppInstallScoped
+            | Permission::AppPublish
+            | Permission::AppManage
+            | Permission::AppInstallAllowNodeRead
+            | Permission::AppInstallAllowNodeWrite
+            | Permission::AppInstallAllowMdEdit
+            | Permission::AppInstallAllowFiles
+            | Permission::AppInstallAllowChat
+            | Permission::AppInstallAllowMembers
+            | Permission::AppInstallAllowStorage
+            | Permission::AppInstallAllowClipboard
+            | Permission::AppInstallAllowNotifications
+            | Permission::AppInstallAllowHostNetwork
+            | Permission::AppInstallAllowPrivateNetwork
+            | Permission::AppInstallAllowServerNetwork
+            | Permission::AppInstallAllowInternalServe
+            | Permission::AppInstallAllowInternalCall => false,
         }
     }
 }
