@@ -13,6 +13,7 @@
  */
 import { isPaid, METERING } from "./plans.mjs";
 import { UNAVAILABLE } from "./ice-reasons.mjs";
+import { limitOf } from "./entitlement-limits.mjs";
 
 export const turnEndpoint = (keyId) =>
   `https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(keyId)}/credentials/generate-ice-servers`;
@@ -30,8 +31,11 @@ export { UNAVAILABLE };
  * barred once that is used; a paid one is billed for relay beyond it (control/monitor.mjs).
  */
 export function relayAllowed(limits, bytesIn) {
-  if (isPaid(limits.tier)) return true;
-  return bytesIn < limits.relay_gb_included * METERING.gb_bytes;
+  if (limits.relay_unmetered === true) return true;
+  // A trial is free-tier-sized until its subscription is active (entitlements v2 `trial_clamped`).
+  if (isPaid(limits.tier) && limits.trial_clamped !== true) return true;
+  const included = limitOf(limits, "relay_gb_included");
+  return included === null || bytesIn < included * METERING.gb_bytes;
 }
 
 /** Cloudflare's answer as the kernel's `IceServer` list, or null for a shape it does not have. */

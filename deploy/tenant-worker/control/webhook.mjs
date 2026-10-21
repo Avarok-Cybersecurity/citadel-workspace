@@ -8,8 +8,7 @@
  *   3. the registry change and the event id are written in ONE D1 batch.
  * A failure at 2 or 3 answers 500 with nothing recorded, and Stripe retries the event.
  */
-import { ADDONS, entitlements, planOfItems } from "./plans.mjs";
-import { noAddons } from "./addons.mjs";
+import { entitlements, FREE_PLAN, planOfItems } from "./plans.mjs";
 import { verifyWebhook } from "./stripe.mjs";
 import { reconcileUsageSubscription } from "./usage-subscription.mjs";
 import { json, readText, refuse } from "./http.mjs";
@@ -18,8 +17,6 @@ import { json, readText, refuse } from "./http.mjs";
 const WEBHOOK_BODY_LIMIT = 512 * 1024;
 const LIVE = new Set(["active", "trialing", "past_due"]);
 const ENDED = new Set(["canceled", "unpaid", "incomplete_expired"]);
-// Free meters by calendar month: no Stripe period.
-const FREE_PLAN = { tier: "free", interval: null, seats: 0, ...noAddons(ADDONS), period_start: null, period_end: null };
 
 export async function handleWebhook(io, cfg, request) {
   if (!cfg.webhookSecret) return refuse("billing-not-configured", "billing is not available yet", 503);
@@ -44,7 +41,9 @@ export async function handleWebhook(io, cfg, request) {
     Object.assign(outcome.change.fields, await reconcileUsageSubscription(io, cfg, outcome.after, { cancelled: outcome.cancelledUsage }));
     await io.tenant(outcome.change.slug).setEntitlements(outcome.entitlements);
   }
-  await io.store.applyEvent(event, io.now(), outcome.change);
+  // A paid Checkout confirms its coupon's redemption in the same batch as the change it makes.
+  const confirmed = outcome.confirm ? io.coupons.confirmation(outcome.change.tenant_id, io.nowMs()) : [];
+  await io.store.applyEvent(event, io.now(), outcome.change, confirmed);
   return json({ received: true, applied: Boolean(outcome.change), note: outcome.note ?? null, tenant: outcome.change?.slug ?? null });
 }
 
@@ -79,7 +78,7 @@ async function checkoutCompleted(io, session) {
     fields.status = "active";
     fields.expires_at = null;
   }
-  return change(row, fields);
+  return { ...change(row, fields), confirm: paid && row.coupon_hash !== null };
 }
 
 async function subscriptionChanged(io, event, sub) {
@@ -95,19 +94,35 @@ async function subscriptionChanged(io, event, sub) {
   const created = Number(event.created ?? 0);
   if (created < row.sub_event_created) return { note: "older than the state already applied" };
 
-  const fields = { stripe_customer: sub.customer ?? row.stripe_customer, stripe_subscription: sub.id ?? row.stripe_subscription, sub_event_created: created };
   const status = event.type === "customer.subscription.deleted" ? "canceled" : sub.status;
+  const fields = {
+    stripe_customer: sub.customer ?? row.stripe_customer, stripe_subscription: sub.id ?? row.stripe_subscription, sub_event_created: created,
+    stripe_status: typeof status === "string" ? status : null, trial_end: trialEndAfter(row, sub, status),
+  };
   if (ENDED.has(status)) {
-    // Downgrade, not deletion: the workspace and its data stay, on the free tier's limits. A
-    // tenant that never became active has nothing to downgrade and simply lapses.
+    // Downgrade, not deletion: the workspace and its data stay, on the free tier's limits -- a
+    // trial that ended with no card among them. A tenant that never became active has nothing to
+    // downgrade and simply lapses. Either way the subscription's trial and status go with it.
     if (row.status !== "pending") Object.assign(fields, FREE_PLAN, { status: "active" });
-    return change(row, fields);
+    return change(row, { ...fields, trial_end: null, stripe_status: null });
   }
   if (status === "paused") return change(row, { ...fields, status: "suspended" });
   if (!LIVE.has(status)) return change(row, fields); // incomplete: nothing is granted yet
   const plan = planOfItems(sub.items?.data ?? []);
   if (plan.error) return { error: plan.error };
   return change(row, { ...fields, ...plan, ...periodOf(sub), status: "active", expires_at: null });
+}
+
+/**
+ * The trial end the trial clamp reads (control/plans.mjs): Stripe's while the subscription is
+ * trialing (the end offered at creation until it names one), none once it is active, and
+ * otherwise what was held -- so past_due at a trial's end stays clamped, and past_due after a
+ * paid period does not become a trial again.
+ */
+function trialEndAfter(row, sub, status) {
+  if (status === "trialing") return Number.isInteger(sub.trial_end) ? sub.trial_end : row.trial_end;
+  if (status === "active") return null;
+  return row.trial_end;
 }
 
 /**

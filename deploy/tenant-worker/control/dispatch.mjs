@@ -15,7 +15,10 @@ import { admissionAnywhere, admissionOf } from "./discovery.mjs";
 import { serveUi } from "./ui.mjs";
 import { serveSupport, supportRoute } from "./support.mjs";
 import { SupportStore } from "./support-store.mjs";
-import { verifySupportRequest } from "./support-verifier.mjs";
+import { verifyAdminRequest, verifySupportRequest } from "./support-verifier.mjs";
+import { CouponStore } from "./coupon-store.mjs";
+import { previewCoupon } from "./coupons.mjs";
+import { couponAdminRoute, serveCouponAdmin } from "./coupon-admin.mjs";
 
 /** Creation and portal bodies are a handful of short fields. */
 const API_BODY_LIMIT = 4096;
@@ -34,6 +37,8 @@ export function ioFor(env) {
     tenant: (slug) => objectFor(env, slug),
     support: new SupportStore(env.CONTROL_DB),
     verifySupport: verifySupportRequest,
+    coupons: new CouponStore(env.CONTROL_DB),
+    verifyAdmin: verifyAdminRequest,
   };
 }
 
@@ -101,8 +106,15 @@ async function api(io, cfg, request, url) {
     if (method === "POST" && parts.length === 2 && parts[0] === "stripe" && parts[1] === "webhook") {
       return await handleWebhook(io, cfg, request);
     }
+    if (method === "POST" && parts.length === 2 && parts[0] === "coupons" && parts[1] === "preview") {
+      const body = await readJson(request, cfg, API_BODY_LIMIT);
+      if (body.error) return body.error;
+      return await previewCoupon(io, body.value, request.headers.get("cf-connecting-ip"));
+    }
     const support = supportRoute(method, parts);
     if (support !== null) return await serveSupport(io, cfg, request, support);
+    const admin = couponAdminRoute(method, parts);
+    if (admin !== null) return await serveCouponAdmin(io, cfg, request, admin);
     return refuse("not-found", "no such route", 404);
   } catch (e) {
     console.error(`[control] ${method} ${url.pathname} failed: ${e?.stack ?? e}`);
