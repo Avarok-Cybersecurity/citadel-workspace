@@ -43,6 +43,7 @@ export type { InstallScope } from './generated/InstallScope.js';
 export type { InstallState } from './generated/InstallState.js';
 export type { LinkGrant } from './generated/LinkGrant.js';
 export type { LinkLifetime } from './generated/LinkLifetime.js';
+export type { ListingOffer } from './generated/ListingOffer.js';
 export type { ListingSource } from './generated/ListingSource.js';
 export type { MemberRole } from './generated/MemberRole.js';
 export type { MessagingTrustPolicy } from './generated/MessagingTrustPolicy.js';

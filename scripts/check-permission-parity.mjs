@@ -139,7 +139,8 @@ const GATED_BY = {
   // Enforced under a broader variant chosen by what the update changes.
   UpdateNode: 'EditTreeStructure / EditMdx in async_node_ops::update_node',
   EditNodeConfig: 'EditTreeStructure / EditMdx in async_node_ops::update_node',
-  UpdateNodeSettings: 'EditTreeStructure / EditMdx in async_node_ops::update_node',
+  // UpdateNodeSettings has no entry since installing an app for anyone but oneself takes it on
+  // the scope's node (kernel::apps::install::decide_install).
   AddNode: 'CreateNode in async_domain_server_ops',
   EditContent: 'EditMdx / EditTreeStructure on the node being edited',
   // ReadMessages has no entry since kernel::apps::rules named it: an app's `chat.read` takes it

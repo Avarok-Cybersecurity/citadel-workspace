@@ -462,6 +462,8 @@ pub enum WorkspaceProtocolRequest {
     Documents(documents::DocumentsRequest),
     /// Secure links; see `secure_links`.
     SecureLinks(secure_links::SecureLinksRequest),
+    /// Citadel Apps: listings, installs and their artifacts; see `apps_protocol`.
+    Apps(apps_protocol::AppsRequest),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -677,6 +679,7 @@ pub enum WorkspaceProtocolResponse {
 
     Documents(documents::DocumentsResponse),
     SecureLinks(secure_links::SecureLinksResponse),
+    Apps(apps_responses::AppsResponse),
 }
 
 /// Type of group message

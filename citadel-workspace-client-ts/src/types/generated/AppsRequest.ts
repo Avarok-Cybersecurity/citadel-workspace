@@ -2,17 +2,18 @@
 import type { Capability } from "./Capability";
 import type { IhttpAddress } from "./IhttpAddress";
 import type { InstallScope } from "./InstallScope";
+import type { ListingOffer } from "./ListingOffer";
 
 export type AppsRequest = "ListCatalogue" | { "GetListing": { app_id: string, } } | "ListInstalls" | { "Publish": { manifest_bytes: Array<number>, 
 /**
  * The `app.mldsa.sig` text.
  */
-signature: string, } } | { "UploadArtifactChunk": { sha256: string, index: number, total_chunks: number, bytes: Array<number>, } } | { "Install": { app_id: string, version: string, scope: InstallScope, granted: Array<Capability>, pinned_publisher_key: string, 
+signature: string, } } | { "UploadArtifactChunk": { sha256: string, index: number, total_chunks: number, bytes: Array<number>, } } | { "Install": { app_id: string, version: string, listing: ListingOffer, scope: InstallScope, granted: Array<Capability>, pinned_publisher_key: string, 
 /**
  * Write the app into the scope node's required-apps header (`AppManage` and `EditMdx`
  * on the node, `Node` or `NodeTree` scope only).
  */
-inject_requirement: boolean, } } | { "Uninstall": { install_id: string, purge_storage: boolean, } } | { "Update": { install_id: string, } } | { "Rollback": { install_id: string, } } | { "Consent": { install_id: string, version: string, granted: Array<Capability>, } } | { "SetDisabledForMe": { install_id: string, disabled: boolean, } } | { "FetchArtifact": { sha256: string, index: number, } } | { "ListAudit": { before_ms: bigint | null, } } | { "RequestInstall": { app_id: string, node_id: string, } } | { "Call": { install_id: string, call: Array<number>, } } | { "AdvertiseService": { install_id: string, 
+inject_requirement: boolean, } } | { "Uninstall": { install_id: string, purge_storage: boolean, } } | { "Update": { install_id: string, listing: ListingOffer, } } | { "Rollback": { install_id: string, } } | { "Consent": { install_id: string, version: string, granted: Array<Capability>, pinned_publisher_key: string, } } | { "SetDisabledForMe": { install_id: string, disabled: boolean, } } | { "FetchArtifact": { sha256: string, index: number, } } | { "GetRelease": { install_id: string, } } | { "ListAudit": { before_ms: bigint | null, } } | { "RequestInstall": { app_id: string, node_id: string, } } | { "Call": { install_id: string, call: Array<number>, } } | { "AdvertiseService": { install_id: string, 
 /**
  * Hex sha256 of the route list served.
  */

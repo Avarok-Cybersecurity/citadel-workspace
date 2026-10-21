@@ -9,8 +9,10 @@ use custom_debug::Debug;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Artifacts and uploads travel in chunks of at most this many bytes.
-pub const ARTIFACT_CHUNK_BYTES: u32 = 1024 * 1024;
+/// Artifacts and uploads travel in chunks of at most this many bytes. A chunk's bytes are a
+/// JSON array of numbers on the wire, up to four characters a byte, so 256 KiB keeps one
+/// request near 1 MiB, far under a tenant's `max_frame_bytes` (`billing/tiers.json`).
+pub const ARTIFACT_CHUNK_BYTES: u32 = 256 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -38,10 +40,12 @@ pub enum AppsRequest {
         bytes: Vec<u8>,
     },
     /// Install a listed app. `granted` is what the installer consents to, at most what the
-    /// manifest asks; `pinned_publisher_key` is the key the consent screen showed.
+    /// manifest asks; `pinned_publisher_key` is the key the consent screen showed. `app_id` and
+    /// `version` must be the listing's.
     Install {
         app_id: String,
         version: String,
+        listing: ListingOffer,
         scope: InstallScope,
         granted: Vec<Capability>,
         pinned_publisher_key: String,
@@ -54,21 +58,30 @@ pub enum AppsRequest {
         install_id: String,
         purge_storage: bool,
     },
-    /// Look for a newer version at the install's listing source, and take it if nothing new is
-    /// asked; otherwise the install waits in `NeedsConsent`.
-    Update { install_id: String },
+    /// Take a newer version from `listing` (the install's own registry entry, or a newer signed
+    /// manifest for an install that came from one) if nothing new is asked; otherwise the
+    /// install waits in `NeedsConsent`, still running the version it has.
+    Update {
+        install_id: String,
+        listing: ListingOffer,
+    },
     /// `AppManage`: back to the recorded previous release.
     Rollback { install_id: String },
-    /// Accept the version an install is waiting on, with this grant.
+    /// Accept the version an install is waiting on, with this grant, signed by this key (the one
+    /// the consent screen showed).
     Consent {
         install_id: String,
         version: String,
         granted: Vec<Capability>,
+        pinned_publisher_key: String,
     },
     /// Hide (or show again) an install for the caller only. It is not uninstalled.
     SetDisabledForMe { install_id: String, disabled: bool },
     /// One chunk of a stored artifact, by digest.
     FetchArtifact { sha256: String, index: u32 },
+    /// The signed manifest of an install's running release, and of the one it waits on, so the
+    /// client verifies the signature itself before it instantiates anything.
+    GetRelease { install_id: String },
     /// `AppManage`: the apps audit log, newest first, a page after `before_ms` if given.
     ListAudit {
         #[ts(type = "bigint | null")]
@@ -97,6 +110,22 @@ pub enum AppsRequest {
         to: IhttpAddress,
         #[debug(with = plaintext_debug_fmt)]
         frame: Vec<u8>,
+    },
+}
+
+/// Where the manifest an install or update takes comes from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub enum ListingOffer {
+    /// This workspace's registry entry (`Published { entry_id }`), at its current version.
+    Registry { entry_id: String },
+    /// A signed manifest the installer holds: a global catalogue listing the client verified,
+    /// or the installer's own. The server verifies the signature and the artifact itself.
+    Signed {
+        #[debug(with = plaintext_debug_fmt)]
+        manifest_bytes: Vec<u8>,
+        /// The `app.mldsa.sig` text.
+        signature: String,
     },
 }
 

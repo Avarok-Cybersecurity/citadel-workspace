@@ -86,6 +86,15 @@ pub enum AppsResponse {
     },
     Installs {
         installs: Vec<AppInstall>,
+        /// The ids among `installs` the caller hid for themselves.
+        disabled_for_me: Vec<String>,
+    },
+    /// An install's running release and, when it waits on consent, the one it waits on. Not
+    /// `pending`: the client's JSON codec reads that name as a bigint wherever it appears.
+    Release {
+        install_id: String,
+        current: AppListing,
+        waiting_on: Option<AppListing>,
     },
     Published {
         entry_id: String,
