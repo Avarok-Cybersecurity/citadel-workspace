@@ -13,6 +13,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 
+mod app_net;
 mod log_setup;
 mod notice_token;
 mod shell_menu;
@@ -106,6 +107,9 @@ async fn run() -> Result<(), Box<dyn Error>> {
         );
     }
 
+    // Host egress for Citadel apps refuses every page origin this agent serves (app_net.rs).
+    let app_net = app_net::app_net_config(&origins, opts.bind.port());
+
     // TLS by default. See BUILTIN_TLS_CERT for why the key ships in the binary,
     // and --no-tls for the one case where plain is right.
     let service = if opts.no_tls {
@@ -131,7 +135,8 @@ async fn run() -> Result<(), Box<dyn Error>> {
         .await?
     }
     .with_supervisor(AGENT_SUPERVISOR)
-    .with_telemetry(telemetry_uplink);
+    .with_telemetry(telemetry_uplink)
+    .with_app_net(app_net);
 
     // Backend selection precedence:
     //   1. INTERNAL_SERVICE_BACKEND / INTERNAL_SERVICE_DATA_DIR env vars
