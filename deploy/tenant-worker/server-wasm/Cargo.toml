@@ -19,7 +19,7 @@ js-sys = { workspace = true }
 web-sys = { workspace = true }
 tenant-console-log = { path = "../console-log" }
 tenant-auth-versions = { path = "../auth-versions" }
-# The signed support request the control plane verifies (support.rs).
+# The signed support and admin requests the control plane verifies (support.rs, admin.rs).
 citadel-support-signature = { path = "../../../citadel-support-signature" }
 toml = "0.8"
 
