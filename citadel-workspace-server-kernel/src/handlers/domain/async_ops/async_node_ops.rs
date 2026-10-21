@@ -301,6 +301,17 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             )));
         }
 
+        // A document's required-apps header is the kernel's to write (`kernel::apps::md_header`):
+        // without AppManage on the node, an edit must carry the stored header byte for byte.
+        // Asked before the lock, as the permission walk reads the node map itself.
+        let may_manage_apps_header = match mdx_content {
+            Some(_) => {
+                self.check_entity_permission(user_id, node_id, Permission::AppManage)
+                    .await?
+            }
+            None => false,
+        };
+
         // Hold the nodes lock across the READ and the WRITE, as create, delete and
         // move already do. The backend's `update_node` does take this mutex, so
         // the write alone was safe — but the read below it was not, and the gap
@@ -328,6 +339,12 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             node.description = String::from(new_desc);
         }
         if let Some(new_mdx) = mdx_content {
+            crate::kernel::apps::md_header::check_header_edit(
+                &node.mdx_content,
+                new_mdx,
+                may_manage_apps_header,
+            )
+            .map_err(NetworkError::msg)?;
             node.mdx_content = String::from(new_mdx);
             // Hashed HERE, where the content is stored, and nowhere else. The
             // client re-hashes before it executes the document and refuses on a

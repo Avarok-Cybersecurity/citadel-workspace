@@ -188,6 +188,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     support_grants: crate::kernel::telemetry::SupportGrantObserverHandle,
     /// How many secure links members may hold: the host's answer, or none, which makes none.
     link_quota: crate::kernel::secure_links::quota::LinkQuotaSourceHandle,
+    /// What fetches app artifacts by URL: the host's, or none, which fetches nothing.
+    artifact_fetcher: crate::kernel::apps::fetcher::ArtifactFetcherHandle,
 }
 
 /// Removes a CID's account attribution when its connection task ends.
@@ -228,6 +230,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             sign_in_settings: self.sign_in_settings.clone(),
             support_grants: self.support_grants.clone(),
             link_quota: self.link_quota.clone(),
+            artifact_fetcher: self.artifact_fetcher.clone(),
             // RateLimiter::Clone shares the same Arc<Mutex<HashMap>>,
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
@@ -276,7 +279,21 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             sign_in_settings: None,
             support_grants: None,
             link_quota: None,
+            artifact_fetcher: None,
         }
+    }
+
+    /// Set by the server bootstrap: the host's artifact fetcher, or none, in which case an app
+    /// is installed or published only from an artifact the server already holds or was sent.
+    pub fn set_artifact_fetcher(
+        &mut self,
+        fetcher: crate::kernel::apps::fetcher::ArtifactFetcherHandle,
+    ) {
+        self.artifact_fetcher = fetcher;
+    }
+
+    pub fn artifact_fetcher(&self) -> &crate::kernel::apps::fetcher::ArtifactFetcherHandle {
+        &self.artifact_fetcher
     }
 
     /// Set by the server bootstrap: the host's secure-link limits, or none, in which case no

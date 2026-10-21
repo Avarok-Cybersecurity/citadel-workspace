@@ -121,6 +121,7 @@ impl TenantServer {
                 sign_in,
                 telemetry,
                 link_quota,
+                None,
             )
             .await;
             let _ = on_exit.call1(&JsValue::NULL, &format!("{outcome:?}").into());

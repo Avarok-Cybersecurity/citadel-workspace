@@ -718,6 +718,17 @@ name = "citadel-app-net-policy"
 version = "0.1.0"
 
 [[package]]
+name = "citadel-app-signature"
+version = "0.1.0"
+dependencies = [
+ "citadel-app-id",
+ "hex",
+ "ml-dsa",
+ "sha2",
+ "zeroize",
+]
+
+[[package]]
 name = "citadel-ihttp-types"
 version = "0.1.0"
 dependencies = [
@@ -808,6 +819,9 @@ dependencies = [
  "bincode",
  "cdoc-crdt",
  "chrono",
+ "citadel-app-id",
+ "citadel-app-net-policy",
+ "citadel-app-signature",
  "citadel-workspace-types",
  "citadel_io",
  "citadel_logging",
@@ -817,6 +831,7 @@ dependencies = [
  "clap 4.6.7",
  "futures",
  "getrandom 0.3.4",
+ "hex",
  "log",
  "parking_lot",
  "reqwest",

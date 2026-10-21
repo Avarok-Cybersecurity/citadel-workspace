@@ -712,6 +712,7 @@ async fn workspace_kernel(
     ice_servers: kernel::ice_servers::IceServerSourceHandle,
     sign_in_settings: kernel::sign_in::SignInSettingsHandle,
     link_quota: kernel::secure_links::quota::LinkQuotaSourceHandle,
+    artifact_fetcher: kernel::apps::fetcher::ArtifactFetcherHandle,
 ) -> Result<kernel::async_kernel::AsyncWorkspaceServerKernel<StackedRatchet>, NetworkError> {
     if first_connect_admin {
         citadel_logging::warn!(target: "citadel", "⚠️  WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN is on: the first account to connect becomes the workspace administrator. Intended for local development. On a reachable deployment this hands ownership to whoever registers first.");
@@ -746,6 +747,10 @@ async fn workspace_kernel(
     kernel.set_ice_server_source(ice_servers);
     kernel.set_sign_in_settings(sign_in_settings);
     kernel.set_link_quota_source(link_quota);
+    if artifact_fetcher.is_none() {
+        info!(target: "citadel", "No artifact fetcher: apps install only from artifacts uploaded to this server.");
+    }
+    kernel.set_artifact_fetcher(artifact_fetcher);
     Ok(kernel)
 }
 
@@ -762,6 +767,8 @@ async fn workspace_kernel(
 /// the host's support-grant mirror and the callback that receives the built kernel.
 /// `link_quota` is the host's secure-link limits (its plan); the host also runs the purge
 /// (`purge_expired_links`), through the kernel `telemetry.kernel_ready` hands it.
+/// `artifact_fetcher` fetches app artifacts by URL (`kernel::apps::fetcher`), or `None` for a
+/// host that has none, whose installs then take uploaded artifacts only.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_server_on<T: PlatformOps>(
     config: ServerConfig,
@@ -772,6 +779,7 @@ pub async fn run_server_on<T: PlatformOps>(
     sign_in: kernel::sign_in::HostedSignIn,
     telemetry: kernel::telemetry::HostedTelemetry<StackedRatchet>,
     link_quota: kernel::secure_links::quota::LinkQuotaSourceHandle,
+    artifact_fetcher: kernel::apps::fetcher::ArtifactFetcherHandle,
 ) -> Result<(), NetworkError> {
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel on an injected listener...");
     if config.sign_in.is_some() {
@@ -794,6 +802,7 @@ pub async fn run_server_on<T: PlatformOps>(
         ice_servers,
         sign_in.settings,
         link_quota,
+        artifact_fetcher,
     )
     .await?;
     kernel.set_support_grant_observer(telemetry.support_grants);
@@ -907,6 +916,11 @@ pub async fn run_server_with_site_verify(
         sign_in.settings,
         Some(std::sync::Arc::new(
             kernel::secure_links::quota::FixedLinkQuota(link_quota),
+        )),
+        Some(std::sync::Arc::new(
+            kernel::apps::fetcher_native::NativeArtifactFetcher::new(
+                kernel::apps::fetcher_native::artifact_client().map_err(NetworkError::msg)?,
+            ),
         )),
     )
     .await?;

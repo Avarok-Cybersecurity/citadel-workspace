@@ -141,6 +141,13 @@ pub enum AppsRefusal {
     NoHost,
     /// Only workspace admins may change a document's required-apps header.
     HeaderManaged,
-    /// This server was built without what the request needs (e.g. fetching artifacts by URL).
+    /// This server was built without what the request needs (e.g. fetching artifacts by URL),
+    /// or the request belongs to a part of the platform this server does not run yet.
     ServerFeatureUnavailable,
+    /// The app is already installed for this scope; this is that install.
+    AlreadyInstalled { install_id: String },
+    /// Install requests are not taken: share the app's link with someone who holds `AppManage`.
+    InstallRequestsNotOffered,
+    /// None of the artifact's locations answered with it.
+    ArtifactUnreachable,
 }
