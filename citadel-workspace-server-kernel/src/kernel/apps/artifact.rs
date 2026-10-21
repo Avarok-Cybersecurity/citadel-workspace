@@ -27,7 +27,7 @@ pub fn check_upload_chunk(
         return limit("sha256 is not 64 lowercase hex characters");
     }
     if total_chunks == 0 || total_chunks > MAX_CHUNKS {
-        return limit("an artifact is at most 8 MiB, in 1 MiB chunks");
+        return limit("an artifact is at most 8 MiB, in 256 KiB chunks");
     }
     if index >= total_chunks {
         return limit("the chunk index is past the last chunk");
@@ -39,7 +39,7 @@ pub fn check_upload_chunk(
         len == full
     };
     if !fits {
-        return limit("every chunk but the last is exactly 1 MiB");
+        return limit("every chunk but the last is exactly 256 KiB");
     }
     Ok(())
 }

@@ -9,8 +9,10 @@ use custom_debug::Debug;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Artifacts and uploads travel in chunks of at most this many bytes.
-pub const ARTIFACT_CHUNK_BYTES: u32 = 1024 * 1024;
+/// Artifacts and uploads travel in chunks of at most this many bytes. A chunk's bytes are a
+/// JSON array of numbers on the wire, up to four characters a byte, so 256 KiB keeps one
+/// request near 1 MiB, far under a tenant's `max_frame_bytes` (`billing/tiers.json`).
+pub const ARTIFACT_CHUNK_BYTES: u32 = 256 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]

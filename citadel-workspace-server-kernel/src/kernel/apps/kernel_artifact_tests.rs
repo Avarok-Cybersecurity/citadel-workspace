@@ -69,3 +69,30 @@ async fn an_upload_whose_bytes_are_not_its_digest_is_refused() {
         Some(AppsRefusal::Limit(_))
     ));
 }
+
+#[tokio::test]
+async fn an_artifact_over_one_chunk_is_uploaded_and_stored_in_chunks() {
+    let (key, bytes, spec) = (publisher(1), wasm(1, 600 * 1024), Spec::new("1.0.0"));
+    let kernel = workspace().await;
+    assert!(matches!(
+        upload(&kernel, "inst", &bytes).await,
+        AppsResponse::ArtifactChunkStored { index: 2, .. }
+    ));
+    let request = install_request(
+        &spec,
+        &key,
+        signed(&spec, &key, &bytes),
+        InstallScope::Workspace,
+        CANVAS_NODES,
+        false,
+    );
+    assert!(installed(&ask(&kernel, "inst", request).await));
+    let stored = apps_keys(&kernel);
+    let sha = hex::encode(citadel_app_signature::sha256(&bytes));
+    let chunk = |n: u32| stored.get(&format!("citadel_workspace.apps.artifact_chunk.{sha}.{n}"));
+    assert!(
+        chunk(2).is_some() && chunk(3).is_none(),
+        "600 KiB is three chunks"
+    );
+    assert!((0..3).all(|n| chunk(n).is_some_and(|v| v.len() < 2_000_000)));
+}

@@ -1,8 +1,8 @@
 //! Artifacts at rest and in upload, and the sweep that drops releases and artifacts nothing
 //! names any more. The caller holds `APPS_LOCK` (`apps_store`).
 //!
-//! A chunk is stored as base64 text: a Durable Object stores a value of at most 2 MB, and a
-//! 1 MiB chunk as a JSON array of numbers would be over three.
+//! A chunk is stored as base64 text, not as the JSON array of numbers serde would write: a
+//! Durable Object value is at most 2 MB, and base64 keeps a chunk at a third over its size.
 
 use super::BackendTransactionManager;
 use crate::kernel::apps::artifact::chunks;

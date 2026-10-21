@@ -27,6 +27,8 @@ pub mod rules;
 pub mod update;
 
 #[cfg(test)]
+mod artifact_tests;
+#[cfg(test)]
 mod audience_tests;
 #[cfg(test)]
 mod effective_tests;
