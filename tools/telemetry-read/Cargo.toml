@@ -16,8 +16,6 @@ citadel-support-signature = { path = "../../citadel-support-signature" }
 citadel-workspace-types = { path = "../../citadel-workspace-types" }
 # The private key file (64 hex characters, mode 0600, never overwritten).
 release-sign = { path = "../release-sign" }
-getrandom = "0.3"
+# The origin, flags, nonce, clock and post-quantum HTTPS shared with tools/coupon-admin.
+control-request = { path = "../control-request" }
 serde_json = "1"
-# HTTPS with a post-quantum key exchange only (X25519MLKEM768; see main.rs `agent`).
-ureq = { version = "3.4", default-features = false, features = ["rustls-no-provider", "rustls-webpki-roots"] }
-rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
