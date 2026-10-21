@@ -102,10 +102,10 @@ max_snapshot_bytes = 4194304
 # The largest awareness payload (cursor, selection, presence) relayed (bytes).
 max_awareness_bytes = 4096
 # Awareness payloads one session may send per second.
-awareness_per_second = 20
+awareness_per_second = 10
 # Appends and pulls one session may send per second.
-appends_per_second = 50
-pulls_per_second = 20
+appends_per_second = 10
+pulls_per_second = 10
 # Bytes of updates held since the last snapshot. At compact_at_pending_bytes the server builds
 # and stores a snapshot itself; at max_pending_log_bytes appends are refused (LogFull) until one
 # is stored. max_pending_log_bytes must exceed snapshot_min_updates * max_update_bytes (16 MiB
