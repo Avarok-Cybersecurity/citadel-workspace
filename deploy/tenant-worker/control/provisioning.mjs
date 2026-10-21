@@ -84,6 +84,23 @@ export class Provisioning {
     ];
     const name = this.displayName();
     if (name !== null) lines.push(`workspace_name = ${JSON.stringify(name)}`);
+    // Last: a table takes every key after it. Required; the kernel refuses to start without it.
+    lines.push(
+      "[documents]",
+      "max_updates_per_pull = 64",
+      "snapshot_min_updates = 256",
+      "max_update_bytes = 65536",
+      "max_snapshot_bytes = 4194304",
+      "max_awareness_bytes = 4096",
+      "awareness_per_second = 10",
+      "appends_per_second = 50",
+      "pulls_per_second = 10",
+      "compact_at_pending_bytes = 8388608",
+      "max_pending_log_bytes = 33554432",
+      "retain_covered_updates_seqs = 256",
+      "max_clients_per_document = 4096",
+      "max_request_frame_bytes = 17825792",
+    );
     return lines.join("\n");
   }
 

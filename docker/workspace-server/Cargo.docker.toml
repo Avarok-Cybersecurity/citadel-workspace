@@ -42,22 +42,25 @@ citadel-workspace-server-kernel = { path = "./citadel-workspace-server-kernel" }
 citadel-workspace-internal-service = { path = "./citadel-workspace-internal-service" }
 citadel-workspace-types = { path = "./citadel-workspace-types" }
 
+# The Documents relay's CRDT; MUST match the root Cargo.toml this file replaces.
+cdoc-crdt = { git = "https://github.com/Avarok-Cybersecurity/citadel-docs", rev = "5f514c5605db871bc0ba693f97606eb6defef659" }
+
 # Secondary packages
 
 # Secondary package (for dev purposes, use the local path at ./citadel-internal-service)
 
 # Avarok deps
-citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "eb9c0b75" }
 # citadel-workspace-types declares this as a dev-dependency (the credential-mirror
 # guard reads the SDK's real constants). Cargo parses EVERY dependency table when
 # it loads a workspace member's manifest, dev-dependencies included, so a missing
 # entry here fails the manifest outright — `cargo clippy` never starts and the
 # production server image cannot be built at all.
-citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
-citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
-citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master" }
+citadel_user = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "eb9c0b75" }
+citadel_types = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "eb9c0b75" }
+citadel_logging = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "eb9c0b75" }
 # The SDK's runtime shim; MUST match the root Cargo.toml this file replaces.
-citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
+citadel_io = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "eb9c0b75", default-features = false }
 
 # Avarok deps (for dev purposes, use the local path at ../Citadel-Protocol)
 #citadel_sdk = { path = "../Citadel-Protocol/citadel_sdk" }

@@ -28,6 +28,7 @@ async fn create(kernel: &Kernel, parent: &str, ty: &str) -> WorkspaceProtocolRes
             entity_type: NodeEntityType::Child(ty.to_string()),
             name: format!("{ty} under {parent}"),
             description: String::new(),
+            metadata: None,
         },
     )
     .await

@@ -83,11 +83,22 @@ services:
       - target_cache:/usr/src/app/target
       # NOTE: dev intentionally has no persistent data volume here.
       # CLAUDE.md documents the dev contract as ephemeral ("any
-      # accounts created on one will be lost on reload"), and the
-      # server defaults to in-memory backend when WORKSPACE_BACKEND is
-      # unset. Production mounts `server_data:/data/server` in
-      # docker-compose.production.yml and sets WORKSPACE_BACKEND there.
+      # accounts created on one will be lost on reload"). Production
+      # mounts `server_data:/data/server` in docker-compose.production.yml.
+    tmpfs:
+      # The filesystem backend on a tmpfs, exactly as `internal-service`
+      # below: ephemeral, but a backend the SDK will stream objects into.
+      # On the in-memory backend every upload to Server Storage failed with
+      #   "File transfer is not enabled for this session.
+      #    Both nodes must use a filesystem backend"
+      # because the SDK requires BOTH ends to store streamed objects, and
+      # the agent already did. `mode=1777` for the same reason as the
+      # agent's: the server runs as `appuser` (uid 1000) and a default
+      # tmpfs is root-owned 1755.
+      - /var/lib/workspace-server:size=256m,mode=1777
     environment:
+      - WORKSPACE_BACKEND=filesystem
+      - WORKSPACE_DATA_DIR=/var/lib/workspace-server
       # citadel=info alone silently deletes the entire ILM subsystem. EnvFilter
       # adds its ERROR default only when the parsed directive set is EMPTY, so a
       # non-empty `citadel=info` leaves every non-matching target off at EVERY
@@ -255,6 +266,8 @@ services:
       - ./citadel-workspaces/src:/app/src:rw
       - ./citadel-workspaces/public:/app/public:rw
       - ./citadel-workspaces/index.html:/app/index.html:rw
+      # The vendored cdoc glue (vendor/cdoc), outside src: without it opening a document fails to import.
+      - ./citadel-workspaces/vendor:/app/vendor:ro
 
       # Mount config files (read-write for hot reload)
       - ./citadel-workspaces/vite.config.ts:/app/vite.config.ts:rw

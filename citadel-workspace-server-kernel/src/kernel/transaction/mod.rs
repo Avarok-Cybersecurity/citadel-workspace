@@ -18,6 +18,9 @@ use std::sync::Arc;
 // `BackendTransactionManager` directly.
 mod accounts;
 pub mod backend_ops_simple;
+pub(crate) mod documents_store;
+#[cfg(test)]
+mod documents_store_tests;
 mod group_message_pages;
 mod records;
 mod roles_store;
@@ -93,6 +96,9 @@ pub struct BackendTransactionManager<R: Ratchet> {
     /// throughput, never correctness, and `GROUP_LOCK_STRIPES` sets how often
     /// that happens.
     group_msg_mutex: Vec<Arc<tokio::sync::Mutex<()>>>,
+
+    /// One stripe per document log, chosen like `group_msg_mutex`'s. See `documents_store`.
+    document_mutex: Vec<Arc<tokio::sync::Mutex<()>>>,
 
     /// Serializes DomainNode-collection read-modify-write operations.
     /// All nodes share a single `citadel_workspace.nodes` HashMap key,
@@ -219,6 +225,9 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
             group_msg_mutex: (0..GROUP_LOCK_STRIPES)
                 .map(|_| Arc::new(tokio::sync::Mutex::new(())))
                 .collect(),
+            document_mutex: (0..GROUP_LOCK_STRIPES)
+                .map(|_| Arc::new(tokio::sync::Mutex::new(())))
+                .collect(),
             node_mutex: Arc::new(tokio::sync::Mutex::new(())),
             nodes_cache: Arc::new(RwLock::new(None)),
             workspace_mutex: Arc::new(tokio::sync::Mutex::new(())),
@@ -252,6 +261,12 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     #[cfg(test)]
     pub(crate) fn saved_keys(&self) -> Vec<String> {
         self.saved_keys.read().clone()
+    }
+
+    /// Every key the test store holds now, for asserting that a purge left nothing behind.
+    #[cfg(test)]
+    pub(crate) fn stored_keys(&self) -> Vec<String> {
+        self.test_storage.read().keys().cloned().collect()
     }
 
     /// Every key and value the in-memory store holds, for a test that reads what was written.

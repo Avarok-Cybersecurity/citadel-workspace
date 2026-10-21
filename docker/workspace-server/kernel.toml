@@ -14,12 +14,13 @@ secure_links_pool = 0
 dangerous_skip_cert_verification = false
 
 # Backend type:
-#   * Omit (default) for in-memory storage - this is the development
-#     contract documented in CLAUDE.md (ephemeral state across `tilt`
-#     reloads).
+#   * Omit (default) for in-memory storage. The SDK streams no objects
+#     into it, so Server Storage (RE-VFS) is not offered on it.
 #   * Set `WORKSPACE_BACKEND=filesystem` and `WORKSPACE_DATA_DIR=/path`
-#     env vars to enable persistent storage. Production deployments do
-#     this in `docker-compose.production.yml`.
+#     env vars for a backend that stores files. Dev (`docker-compose.yml`)
+#     points it at a tmpfs, which keeps the ephemeral contract documented
+#     in CLAUDE.md; production uses a volume in
+#     `docker-compose.production.yml`.
 #
 # A previous version of this file hard-coded `backend = "filesystem"`,
 # which broke the ephemeral-dev contract because dev and prod share
@@ -85,3 +86,36 @@ admission = "none"
 # turnstile_hostnames = ["work.example.com"]  # hostnames the widget may be solved on
 # turnstile_cdata = "work-example"            # this server's identity: the widget's cData (A-Z a-z 0-9 _ -)
 # settings_file = "/data/server/sign-in/settings.json"  # where the admin's switch is kept
+
+# =============================================================================
+# Documents (collaborative editing relay)
+# =============================================================================
+# Every key is required: the server refuses to start without this section.
+[documents]
+# The most updates one Pull returns; the client pulls again for the rest.
+max_updates_per_pull = 64
+# Updates held since the last snapshot before Appended asks a writer to compact.
+snapshot_min_updates = 256
+# The largest single CRDT update, and the largest snapshot, accepted (bytes).
+max_update_bytes = 65536
+max_snapshot_bytes = 4194304
+# The largest awareness payload (cursor, selection, presence) relayed (bytes).
+max_awareness_bytes = 4096
+# Awareness payloads one session may send per second.
+awareness_per_second = 10
+# Appends and pulls one session may send per second.
+appends_per_second = 50
+pulls_per_second = 10
+# Bytes of updates held since the last snapshot. At compact_at_pending_bytes the server builds
+# and stores a snapshot itself; at max_pending_log_bytes appends are refused (LogFull) until one
+# is stored. max_pending_log_bytes must exceed snapshot_min_updates * max_update_bytes (16 MiB
+# here), and compact_at_pending_bytes must be below it.
+compact_at_pending_bytes = 8388608
+max_pending_log_bytes = 33554432
+# Updates a snapshot covers are kept for this many sequence numbers behind it, then dropped.
+retain_covered_updates_seqs = 256
+# CRDT client ids (one per editing session) one document may bind to authors.
+max_clients_per_document = 4096
+# The largest request frame decoded at all (bytes); refused unread above it. Must exceed four
+# times the largest payload cap above (JSON writes a byte as up to four characters): 16 MiB here.
+max_request_frame_bytes = 17825792

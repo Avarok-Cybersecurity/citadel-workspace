@@ -1085,9 +1085,13 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
         // ========== Server Capabilities ==========
         WorkspaceProtocolRequest::GetServerCapabilities => {
             let config = kernel.file_transfer_config();
+            let file_transfer_refusal = kernel.server_file_transfer_refusal();
+            let revfs_storage_refusal = kernel.server_revfs_refusal();
             Ok(WorkspaceProtocolResponse::ServerCapabilities {
-                allow_server_file_transfer: config.allow_server_file_transfer,
-                allow_server_revfs_storage: config.allow_server_revfs_storage,
+                allow_server_file_transfer: file_transfer_refusal.is_none(),
+                file_transfer_refusal,
+                allow_server_revfs_storage: revfs_storage_refusal.is_none(),
+                revfs_storage_refusal,
                 max_file_transfer_size_mb: config.max_file_transfer_size_mb,
                 revfs_storage_quota_mb: config.revfs_storage_quota_mb,
             })
@@ -1120,6 +1124,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
             entity_type,
             name,
             description,
+            metadata,
         } => {
             use crate::handlers::domain::node_ops::AsyncNodeOperations;
             match kernel
@@ -1130,6 +1135,7 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
                     entity_type,
                     name,
                     description,
+                    metadata.as_deref(),
                 )
                 .await
             {
@@ -1288,6 +1294,10 @@ pub async fn process_command_with_user_and_cid<R: Ratchet + Send + Sync + 'stati
 
         WorkspaceProtocolRequest::Roles(request) => {
             super::roles::process(kernel, actor_user_id, requester_cid, request).await
+        }
+
+        WorkspaceProtocolRequest::Documents(request) => {
+            super::documents::process(kernel, actor_user_id, requester_cid, request).await
         }
 
         WorkspaceProtocolRequest::SecureLinks(request) => {

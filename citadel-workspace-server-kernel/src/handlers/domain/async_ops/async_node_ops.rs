@@ -10,6 +10,7 @@ use crate::handlers::domain::async_ops::node_views::{
 use crate::handlers::domain::async_ops::AsyncPermissionOperations;
 use crate::handlers::domain::node_ops::AsyncNodeOperations;
 use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
+use crate::handlers::domain::server_ops::node_metadata::new_node_metadata;
 use crate::handlers::domain::tree_validator::{NodeMutation, TreeValidator};
 use crate::platform::{SystemTime, UNIX_EPOCH};
 use async_trait::async_trait;
@@ -81,7 +82,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
         entity_type: &NodeEntityType,
         name: &str,
         description: &str,
+        metadata: Option<&[u8]>,
     ) -> Result<DomainNode, NetworkError> {
+        // Before any lock or write: a document no merge could build on is never stored.
+        let metadata = new_node_metadata(metadata).map_err(NetworkError::msg)?;
+
         // Validate: Workspace type can only be created at root level
         if entity_type.is_workspace() && parent_id.is_some() {
             return Err(NetworkError::msg(
@@ -189,7 +194,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             chat_enabled: false,
             chat_channel_id: None,
             default_permissions: DomainPermissions::default(),
-            metadata: vec![],
+            metadata,
             // Derived from the live schema on every read (node_views), never stored.
             allowed_child_types: None,
             is_default: false,
@@ -475,6 +480,14 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncNodeOperations<R> for AsyncDomainS
             self.backend_tx_manager
                 .delete_all_group_messages(channel_id)
                 .await?;
+        }
+
+        // And their document logs, before the save for the same reason. Their locks are held
+        // until this returns, past the save: an append racing the delete either lands before
+        // the purge and goes with it, or finds the node gone (`documents_store`).
+        let _document_guards = self.backend_tx_manager.lock_documents(&deleted_ids).await;
+        for id in &deleted_ids {
+            self.backend_tx_manager.delete_document_log(id).await?;
         }
 
         // Remove all deleted nodes

@@ -42,6 +42,8 @@ tempfile = "3.10.1"
 bcrypt = "0.17.0"
 sha2 = "0.10"
 subtle = "2.6"
+# The Documents relay decodes CRDT updates and snapshots, and builds its own (see the root).
+cdoc-crdt = { workspace = true }
 # Secure-link tokens (kernel::secure_links::token): 32 bytes from the OS CSPRNG.
 getrandom = "0.3"
 chrono = { workspace = true }
@@ -64,7 +66,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-
 tokio = { version = "1.44.1", default-features = false, features = ["macros", "sync"] }
 # `crypto.getRandomValues`, with the `getrandom_backend="wasm_js"` cfg the tenant worker sets.
 getrandom = { version = "0.3", features = ["wasm_js"] }
-citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", branch = "master", default-features = false }
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "eb9c0b75", default-features = false }
 
 [dev-dependencies]
 citadel_sdk = { workspace = true, features = ["localhost-testing", "multi-threaded"] }

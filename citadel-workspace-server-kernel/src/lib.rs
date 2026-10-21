@@ -71,6 +71,9 @@ pub mod config {
         /// self-hosted server, whose users never saw them. No default: a server that does not
         /// say refuses to start. See `resolve_require_platform_terms`.
         pub require_platform_terms: Option<bool>,
+        /// The Documents relay's limits. No default: a server that does not say refuses to
+        /// start. See `resolve_documents_relay`.
+        pub documents: Option<crate::kernel::documents::DocumentsConfig>,
         /// Live secure links each member may hold of their own. Required by the native server,
         /// which has no plan to read it from; 0 is allowed. See `resolve_secure_link_quota`.
         /// A hosted tenant's limits come from its plan instead (`LinkQuotaSource`).
@@ -111,6 +114,7 @@ pub mod config {
                 .field("allow_first_connect_admin", &self.allow_first_connect_admin)
                 .field("workspace_name", &self.workspace_name)
                 .field("require_platform_terms", &self.require_platform_terms)
+                .field("documents", &self.documents)
                 .field("secure_links_per_member", &self.secure_links_per_member)
                 .field("secure_links_pool", &self.secure_links_pool)
                 .field("sign_in", &self.sign_in)
@@ -515,6 +519,23 @@ pub fn resolve_require_platform_terms(config: &ServerConfig) -> Result<bool, Net
     })
 }
 
+/// The Documents relay `config` describes. Unset is a configuration error: its bounds depend on
+/// where the server runs and what its clients send, so no value is right for every server.
+pub fn resolve_documents_relay(
+    config: &ServerConfig,
+) -> Result<kernel::documents::DocumentsRelay, NetworkError> {
+    let documents = config.documents.ok_or_else(|| {
+        NetworkError::msg(
+            "[documents] must be set: max_updates_per_pull, snapshot_min_updates, \
+             max_update_bytes, max_snapshot_bytes, max_awareness_bytes, awareness_per_second, \
+             appends_per_second, pulls_per_second, compact_at_pending_bytes, \
+             max_pending_log_bytes, retain_covered_updates_seqs, max_clients_per_document and \
+             max_request_frame_bytes",
+        )
+    })?;
+    kernel::documents::DocumentsRelay::new(documents).map_err(NetworkError::msg)
+}
+
 /// The secure-link limits `config` sets. Both keys are required: a native server has no plan to
 /// read them from, and a default would be a limit nobody chose.
 pub fn resolve_secure_link_quota(
@@ -718,6 +739,7 @@ async fn workspace_kernel(
     kernel.set_first_connect_admin(first_connect_admin);
     kernel.set_workspace_name(resolve_workspace_name(config)?);
     kernel.set_platform_terms_required(resolve_require_platform_terms(config)?);
+    kernel.set_documents_relay(resolve_documents_relay(config)?);
     if ice_servers.is_none() {
         info!(target: "citadel", "No relay-credential source: GetIceServers answers that no relay is available.");
     }
@@ -1312,6 +1334,7 @@ mod server_config_debug_tests {
             allow_first_connect_admin: None,
             workspace_name: Some("Admin Lab".to_string()),
             require_platform_terms: Some(false),
+            documents: None,
             secure_links_per_member: Some(5),
             secure_links_pool: Some(0),
             sign_in: None,

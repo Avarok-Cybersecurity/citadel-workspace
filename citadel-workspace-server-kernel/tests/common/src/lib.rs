@@ -1,4 +1,6 @@
 pub mod async_test_helpers;
+pub mod crdt_test_utils;
+pub mod documents_test_utils;
 pub mod integration_test_utils;
 pub mod member_test_utils;
 pub mod permission_test_utils;

@@ -10,6 +10,7 @@ use crate::kernel::transaction::BackendTransactionManager;
 use crate::WorkspaceProtocolResponse;
 use citadel_logging::{debug, error, info, warn};
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, ObjectTransferStatus, Ratchet};
+use citadel_workspace_types::server_feature_refusal::ServerFeatureRefusal;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -152,6 +153,9 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     /// (`ServerConfig::require_platform_terms`). `None` until the bootstrap sets it: the
     /// Telemetry Service refuses to answer rather than guess which terms its users were shown.
     platform_terms_required: Option<bool>,
+    /// The Documents relay (`ServerConfig::documents`). `None` until the bootstrap sets it: every
+    /// documents request is then refused rather than served under limits nobody chose.
+    documents: Option<crate::kernel::documents::DocumentsRelay>,
     /// Broadcast channel for sending updates to all connected clients
     broadcast_tx: broadcast::Sender<BroadcastMessage>,
     /// File transfer configuration
@@ -216,6 +220,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             workspace_structure: self.workspace_structure.clone(),
             workspace_name: self.workspace_name.clone(),
             platform_terms_required: self.platform_terms_required,
+            documents: self.documents.clone(),
             broadcast_tx: self.broadcast_tx.clone(),
             file_transfer_config: self.file_transfer_config.clone(),
             first_connect_admin: self.first_connect_admin,
@@ -261,6 +266,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             workspace_structure: None,
             workspace_name: None,
             platform_terms_required: None,
+            documents: None,
             broadcast_tx,
             file_transfer_config: FileTransferConfig::default(),
             rate_limiter: RateLimiter::new(DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL),
@@ -357,6 +363,16 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         self.platform_terms_required
     }
 
+    /// The Documents relay's limits, from configuration.
+    pub fn set_documents_relay(&mut self, relay: crate::kernel::documents::DocumentsRelay) {
+        self.documents = Some(relay);
+    }
+
+    /// `None` when no configuration said.
+    pub fn documents_relay(&self) -> Option<&crate::kernel::documents::DocumentsRelay> {
+        self.documents.as_ref()
+    }
+
     /// Set by the server bootstrap from configuration. Off unless asked for.
     pub fn set_first_connect_admin(&mut self, allowed: bool) {
         self.first_connect_admin = allowed;
@@ -384,9 +400,21 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         &self.file_transfer_config
     }
 
-    /// Check if server file transfer is enabled
-    pub fn is_server_file_transfer_enabled(&self) -> bool {
-        self.file_transfer_config.allow_server_file_transfer
+    /// Why clients cannot transfer files to this server, or `None` when they can: configured on
+    /// AND backed by storage the SDK will stream objects into.
+    pub fn server_file_transfer_refusal(&self) -> Option<ServerFeatureRefusal> {
+        self.streamed_objects_refusal(self.file_transfer_config.allow_server_file_transfer)
+    }
+
+    /// `configured`, narrowed to what the backend this node runs on can actually store.
+    fn streamed_objects_refusal(&self, configured: bool) -> Option<ServerFeatureRefusal> {
+        let node_remote = self.node_remote.read();
+        crate::kernel::server_capabilities::streamed_objects_refusal(
+            configured,
+            node_remote
+                .as_ref()
+                .map(|nr| nr.account_manager().get_backend_type()),
+        )
     }
 
     /// Which permission a transfer needs, taken from which way the bytes flow.
@@ -439,9 +467,10 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             .unwrap_or(false)
     }
 
-    /// Check if server RE-VFS storage is enabled
-    pub fn is_server_revfs_enabled(&self) -> bool {
-        self.file_transfer_config.allow_server_revfs_storage
+    /// Why this server cannot store RE-VFS files, or `None` when it can: configured on AND backed
+    /// by storage the SDK will stream objects into.
+    pub fn server_revfs_refusal(&self) -> Option<ServerFeatureRefusal> {
+        self.streamed_objects_refusal(self.file_transfer_config.allow_server_revfs_storage)
     }
 
     /// Health check: returns true if the kernel is operational
@@ -1895,7 +1924,8 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                     continue;
                                 }
 
-                                match serde_json::from_slice::<WorkspaceProtocolPayload>(msg.as_ref()) {
+                                let max_frame = this.documents_relay().map(|relay| relay.config.max_request_frame_bytes);
+                                match crate::kernel::documents::frame::decode_request(msg.as_ref(), max_frame) {
                                     Ok(command_payload) => {
                                         if let WorkspaceProtocolPayload::Request(request) = command_payload
                                         {
@@ -1926,11 +1956,8 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                         }
                                     }
                                     Err(e) => {
-                                        error!(target: "citadel", "[ASYNC_KERNEL] Failed to deserialize command with serde_json: {:?}. Message (first 50 bytes): {:?}", e, msg.as_ref().iter().take(50).collect::<Vec<_>>());
-                                        let error_response = WorkspaceProtocolResponse::Error(format!(
-                                            "Invalid command. Failed serde_json deserialization: {}",
-                                            e
-                                        ));
+                                        error!(target: "citadel", "[ASYNC_KERNEL] Refused a request frame: {}. Message (first 50 bytes): {:?}", e, msg.as_ref().iter().take(50).collect::<Vec<_>>());
+                                        let error_response = WorkspaceProtocolResponse::Error(e.to_string());
                                         let response_wrapped =
                                             WorkspaceProtocolPayload::Response(Box::new(error_response));
                                         match serde_json::to_vec(&response_wrapped) {
@@ -1959,56 +1986,9 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                             continue;
                                         }
 
-                                        // A group-scoped broadcast reaches only
-                                        // sessions entitled to that channel. This
-                                        // is the one place that knows which user
-                                        // the socket belongs to, so it is the only
-                                        // place the check can be made.
-                                        if let BroadcastAudience::Group(ref group_id) = broadcast_msg.audience {
-                                            use crate::kernel::group_access::authorize_group_read;
-                                            if authorize_group_read(&this, &user_id, group_id).await.is_none() {
-                                                continue;
-                                            }
-                                        }
-                                        // A node-scoped broadcast reaches only sessions that
-                                        // may view that node. Same reasoning as the group case
-                                        // above, and the same single place that knows whose
-                                        // socket this is.
-                                        if let BroadcastAudience::Node(ref node_id) = broadcast_msg.audience {
-                                            use crate::handlers::domain::async_ops::AsyncPermissionOperations;
-                                            use citadel_workspace_types::structs::Permission;
-                                            let may_view = this
-                                                .domain_operations
-                                                .check_entity_permission(&user_id, node_id, Permission::ViewContent)
-                                                .await
-                                                .unwrap_or(false);
-                                            if !may_view {
-                                                continue;
-                                            }
-                                        }
-
-                                        // A workspace-scoped broadcast reaches only that
-                                        // workspace's members. Same reasoning as the node case
-                                        // above; the record carries the full member list, so
-                                        // sending it to a non-member discloses the membership
-                                        // of a workspace they cannot even read.
-                                        if let BroadcastAudience::Workspace(ref workspace_id) =
-                                            broadcast_msg.audience
-                                        {
-                                            use crate::handlers::domain::async_ops::AsyncPermissionOperations;
-                                            use citadel_workspace_types::structs::Permission;
-                                            let may_view = this
-                                                .domain_operations
-                                                .check_entity_permission(
-                                                    &user_id,
-                                                    workspace_id,
-                                                    Permission::ViewContent,
-                                                )
-                                                .await
-                                                .unwrap_or(false);
-                                            if !may_view {
-                                                continue;
-                                            }
+                                        // Scoped by the one place that knows whose socket this is.
+                                        if !this.may_receive(&user_id, &broadcast_msg.audience).await {
+                                            continue;
                                         }
 
                                         // Forward the broadcast to this client

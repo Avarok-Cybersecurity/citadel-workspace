@@ -37,6 +37,7 @@ async fn test_room_operations() {
             entity_type: NodeEntityType::Child("Office".to_string()),
             name: "Test Office".to_string(),
             description: "A test office".to_string(),
+            metadata: None,
         },
     )
     .await
@@ -53,6 +54,7 @@ async fn test_room_operations() {
             entity_type: NodeEntityType::Child("Room".to_string()),
             name: "Test Room".to_string(),
             description: "A test room".to_string(),
+            metadata: None,
         },
     )
     .await

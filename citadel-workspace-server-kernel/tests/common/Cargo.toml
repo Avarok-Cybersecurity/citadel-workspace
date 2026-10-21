@@ -15,6 +15,8 @@ citadel-internal-service-types = { path = "../../../citadel-internal-service/cit
 citadel-internal-service-connector = { path = "../../../citadel-internal-service/citadel-internal-service-connector" }
 citadel-internal-service-test-common = { path = "../../../citadel-internal-service/citadel-internal-service/tests/common" }
 citadel-workspace-types = { path = "../../../citadel-workspace-types" }
+# Real CRDT updates for the Documents tests: the relay refuses bytes that do not decode.
+cdoc-crdt = { workspace = true }
 
 
 #rstest = { workspace = true }

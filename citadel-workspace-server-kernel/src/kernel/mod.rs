@@ -9,8 +9,12 @@
 // - `user_management`: User injection utilities for testing
 // - `member_operations`: Domain member add/remove operations
 
+/// Whether a session may be sent a broadcast.
+mod broadcast_scope;
 pub mod command_processor;
 pub mod display_name;
+/// The Documents relay: configuration and the log's rules.
+pub mod documents;
 pub mod group_access;
 pub mod ice_servers;
 pub mod profile_limits;
@@ -23,6 +27,8 @@ pub(crate) mod roster;
 pub mod secret_eq;
 /// Secure links: tokens the server maps to in-app deep links.
 pub mod secure_links;
+/// What the server advertises, derived from the backend it runs on.
+pub mod server_capabilities;
 pub mod sign_in;
 pub mod telemetry;
 pub mod transaction;

@@ -58,6 +58,8 @@ getrandom = "0.3"
 # a list that lives elsewhere and nothing else keeps them equal.
 sha2 = "0.10"
 subtle = "2.6"
+# The Documents relay decodes CRDT updates and snapshots, and builds its own (see the root).
+cdoc-crdt = { workspace = true }
 
 # NOTE: dev-dependencies removed for Docker build to avoid localhost-testing feature
 

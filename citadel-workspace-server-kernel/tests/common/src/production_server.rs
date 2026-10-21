@@ -61,8 +61,10 @@ pub async fn start_native_server(
         "WORKSPACE_BIND_ADDR is set; the server would bind it instead of the test's port"
     );
     let addr = free_addr();
+    // The shipped `[documents]` limits, after `extra_toml`: a table takes every key after it.
     let config: ServerConfig = toml::from_str(&format!(
-        "bind_addr = \"{addr}\"\nworkspace_master_password = \"a-test-master-password\"\nrequire_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\n{tail}"
+        "bind_addr = \"{addr}\"\nworkspace_master_password = \"a-test-master-password\"\nrequire_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\n{tail}\n{}",
+        crate::documents_test_utils::shipped_documents_section()
     ))
     .expect("config");
     tokio::spawn(async move {

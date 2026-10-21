@@ -13,6 +13,25 @@ pub use citadel_io::time::{Instant, SystemTime, UNIX_EPOCH};
 #[cfg(not(target_family = "wasm"))]
 pub use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+/// Runs CPU-bound `work` off the event loop. Natively on tokio's blocking pool, so a long
+/// computation (materialising a document) never stalls the connections sharing the runtime's
+/// workers. A wasm32 host has one thread and no pool, so there it runs in place.
+#[cfg(not(target_family = "wasm"))]
+pub async fn run_blocking<T: Send + 'static>(
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, String> {
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(|e| format!("blocking work did not finish: {e}"))
+}
+
+#[cfg(target_family = "wasm")]
+pub async fn run_blocking<T: Send + 'static>(
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, String> {
+    Ok(work())
+}
+
 /// Content mirroring writes MDX files under the configured content directory.
 pub mod fs {
     #[cfg(not(target_family = "wasm"))]

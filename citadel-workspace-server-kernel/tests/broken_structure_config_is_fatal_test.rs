@@ -34,6 +34,7 @@ fn config_naming(structure_file: Option<&str>) -> ServerConfig {
         allow_first_connect_admin: None,
         workspace_name: None,
         require_platform_terms: Some(false),
+        documents: None,
         secure_links_per_member: Some(5),
         secure_links_pool: Some(0),
         sign_in: None,
