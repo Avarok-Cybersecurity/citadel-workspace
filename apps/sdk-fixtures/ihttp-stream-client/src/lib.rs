@@ -24,10 +24,7 @@ fn on(app: &mut StreamClient, event: ClientEvent) {
             app.chunks += 1;
             app.bytes += b.len();
         }
-        ClientEvent::End => report(
-            "stream",
-            &format!("complete:{}:{}", app.chunks, app.bytes),
-        ),
+        ClientEvent::End => report("stream", &format!("complete:{}:{}", app.chunks, app.bytes)),
         ClientEvent::Failed(e) => report("stream", &format!("failed:{}", answer::<()>(&Err(e)))),
     }
 }
