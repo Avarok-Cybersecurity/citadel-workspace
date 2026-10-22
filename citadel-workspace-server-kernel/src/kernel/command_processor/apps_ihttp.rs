@@ -1,5 +1,9 @@
 //! Internal HTTP through the server (R4.4): `AdvertiseService` and `IhttpSend`.
 //!
+//! An advertisement names the route table it serves by `routes_digest`
+//! (`kernel::apps::ihttp_routes`), and is taken only for the table the installer consented to
+//! (the install's `ihttp_routes`).
+//!
 //! The relay is for callers with no P2P session to the serving host, or addressing a scope.
 //! Identity is the session's: the frame a serving app receives carries `from`, stamped here
 //! from the caller's session and install, never from the frame. A stream opens with a
@@ -17,6 +21,7 @@ use super::apps_member::visible_install;
 use crate::kernel::apps::artifact::is_sha256_hex;
 use crate::kernel::apps::facts::authority_node;
 use crate::kernel::apps::ihttp_relay::{Endpoint, Forward, RelayFault, RELAY_STREAM_BIT};
+use crate::kernel::apps::ihttp_routes;
 use crate::kernel::apps::rules::require_capability;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::{WorkspaceProtocolResponse, WORKSPACE_ROOT_ID};
@@ -69,6 +74,10 @@ pub(super) async fn advertise<R: Ratchet + Send + Sync + 'static>(
         }
         if !may(kernel, &install, caller.user, Capability::IhttpServe).await? {
             return Err(AppsRefusal::Ungranted(Capability::IhttpServe).into());
+        }
+        let consented = &install.details.ihttp_routes;
+        if ihttp_routes::routes_digest(consented.iter().map(String::as_str)) != routes_digest {
+            return Err(AppsRefusal::Policy.into());
         }
         kernel
             .apps_relay()

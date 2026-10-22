@@ -1,6 +1,7 @@
 //! What the internal-HTTP kernel tests share: two sessions, frames, and reading what the
 //! relay pushed.
 
+use super::ihttp_routes::routes_digest;
 use super::test_manifests::refused;
 use super::test_runtime::*;
 use super::test_support::Kernel;
@@ -45,15 +46,30 @@ pub(crate) fn user(username: &str) -> IhttpAddress {
     }
 }
 
+/// The digest of the test manifest's `ihttp.serve` routes (`test_runtime`).
+pub(crate) fn served_digest() -> String {
+    routes_digest(["GET /cards"])
+}
+
 pub(crate) async fn advertise(
     kernel: &Kernel,
     who: &str,
     cid: Option<u64>,
     install_id: &str,
 ) -> AppsResponse {
+    advertise_digest(kernel, who, cid, install_id, &served_digest()).await
+}
+
+pub(crate) async fn advertise_digest(
+    kernel: &Kernel,
+    who: &str,
+    cid: Option<u64>,
+    install_id: &str,
+    routes_digest: &str,
+) -> AppsResponse {
     let request = AppsRequest::AdvertiseService {
         install_id: install_id.into(),
-        routes_digest: "ab".repeat(32),
+        routes_digest: routes_digest.into(),
         until_ms: now_ms() + 60_000,
     };
     ask_on(kernel, who, cid, request).await

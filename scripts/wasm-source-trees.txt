@@ -15,6 +15,10 @@
 citadel-internal-service-wasm-client/src
 citadel-internal-service-connector/src
 citadel-internal-service-types/src
+# The app-signature check the page runs (src/app_signature.rs exports it), and the id and
+# version grammar its signed message is built with: both compiled INTO the binary.
+citadel-app-signature/src
+citadel-app-id/src
 # ILM, for the same reason as the connector and by the same route.
 #
 # The wasm-client depends on the connector, and the connector depends on

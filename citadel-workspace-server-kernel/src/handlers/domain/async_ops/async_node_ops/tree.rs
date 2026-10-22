@@ -58,7 +58,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncDomainServerOperations<R> {
 /// version adds both protections (a `visited` set and an explicit queue).
 ///
 /// This is BFS + reverse-depth assembly, mirroring the iterative pattern
-/// `list_nodes` uses in the same file. Two phases:
+/// `list_nodes` uses (`list_nodes_impl`, in `read.rs`). Two phases:
 ///   1. BFS the children graph from `root` to collect every node that
 ///      should appear in the tree (respecting `max_depth`), recording
 ///      each node's depth and pruning cycles/duplicate child refs.

@@ -57,10 +57,17 @@ export function send_media_frame(local_cid_str: string, peer_cid_str: string, tr
  */
 export function send_p2p_message_reliable(local_cid_str: string, peer_cid_str: string, message: Uint8Array, security_level?: string | null, compression_hint?: string | null): Promise<void>;
 
+/**
+ * True only for a valid signature. `signature` is the `app.mldsa.sig` bytes (its hex decoded);
+ * the digests are lowercase hex sha256. Anything malformed is false, never an exception.
+ */
+export function verify_app_signature(public_key_hex: string, app_id: string, version: string, manifest_sha256_hex: string, wasm_sha256_hex: string, signature: Uint8Array): boolean;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly verify_app_signature: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => number;
     readonly close_connection: () => any;
     readonly ensure_messenger_open: (a: number, b: number) => any;
     readonly get_version: () => [number, number];

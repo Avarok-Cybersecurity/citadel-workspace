@@ -1,6 +1,7 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const verify_app_signature: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => number;
 export const close_connection: () => any;
 export const ensure_messenger_open: (a: number, b: number) => any;
 export const get_version: () => [number, number];

@@ -13,7 +13,8 @@
 //! The app runtime's server side: `storage` the named backends' namespaces and limits;
 //! `egress` server egress (`net.server`) over the host's `EgressFetcher`, metered for now by an
 //! operator log line per response (the host's `bytes_in` meter is not wired to it yet);
-//! `ihttp_relay` and `ihttp_flow` the internal-HTTP relay's advertisements, streams and flow.
+//! `ihttp_relay` and `ihttp_flow` the internal-HTTP relay's advertisements, streams and flow,
+//! `ihttp_routes` the digest an advertisement names its route table by.
 //!
 //! No I/O: the request handler (`command_processor::apps`) gathers the facts (permissions,
 //! roles, node views, members) and applies what these decide; the store is
@@ -32,6 +33,7 @@ pub mod fetcher_native;
 pub mod ihttp_flow;
 pub mod ihttp_relay;
 pub mod ihttp_relay_types;
+pub mod ihttp_routes;
 pub mod install;
 pub mod md_header;
 pub mod records;
@@ -51,6 +53,8 @@ mod egress_tests;
 mod ihttp_relay_tests;
 #[cfg(test)]
 mod install_tests;
+#[cfg(test)]
+mod kernel_advertise_tests;
 #[cfg(test)]
 mod kernel_artifact_tests;
 #[cfg(test)]
@@ -81,6 +85,14 @@ mod kernel_session_tests;
 mod md_header_tests;
 #[cfg(test)]
 mod rules_tests;
+#[cfg(test)]
+mod runtime_wire_calls;
+#[cfg(test)]
+mod runtime_wire_fixture_tests;
+#[cfg(test)]
+mod runtime_wire_frames;
+#[cfg(test)]
+mod runtime_wire_relay;
 #[cfg(test)]
 mod storage_tests;
 #[cfg(test)]
