@@ -113,6 +113,7 @@ const UNSCOPED = new Map([
   ['NodeTypes', 'schema, not content'],
   ['Telemetry', 'only ever the answer to the requesting member (never fanned out); it carries consent state and agent logs'],
   ['SecureLinks', 'only ever the answer to the requesting member: a link, its token and its target are never fanned out'],
+  ['Apps', 'only ever the answer to the requesting member: listings, installs, artifacts and the audit log are never fanned out (a header the kernel writes goes out as NodeContentUpdated through broadcast_to_node)'],
   ['MessagingTrust', 'only ever the answer to the requesting member (never fanned out); a policy change reaches members as the Workspace record mutate_workspace announces'],
 ]);
 

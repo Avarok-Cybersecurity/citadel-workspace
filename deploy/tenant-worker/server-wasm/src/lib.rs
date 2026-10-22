@@ -5,6 +5,7 @@
 //! running on the isolate's event loop for as long as the object lives. Its accounts and
 //! workspace data live in the object's own SQLite storage (`storage`), so they outlive it.
 
+mod admin;
 mod auth_versions;
 mod host_promise;
 mod ice;
@@ -121,6 +122,7 @@ impl TenantServer {
                 sign_in,
                 telemetry,
                 link_quota,
+                None,
             )
             .await;
             let _ = on_exit.call1(&JsValue::NULL, &format!("{outcome:?}").into());

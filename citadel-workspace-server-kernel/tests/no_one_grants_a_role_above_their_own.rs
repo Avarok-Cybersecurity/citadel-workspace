@@ -33,6 +33,10 @@ const ROOT: &str = citadel_workspace_server_kernel::WORKSPACE_ROOT_ID;
 /// upgrade (roles_stored.rs, version 1) rightly leaves alone; without the permission it could not
 /// assign Member, by the same ladder rule this file tests. A role stored before the upgrade gets
 /// it when read: kernel/transaction/roles_upgrade_tests.rs.
+///
+/// And `AppInstall`, which the Member seed carries since role table v2, for the same reason: a
+/// role written today without it could not assign Member (citadel-workspace-types/tests/
+/// apps_role_upgrade.rs is the upgrade that gives it to a table stored before v2).
 const EDITOR: &[Permission] = &[
     Permission::ViewContent,
     Permission::ViewMembers,
@@ -46,6 +50,7 @@ const EDITOR: &[Permission] = &[
     Permission::EditMdx,
     Permission::ManageRoles,
     Permission::ShareSecureLinks,
+    Permission::AppInstall,
 ];
 
 async fn an_editor(kernel: &Kernel, id: &str) {

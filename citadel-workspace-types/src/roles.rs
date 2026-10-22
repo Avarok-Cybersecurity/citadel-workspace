@@ -162,6 +162,9 @@ pub fn seed_roles() -> Vec<RoleDefinition> {
                 UploadFiles,
                 DownloadFiles,
                 ShareSecureLinks,
+                // Installing an app for themselves, and nothing it could be granted: every
+                // `AppInstallAllow*` is an administrator's to give.
+                AppInstall,
             ],
         ),
         // Read-only.

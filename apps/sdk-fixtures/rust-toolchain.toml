@@ -1,0 +1,6 @@
+# The fixtures in wasm/ are committed and rebuilt byte-for-byte by
+# `node scripts/build-app-fixtures.mjs --check`: that needs one exact compiler.
+[toolchain]
+channel = "1.99.0"
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"

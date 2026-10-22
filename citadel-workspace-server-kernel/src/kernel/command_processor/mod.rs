@@ -67,3 +67,24 @@ mod secure_links_resolve;
 
 /// A secure link's owner listing, deleting, regenerating and extending it.
 mod secure_links_owner;
+
+/// Citadel Apps: the registry, installs, their artifacts and the audit log.
+mod apps;
+/// The reads the apps decisions need, made before they decide, and what an install may do now.
+pub mod apps_gather;
+/// The kernel's own writes to a document's required-apps header.
+mod apps_header;
+/// `Install`.
+mod apps_install;
+/// `Uninstall` and `Rollback`.
+mod apps_lifecycle;
+/// The registry: listing, reading, publishing, uploading.
+mod apps_listing;
+/// What a member reads about the installs that concern them.
+mod apps_member;
+/// Where a listing and its artifact come from.
+mod apps_offer;
+/// `Update` and `Consent`.
+mod apps_update;
+/// `UploadArtifactChunk`.
+mod apps_upload;

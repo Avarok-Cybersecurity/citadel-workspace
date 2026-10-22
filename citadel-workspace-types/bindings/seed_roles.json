@@ -31,7 +31,25 @@
       "Themes",
       "ViewTelemetry",
       "ManageRoles",
-      "ShareSecureLinks"
+      "ShareSecureLinks",
+      "AppInstall",
+      "AppInstallScoped",
+      "AppPublish",
+      "AppManage",
+      "AppInstallAllowNodeRead",
+      "AppInstallAllowNodeWrite",
+      "AppInstallAllowMdEdit",
+      "AppInstallAllowFiles",
+      "AppInstallAllowChat",
+      "AppInstallAllowMembers",
+      "AppInstallAllowStorage",
+      "AppInstallAllowClipboard",
+      "AppInstallAllowNotifications",
+      "AppInstallAllowHostNetwork",
+      "AppInstallAllowPrivateNetwork",
+      "AppInstallAllowServerNetwork",
+      "AppInstallAllowInternalServe",
+      "AppInstallAllowInternalCall"
     ],
     "position": 65535
   },
@@ -53,7 +71,8 @@
       "ReadMessages",
       "UploadFiles",
       "DownloadFiles",
-      "ShareSecureLinks"
+      "ShareSecureLinks",
+      "AppInstall"
     ],
     "position": 200
   },

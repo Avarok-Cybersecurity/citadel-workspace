@@ -16,6 +16,8 @@ services:
       - ./citadel-internal-service:/workspace/citadel-internal-service:rw
       - ./citadel-workspace-client-ts:/workspace/citadel-workspace-client-ts:rw
       - ./citadel-workspaces:/workspace/citadel-workspaces:rw
+      # Step 9's `vite build` reads the global app catalogue beside the UI (vite.config.ts).
+      - ./apps/catalogue:/workspace/apps/catalogue:ro
       # The root of the npm workspace, read-only: the sync installs with `npm ci` from this
       # lockfile instead of resolving ranges against the live registry (an upstream publish
       # broke Publish ui that way on 2026-10-12). The four members' manifests arrive through
@@ -268,6 +270,8 @@ services:
       - ./citadel-workspaces/index.html:/app/index.html:rw
       # The vendored cdoc glue (vendor/cdoc), outside src: without it opening a document fails to import.
       - ./citadel-workspaces/vendor:/app/vendor:ro
+      # The global app catalogue, served at /apps/catalogue.json (src/build/app-catalogue-asset.ts).
+      - ./apps/catalogue:/apps/catalogue:ro
 
       # Mount config files (read-write for hot reload)
       - ./citadel-workspaces/vite.config.ts:/app/vite.config.ts:rw

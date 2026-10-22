@@ -6,6 +6,7 @@ import { instantiate } from "../server-wasm/pkg/instance.mjs";
 import wasm from "../server-wasm/pkg/citadel_tenant_server_wasm_bg.wasm";
 import { required } from "./http.mjs";
 import { enforcedEntitlements, METERING } from "./plans.mjs";
+import { limitOf } from "./entitlement-limits.mjs";
 import { ksfParams } from "./tenant-sign-in.mjs";
 
 // Wasm instances this isolate has created. Module state is per isolate, so objects that see the
@@ -36,8 +37,12 @@ export function nodeStorage(storage, entitlements) {
   return {
     run: (statements) =>
       storage.transactionSync(() => statements.map(([sql, params]) => [...storage.sql.exec(sql, ...params).raw()])),
-    // What RE-VFS uploads may hold in total: the plan's storage, in tiers.json's own GB.
-    quotaBytes: () => enforcedEntitlements(entitlements()).storage_gb * METERING.gb_bytes,
+    // What RE-VFS uploads may hold in total: the plan's storage, in tiers.json's own GB; null for
+    // no limit (an unlimited grant).
+    quotaBytes: () => {
+      const gb = limitOf(enforcedEntitlements(entitlements()), "storage_gb");
+      return gb === null ? null : gb * METERING.gb_bytes;
+    },
   };
 }
 

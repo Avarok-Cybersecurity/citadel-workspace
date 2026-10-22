@@ -9,6 +9,8 @@
 // - `user_management`: User injection utilities for testing
 // - `member_operations`: Domain member add/remove operations
 
+/// Citadel Apps: the pure install, grant and audience rules.
+pub mod apps;
 /// Whether a session may be sent a broadcast.
 mod broadcast_scope;
 pub mod command_processor;
@@ -17,6 +19,8 @@ pub mod display_name;
 pub mod documents;
 pub mod group_access;
 pub mod ice_servers;
+/// A usage limit as the host states it: a count, or explicitly none.
+pub mod limit;
 pub mod profile_limits;
 pub mod profile_update;
 pub mod profile_visibility;

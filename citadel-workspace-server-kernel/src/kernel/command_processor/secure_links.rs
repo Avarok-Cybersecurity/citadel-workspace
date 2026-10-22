@@ -13,7 +13,7 @@ use super::secure_links_resolve::resolve;
 use super::telemetry::now_ms;
 use crate::handlers::domain::async_ops::AsyncPermissionOperations;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
-use crate::kernel::secure_links::quota::{LinkQuota, LinkQuotaUnavailable, LinkSource};
+use crate::kernel::secure_links::quota::{Draw, LinkQuota, LinkQuotaUnavailable, LinkSource};
 use crate::kernel::secure_links::records::LinkRecord;
 use crate::kernel::secure_links::rules::{decide_create, CreateInput};
 use crate::kernel::secure_links::target::target_node_id;
@@ -114,11 +114,11 @@ async fn create<R: Ratchet + Send + Sync + 'static>(
     let token = mint_token()?;
     let backend = &ops.backend_tx_manager;
     let _guard = LINKS_LOCK.lock().await;
-    let Some(source) = backend.link_usage(actor, now).await?.draw(quota) else {
-        return answer(SecureLinksResponse::LimitReached {
-            per_member: quota.per_member,
-            pool: quota.pool,
-        });
+    let source = match backend.link_usage(actor, now).await?.draw(quota) {
+        Draw::From(source) => source,
+        Draw::Exhausted { per_member, pool } => {
+            return answer(SecureLinksResponse::LimitReached { per_member, pool })
+        }
     };
     let record = LinkRecord {
         digest: digest_of(&token),

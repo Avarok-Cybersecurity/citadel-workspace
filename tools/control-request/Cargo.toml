@@ -1,0 +1,16 @@
+[package]
+name = "control-request"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "What Avarok's signed control-plane tools share: the origin, the flags, the nonce, the clock and the post-quantum HTTPS POST."
+publish = false
+
+# Its own workspace, like the tools that use it (tools/telemetry-read, tools/coupon-admin).
+[workspace]
+
+[dependencies]
+getrandom = "0.3"
+# HTTPS with a post-quantum key exchange only (X25519MLKEM768; see https.rs).
+ureq = { version = "3.4", default-features = false, features = ["rustls-no-provider", "rustls-webpki-roots"] }
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }

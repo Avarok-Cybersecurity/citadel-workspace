@@ -94,6 +94,11 @@ const SKIP = new Map([
   // stop keying on button copy — see ROBUSTNESS round 168.
   ['types/messaging-layer.ts', 438],
   ['types/workspace-protocol.ts', 286],
+  // Not written here: a byte-for-byte copy of citadel-app-sdk-types' generated ABI
+  // constants (every op's arguments and reply), held to its source by the UI's
+  // generated-drift test. Splitting it would break that equality; it changes only
+  // when the SDK does, and then this entry moves with it.
+  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 344],
 ]);
 
 if (!statSync(SRC, { throwIfNoEntry: false })) {

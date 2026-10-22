@@ -1,0 +1,22 @@
+# Native tests over the committed fixtures: the inspector's verdict on each, and a reference
+# host (wasmi) that implements citadel_app_abi_1 exactly as the ABI text states, so what each
+# hostile fixture does is proven here, not only in the TypeScript host.
+[package]
+name = "app-fixture-harness"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[workspace]
+
+[dependencies]
+citadel-app-abi-inspect = { path = "../../../citadel-internal-service/citadel-app-abi-inspect" }
+citadel-app-sdk-types = { path = "../../../citadel-internal-service/citadel-app-sdk-types" }
+# MIT/Apache-2.0; an interpreter with fuel metering, used only by these tests. The portable
+# (loop) dispatch: the default threads instructions through tail calls, which an unoptimised
+# build turns into one native frame per instruction, so a long-running guest overflows the stack.
+wasmi = { version = "2.0.0", default-features = false, features = ["std", "validate", "portable-dispatch"] }
+serde_json = "1"
+serde = "1"
+

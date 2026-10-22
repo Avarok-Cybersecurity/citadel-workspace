@@ -17,6 +17,8 @@ use std::sync::Arc;
 // resurrected it. The live paths are the handlers in `crate::handlers` over
 // `BackendTransactionManager` directly.
 mod accounts;
+mod apps_artifact_store;
+pub(crate) mod apps_store;
 pub mod backend_ops_simple;
 pub(crate) mod documents_store;
 #[cfg(test)]

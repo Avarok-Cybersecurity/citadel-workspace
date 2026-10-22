@@ -15,13 +15,13 @@ const TTL = 600;
 const T0 = Date.UTC(2026, 8, 23, 12, 0, 0);
 const turn = { keyId: env.TURN_KEY_ID, token: env.TURN_KEY_API_TOKEN, ttl: TTL };
 const plan = (tier, extra = {}) =>
-  entitlements({ tier, interval: tier === "free" ? null : "month", seats: tier === "free" ? 0 : 3, storage_blocks: 0, link_packs: 0, status: "active", period_start: null, period_end: null, ...extra });
+  entitlements({ tier, interval: tier === "free" ? null : "month", seats: tier === "free" ? 0 : 3, storage_blocks: 0, link_packs: 0, status: "active", period_start: null, period_end: null, grant_id: null, grant_unlimited: 0, trial_end: null, stripe_status: null, ...extra });
 const FREE_RELAY_BYTES = plan("free").relay_gb_included * METERING.gb_bytes;
 
 /** A minter on a clock the test moves, for a tenant on `tier` that has relayed `bytesIn`. */
-function minter({ tier = "free", bytesIn = 0, cfg = turn } = {}) {
+function minter({ tier = "free", bytesIn = 0, cfg = turn, extra = {} } = {}) {
   const clock = { now: T0 };
-  const tenant = { limits: plan(tier), bytesIn };
+  const tenant = { limits: plan(tier, extra), bytesIn };
   const m = new IceMinter(cfg, { fetch: (url, init) => fetch(url, init), nowMs: () => clock.now }, () => tenant);
   return { m, clock, tenant };
 }
@@ -98,6 +98,17 @@ describe("the plan's relay", () => {
     outbound();
     const { m } = minter({ tier: "team", bytesIn: 10 * plan("team").relay_gb_included * METERING.gb_bytes });
     expect((await m.mint("alice")).ice_servers).toBeDefined();
+  });
+});
+
+describe("an unlimited grant's relay", () => {
+  it("has no limit to reach: servers are minted however much it has relayed", async () => {
+    const { calls } = outbound();
+    const unlimited = { grant_id: "design-partner", grant_unlimited: 1, seats: 25 };
+    const { m, tenant } = minter({ tier: "business", bytesIn: 1e15, extra: unlimited });
+    expect(tenant.limits.relay_gb_included).toBeNull();
+    expect((await m.mint("alice")).ice_servers).toBeDefined();
+    expect(turnCalls(calls)).toHaveLength(1);
   });
 });
 

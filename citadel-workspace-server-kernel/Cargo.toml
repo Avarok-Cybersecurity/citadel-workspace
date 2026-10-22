@@ -47,6 +47,13 @@ cdoc-crdt = { workspace = true }
 # Secure-link tokens (kernel::secure_links::token): 32 bytes from the OS CSPRNG.
 getrandom = "0.3"
 chrono = { workspace = true }
+# Citadel Apps (kernel::apps): the publisher's signature over a manifest and its wasm, the app
+# id and version grammar, and the egress policy's URL and address rules for artifact fetches.
+# Pure Rust, wasm32-unknown-unknown clean, as the tenant worker builds them already.
+citadel-app-signature = { path = "../citadel-internal-service/citadel-app-signature" }
+citadel-app-id = { path = "../citadel-internal-service/citadel-app-id" }
+citadel-app-net-policy = { path = "../citadel-internal-service/citadel-app-net-policy" }
+hex = "0.4"
 
 # Native: the production server — SQLite backend, SIGTERM drain.
 [target.'cfg(not(target_family = "wasm"))'.dependencies]

@@ -1,0 +1,23 @@
+[package]
+name = "coupon-admin"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "The owner's ML-DSA-65 signed coupon issue, revoke and listing for the Citadel control plane."
+publish = false
+
+# Its own workspace, like tools/telemetry-read whose shape it copies: the owner runs it offline
+# with the admin key, and nothing else builds it.
+[workspace]
+
+[dependencies]
+# The signed request: one definition, shared with the control plane's verifier (server-wasm).
+citadel-support-signature = { path = "../../citadel-support-signature" }
+# The origin, flags, nonce, clock and post-quantum HTTPS shared with tools/telemetry-read.
+control-request = { path = "../control-request" }
+# The private key file (64 hex characters, mode 0600, never overwritten).
+release-sign = { path = "../release-sign" }
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"

@@ -4,8 +4,10 @@
  *
  * The limits are the entitlements the control plane stored (control/plans.mjs
  * `enforcedEntitlements`): `secure_links_per_member` and `secure_links_pool`. There is no default:
- * an object whose entitlements lack either refuses to make links and says why.
+ * an object whose entitlements lack either refuses to make links and says why. Either is null
+ * only for an unlimited grant (entitlements v2): no limit, passed to the kernel as such.
  */
+import { limitOf } from "./entitlement-limits.mjs";
 
 /** How often expired links are purged: hourly (the plan). Expiry is enforced on read regardless. */
 export const LINKS_PURGE_INTERVAL_MS = 60 * 60 * 1000;
@@ -15,11 +17,11 @@ export const LINKS_PURGE_SOON_MS = 60 * 1000;
 /** One key-value entry: `{ due_ms, last: { at_ms, remaining } | { at_ms, error } | null }`. */
 const KEY = "links_purge";
 
-/** `{per_member, pool}` from `entitlements`; throws when either is missing or not a count. */
+/** `{per_member, pool}` from `entitlements` (null: no limit); throws when either is missing or not a count. */
 export function linkQuota(entitlements) {
-  const quota = { per_member: entitlements.secure_links_per_member, pool: entitlements.secure_links_pool };
+  const quota = { per_member: limitOf(entitlements, "secure_links_per_member"), pool: limitOf(entitlements, "secure_links_pool") };
   for (const [field, value] of [["secure_links_per_member", quota.per_member], ["secure_links_pool", quota.pool]]) {
-    if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
+    if (value !== null && value > 0xffffffff) {
       throw new Error(`the tenant's entitlements carry no usable ${field} (${JSON.stringify(value)})`);
     }
   }

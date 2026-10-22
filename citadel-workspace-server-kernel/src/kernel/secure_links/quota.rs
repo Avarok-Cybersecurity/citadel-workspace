@@ -8,13 +8,27 @@
 //! Each member has `per_member` links of their own. Links past that draw on one `pool` the whole
 //! workspace shares. A link is tagged with where it came from when it is made, and keeps the tag:
 //! `pool_used` counts the live links tagged as the pool's.
+//!
+//! Either may be [`Limit::Unlimited`], which only an unlimited tenant's host says (entitlements
+//! v2's explicit `null`); a native server's `kernel.toml` sets counts.
 
+pub use crate::kernel::limit::Limit;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LinkQuota {
-    pub per_member: u32,
-    pub pool: u32,
+    pub per_member: Limit,
+    pub pool: Limit,
+}
+
+impl LinkQuota {
+    /// Both limits counts, as every finite plan and every native server sets them.
+    pub fn counts(per_member: u32, pool: u32) -> Self {
+        Self {
+            per_member: Limit::At(per_member),
+            pool: Limit::At(pool),
+        }
+    }
 }
 
 /// The host could not say, and why. The detail is the host's to log.
@@ -53,16 +67,28 @@ pub enum LinkSource {
     Pool,
 }
 
+/// Where the member's next link comes from, or the two limits that are both used up: only
+/// counts can be, so an exhausted draw always names two.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Draw {
+    From(LinkSource),
+    Exhausted { per_member: u32, pool: u32 },
+}
+
 impl LinkUsage {
-    /// Where the member's next link comes from: their own allowance first, then the pool, or
-    /// nowhere when both are used up.
-    pub fn draw(&self, quota: LinkQuota) -> Option<LinkSource> {
-        if self.own_live < quota.per_member {
-            Some(LinkSource::Own)
-        } else if self.pool_used < quota.pool {
-            Some(LinkSource::Pool)
-        } else {
-            None
-        }
+    /// Their own allowance first, then the pool.
+    pub fn draw(&self, quota: LinkQuota) -> Draw {
+        let per_member = match quota.per_member {
+            Limit::At(max) if self.own_live >= max => max,
+            _ => return Draw::From(LinkSource::Own),
+        };
+        let pool = match quota.pool {
+            Limit::At(max) if self.pool_used >= max => max,
+            _ => return Draw::From(LinkSource::Pool),
+        };
+        Draw::Exhausted { per_member, pool }
     }
 }
+
+#[cfg(test)]
+mod tests;

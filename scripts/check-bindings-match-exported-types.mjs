@@ -25,7 +25,7 @@
  * send.
  */
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -54,12 +54,46 @@ function exportedTypes() {
   return names;
 }
 
+/** `.rs` files under `dir`, recursively. */
+function rustFilesUnder(dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? rustFilesUnder(join(dir, e.name)) : e.name.endsWith('.rs') ? [join(dir, e.name)] : []);
+}
+
+/** Whether `name` is defined with a ts-rs export (`#[ts(export)]`, or `ts(export)` in a `cfg_attr`) under `dir`. */
+function exportsType(dir, name) {
+  return rustFilesUnder(dir).some((file) => {
+    const lines = readFileSync(file, 'utf8').split('\n');
+    return lines.some((line, i) => /\bts\(export/.test(line.split('//')[0])
+      && lines.slice(i + 1, i + 12).some((l) => new RegExp(`^\\s*pub\\s+(?:struct|enum)\\s+${name}\\b`).test(l)));
+  });
+}
+
+/**
+ * Types this crate re-exports from a path dependency (`pub use dep_crate::Name;`) that the
+ * dependency itself exports to TypeScript: ts-rs writes their binding here too, as a dependency of
+ * the types that use them. Each must resolve to a real exported definition, or it is not counted.
+ */
+function reexportedTypes() {
+  const manifest = readFileSync(join(ROOT, 'citadel-workspace-types/Cargo.toml'), 'utf8');
+  const deps = new Map([...manifest.matchAll(/^([A-Za-z0-9_-]+)\s*=\s*\{[^}]*\bpath\s*=\s*"([^"]+)"/gm)]
+    .map((m) => [m[1].replaceAll('-', '_'), resolve(ROOT, 'citadel-workspace-types', m[2], 'src')]));
+  const names = new Set();
+  for (const file of readdirSync(SRC).filter((f) => f.endsWith('.rs'))) {
+    for (const m of readFileSync(join(SRC, file), 'utf8').matchAll(/^\s*pub use ([a-z0-9_]+)::([A-Za-z0-9_]+);/gm)) {
+      const dir = deps.get(m[1]);
+      if (dir !== undefined && existsSync(dir) && exportsType(dir, m[2])) names.add(m[2]);
+    }
+  }
+  return names;
+}
+
 if (!existsSync(BINDINGS)) {
   console.error(`check-bindings-match-exported-types: ${BINDINGS} does not exist.`);
   process.exit(1);
 }
 
-const exported = exportedTypes();
+const exported = new Set([...exportedTypes(), ...reexportedTypes()]);
 const files = new Set(
   readdirSync(BINDINGS).filter((f) => f.endsWith('.ts')).map((f) => f.replace(/\.ts$/, '')),
 );

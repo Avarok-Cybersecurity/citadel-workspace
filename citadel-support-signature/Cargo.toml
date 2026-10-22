@@ -22,3 +22,5 @@ zeroize = "1.8"
 # Only to prove a release signature is never a support signature (the tests, and the fixtures
 # examples/support_fixtures.rs writes for deploy/tenant-worker/test/support.test.mjs).
 citadel-release-signature = { path = "../citadel-internal-service/citadel-release-signature" }
+# Only to prove an app publisher's signature is never a support signature, nor the reverse.
+citadel-app-signature = { path = "../citadel-internal-service/citadel-app-signature" }

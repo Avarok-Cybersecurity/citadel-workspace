@@ -24,6 +24,9 @@ use citadel_workspace_types::telemetry::{
 };
 use std::path::PathBuf;
 
+pub use control_request::{control, Control};
+use control_request::{number, Flags};
+
 /// How long a request this tool signs stays valid: long enough for one round trip, well inside
 /// the control plane's `MAX_LIFETIME_MS`.
 pub const REQUEST_LIFETIME_MS: u64 = 60_000;
@@ -35,13 +38,6 @@ pub const USAGE: &str = "usage:
   telemetry-read fetch  --control <https://host> --private-key <file> --tenant <slug> --limit <n>
                         [--offset <n>] [--user <id>] [--peer-cid <cid>] [--min-level warn|error]
                         [--since-ms <unix ms>] [--until-ms <unix ms>]";
-
-/// The control plane: where requests go, and the host they are signed for.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Control {
-    pub origin: String,
-    pub audience: String,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
@@ -65,26 +61,6 @@ impl Command {
     }
 }
 
-/// `https://<host>` (no path): the deployment's origin. The host is the request's audience.
-pub fn control(text: &str) -> Result<Control, String> {
-    let host = text
-        .strip_prefix("https://")
-        .ok_or_else(|| format!("--control {text:?} is not an https:// origin"))?;
-    let valid = !host.is_empty()
-        && host
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-');
-    if !valid {
-        return Err(format!(
-            "--control {text:?} is not https://<host> with no port or path"
-        ));
-    }
-    Ok(Control {
-        origin: text.to_string(),
-        audience: host.to_ascii_lowercase(),
-    })
-}
-
 /// The signed payload for `action`, made at `now_ms` with `nonce`.
 pub fn request(
     control: &Control,
@@ -102,26 +78,10 @@ pub fn request(
     .expect("REQUEST_LIFETIME_MS is within MAX_LIFETIME_MS")
 }
 
-fn number<T: std::str::FromStr>(flag: &str, value: &str) -> Result<T, String> {
-    value
-        .parse()
-        .map_err(|_| format!("{flag} {value:?} is not a whole number"))
-}
-
 pub fn parse(args: &[String]) -> Result<Command, String> {
     let (command, rest) = args.split_first().ok_or("no command")?;
-    let mut flags = std::collections::BTreeMap::<String, String>::new();
-    let mut rest = rest.iter();
-    while let Some(flag) = rest.next() {
-        if !flag.starts_with("--") {
-            return Err(format!("unexpected argument {flag:?}"));
-        }
-        let value = rest.next().ok_or_else(|| format!("{flag} needs a value"))?;
-        if flags.insert(flag.clone(), value.clone()).is_some() {
-            return Err(format!("{flag} given twice"));
-        }
-    }
-    let mut take = |flag: &str| flags.remove(flag);
+    let mut flags = Flags::parse(rest, &[])?;
+    let mut take = |flag: &str| flags.take(flag);
     let private_key = take("--private-key")
         .map(PathBuf::from)
         .ok_or_else(|| format!("{command} needs --private-key"))?;
@@ -143,10 +103,8 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
         }
         other => return Err(format!("unknown command {other}")),
     };
-    match flags.keys().next() {
-        Some(flag) => Err(format!("{command} does not take {flag}")),
-        None => Ok(parsed),
-    }
+    flags.finish(command)?;
+    Ok(parsed)
 }
 
 fn fetch(take: &mut impl FnMut(&str) -> Option<String>) -> Result<SupportAction, String> {
