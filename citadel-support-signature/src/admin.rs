@@ -19,17 +19,18 @@ use serde::{Deserialize, Serialize};
 pub const ADMIN_DOMAIN: &[u8] = b"citadel-control-admin-v1\0";
 
 /// What a coupon is an instance of: a `tiers.json` `coupons.templates[]` id (a discount or a
-/// trial) or a `coupons.grants[]` id (a comp grant).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
+/// trial) or a `coupons.grants[]` id (a comp grant). On the wire it is the action's `template`
+/// and `grant_id` fields, both stated, exactly one of them null.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CouponShape {
     Template(String),
     Grant(String),
 }
 
-/// What the owner asks for.
+/// What the owner asks for. Serialized as [`WireAction`]: `{ kind, ...fields }`, the shape
+/// `deploy/tenant-worker/control/coupon-admin-payload.mjs` reads field for field.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
+#[serde(into = "WireAction", try_from = "WireAction")]
 pub enum AdminAction {
     /// A new dynamic code. Every field is required, `redeem_by_ms` included (`null` is "no
     /// deadline", which the control plane refuses for an unlimited grant).
@@ -42,7 +43,6 @@ pub enum AdminAction {
         intervals: Vec<String>,
         max_redemptions: u32,
         /// Unix milliseconds after which the code redeems no more.
-        #[serde(deserialize_with = "Option::deserialize")]
         redeem_by_ms: Option<u64>,
         note: String,
     },
@@ -56,6 +56,115 @@ pub enum AdminAction {
     ListRedemptions {
         code: String,
     },
+}
+
+/// [`AdminAction`] as it is signed: internally tagged by `kind`, every field required (an
+/// `Option` is stated as `null`, never left out), nothing unknown, and a field-less action an
+/// empty struct so that it too refuses an unknown field.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WireAction {
+    IssueCoupon {
+        code: String,
+        #[serde(deserialize_with = "Option::deserialize")]
+        template: Option<String>,
+        #[serde(deserialize_with = "Option::deserialize")]
+        grant_id: Option<String>,
+        available_on: Vec<String>,
+        intervals: Vec<String>,
+        max_redemptions: u32,
+        #[serde(deserialize_with = "Option::deserialize")]
+        redeem_by_ms: Option<u64>,
+        note: String,
+    },
+    RevokeCoupon {
+        code: String,
+        also_revoke_grants: bool,
+    },
+    ListCoupons {},
+    ListRedemptions {
+        code: String,
+    },
+}
+
+impl From<AdminAction> for WireAction {
+    fn from(action: AdminAction) -> Self {
+        match action {
+            AdminAction::IssueCoupon {
+                code,
+                shape,
+                available_on,
+                intervals,
+                max_redemptions,
+                redeem_by_ms,
+                note,
+            } => {
+                let (template, grant_id) = match shape {
+                    CouponShape::Template(id) => (Some(id), None),
+                    CouponShape::Grant(id) => (None, Some(id)),
+                };
+                WireAction::IssueCoupon {
+                    code,
+                    template,
+                    grant_id,
+                    available_on,
+                    intervals,
+                    max_redemptions,
+                    redeem_by_ms,
+                    note,
+                }
+            }
+            AdminAction::RevokeCoupon {
+                code,
+                also_revoke_grants,
+            } => WireAction::RevokeCoupon {
+                code,
+                also_revoke_grants,
+            },
+            AdminAction::ListCoupons => WireAction::ListCoupons {},
+            AdminAction::ListRedemptions { code } => WireAction::ListRedemptions { code },
+        }
+    }
+}
+
+impl TryFrom<WireAction> for AdminAction {
+    type Error = String;
+
+    fn try_from(wire: WireAction) -> Result<Self, Self::Error> {
+        Ok(match wire {
+            WireAction::IssueCoupon {
+                code,
+                template,
+                grant_id,
+                available_on,
+                intervals,
+                max_redemptions,
+                redeem_by_ms,
+                note,
+            } => AdminAction::IssueCoupon {
+                code,
+                shape: match (template, grant_id) {
+                    (Some(id), None) => CouponShape::Template(id),
+                    (None, Some(id)) => CouponShape::Grant(id),
+                    _ => return Err("an issue names exactly one of template and grant_id".into()),
+                },
+                available_on,
+                intervals,
+                max_redemptions,
+                redeem_by_ms,
+                note,
+            },
+            WireAction::RevokeCoupon {
+                code,
+                also_revoke_grants,
+            } => AdminAction::RevokeCoupon {
+                code,
+                also_revoke_grants,
+            },
+            WireAction::ListCoupons {} => AdminAction::ListCoupons,
+            WireAction::ListRedemptions { code } => AdminAction::ListRedemptions { code },
+        })
+    }
 }
 
 /// The signed payload.

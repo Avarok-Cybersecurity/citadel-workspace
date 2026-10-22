@@ -1,9 +1,11 @@
 /**
  * The payload of a verified coupon-admin request, checked field by field (pure). The signature
  * says who sent it; this says it is well formed, so nothing past here builds on an unchecked
- * field. Every field is required: an issue names `template` and `grant_id` both, one null.
+ * field. Every field is required: an issue names `template` and `grant_id` both, one null. The
+ * field lists are the Rust `WireAction`'s, which test/admin-verifier.test.mjs holds them to through
+ * the fixtures citadel-support-signature's admin_fixtures example signs.
  *
- *   { nonce, expires_at_ms, audience?, action }
+ *   { audience, nonce, expires_at_ms, action }   (citadel-support-signature `AdminRequest`)
  *   action: { kind: "issue_coupon", code, template, grant_id, available_on, intervals,
  *             max_redemptions, redeem_by_ms, note }
  *         | { kind: "revoke_coupon", code, also_revoke_grants }
@@ -15,12 +17,13 @@ import { COUPONS } from "./plans.mjs";
 import { normaliseCode } from "./coupon-rules.mjs";
 
 const NONCE = /^[0-9a-f]{32}$/;
-const ACTION_FIELDS = {
+export const PAYLOAD_FIELDS = Object.freeze(["audience", "nonce", "expires_at_ms", "action"]);
+export const ACTION_FIELDS = Object.freeze({
   issue_coupon: ["kind", "code", "template", "grant_id", "available_on", "intervals", "max_redemptions", "redeem_by_ms", "note"],
   revoke_coupon: ["kind", "code", "also_revoke_grants"],
   list_coupons: ["kind"],
   list_redemptions: ["kind", "code"],
-};
+});
 
 function exactly(value, fields) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "is not an object";
@@ -35,10 +38,9 @@ const codeOf = (value) => (typeof value === "string" && normaliseCode(value) ===
 
 /** `{nonce, expires_at_ms, action}` or `{error}` (the detail of a 400). `audience` is the control host. */
 export function readAdminPayload(payload, audience, nowMs) {
-  const fields = ["nonce", "expires_at_ms", "action"];
-  const shape = exactly(payload, payload && "audience" in payload ? [...fields, "audience"] : fields);
+  const shape = exactly(payload, PAYLOAD_FIELDS);
   if (shape) return { error: `the payload ${shape}` };
-  if ("audience" in payload && payload.audience !== audience) return { error: "the payload is for another audience" };
+  if (payload.audience !== audience) return { error: "the payload is for another audience" };
   if (typeof payload.nonce !== "string" || !NONCE.test(payload.nonce)) return { error: "nonce is 32 lowercase hex characters" };
   if (!Number.isInteger(payload.expires_at_ms) || payload.expires_at_ms <= nowMs) return { error: "expires_at_ms is a future instant" };
   const action = payload.action;

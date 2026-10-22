@@ -30,6 +30,18 @@ fn issue() -> AdminAction {
     }
 }
 
+fn issue_template() -> AdminAction {
+    AdminAction::IssueCoupon {
+        code: "SPRING-TEAM".to_string(),
+        shape: CouponShape::Template("pct-10-once".to_string()),
+        available_on: vec!["team".to_string(), "business".to_string()],
+        intervals: vec!["month".to_string()],
+        max_redemptions: 50,
+        redeem_by_ms: None,
+        note: String::new(),
+    }
+}
+
 fn revoke() -> AdminAction {
     AdminAction::RevokeCoupon {
         code: "PARTNER-ACME".to_string(),
@@ -61,9 +73,9 @@ fn main() {
     // What a signer that leaves the choice out would send: refused, never read as either answer.
     let revoke_unstated = {
         let mut value = serde_json::to_value(request(revoke(), 6, NOW_MS)).expect("serialises");
-        let fields = value["action"]["revoke_coupon"]
+        let fields = value["action"]
             .as_object_mut()
-            .expect("a struct variant");
+            .expect("an internally tagged action");
         fields.remove("also_revoke_grants").expect("present");
         body(&RequestSigningKey::from_seed(&SEED).seal(ADMIN_DOMAIN, &value))
     };
@@ -83,7 +95,13 @@ fn main() {
         "requests": {
             "issue_grant": sign(&request(issue(), 1, NOW_MS)),
             "revoke_with_grants": sign(&request(revoke(), 2, NOW_MS)),
+            "issue_template": sign(&request(issue_template(), 9, NOW_MS)),
             "list_coupons": sign(&request(AdminAction::ListCoupons, 3, NOW_MS)),
+            "list_redemptions": sign(&request(
+                AdminAction::ListRedemptions { code: "PARTNER-ACME".to_string() },
+                10,
+                NOW_MS,
+            )),
             "expired": sign(&request(AdminAction::ListCoupons, 4, NOW_MS - LIFETIME_MS)),
             "tampered": tampered,
             "revoke_unstated": revoke_unstated,

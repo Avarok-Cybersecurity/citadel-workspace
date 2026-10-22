@@ -1,9 +1,9 @@
 /**
  * Coupon test plumbing. Dynamic codes are issued with the store's own `issue` (what the admin route
  * calls once a request has verified), so a test's coupon is a real D1 row in the shape production
- * writes. The one fake is `fakeAdminVerifier`: the ML-DSA admin verifier is a server-wasm export
- * another change provides, so these tests stand in for it at its port (`io.verifyAdmin`), exactly
- * where the support tests use the real one.
+ * writes. The one fake is `fakeAdminVerifier`, at the admin verifier's port (`io.verifyAdmin`): the
+ * route tests need many payload variants, and only the native Rust tool can sign one. The real
+ * server-wasm verifier is driven end to end with Rust-signed fixtures in admin-verifier.test.mjs.
  */
 import { env, SELF } from "cloudflare:test";
 import { ioFor } from "../control/dispatch.mjs";

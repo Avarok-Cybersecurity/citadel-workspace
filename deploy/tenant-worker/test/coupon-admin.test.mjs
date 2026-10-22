@@ -14,7 +14,9 @@ import { ADMIN_KEY, fakeAdminVerifier, freshCode, freshIp, paidBody, preview, pr
 
 const DAY_MS = 86400 * 1000;
 const nonce = () => crypto.randomUUID().replaceAll("-", "");
-const signed = (action, extra = {}) => JSON.stringify({ payload: { nonce: nonce(), expires_at_ms: Date.now() + 60000, action, ...extra }, signature: `admin:${ADMIN_KEY}` });
+const AUDIENCE = config(env).controlHost;
+const signed = (action, extra = {}) =>
+  JSON.stringify({ payload: { audience: AUDIENCE, nonce: nonce(), expires_at_ms: Date.now() + 60000, action, ...extra }, signature: `admin:${ADMIN_KEY}` });
 
 function ask(route, body, cfgOverrides = {}) {
   const io = { ...ioFor(env), verifyAdmin: fakeAdminVerifier };
@@ -39,7 +41,7 @@ describe("unconfigured, unsigned, replayed", () => {
 
   it("refuses a request that does not verify (no signature, a support signature, another key) and stores nothing", async () => {
     const action = issueAction();
-    const payload = { nonce: nonce(), expires_at_ms: Date.now() + 60000, action };
+    const payload = { audience: AUDIENCE, nonce: nonce(), expires_at_ms: Date.now() + 60000, action };
     const before = await nonceCount();
     for (const body of [JSON.stringify({ payload }), JSON.stringify({ payload, signature: `support:${ADMIN_KEY}` }), JSON.stringify({ payload, signature: "admin:other" }), "{"]) {
       const r = await ask("issue", body);
@@ -76,9 +78,7 @@ describe("issue", () => {
     expect(await (await preview(previewBody(action.code), freshIp())).json()).toEqual({ applies: true, kind: "discount", amount_off_cents: 1000, duration: "once" });
   });
 
-  it("refuses a code a static one already is, or one already issued", async () => {
-    expect((await (await ask("issue", signed(issueAction({ code: "LAUNCH10" })))).json()).error).toBe("coupon-exists");
-    expect(await couponRow("LAUNCH10")).toBeNull();
+  it("refuses a code already issued", async () => {
     const action = issueAction();
     expect((await ask("issue", signed(action))).status).toBe(201);
     expect((await ask("issue", signed(action))).status).toBe(409);
@@ -106,6 +106,9 @@ describe("issue", () => {
     }
     expect((await ask("issue", signed(issueAction(), { expires_at_ms: Date.now() - 1 }))).status).toBe(400);
     expect((await ask("issue", signed(issueAction(), { audience: "elsewhere.example" }))).status).toBe(400);
+    const { audience: _a, ...unaddressed } = JSON.parse(signed(issueAction())).payload;
+    const r = await ask("issue", JSON.stringify({ payload: unaddressed, signature: `admin:${ADMIN_KEY}` }));
+    expect([r.status, (await r.json()).detail]).toEqual([400, "the payload lacks audience"]);
   });
 });
 
@@ -143,7 +146,6 @@ describe("revoke", () => {
     expect((await ask("revoke", signed({ kind: "revoke_coupon", code, also_revoke_grants: false }))).status).toBe(200);
     expect(await tenantRow(slug)).toMatchObject({ grant_id: "design-partner", grant_unlimited: 1 });
     expect((await preview(previewBody(code, { tier: "business" }), freshIp())).status).toBe(400);
-    expect((await ask("revoke", signed({ kind: "revoke_coupon", code: "LAUNCH10", also_revoke_grants: false }))).status).toBe(400);
   });
 });
 
@@ -153,7 +155,8 @@ describe("list and redemptions", () => {
     const listed = await (await ask("list", signed({ kind: "list_coupons" }))).json();
     const mine = listed.coupons.find((c) => c.grant_holders.includes(slug));
     expect(mine).toMatchObject({ kind: "comp", grant_id: "design-partner", unlimited: true, max_redemptions: 2, held: 1, grant_holders: [slug] });
-    expect(listed.statics.map((s) => s.code)).toEqual(["LAUNCH10"]);
+    // billing/tiers.json's static codes, as shipped: none is approved (coupon-rules.test.mjs has its own).
+    expect(listed.statics).toEqual([]);
     const trail = await (await ask("redemptions", signed({ kind: "list_redemptions", code }))).json();
     expect(trail.redemptions).toMatchObject([{ slug, state: "redeemed" }]);
     expect(trail.events.map((e) => e.action)).toEqual(["issue", "reserve", "redeem"]);

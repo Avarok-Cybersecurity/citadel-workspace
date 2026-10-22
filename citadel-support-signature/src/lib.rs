@@ -43,7 +43,7 @@ mod verify;
 
 pub use admin::{
     admin_signed_message, verify_admin, AdminAction, AdminRequest, AdminSigningKey, CouponShape,
-    SignedAdminRequest, ADMIN_DOMAIN,
+    SignedAdminRequest, WireAction, ADMIN_DOMAIN,
 };
 use verify::Envelope;
 pub use verify::{parse_public_key, Refusal, RequestSigningKey, SignedRequest};
