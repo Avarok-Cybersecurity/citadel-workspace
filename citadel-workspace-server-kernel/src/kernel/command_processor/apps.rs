@@ -13,9 +13,13 @@
 //! - A member's own: `ListInstalls`, `SetDisabledForMe`, `GetRelease`, `FetchArtifact`
 //!   (`apps_member`) answer for installs that reach the caller, that they made, or any install
 //!   to an `AppManage` holder; anything else is `Unavailable`.
-//! - `RequestInstall` is copy-link only in this release. `Call`, `AdvertiseService` and
-//!   `IhttpSend` belong to the app runtime, which this server does not run yet.
+//! - The app runtime's server side: `Call` (`apps_call`) re-checks the call's capability and
+//!   serves the storage backends and server egress; `AdvertiseService` and `IhttpSend`
+//!   (`apps_ihttp`) relay internal HTTP between members' sessions.
+//! - `RequestInstall` is copy-link only in this release.
 
+use super::apps_call::call;
+use super::apps_ihttp::{advertise, send};
 use super::apps_install::install;
 use super::apps_lifecycle::{rollback, uninstall};
 use super::apps_listing::{get_listing, list_catalogue, publish};
@@ -139,8 +143,19 @@ pub(super) async fn process<R: Ratchet + Send + Sync + 'static>(
         AppsRequest::GetRelease { install_id } => get_release(kernel, &caller, install_id).await,
         AppsRequest::ListAudit { before_ms } => list_audit(kernel, &caller, *before_ms).await,
         AppsRequest::RequestInstall { .. } => refuse(AppsRefusal::InstallRequestsNotOffered),
-        AppsRequest::Call { .. }
-        | AppsRequest::AdvertiseService { .. }
-        | AppsRequest::IhttpSend { .. } => refuse(AppsRefusal::ServerFeatureUnavailable),
+        AppsRequest::Call {
+            install_id,
+            call: bytes,
+        } => call(kernel, &caller, install_id, bytes).await,
+        AppsRequest::AdvertiseService {
+            install_id,
+            routes_digest,
+            until_ms,
+        } => advertise(kernel, &caller, install_id, routes_digest, *until_ms).await,
+        AppsRequest::IhttpSend {
+            from_install_id,
+            to,
+            frame,
+        } => send(kernel, &caller, from_install_id, to, frame).await,
     }
 }

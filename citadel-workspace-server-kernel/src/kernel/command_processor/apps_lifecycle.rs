@@ -6,6 +6,7 @@ use super::apps_header::rewrite_mdx;
 use super::apps_member::visible_install;
 use crate::kernel::apps::install::grant_details;
 use crate::kernel::apps::md_header::remove;
+use crate::kernel::apps::storage::StorageRoot;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::transaction::apps_store::APPS_LOCK;
 use citadel_logging::warn;
@@ -89,6 +90,14 @@ pub(super) async fn uninstall<R: Ratchet + Send + Sync + 'static>(
             artifacts.push(pending.release.artifact_sha256.clone());
         }
         backend.sweep_apps_releases(&manifests, &artifacts).await?;
+        if purge_storage {
+            let scope_key = install.scope.scope_key().ok_or(AppsRefusal::Unavailable)?;
+            let root = StorageRoot {
+                app_id: install.app_id.clone(),
+                scope_key,
+            };
+            backend.purge_app_storage(&root).await?;
+        }
         let event = AppsAuditEvent::Uninstalled {
             purged_storage: purge_storage,
         };

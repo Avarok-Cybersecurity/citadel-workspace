@@ -68,6 +68,16 @@ pub struct CidAttribution {
     generation: u64,
 }
 
+impl CidAttribution {
+    /// Whether this is still the live attribution for its CID.
+    pub fn is_current(&self) -> bool {
+        matches!(
+            self.accounts.inner.read().by_cid.get(&self.cid),
+            Some((generation, _)) if *generation == self.generation
+        )
+    }
+}
+
 impl Drop for CidAttribution {
     fn drop(&mut self) {
         let mut attributions = self.accounts.inner.write();
@@ -111,6 +121,18 @@ mod tests {
         );
         drop(new);
         assert_eq!(accounts.account_of(CID), None);
+    }
+
+    #[test]
+    fn only_the_newest_attribution_is_current() {
+        let accounts = ConnectedAccounts::default();
+        let old = accounts.attribute(CID, "alice".to_string());
+        let new = accounts.attribute(CID, "alice".to_string());
+        assert!(
+            !old.is_current(),
+            "a replaced connection must not count as live"
+        );
+        assert!(new.is_current());
     }
 
     #[test]

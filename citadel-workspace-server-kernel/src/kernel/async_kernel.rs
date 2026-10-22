@@ -124,6 +124,8 @@ pub enum BroadcastAudience {
     /// The pull path checks membership AND `ViewContent`
     /// (`async_domain_server_ops.rs`); this makes the push path check the same.
     Workspace(String),
+    /// Only the one session with this CID: a frame the apps relay addresses to it.
+    Session(u64),
 }
 
 /// Message for broadcasting workspace updates to connected clients
@@ -185,6 +187,32 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     link_quota: crate::kernel::secure_links::quota::LinkQuotaSourceHandle,
     /// What fetches app artifacts by URL: the host's, or none, which fetches nothing.
     artifact_fetcher: crate::kernel::apps::fetcher::ArtifactFetcherHandle,
+    /// Apps' server egress (`net.server`): the host's fetcher, or none, which reaches nothing.
+    server_egress: crate::kernel::apps::egress::ServerEgressHandle,
+    /// The internal-HTTP relay's advertisements and streams, shared across clones.
+    apps_relay: crate::kernel::apps::ihttp_relay::RelayHandle,
+}
+
+/// Ends a connection's relayed streams and advertisements with its attribution.
+///
+/// Only while the attribution is still this connection's own: a replaced
+/// connection ending late must not close the live connection's streams.
+struct SessionRelay {
+    attribution: crate::kernel::cid_attribution::CidAttribution,
+    apps_relay: crate::kernel::apps::ihttp_relay::RelayHandle,
+    cid: u64,
+}
+
+impl Drop for SessionRelay {
+    fn drop(&mut self) {
+        if !self.attribution.is_current() {
+            return;
+        }
+        let closed = self.apps_relay.lock().forget_session(self.cid);
+        if closed > 0 {
+            info!(target: "citadel", "[APPS] Session {} ended with {closed} relayed stream(s) open", self.cid);
+        }
+    }
 }
 
 // Placeholder for entities that don't have an owner yet.
@@ -209,6 +237,8 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             support_grants: self.support_grants.clone(),
             link_quota: self.link_quota.clone(),
             artifact_fetcher: self.artifact_fetcher.clone(),
+            server_egress: self.server_egress.clone(),
+            apps_relay: self.apps_relay.clone(),
             // RateLimiter::Clone shares the same Arc<Mutex<HashMap>>,
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
@@ -258,7 +288,23 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             support_grants: None,
             link_quota: None,
             artifact_fetcher: None,
+            server_egress: None,
+            apps_relay: Default::default(),
         }
+    }
+
+    /// Set by the server bootstrap: the host's server egress for apps, or none, in which case
+    /// every `net.server` call is answered unavailable.
+    pub fn set_server_egress(&mut self, egress: crate::kernel::apps::egress::ServerEgressHandle) {
+        self.server_egress = egress;
+    }
+
+    pub fn server_egress(&self) -> &crate::kernel::apps::egress::ServerEgressHandle {
+        &self.server_egress
+    }
+
+    pub(crate) fn apps_relay(&self) -> &crate::kernel::apps::ihttp_relay::RelayHandle {
+        &self.apps_relay
     }
 
     /// Set by the server bootstrap: the host's artifact fetcher, or none, in which case an app
@@ -506,6 +552,11 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             exclude_cid,
             BroadcastAudience::Workspace(workspace_id),
         )
+    }
+
+    /// Send a response to the one session `cid`, whoever else is connected.
+    pub fn send_to_session(&self, response: WorkspaceProtocolResponse, cid: u64) {
+        self.broadcast_to(response, None, BroadcastAudience::Session(cid))
     }
 
     /// Broadcast a response only to sessions entitled to see `group_id`'s chat.
@@ -1881,8 +1932,11 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     // error, or by the task being dropped -- so a later
                     // connection reusing the CID cannot inherit the attribution,
                     // and an earlier one ending late cannot erase this one's.
-                    let _cid_attribution =
-                        this.connected_users.attribute(current_cid, user_id.clone());
+                    let _cid_attribution = SessionRelay {
+                        attribution: this.connected_users.attribute(current_cid, user_id.clone()),
+                        apps_relay: this.apps_relay.clone(),
+                        cid: current_cid,
+                    };
 
                     // Subscribe to broadcast channel for this connection
                     let mut broadcast_rx = this.subscribe_broadcast();
@@ -1979,7 +2033,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                                         }
 
                                         // Scoped by the one place that knows whose socket this is.
-                                        if !this.may_receive(&user_id, &broadcast_msg.audience).await {
+                                        if !this.may_receive_at(current_cid, &user_id, &broadcast_msg.audience).await {
                                             continue;
                                         }
 

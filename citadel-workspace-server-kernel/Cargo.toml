@@ -53,6 +53,10 @@ chrono = { workspace = true }
 citadel-app-signature = { path = "../citadel-internal-service/citadel-app-signature" }
 citadel-app-id = { path = "../citadel-internal-service/citadel-app-id" }
 citadel-app-net-policy = { path = "../citadel-internal-service/citadel-app-net-policy" }
+# The app runtime's server side (kernel::apps): the ABI's host calls and replies that `Call`
+# carries, and the internal-HTTP frames the relay checks. Pure, no_std/wasm32 clean.
+citadel-app-sdk-types = { path = "../citadel-internal-service/citadel-app-sdk-types" }
+citadel-ihttp-types = { path = "../citadel-internal-service/citadel-ihttp-types" }
 hex = "0.4"
 
 # Native: the production server — SQLite backend, SIGTERM drain.

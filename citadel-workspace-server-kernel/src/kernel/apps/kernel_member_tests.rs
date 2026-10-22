@@ -211,9 +211,11 @@ async fn requests_this_server_does_not_take_are_typed_refusals() {
             frame: vec![],
         },
     ] {
+        // The runtime's requests are served now; about an install that is not there they
+        // answer as every apps request does.
         assert_eq!(
             ask(&kernel, "alice", request).await,
-            AppsResponse::Refused(AppsRefusal::ServerFeatureUnavailable)
+            AppsResponse::Refused(AppsRefusal::Unavailable)
         );
     }
 }

@@ -69,7 +69,7 @@ pub(super) async fn members<R: Ratchet + Send + Sync + 'static>(
 }
 
 /// `node_id` and every node below it.
-fn subtree(nodes: &HashMap<String, DomainNode>, node_id: &str) -> Vec<String> {
+pub(super) fn subtree(nodes: &HashMap<String, DomainNode>, node_id: &str) -> Vec<String> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut queue = vec![node_id.to_string()];
     while let Some(at) = queue.pop() {

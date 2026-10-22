@@ -10,20 +10,33 @@
 //! gathers for them, `records` what is stored; `fetcher` is the host capability that fetches
 //! artifacts by URL.
 //!
+//! The app runtime's server side: `storage` the named backends' namespaces and limits;
+//! `egress` server egress (`net.server`) over the host's `EgressFetcher`, metered for now by an
+//! operator log line per response (the host's `bytes_in` meter is not wired to it yet);
+//! `ihttp_relay` and `ihttp_flow` the internal-HTTP relay's advertisements, streams and flow.
+//!
 //! No I/O: the request handler (`command_processor::apps`) gathers the facts (permissions,
 //! roles, node views, members) and applies what these decide; the store is
 //! `kernel::transaction::apps_store`.
 
 pub mod artifact;
 pub mod audience;
+pub mod egress;
+#[cfg(not(target_family = "wasm"))]
+pub mod egress_native;
+pub mod egress_port;
 pub mod facts;
 pub mod fetcher;
 #[cfg(not(target_family = "wasm"))]
 pub mod fetcher_native;
+pub mod ihttp_flow;
+pub mod ihttp_relay;
+pub mod ihttp_relay_types;
 pub mod install;
 pub mod md_header;
 pub mod records;
 pub mod rules;
+pub mod storage;
 pub mod update;
 
 #[cfg(test)]
@@ -33,13 +46,23 @@ mod audience_tests;
 #[cfg(test)]
 mod effective_tests;
 #[cfg(test)]
+mod egress_tests;
+#[cfg(test)]
+mod ihttp_relay_tests;
+#[cfg(test)]
 mod install_tests;
 #[cfg(test)]
 mod kernel_artifact_tests;
 #[cfg(test)]
+mod kernel_call_backend_tests;
+#[cfg(test)]
+mod kernel_call_tests;
+#[cfg(test)]
 mod kernel_effective_tests;
 #[cfg(test)]
 mod kernel_header_tests;
+#[cfg(test)]
+mod kernel_ihttp_tests;
 #[cfg(test)]
 mod kernel_install_tests;
 #[cfg(test)]
@@ -49,14 +72,24 @@ mod kernel_listing_tests;
 #[cfg(test)]
 mod kernel_member_tests;
 #[cfg(test)]
+mod kernel_purge_tests;
+#[cfg(test)]
 mod kernel_scope_tests;
+#[cfg(test)]
+mod kernel_session_tests;
 #[cfg(test)]
 mod md_header_tests;
 #[cfg(test)]
 mod rules_tests;
 #[cfg(test)]
+mod storage_tests;
+#[cfg(test)]
 mod test_facts;
 #[cfg(test)]
+mod test_ihttp;
+#[cfg(test)]
 mod test_manifests;
+#[cfg(test)]
+mod test_runtime;
 #[cfg(test)]
 mod test_support;
