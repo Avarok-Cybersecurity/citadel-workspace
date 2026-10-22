@@ -16,6 +16,8 @@ services:
       - ./citadel-internal-service:/workspace/citadel-internal-service:rw
       - ./citadel-workspace-client-ts:/workspace/citadel-workspace-client-ts:rw
       - ./citadel-workspaces:/workspace/citadel-workspaces:rw
+      # Step 9's `vite build` reads the global app catalogue beside the UI (vite.config.ts).
+      - ./apps/catalogue:/workspace/apps/catalogue:ro
       # The root of the npm workspace, read-only: the sync installs with `npm ci` from this
       # lockfile instead of resolving ranges against the live registry (an upstream publish
       # broke Publish ui that way on 2026-10-12). The four members' manifests arrive through
