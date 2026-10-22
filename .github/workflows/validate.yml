@@ -951,6 +951,11 @@ jobs:
           # directories in the user's TMPDIR, so use the per-job temp dir the
           # runner empties.
           TMPDIR: ${{ runner.temp }}
+          # Line tables only: backtraces keep their files and lines, and the workspace's test
+          # binaries stop exhausting the hosted runner at link time (`ld` died with a bus error
+          # twice on 2026-10-21, once the app crates, the SDK inspector and the agent's app
+          # transport joined the workspace).
+          CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
   rust-tests:
     name: Rust Tests - ${{ matrix.crate }}
