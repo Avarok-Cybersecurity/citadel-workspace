@@ -81,10 +81,7 @@ const SKIP = new Map([
   // outcome to prefer where a cohesive unit exists to cut.
   //
   // The natural next cuts, in order: Landing.tsx (three dialogs that could be
-  // lazy), revfs-service.ts and live-document-store/service.ts (each holds a
-  // store AND its persistence).
-  ['lib/live-document-store/service.ts', 279],
-  ['lib/p2p/message-handler.ts', 259],
+  // lazy) and revfs-service.ts (it holds a store AND its persistence).
   ['lib/server-auto-connect-service/service.ts', 252],
   ['lib/revfs/revfs-retry.ts', 254],
 

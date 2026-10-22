@@ -111,7 +111,6 @@ compute-bearing.
 
 | Module | Lines | Why |
 | --- | --- | --- |
-| `lib/merkle-tree/tree.ts` | 210 | Hashing and tree comparison; pure arithmetic over byte arrays, the classic WASM case |
 | `lib/revfs/tree-mutations.ts` | 210 | Pure tree transforms, data in / data out |
 | `lib/revfs/tree-sync.ts` | 242 | Tree diff and merge; hot on large trees |
 | `lib/call/send-encoder.ts` | 212 | Frame encoding on the media path, per-frame hot |
@@ -167,7 +166,7 @@ modules are slow enough to matter — which nobody has measured.
 
 Suggested order:
 
-1. **Profile first.** Establish that `merkle-tree/tree.ts` or `revfs/tree-sync.ts`
+1. **Profile first.** Establish that `revfs/tree-sync.ts` or `revfs/tree-mutations.ts`
    is actually hot on a realistic tree, with numbers. If they are not, the study
    ends here and that is a good outcome.
 2. **If hot, port one to Rust**, which needs no new toolchain, and measure the
