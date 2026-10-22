@@ -21,9 +21,9 @@ pub fn required_installer_permission(cap: Capability) -> Permission {
         NodesRead => Permission::AppInstallAllowNodeRead,
         NodesWrite => Permission::AppInstallAllowNodeWrite,
         MdEdit => Permission::AppInstallAllowMdEdit,
-        FilesRead | FilesWrite => Permission::AppInstallAllowFiles,
+        FilesRead | FilesWrite | StorageFiles => Permission::AppInstallAllowFiles,
         ChatRead | ChatSend => Permission::AppInstallAllowChat,
-        MembersList | MembersPresence => Permission::AppInstallAllowMembers,
+        MembersList => Permission::AppInstallAllowMembers,
         StorageUser | StorageScope | StorageNode | StorageBlob | StorageLocal => {
             Permission::AppInstallAllowStorage
         }
@@ -52,11 +52,13 @@ pub fn acting_user_requirement(cap: Capability) -> &'static [Permission] {
         | StorageNode | StorageBlob | StorageLocal => &[Permission::ViewContent],
         NodesWrite => &[Permission::CreateNode, Permission::EditTreeStructure],
         MdEdit | Documents => &[Permission::EditMdx],
-        FilesRead => &[Permission::DownloadFiles],
+        // `storage.files` is the app's own directory in the server file store: the member must be
+        // able to read that store at all; a write adds `UploadFiles` at the call.
+        FilesRead | StorageFiles => &[Permission::DownloadFiles],
         FilesWrite => &[Permission::UploadFiles],
         ChatRead => &[Permission::ReadMessages],
         ChatSend => &[Permission::SendMessages],
-        MembersList | MembersPresence => &[Permission::ViewMembers],
+        MembersList => &[Permission::ViewMembers],
         ClipboardRead | ClipboardWrite | Notifications | NetHost | NetHostPrivate | NetServer
         | IhttpServe | IhttpCall => &[],
     }

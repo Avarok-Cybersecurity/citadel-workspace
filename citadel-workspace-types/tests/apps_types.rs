@@ -10,8 +10,8 @@ fn listed(cap: Capability) -> bool {
     use Capability::*;
     match cap {
         Canvas | Ui | Events | Navigate | Log | NodesRead | NodesWrite | MdEdit | FilesRead
-        | FilesWrite | ChatRead | ChatSend | MembersList | MembersPresence | StorageUser
-        | StorageScope | StorageNode | StorageBlob | StorageLocal | ClipboardRead
+        | FilesWrite | ChatRead | ChatSend | MembersList | StorageUser | StorageScope
+        | StorageNode | StorageBlob | StorageFiles | StorageLocal | ClipboardRead
         | ClipboardWrite | Notifications | Documents | NetHost | NetHostPrivate | NetServer
         | IhttpServe | IhttpCall => Capability::ALL.contains(&cap),
     }
@@ -19,7 +19,8 @@ fn listed(cap: Capability) -> bool {
 
 #[test]
 fn every_capability_is_listed_once_with_its_manifest_name() {
-    assert!(Capability::ALL.into_iter().all(listed));
+    assert!(Capability::ALL.iter().copied().all(listed));
+    assert_eq!(Capability::ALL.len(), 28);
     let names: Vec<String> = Capability::ALL
         .iter()
         .map(|c| {
@@ -49,7 +50,7 @@ fn every_capability_is_listed_once_with_its_manifest_name() {
     );
     assert!(Capability::ALL
         .iter()
-        .filter(|c| c.takes_hosts())
+        .filter(|c| citadel_workspace_types::apps::takes_hosts(**c))
         .eq([&Capability::NetHost, &Capability::NetServer]));
 }
 

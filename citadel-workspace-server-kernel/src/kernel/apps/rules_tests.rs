@@ -24,7 +24,8 @@ fn request(cap: Capability, optional: bool) -> CapabilityRequest {
 #[test]
 fn every_app_install_allow_permission_is_what_some_capability_needs() {
     let needed: HashSet<Permission> = Capability::ALL
-        .into_iter()
+        .iter()
+        .copied()
         .map(required_installer_permission)
         .collect();
     let allow: Vec<Permission> = Permission::ALL_VARIANTS
@@ -176,7 +177,8 @@ fn documents_go_to_the_first_party_key_only_and_private_needs_host_network() {
 fn an_owner_may_grant_everything_and_a_member_seed_only_the_intrinsic_capabilities() {
     let owner = holds(owner_permissions());
     assert!(Capability::ALL
-        .into_iter()
+        .iter()
+        .copied()
         .all(|c| owner(required_installer_permission(c))));
     let member_seed = citadel_workspace_types::roles::seed_roles()
         .into_iter()
@@ -185,7 +187,8 @@ fn an_owner_may_grant_everything_and_a_member_seed_only_the_intrinsic_capabiliti
         .unwrap_or_default();
     let member = holds(member_seed);
     let grantable: Vec<Capability> = Capability::ALL
-        .into_iter()
+        .iter()
+        .copied()
         .filter(|c| member(required_installer_permission(*c)))
         .collect();
     assert_eq!(
@@ -198,5 +201,28 @@ fn an_owner_may_grant_everything_and_a_member_seed_only_the_intrinsic_capabiliti
             Capability::Log,
             Capability::Documents
         ]
+    );
+}
+
+/// The SDK's whole list (citadel-app-sdk-types, the SSOT the manifest reads too), each mapped
+/// to an apps permission an installer can hold, and only `storage.files` reaching the file store.
+#[test]
+fn every_sdk_capability_has_an_installer_permission() {
+    assert_eq!(Capability::ALL.len(), 28);
+    for cap in Capability::ALL.iter().copied() {
+        let needed = required_installer_permission(cap);
+        assert!(
+            format!("{needed:?}").starts_with("AppInstall"),
+            "{cap:?} is granted under {needed:?}, not an apps permission"
+        );
+        assert!(Permission::ALL_VARIANTS.contains(&needed), "{needed:?}");
+    }
+    assert_eq!(
+        required_installer_permission(Capability::StorageFiles),
+        Permission::AppInstallAllowFiles
+    );
+    assert_eq!(
+        acting_user_requirement(Capability::StorageFiles),
+        &[Permission::DownloadFiles]
     );
 }

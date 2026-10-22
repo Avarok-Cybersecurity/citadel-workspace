@@ -66,7 +66,7 @@ pub(crate) fn check_capabilities(
         if !plain_text(&request.why, MAX_WHY_CHARS, false) {
             return refuse(format!("{cap:?}: why"));
         }
-        if request.hosts.is_some() != cap.takes_hosts()
+        if request.hosts.is_some() != crate::apps::takes_hosts(cap)
             || request.routes.is_some() != (cap == Capability::IhttpServe)
             || request.targets.is_some() != (cap == Capability::IhttpCall)
         {

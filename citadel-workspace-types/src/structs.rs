@@ -234,7 +234,7 @@ pub enum Permission {
     AppInstallAllowFiles,
     /// Grant an app `chat.read` and `chat.send`
     AppInstallAllowChat,
-    /// Grant an app `members.list` and `members.presence`
+    /// Grant an app `members.list`
     AppInstallAllowMembers,
     /// Grant an app its storage backends (`storage.*`)
     AppInstallAllowStorage,

@@ -20,6 +20,8 @@ export const RULE_MODULES = [
   'manifest/catalogue-format.ts', 'manifest/manifest-rules.ts', 'manifest/manifest-rules-parts.ts',
   'manifest/manifest-shape.ts', 'manifest/json-duplicate-keys.ts', 'manifest/net-rules.ts',
   'app-identity.ts', 'icon.ts',
+  // The capability list is the SDK's generated one, read through the host's module.
+  'host/capabilities.ts', 'sdk/generated/AbiConstants.ts',
 ];
 
 const RELATIVE_IMPORT = /(from\s+['"])(\.{1,2}\/[^'"]+)(['"])/g;

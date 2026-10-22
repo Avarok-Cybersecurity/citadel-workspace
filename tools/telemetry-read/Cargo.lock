@@ -201,6 +201,15 @@ name = "citadel-app-net-policy"
 version = "0.1.0"
 
 [[package]]
+name = "citadel-app-sdk-types"
+version = "0.1.0"
+dependencies = [
+ "ciborium",
+ "serde",
+ "ts-rs",
+]
+
+[[package]]
 name = "citadel-ihttp-types"
 version = "0.1.0"
 dependencies = [
@@ -261,6 +270,7 @@ dependencies = [
  "base64 0.22.1",
  "citadel-app-id",
  "citadel-app-net-policy",
+ "citadel-app-sdk-types",
  "citadel-ihttp-types",
  "citadel-internal-service-types",
  "custom_debug",

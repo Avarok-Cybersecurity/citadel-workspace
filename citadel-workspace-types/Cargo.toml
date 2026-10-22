@@ -20,6 +20,8 @@ citadel-internal-service-types = { path = "../citadel-internal-service/citadel-i
 citadel-app-id = { path = "../citadel-internal-service/citadel-app-id" }
 citadel-app-net-policy = { path = "../citadel-internal-service/citadel-app-net-policy" }
 citadel-ihttp-types = { path = "../citadel-internal-service/citadel-ihttp-types" }
+# The capability list is the SDK's (the guest ABI's SSOT); `ts` exports it with these bindings.
+citadel-app-sdk-types = { path = "../citadel-internal-service/citadel-app-sdk-types", features = ["ts"] }
 # A manifest's icon is base64; it is decoded to check it is a PNG within its size cap.
 base64 = "0.22"
 

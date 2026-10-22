@@ -15,129 +15,17 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use ts_rs::TS;
 
-/// What an install may be granted. Closed: a capability that is not here cannot be asked for,
-/// granted or called. The wire names are the manifest's `cap` strings.
+/// What an install may be granted: the SDK's closed list (`citadel-app-sdk-types`), so the
+/// manifest's `cap` strings, the install record and the guest ABI name one set. A capability
+/// that is not there cannot be asked for, granted or called.
 ///
 /// Never capabilities, and never in the SDK: roles, secure links, telemetry, workspace
 /// configuration, sign-in, keys, support.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub enum Capability {
-    /// Paint into its own canvas (intrinsic to every app).
-    #[serde(rename = "canvas")]
-    Canvas,
-    /// Host-rendered toolbar, menus, dialogs and toasts (intrinsic).
-    #[serde(rename = "ui")]
-    Ui,
-    /// Pointer, keyboard and lifecycle events (intrinsic).
-    #[serde(rename = "events")]
-    Events,
-    /// Follow internal links only (intrinsic).
-    #[serde(rename = "navigate")]
-    Navigate,
-    /// Write to its own log (intrinsic).
-    #[serde(rename = "log")]
-    Log,
-    #[serde(rename = "nodes.read")]
-    NodesRead,
-    #[serde(rename = "nodes.write")]
-    NodesWrite,
-    /// Replace a zone's own region or append; never the apps header.
-    #[serde(rename = "md.edit")]
-    MdEdit,
-    #[serde(rename = "files.read")]
-    FilesRead,
-    #[serde(rename = "files.write")]
-    FilesWrite,
-    /// The node's own channel only, as are `chat.send`.
-    #[serde(rename = "chat.read")]
-    ChatRead,
-    #[serde(rename = "chat.send")]
-    ChatSend,
-    #[serde(rename = "members.list")]
-    MembersList,
-    #[serde(rename = "members.presence")]
-    MembersPresence,
-    /// Per member, per app and scope.
-    #[serde(rename = "storage.user")]
-    StorageUser,
-    /// Shared by everyone the install reaches.
-    #[serde(rename = "storage.scope")]
-    StorageScope,
-    /// Per node.
-    #[serde(rename = "storage.node")]
-    StorageNode,
-    /// Content-addressed blobs.
-    #[serde(rename = "storage.blob")]
-    StorageBlob,
-    /// On the member's own machine, through their agent.
-    #[serde(rename = "storage.local")]
-    StorageLocal,
-    /// Host-mediated, after a user gesture.
-    #[serde(rename = "clipboard.read")]
-    ClipboardRead,
-    #[serde(rename = "clipboard.write")]
-    ClipboardWrite,
-    /// Host toasts only.
-    #[serde(rename = "notifications")]
-    Notifications,
-    /// The documents CRDT relay. First-party publisher key only.
-    #[serde(rename = "documents")]
-    Documents,
-    /// HTTPS from the member's own machine through their agent, to the listed hosts.
-    #[serde(rename = "net.host")]
-    NetHost,
-    /// Adds http and private, loopback and link-local addresses to `net.host`.
-    #[serde(rename = "net.host.private")]
-    NetHostPrivate,
-    /// HTTPS from the workspace server to the listed hosts, metered.
-    #[serde(rename = "net.server")]
-    NetServer,
-    /// Serve internal HTTP to other members over Citadel sessions.
-    #[serde(rename = "ihttp.serve")]
-    IhttpServe,
-    /// Call internal HTTP servers: the app's own, and the listed apps'.
-    #[serde(rename = "ihttp.call")]
-    IhttpCall,
-}
+pub use citadel_app_sdk_types::Capability;
 
-impl Capability {
-    /// Every capability, in declaration order.
-    pub const ALL: [Capability; 28] = [
-        Self::Canvas,
-        Self::Ui,
-        Self::Events,
-        Self::Navigate,
-        Self::Log,
-        Self::NodesRead,
-        Self::NodesWrite,
-        Self::MdEdit,
-        Self::FilesRead,
-        Self::FilesWrite,
-        Self::ChatRead,
-        Self::ChatSend,
-        Self::MembersList,
-        Self::MembersPresence,
-        Self::StorageUser,
-        Self::StorageScope,
-        Self::StorageNode,
-        Self::StorageBlob,
-        Self::StorageLocal,
-        Self::ClipboardRead,
-        Self::ClipboardWrite,
-        Self::Notifications,
-        Self::Documents,
-        Self::NetHost,
-        Self::NetHostPrivate,
-        Self::NetServer,
-        Self::IhttpServe,
-        Self::IhttpCall,
-    ];
-
-    /// Whether a manifest entry for this capability lists `hosts`.
-    pub fn takes_hosts(self) -> bool {
-        matches!(self, Self::NetHost | Self::NetServer)
-    }
+/// Whether a manifest entry for `cap` lists `hosts`.
+pub fn takes_hosts(cap: Capability) -> bool {
+    matches!(cap, Capability::NetHost | Capability::NetServer)
 }
 
 /// Where an install runs.
