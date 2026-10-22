@@ -158,9 +158,15 @@ const GATED_BY = {
 // left `Permission::UploadFiles` matching, because `may_transfer`'s doc comment
 // names it. A permission "enforced" by prose is exactly the failure this gate
 // exists to catch, so prose must not count.
+//
+// Test code is left out for the same reason: a test that names a permission
+// proves nothing about the server refusing without it. So only sources compiled
+// into the server count -- not `#[cfg(test)]` modules, inline or in files of
+// their own, and not test-named files (`*_tests.rs`, `tests.rs`, `test_*.rs`).
+const KERNEL_SRC = 'citadel-workspace-server-kernel/src';
 const rustFiles = execFileSync(
   'find',
-  ['citadel-workspace-server-kernel/src', '-name', '*.rs', '-not', '-path', '*/target/*'],
+  [KERNEL_SRC, '-name', '*.rs', '-not', '-path', '*/target/*'],
   { encoding: 'utf8' },
 )
   .split('\n')
@@ -173,9 +179,48 @@ const stripComments = (src) =>
     .map((line) => line.replace(/\/\/.*$/, ''))
     .join('\n');
 
-const enforced = new Set();
+const TEST_ATTR = /#\[cfg\((?:test|all\(test[^)]*\)|any\(test[^)]*\))\)\]\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*([;{])/g;
+
+/** `code` without its inline `#[cfg(test)] mod x { ... }` blocks, and the names of its `#[cfg(test)] mod x;` files. */
+function withoutTestModules(code) {
+  const files = [];
+  let out = '';
+  let from = 0;
+  for (const m of code.matchAll(TEST_ATTR)) {
+    if (m.index < from) continue;
+    if (m[2] === ';') {
+      files.push(m[1]);
+      continue;
+    }
+    let depth = 0;
+    let i = m.index + m[0].length - 1;
+    for (; i < code.length; i++) {
+      if (code[i] === '{') depth++;
+      else if (code[i] === '}' && --depth === 0) break;
+    }
+    out += code.slice(from, m.index);
+    from = i + 1;
+  }
+  return { code: out + code.slice(from), files };
+}
+
+/** Where `mod name;` declared in `file` lives. */
+const moduleDir = (file) => (/(?:^|\/)(?:mod|lib|main)\.rs$/.test(file) ? file.replace(/[^/]+$/, '') : file.replace(/\.rs$/, '/'));
+const isTestNamed = (file) => /(?:^|\/)(?:\w+_tests|tests|test_\w+)\.rs$/.test(file);
+
+const testFiles = new Set();
+const serverCode = new Map();
 for (const file of rustFiles) {
-  const code = stripComments(readFileSync(file, 'utf8'));
+  const { code, files } = withoutTestModules(stripComments(readFileSync(file, 'utf8')));
+  serverCode.set(file, code);
+  for (const name of files) for (const f of [`${moduleDir(file)}${name}.rs`, `${moduleDir(file)}${name}/mod.rs`]) testFiles.add(f);
+}
+const underTest = (file) =>
+  isTestNamed(file) || [...testFiles].some((t) => file === t || file.startsWith(t.replace(/(?:mod)?\.rs$/, '').replace(/\/?$/, '/')));
+
+const enforced = new Set();
+for (const [file, code] of serverCode) {
+  if (underTest(file)) continue;
   for (const m of code.matchAll(/Permission::([A-Za-z0-9]+)/g)) enforced.add(m[1]);
 }
 
