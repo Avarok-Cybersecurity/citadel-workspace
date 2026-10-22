@@ -13,6 +13,8 @@
 pub mod apps;
 /// Whether a session may be sent a broadcast.
 mod broadcast_scope;
+/// Which account each live connection belongs to.
+mod cid_attribution;
 pub mod command_processor;
 pub mod display_name;
 /// The Documents relay: configuration and the log's rules.

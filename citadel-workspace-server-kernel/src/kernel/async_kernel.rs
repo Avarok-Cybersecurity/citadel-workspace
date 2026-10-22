@@ -5,6 +5,7 @@
 
 use crate::config::{FileTransferConfig, WorkspaceStructureConfig};
 use crate::handlers::domain::server_ops::async_domain_server_ops::AsyncDomainServerOperations;
+use crate::kernel::cid_attribution::ConnectedAccounts;
 use crate::kernel::rate_limiter::{RateLimiter, DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL};
 use crate::kernel::transaction::BackendTransactionManager;
 use crate::WorkspaceProtocolResponse;
@@ -12,7 +13,6 @@ use citadel_logging::{debug, error, info, warn};
 use citadel_sdk::prelude::{NetworkError, NodeRemote, NodeResult, ObjectTransferStatus, Ratchet};
 use citadel_workspace_types::server_feature_refusal::ServerFeatureRefusal;
 use parking_lot::RwLock;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -166,13 +166,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     /// account no longer multiplies the budget.
     rate_limiter: RateLimiter,
     /// Which account each live connection belongs to, keyed by session CID.
-    ///
-    /// Command handling learns the actor from the per-connection task, but
-    /// `NodeResult::ObjectTransferHandle` arrives on a different branch of the
-    /// event loop and carries only a `session_cid`. Without this map a file
-    /// transfer cannot be attributed to a user, and so cannot be authorised.
-    /// Shared across clones, like the rate limiter.
-    connected_users: Arc<RwLock<HashMap<u64, String>>>,
+    /// Shared across clones, like the rate limiter. See `cid_attribution`.
+    connected_users: ConnectedAccounts,
     /// Whether the first account to CONNECT is made the Owner.
     ///
     /// False unless the operator asks for it by name. See
@@ -190,23 +185,6 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     link_quota: crate::kernel::secure_links::quota::LinkQuotaSourceHandle,
     /// What fetches app artifacts by URL: the host's, or none, which fetches nothing.
     artifact_fetcher: crate::kernel::apps::fetcher::ArtifactFetcherHandle,
-}
-
-/// Removes a CID's account attribution when its connection task ends.
-///
-/// A `Drop` guard rather than a line at the end of the loop, because the task
-/// has several exits (stream closed, send error, cancellation) and a stale
-/// attribution is worse than none: CIDs are reused, so the next connection on
-/// that CID would inherit the previous account's authorisation.
-struct CidAttribution {
-    connected_users: Arc<RwLock<HashMap<u64, String>>>,
-    cid: u64,
-}
-
-impl Drop for CidAttribution {
-    fn drop(&mut self) {
-        self.connected_users.write().remove(&self.cid);
-    }
 }
 
 // Placeholder for entities that don't have an owner yet.
@@ -273,7 +251,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             broadcast_tx,
             file_transfer_config: FileTransferConfig::default(),
             rate_limiter: RateLimiter::new(DEFAULT_RATE_LIMIT_MAX, DEFAULT_RATE_LIMIT_REFILL),
-            connected_users: Arc::new(RwLock::new(HashMap::new())),
+            connected_users: ConnectedAccounts::default(),
             first_connect_admin: false,
             ice_servers: None,
             sign_in_settings: None,
@@ -1898,16 +1876,13 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                     // another branch of the event loop with nothing but a
                     // session CID, and a transfer that cannot be attributed
                     // cannot be authorised.
-                    this.connected_users
-                        .write()
-                        .insert(current_cid, user_id.clone());
+                    //
                     // Cleared however this connection ends -- normally, by
                     // error, or by the task being dropped -- so a later
-                    // connection reusing the CID cannot inherit the attribution.
-                    let _cid_attribution = CidAttribution {
-                        connected_users: this.connected_users.clone(),
-                        cid: current_cid,
-                    };
+                    // connection reusing the CID cannot inherit the attribution,
+                    // and an earlier one ending late cannot erase this one's.
+                    let _cid_attribution =
+                        this.connected_users.attribute(current_cid, user_id.clone());
 
                     // Subscribe to broadcast channel for this connection
                     let mut broadcast_rx = this.subscribe_broadcast();
@@ -2078,7 +2053,7 @@ impl<R: Ratchet + Send + Sync + 'static> citadel_sdk::prelude::NetKernel<R>
                 // no interpretation: the server receiving is somebody uploading,
                 // the server sending is somebody downloading.
                 let transfer_cid = object_transfer_handle.session_cid;
-                let actor = self.connected_users.read().get(&transfer_cid).cloned();
+                let actor = self.connected_users.account_of(transfer_cid);
                 let orientation = object_transfer_handle.handle.orientation;
                 let required = Self::permission_for_transfer(&orientation);
                 let permitted = self.may_transfer(actor.as_deref(), &orientation).await;
