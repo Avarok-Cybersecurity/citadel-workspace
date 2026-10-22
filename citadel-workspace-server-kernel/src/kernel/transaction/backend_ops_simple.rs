@@ -240,7 +240,7 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     ///
     /// The mutators below serialize a load-modify-save that they do INTERNALLY.
     /// Callers that read the map, decide something from it, and then write the
-    /// whole map back (handlers/domain/async_ops/async_node_ops.rs does this for
+    /// whole map back (handlers/domain/async_ops/async_node_ops/ does this for
     /// create / delete / move) span the same cycle across their own awaits, so
     /// the per-mutator lock does not cover them — two such callers both load the
     /// prior map and the second save drops the first one's node.

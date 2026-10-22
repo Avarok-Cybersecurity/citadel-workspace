@@ -1,6 +1,6 @@
 //! Authorization for group (room/office) chat.
 //!
-//! A `group_id` is a node's `chat_channel_id` (`async_node_ops.rs:337`), minted
+//! A `group_id` is a node's `chat_channel_id` (`async_ops/node_chat.rs`), minted
 //! per node when chat is enabled. It is therefore scoped to exactly one node,
 //! and the people entitled to it are the people entitled to view that node.
 //!

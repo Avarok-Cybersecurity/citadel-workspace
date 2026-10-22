@@ -65,7 +65,7 @@ fn both_call_sites_ask_the_shared_predicate() {
     let sites: [(&str, &str); 2] = [
         (
             "permission gate",
-            include_str!("../src/handlers/domain/async_ops/async_node_ops.rs"),
+            include_str!("../src/handlers/domain/async_ops/async_node_ops/update.rs"),
         ),
         (
             "broadcast decision",
