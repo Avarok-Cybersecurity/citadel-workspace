@@ -844,12 +844,13 @@ jobs:
         # fail on it and clippy could not see it -- and it read as maintained
         # code contradicting the table enforcement should use.
         run: node scripts/check-rust-modules-are-compiled.mjs
-      - name: Every browser install goes through the one script
-        # citadel-workspaces/scripts/ci/install-chromium.sh waits for apt's locks, then bounds
-        # and retries the download. It replaced seven inline copies that had drifted -- one had
-        # no lock wait and failed twice on 2026-10-22 -- and the bounded-retry gate this step
-        # used to run, whose rule now lives in the script. The UI runs the same check on its own
-        # workflow (npm run check:browser-installs).
+      - name: Every browser install goes through the one action
+        # citadel-workspaces/.github/actions/install-chromium caches the browser and the apt
+        # packages and runs scripts/ci/install-chromium.sh, which waits for apt's locks, then
+        # bounds and retries the download. It replaced seven inline copies that had drifted --
+        # one had no lock wait and failed twice on 2026-10-22 -- and the bounded-retry gate this
+        # step used to run, whose rule now lives in the script. The UI runs the same check on its
+        # own workflow (npm run check:browser-installs).
         run: node citadel-workspaces/scripts/check-browser-installs-use-the-script.mjs .
       - name: Network fetches are bounded, not only retried
         # Two jobs were killed by their budgets in consecutive runs, both in
@@ -1733,28 +1734,13 @@ jobs:
         # because the installed binary version doesn't match the one
         # playwright@locked-version expects.
         run: npm ci
-      - name: Cache Playwright browsers
-        # Every leg of a 47-job matrix downloaded chromium + headless-shell
-        # (~170 MB) from scratch, because nothing cached ~/.cache/ms-playwright.
-        # `playwright install` is idempotent and returns in seconds when the
-        # browsers are already there, so the step below stays exactly as it is --
-        # including its retry and its 600s bound, which a cache miss still needs.
-        #
-        # Keyed on the LOCKED version, not on a date or a lockfile hash: the
-        # browser build is a property of the playwright version and nothing else,
-        # so this is correct across unrelated dependency changes and cannot serve
-        # a browser from a different version. A miss costs exactly what today
-        # costs; it cannot be wrong, only absent.
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ms-playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ms-playwright-${{ runner.os }}-
       - name: Install Playwright Browsers
-        # The one browser install: install-chromium.sh waits for apt's locks before every
-        # attempt and bounds and retries the download; its header has the runs that made it so.
-        run: bash citadel-workspaces/scripts/ci/install-chromium.sh
+        # The one browser install, with the browser and apt packages cached (its action.yml says
+        # how). It replaced an inline ~/.cache/ms-playwright cache here that was keyed on the
+        # whole lockfile while its comment said "keyed on the LOCKED version".
+        uses: ./citadel-workspaces/.github/actions/install-chromium
+        with:
+          working-directory: .
       - name: Symlink workspace deps for integration-tests build
         # `tsc` in integration-tests resolves modules with NodeNext
         # which walks node_modules up the directory tree. After the
@@ -1931,28 +1917,13 @@ jobs:
         # the integration-tests job: two copies of playwright make tsc see two
         # distinct playwright-core type identities.
         run: npm ci
-      - name: Cache Playwright browsers
-        # Every leg of a 47-job matrix downloaded chromium + headless-shell
-        # (~170 MB) from scratch, because nothing cached ~/.cache/ms-playwright.
-        # `playwright install` is idempotent and returns in seconds when the
-        # browsers are already there, so the step below stays exactly as it is --
-        # including its retry and its 600s bound, which a cache miss still needs.
-        #
-        # Keyed on the LOCKED version, not on a date or a lockfile hash: the
-        # browser build is a property of the playwright version and nothing else,
-        # so this is correct across unrelated dependency changes and cannot serve
-        # a browser from a different version. A miss costs exactly what today
-        # costs; it cannot be wrong, only absent.
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ms-playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ms-playwright-${{ runner.os }}-
       - name: Install Playwright Browsers
-        # The one browser install: install-chromium.sh waits for apt's locks before every
-        # attempt and bounds and retries the download; its header has the runs that made it so.
-        run: bash citadel-workspaces/scripts/ci/install-chromium.sh
+        # The one browser install, with the browser and apt packages cached (its action.yml says
+        # how). It replaced an inline ~/.cache/ms-playwright cache here that was keyed on the
+        # whole lockfile while its comment said "keyed on the LOCKED version".
+        uses: ./citadel-workspaces/.github/actions/install-chromium
+        with:
+          working-directory: .
       - name: Symlink workspace deps for integration-tests
         run: |
           mkdir -p citadel-workspaces/integration-tests/node_modules
@@ -2476,6 +2447,16 @@ jobs:
         run: npm run build && npm run check:bundle
         working-directory: citadel-workspaces
 
+      - name: Hand the build to the browser gates
+        # production-bundle-browser drives Chromium against exactly this dist/; see there.
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-dist
+          path: citadel-workspaces/dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
       - name: PWA installability
         # The install button is drawn by the browser, not the app: if a manifest
         # field or an icon breaks, the button simply stops appearing. Nothing
@@ -2506,72 +2487,6 @@ jobs:
         run: npm run check:lighthouse
         working-directory: citadel-workspaces
 
-      - name: Install Chromium for the offline check
-        # The one browser install: install-chromium.sh waits for apt's locks before every
-        # attempt and bounds and retries the download; its header has the runs that made it so.
-        run: bash scripts/ci/install-chromium.sh
-        working-directory: citadel-workspaces
-
-      - name: PWA offline behaviour
-        # The app tells the user "will now load without a connection" once the
-        # worker is ready. Nothing verified that promise until this step: a
-        # precache that silently stopped covering the shell would leave an
-        # installed app opening to a blank page with no connection, and every
-        # other check would stay green.
-        run: npm run check:pwa-offline
-        working-directory: citadel-workspaces
-
-      - name: PWA update flow
-        # The upgrade half of the lifecycle, and the half that fails silently:
-        # an installed worker keeps serving its cached bundle by design, so a
-        # broken update path produces no error and no complaint — the app just
-        # stops changing. The unit test beside PwaUpdatePrompt mocks the
-        # register hook, proving the component reacts to needRefresh but never
-        # that anything sets it.
-        run: npm run check:pwa-update
-        working-directory: citadel-workspaces
-
-      - name: A phone toast clears the fixed header
-        # Measured in a browser, because two versions of this fix moved nothing
-        # and a jsdom test asserting the style attribute passed through both:
-        # Sonner's `offset` prop silently not applying, then an override of
-        # `--offset-top` when its stylesheet reads `--mobile-offset-top` below
-        # its own breakpoint. jsdom has no layout and cannot tell a toast that
-        # moved from one that did not.
-        run: npm run check:toast-header
-        working-directory: citadel-workspaces
-      - name: Reduced motion
-        # Neither axe nor Lighthouse reports motion, so ninety of the app's
-        # hundred animations opted out of prefers-reduced-motion unnoticed.
-        # Also checks that suppressing motion did not suppress the dialogs the
-        # motion was attached to — a failure only reduced-motion users would see.
-        run: npm run check:reduced-motion
-        working-directory: citadel-workspaces
-
-      - name: Accessibility on the pre-auth screens
-        # A separate gate from integration-tests' accessibility.spec.ts, which
-        # is better but needs a backend and an account -- so when registration
-        # breaks, it stops running, silently. The screens a visitor meets before
-        # they have an account need nothing but a served bundle, and their
-        # accessibility should not depend on whether an account can be created.
-        run: npm run check:a11y
-        working-directory: citadel-workspaces
-
-      - name: The agent-down first run
-        # The most common state a new user is in -- app installed, agent not
-        # started -- and nothing tested it. /ws is pointed at a dead port, so it
-        # needs no stack and no account. The check proves its own premise: if
-        # anything answers on that port it fails rather than reporting on a
-        # state it is not in, which is exactly the mistake made once by hand.
-        run: npm run check:agent-down
-        working-directory: citadel-workspaces
-
-      - name: Mobile layout
-        # axe measures colour, names and roles — not size. Three controls
-        # shipped under the WCAG 2.2 24px target floor, including the close
-        # button on every dialog in the app, with every a11y gate green.
-        run: npm run check:mobile
-        working-directory: citadel-workspaces
       - name: Build Production Images (server + internal-service + ui)
         run: |
           # The UI image has its own multi-stage `production` target with a
@@ -2640,6 +2555,11 @@ jobs:
         # Shared with publish-images.yml so the two gates cannot drift into testing
         # different things.
         run: ./scripts/smoke-ui-ws.sh ghcr.io/avarok-cybersecurity/citadel-workspace-ui:latest 18080
+      - name: Install Chromium for the image smoke
+        # The one browser install (its action.yml says what it caches and why).
+        uses: ./citadel-workspaces/.github/actions/install-chromium
+        with:
+          working-directory: citadel-workspaces
       - name: Smoke Test - the production image in a real browser
         # The only check that drives a browser against the artefact users get.
         # Every Playwright spec runs on the Vite dev server, which sends no CSP
@@ -2817,6 +2737,101 @@ jobs:
   # Every result must be `success`, not merely "not failure": no job above has
   # an `if:`, so none is legitimately skippable, and a skip can only mean
   # something upstream did not pass.
+  production-bundle-browser:
+    name: Production bundle in Chromium
+    # The seven gates that drive Chromium against the production dist/, split out of
+    # production-build. That job ran a median 34 and a maximum 48 of its 55 minutes over the
+    # last 21 runs (2026-10-14..22) -- the image build alone is ~15 -- and these gates added
+    # ~6 more after a Chromium install from the Azure apt mirror, which took 11.5 minutes on
+    # 2026-10-22 when the mirror ran at ~40 KB/s. Here they have a budget of their own: the
+    # build reaches them as the production-dist artifact, so nothing is built twice and they
+    # measure the same bytes. Setup ~2 minutes, the install ~30 s warm, the gates ~6.
+    needs: production-build
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Set up Node for the production-bundle gates
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install workspace dependencies for the gates
+        run: npm ci
+      - name: Take the build production-build made
+        uses: actions/download-artifact@v4
+        with:
+          name: production-dist
+          path: citadel-workspaces/dist
+      - name: Install Chromium
+        # The one browser install (its action.yml says what it caches and why).
+        uses: ./citadel-workspaces/.github/actions/install-chromium
+        with:
+          working-directory: citadel-workspaces
+
+      - name: PWA offline behaviour
+        # The app tells the user "will now load without a connection" once the
+        # worker is ready. Nothing verified that promise until this step: a
+        # precache that silently stopped covering the shell would leave an
+        # installed app opening to a blank page with no connection, and every
+        # other check would stay green.
+        run: npm run check:pwa-offline
+        working-directory: citadel-workspaces
+
+      - name: PWA update flow
+        # The upgrade half of the lifecycle, and the half that fails silently:
+        # an installed worker keeps serving its cached bundle by design, so a
+        # broken update path produces no error and no complaint — the app just
+        # stops changing. The unit test beside PwaUpdatePrompt mocks the
+        # register hook, proving the component reacts to needRefresh but never
+        # that anything sets it.
+        run: npm run check:pwa-update
+        working-directory: citadel-workspaces
+
+      - name: A phone toast clears the fixed header
+        # Measured in a browser, because two versions of this fix moved nothing
+        # and a jsdom test asserting the style attribute passed through both:
+        # Sonner's `offset` prop silently not applying, then an override of
+        # `--offset-top` when its stylesheet reads `--mobile-offset-top` below
+        # its own breakpoint. jsdom has no layout and cannot tell a toast that
+        # moved from one that did not.
+        run: npm run check:toast-header
+        working-directory: citadel-workspaces
+      - name: Reduced motion
+        # Neither axe nor Lighthouse reports motion, so ninety of the app's
+        # hundred animations opted out of prefers-reduced-motion unnoticed.
+        # Also checks that suppressing motion did not suppress the dialogs the
+        # motion was attached to — a failure only reduced-motion users would see.
+        run: npm run check:reduced-motion
+        working-directory: citadel-workspaces
+
+      - name: Accessibility on the pre-auth screens
+        # A separate gate from integration-tests' accessibility.spec.ts, which
+        # is better but needs a backend and an account -- so when registration
+        # breaks, it stops running, silently. The screens a visitor meets before
+        # they have an account need nothing but a served bundle, and their
+        # accessibility should not depend on whether an account can be created.
+        run: npm run check:a11y
+        working-directory: citadel-workspaces
+
+      - name: The agent-down first run
+        # The most common state a new user is in -- app installed, agent not
+        # started -- and nothing tested it. /ws is pointed at a dead port, so it
+        # needs no stack and no account. The check proves its own premise: if
+        # anything answers on that port it fails rather than reporting on a
+        # state it is not in, which is exactly the mistake made once by hand.
+        run: npm run check:agent-down
+        working-directory: citadel-workspaces
+
+      - name: Mobile layout
+        # axe measures colour, names and roles — not size. Three controls
+        # shipped under the WCAG 2.2 24px target floor, including the close
+        # button on every dialog in the app, with every a11y gate green.
+        run: npm run check:mobile
+        working-directory: citadel-workspaces
   all-green:
     name: Validation passed
     if: always()
@@ -2840,6 +2855,7 @@ jobs:
       - playwright-tests
       - deploy-gate-tests
       - production-build
+      - production-bundle-browser
       - integration-stack
     # It only reads a JSON blob; the timeout is the house rule, not a need.
     timeout-minutes: 5

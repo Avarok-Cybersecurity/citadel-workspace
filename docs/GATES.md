@@ -175,7 +175,7 @@ nor Linux or Windows rendering; scenarios that pin a motion tier keep it.
 | `check-app-zone-geometry.mjs` | An installed app running in its page zone, measured in a real browser on the shipped runtime (lib/app-zone-harness: AppZone, zone-runtime.ts, the app worker, OffscreenCanvas and the SDK's hello-canvas fixture). |
 | `check-assertions-can-fail.mjs` | An assertion no input could falsify is worse than no assertion: it reports a guarantee it does not provide. |
 | `check-baselines-are-committed.mjs` | A gate that rewrites its own baseline, left uncommitted, stops being a gate. |
-| `check-browser-installs-use-the-script.mjs` | Every browser install in CI goes through scripts/ci/install-chromium.sh. |
+| `check-browser-installs-use-the-script.mjs` | Every browser install in CI goes through the install-chromium action, which runs scripts/ci/install-chromium.sh with the browser and apt packages cached. |
 | `check-bundle-budget.mjs` | Fails the build if the landing route's critical path grows past its budget. |
 | `check-captured-is-not-failed.mjs` | What a spec CAPTURES from the console is not what it counts as a FAILURE. |
 | `check-cdoc-paint-perf.mjs` | Prints the Citadel Docs paint-path numbers on the 100-page golden: decode, first-page paint, atlas hit rate. |
