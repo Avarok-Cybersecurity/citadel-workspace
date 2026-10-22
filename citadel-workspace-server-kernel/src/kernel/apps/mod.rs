@@ -30,8 +30,10 @@ pub mod facts;
 pub mod fetcher;
 #[cfg(not(target_family = "wasm"))]
 pub mod fetcher_native;
+pub mod ihttp_adverts;
 pub mod ihttp_flow;
 pub mod ihttp_relay;
+pub mod ihttp_relay_end;
 pub mod ihttp_relay_types;
 pub mod ihttp_routes;
 pub mod install;
@@ -48,7 +50,11 @@ mod audience_tests;
 #[cfg(test)]
 mod effective_tests;
 #[cfg(test)]
+mod egress_in_flight_tests;
+#[cfg(test)]
 mod egress_tests;
+#[cfg(test)]
+mod ihttp_adverts_tests;
 #[cfg(test)]
 mod ihttp_relay_tests;
 #[cfg(test)]
@@ -78,9 +84,13 @@ mod kernel_member_tests;
 #[cfg(test)]
 mod kernel_purge_tests;
 #[cfg(test)]
+mod kernel_release_change_tests;
+#[cfg(test)]
 mod kernel_scope_tests;
 #[cfg(test)]
 mod kernel_session_tests;
+#[cfg(test)]
+mod kernel_withdraw_tests;
 #[cfg(test)]
 mod md_header_tests;
 #[cfg(test)]

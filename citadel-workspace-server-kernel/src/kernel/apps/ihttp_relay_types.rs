@@ -29,6 +29,8 @@ pub enum RelayFault {
     RelayStreamId,
     /// `until_ms` is not in the next `MAX_ADVERT_MS`.
     AdvertWindow,
+    /// The advertising instance's name is not 1 to 64 of `[A-Za-z0-9_-]`.
+    Instance,
     Flow(FlowFault),
 }
 

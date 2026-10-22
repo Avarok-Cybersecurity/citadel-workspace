@@ -18,6 +18,18 @@ impl App for Panics {
             }
         }
     }
+
+    // The ABI's lifecycle: nothing to pause, nothing to persist.
+    fn suspend(&mut self, _reason: citadel_app_sdk::SuspendReason) {}
+
+    fn resume(&mut self) {}
+
+    fn close(
+        &mut self,
+        _ctx: &citadel_app_sdk::CloseContext,
+        _reason: citadel_app_sdk::CloseReason,
+    ) {
+    }
 }
 
 export_app!(Panics);

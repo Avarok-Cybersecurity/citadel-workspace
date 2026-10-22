@@ -42,9 +42,9 @@ pub fn caps(list: &Value) -> Vec<Capability> {
         .collect()
 }
 
-/// The context every run starts with. The values are arbitrary but fixed; only `granted`
-/// matters to a fixture, and the host's checks never read the context.
-pub fn context(granted: &[Capability]) -> citadel_app_sdk_types::AppContext {
+/// The context every run starts with. The values are arbitrary but fixed; only `granted` and
+/// the run's close grace matter to a fixture, and the host's checks never read the context.
+pub fn context(granted: &[Capability], close_grace_ms: u32) -> citadel_app_sdk_types::AppContext {
     use citadel_app_sdk_types::{AppContext, AppScope, Size, Surface};
     AppContext {
         app_id: "net.avarok.fixture".into(),
@@ -61,5 +61,6 @@ pub fn context(granted: &[Capability]) -> citadel_app_sdk_types::AppContext {
         locale: "en".into(),
         acting_username: "alice".into(),
         node_id: "root".into(),
+        close_grace_ms,
     }
 }

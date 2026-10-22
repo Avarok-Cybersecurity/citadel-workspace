@@ -52,15 +52,15 @@ fn opened(relay: &mut IhttpRelay, stream: u64, body_len: Option<u64>) -> u64 {
 fn an_advertisement_is_short_lived_and_names_its_member() {
     let mut relay = IhttpRelay::default();
     assert_eq!(
-        relay.advertise("i1", 2, "bob", NOW, NOW),
+        relay.advertise("i1", 2, "bob", "z1", NOW, NOW),
         Err(RelayFault::AdvertWindow)
     );
     assert_eq!(
-        relay.advertise("i1", 2, "bob", NOW + MAX_ADVERT_MS + 1, NOW),
+        relay.advertise("i1", 2, "bob", "z1", NOW + MAX_ADVERT_MS + 1, NOW),
         Err(RelayFault::AdvertWindow)
     );
     relay
-        .advertise("i1", 2, "bob", NOW + 60_000, NOW)
+        .advertise("i1", 2, "bob", "z1", NOW + 60_000, NOW)
         .expect("ok");
     assert_eq!(relay.host("i1", None, NOW), Some((2, "bob".into())));
     assert_eq!(relay.host("i1", Some("bob"), NOW), Some((2, "bob".into())));
@@ -210,7 +210,7 @@ fn a_cancel_or_the_timeout_closes_the_stream() {
 fn a_session_that_ends_takes_its_adverts_and_streams() {
     let mut relay = IhttpRelay::default();
     relay
-        .advertise("i1", 2, "bob", NOW + 60_000, NOW)
+        .advertise("i1", 2, "bob", "z1", NOW + 60_000, NOW)
         .expect("ok");
     opened(&mut relay, 1, None);
     opened(&mut relay, 2, None);

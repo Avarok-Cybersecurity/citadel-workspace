@@ -37,7 +37,7 @@ pub fn valid() -> Value {
             { "cap": "ihttp.serve", "routes": ["GET /cards/:id", "POST /cards", "GET /static/*"], "why": "Shares your board", "optional": true },
             { "cap": "ihttp.call", "targets": ["com.acme.lint"], "why": "Asks the linter", "optional": true }
         ],
-        "limits": { "memory_pages": 1024, "max_call_rate_per_s": 200, "frame_budget_ms": 16, "storage_user_bytes": 1048576, "storage_scope_bytes": 8388608 },
+        "limits": { "memory_pages": 1024, "max_call_rate_per_s": 200, "frame_budget_ms": 16, "storage_user_bytes": 1048576, "storage_scope_bytes": 8388608, "close_grace_ms": 500 },
         "artifact": {
             "sha256": "0".repeat(64),
             "bytes": 1234567,

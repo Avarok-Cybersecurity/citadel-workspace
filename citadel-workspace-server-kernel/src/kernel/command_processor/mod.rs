@@ -82,6 +82,8 @@ pub mod apps_gather;
 mod apps_header;
 /// `AdvertiseService` and `IhttpSend`: internal HTTP relayed between sessions.
 mod apps_ihttp;
+/// `WithdrawService`, and an install's relay state ending with its release.
+mod apps_ihttp_end;
 /// Which install an internal-HTTP request is for.
 mod apps_ihttp_target;
 /// `Install`.

@@ -116,7 +116,7 @@ async fn serve<R: Ratchet + Send + Sync + 'static>(
     match call {
         HostCall::Storage(op) => serve_storage(kernel, caller, install, &target, op).await,
         HostCall::Net(NetOps::ServerFetch(fetch)) => {
-            Ok(server_fetch(kernel, caller, install, fetch).await)
+            server_fetch(kernel, caller, install, fetch).await
         }
         _ => Ok(reply_refused(Refused::Unavailable(
             "workspace_server".to_string(),
@@ -124,19 +124,34 @@ async fn serve<R: Ratchet + Send + Sync + 'static>(
     }
 }
 
+/// The policy reason an egress answer is withheld with when the install that asked for it was
+/// removed, or its release replaced, while the request was in flight.
+pub(super) const ENDED_IN_FLIGHT: &str = "install_ended";
+
 async fn server_fetch<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     caller: &Caller<'_>,
     install: &AppInstall,
     fetch: &ServerFetch,
-) -> Vec<u8> {
+) -> Step<Vec<u8>> {
     let Some(egress) = kernel.server_egress() else {
-        return reply_refused(Refused::Unavailable("server_egress".to_string()));
+        return Ok(reply_refused(Refused::Unavailable(
+            "server_egress".to_string(),
+        )));
     };
     let key = (install.id.clone(), caller.user.to_string());
     let hosts = &install.details.server_network_hosts;
-    match egress.fetch(&key, hosts, &fetch.request, caller.now).await {
+    let answer = egress.fetch(&key, hosts, &fetch.request, caller.now).await;
+    // A response for an install that ended meanwhile is not delivered to what replaced it.
+    let backend = &kernel.domain_operations.backend_tx_manager;
+    let now = backend.app_install(&install.id).await?;
+    if now.is_none_or(|i| i.manifest_sha256 != install.manifest_sha256) {
+        return Ok(reply_refused(Refused::Unavailable(
+            ENDED_IN_FLIGHT.to_string(),
+        )));
+    }
+    Ok(match answer {
         Ok(response) => reply_ok(response),
         Err(refused) => reply_refused(refused),
-    }
+    })
 }

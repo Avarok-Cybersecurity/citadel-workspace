@@ -11,12 +11,14 @@ pub use crate::remote::IhttpRemote;
 use crate::remote::Remote;
 use crate::state::{group_call, reply_len, reply_read};
 pub use crate::state::{Limits, State};
-use citadel_app_sdk_types::abi::{MEMORY, NAMESPACE, REPLY_LEN, REPLY_READ};
-use citadel_app_sdk_types::{encode, AppContext, AppEvent, Capability, Group};
+use citadel_app_sdk_types::abi::{EXPORT_CLOSE, MEMORY, NAMESPACE, REPLY_LEN, REPLY_READ};
+use citadel_app_sdk_types::{
+    encode, AppContext, AppEvent, Capability, CloseReason, Group, LifecycleState, LifecycleStep,
+};
 use std::collections::BTreeMap;
 use wasmi::{Caller, Config, Engine, Linker, Memory, MemoryType, Module, Store, TypedFunc};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Trap {
     OutOfFuel,
     Other(String),
@@ -30,6 +32,7 @@ pub struct Instance {
     init: TypedFunc<(i32, i32), i32>,
     event: TypedFunc<(i32, i32), ()>,
     frame: Option<TypedFunc<i32, ()>>,
+    close: TypedFunc<i32, i32>,
 }
 
 fn trap(e: wasmi::Error) -> Trap {
@@ -63,6 +66,8 @@ impl Instance {
             inbound: vec![],
             log: vec![],
             calls: vec![],
+            lifecycle: LifecycleState::Created,
+            kv: BTreeMap::new(),
         };
         let mut store = Store::new(&engine, state);
         store.set_fuel(limits.fuel_per_call).expect("fuel is on");
@@ -88,12 +93,17 @@ impl Instance {
             init: inst.get_typed_func(&store, "app_init").unwrap(),
             event: inst.get_typed_func(&store, "app_event").unwrap(),
             frame: inst.get_typed_func(&store, "app_frame").ok(),
+            close: inst.get_typed_func(&store, EXPORT_CLOSE).unwrap(),
             store,
             memory,
         }
     }
 
+    /// Fuel for the next call, except while closing: then the close grace's fuel is all there is.
     fn refuel(&mut self) {
+        if self.store.data().lifecycle == LifecycleState::Closing {
+            return;
+        }
         let fuel = self.store.data().limits.fuel_per_call;
         self.store.set_fuel(fuel).expect("fuel is on");
     }
@@ -118,15 +128,67 @@ impl Instance {
     }
 
     pub fn init(&mut self, ctx: &AppContext) -> Result<i32, Trap> {
-        self.with_buffer(&encode(ctx), |me, p, l| {
+        let got = self.with_buffer(&encode(ctx), |me, p, l| {
             me.init.call(&mut me.store, (p, l)).map_err(trap)
-        })
+        });
+        self.step(match got {
+            Ok(0) => LifecycleStep::Initialised,
+            _ => LifecycleStep::Abort,
+        });
+        got
+    }
+
+    /// The host's own lifecycle; a step it does not allow is a harness bug.
+    fn step(&mut self, step: LifecycleStep) {
+        let state = &mut self.store.data_mut().lifecycle;
+        *state = state.step(step).unwrap_or_else(|e| panic!("{e:?}"));
+    }
+
+    /// Start the app: `AppEvent::Init`.
+    pub fn start(&mut self) -> Result<(), Trap> {
+        self.step(LifecycleStep::Start);
+        self.event(&AppEvent::Init)
     }
 
     pub fn event(&mut self, event: &AppEvent) -> Result<(), Trap> {
-        self.with_buffer(&encode(event), |me, p, l| {
+        match event {
+            AppEvent::Suspend { .. } => self.step(LifecycleStep::Suspend),
+            AppEvent::Resume => self.step(LifecycleStep::Resume),
+            _ => {}
+        }
+        let got = self.with_buffer(&encode(event), |me, p, l| {
             me.event.call(&mut me.store, (p, l)).map_err(trap)
-        })
+        });
+        if got.is_err() {
+            self.step(LifecycleStep::Abort);
+        }
+        got
+    }
+
+    /// Close: `app_close(reason)` and then every reply it waits on, all inside the close grace's
+    /// fuel. Answers what `app_close` answered; the instance is closed either way.
+    pub fn close(&mut self, reason: CloseReason) -> Result<i32, Trap> {
+        self.step(LifecycleStep::Close);
+        let fuel = self.store.data().limits.close_grace_fuel;
+        self.store.set_fuel(fuel).expect("fuel is on");
+        let answered = self
+            .close
+            .call(&mut self.store, reason.code())
+            .map_err(trap);
+        let settled = answered.clone().and_then(|_| self.pump());
+        self.step(match settled {
+            Ok(()) => LifecycleStep::Settled,
+            Err(_) => LifecycleStep::Abort,
+        });
+        settled.and(answered)
+    }
+
+    /// `app_close` called again, past the host's own refusal: what the guest itself answers.
+    pub fn close_again(&mut self, reason: CloseReason) -> Result<i32, Trap> {
+        self.refuel();
+        self.close
+            .call(&mut self.store, reason.code())
+            .map_err(trap)
     }
 
     pub fn frame(&mut self, dt_ms: i32) -> Result<(), Trap> {

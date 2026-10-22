@@ -3,6 +3,7 @@
 
 use super::apps::{audit_entry, finish, Answer, Caller, Halt, Step};
 use super::apps_header::rewrite_mdx;
+use super::apps_ihttp_end::end_install_relay;
 use super::apps_member::visible_install;
 use crate::kernel::apps::install::grant_details;
 use crate::kernel::apps::md_header::remove;
@@ -79,6 +80,7 @@ pub(super) async fn uninstall<R: Ratchet + Send + Sync + 'static>(
         }
         let pending = backend.app_pending(&install.id).await?;
         backend.remove_app_install(&install).await?;
+        end_install_relay(kernel, &install.id);
         let mut manifests = vec![install.manifest_sha256.clone()];
         let mut artifacts = vec![install.artifact_sha256.clone()];
         for release in install.previous.iter() {
@@ -156,6 +158,7 @@ pub(super) async fn rollback<R: Ratchet + Send + Sync + 'static>(
         install.state = InstallState::Active;
         install.previous = None;
         backend.save_app_install(&install).await?;
+        end_install_relay(kernel, &install.id);
         backend.save_app_pending(&install.id, None).await?;
         let (mut manifests, mut artifacts) = (vec![dropped.0], vec![dropped.1]);
         for pending in pending.iter() {

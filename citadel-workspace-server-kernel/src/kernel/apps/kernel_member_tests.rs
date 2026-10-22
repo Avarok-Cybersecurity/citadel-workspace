@@ -199,8 +199,13 @@ async fn requests_this_server_does_not_take_are_typed_refusals() {
         },
         AppsRequest::AdvertiseService {
             install_id: "i".into(),
+            instance: "z".into(),
             routes_digest: "0".repeat(64),
             until_ms: 0,
+        },
+        AppsRequest::WithdrawService {
+            install_id: "i".into(),
+            instance: "z".into(),
         },
         AppsRequest::IhttpSend {
             from_install_id: "i".into(),

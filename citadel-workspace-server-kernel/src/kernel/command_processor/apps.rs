@@ -15,11 +15,13 @@
 //!   to an `AppManage` holder; anything else is `Unavailable`.
 //! - The app runtime's server side: `Call` (`apps_call`) re-checks the call's capability and
 //!   serves the storage backends and server egress; `AdvertiseService` and `IhttpSend`
-//!   (`apps_ihttp`) relay internal HTTP between members' sessions.
+//!   (`apps_ihttp`) relay internal HTTP between members' sessions, and `WithdrawService`
+//!   (`apps_ihttp_end`) ends what an instance served when its app closed.
 //! - `RequestInstall` is copy-link only in this release.
 
 use super::apps_call::call;
 use super::apps_ihttp::{advertise, send};
+use super::apps_ihttp_end::withdraw;
 use super::apps_install::install;
 use super::apps_lifecycle::{rollback, uninstall};
 use super::apps_listing::{get_listing, list_catalogue, publish};
@@ -149,9 +151,24 @@ pub(super) async fn process<R: Ratchet + Send + Sync + 'static>(
         } => call(kernel, &caller, install_id, bytes).await,
         AppsRequest::AdvertiseService {
             install_id,
+            instance,
             routes_digest,
             until_ms,
-        } => advertise(kernel, &caller, install_id, routes_digest, *until_ms).await,
+        } => {
+            advertise(
+                kernel,
+                &caller,
+                install_id,
+                instance,
+                routes_digest,
+                *until_ms,
+            )
+            .await
+        }
+        AppsRequest::WithdrawService {
+            install_id,
+            instance,
+        } => withdraw(kernel, &caller, install_id, instance).await,
         AppsRequest::IhttpSend {
             from_install_id,
             to,

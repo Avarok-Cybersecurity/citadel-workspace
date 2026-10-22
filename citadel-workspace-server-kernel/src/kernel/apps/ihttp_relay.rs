@@ -3,12 +3,14 @@
 //!
 //! An install is reachable through the relay only from a session that advertised it, as a peer
 //! is reachable over P2P only once its ILM capabilities carry `INTERNAL_HTTP`: unadvertised is
-//! unreachable. Advertisements and streams live in memory with the sessions that made them,
-//! and go with them (`forget_session`).
+//! unreachable. Advertisements (`ihttp_adverts`) and streams live in memory with the sessions
+//! that made them, and end with them, with the instance that withdraws, or with the install
+//! (`ihttp_relay_end`).
 //!
 //! The relay renumbers streams: the serving session sees ids the relay allocated, unique on its
 //! connection and increasing, so two callers who both chose stream 1 never collide there.
 
+use super::ihttp_adverts::Adverts;
 use super::ihttp_flow::{Side, StreamFlow};
 pub use super::ihttp_relay_types::{Endpoint, Forward, RelayFault, RelayHandle};
 use citadel_ihttp_types::{
@@ -24,16 +26,10 @@ pub const MAX_ADVERT_MS: u64 = 120_000;
 pub const RELAY_STREAM_BIT: u64 = 1 << 63;
 
 #[derive(Debug, Clone)]
-struct Advert {
-    username: String,
-    until_ms: u64,
-}
-
-#[derive(Debug, Clone)]
-struct RelayStream {
-    client: Endpoint,
-    client_stream: u64,
-    server: Endpoint,
+pub(super) struct RelayStream {
+    pub(super) client: Endpoint,
+    pub(super) client_stream: u64,
+    pub(super) server: Endpoint,
     opened_ms: u64,
     deadline_ms: u64,
     flow: StreamFlow,
@@ -44,21 +40,21 @@ type ClientKey = (u64, String, u64);
 
 #[derive(Debug, Default)]
 pub struct IhttpRelay {
-    /// Install id to the sessions serving it.
-    adverts: HashMap<String, HashMap<u64, Advert>>,
+    pub(super) adverts: Adverts,
     /// Relay stream id (unique, increasing) to the stream.
-    streams: HashMap<u64, RelayStream>,
+    pub(super) streams: HashMap<u64, RelayStream>,
     by_client: HashMap<ClientKey, u64>,
     next_id: u64,
 }
 
 impl IhttpRelay {
-    /// `cid`, signed in as `username`, serves `install_id` until `until_ms`.
+    /// `cid`, signed in as `username`, serves `install_id` until `until_ms`, for `instance`.
     pub fn advertise(
         &mut self,
         install_id: &str,
         cid: u64,
         username: &str,
+        instance: &str,
         until_ms: u64,
         now_ms: u64,
     ) -> Result<(), RelayFault> {
@@ -66,15 +62,8 @@ impl IhttpRelay {
             return Err(RelayFault::AdvertWindow);
         }
         self.expire(now_ms);
-        let advert = Advert {
-            username: username.to_string(),
-            until_ms,
-        };
         self.adverts
-            .entry(install_id.to_string())
-            .or_default()
-            .insert(cid, advert);
-        Ok(())
+            .advertise(install_id, cid, username, instance, until_ms)
     }
 
     /// A session serving `install_id` now (as `username`, if given): the one advertised
@@ -85,12 +74,7 @@ impl IhttpRelay {
         username: Option<&str>,
         now_ms: u64,
     ) -> Option<(u64, String)> {
-        self.adverts
-            .get(install_id)?
-            .iter()
-            .filter(|(_, a)| a.until_ms > now_ms && username.is_none_or(|u| a.username == u))
-            .max_by_key(|(cid, a)| (a.until_ms, **cid))
-            .map(|(cid, a)| (*cid, a.username.clone()))
+        self.adverts.host(install_id, username, now_ms)
     }
 
     /// Open a stream from `client` (its id `client_stream`) to `server`, whose `RequestHead`
@@ -203,7 +187,7 @@ impl IhttpRelay {
         Ok(forward)
     }
 
-    fn close(&mut self, id: u64) {
+    pub(super) fn close(&mut self, id: u64) {
         if let Some(stream) = self.streams.remove(&id) {
             let key = (
                 stream.client.cid,
@@ -216,10 +200,7 @@ impl IhttpRelay {
 
     /// Drop advertisements and streams whose time is up.
     pub fn expire(&mut self, now_ms: u64) {
-        self.adverts.retain(|_, sessions| {
-            sessions.retain(|_, a| a.until_ms > now_ms);
-            !sessions.is_empty()
-        });
+        self.adverts.expire(now_ms);
         let over: Vec<u64> = self
             .streams
             .iter()
@@ -227,23 +208,5 @@ impl IhttpRelay {
             .map(|(id, _)| *id)
             .collect();
         over.into_iter().for_each(|id| self.close(id));
-    }
-
-    /// The session `cid` ended: whatever it advertised, and every stream it was an end of.
-    /// Answers how many streams that closed.
-    pub fn forget_session(&mut self, cid: u64) -> usize {
-        self.adverts.retain(|_, sessions| {
-            sessions.remove(&cid);
-            !sessions.is_empty()
-        });
-        let gone: Vec<u64> = self
-            .streams
-            .iter()
-            .filter(|(_, s)| s.client.cid == cid || s.server.cid == cid)
-            .map(|(id, _)| *id)
-            .collect();
-        let closed = gone.len();
-        gone.into_iter().for_each(|id| self.close(id));
-        closed
     }
 }

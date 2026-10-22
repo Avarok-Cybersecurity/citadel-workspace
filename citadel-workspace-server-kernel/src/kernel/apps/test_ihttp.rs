@@ -69,8 +69,27 @@ pub(crate) async fn advertise_digest(
 ) -> AppsResponse {
     let request = AppsRequest::AdvertiseService {
         install_id: install_id.into(),
+        instance: ZONE.into(),
         routes_digest: routes_digest.into(),
         until_ms: now_ms() + 60_000,
+    };
+    ask_on(kernel, who, cid, request).await
+}
+
+/// The instance every test host advertises from.
+pub(crate) const ZONE: &str = "zone-1";
+
+/// `instance` of `who`'s session (`cid`) withdraws `install_id`.
+pub(crate) async fn withdraw(
+    kernel: &Kernel,
+    who: &str,
+    cid: Option<u64>,
+    install_id: &str,
+    instance: &str,
+) -> AppsResponse {
+    let request = AppsRequest::WithdrawService {
+        install_id: install_id.into(),
+        instance: instance.into(),
     };
     ask_on(kernel, who, cid, request).await
 }

@@ -37,6 +37,7 @@ fn relay_refusal(fault: RelayFault) -> AppsRefusal {
         RelayFault::NoStream => AppsRefusal::Unavailable,
         RelayFault::Busy => AppsRefusal::Limit("streams".to_string()),
         RelayFault::AdvertWindow => AppsRefusal::Limit("until_ms".to_string()),
+        RelayFault::Instance => AppsRefusal::Limit("instance".to_string()),
         RelayFault::StreamInUse | RelayFault::RelayStreamId | RelayFault::Flow(_) => {
             AppsRefusal::Policy
         }
@@ -60,6 +61,7 @@ pub(super) async fn advertise<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     caller: &Caller<'_>,
     install_id: &str,
+    instance: &str,
     routes_digest: &str,
     until_ms: u64,
 ) -> Answer {
@@ -82,7 +84,14 @@ pub(super) async fn advertise<R: Ratchet + Send + Sync + 'static>(
         kernel
             .apps_relay()
             .lock()
-            .advertise(&install.id, cid, caller.user, until_ms, caller.now)
+            .advertise(
+                &install.id,
+                cid,
+                caller.user,
+                instance,
+                until_ms,
+                caller.now,
+            )
             .map_err(relay_refusal)?;
         Ok(AppsResponse::Advertised { until_ms })
     };

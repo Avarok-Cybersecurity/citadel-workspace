@@ -5,6 +5,7 @@ use crate::apps_manifest::{AppLimits, ArtifactLocation, ArtifactRef, CapabilityR
 use crate::apps_manifest_check::{distinct, https_url, lower_hex, plain_text, ManifestRefusal};
 use citadel_app_id::validate_app_id;
 use citadel_app_net_policy::{Egress, NetGrant, METHODS};
+pub use citadel_app_sdk_types::abi::MAX_CLOSE_GRACE_MS;
 
 pub const MAX_WHY_CHARS: usize = 200;
 pub const MAX_CALL_TARGETS: usize = 16;
@@ -129,6 +130,10 @@ pub(crate) fn check_limits(limits: &AppLimits) -> Result<(), ManifestRefusal> {
         (
             "storage_scope_bytes",
             limits.storage_scope_bytes <= MAX_STORAGE_SCOPE_BYTES,
+        ),
+        (
+            "close_grace_ms",
+            within(limits.close_grace_ms, MAX_CLOSE_GRACE_MS),
         ),
     ];
     match checks.iter().find(|(_, ok)| !ok) {

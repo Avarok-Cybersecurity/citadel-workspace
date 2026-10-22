@@ -97,8 +97,9 @@ const SKIP = new Map([
   // Not written here: a byte-for-byte copy of citadel-app-sdk-types' generated ABI
   // constants (every op's arguments and reply), held to its source by the UI's
   // generated-drift test. Splitting it would break that equality; it changes only
-  // when the SDK does, and then this entry moves with it.
-  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 344],
+  // when the SDK does, and then this entry moves with it. 381: the app lifecycle's transition
+  // table, close reasons and the closing groups, generated from lifecycle.rs (docs/app-lifecycle.md).
+  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 381],
 ]);
 
 if (!statSync(SRC, { throwIfNoEntry: false })) {

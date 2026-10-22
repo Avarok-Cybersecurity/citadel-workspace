@@ -117,6 +117,8 @@ Rust guest (`citadel-app-sdk`): `storage::{user,scope,node(id),local}() -> Kv {g
 
 TS host ports (`src/lib/citadel-apps/host/ports.ts`, injected; pure dispatcher): `StoragePort`, `BlobPort`, `HostNetPort` (-> agent `AppFetch`; absent without an agent), `ServerNetPort` (-> `AppsRequest::Call{Net}`), `IhttpPort {advertise, send, onFrame}`. `host/ihttp-router.ts` (pure) matches routes, enforces stream limits and credit; tested with fakes.
 
+The lifecycle (start, suspend/resume, the required `app_close(reason)`, the manifest's bounded close grace, and what the host and the server release on every exit path) is `docs/app-lifecycle.md`.
+
 ### R4.7 Threat model additions
 SSRF (policy crate, resolve-then-pin, deny ranges, same-host redirects, explicit hosts; agent port hard-denied); confused deputy across users (the serving app's calls run with the SERVING user's authority and its own install's caps, never the caller's; the `caller` field is stamped by the session/kernel); impersonation (no app-asserted identity field exists in the wire format); request smuggling (CBOR frames, no HTTP/1.1 parsing); DoS of a serving host (per-caller and per-server limits, credit backpressure, timeouts, kernel per-CID limiter); exfiltration (explicit hosts accepted one by one; no ambient credentials); relay plaintext exposure (P2P preferred; `via: relay` shown); DNS rebinding (pinned connect); port-scanning via error timing (uniform `Policy` refusal before any connection).
 
