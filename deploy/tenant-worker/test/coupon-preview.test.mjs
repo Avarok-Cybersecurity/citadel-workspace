@@ -13,14 +13,17 @@ import { freshIp, issueCode, preview, previewBody } from "./coupon-helpers.mjs";
 describe("the preview's limits", () => {
   it("20 previews an hour from one address; the 21st is 429 before any lookup; another address is unaffected", async () => {
     const ip = freshIp();
-    for (let i = 0; i < 20; i++) expect((await preview(previewBody("LAUNCH10"), ip)).status).toBe(200);
-    const limited = await preview(previewBody("LAUNCH10"), ip);
+    const code = await issueCode({ template: "pct-10-once" });
+    for (let i = 0; i < 20; i++) expect((await preview(previewBody(code), ip)).status).toBe(200);
+    const limited = await preview(previewBody(code), ip);
     expect(limited.status).toBe(429);
     expect(await limited.json()).toEqual({ error: "coupon-rate-limited", detail: "Too many attempts. Try again in an hour." });
-    expect((await preview(previewBody("LAUNCH10"), freshIp())).status).toBe(200);
+    expect((await preview(previewBody(code), freshIp())).status).toBe(200);
   });
 
-  it("looks a code up with the same statements whether it is unknown, static or dynamic", async () => {
+  // A static code is matched in memory after this same lookup (coupon-rules.mjs `pick`), so the
+  // statements cannot depend on it either; tiers.json ships none (coupon-rules.test.mjs has its own).
+  it("looks a code up with the same statements whether it is unknown or dynamic", async () => {
     const dynamic = await issueCode({ template: "pct-10-once" });
     const statements = [];
     const db = env.CONTROL_DB;
@@ -36,13 +39,12 @@ describe("the preview's limits", () => {
     };
     const io = { ...ioFor(env), coupons: new CouponStore(counting) };
     const shapes = [];
-    for (const code of ["NOSUCHCODE2", "LAUNCH10", dynamic]) {
+    for (const code of ["NOSUCHCODE2", dynamic]) {
       statements.length = 0;
       await couponFor(io, code, { slug: null, tier: "team", interval: "month" });
       shapes.push([...statements]);
     }
     expect(shapes[0].length).toBeGreaterThan(0);
     expect(shapes[1]).toEqual(shapes[0]);
-    expect(shapes[2]).toEqual(shapes[0]);
   });
 });

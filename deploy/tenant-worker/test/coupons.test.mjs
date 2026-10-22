@@ -57,7 +57,8 @@ describe("a code that does not apply", () => {
 
   it("is refused at preview with the same bytes, the free tier among them", async () => {
     const ip = freshIp();
-    const cases = [...(await refusals()), ["free tier", "LAUNCH10", { tier: "free" }]];
+    const applies = await issueCode({ template: "pct-10-once" });
+    const cases = [...(await refusals()), ["free tier", applies, { tier: "free" }]];
     for (const [name, code, plan] of cases) {
       const r = await preview(previewBody(code, plan), ip);
       expect([name, r.status, await r.text()]).toEqual([name, 400, UNAVAILABLE_BODY]);
@@ -66,7 +67,7 @@ describe("a code that does not apply", () => {
 
   it("the free tier takes no coupon_code at creation", async () => {
     outbound();
-    const r = await post("/api/tenants", createBody(freshSlug("fc"), { coupon_code: "LAUNCH10" }));
+    const r = await post("/api/tenants", createBody(freshSlug("fc"), { coupon_code: await issueCode({ template: "pct-10-once" }) }));
     expect(r.status).toBe(400);
     expect((await r.json()).detail).toMatch(/the free tier takes no .*coupon_code/);
   });
@@ -86,14 +87,15 @@ describe("a code that applies", () => {
     expect(row.coupon_hash).toBe((await redemptionsOf(code))[0].coupon_hash);
   });
 
-  it("previews as the UI's contract says, static and dynamic alike", async () => {
+  it("previews as the UI's contract says, a code typed in lower case among them", async () => {
     const ip = freshIp();
+    const percent = await issueCode({ template: "pct-10-once" });
     const trial = await issueCode({ template: "trial-14" });
     const amount = await issueCode({ template: "usd-10-once" });
     const repeating = await issueCode({ template: "pct-20-3mo", intervals: ["month"] });
     const comp = await issueCode({ grant_id: "design-partner", available_on: ["business"], intervals: ["month"], max_redemptions: 1 });
     const answers = [];
-    for (const [code, plan] of [["launch10", {}], [trial, {}], [amount, {}], [repeating, {}], [comp, { tier: "business" }]]) {
+    for (const [code, plan] of [[percent.toLowerCase(), {}], [trial, {}], [amount, {}], [repeating, {}], [comp, { tier: "business" }]]) {
       const r = await preview(previewBody(code, plan), ip);
       expect(r.status).toBe(200);
       answers.push(await r.json());

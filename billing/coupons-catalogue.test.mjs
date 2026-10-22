@@ -13,16 +13,30 @@ const withCoupons = (edit) => {
   return copy;
 };
 const template = (coupons, id) => coupons.templates.find((t) => t.id === id);
+/** A public code of the tests' own: the shipped file carries none until the owner approves one. */
+const TEST_STATIC = {
+  code: 'TESTCODE10', template: 'pct-10-once', available_on: ['team', 'business'], intervals: ['month', 'year'],
+  max_redemptions: 500, redeem_by: '2099-12-31T23:59:59Z',
+};
+/** `withCoupons` over a table that also lists TEST_STATIC as its first static code. */
+const withStatic = (edit) => withCoupons((c) => {
+  c.static.unshift(structuredClone(TEST_STATIC));
+  edit(c);
+});
 
-test('the approved coupons block loads, one static code in the shape a dynamic one has', () => {
+test('the shipped coupons block loads with no public code: none is approved', () => {
   const cat = couponCatalogue(table);
   assert.deepEqual([...cat.templates.keys()], ['pct-10-once', 'pct-20-3mo', 'usd-10-once', 'trial-14']);
   assert.deepEqual([...cat.grants.keys()], ['design-partner', 'owner-internal']);
-  assert.deepEqual(cat.statics, [{
-    code: 'LAUNCH10', template: 'pct-10-once', grant_id: null, available_on: ['team', 'business'], intervals: ['month', 'year'],
-    max_redemptions: 500, redeem_by_ms: Date.parse('2026-12-31T23:59:59Z'),
-  }]);
+  assert.deepEqual(cat.statics, []);
   assert.deepEqual(cat.paidTiers, ['team', 'business']);
+});
+
+test('a static code loads in the shape a dynamic one has', () => {
+  assert.deepEqual(couponCatalogue(withStatic(() => {})).statics, [{
+    code: 'TESTCODE10', template: 'pct-10-once', grant_id: null, available_on: ['team', 'business'], intervals: ['month', 'year'],
+    max_redemptions: 500, redeem_by_ms: Date.parse('2099-12-31T23:59:59Z'),
+  }]);
 });
 
 test('Stripe coupon ids are content-addressed and stable', async () => {
@@ -88,8 +102,8 @@ test('malformed grants and static codes are refused at load', () => {
     [(c) => { delete grant(c).unlimited; }, /lacks unlimited/],
     [(c) => { delete grant(c).alarm.members; }, /alarm lacks members/],
     [(c) => { grant(c).alarm.storage_gb = 0; }, /alarm.storage_gb/],
-    [(c) => { c.static.push(structuredClone(c.static[0])); }, /duplicate static coupon LAUNCH10/],
-    [(c) => { c.static[0].code = 'launch10'; }, /code_shape/],
+    [(c) => { c.static.push(structuredClone(c.static[0])); }, /duplicate static coupon TESTCODE10/],
+    [(c) => { c.static[0].code = 'testcode10'; }, /code_shape/],
     [(c) => { c.static[0].available_on = ['free']; }, /available_on names free/],
     [(c) => { c.static[0].available_on = []; }, /available_on is a non-empty list/],
     [(c) => { c.static[0].template = 'no-such'; }, /no template no-such/],
@@ -101,7 +115,9 @@ test('malformed grants and static codes are refused at load', () => {
     [(c) => { c.code_shape = '[A-Z]+'; }, /anchored/],
     [(c) => { delete c.flat_max_cents; }, /lacks flat_max_cents/],
   ];
-  for (const [edit, why] of cases) assert.throws(() => couponCatalogue(withCoupons(edit)), why);
+  for (const [edit, why] of cases) assert.throws(() => couponCatalogue(withStatic(edit)), why);
+  // The control: the table with its static code, unedited, loads.
+  assert.doesNotThrow(() => couponCatalogue(withStatic(() => {})));
 });
 
 test('a dynamic code for an unlimited grant needs an expiry; any other may have none', () => {

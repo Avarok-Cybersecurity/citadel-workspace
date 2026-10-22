@@ -23,7 +23,12 @@ import { periodAt } from "./meter.mjs";
 import { stripe } from "./stripe.mjs";
 
 /** Whole GB of metered usage beyond what the tier includes. */
-export const overageGb = (bytes, includedGb) => Math.max(0, Math.floor(bytes / METERING.gb_bytes) - includedGb);
+/** Whole GB relayed past `includedGb`; none past no limit (`null`, an unlimited grant's). */
+export function overageGb(bytes, includedGb) {
+  if (includedGb === null) return 0;
+  if (!Number.isInteger(includedGb) || includedGb < 0) throw new Error(`relay_gb_included is a count or null (${JSON.stringify(includedGb)})`);
+  return Math.max(0, Math.floor(bytes / METERING.gb_bytes) - includedGb);
+}
 
 export async function runMonitor(io, cfg) {
   const failures = [];

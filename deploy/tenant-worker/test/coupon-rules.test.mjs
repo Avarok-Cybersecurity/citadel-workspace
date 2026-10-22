@@ -7,7 +7,10 @@ import { nodeStorage } from "../control/tenant-node.mjs";
 import { relayAllowed } from "../control/ice.mjs";
 import { Meter } from "../control/meter.mjs";
 import { alarmsOf } from "../control/coupon-alarm.mjs";
-import { normaliseCode, offerOf, redeemable } from "../control/coupon-rules.mjs";
+import { overageGb } from "../control/monitor.mjs";
+import { codeHash, isStaticHash, normaliseCode, offerOf, pick, redeemable, staticCoupons, staticCouponsOf } from "../control/coupon-rules.mjs";
+import { couponCatalogue } from "../../../billing/coupons-catalogue.mjs";
+import tiers from "../../../billing/tiers.json";
 
 const GB = 1e9;
 const none = { period_start: null, period_end: null, grant_id: null, grant_unlimited: 0, trial_end: null, stripe_status: null };
@@ -57,6 +60,12 @@ describe("entitlements v2", () => {
     expect(enforcedEntitlements(e)).toEqual(e);
   });
 
+  it("relay past no limit is no overage; past a count it is the whole GB beyond it", () => {
+    expect([overageGb(1e15, null), overageGb(0, null)]).toEqual([0, 0]);
+    expect([overageGb(62 * GB, 60), overageGb(59 * GB, 60)]).toEqual([2, 0]);
+    expect(() => overageGb(GB, undefined)).toThrow(/count or null/);
+  });
+
   it("a null limit without unlimited is a record no limit can be read from", () => {
     expect(() => limitOf({ ...V1, storage_gb: null }, "storage_gb")).toThrow(/without being unlimited/);
     expect(() => quotaBytes({ ...V1, storage_gb: null })).toThrow(/without being unlimited/);
@@ -104,10 +113,36 @@ describe("redeemable", () => {
     expect(redeemable({ ...c, redeem_by_ms: null }, plan, 8e15, 0)).toEqual({ ok: true });
   });
   it("normalises codes, and refuses what no code_shape matches", () => {
-    expect([normaliseCode(" launch10 "), normaliseCode("ab"), normaliseCode(7), normaliseCode("x".repeat(65))]).toEqual(["LAUNCH10", null, null, null]);
+    expect([normaliseCode(" spring10 "), normaliseCode("ab"), normaliseCode(7), normaliseCode("x".repeat(65))]).toEqual(["SPRING10", null, null, null]);
   });
   it("offers what tiers.json says", () => {
     expect(offerOf({ kind: "comp", grant_id: "owner-internal" })).toEqual({ applies: true, kind: "comp", tier_as: "business", seats: 100 });
+  });
+});
+
+describe("static codes", () => {
+  // The tests' own table, through the pure loader: billing/tiers.json ships no public code.
+  const table = structuredClone(tiers);
+  table.coupons.static.push({ code: "TESTCODE10", template: "pct-10-once", available_on: ["team"], intervals: ["month"], max_redemptions: 3, redeem_by: "2099-01-01T00:00:00Z" });
+  const listed = () => staticCouponsOf(couponCatalogue(table).statics);
+
+  it("tiers.json ships none", async () => {
+    expect(await staticCoupons()).toEqual([]);
+  });
+  it("a static code wins its own hash over any row, and is redeemable as a dynamic one would be", async () => {
+    const statics = await listed();
+    const hash = await codeHash("TESTCODE10");
+    const found = pick(statics, hash, null);
+    expect(found).toMatchObject({ source: "static", kind: "discount", template: "pct-10-once", available_on: ["team"], max_redemptions: 3, revoked_at_ms: null });
+    expect(redeemable(found, { tier: "team", interval: "month" }, Date.now(), 0)).toEqual({ ok: true });
+    expect(redeemable(found, { tier: "team", interval: "month" }, Date.now(), 3).reason).toBe("exhausted");
+    expect(pick(statics, await codeHash("NOSUCHCODE2"), null)).toBeNull();
+  });
+  it("is what the admin route refuses to shadow or revoke", async () => {
+    const statics = await listed();
+    expect(isStaticHash(statics, await codeHash("TESTCODE10"))).toBe(true);
+    expect(isStaticHash(statics, await codeHash("PARTNER-ACME"))).toBe(false);
+    expect(isStaticHash(await staticCoupons(), await codeHash("TESTCODE10"))).toBe(false);
   });
 });
 

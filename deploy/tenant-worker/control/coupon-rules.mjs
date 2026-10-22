@@ -41,12 +41,18 @@ function coupon(source, hash, c, revokedAtMs) {
   });
 }
 
+/** A catalogue's static codes (`couponCatalogue(...).statics`), normalised and hashed. */
+export const staticCouponsOf = (list) => Promise.all(list.map(async (s) => coupon("static", await codeHash(s.code), s, null)));
+
 let statics = null;
-/** The static codes, normalised and hashed once per isolate. */
+/** billing/tiers.json's static codes, normalised and hashed once per isolate. */
 export function staticCoupons() {
-  statics ??= Promise.all(COUPONS.statics.map(async (s) => coupon("static", await codeHash(s.code), s, null)));
+  statics ??= staticCouponsOf(COUPONS.statics);
   return statics;
 }
+
+/** Whether `hash` is one of `staticList`'s codes. */
+export const isStaticHash = (staticList, hash) => staticList.some((s) => s.code_hash === hash);
 
 /** A D1 `coupons` row, normalised. */
 export function dynamicCoupon(row) {

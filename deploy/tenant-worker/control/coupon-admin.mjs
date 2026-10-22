@@ -16,7 +16,7 @@
  */
 import { json, readText, refuse } from "./http.mjs";
 import { COUPONS, entitlements, FREE_PLAN } from "./plans.mjs";
-import { codeHash, dynamicCoupon, kindOf, staticCoupons } from "./coupon-rules.mjs";
+import { codeHash, dynamicCoupon, isStaticHash, kindOf, staticCoupons } from "./coupon-rules.mjs";
 import { issuedCoupon, readAdminPayload } from "./coupon-admin-payload.mjs";
 
 /** `{ payload, signature }`: a payload of at most 4096 bytes and a 6618-character signature. */
@@ -48,9 +48,7 @@ export async function serveCouponAdmin(io, cfg, request, route) {
   return act(io, payload, nowMs);
 }
 
-async function isStatic(hash) {
-  return (await staticCoupons()).some((s) => s.code_hash === hash);
-}
+const isStatic = async (hash) => isStaticHash(await staticCoupons(), hash);
 
 async function issue(io, { nonce, action }, nowMs) {
   const hash = await codeHash(action.code);

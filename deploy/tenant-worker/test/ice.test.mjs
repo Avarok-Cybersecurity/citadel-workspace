@@ -19,9 +19,9 @@ const plan = (tier, extra = {}) =>
 const FREE_RELAY_BYTES = plan("free").relay_gb_included * METERING.gb_bytes;
 
 /** A minter on a clock the test moves, for a tenant on `tier` that has relayed `bytesIn`. */
-function minter({ tier = "free", bytesIn = 0, cfg = turn } = {}) {
+function minter({ tier = "free", bytesIn = 0, cfg = turn, extra = {} } = {}) {
   const clock = { now: T0 };
-  const tenant = { limits: plan(tier), bytesIn };
+  const tenant = { limits: plan(tier, extra), bytesIn };
   const m = new IceMinter(cfg, { fetch: (url, init) => fetch(url, init), nowMs: () => clock.now }, () => tenant);
   return { m, clock, tenant };
 }
@@ -98,6 +98,17 @@ describe("the plan's relay", () => {
     outbound();
     const { m } = minter({ tier: "team", bytesIn: 10 * plan("team").relay_gb_included * METERING.gb_bytes });
     expect((await m.mint("alice")).ice_servers).toBeDefined();
+  });
+});
+
+describe("an unlimited grant's relay", () => {
+  it("has no limit to reach: servers are minted however much it has relayed", async () => {
+    const { calls } = outbound();
+    const unlimited = { grant_id: "design-partner", grant_unlimited: 1, seats: 25 };
+    const { m, tenant } = minter({ tier: "business", bytesIn: 1e15, extra: unlimited });
+    expect(tenant.limits.relay_gb_included).toBeNull();
+    expect((await m.mint("alice")).ice_servers).toBeDefined();
+    expect(turnCalls(calls)).toHaveLength(1);
   });
 });
 
