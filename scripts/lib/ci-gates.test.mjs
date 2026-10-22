@@ -51,7 +51,7 @@ jobs:
         working-directory: parent
     steps:
       - name: Install Chromium
-        run: npx playwright install chromium
+        run: bash citadel-workspaces/scripts/ci/install-chromium.sh
       - name: \${{ matrix.gate.name }}
         run: \${{ matrix.gate.run }}
         env:
