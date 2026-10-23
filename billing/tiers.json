@@ -118,6 +118,31 @@
     "max_frame_bytes": 4194304,
     "flush_seconds": 60
   },
+  "paths": {
+    "$comment": "The path policy each tenant's server runs (control/path-policy.mjs). The owner's order, the same on every tier: Direct, then PeerRelay, then TURN, then the server relay. Tiers differ only in what the server relay may carry: real-time media only on the tiers listed, so a free call that cannot go peer to peer is refused with its reason instead of relayed through the server.",
+    "order": [
+      "Direct",
+      "PeerRelay",
+      "Turn",
+      "ServerRelay"
+    ],
+    "attempt_timeout_seconds": {
+      "Direct": 30,
+      "PeerRelay": 30,
+      "Turn": 30,
+      "ServerRelay": 30
+    },
+    "cost_weight": {
+      "Direct": 0,
+      "PeerRelay": 1,
+      "Turn": 2,
+      "ServerRelay": 3
+    },
+    "media_on_server_relay": [
+      "team",
+      "business"
+    ]
+  },
   "metered": [
     {
       "$comment": "Approved 2026-09-23. Relayed data beyond a tier's included relay_gb is billed per whole GB through a Stripe Billing Meter at 10 cents/GB: 2x Cloudflare Realtime TURN's list price ($0.05/GB) and at least 16x the tenant object's own relay cost (<= $0.006/GB). One price whichever path carried it, since customers do not choose the path. The margin covers Stripe's fees, the account-wide free TURN allowance running out, and support.",
