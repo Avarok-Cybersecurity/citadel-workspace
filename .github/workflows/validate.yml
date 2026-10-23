@@ -1713,6 +1713,10 @@ jobs:
           # to every window, the sealed re-join token, and logout ending all of them.
           - test: test:multi-window
             artifact: multi-window
+          # Compute Pool between two members: install a signed app, per-member P2P consent, P2P
+          # vs relay, the denials, and CID routing of IhttpFrameNotification across two tabs.
+          - test: test:apps-compute-pool
+            artifact: apps-compute-pool
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1811,6 +1815,16 @@ jobs:
           docker builder prune -af
           docker image prune -af
           df -h
+      # The spec signs the app with a seed it makes and never prints (apps-signing.ts), by
+      # `cargo +<pin> run` of apps/first-party/signer. Built here so the test step's budget is
+      # not spent compiling, with the compiler the app's own rust-toolchain.toml pins.
+      - name: Build the app signer
+        if: matrix.test == 'test:apps-compute-pool'
+        run: |
+          pin="$(sed -n 's/^channel = "\(.*\)"$/\1/p' apps/first-party/compute-pool/rust-toolchain.toml)"
+          test -n "$pin" || { echo "::error::no channel in apps/first-party/compute-pool/rust-toolchain.toml"; exit 1; }
+          rustup toolchain install "$pin" --profile minimal
+          cargo "+$pin" build --locked --release --manifest-path apps/first-party/signer/Cargo.toml
       - name: Run Integration Test
         # A step budget for the same reason as Start Services: a job timeout
         # would cancel, and cancellation skips the log dump and the screenshot
