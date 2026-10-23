@@ -11,7 +11,7 @@ use ts_rs::TS;
 /// diagnostic uploads pause until they do. tests/platform_terms_version.rs fails until a text
 /// change is matched by a bump here and a pin there.
 /// 2: diagnostic logs include the web app's browser console warnings and errors.
-pub const PLATFORM_TERMS_VERSION: u32 = 2;
+pub const PLATFORM_TERMS_VERSION: u32 = 3;
 /// Avarok's platform terms.
 pub const PLATFORM_TERMS_TEXT: &str = include_str!("platform_terms.md");
 /// Bump with every change to `CUSTOMER_TERMS_TEXT`; creating a workspace requires the current one.

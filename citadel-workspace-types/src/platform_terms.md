@@ -1,6 +1,6 @@
 # Citadel Workspace Terms of Use
 
-**Version 2 · Effective October 21, 2026**
+**Version 3 · Effective October 23, 2026**
 
 These Terms of Use ("Terms") are a binding agreement between you and **Avarok Corp**, a Delaware corporation ("Avarok", "we", "us"). They govern your use of Citadel Workspace, including the web application, the Citadel Agent software you install on your device, the hosted workspace servers, and related services (together, the "Service").
 
@@ -36,7 +36,11 @@ Sharing diagnostic logs is **off unless you turn it on**, and you can change you
 
 When it is on, your Citadel Agent periodically sends **warning and error log lines** about your use of that workspace, together with the agent version and operating system, to that workspace's server. These include the **warnings and errors the Citadel web app writes to your browser's console** (for example, an error message and where in the app's code it occurred), which the web app passes to your Citadel Agent; lines raised by browser extensions are left out. Before sending, the agent removes usernames, names, file names and paths, network addresses, host names, and secrets from every line. **Peer identifiers (numeric account IDs) are kept**, so connection problems between members can be diagnosed. Message content, file content, and encryption keys are never deliberately included, although an error message can occasionally quote text the app was handling when the error occurred.
 
+Diagnostic logs also include **connection reports**: for each attempt to connect directly to another member, which kind of connection was used (direct, relayed through TURN, or relayed through the workspace server), how long each step took and why a step failed, and the type of network address translation on each side. Connection reports contain no network addresses; the other member's numeric account ID is kept.
+
 The logs are stored on that workspace's server for the retention period its Admins set, up to 90 days, and within a per-member size limit. They can be read by the workspace's Admins and by Avarok **only while an Admin has granted Avarok support access**, and every read is recorded in an access log the Admins can see. Turning diagnostic logs off stops sending and deletes the logs stored for you in that workspace.
+
+**Connection information (not optional).** To choose the cheapest working path for connections between members, the workspace server learns, whether or not diagnostic logs are on, which members connect to each other, when, how much data passes, and which kind of connection is used. When an app you allowed exchanges requests directly with another member's copy of that app, the server learns the same about those requests, but not their content. This information is used to route and meter connections and is not shared outside the Service.
 
 ## 5. The Citadel Agent software
 
