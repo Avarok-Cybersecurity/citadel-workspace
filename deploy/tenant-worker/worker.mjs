@@ -163,13 +163,16 @@ export class WorkspaceServer extends DurableObject {
 
   /** Closes the metered period when the billing period has moved on, persisting its final totals. */
   #roll(now) {
+    this.meter.traffic(this.server?.traffic() ?? null);
     const closed = this.meter.adopt(periodAt(this.provisioning.summary().entitlements, now), now);
     if (closed) this.usageTable.save(closed, now);
   }
 
   #flush(now) {
+    this.meter.traffic(this.server?.traffic() ?? null);
     this.usageTable.save(this.meter.snapshot(now), now);
   }
+
 
   start() {
     const t0 = Date.now();

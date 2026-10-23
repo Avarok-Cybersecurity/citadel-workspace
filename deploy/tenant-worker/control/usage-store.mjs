@@ -3,7 +3,10 @@
  * tenant's object, and the outbox of what has been reported to Stripe's meter.
  */
 
-const METRICS = ["period_end", "bytes_in", "bytes_out", "frames_in", "active_seconds", "peak_connections"];
+const METRICS = [
+  "period_end", "bytes_in", "bytes_out", "frames_in", "active_seconds", "peak_connections",
+  "relayed_p2p_bytes", "group_fanout_bytes",
+];
 
 export class UsageStore {
   constructor(db) {

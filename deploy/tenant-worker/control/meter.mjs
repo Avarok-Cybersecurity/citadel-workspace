@@ -8,7 +8,33 @@
  * alarm that runs twice) changes nothing.
  */
 
-const EMPTY = { bytes_in: 0, bytes_out: 0, frames_in: 0, active_seconds: 0, peak_connections: 0 };
+const EMPTY = {
+  bytes_in: 0, bytes_out: 0, frames_in: 0, active_seconds: 0, peak_connections: 0,
+  // Of what crossed the object, the P2P traffic the node relayed between peers (received from the
+  // senders) and the group fan-out it sent to members: the node's own counts (`traffic`).
+  relayed_p2p_bytes: 0, group_fanout_bytes: 0,
+};
+
+/** Each split total, and the node counter (server-wasm `TenantServer::traffic`) it grows with. */
+const TRAFFIC = [
+  ["relayed_p2p_bytes", "relayed_p2p_rx"],
+  ["group_fanout_bytes", "group_broadcast_tx"],
+];
+const NO_TRAFFIC = Object.fromEntries(TRAFFIC.map(([, counter]) => [counter, 0]));
+
+/**
+ * What `sample` adds to `last`, per node counter. The counters only grow while a node runs, so a
+ * count below the last one is a node that started again, from zero: all of it is new.
+ */
+export function trafficGrowth(last, sample) {
+  return Object.fromEntries(
+    TRAFFIC.map(([, counter]) => {
+      const now = sample[counter];
+      if (!Number.isFinite(now) || now < 0) throw new Error(`traffic ${counter} is a byte count (${JSON.stringify(now)})`);
+      return [counter, now >= last[counter] ? now - last[counter] : now];
+    }),
+  );
+}
 
 /** The UTC calendar month holding `nowMs`, as `{start, end}` in seconds. */
 export function calendarMonth(nowMs) {
@@ -43,6 +69,16 @@ export class Meter {
     this.activeMs = this.totals.active_seconds * 1000;
     this.mark = nowMs;
     this.open = new Map();
+    // The node's counters at the last `traffic` sample; the node starts after the meter.
+    this.lastTraffic = NO_TRAFFIC;
+  }
+
+  /** The node's traffic counters now (null before the node has started): their growth is this period's. */
+  traffic(sample) {
+    if (sample === null) return;
+    const growth = trafficGrowth(this.lastTraffic, sample);
+    for (const [total, counter] of TRAFFIC) this.totals[total] += growth[counter];
+    this.lastTraffic = Object.fromEntries(TRAFFIC.map(([, counter]) => [counter, sample[counter]]));
   }
 
   get openCount() {

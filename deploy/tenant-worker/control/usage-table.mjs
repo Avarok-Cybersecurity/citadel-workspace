@@ -6,7 +6,12 @@
 
 /** Periods kept in the object; the monitor copies each into D1 long before it would be pruned. */
 const KEEP_PERIODS = 24;
-const FIELDS = ["period_end", "bytes_in", "bytes_out", "frames_in", "active_seconds", "peak_connections"];
+const FIELDS = [
+  "period_end", "bytes_in", "bytes_out", "frames_in", "active_seconds", "peak_connections",
+  "relayed_p2p_bytes", "group_fanout_bytes",
+];
+/** Columns added after the table first shipped: an object made before them gains them, at 0. */
+const ADDED = ["relayed_p2p_bytes", "group_fanout_bytes"];
 
 export class UsageTable {
   constructor(sql) {
@@ -16,6 +21,11 @@ export class UsageTable {
         "bytes_in INTEGER NOT NULL, bytes_out INTEGER NOT NULL, frames_in INTEGER NOT NULL, " +
         "active_seconds INTEGER NOT NULL, peak_connections INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
     );
+    const have = new Set([...sql.exec("PRAGMA table_info(quota_usage)")].map((c) => c.name));
+    // A period measured before the split existed had none of it counted: 0 is what was counted.
+    for (const column of ADDED) {
+      if (!have.has(column)) sql.exec(`ALTER TABLE quota_usage ADD COLUMN ${column} INTEGER NOT NULL DEFAULT 0`);
+    }
   }
 
   load(periodStart) {
