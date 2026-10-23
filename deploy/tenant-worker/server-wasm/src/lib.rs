@@ -15,6 +15,7 @@ mod storage;
 mod support;
 mod telemetry;
 mod traffic;
+mod turn;
 
 use citadel_sdk::prelude::{
     ArgonDefaultServerSettings, BackendType, StunServers, WasmConnectionInjector, WasmIO,
@@ -74,7 +75,8 @@ impl TenantServer {
     /// (see `storage::TenantStorage`); `ice` mints relay credentials for `GetIceServers` (see
     /// `ice::IceHost`); `pq` is post-quantum sign-in and `sign_in` the object's sign-in settings
     /// (see `sign_in`). `support_grants` mirrors the support grant (see `support`). `links`
-    /// gives the secure-link limits (see `links`). `stun_servers` is the host's comma-separated
+    /// gives the secure-link limits (see `links`), `turn_usage` the meter agents' TURN bytes go
+    /// to (see `turn`). `stun_servers` is the host's comma-separated
     /// STUN list, required (`citadel_workspace_server_kernel::network`). `path_policy_json` is
     /// the tenant plan's path policy (control/path-policy.mjs), required, in the shape of
     /// kernel.toml's `[path_policy]` (`citadel_workspace_server_kernel::path_policy`). `on_exit`
@@ -91,6 +93,7 @@ impl TenantServer {
         sign_in: sign_in::SignInHost,
         support_grants: support::SupportGrantHost,
         links: links::LinkQuotaHost,
+        turn_usage: turn::TurnUsageHost,
         stun_servers: &str,
         path_policy_json: &str,
         log_filter: &str,
@@ -130,6 +133,7 @@ impl TenantServer {
         let slot = kernel.clone();
         let telemetry = HostedTelemetry {
             support_grants: Some(support::observer(support_grants)),
+            turn_usage: Some(turn::sink(turn_usage)),
             kernel_ready: Box::new(move |built| *slot.borrow_mut() = Some(built)),
         };
         let (injector, listener) = WasmListener::injected();

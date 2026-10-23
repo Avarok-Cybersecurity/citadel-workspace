@@ -863,6 +863,7 @@ pub async fn run_server_on<T: PlatformOps>(
     )
     .await?;
     kernel.set_support_grant_observer(telemetry.support_grants);
+    kernel.set_turn_usage_sink(telemetry.turn_usage);
     (telemetry.kernel_ready)(kernel.clone());
 
     let node_type =

@@ -20,9 +20,9 @@ use citadel_workspace_types::telemetry::TelemetryRequest;
 
 fn required_permission(request: &TelemetryRequest) -> Option<Permission> {
     match request {
-        TelemetryRequest::AcceptTerms { .. } | TelemetryRequest::UploadTelemetry { .. } => {
-            Some(Permission::ViewContent)
-        }
+        TelemetryRequest::AcceptTerms { .. }
+        | TelemetryRequest::UploadTelemetry { .. }
+        | TelemetryRequest::ReportTurnUsage { .. } => Some(Permission::ViewContent),
         TelemetryRequest::SetTelemetryConsent { enabled } => {
             enabled.then_some(Permission::ViewContent)
         }

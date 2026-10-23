@@ -51,12 +51,12 @@ export function nodeStorage(storage, entitlements) {
 /**
  * Starts the node in `wasm` (the object's own instance) with the object's capabilities: `ice`
  * mints relay credentials, `signIn` is the object's TenantSignIn, `grants` the support-grant
- * mirror, `plan()` the tenant's enforced entitlements; `onExit(outcome)` is told how the node
- * ended. The plan gives the secure-link limits (control/tenant-links.mjs), read on each use, and
+ * mirror, `plan()` the tenant's enforced entitlements, `turnUsage.record(bytes)` the meter
+ * members' TURN bytes go to (server-wasm turn.rs); `onExit(outcome)` is told how the node ended. The plan gives the secure-link limits (control/tenant-links.mjs), read on each use, and
  * the path policy (control/path-policy.mjs), read once here: a plan change reaches the path
  * policy at the node's next start, not on a running node (v1).
  */
-export function startNode(wasm, env, { config, storage, ice, signIn, grants, plan, onExit }) {
+export function startNode(wasm, env, { config, storage, ice, signIn, grants, plan, turnUsage, onExit }) {
   const argon = new wasm.ArgonCost(
     Number(required(env, "ARGON_LANES")),
     Number(required(env, "ARGON_MEM_KIB")),
@@ -66,5 +66,5 @@ export function startNode(wasm, env, { config, storage, ice, signIn, grants, pla
   const pq = new wasm.PqSignIn(signIn.takeSeed(), ksf.memKib, ksf.iterations, ksf.lanes);
   const links = linkQuotaHost(plan);
   const pathPolicy = JSON.stringify(pathPolicyOf(plan()));
-  return new wasm.TenantServer(config, storage, argon, ice, pq, signIn.host(), grants, links, required(env, "STUN_SERVERS"), pathPolicy, required(env, "LOG_FILTER"), onExit);
+  return new wasm.TenantServer(config, storage, argon, ice, pq, signIn.host(), grants, links, turnUsage, required(env, "STUN_SERVERS"), pathPolicy, required(env, "LOG_FILTER"), onExit);
 }

@@ -26,6 +26,7 @@ pub(crate) fn consent_view(
     record: &ConsentRecord,
     terms: &CurrentTerms,
     require_platform: bool,
+    meters_turn: bool,
 ) -> MyConsent {
     let terms_current = terms_accepted(
         terms,
@@ -42,6 +43,7 @@ pub(crate) fn consent_view(
         telemetry_enabled: record.telemetry_enabled,
         uploads_allowed: record.telemetry_enabled && terms_current,
         metric_format: Some(TELEMETRY_METRIC_FORMAT_VERSION),
+        meters_turn: Some(meters_turn),
     }
 }
 

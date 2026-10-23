@@ -6,4 +6,4 @@ import type { TelemetryPageResult } from "./TelemetryPageResult";
 import type { TelemetrySettings } from "./TelemetrySettings";
 import type { TelemetryUploadRefusal } from "./TelemetryUploadRefusal";
 
-export type TelemetryResponse = { "Terms": CurrentTerms } | { "Consent": MyConsent } | { "Uploaded": { stored_entries: number, } } | { "UploadRefused": TelemetryUploadRefusal } | { "Page": TelemetryPageResult } | { "Deleted": { segments: number, } } | { "Settings": TelemetrySettings } | { "AccessLog": Array<TelemetryAccessLogEntry> };
+export type TelemetryResponse = { "Terms": CurrentTerms } | { "Consent": MyConsent } | { "Uploaded": { stored_entries: number, } } | { "UploadRefused": TelemetryUploadRefusal } | { "Page": TelemetryPageResult } | { "Deleted": { segments: number, } } | { "Settings": TelemetrySettings } | { "AccessLog": Array<TelemetryAccessLogEntry> } | "TurnUsageRecorded";

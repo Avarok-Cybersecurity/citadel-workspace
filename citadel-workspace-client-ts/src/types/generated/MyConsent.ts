@@ -20,4 +20,9 @@ uploads_allowed: boolean,
  * The metric format this server stores (`TELEMETRY_METRIC_FORMAT_VERSION`). Absent from a
  * server built before metrics existed, which stores none: decoded as `None`, never assumed.
  */
-metric_format?: number, };
+metric_format?: number, 
+/**
+ * Whether this server meters TURN bytes and takes `ReportTurnUsage`: a hosted server
+ * whose host keeps a relay quota. Absent from a server built before the report existed.
+ */
+meters_turn?: boolean, };

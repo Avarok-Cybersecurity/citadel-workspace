@@ -183,6 +183,8 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     sign_in_settings: crate::kernel::sign_in::SignInSettingsHandle,
     /// Told when an admin changes the support grant: the host's mirror of it, or none.
     support_grants: crate::kernel::telemetry::SupportGrantObserverHandle,
+    /// Where agents' TURN usage reports go: the host's relay quota, or none, which meters none.
+    turn_usage: crate::kernel::telemetry::TurnUsageSinkHandle,
     /// How many secure links members may hold: the host's answer, or none, which makes none.
     link_quota: crate::kernel::secure_links::quota::LinkQuotaSourceHandle,
     /// What fetches app artifacts by URL: the host's, or none, which fetches nothing.
@@ -235,6 +237,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             ice_servers: self.ice_servers.clone(),
             sign_in_settings: self.sign_in_settings.clone(),
             support_grants: self.support_grants.clone(),
+            turn_usage: self.turn_usage.clone(),
             link_quota: self.link_quota.clone(),
             artifact_fetcher: self.artifact_fetcher.clone(),
             server_egress: self.server_egress.clone(),
@@ -286,6 +289,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             ice_servers: None,
             sign_in_settings: None,
             support_grants: None,
+            turn_usage: None,
             link_quota: None,
             artifact_fetcher: None,
             server_egress: None,
@@ -343,6 +347,15 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
 
     pub fn support_grant_observer(&self) -> &crate::kernel::telemetry::SupportGrantObserverHandle {
         &self.support_grants
+    }
+
+    /// Set by the server bootstrap: where agents' TURN usage reports go, or none.
+    pub fn set_turn_usage_sink(&mut self, sink: crate::kernel::telemetry::TurnUsageSinkHandle) {
+        self.turn_usage = sink;
+    }
+
+    pub fn turn_usage_sink(&self) -> &crate::kernel::telemetry::TurnUsageSinkHandle {
+        &self.turn_usage
     }
 
     /// Set by the server bootstrap: the host's sign-in settings store, or none, in which case

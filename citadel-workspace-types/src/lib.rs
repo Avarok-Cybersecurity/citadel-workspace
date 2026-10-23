@@ -50,7 +50,9 @@ pub mod structs;
 pub mod submodule_freshness;
 pub mod telemetry;
 pub mod telemetry_metric;
+pub mod telemetry_reads;
 pub mod terms;
+pub mod turn_usage;
 
 /// The id of the workspace every tree hangs from; the kernel and the UI read it from here.
 pub const WORKSPACE_ROOT_ID: &str = "workspace-root";

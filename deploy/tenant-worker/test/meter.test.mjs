@@ -1,6 +1,6 @@
 /** The metering arithmetic (control/meter.mjs) and the overage rule (control/monitor.mjs): pure. */
 import { describe, expect, it } from "vitest";
-import { calendarMonth, Meter, periodAt, trafficGrowth } from "../control/meter.mjs";
+import { calendarMonth, Meter, periodAt, relayBytes, trafficGrowth } from "../control/meter.mjs";
 import { overageGb } from "../control/monitor.mjs";
 
 const T0 = Date.UTC(2026, 8, 22, 12, 0, 0); // ms
@@ -87,6 +87,28 @@ describe("traffic split", () => {
   it("refuses a sample that is not a byte count", () => {
     const m = new Meter(period, null, T0);
     expect(() => m.traffic({ ...sample(1, 1), relayed_p2p_rx: undefined })).toThrow(/relayed_p2p_rx/);
+  });
+});
+
+describe("TURN usage", () => {
+  it("adds what members' agents report, persists it, and starts again with the next period", () => {
+    const m = new Meter(period, { turn_bytes: 5 }, T0);
+    m.turn(1000);
+    m.turn(0);
+    expect(m.snapshot(T0)).toMatchObject({ turn_bytes: 1005, bytes_in: 0 });
+    m.adopt({ start: period.end, end: period.end + 3600, fallback: false }, T0);
+    expect(m.snapshot(T0)).toMatchObject({ turn_bytes: 0 });
+  });
+
+  it("refuses a report that is not a byte count", () => {
+    const m = new Meter(period, null, T0);
+    for (const bad of [-1, 1.5, Number.NaN, "7", undefined]) expect(() => m.turn(bad)).toThrow(/TURN usage/);
+  });
+
+  it("counts against the same relay quota as the object's own bytes", () => {
+    expect(relayBytes({ bytes_in: 40e9, turn_bytes: 22.5e9 })).toBe(62.5e9);
+    expect(overageGb(relayBytes({ bytes_in: 40e9, turn_bytes: 22.5e9 }), 60)).toBe(overageGb(62.5e9, 60));
+    expect(() => relayBytes({ bytes_in: 1 })).toThrow(/turn_bytes/);
   });
 });
 

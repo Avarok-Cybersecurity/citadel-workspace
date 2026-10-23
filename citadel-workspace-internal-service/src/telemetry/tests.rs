@@ -54,6 +54,7 @@ fn consent(uploads_allowed: bool) -> Vec<u8> {
         telemetry_enabled: uploads_allowed,
         uploads_allowed,
         metric_format: Some(TELEMETRY_METRIC_FORMAT_VERSION),
+        meters_turn: Some(true),
     }))
 }
 
@@ -237,6 +238,7 @@ fn only_a_server_naming_this_metric_format_is_sent_metrics() {
         ServerSignal::Consent {
             uploads_allowed: true,
             takes_metrics,
+            ..
         } => takes_metrics,
         _ => panic!("not an allowing consent answer"),
     };

@@ -39,6 +39,7 @@ pub(crate) async fn my_consent<R: Ratchet + Send + Sync + 'static>(
         &consent,
         &terms,
         store.platform_terms_required(),
+        store.meters_turn(),
     ))))
 }
 
@@ -79,7 +80,13 @@ pub(crate) async fn set_consent<R: Ratchet + Send + Sync + 'static>(
     let terms = current_terms(store).await?;
     let mut consent = store.consent(user_id).await?;
     if enabled
-        && !rules::consent_view(&consent, &terms, store.platform_terms_required()).terms_current
+        && !rules::consent_view(
+            &consent,
+            &terms,
+            store.platform_terms_required(),
+            store.meters_turn(),
+        )
+        .terms_current
     {
         return Ok(refuse(
             "Accept the current terms before turning on diagnostics",
@@ -105,6 +112,7 @@ pub(crate) async fn upload<R: Ratchet + Send + Sync + 'static>(
         &store.consent(user_id).await?,
         &terms,
         store.platform_terms_required(),
+        store.meters_turn(),
     );
     if let Some(refusal) = rules::upload_refusal(&consent) {
         return Ok(reply(TelemetryResponse::UploadRefused(refusal)));

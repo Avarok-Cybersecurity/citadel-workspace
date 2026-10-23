@@ -16,7 +16,7 @@ import { dispatch, ioFor, tenantFor } from "./control/dispatch.mjs";
 import { config, isWebSocketUpgrade, json, turnConfig, upgradeRequired } from "./control/http.mjs";
 import { IceMinter } from "./control/ice.mjs";
 import { Provisioning } from "./control/provisioning.mjs";
-import { Meter, periodAt } from "./control/meter.mjs";
+import { Meter, periodAt, relayBytes } from "./control/meter.mjs";
 import { UsageTable } from "./control/usage-table.mjs";
 import { meterSocket } from "./control/sockets.mjs";
 import { enforcedEntitlements, METERING } from "./control/plans.mjs";
@@ -57,12 +57,11 @@ export class WorkspaceServer extends DurableObject {
     this.meter = null;
     // Sign-in (control/tenant-sign-in.mjs): the OPRF seed, the sign-in settings, the admission check.
     this.signIn = new TenantSignIn(ctx.storage, { random: crypto, turnstile: () => config(env).turnstile, siteKey: () => config(env).turnstileSiteKey, io: { fetch: (u, i) => fetch(u, i) } });
-    // Relay credentials for the kernel's GetIceServers (control/ice.mjs), gated on this tenant's
-    // plan and this period's metered relay.
+    // Relay credentials for GetIceServers (control/ice.mjs), gated on the plan and this period's relay.
     this.ice = new IceMinter(turnConfig(env), { fetch: (url, init) => fetch(url, init), nowMs: Date.now }, () => {
       const now = Date.now();
       this.#roll(now);
-      return { limits: enforcedEntitlements(this.provisioning.summary().entitlements), bytesIn: this.meter.snapshot(now).bytes_in };
+      return { limits: enforcedEntitlements(this.provisioning.summary().entitlements), bytesIn: relayBytes(this.meter.snapshot(now)) };
     });
     // The purge alarm, support reads and the grant mirror (control/tenant-telemetry.mjs).
     this.telemetry = new TenantTelemetry(ctx.storage, {
@@ -183,6 +182,7 @@ export class WorkspaceServer extends DurableObject {
       signIn: this.signIn,
       grants: this.telemetry.grantHost(),
       plan: () => enforcedEntitlements(this.provisioning.summary().entitlements),
+      turnUsage: { record: (bytes) => (this.#roll(Date.now()), this.meter.turn(bytes)) },
       onExit: (outcome) => {
         this.exit = outcome;
         console.error(`[tenant] node exited: ${outcome}`);

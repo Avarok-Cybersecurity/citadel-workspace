@@ -13,6 +13,9 @@ const EMPTY = {
   // Of what crossed the object, the P2P traffic the node relayed between peers (received from the
   // senders) and the group fan-out it sent to members: the node's own counts (`traffic`).
   relayed_p2p_bytes: 0, group_fanout_bytes: 0,
+  // TURN bytes members' agents reported (server-wasm turn.rs): they never cross the object, so
+  // they are not part of bytes_in, and the relay quota adds them to it (ice.mjs).
+  turn_bytes: 0,
 };
 
 /** Each split total, and the node counter (server-wasm `TenantServer::traffic`) it grows with. */
@@ -34,6 +37,17 @@ export function trafficGrowth(last, sample) {
       return [counter, now >= last[counter] ? now - last[counter] : now];
     }),
   );
+}
+
+/**
+ * What a period's relay quota counts: the bytes the tenant's object carried (`bytes_in`) and the
+ * TURN bytes members' agents reported (`turn_bytes`), one quota for both.
+ */
+export function relayBytes(period) {
+  for (const field of ["bytes_in", "turn_bytes"]) {
+    if (!Number.isSafeInteger(period[field]) || period[field] < 0) throw new Error(`period ${field} is a byte count (${JSON.stringify(period[field])})`);
+  }
+  return period.bytes_in + period.turn_bytes;
 }
 
 /** The UTC calendar month holding `nowMs`, as `{start, end}` in seconds. */
@@ -79,6 +93,12 @@ export class Meter {
     const growth = trafficGrowth(this.lastTraffic, sample);
     for (const [total, counter] of TRAFFIC) this.totals[total] += growth[counter];
     this.lastTraffic = Object.fromEntries(TRAFFIC.map(([, counter]) => [counter, sample[counter]]));
+  }
+
+  /** `bytes` more TURN bytes, as one member's agent reported them. */
+  turn(bytes) {
+    if (!Number.isSafeInteger(bytes) || bytes < 0) throw new Error(`TURN usage is a byte count (${JSON.stringify(bytes)})`);
+    this.totals.turn_bytes += bytes;
   }
 
   get openCount() {

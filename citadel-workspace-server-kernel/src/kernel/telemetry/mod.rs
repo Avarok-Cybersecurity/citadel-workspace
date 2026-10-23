@@ -12,6 +12,7 @@ mod records;
 mod rules;
 mod service;
 mod store;
+mod turn_usage;
 
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::WorkspaceProtocolResponse;
@@ -33,11 +34,23 @@ pub trait SupportGrantObserver: Send + Sync {
 /// The observer as the kernel holds it: absent unless the host passed one.
 pub type SupportGrantObserverHandle = Option<Arc<dyn SupportGrantObserver>>;
 
+/// The host's relay quota, told the TURN bytes each member's agent reports
+/// (`TelemetryRequest::ReportTurnUsage`). A server without one meters no TURN, says so in its
+/// consent answer (`MyConsent::meters_turn`), and refuses the report.
+#[async_trait::async_trait]
+pub trait TurnUsageSink: Send + Sync {
+    async fn record_turn_bytes(&self, user_id: &str, bytes: u64);
+}
+
+/// The sink as the kernel holds it: absent unless the host passed one.
+pub type TurnUsageSinkHandle = Option<Arc<dyn TurnUsageSink>>;
+
 /// What a host that serves support reads gives the kernel: the grant observer, and a callback
 /// handed a clone of the kernel once it is built, for the host's alarm
 /// (`purge_expired_telemetry`) and verified support reads (`support_list_telemetry`).
 pub struct HostedTelemetry<R: Ratchet> {
     pub support_grants: SupportGrantObserverHandle,
+    pub turn_usage: TurnUsageSinkHandle,
     pub kernel_ready: Box<dyn FnOnce(AsyncWorkspaceServerKernel<R>)>,
 }
 
@@ -61,6 +74,7 @@ pub(crate) async fn serve<R: Ratchet + Send + Sync + 'static>(
     let store = TelemetryStore::new(
         &kernel.domain_operations.backend_tx_manager,
         platform_terms_required,
+        kernel.turn_usage_sink().is_some(),
     );
     let _guard = TELEMETRY_LOCK.lock().await;
     match request {
@@ -122,6 +136,9 @@ pub(crate) async fn serve<R: Ratchet + Send + Sync + 'static>(
         TelemetryRequest::SetWorkspaceTerms { text } => {
             service::set_workspace_terms(&store, text.as_deref()).await
         }
+        TelemetryRequest::ReportTurnUsage { usage } => {
+            turn_usage::record(kernel.turn_usage_sink().as_deref(), user_id, usage).await
+        }
     }
 }
 
@@ -133,6 +150,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         let store = TelemetryStore::new(
             &self.domain_operations.backend_tx_manager,
             self.platform_terms_required().unwrap_or(false),
+            self.turn_usage_sink().is_some(),
         );
         let _guard = TELEMETRY_LOCK.lock().await;
         let policy = store.policy().await?;
@@ -151,6 +169,7 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
         let store = TelemetryStore::new(
             &self.domain_operations.backend_tx_manager,
             self.platform_terms_required().unwrap_or(false),
+            self.turn_usage_sink().is_some(),
         );
         let _guard = TELEMETRY_LOCK.lock().await;
         if !rules::support_access_active(&store.support_access().await?, now_ms) {

@@ -56,7 +56,8 @@ export class IceMinter {
   /**
    * `turn`: `{keyId, token, ttl}` from http.mjs `turnConfig`, or null when unset.
    * `io`: `{fetch, nowMs}`. `tenant()`: `{limits, bytesIn}`, the object's enforced entitlements
-   * and this period's metered relay, read when a mint is asked for.
+   * and this period's metered relay (meter.mjs `relayBytes`: its own and TURN), read when a mint
+   * is asked for.
    */
   constructor(turn, io, tenant) {
     this.turn = turn;

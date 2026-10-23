@@ -22,21 +22,29 @@ pub(crate) struct TelemetryStore<'a, R: Ratchet + Send + Sync + 'static> {
     backend: &'a BackendTransactionManager<R>,
     /// Configuration, not stored: see `ServerConfig::require_platform_terms`.
     platform_terms_required: bool,
+    /// Configuration, not stored: whether the host meters TURN (`TurnUsageSink`).
+    meters_turn: bool,
 }
 
 impl<'a, R: Ratchet + Send + Sync + 'static> TelemetryStore<'a, R> {
     pub(crate) fn new(
         backend: &'a BackendTransactionManager<R>,
         platform_terms_required: bool,
+        meters_turn: bool,
     ) -> Self {
         Self {
             backend,
             platform_terms_required,
+            meters_turn,
         }
     }
 
     pub(crate) fn platform_terms_required(&self) -> bool {
         self.platform_terms_required
+    }
+
+    pub(crate) fn meters_turn(&self) -> bool {
+        self.meters_turn
     }
 
     pub(crate) async fn users(&self) -> Result<BTreeSet<String>, NetworkError> {

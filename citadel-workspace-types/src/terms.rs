@@ -69,4 +69,8 @@ pub struct MyConsent {
     /// server built before metrics existed, which stores none: decoded as `None`, never assumed.
     #[ts(optional)]
     pub metric_format: Option<u32>,
+    /// Whether this server meters TURN bytes and takes `ReportTurnUsage`: a hosted server
+    /// whose host keeps a relay quota. Absent from a server built before the report existed.
+    #[ts(optional)]
+    pub meters_turn: Option<bool>,
 }
