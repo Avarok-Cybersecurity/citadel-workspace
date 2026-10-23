@@ -83,8 +83,8 @@ Every feature accessible from EVERY entry point.
 - View message history → `P2PMessageList` → bubbles
 - Chat settings → `ChatSettingsPanel` (File tab, Remote tab)
 - File transfer → `FileTransferModal` / `FileDropZone`
-- Live document → `LiveDocumentModal` → `CollaborativeEditor` with `CollaboratorCursor`
-- Markdown editing → `MarkdownToolbar` / `EditorToolbar`
+- Chat document → `LiveDocumentModal` → `ChatDocumentPane` (the Citadel Docs canvas)
+- Markdown editing → `MarkdownToolbar`
 
 ### 2.4 Peer Discovery & Connection
 
@@ -219,7 +219,7 @@ PAGE_LOAD ──WorkspaceLoader guard──→ LOADING_WORKSPACE
 | M1 | Send message to offline peer | Message queued or error shown |
 | M2 | Receive message while on different page | Notification appears via `NotificationCenter` |
 | M3 | Send file to peer with no P2P connection | "Connection Required" toast |
-| M4 | Open live document simultaneously from two users | `CollaborativeEditor` syncs via Yjs |
+| M4 | Open a chat document simultaneously from two users | Both canvases converge via CdocChatSync |
 | M5 | Switch peer conversation mid-typing | Input should clear, typing indicator should stop |
 | M6 | Send message in group after being kicked | Should fail gracefully |
 

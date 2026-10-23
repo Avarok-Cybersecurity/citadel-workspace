@@ -52,6 +52,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "close-calls"
+version = "0.1.0"
+dependencies = [
+ "citadel-app-sdk",
+ "fixture-report",
+]
+
+[[package]]
+name = "close-flush"
+version = "0.1.0"
+dependencies = [
+ "citadel-app-sdk",
+ "fixture-report",
+]
+
+[[package]]
+name = "close-hang"
+version = "0.1.0"
+dependencies = [
+ "citadel-app-sdk",
+ "fixture-report",
+]
+
+[[package]]
+name = "close-panic"
+version = "0.1.0"
+dependencies = [
+ "citadel-app-sdk",
+ "fixture-report",
+]
+
+[[package]]
 name = "crunchy"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

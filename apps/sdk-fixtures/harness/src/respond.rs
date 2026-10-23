@@ -4,7 +4,7 @@
 use crate::state::State;
 use citadel_app_sdk_types::calls::*;
 use citadel_app_sdk_types::ops::{
-    CanvasOps, EventsOps, FilesOps, IhttpOps, LogOps, NavigateOps, UiOps,
+    CanvasOps, EventsOps, FilesOps, IhttpOps, LogOps, NavigateOps, StorageOps, UiOps,
 };
 use citadel_app_sdk_types::{encode, Bytes, HostCall, HostReply, Refused};
 
@@ -53,6 +53,13 @@ pub fn respond(state: &mut State, call: &HostCall) -> Vec<u8> {
         HostCall::Navigate(_) => refused(Refused::Policy("not_an_internal_link".into())),
         HostCall::Files(FilesOps::FilesRead(r)) if r.len > state.limits.max_reply_bytes => {
             refused(Refused::Limit("read_len".into()))
+        }
+        HostCall::Storage(StorageOps::KvGet(g)) if g.backend == KvBackend::User => ok(KvValue {
+            value: state.kv.get(&g.key).cloned().map(Bytes),
+        }),
+        HostCall::Storage(StorageOps::KvSet(s)) if s.backend == KvBackend::User => {
+            state.kv.insert(s.key.clone(), s.value.0.clone());
+            ok(())
         }
         HostCall::Files(FilesOps::FilesRead(r)) => ok(BytesValue {
             bytes: Bytes(vec![0; r.len as usize]),

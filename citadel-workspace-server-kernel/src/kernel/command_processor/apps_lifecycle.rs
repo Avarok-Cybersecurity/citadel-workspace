@@ -3,9 +3,11 @@
 
 use super::apps::{audit_entry, finish, Answer, Caller, Halt, Step};
 use super::apps_header::rewrite_mdx;
+use super::apps_ihttp_end::end_install_relay;
 use super::apps_member::visible_install;
 use crate::kernel::apps::install::grant_details;
 use crate::kernel::apps::md_header::remove;
+use crate::kernel::apps::storage::StorageRoot;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::transaction::apps_store::APPS_LOCK;
 use citadel_logging::warn;
@@ -78,6 +80,7 @@ pub(super) async fn uninstall<R: Ratchet + Send + Sync + 'static>(
         }
         let pending = backend.app_pending(&install.id).await?;
         backend.remove_app_install(&install).await?;
+        end_install_relay(kernel, &install.id);
         let mut manifests = vec![install.manifest_sha256.clone()];
         let mut artifacts = vec![install.artifact_sha256.clone()];
         for release in install.previous.iter() {
@@ -89,6 +92,14 @@ pub(super) async fn uninstall<R: Ratchet + Send + Sync + 'static>(
             artifacts.push(pending.release.artifact_sha256.clone());
         }
         backend.sweep_apps_releases(&manifests, &artifacts).await?;
+        if purge_storage {
+            let scope_key = install.scope.scope_key().ok_or(AppsRefusal::Unavailable)?;
+            let root = StorageRoot {
+                app_id: install.app_id.clone(),
+                scope_key,
+            };
+            backend.purge_app_storage(&root).await?;
+        }
         let event = AppsAuditEvent::Uninstalled {
             purged_storage: purge_storage,
         };
@@ -147,6 +158,7 @@ pub(super) async fn rollback<R: Ratchet + Send + Sync + 'static>(
         install.state = InstallState::Active;
         install.previous = None;
         backend.save_app_install(&install).await?;
+        end_install_relay(kernel, &install.id);
         backend.save_app_pending(&install.id, None).await?;
         let (mut manifests, mut artifacts) = (vec![dropped.0], vec![dropped.1]);
         for pending in pending.iter() {

@@ -5,7 +5,7 @@ use crate::remote::{IhttpRemote, Remote};
 use crate::respond::{refused, respond};
 use citadel_app_sdk_types::abi::{self, AbiError};
 use citadel_app_sdk_types::ops::CallDecodeError;
-use citadel_app_sdk_types::{AppEvent, Capability, Group, HostCall, Refused};
+use citadel_app_sdk_types::{AppEvent, Capability, Group, HostCall, LifecycleState, Refused};
 use std::collections::BTreeMap;
 use wasmi::{Caller, Memory};
 
@@ -16,6 +16,8 @@ pub struct Limits {
     pub max_request_bytes: u32,
     pub max_reply_bytes: u32,
     pub fuel_per_call: u64,
+    /// The close grace, metered in fuel: `app_close` and the replies it waits on share it.
+    pub close_grace_fuel: u64,
     /// The far end of the app's ihttp client calls; None: there is none (`unavailable`).
     pub ihttp_remote: Option<IhttpRemote>,
 }
@@ -34,6 +36,10 @@ pub struct State {
     pub(crate) inbound: Vec<AppEvent>,
     pub log: Vec<String>,
     pub calls: Vec<HostCall>,
+    /// The instance's lifecycle, as the host runs it; it gates every call first.
+    pub lifecycle: LifecycleState,
+    /// `storage.user`, the one backend the reference host serves.
+    pub(crate) kv: BTreeMap<String, Vec<u8>>,
 }
 
 impl State {
@@ -71,6 +77,10 @@ pub(crate) fn group_call(
     ptr: i32,
     len: i32,
 ) -> i32 {
+    if let Some(why) = caller.data().lifecycle.refusal_for(group) {
+        let reply = refused(Refused::Unavailable(why.into()));
+        return caller.data_mut().issue(Some(reply));
+    }
     let opens = |s: &State| {
         Capability::ALL
             .iter()

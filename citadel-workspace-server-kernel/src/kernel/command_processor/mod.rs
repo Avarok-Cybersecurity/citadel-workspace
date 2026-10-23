@@ -70,10 +70,22 @@ mod secure_links_owner;
 
 /// Citadel Apps: the registry, installs, their artifacts and the audit log.
 mod apps;
+/// `Call`: a running app's host call, re-checked, served from storage or server egress.
+mod apps_call;
+/// `storage.blob`, which `Call` serves.
+mod apps_call_blob;
+/// The storage backends `Call` serves.
+mod apps_call_storage;
 /// The reads the apps decisions need, made before they decide, and what an install may do now.
 pub mod apps_gather;
 /// The kernel's own writes to a document's required-apps header.
 mod apps_header;
+/// `AdvertiseService` and `IhttpSend`: internal HTTP relayed between sessions.
+mod apps_ihttp;
+/// `WithdrawService`, and an install's relay state ending with its release.
+mod apps_ihttp_end;
+/// Which install an internal-HTTP request is for.
+mod apps_ihttp_target;
 /// `Install`.
 mod apps_install;
 /// `Uninstall` and `Rollback`.

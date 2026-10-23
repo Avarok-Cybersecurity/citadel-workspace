@@ -5,13 +5,21 @@ use app_fixture_harness::{caps, context, manifest, wasm};
 use citadel_app_abi_inspect::inspect;
 use citadel_app_sdk_types::calls::DrawCommand;
 use citadel_app_sdk_types::ops::CanvasOps;
-use citadel_app_sdk_types::{AppEvent, HostCall};
+use citadel_app_sdk_types::{AppEvent, CloseReason, HostCall, LifecycleState};
 use serde_json::Value;
 
 /// Generous for every well-behaved call here, finite for an endless loop.
 const FUEL: u64 = 20_000_000;
+/// The reference host's clock for the close grace: fuel per millisecond of `close_grace_ms`.
+const FUEL_PER_MS: u64 = 40_000;
 /// A request or reply cap no fixture's legitimate call approaches, unless the run states one.
 const DEFAULT_IO_BYTES: u32 = 1 << 20;
+
+fn grace_ms(run: &Value) -> u32 {
+    run["host"]["close_grace_ms"]
+        .as_u64()
+        .expect("every run states its grace") as u32
+}
 
 fn start(name: &str, run: &Value) -> Instance {
     let bytes = wasm(name);
@@ -24,6 +32,10 @@ fn start(name: &str, run: &Value) -> Instance {
             .as_u64()
             .map_or(DEFAULT_IO_BYTES, |n| n as u32),
         fuel_per_call: FUEL,
+        close_grace_fuel: host["close_grace_ms"]
+            .as_u64()
+            .expect("every run states its grace")
+            * FUEL_PER_MS,
         ihttp_remote: host.get("ihttp_remote").map(|r| IhttpRemote {
             chunks: r["chunks"].as_u64().unwrap() as u32,
             chunk_bytes: r["chunk_bytes"].as_u64().unwrap() as u32,
@@ -33,7 +45,7 @@ fn start(name: &str, run: &Value) -> Instance {
 }
 
 fn expect_init(name: &str, inst: &mut Instance, run: &Value) {
-    let got = inst.init(&context(&caps(&run["granted"])));
+    let got = inst.init(&context(&caps(&run["granted"]), grace_ms(run)));
     match &run["init"] {
         Value::String(s) if s == "trap" => {
             assert!(matches!(got, Err(Trap::Other(_))), "{name}: {got:?}")
@@ -50,12 +62,19 @@ fn expect_init(name: &str, inst: &mut Instance, run: &Value) {
 fn play(name: &str, run: &Value) -> Instance {
     let mut inst = start(name, run);
     expect_init(name, &mut inst, run);
-    if run["init"] != "trap" {
-        assert_eq!(
-            inst.pump(),
-            Ok(()),
-            "{name}: delivering pending replies after init"
-        );
+    let pump_first = run["pump_before_close"].as_bool() != Some(false);
+    if run["init"] == 0 {
+        if pump_first {
+            assert_eq!(inst.pump(), Ok(()), "{name}: pending replies after init");
+        }
+        assert_eq!(inst.start(), Ok(()), "{name}: the start");
+        if pump_first {
+            assert_eq!(
+                inst.pump(),
+                Ok(()),
+                "{name}: pending replies after the start"
+            );
+        }
     }
     for step in run["events"].as_array().into_iter().flatten() {
         let event: AppEvent = serde_json::from_value(step["event"].clone()).unwrap();
@@ -70,7 +89,14 @@ fn play(name: &str, run: &Value) -> Instance {
         Some(_) => assert_eq!(inst.frame(16), Err(Trap::OutOfFuel), "{name} frame"),
         None => {}
     }
+    if let Some(close) = run.get("close") {
+        expect_close(name, &mut inst, close);
+    }
     let report = inst.report();
+    for absent in run["report_absent"].as_array().into_iter().flatten() {
+        let probe = absent.as_str().unwrap();
+        assert!(!report.contains_key(probe), "{name}: {probe} was reported");
+    }
     for (probe, want) in run["report"].as_object().into_iter().flatten() {
         assert_eq!(
             report.get(probe).map(String::as_str),
@@ -98,19 +124,46 @@ fn play(name: &str, run: &Value) -> Instance {
     inst
 }
 
+fn expect_close(name: &str, inst: &mut Instance, close: &Value) {
+    let reason: CloseReason = serde_json::from_value(close["reason"].clone()).unwrap();
+    let got = inst.close(reason);
+    match close["outcome"].as_str().unwrap() {
+        "settled" => {
+            let want = close["result"].as_i64().unwrap() as i32;
+            assert_eq!(got, Ok(want), "{name}: close; log {:?}", inst.state().log);
+        }
+        "terminated" => assert_eq!(got, Err(Trap::OutOfFuel), "{name}: close"),
+        _ => assert!(matches!(got, Err(Trap::Other(_))), "{name}: close {got:?}"),
+    }
+    assert_eq!(inst.state().lifecycle, LifecycleState::Closed, "{name}");
+    if let Some(again) = close["again"].as_i64() {
+        assert_eq!(inst.close_again(reason), Ok(again as i32), "{name}: again");
+    }
+    for event in close["events_after"].as_array().into_iter().flatten() {
+        let event: AppEvent = serde_json::from_value(event.clone()).unwrap();
+        assert_eq!(inst.event(&event), Ok(()), "{name}: {event:?} after close");
+    }
+}
+
+/// Every run of a fixture: `run`, `control_run` and each of `extra_runs`.
+fn runs(f: &Value) -> Vec<&Value> {
+    let named = ["run", "control_run"].into_iter().filter_map(|k| f.get(k));
+    named
+        .chain(f["extra_runs"].as_array().into_iter().flatten())
+        .collect()
+}
+
 #[test]
 fn every_fixture_runs_as_fixtures_json_says() {
     let m = manifest();
     let mut ran = 0;
     for (name, f) in m["fixtures"].as_object().unwrap() {
-        for key in ["run", "control_run"] {
-            if let Some(run) = f.get(key) {
-                play(name, run);
-                ran += 1;
-            }
+        for run in runs(f) {
+            play(name, run);
+            ran += 1;
         }
     }
-    assert!(ran >= 8, "only {ran} runs");
+    assert!(ran >= 13, "only {ran} runs");
 }
 
 #[test]
@@ -159,7 +212,10 @@ fn a_pending_reply_reaches_the_app_only_through_reply_ready() {
     let m = manifest();
     let run = &m["fixtures"]["huge-reply"]["run"];
     let mut inst = start("huge-reply", run);
-    assert_eq!(inst.init(&context(&caps(&run["granted"]))), Ok(0));
+    assert_eq!(
+        inst.init(&context(&caps(&run["granted"]), grace_ms(run))),
+        Ok(0)
+    );
     assert!(
         inst.report().is_empty(),
         "every read is pending until delivered: {:?}",

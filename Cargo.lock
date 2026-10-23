@@ -1099,7 +1099,7 @@ dependencies = [
 
 [[package]]
 name = "citadel-workspace-internal-service"
-version = "0.10.5"
+version = "0.10.6"
 dependencies = [
  "citadel-internal-service",
  "citadel-internal-service-types",
@@ -1135,7 +1135,9 @@ dependencies = [
  "chrono",
  "citadel-app-id",
  "citadel-app-net-policy",
+ "citadel-app-sdk-types",
  "citadel-app-signature",
+ "citadel-ihttp-types",
  "citadel-internal-service",
  "citadel-internal-service-connector",
  "citadel-internal-service-test-common",

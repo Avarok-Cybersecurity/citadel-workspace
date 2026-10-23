@@ -146,6 +146,11 @@ pub enum AppsResponse {
         #[ts(type = "bigint")]
         until_ms: u64,
     },
+    /// `WithdrawService` taken: how many relayed streams it ended.
+    Withdrawn {
+        install_id: String,
+        closed_streams: u32,
+    },
     IhttpSent,
     /// A relayed frame for one of the caller's running apps.
     IhttpFrame {

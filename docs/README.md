@@ -9,6 +9,7 @@
 - [WORKSPACE_IMPLEMENTATION_GAPS.md](WORKSPACE_IMPLEMENTATION_GAPS.md) — UI action vs backend support
 - [EXIT_VS_SIGNOUT_IMPLEMENTATION.md](EXIT_VS_SIGNOUT_IMPLEMENTATION.md) — exit vs sign-out semantics
 - [THEMING.md](THEMING.md) — semantic colour tokens, and why hardcoded palette classes break workspace theming
+- [app-lifecycle.md](app-lifecycle.md) — a Citadel app's lifecycle: the one state machine, the required `app_close`, the manifest's close grace, and what the host and the server release on every exit path
 
 ## Build & deploy
 - [INSTALL.md](INSTALL.md) — using, hosting, or developing: which compose file, and why it matters

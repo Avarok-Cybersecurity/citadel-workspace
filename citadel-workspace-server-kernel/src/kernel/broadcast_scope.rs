@@ -12,9 +12,25 @@ use citadel_sdk::prelude::Ratchet;
 use citadel_workspace_types::structs::Permission;
 
 impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
-    /// May `user_id`'s session receive a broadcast addressed to `audience`?
+    /// May the session `cid`, signed in as `user_id`, receive a broadcast addressed to
+    /// `audience`? What the forwarding loop asks.
+    pub async fn may_receive_at(
+        &self,
+        cid: u64,
+        user_id: &str,
+        audience: &BroadcastAudience,
+    ) -> bool {
+        match audience {
+            BroadcastAudience::Session(target) => *target == cid,
+            other => self.may_receive(user_id, other).await,
+        }
+    }
+
+    /// May `user_id`'s session receive a broadcast addressed to `audience`? A broadcast for one
+    /// session is answered no here: only `may_receive_at` knows which session is asking.
     pub async fn may_receive(&self, user_id: &str, audience: &BroadcastAudience) -> bool {
         match audience {
+            BroadcastAudience::Session(_) => false,
             BroadcastAudience::Everyone => true,
             // A group-scoped broadcast reaches only sessions entitled to that channel.
             BroadcastAudience::Group(group_id) => authorize_group_read(self, user_id, group_id)

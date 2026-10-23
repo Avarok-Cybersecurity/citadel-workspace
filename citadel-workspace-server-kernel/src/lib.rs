@@ -85,6 +85,18 @@ pub mod config {
         /// Required by the native server and refused by a hosted one, whose host supplies it.
         /// See `kernel::sign_in::config`.
         pub sign_in: Option<crate::kernel::sign_in::config::NativeSignInConfig>,
+        /// Apps' server egress (`net.server`). Absent: the server makes no request for any
+        /// app, and every such call is answered unavailable. See `resolve_server_egress`.
+        pub app_server_egress: Option<AppServerEgressConfig>,
+    }
+
+    /// What server egress must know about the deployment it runs in: the host its pages are
+    /// served from, which no app's request may reach, whatever its grant.
+    #[derive(Deserialize, Debug, Clone)]
+    #[serde(deny_unknown_fields)]
+    pub struct AppServerEgressConfig {
+        /// Lowercase, no scheme or port (`acme.work.example`).
+        pub page_origin_host: String,
     }
 
     impl std::fmt::Debug for ServerConfig {
@@ -118,6 +130,7 @@ pub mod config {
                 .field("secure_links_per_member", &self.secure_links_per_member)
                 .field("secure_links_pool", &self.secure_links_pool)
                 .field("sign_in", &self.sign_in)
+                .field("app_server_egress", &self.app_server_egress)
                 .finish()
         }
     }
@@ -536,6 +549,20 @@ pub fn resolve_documents_relay(
     kernel::documents::DocumentsRelay::new(documents).map_err(NetworkError::msg)
 }
 
+/// The native server's apps egress, if `[app_server_egress]` configures it: the system
+/// resolver and an HTTPS client pinned to the addresses the policy checked.
+#[cfg(not(target_family = "wasm"))]
+pub fn resolve_server_egress(config: &ServerConfig) -> kernel::apps::egress::ServerEgressHandle {
+    let egress = config.app_server_egress.as_ref()?;
+    let deployment = citadel_app_net_policy::Deployment {
+        page_origin_host: egress.page_origin_host.to_ascii_lowercase(),
+    };
+    let fetcher = std::sync::Arc::new(kernel::apps::egress_native::NativeEgressFetcher);
+    Some(std::sync::Arc::new(
+        kernel::apps::egress::ServerEgress::new(fetcher, deployment),
+    ))
+}
+
 /// The secure-link limits `config` sets. Both keys are required: a native server has no plan to
 /// read them from, and a default would be a limit nobody chose.
 pub fn resolve_secure_link_quota(
@@ -705,6 +732,7 @@ pub fn connect_enrolment(
 /// transfer policy, first-connect decision and the host's relay-credential minter. One
 /// constructor, so a hosted server cannot drift from the native one in what it seeds or whom it
 /// promotes.
+#[allow(clippy::too_many_arguments)]
 async fn workspace_kernel(
     config: &ServerConfig,
     workspace_structure: Option<(WorkspaceStructureConfig, Option<std::path::PathBuf>)>,
@@ -713,6 +741,7 @@ async fn workspace_kernel(
     sign_in_settings: kernel::sign_in::SignInSettingsHandle,
     link_quota: kernel::secure_links::quota::LinkQuotaSourceHandle,
     artifact_fetcher: kernel::apps::fetcher::ArtifactFetcherHandle,
+    server_egress: kernel::apps::egress::ServerEgressHandle,
 ) -> Result<kernel::async_kernel::AsyncWorkspaceServerKernel<StackedRatchet>, NetworkError> {
     if first_connect_admin {
         citadel_logging::warn!(target: "citadel", "⚠️  WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN is on: the first account to connect becomes the workspace administrator. Intended for local development. On a reachable deployment this hands ownership to whoever registers first.");
@@ -751,6 +780,10 @@ async fn workspace_kernel(
         info!(target: "citadel", "No artifact fetcher: apps install only from artifacts uploaded to this server.");
     }
     kernel.set_artifact_fetcher(artifact_fetcher);
+    if server_egress.is_none() {
+        info!(target: "citadel", "No server egress: apps' net.server calls are answered unavailable.");
+    }
+    kernel.set_server_egress(server_egress);
     Ok(kernel)
 }
 
@@ -768,7 +801,8 @@ async fn workspace_kernel(
 /// `link_quota` is the host's secure-link limits (its plan); the host also runs the purge
 /// (`purge_expired_links`), through the kernel `telemetry.kernel_ready` hands it.
 /// `artifact_fetcher` fetches app artifacts by URL (`kernel::apps::fetcher`), or `None` for a
-/// host that has none, whose installs then take uploaded artifacts only.
+/// host that has none, whose installs then take uploaded artifacts only. `server_egress` makes
+/// apps' `net.server` requests (`kernel::apps::egress`), or `None` for a host that has none.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_server_on<T: PlatformOps>(
     config: ServerConfig,
@@ -780,6 +814,7 @@ pub async fn run_server_on<T: PlatformOps>(
     telemetry: kernel::telemetry::HostedTelemetry<StackedRatchet>,
     link_quota: kernel::secure_links::quota::LinkQuotaSourceHandle,
     artifact_fetcher: kernel::apps::fetcher::ArtifactFetcherHandle,
+    server_egress: kernel::apps::egress::ServerEgressHandle,
 ) -> Result<(), NetworkError> {
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel on an injected listener...");
     if config.sign_in.is_some() {
@@ -803,6 +838,7 @@ pub async fn run_server_on<T: PlatformOps>(
         sign_in.settings,
         link_quota,
         artifact_fetcher,
+        server_egress,
     )
     .await?;
     kernel.set_support_grant_observer(telemetry.support_grants);
@@ -922,6 +958,7 @@ pub async fn run_server_with_site_verify(
                 kernel::apps::fetcher_native::artifact_client().map_err(NetworkError::msg)?,
             ),
         )),
+        resolve_server_egress(&config),
     )
     .await?;
     spawn_link_purge(kernel.clone());
@@ -1352,6 +1389,7 @@ mod server_config_debug_tests {
             secure_links_per_member: Some(5),
             secure_links_pool: Some(0),
             sign_in: None,
+            app_server_egress: None,
         }
     }
 

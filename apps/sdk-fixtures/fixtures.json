@@ -1,6 +1,6 @@
 {
   "abi": "citadel-app-abi-1",
-  "about": "What each fixture in wasm/ declares, how an inspector must judge it, and what a host must observe running it. Rejection codes are citadel-app-abi-inspect's Rejection::code(). A run's `report` is the fixture's `log` lines `<probe>=<answer>`; answers are ok | ungranted | unavailable:<r> | limit:<w> | policy:<r> | remote:<n> | code:<abi error>. Refusals answer at once; a host may make any other granted call except canvas and log pending, and the fixture then reports it when its reply_ready arrives, so compare reports after every pending reply has been delivered. The intrinsic capabilities (canvas, ui, events, navigate, log) are held by every install. `host` is the reference host's policy for the run; the TS host must be configured the same to compare.",
+  "about": "What each fixture in wasm/ declares, how an inspector must judge it, and what a host must observe running it. Rejection codes are citadel-app-abi-inspect's Rejection::code(). A run's `report` is the fixture's `log` lines `<probe>=<answer>`; answers are ok | ungranted | unavailable:<r> | limit:<w> | policy:<r> | remote:<n> | code:<abi error>. Refusals answer at once; a host may make any other granted call except canvas and log pending, and the fixture then reports it when its reply_ready arrives, so compare reports after every pending reply has been delivered. The intrinsic capabilities (canvas, ui, events, navigate, log) are held by every install. `host` is the reference host's policy for the run; the TS host must be configured the same to compare. Every run starts the app the host's way: app_init, its pending replies delivered, then AppEvent init (the lifecycle's start); `events` follow. A run's `close` closes it: app_close(reason) (`result`: what it answers), then the replies it waits on, within `host.close_grace_ms` (the reference host meters it in fuel); `outcome` is settled (closed, every reply delivered), terminated (the grace ran out) or trapped; `again` is what a second app_close answers. `pump_before_close: false` closes with the replies of init still pending. `extra_runs` are more runs of the same fixture.",
   "fixtures": {
     "hello-canvas": {
       "about": "The control. Subscribes to pointer events, asks for frames, paints a card.",
@@ -8,7 +8,7 @@
       "inspect": {"accepted": true},
       "run": {
         "granted": ["canvas", "events", "log"],
-        "host": {"max_memory_pages": 64},
+        "host": {"max_memory_pages": 64, "close_grace_ms": 500},
         "init": 0,
         "frame": "ok",
         "log": ["hello-canvas started"]
@@ -42,7 +42,7 @@
       "inspect": {"accepted": true},
       "run": {
         "granted": ["log"],
-        "host": {"max_memory_pages": 32},
+        "host": {"max_memory_pages": 32, "close_grace_ms": 500},
         "init": "trap",
         "memory_pages_after": 32,
         "report": {
@@ -57,7 +57,12 @@
       "about": "app_frame never returns.",
       "declared": ["log"],
       "inspect": {"accepted": true},
-      "run": {"granted": ["log"], "host": {"max_memory_pages": 64}, "init": 0, "frame": "trap"}
+      "run": {
+        "granted": ["log"],
+        "host": {"max_memory_pages": 64, "close_grace_ms": 500},
+        "init": 0,
+        "frame": "trap"
+      }
     },
     "ungranted-calls": {
       "about": "Calls every group an install must be granted (all but the intrinsic ones), and an ungranted group raw with a bogus op, garbage and an out-of-bounds pointer. init answers 0 only if every answer was exactly {refused: \"ungranted\"} at once; 100 + group index of the first that was not; 200/201 for the raw probes.",
@@ -92,8 +97,12 @@
         "documents"
       ],
       "inspect": {"accepted": true},
-      "run": {"granted": [], "host": {"max_memory_pages": 64}, "init": 0},
-      "control_run": {"granted": ["nodes.read"], "host": {"max_memory_pages": 64}, "init": 104}
+      "run": {"granted": [], "host": {"max_memory_pages": 64, "close_grace_ms": 500}, "init": 0},
+      "control_run": {
+        "granted": ["nodes.read"],
+        "host": {"max_memory_pages": 64, "close_grace_ms": 500},
+        "init": 104
+      }
     },
     "panics": {
       "about": "Panics in app_event on UiAction{id:\"panic\"}; handles every other event.",
@@ -101,10 +110,10 @@
       "inspect": {"accepted": true},
       "run": {
         "granted": ["log"],
-        "host": {"max_memory_pages": 64},
+        "host": {"max_memory_pages": 64, "close_grace_ms": 500},
         "init": 0,
         "events": [
-          {"event": "init", "outcome": "ok"},
+          {"event": {"focus": {"focused": true}}, "outcome": "ok"},
           {"event": {"ui_action": {"id": "panic"}}, "outcome": "trap"}
         ],
         "log_contains": "boom from app_event"
@@ -116,7 +125,7 @@
       "inspect": {"accepted": true},
       "run": {
         "granted": ["files.read", "log"],
-        "host": {"max_memory_pages": 64, "max_reply_bytes": 16777216},
+        "host": {"max_memory_pages": 64, "max_reply_bytes": 16777216, "close_grace_ms": 500},
         "init": 0,
         "report": {"read_4gib": "limit:read_len", "read_8mib": "limit:reply", "read_16b": "ok"}
       }
@@ -156,7 +165,7 @@
       "inspect": {"accepted": true},
       "run": {
         "granted": ["log"],
-        "host": {"max_memory_pages": 64},
+        "host": {"max_memory_pages": 64, "close_grace_ms": 500},
         "init": 0,
         "report": {
           "net_host_agent_port": "ungranted",
@@ -197,15 +206,105 @@
       "inspect": {"accepted": true},
       "run": {
         "granted": ["ihttp.call", "log"],
-        "host": {"max_memory_pages": 64, "ihttp_remote": {"chunks": 10, "chunk_bytes": 1000}},
+        "host": {
+          "max_memory_pages": 64,
+          "ihttp_remote": {"chunks": 10, "chunk_bytes": 1000},
+          "close_grace_ms": 500
+        },
         "init": 0,
         "report": {"head": "200", "stream": "complete:10:10000"}
       },
       "control_run": {
         "granted": ["ihttp.serve", "log"],
-        "host": {"max_memory_pages": 64, "ihttp_remote": {"chunks": 10, "chunk_bytes": 1000}},
+        "host": {
+          "max_memory_pages": 64,
+          "ihttp_remote": {"chunks": 10, "chunk_bytes": 1000},
+          "close_grace_ms": 500
+        },
         "init": 0,
         "report": {"stream": "failed:ungranted"}
+      }
+    },
+    "close-flush": {
+      "about": "The well-behaved close: writes its state to storage.user in close and reports the write when the reply arrives, before the host ends it. Its init read reports whether its reply came while running or after close began; a second app_close does not run close again. Also suspends and resumes.",
+      "declared": ["storage.user", "log"],
+      "inspect": {"accepted": true},
+      "run": {
+        "granted": ["storage.user", "log"],
+        "host": {"max_memory_pages": 64, "close_grace_ms": 500},
+        "init": 0,
+        "events": [
+          {"event": {"suspend": {"reason": "hidden"}}, "outcome": "ok"},
+          {"event": "resume", "outcome": "ok"},
+          {"event": {"ui_action": {"id": "edit"}}, "outcome": "ok"}
+        ],
+        "close": {"reason": "unmount", "result": 0, "outcome": "settled", "again": 2},
+        "report": {
+          "restored": "ok:running",
+          "suspended": "Hidden",
+          "resumed": "ok",
+          "close": "Unmount:500:1",
+          "flush": "ok"
+        }
+      },
+      "extra_runs": [
+        {
+          "granted": ["storage.user", "log"],
+          "host": {"max_memory_pages": 64, "close_grace_ms": 500},
+          "init": 0,
+          "pump_before_close": false,
+          "close": {"reason": "uninstall", "result": 0, "outcome": "settled", "again": 2},
+          "report": {"restored": "ok:closing", "close": "Uninstall:500:1", "flush": "ok"}
+        }
+      ]
+    },
+    "close-hang": {
+      "about": "close never returns: the host ends the instance once the grace has passed, without waiting on it.",
+      "declared": ["log"],
+      "inspect": {"accepted": true},
+      "run": {
+        "granted": ["log"],
+        "host": {"max_memory_pages": 64, "close_grace_ms": 500},
+        "init": 0,
+        "close": {"reason": "unmount", "outcome": "terminated"},
+        "log": ["close-hang closing forever"]
+      }
+    },
+    "close-panic": {
+      "about": "close panics: the SDK logs it and traps, and the host ends the instance as trapped at once.",
+      "declared": ["log"],
+      "inspect": {"accepted": true},
+      "run": {
+        "granted": ["log"],
+        "host": {"max_memory_pages": 64, "close_grace_ms": 500},
+        "init": 0,
+        "close": {"reason": "host_shutdown", "outcome": "trapped"},
+        "log_contains": "boom from app_close (HostShutdown)"
+      }
+    },
+    "close-calls": {
+      "about": "Calls the host from close, granted everything it calls: only storage and log are served while closing, every other group answers unavailable:closing at once. Input after close began never reaches the app (late is never reported).",
+      "declared": ["nodes.read", "notifications", "net.server", "storage.user", "log"],
+      "inspect": {"accepted": true},
+      "run": {
+        "granted": ["nodes.read", "notifications", "net.server", "storage.user", "log"],
+        "host": {"max_memory_pages": 64, "close_grace_ms": 500},
+        "init": 0,
+        "close": {
+          "reason": "access_revoked",
+          "result": 0,
+          "outcome": "settled",
+          "events_after": [{"ui_action": {"id": "late"}}]
+        },
+        "report": {
+          "closing_nodes": "unavailable:closing",
+          "closing_notify": "unavailable:closing",
+          "closing_toast": "unavailable:closing",
+          "closing_net": "unavailable:closing",
+          "closing_storage": "ok",
+          "closing_log": "ok"
+        },
+        "report_absent": ["late"]
       }
     }
   }

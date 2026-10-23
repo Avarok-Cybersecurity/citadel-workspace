@@ -20,7 +20,7 @@ const UNSAFE = /[|;<>`$(){}]/;
  * a build, a browser, a served app. Such a gate is `heavy` only if EVERY job that runs it is --
  * the file-length gate runs in the Docker job too, and in a plain lint job.
  */
-const HEAVY = /playwright install|docker compose/;
+const HEAVY = /install-chromium\.sh|playwright install|docker compose/;
 
 /** Split one command into argv: whitespace, with '…' and "…" kept whole. */
 export function argv(command) {

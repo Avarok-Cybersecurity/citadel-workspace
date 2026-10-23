@@ -151,6 +151,10 @@ pub struct AppLimits {
     pub frame_budget_ms: u32,
     pub storage_user_bytes: u32,
     pub storage_scope_bytes: u32,
+    /// How long `app_close` and the replies it waits on may take before the host ends the
+    /// instance, in milliseconds: 1 to `abi::MAX_CLOSE_GRACE_MS`. Required, never defaulted: the
+    /// publisher states the cleanup it needs, the consent screen and the host hold it to that.
+    pub close_grace_ms: u32,
 }
 
 /// The wasm module: its identity is the digest; locations are hints.

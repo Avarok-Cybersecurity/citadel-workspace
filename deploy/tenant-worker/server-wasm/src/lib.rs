@@ -123,6 +123,11 @@ impl TenantServer {
                 telemetry,
                 link_quota,
                 None,
+                // Server egress for apps: none yet. A Worker's `fetch` resolves names itself and
+                // cannot be pinned to the addresses the policy checked, so an `EgressFetcher`
+                // here needs a resolve-then-connect primitive the runtime does not offer; until
+                // then `net.server` calls are answered unavailable (kernel::apps::egress).
+                None,
             )
             .await;
             let _ = on_exit.call1(&JsValue::NULL, &format!("{outcome:?}").into());

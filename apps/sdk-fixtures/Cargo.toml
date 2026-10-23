@@ -17,6 +17,10 @@ members = [
     "huge-reply",
     "exfil-attempts",
     "ihttp-stream-client",
+    "close-flush",
+    "close-hang",
+    "close-panic",
+    "close-calls",
 ]
 exclude = ["harness", "sdk"]
 

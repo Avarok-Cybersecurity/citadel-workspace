@@ -15,6 +15,11 @@ signature: string, } } | { "UploadArtifactChunk": { sha256: string, index: numbe
  */
 inject_requirement: boolean, } } | { "Uninstall": { install_id: string, purge_storage: boolean, } } | { "Update": { install_id: string, listing: ListingOffer, } } | { "Rollback": { install_id: string, } } | { "Consent": { install_id: string, version: string, granted: Array<Capability>, pinned_publisher_key: string, } } | { "SetDisabledForMe": { install_id: string, disabled: boolean, } } | { "FetchArtifact": { sha256: string, index: number, } } | { "GetRelease": { install_id: string, } } | { "ListAudit": { before_ms: bigint | null, } } | { "RequestInstall": { app_id: string, node_id: string, } } | { "Call": { install_id: string, call: Array<number>, } } | { "AdvertiseService": { install_id: string, 
 /**
+ * The running instance advertising (one session may run several of one install): the
+ * session serves the install while any of its instances is advertised.
+ */
+instance: string, 
+/**
  * Hex sha256 of the route list served.
  */
-routes_digest: string, until_ms: bigint, } } | { "IhttpSend": { from_install_id: string, to: IhttpAddress, frame: Array<number>, } };
+routes_digest: string, until_ms: bigint, } } | { "WithdrawService": { install_id: string, instance: string, } } | { "IhttpSend": { from_install_id: string, to: IhttpAddress, frame: Array<number>, } };

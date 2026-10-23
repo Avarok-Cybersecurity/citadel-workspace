@@ -15,6 +15,10 @@
 //! - `citadel_workspace.apps.upload.<username>` and `.upload_chunk.<n>.<username>`: the one
 //!   artifact a member is uploading.
 //! - `citadel_workspace.apps.audit`: the audit log, at most `MAX_AUDIT_ENTRIES`.
+//! - `citadel_workspace.apps.ledger.<root>`: what one app holds at one scope
+//!   (`storage::StorageLedger`); `.kvindex.<namespace>` one KV's keys, `.kv.<namespace>.<key>`
+//!   one value, `.blob.<root>.<sha256>` and `.blob_chunk.<root>.<sha256>.<n>` one blob. Every
+//!   `<...>` here is a digest (`storage::StorageRoot`), never an app's own text.
 //!
 //! A release or artifact is deleted once no install (running, previous or pending) and no
 //! registry entry names it.
@@ -73,6 +77,26 @@ pub(crate) fn upload_key(username: &str) -> String {
 /// Index first: a username may hold dots, a number does not.
 pub(crate) fn upload_chunk_key(username: &str, index: u32) -> String {
     format!("{PREFIX}upload_chunk.{index}.{username}")
+}
+
+pub(crate) fn ledger_key(root_id: &str) -> String {
+    format!("{PREFIX}ledger.{root_id}")
+}
+
+pub(crate) fn kv_index_key(namespace_id: &str) -> String {
+    format!("{PREFIX}kvindex.{namespace_id}")
+}
+
+pub(crate) fn kv_value_key(namespace_id: &str, key_id: &str) -> String {
+    format!("{PREFIX}kv.{namespace_id}.{key_id}")
+}
+
+pub(crate) fn blob_key(root_id: &str, sha256: &str) -> String {
+    format!("{PREFIX}blob.{root_id}.{sha256}")
+}
+
+pub(crate) fn blob_chunk_key(root_id: &str, sha256: &str, index: u32) -> String {
+    format!("{PREFIX}blob_chunk.{root_id}.{sha256}.{index}")
 }
 
 /// One release of an app: which manifest and which module.

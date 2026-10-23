@@ -87,7 +87,8 @@
    "max_call_rate_per_s": 200,
    "frame_budget_ms": 16,
    "storage_user_bytes": 1048576,
-   "storage_scope_bytes": 8388608
+   "storage_scope_bytes": 8388608,
+   "close_grace_ms": 500
   },
   "artifact": {
    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
@@ -1864,6 +1865,55 @@
      ],
      "value": 8388609
     }
+   ]
+  },
+  {
+   "name": "limit close_grace_ms 0",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "limits",
+      "close_grace_ms"
+     ],
+     "value": 0
+    }
+   ]
+  },
+  {
+   "name": "limit close_grace_ms 2001",
+   "expect": "Limits",
+   "set": [
+    {
+     "path": [
+      "limits",
+      "close_grace_ms"
+     ],
+     "value": 2001
+    }
+   ]
+  },
+  {
+   "name": "control: the close grace ceiling",
+   "expect": "ok",
+   "set": [
+    {
+     "path": [
+      "limits",
+      "close_grace_ms"
+     ],
+     "value": 2000
+    }
+   ]
+  },
+  {
+   "name": "a manifest without close_grace_ms",
+   "expect": "Json",
+   "remove": [
+    [
+     "limits",
+     "close_grace_ms"
+    ]
    ]
   },
   {

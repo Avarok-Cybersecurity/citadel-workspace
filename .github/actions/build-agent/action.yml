@@ -62,10 +62,15 @@ runs:
 
     # A musl target links statically against musl, whose C compiler wrapper the vendored
     # OpenSSL, ring and pqcrypto builds all need; the runner has only glibc's.
+    # apt-get fails at once (exit 100) on a lock the runner's own apt is holding, so it waits for
+    # the locks first, with the browser installs' wait (the UI submodule; release-agent.yml
+    # checks submodules out before this action).
     - name: Install the musl toolchain
       if: contains(inputs.target, '-musl')
       shell: bash
-      run: sudo apt-get update -qq && sudo apt-get install -y -qq musl-tools
+      run: >-
+        bash citadel-workspaces/scripts/ci/wait-for-apt-locks.sh &&
+        sudo apt-get update -qq && sudo apt-get install -y -qq musl-tools
 
     - name: Use this release's certificate
       uses: actions/download-artifact@v4

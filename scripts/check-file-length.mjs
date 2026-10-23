@@ -81,10 +81,7 @@ const SKIP = new Map([
   // outcome to prefer where a cohesive unit exists to cut.
   //
   // The natural next cuts, in order: Landing.tsx (three dialogs that could be
-  // lazy), revfs-service.ts and live-document-store/service.ts (each holds a
-  // store AND its persistence).
-  ['lib/live-document-store/service.ts', 279],
-  ['lib/p2p/message-handler.ts', 259],
+  // lazy) and revfs-service.ts (it holds a store AND its persistence).
   ['lib/server-auto-connect-service/service.ts', 252],
   ['lib/revfs/revfs-retry.ts', 254],
 
@@ -97,8 +94,9 @@ const SKIP = new Map([
   // Not written here: a byte-for-byte copy of citadel-app-sdk-types' generated ABI
   // constants (every op's arguments and reply), held to its source by the UI's
   // generated-drift test. Splitting it would break that equality; it changes only
-  // when the SDK does, and then this entry moves with it.
-  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 344],
+  // when the SDK does, and then this entry moves with it. 381: the app lifecycle's transition
+  // table, close reasons and the closing groups, generated from lifecycle.rs (docs/app-lifecycle.md).
+  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 381],
 ]);
 
 if (!statSync(SRC, { throwIfNoEntry: false })) {

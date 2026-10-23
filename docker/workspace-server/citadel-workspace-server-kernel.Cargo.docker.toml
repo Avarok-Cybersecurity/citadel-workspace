@@ -49,6 +49,8 @@ getrandom = "0.3"
 citadel-app-signature = { path = "../citadel-internal-service/citadel-app-signature" }
 citadel-app-id = { path = "../citadel-internal-service/citadel-app-id" }
 citadel-app-net-policy = { path = "../citadel-internal-service/citadel-app-net-policy" }
+citadel-app-sdk-types = { path = "../citadel-internal-service/citadel-app-sdk-types" }
+citadel-ihttp-types = { path = "../citadel-internal-service/citadel-ihttp-types" }
 hex = "0.4"
 
 # The constant-time master-password comparison (kernel/secret_eq.rs).

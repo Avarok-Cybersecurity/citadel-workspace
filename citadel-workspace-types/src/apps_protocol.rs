@@ -98,10 +98,20 @@ pub enum AppsRequest {
     /// The caller's host serves this install's routes until `until_ms` (repeated while mounted).
     AdvertiseService {
         install_id: String,
+        /// The running instance advertising (one session may run several of one install): the
+        /// session serves the install while any of its instances is advertised.
+        instance: String,
         /// Hex sha256 of the route list served.
         routes_digest: String,
         #[ts(type = "bigint")]
         until_ms: u64,
+    },
+    /// The instance ended (its app closed): it no longer advertises the install. When no other
+    /// instance of the caller's session does, the relayed streams this session serves for the
+    /// install end too, and their callers are sent `Cancel { Closed }`.
+    WithdrawService {
+        install_id: String,
+        instance: String,
     },
     /// Relay one internal-HTTP frame (CBOR of `citadel_ihttp_types::IhttpFrame`) through the
     /// server, when there is no P2P session or the address is a scope.

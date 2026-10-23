@@ -142,7 +142,8 @@ const GATED_BY = {
   // UpdateNodeSettings has no entry since installing an app for anyone but oneself takes it on
   // the scope's node (kernel::apps::install::decide_install).
   AddNode: 'CreateNode in async_domain_server_ops',
-  EditContent: 'EditMdx / EditTreeStructure on the node being edited',
+  // EditContent has no entry since an app's shared store (`storage.scope`) takes it for a write
+  // (command_processor/apps_call_storage.rs).
   // ReadMessages has no entry since kernel::apps::rules named it: an app's `chat.read` takes it
   // (enforced once the apps call handler dispatches through those rules). A member's own reads
   // are still gated on ViewContent (group_access::authorize_group_read), not on this toggle.
