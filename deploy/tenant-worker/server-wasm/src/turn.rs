@@ -5,15 +5,17 @@
 
 use citadel_sdk::prelude::async_trait;
 use citadel_workspace_server_kernel::kernel::telemetry::TurnUsageSink;
+use citadel_workspace_types::turn_usage::TurnUsageRefusal;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 extern "C" {
-    /// The object's meter: `record(bytes)` adds TURN bytes to the current period.
+    /// The object's TURN intake (control/turn-cap.mjs `TurnIntake`): `record(userId, bytes)`
+    /// counts the report and returns null, or returns the refusal (`TurnUsageRefusal`) as JSON.
     pub type TurnUsageHost;
 
     #[wasm_bindgen(method, catch)]
-    fn record(this: &TurnUsageHost, bytes: f64) -> Result<(), JsValue>;
+    fn record(this: &TurnUsageHost, user_id: &str, bytes: f64) -> Result<Option<String>, JsValue>;
 }
 
 struct DurableObjectMeter(TurnUsageHost);
@@ -30,10 +32,21 @@ pub fn sink(host: TurnUsageHost) -> std::sync::Arc<dyn TurnUsageSink> {
 
 #[async_trait]
 impl TurnUsageSink for DurableObjectMeter {
-    async fn record_turn_bytes(&self, _user_id: &str, bytes: u64) {
+    async fn record_turn_bytes(&self, user_id: &str, bytes: u64) -> Result<(), TurnUsageRefusal> {
         // Exact: a report is at most MAX_TURN_USAGE_REPORT_BYTES per direction, far under 2^53.
-        if let Err(e) = self.0.record(bytes as f64) {
-            web_sys::console::error_1(&format!("[tenant] TURN usage not metered: {e:?}").into());
+        match self.0.record(user_id, bytes as f64) {
+            Ok(None) => Ok(()),
+            Ok(Some(refusal)) => Err(serde_json::from_str(&refusal).unwrap_or_else(|e| {
+                web_sys::console::error_1(&format!("[tenant] unreadable TURN refusal: {e}").into());
+                TurnUsageRefusal::HostFailed
+            })),
+            // The meter threw: nothing was counted, and the agent is told so.
+            Err(e) => {
+                web_sys::console::error_1(
+                    &format!("[tenant] TURN usage not metered: {e:?}").into(),
+                );
+                Err(TurnUsageRefusal::HostFailed)
+            }
         }
     }
 }

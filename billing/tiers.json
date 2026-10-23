@@ -119,7 +119,7 @@
     "flush_seconds": 60
   },
   "paths": {
-    "$comment": "The path policy each tenant's server runs (control/path-policy.mjs). The owner's order, the same on every tier: Direct, then PeerRelay, then TURN, then the server relay. Tiers differ only in what the server relay may carry: real-time media only on the tiers listed, so a free call that cannot go peer to peer is refused with its reason instead of relayed through the server.",
+    "$comment": "The path policy each tenant's server runs (control/path-policy.mjs). turn_gb_per_member_hour is the most TURN one member's agents may report in an hour (control/turn-cap.mjs): 20 GB is about 44 Mbit/s sustained for the hour, well over a video call, and a report past it is refused and recorded, so one member cannot run up the workspace's relay overage. The owner's order, the same on every tier: Direct, then PeerRelay, then TURN, then the server relay. Tiers differ only in what the server relay may carry: real-time media only on the tiers listed, so a free call that cannot go peer to peer is refused with its reason instead of relayed through the server.",
     "order": [
       "Direct",
       "PeerRelay",
@@ -138,6 +138,7 @@
       "Turn": 2,
       "ServerRelay": 3
     },
+    "turn_gb_per_member_hour": 20,
     "media_on_server_relay": [
       "team",
       "business"

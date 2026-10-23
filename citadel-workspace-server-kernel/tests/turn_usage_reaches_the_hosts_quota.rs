@@ -7,18 +7,37 @@
 
 use citadel_workspace_server_kernel::kernel::telemetry::TurnUsageSink;
 use citadel_workspace_types::telemetry::{TelemetryRequest, TelemetryResponse};
-use citadel_workspace_types::turn_usage::{TurnUsage, MAX_TURN_USAGE_REPORT_BYTES};
+use citadel_workspace_types::turn_usage::{
+    TurnUsage, TurnUsageRefusal, MAX_TURN_USAGE_REPORT_BYTES,
+};
 use common::telemetry_test_utils::{ask, hosted_kernel, member, refusal, telemetry};
 use common::workspace_test_utils::create_configured_test_kernel;
 use std::sync::{Arc, Mutex};
 
-#[derive(Default)]
-struct Quota(Mutex<Vec<(String, u64)>>);
+/// Counts what it is told, and refuses any single report over `refuse_over` bytes, as the
+/// host's per-member cap would (its own rule is tested in deploy/tenant-worker).
+struct Quota {
+    counted: Mutex<Vec<(String, u64)>>,
+    refuse_over: u64,
+}
+
+const HOST_CAP: u64 = 5_000;
 
 #[async_trait::async_trait]
 impl TurnUsageSink for Quota {
-    async fn record_turn_bytes(&self, user_id: &str, bytes: u64) {
-        self.0.lock().unwrap().push((user_id.to_string(), bytes));
+    async fn record_turn_bytes(&self, user_id: &str, bytes: u64) -> Result<(), TurnUsageRefusal> {
+        if bytes > self.refuse_over {
+            return Err(TurnUsageRefusal::MemberHourlyCap {
+                cap_bytes: self.refuse_over,
+                counted_bytes: 0,
+                claimed_bytes: bytes,
+            });
+        }
+        self.counted
+            .lock()
+            .unwrap()
+            .push((user_id.to_string(), bytes));
+        Ok(())
     }
 }
 
@@ -37,7 +56,10 @@ async fn meters_turn(kernel: &common::member_test_utils::GateKernel) -> Option<b
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_report_reaches_the_hosts_quota_for_its_member() {
-    let quota = Arc::new(Quota::default());
+    let quota = Arc::new(Quota {
+        counted: Mutex::default(),
+        refuse_over: HOST_CAP,
+    });
     let sink = quota.clone();
     let kernel = create_configured_test_kernel(move |kernel| {
         kernel.set_platform_terms_required(true);
@@ -53,7 +75,20 @@ async fn a_report_reaches_the_hosts_quota_for_its_member() {
     ));
     let over = ask(&kernel, "alice", report(MAX_TURN_USAGE_REPORT_BYTES + 1, 0)).await;
     assert!(refusal(over).contains("TURN usage report"));
-    assert_eq!(*quota.0.lock().unwrap(), vec![("alice".to_string(), 1000)]);
+    let capped = ask(&kernel, "alice", report(HOST_CAP, 1)).await;
+    assert_eq!(
+        telemetry(capped),
+        TelemetryResponse::TurnUsageRefused(TurnUsageRefusal::MemberHourlyCap {
+            cap_bytes: HOST_CAP,
+            counted_bytes: 0,
+            claimed_bytes: HOST_CAP + 1,
+        }),
+        "the host's refusal reaches the agent typed"
+    );
+    assert_eq!(
+        *quota.counted.lock().unwrap(),
+        vec![("alice".to_string(), 1000)]
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

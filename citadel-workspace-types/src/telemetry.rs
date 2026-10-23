@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use crate::telemetry_reads::*;
-pub use crate::turn_usage::TurnUsage;
+pub use crate::turn_usage::{TurnUsage, TurnUsageRefusal};
 
 /// The `TelemetryBatch::format_version` this server reads. A batch naming another is refused.
 pub const TELEMETRY_BATCH_FORMAT_VERSION: u32 = 1;
@@ -163,4 +163,5 @@ pub enum TelemetryResponse {
     Settings(TelemetrySettings),
     AccessLog(Vec<TelemetryAccessLogEntry>),
     TurnUsageRecorded,
+    TurnUsageRefused(TurnUsageRefusal),
 }

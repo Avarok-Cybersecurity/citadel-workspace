@@ -5,5 +5,6 @@ import type { TelemetryAccessLogEntry } from "./TelemetryAccessLogEntry";
 import type { TelemetryPageResult } from "./TelemetryPageResult";
 import type { TelemetrySettings } from "./TelemetrySettings";
 import type { TelemetryUploadRefusal } from "./TelemetryUploadRefusal";
+import type { TurnUsageRefusal } from "./TurnUsageRefusal";
 
-export type TelemetryResponse = { "Terms": CurrentTerms } | { "Consent": MyConsent } | { "Uploaded": { stored_entries: number, } } | { "UploadRefused": TelemetryUploadRefusal } | { "Page": TelemetryPageResult } | { "Deleted": { segments: number, } } | { "Settings": TelemetrySettings } | { "AccessLog": Array<TelemetryAccessLogEntry> } | "TurnUsageRecorded";
+export type TelemetryResponse = { "Terms": CurrentTerms } | { "Consent": MyConsent } | { "Uploaded": { stored_entries: number, } } | { "UploadRefused": TelemetryUploadRefusal } | { "Page": TelemetryPageResult } | { "Deleted": { segments: number, } } | { "Settings": TelemetrySettings } | { "AccessLog": Array<TelemetryAccessLogEntry> } | "TurnUsageRecorded" | { "TurnUsageRefused": TurnUsageRefusal };

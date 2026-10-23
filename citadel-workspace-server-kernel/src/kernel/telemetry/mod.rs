@@ -36,10 +36,15 @@ pub type SupportGrantObserverHandle = Option<Arc<dyn SupportGrantObserver>>;
 
 /// The host's relay quota, told the TURN bytes each member's agent reports
 /// (`TelemetryRequest::ReportTurnUsage`). A server without one meters no TURN, says so in its
-/// consent answer (`MyConsent::meters_turn`), and refuses the report.
+/// consent answer (`MyConsent::meters_turn`), and refuses the report. The host counts the
+/// report, or refuses it whole with its reason (its per-member cap).
 #[async_trait::async_trait]
 pub trait TurnUsageSink: Send + Sync {
-    async fn record_turn_bytes(&self, user_id: &str, bytes: u64);
+    async fn record_turn_bytes(
+        &self,
+        user_id: &str,
+        bytes: u64,
+    ) -> Result<(), citadel_workspace_types::turn_usage::TurnUsageRefusal>;
 }
 
 /// The sink as the kernel holds it: absent unless the host passed one.

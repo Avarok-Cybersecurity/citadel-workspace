@@ -153,6 +153,9 @@ impl TelemetryCodec for WorkspaceTelemetryCodec {
             WorkspaceProtocolResponse::Telemetry(TelemetryResponse::TurnUsageRecorded) => {
                 ServerSignal::TurnUsageRecorded
             }
+            WorkspaceProtocolResponse::Telemetry(TelemetryResponse::TurnUsageRefused(refusal)) => {
+                ServerSignal::TurnUsageRefused(format!("{refusal:?}"))
+            }
             _ => ServerSignal::Unrelated,
         }
     }

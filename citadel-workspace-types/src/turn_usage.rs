@@ -10,7 +10,8 @@ use ts_rs::TS;
 
 /// The most bytes one report may claim in either direction. An agent splits a larger growth
 /// across several reports; a larger claim is refused whole, so one report cannot exhaust the
-/// workspace's quota. It does not stop a member's agent from sending many: see the report.
+/// workspace's quota. Many reports are bounded by the host's per-member cap
+/// (`TurnUsageRefusal::MemberHourlyCap`).
 pub const MAX_TURN_USAGE_REPORT_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 
 /// One report: bytes sent and received through TURN since the previous one.
@@ -21,6 +22,27 @@ pub struct TurnUsage {
     pub tx_bytes: u64,
     #[ts(type = "bigint")]
     pub rx_bytes: u64,
+}
+
+/// Why the host refused a report whole: nothing of it was counted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub enum TurnUsageRefusal {
+    /// The member's reports this hour would pass the plan's per-member hourly ceiling
+    /// (billing/tiers.json `paths.turn_gb_per_member_hour`), so one member's agent cannot run
+    /// up the workspace's relay overage.
+    MemberHourlyCap {
+        #[ts(type = "bigint")]
+        cap_bytes: u64,
+        /// What the member's reports this hour already counted.
+        #[ts(type = "bigint")]
+        counted_bytes: u64,
+        /// What this report claimed.
+        #[ts(type = "bigint")]
+        claimed_bytes: u64,
+    },
+    /// The host could not count it (its meter failed); nothing of it was counted.
+    HostFailed,
 }
 
 impl TurnUsage {

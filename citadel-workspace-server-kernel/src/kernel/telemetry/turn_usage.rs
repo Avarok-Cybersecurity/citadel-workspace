@@ -3,12 +3,14 @@
 
 use super::TurnUsageSink;
 use crate::WorkspaceProtocolResponse;
+use citadel_logging::warn;
 use citadel_sdk::prelude::NetworkError;
 use citadel_workspace_types::telemetry::TelemetryResponse;
 use citadel_workspace_types::turn_usage::TurnUsage;
 
 /// Hands `usage` to `sink` for `user_id`, or refuses it: a server whose host keeps no relay
-/// quota meters no TURN, and a report over the per-report bound is refused whole.
+/// quota meters no TURN, a report over the per-report bound is refused whole, and so is one the
+/// host refuses (`TurnUsageRefused`, with its reason).
 pub(super) async fn record(
     sink: Option<&dyn TurnUsageSink>,
     user_id: &str,
@@ -23,10 +25,21 @@ pub(super) async fn record(
         Ok(bytes) => bytes,
         Err(reason) => return Ok(WorkspaceProtocolResponse::Error(reason)),
     };
-    if bytes > 0 {
-        sink.record_turn_bytes(user_id, bytes).await;
+    if bytes == 0 {
+        return Ok(recorded());
     }
-    Ok(WorkspaceProtocolResponse::Telemetry(
-        TelemetryResponse::TurnUsageRecorded,
-    ))
+    match sink.record_turn_bytes(user_id, bytes).await {
+        Ok(()) => Ok(recorded()),
+        Err(refusal) => {
+            // The server's log is where an operator sees a member's agent over its cap.
+            warn!(target: "citadel", "TURN usage report from {user_id} refused: {refusal:?}");
+            Ok(WorkspaceProtocolResponse::Telemetry(
+                TelemetryResponse::TurnUsageRefused(refusal),
+            ))
+        }
+    }
+}
+
+fn recorded() -> WorkspaceProtocolResponse {
+    WorkspaceProtocolResponse::Telemetry(TelemetryResponse::TurnUsageRecorded)
 }

@@ -23,10 +23,10 @@ describe("usage table", () => {
       sql.exec("INSERT INTO quota_usage VALUES (100, 200, 5, 6, 1, 2, 1, 0)");
       const table = new UsageTable(sql);
       new UsageTable(sql); // a second construction finds the columns and adds nothing
-      table.save({ period_start: 300, period_end: 400, bytes_in: 9, bytes_out: 9, frames_in: 1, active_seconds: 1, peak_connections: 1, relayed_p2p_bytes: 7, group_fanout_bytes: 3, turn_bytes: 11 }, 1000);
+      table.save({ period_start: 300, period_end: 400, bytes_in: 9, bytes_out: 9, frames_in: 1, active_seconds: 1, peak_connections: 1, relayed_p2p_bytes: 7, group_fanout_bytes: 3, turn_bytes: 11, turn_refused_bytes: 2 }, 1000);
       return { old: table.load(100), next: table.load(300) };
     });
-    expect(row.old).toMatchObject({ bytes_in: 5, relayed_p2p_bytes: 0, group_fanout_bytes: 0, turn_bytes: 0 });
-    expect(row.next).toMatchObject({ bytes_in: 9, relayed_p2p_bytes: 7, group_fanout_bytes: 3, turn_bytes: 11 });
+    expect(row.old).toMatchObject({ bytes_in: 5, relayed_p2p_bytes: 0, group_fanout_bytes: 0, turn_bytes: 0, turn_refused_bytes: 0 });
+    expect(row.next).toMatchObject({ bytes_in: 9, relayed_p2p_bytes: 7, group_fanout_bytes: 3, turn_bytes: 11, turn_refused_bytes: 2 });
   });
 });

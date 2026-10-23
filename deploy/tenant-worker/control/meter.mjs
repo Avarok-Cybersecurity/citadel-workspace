@@ -16,6 +16,9 @@ const EMPTY = {
   // TURN bytes members' agents reported (server-wasm turn.rs): they never cross the object, so
   // they are not part of bytes_in, and the relay quota adds them to it (ice.mjs).
   turn_bytes: 0,
+  // TURN bytes claimed in reports the per-member ceiling refused (turn-cap.mjs): not billed,
+  // kept so a member's agent over its ceiling shows in the period's record.
+  turn_refused_bytes: 0,
 };
 
 /** Each split total, and the node counter (server-wasm `TenantServer::traffic`) it grows with. */
@@ -99,6 +102,12 @@ export class Meter {
   turn(bytes) {
     if (!Number.isSafeInteger(bytes) || bytes < 0) throw new Error(`TURN usage is a byte count (${JSON.stringify(bytes)})`);
     this.totals.turn_bytes += bytes;
+  }
+
+  /** `bytes` claimed in a TURN report the per-member ceiling refused. */
+  turnRefused(bytes) {
+    if (!Number.isSafeInteger(bytes) || bytes < 0) throw new Error(`TURN usage is a byte count (${JSON.stringify(bytes)})`);
+    this.totals.turn_refused_bytes += bytes;
   }
 
   get openCount() {

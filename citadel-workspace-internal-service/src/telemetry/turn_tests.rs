@@ -5,7 +5,9 @@ use super::WorkspaceTelemetryCodec;
 use citadel_internal_service::telemetry::{ServerSignal, TelemetryCodec};
 use citadel_workspace_types::telemetry::{TelemetryRequest, TelemetryResponse};
 use citadel_workspace_types::terms::MyConsent;
-use citadel_workspace_types::turn_usage::{TurnUsage, MAX_TURN_USAGE_REPORT_BYTES};
+use citadel_workspace_types::turn_usage::{
+    TurnUsage, TurnUsageRefusal, MAX_TURN_USAGE_REPORT_BYTES,
+};
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
@@ -68,4 +70,14 @@ fn only_a_server_that_says_it_meters_turn_is_sent_reports() {
     assert!(!meters(consent(None)), "a server built before the report");
     let recorded = codec().classify(&answer(TelemetryResponse::TurnUsageRecorded));
     assert_eq!(recorded, ServerSignal::TurnUsageRecorded);
+    let refusal = TurnUsageRefusal::MemberHourlyCap {
+        cap_bytes: 10,
+        counted_bytes: 9,
+        claimed_bytes: 2,
+    };
+    let refused = codec().classify(&answer(TelemetryResponse::TurnUsageRefused(refusal)));
+    assert!(
+        matches!(&refused, ServerSignal::TurnUsageRefused(r) if r.contains("MemberHourlyCap")),
+        "{refused:?}"
+    );
 }
