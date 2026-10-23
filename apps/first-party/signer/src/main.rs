@@ -17,16 +17,24 @@ fn run() -> Result<String, String> {
     let seed = std::env::var(SEED_ENV).map_err(|_| format!("{SEED_ENV} is not set"))?;
     let key = AppSigningKey::from_seed_hex(&seed).map_err(|e| e.to_string())?;
     let app = PathBuf::from(app);
-    let name = app.file_name().and_then(|n| n.to_str()).ok_or("the app dir has no name")?;
+    let name = app
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or("the app dir has no name")?;
     let read = |p: PathBuf| std::fs::read(&p).map_err(|e| format!("{}: {e}", p.display()));
-    let manifest = String::from_utf8(read(app.join("manifest.json"))?).map_err(|e| e.to_string())?;
+    let manifest =
+        String::from_utf8(read(app.join("manifest.json"))?).map_err(|e| e.to_string())?;
     let wasm = read(app.join("wasm").join(format!("{name}.wasm")))?;
     let signed = sign(&manifest, &wasm, &key)?;
     let out = PathBuf::from(out);
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
-    let write = |p: PathBuf, b: &[u8]| std::fs::write(&p, b).map_err(|e| format!("{}: {e}", p.display()));
+    let write =
+        |p: PathBuf, b: &[u8]| std::fs::write(&p, b).map_err(|e| format!("{}: {e}", p.display()));
     write(out.join("manifest.json"), &signed.manifest)?;
-    write(out.join(SIGNATURE_FILE_NAME), format!("{}\n", signed.signature).as_bytes())?;
+    write(
+        out.join(SIGNATURE_FILE_NAME),
+        format!("{}\n", signed.signature).as_bytes(),
+    )?;
     fingerprint(&key.public_key_hex()).map_err(|e| e.to_string())
 }
 

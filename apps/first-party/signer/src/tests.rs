@@ -17,18 +17,34 @@ fn the_committed_app_signs_and_the_signature_verifies_under_the_signers_key() {
     let public = key().public_key_hex();
     assert_eq!(m["publisher"]["mldsa65_public_key"], public.as_str());
     let digests = ArtifactDigests::of(&signed.manifest, WASM);
-    verify(&public, "net.avarok.compute-pool", "0.1.0", &digests, &signed.signature).unwrap();
+    verify(
+        &public,
+        "net.avarok.compute-pool",
+        "0.1.0",
+        &digests,
+        &signed.signature,
+    )
+    .unwrap();
     let mut other = signed.manifest.clone();
     other.pop();
     let moved = ArtifactDigests::of(&other, WASM);
-    assert!(verify(&public, "net.avarok.compute-pool", "0.1.0", &moved, &signed.signature).is_err());
+    assert!(verify(
+        &public,
+        "net.avarok.compute-pool",
+        "0.1.0",
+        &moved,
+        &signed.signature
+    )
+    .is_err());
 }
 
 #[test]
 fn a_module_that_is_not_the_manifests_is_refused() {
     let mut wasm = WASM.to_vec();
     *wasm.last_mut().unwrap() ^= 1;
-    assert!(sign(MANIFEST, &wasm, &key()).unwrap_err().contains("not the one"));
+    assert!(sign(MANIFEST, &wasm, &key())
+        .unwrap_err()
+        .contains("not the one"));
 }
 
 #[test]

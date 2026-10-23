@@ -20,12 +20,16 @@ fn field<'a>(m: &'a Value, path: &[&str]) -> Result<&'a Value, String> {
 }
 
 fn text<'a>(m: &'a Value, path: &[&str]) -> Result<&'a str, String> {
-    field(m, path)?.as_str().ok_or_else(|| format!("{} is not text", path.join(".")))
+    field(m, path)?
+        .as_str()
+        .ok_or_else(|| format!("{} is not text", path.join(".")))
 }
 
 /// The declared capabilities, by name.
 fn declared(m: &Value) -> Result<Vec<Capability>, String> {
-    let caps = field(m, &["capabilities"])?.as_array().ok_or("capabilities is not a list")?;
+    let caps = field(m, &["capabilities"])?
+        .as_array()
+        .ok_or("capabilities is not a list")?;
     caps.iter()
         .map(|c| {
             let name = c.get("cap").and_then(Value::as_str).unwrap_or_default();
@@ -43,14 +47,19 @@ pub fn sign(manifest_text: &str, wasm: &[u8], key: &AppSigningKey) -> Result<Sig
     if field(&m, &["artifact", "bytes"])?.as_u64() != Some(wasm.len() as u64) {
         return Err("the module's size is not the manifest's".into());
     }
-    let pages = field(&m, &["limits", "memory_pages"])?.as_u64().ok_or("memory_pages")?;
+    let pages = field(&m, &["limits", "memory_pages"])?
+        .as_u64()
+        .ok_or("memory_pages")?;
     let policy = Policy {
         declared: declared(&m)?,
         max_memory_pages: u32::try_from(pages).map_err(|_| "memory_pages")?,
     };
     let verdict = check(wasm, &policy);
     if !verdict.is_accepted() {
-        return Err(format!("the ABI inspector refuses the module: {:?}", verdict.reasons()));
+        return Err(format!(
+            "the ABI inspector refuses the module: {:?}",
+            verdict.reasons()
+        ));
     }
     m["publisher"]["mldsa65_public_key"] = Value::String(key.public_key_hex());
     let mut manifest = serde_json::to_vec_pretty(&m).map_err(|e| e.to_string())?;
@@ -58,7 +67,10 @@ pub fn sign(manifest_text: &str, wasm: &[u8], key: &AppSigningKey) -> Result<Sig
     let (id, version) = (text(&m, &["id"])?, text(&m, &["version"])?);
     let digests = ArtifactDigests::of(&manifest, wasm);
     let signature = key.sign(id, version, &digests).map_err(|e| e.to_string())?;
-    Ok(Signed { manifest, signature })
+    Ok(Signed {
+        manifest,
+        signature,
+    })
 }
 
 fn hex(bytes: &[u8]) -> String {

@@ -210,6 +210,20 @@ jobs:
           cargo clippy --locked --workspace --target wasm32-unknown-unknown -- -D warnings
       - name: The committed fixtures rebuild byte-for-byte from their source
         run: node scripts/build-app-fixtures.mjs --check
+      - name: First-party apps - fmt, clippy for wasm32, and their logic's tests
+        working-directory: apps/first-party/compute-pool
+        run: |
+          cargo fmt --all --check
+          cargo clippy --locked --workspace --target wasm32-unknown-unknown -- -D warnings
+          cargo test --locked -p compute-pool-core
+      - name: The committed first-party apps rebuild byte-for-byte from their source
+        run: node scripts/build-first-party-apps.mjs --check
+      - name: First-party app signer - fmt, clippy and tests
+        working-directory: apps/first-party/signer
+        run: |
+          cargo +1.99.0 fmt --check
+          cargo +1.99.0 clippy --locked --all-targets -- -D warnings
+          cargo +1.99.0 test --locked
       - name: Reference host - fmt, clippy, every fixture judged and run as fixtures.json says
         working-directory: apps/sdk-fixtures/harness
         run: |
