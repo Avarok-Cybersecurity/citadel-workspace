@@ -45,6 +45,7 @@ pub mod structs;
 /// `include!`s this file and supplies the git calls.
 pub mod submodule_freshness;
 pub mod telemetry;
+pub mod telemetry_metric;
 pub mod terms;
 
 /// The id of the workspace every tree hangs from; the kernel and the UI read it from here.

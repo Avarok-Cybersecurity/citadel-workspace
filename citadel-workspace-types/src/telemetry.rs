@@ -36,15 +36,18 @@ pub const DEFAULT_TELEMETRY_POLICY: TelemetryPolicy = TelemetryPolicy {
     per_user_bytes: DEFAULT_TELEMETRY_PER_USER_BYTES,
 };
 
-/// Only warnings and errors are collected. Ordered, so `min_level` filters.
+/// Warnings, errors and metrics are collected. Ordered, so `min_level` filters: a metric is
+/// below every log level, so `Warn` and `Error` filters leave metrics out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub enum TelemetryLevel {
+    /// A measurement, in `TelemetryEntry::metric`, not a log line.
+    Metric,
     Warn,
     Error,
 }
 
-/// One log line, already redacted by the agent.
+/// One log line, already redacted by the agent, or one metric (`TelemetryLevel::Metric`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct TelemetryEntry {
@@ -58,6 +61,8 @@ pub struct TelemetryEntry {
     /// The peer this line concerns, kept so issues between peers can be traced.
     #[ts(type = "bigint | null")]
     pub peer_cid: Option<u64>,
+    /// Exactly when `level` is `Metric`: what was measured. Absent from older agents' entries.
+    pub metric: Option<crate::telemetry_metric::TelemetryMetric>,
 }
 
 // The signature custom_debug's `with` calls: the field's own type by reference.

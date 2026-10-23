@@ -60,5 +60,5 @@ export function startNode(wasm, env, { config, storage, ice, signIn, grants, lin
   );
   const ksf = ksfParams(env);
   const pq = new wasm.PqSignIn(signIn.takeSeed(), ksf.memKib, ksf.iterations, ksf.lanes);
-  return new wasm.TenantServer(config, storage, argon, ice, pq, signIn.host(), grants, links, required(env, "LOG_FILTER"), onExit);
+  return new wasm.TenantServer(config, storage, argon, ice, pq, signIn.host(), grants, links, required(env, "STUN_SERVERS"), required(env, "LOG_FILTER"), onExit);
 }

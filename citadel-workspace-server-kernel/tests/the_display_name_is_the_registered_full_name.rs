@@ -80,6 +80,7 @@ async fn stored_name(settings: ServerConnectionSettings<StackedRatchet>, repair:
     });
     let mut builder = DefaultNodeBuilder::default();
     let client = builder
+        .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
         .with_backend(BackendType::InMemory)
         .with_insecure_skip_cert_verification()
         .build(kernel)

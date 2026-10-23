@@ -96,7 +96,9 @@ const SKIP = new Map([
   // generated-drift test. Splitting it would break that equality; it changes only
   // when the SDK does, and then this entry moves with it. 381: the app lifecycle's transition
   // table, close reasons and the closing groups, generated from lifecycle.rs (docs/app-lifecycle.md).
-  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 381],
+  // 421: the topic ops and constants and the plane tables (TRANSPORT_CAPABILITY,
+  // SERVE_PLANE_CAPABILITY), generated from the Rust constants (docs/plans/p2p-demo-design.md).
+  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 421],
 ]);
 
 if (!statSync(SRC, { throwIfNoEntry: false })) {

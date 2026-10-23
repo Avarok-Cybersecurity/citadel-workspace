@@ -96,7 +96,7 @@ pub(crate) fn validate_batch(batch: &TelemetryBatch) -> Result<(), String> {
             "A telemetry batch carries at most {MAX_TELEMETRY_BATCH_ENTRIES} entries"
         ));
     }
-    Ok(())
+    super::entry_rules::validate_entries(&batch.entries)
 }
 
 /// The bytes a stored segment occupies, refused when one batch is over the batch cap.

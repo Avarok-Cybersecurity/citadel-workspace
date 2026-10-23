@@ -67,6 +67,9 @@ PQ_KSF_MEM_KIB = "19456"
 PQ_KSF_ITERATIONS = "2"
 PQ_KSF_LANES = "1"
 LOG_FILTER = "citadel=warn"
+# The STUN servers each tenant's node learns its NAT mapping from (server-wasm `TenantServer`):
+# required, at least three distinct host:port endpoints, with no default list.
+STUN_SERVERS = "stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302"
 
 # The control plane. Secrets (`wrangler secret put`), each of which leaves its routes answering
 # 503 until it is set; deploy.sh refuses to deploy while any is missing:

@@ -14,14 +14,16 @@ mod sign_in;
 mod storage;
 mod support;
 mod telemetry;
+mod traffic;
 
 use citadel_sdk::prelude::{
-    ArgonDefaultServerSettings, BackendType, WasmConnectionInjector, WasmIO, WasmListener,
-    WasmStream, WasmWebSocketStream,
+    ArgonDefaultServerSettings, BackendType, StunServers, WasmConnectionInjector, WasmIO,
+    WasmListener, WasmStream, WasmWebSocketStream,
 };
 use citadel_workspace_server_kernel::config::ServerConfig;
 use citadel_workspace_server_kernel::kernel::sign_in::HostedSignIn;
 use citadel_workspace_server_kernel::kernel::telemetry::HostedTelemetry;
+use citadel_workspace_server_kernel::network::HostedNetwork;
 use citadel_workspace_server_kernel::run_server_on;
 use std::cell::Cell;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -71,7 +73,8 @@ impl TenantServer {
     /// (see `storage::TenantStorage`); `ice` mints relay credentials for `GetIceServers` (see
     /// `ice::IceHost`); `pq` is post-quantum sign-in and `sign_in` the object's sign-in settings
     /// (see `sign_in`). `support_grants` mirrors the support grant (see `support`). `links`
-    /// gives the secure-link limits (see `links`). `on_exit` is called with a description of how
+    /// gives the secure-link limits (see `links`). `stun_servers` is the host's comma-separated
+    /// STUN list, required (`citadel_workspace_server_kernel::network`). `on_exit` is called with a description of how
     /// the node ended, which for a server that should run until eviction is always a failure.
     #[allow(clippy::too_many_arguments)]
     #[wasm_bindgen(constructor)]
@@ -84,6 +87,7 @@ impl TenantServer {
         sign_in: sign_in::SignInHost,
         support_grants: support::SupportGrantHost,
         links: links::LinkQuotaHost,
+        stun_servers: &str,
         log_filter: &str,
         on_exit: js_sys::Function,
     ) -> Result<TenantServer, JsError> {
@@ -95,6 +99,12 @@ impl TenantServer {
             mem_cost: argon.mem_cost_kib,
             time_cost: argon.time_cost,
             ..ArgonDefaultServerSettings::default()
+        };
+        // The host's STUN list (wrangler.toml STUN_SERVERS): required, with no default.
+        let network = HostedNetwork {
+            stun_servers: stun_servers
+                .parse::<StunServers>()
+                .map_err(|e| JsError::new(&format!("invalid STUN_SERVERS: {e}")))?,
         };
         let backend = BackendType::HostSql(storage::backend_handle(storage));
         let ice_servers = Some(ice::source(ice));
@@ -128,6 +138,7 @@ impl TenantServer {
                 // here needs a resolve-then-connect primitive the runtime does not offer; until
                 // then `net.server` calls are answered unavailable (kernel::apps::egress).
                 None,
+                network,
             )
             .await;
             let _ = on_exit.call1(&JsValue::NULL, &format!("{outcome:?}").into());

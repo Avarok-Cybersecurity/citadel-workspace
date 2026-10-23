@@ -85,12 +85,14 @@ fn wire_entry(entry: AgentEntry) -> TelemetryEntry {
     TelemetryEntry {
         time_ms: entry.time_ms,
         level: match entry.level {
+            AgentLevel::Metric => TelemetryLevel::Metric,
             AgentLevel::Warn => TelemetryLevel::Warn,
             AgentLevel::Error => TelemetryLevel::Error,
         },
         target: entry.target,
         message: entry.message,
         peer_cid: entry.peer_cid,
+        metric: entry.metric.map(super::metric_wire::wire_metric),
     }
 }
 

@@ -43,11 +43,22 @@ fn every_group() -> Vec<(Group, Option<Result<(), Refused>>)> {
         (Group::Net, now(net::server_fetch(request()))),
         (
             Group::Ihttp,
-            now(ihttp::serve(vec![], |_: &mut UngrantedCalls, _, _| {})),
+            now(ihttp::serve(
+                vec![],
+                ihttp::ServeOn {
+                    relay: true,
+                    p2p: false,
+                },
+                |_: &mut UngrantedCalls, _, _| {},
+            )),
         ),
         (Group::Clipboard, now(clipboard::read_text())),
         (Group::Notify, now(notify::notify("t", "b"))),
         (Group::Documents, now(documents::open("n"))),
+        (
+            Group::Topic,
+            now(topic::open("pool", |_: &mut UngrantedCalls, _| {})),
+        ),
     ]
 }
 
@@ -71,9 +82,10 @@ impl App for UngrantedCalls {
             headers: vec![],
             body: vec![],
         };
-        ihttp::Client::new(to).call(out, |_: &mut UngrantedCalls, r| {
-            assert_eq!(r.err(), Some(Refused::Ungranted))
-        });
+        let _call = ihttp::Client::new(to, ihttp::Transport::Relay)
+            .call(out, |_: &mut UngrantedCalls, r| {
+                assert_eq!(r.err(), Some(Refused::Ungranted))
+            });
         let stub = encode(&HostReply::<()>::Refused(Refused::Ungranted));
         let garbage = [0xffu8; 7];
         // SAFETY: the host reads 7 bytes of `garbage`, or none.

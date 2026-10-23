@@ -11,6 +11,16 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+/// `kernel.toml`'s required `stun_servers`, as the SDK's loopback test list: the tests build the
+/// SDK with `localhost-testing`, under which no STUN server is ever contacted.
+pub fn test_stun_servers_toml() -> String {
+    let quoted: Vec<String> = citadel_sdk::test_common::LOCALHOST_STUN_SERVERS
+        .iter()
+        .map(|s| format!("{s:?}"))
+        .collect();
+    format!("stun_servers = [{}]", quoted.join(", "))
+}
+
 fn free_addr() -> SocketAddr {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     listener.local_addr().expect("addr")
@@ -63,7 +73,8 @@ pub async fn start_native_server(
     let addr = free_addr();
     // The shipped `[documents]` limits, after `extra_toml`: a table takes every key after it.
     let config: ServerConfig = toml::from_str(&format!(
-        "bind_addr = \"{addr}\"\nworkspace_master_password = \"a-test-master-password\"\nrequire_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\n{tail}\n{}",
+        "bind_addr = \"{addr}\"\nworkspace_master_password = \"a-test-master-password\"\nrequire_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\n{}\n{tail}\n{}",
+        test_stun_servers_toml(),
         crate::documents_test_utils::shipped_documents_section()
     ))
     .expect("config");

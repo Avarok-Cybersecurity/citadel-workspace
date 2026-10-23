@@ -49,7 +49,10 @@
       "AppInstallAllowPrivateNetwork",
       "AppInstallAllowServerNetwork",
       "AppInstallAllowInternalServe",
-      "AppInstallAllowInternalCall"
+      "AppInstallAllowInternalCall",
+      "AppInstallAllowPeerServe",
+      "AppInstallAllowPeerCall",
+      "AppInstallAllowGroupTopics"
     ],
     "position": 65535
   },

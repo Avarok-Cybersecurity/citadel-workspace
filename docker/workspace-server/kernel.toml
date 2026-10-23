@@ -10,6 +10,9 @@ require_platform_terms = false
 # tenant reads these from its plan instead.
 secure_links_per_member = 50
 secure_links_pool = 0
+# The STUN servers the node learns its NAT mapping from. Required: at least three distinct
+# host:port endpoints, with no built-in list. A hosted tenant's host supplies its own instead.
+stun_servers = ["stun.cloudflare.com:3478", "stun1.l.google.com:19302", "stun4.l.google.com:19302"]
 # TLS certificate verification — set to true ONLY for local development with self-signed certs.
 dangerous_skip_cert_verification = false
 

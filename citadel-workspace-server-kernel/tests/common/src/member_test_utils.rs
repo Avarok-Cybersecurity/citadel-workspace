@@ -51,6 +51,7 @@ pub async fn new_internal_service_with_admin(
         )
         .await?;
     let internal_service = NodeBuilder::default()
+        .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
         .with_node_type(NodeType::Peer)
         .with_backend(BackendType::InMemory)
         .with_insecure_skip_cert_verification()

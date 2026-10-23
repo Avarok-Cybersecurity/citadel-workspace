@@ -181,6 +181,7 @@ fn batches_split_at_the_entry_and_byte_limits() {
         target: "t".into(),
         message,
         peer_cid: None,
+        metric: None,
     };
     let many = codec
         .split(
