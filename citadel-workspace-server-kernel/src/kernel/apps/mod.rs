@@ -84,6 +84,8 @@ mod kernel_listing_tests;
 #[cfg(test)]
 mod kernel_member_tests;
 #[cfg(test)]
+mod kernel_notice_tests;
+#[cfg(test)]
 mod kernel_peer_tests;
 #[cfg(test)]
 mod kernel_purge_tests;

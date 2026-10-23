@@ -163,6 +163,12 @@ pub enum AppsResponse {
         entries: Vec<AppsAuditEntry>,
     },
     InstallRequested,
+    /// Pushed to the workspace's other members when an install was made, changed or removed:
+    /// read the installs again. Content-free, so it tells no one about an install they cannot see.
+    InstallsChanged,
+    /// Pushed to the workspace's other members when one changed their own answers for an install
+    /// (consent, blocks, turned off for me): what `AuthorizePeer` says may have changed. Content-free.
+    PeerAnswersChanged,
     /// CBOR of the SDK's `HostReply`.
     CallReply {
         #[debug(with = plaintext_debug_fmt)]

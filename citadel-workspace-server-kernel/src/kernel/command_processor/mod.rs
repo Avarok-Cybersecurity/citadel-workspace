@@ -94,6 +94,8 @@ mod apps_lifecycle;
 mod apps_listing;
 /// What a member reads about the installs that concern them.
 mod apps_member;
+/// What the other members are told when an apps answer changed what they hold.
+mod apps_notice;
 /// Where a listing and its artifact come from.
 mod apps_offer;
 mod apps_peer;
