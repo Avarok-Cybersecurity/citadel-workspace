@@ -10,6 +10,7 @@ use citadel_workspace_types::telemetry::{
     TelemetryBatch, TelemetryEntry, TelemetryLevel, TelemetryRequest, TelemetryResponse,
     MAX_TELEMETRY_BATCH_BYTES, MAX_TELEMETRY_BATCH_ENTRIES, TELEMETRY_BATCH_FORMAT_VERSION,
 };
+use citadel_workspace_types::telemetry_metric::TELEMETRY_METRIC_FORMAT_VERSION;
 use citadel_workspace_types::{
     WorkspaceProtocolPayload, WorkspaceProtocolRequest, WorkspaceProtocolResponse,
 };
@@ -121,6 +122,9 @@ impl TelemetryCodec for WorkspaceTelemetryCodec {
             WorkspaceProtocolResponse::Telemetry(TelemetryResponse::Consent(consent)) => {
                 ServerSignal::Consent {
                     uploads_allowed: consent.uploads_allowed,
+                    // A server built before metrics names no format and refuses a batch
+                    // carrying one, so its sessions capture none.
+                    takes_metrics: consent.metric_format == Some(TELEMETRY_METRIC_FORMAT_VERSION),
                 }
             }
             WorkspaceProtocolResponse::Telemetry(TelemetryResponse::Uploaded { .. }) => {

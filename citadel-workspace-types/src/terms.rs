@@ -65,4 +65,8 @@ pub struct MyConsent {
     pub telemetry_enabled: bool,
     /// `telemetry_enabled && terms_current`: whether an upload would be stored.
     pub uploads_allowed: bool,
+    /// The metric format this server stores (`TELEMETRY_METRIC_FORMAT_VERSION`). Absent from a
+    /// server built before metrics existed, which stores none: decoded as `None`, never assumed.
+    #[ts(optional)]
+    pub metric_format: Option<u32>,
 }

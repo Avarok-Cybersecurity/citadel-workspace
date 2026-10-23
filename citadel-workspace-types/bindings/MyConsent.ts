@@ -15,4 +15,9 @@ telemetry_enabled: boolean,
 /**
  * `telemetry_enabled && terms_current`: whether an upload would be stored.
  */
-uploads_allowed: boolean, };
+uploads_allowed: boolean, 
+/**
+ * The metric format this server stores (`TELEMETRY_METRIC_FORMAT_VERSION`). Absent from a
+ * server built before metrics existed, which stores none: decoded as `None`, never assumed.
+ */
+metric_format?: number, };

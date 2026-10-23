@@ -5,6 +5,7 @@
 //! kernel's request handler (`command_processor::telemetry`) gates each request; the methods
 //! below are the host's entry points, for a Durable Object alarm and the support read.
 
+mod consent_rules;
 mod entry_rules;
 mod reads;
 mod records;

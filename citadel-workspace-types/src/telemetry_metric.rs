@@ -8,6 +8,11 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+/// The metric format this build writes and, on a server, stores. A server names it in
+/// `MyConsent::metric_format`; an agent uploads metric entries only to a server naming this
+/// one, because a server built before metrics existed refuses the whole batch they ride in.
+pub const TELEMETRY_METRIC_FORMAT_VERSION: u32 = 1;
+
 /// What a metric entry measured.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]

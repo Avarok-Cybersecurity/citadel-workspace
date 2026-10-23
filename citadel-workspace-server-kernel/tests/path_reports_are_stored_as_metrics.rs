@@ -10,6 +10,7 @@ use citadel_workspace_types::telemetry::{
 };
 use citadel_workspace_types::telemetry_metric::{
     NatClassReport, NatTranslation, PathReport, PathStageReport, PathTaken, TelemetryMetric,
+    TELEMETRY_METRIC_FORMAT_VERSION,
 };
 use common::telemetry_test_utils::{
     ask, everything, hosted_kernel, member, messages, opt_in, refusal, telemetry, upload,
@@ -62,6 +63,13 @@ async fn a_path_report_is_read_back_whole_with_its_peer() {
     let kernel = hosted_kernel().await;
     member(&kernel, "alice").await;
     opt_in(&kernel, "alice").await;
+    // The consent answer names the metric format, which is what tells an agent to send them.
+    match telemetry(ask(&kernel, "alice", TelemetryRequest::GetMyConsent).await) {
+        TelemetryResponse::Consent(c) => {
+            assert_eq!(c.metric_format, Some(TELEMETRY_METRIC_FORMAT_VERSION))
+        }
+        other => panic!("no consent answer: {other:?}"),
+    }
     assert!(matches!(
         upload(
             &kernel,
