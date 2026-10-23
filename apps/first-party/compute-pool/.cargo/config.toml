@@ -1,0 +1,13 @@
+# How every Citadel app links (the SDK's crate docs say the same):
+# - it imports its memory from the ABI namespace, so the host sets the hard maximum;
+# - the output's features omit bulk-memory. With an imported memory and bulk-memory, wasm-ld
+#   adds a start function (__wasm_init_memory) that zeroes .bss, and the ABI refuses start
+#   functions; without it, wasm-ld writes .bss as ordinary data instead. std is prebuilt with
+#   bulk-memory, so the feature check is told the list rather than inferring it. (The
+#   `linker-start` fixture is hello-canvas linked without these two flags: it has the start.)
+[target.wasm32-unknown-unknown]
+rustflags = [
+    "-C", "link-arg=--import-memory=citadel_app_abi_1,memory",
+    "-C", "link-arg=--no-check-features",
+    "-C", "link-arg=--features=mutable-globals,sign-ext,nontrapping-fptoint,multivalue,reference-types",
+]
