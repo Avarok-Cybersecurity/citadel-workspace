@@ -19,6 +19,8 @@ const APPS_SRC = join(ROOT, 'citadel-workspaces/src/lib/citadel-apps');
 export const RULE_MODULES = [
   'manifest/catalogue-format.ts', 'manifest/manifest-rules.ts', 'manifest/manifest-rules-parts.ts',
   'manifest/manifest-shape.ts', 'manifest/json-duplicate-keys.ts', 'manifest/net-rules.ts',
+  // The P2P and topic capability rules, and the pure limits and topic-name checks they use.
+  'manifest/manifest-rules-peer.ts', 'manifest/topic-names.ts', 'host/limits.ts',
   'app-identity.ts', 'icon.ts',
   // The capability list is the SDK's generated one, read through the host's module.
   'host/capabilities.ts', 'sdk/generated/AbiConstants.ts',

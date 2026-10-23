@@ -96,6 +96,8 @@ mod apps_listing;
 mod apps_member;
 /// Where a listing and its artifact come from.
 mod apps_offer;
+mod apps_peer;
+mod apps_peer_topic;
 /// `Update` and `Consent`.
 mod apps_update;
 /// `UploadArtifactChunk`.

@@ -78,15 +78,17 @@ pub(super) async fn list_installs<R: Ratchet + Send + Sync + 'static>(
         .into_iter()
         .filter(|install| manager || concerns(install, caller, &facts))
         .collect();
-    let hidden = backend.user_apps(caller.user).await?.disabled;
+    let mine = backend.user_apps(caller.user).await?;
     let disabled_for_me = installs
         .iter()
-        .filter(|install| hidden.contains(&install.id))
+        .filter(|install| mine.disabled.contains(&install.id))
         .map(|install| install.id.clone())
         .collect();
+    let peer_for_me = mine.for_me(installs.iter().map(|i| i.id.as_str()));
     finish(Ok(AppsResponse::Installs {
         installs,
         disabled_for_me,
+        peer_for_me,
     }))
 }
 

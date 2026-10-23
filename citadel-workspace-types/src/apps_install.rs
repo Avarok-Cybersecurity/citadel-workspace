@@ -51,6 +51,13 @@ pub struct GrantDetails {
     pub ihttp_routes: Vec<String>,
     /// `ihttp.call`: other apps' ids that may be called, besides the app's own.
     pub ihttp_call_targets: Vec<String>,
+    /// `ihttp.p2p.serve`: the patterns served peer to peer. Absent from installs made before
+    /// it existed, which could not have been granted it: empty.
+    #[serde(default)]
+    pub ihttp_p2p_routes: Vec<String>,
+    /// `group.topic.*`: the app's topics. Absent from older installs, as above: empty.
+    #[serde(default)]
+    pub topics: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

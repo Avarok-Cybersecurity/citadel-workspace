@@ -2,6 +2,7 @@
 //!
 //! Byte fields print only their length when logged, as in `apps_protocol`.
 
+use crate::apps::peer::{PeerConsent, PeerDirection, PeerForMe};
 use crate::apps::{Capability, InstallScope};
 use crate::apps_install::{AppInstall, AppsRefusal, ListingSource};
 use crate::apps_protocol::IhttpFrom;
@@ -88,6 +89,9 @@ pub enum AppsResponse {
         installs: Vec<AppInstall>,
         /// The ids among `installs` the caller hid for themselves.
         disabled_for_me: Vec<String>,
+        /// The caller's peer settings, for the installs among `installs` they ever set them on;
+        /// any other install has `PeerConsent::NONE` and no blocks.
+        peer_for_me: Vec<PeerForMe>,
     },
     /// An install's running release and, when it waits on consent, the one it waits on. Not
     /// `pending`: the client's JSON codec reads that name as a bigint wherever it appears.
@@ -125,6 +129,28 @@ pub enum AppsResponse {
     DisabledForMe {
         install_id: String,
         disabled: bool,
+    },
+    PeerConsentForMe {
+        install_id: String,
+        consent: PeerConsent,
+    },
+    PeerBlockedForMe {
+        install_id: String,
+        username: String,
+        blocked: bool,
+    },
+    /// The peer may reach (or be reached) until `until_ms`.
+    PeerAuthorized {
+        install_id: String,
+        peer: IhttpFrom,
+        direction: PeerDirection,
+        #[ts(type = "bigint")]
+        until_ms: u64,
+    },
+    TopicGroup {
+        install_id: String,
+        topic: String,
+        group_key: Option<String>,
     },
     ArtifactChunk {
         sha256: String,

@@ -146,7 +146,7 @@ impl AppManifest {
             return Err(ManifestRefusal::Scopes);
         }
         check_capabilities(&self.id, &self.capabilities)?;
-        check_limits(&self.limits)?;
+        check_limits(&self.limits, &self.capabilities)?;
         check_artifact(&self.artifact)?;
         if let Some(previous) = &self.previous_versions {
             let older = |v: &String| AppVersion::parse(v).is_ok_and(|v| v < version);

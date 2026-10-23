@@ -18,6 +18,7 @@ fn request(cap: Capability, optional: bool) -> CapabilityRequest {
         hosts: None,
         routes: None,
         targets: None,
+        topics: None,
     }
 }
 
@@ -32,15 +33,15 @@ fn every_app_install_allow_permission_is_what_some_capability_needs() {
         .into_iter()
         .filter(|p| format!("{p:?}").starts_with("AppInstallAllow"))
         .collect();
-    assert_eq!(allow.len(), 14);
+    assert_eq!(allow.len(), 17);
     for p in allow {
         assert!(needed.contains(&p), "{p:?} gates no capability");
     }
     assert!(needed.contains(&Permission::AppInstall));
     assert_eq!(
         needed.len(),
-        15,
-        "the 14 grants and AppInstall, nothing else"
+        18,
+        "the 17 grants and AppInstall, nothing else"
     );
 }
 
@@ -208,7 +209,7 @@ fn an_owner_may_grant_everything_and_a_member_seed_only_the_intrinsic_capabiliti
 /// to an apps permission an installer can hold, and only `storage.files` reaching the file store.
 #[test]
 fn every_sdk_capability_has_an_installer_permission() {
-    assert_eq!(Capability::ALL.len(), 28);
+    assert_eq!(Capability::ALL.len(), 32);
     for cap in Capability::ALL.iter().copied() {
         let needed = required_installer_permission(cap);
         assert!(

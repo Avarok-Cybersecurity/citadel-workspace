@@ -115,8 +115,9 @@ pub enum AppSurface {
 }
 
 /// One capability the app asks for, and why. `hosts` is present exactly for `net.host` and
-/// `net.server`, `routes` for `ihttp.serve`, `targets` for `ihttp.call`; any other combination
-/// is refused.
+/// `net.server`, `routes` for `ihttp.serve` and `ihttp.p2p.serve`, `targets` for `ihttp.call`
+/// and `ihttp.p2p.call`, `topics` for `group.topic.subscribe` and `.publish`; any other
+/// combination is refused.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(deny_unknown_fields)]
@@ -134,10 +135,15 @@ pub struct CapabilityRequest {
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub routes: Option<Vec<String>>,
-    /// Other apps' ids the app may call; its own is implied.
+    /// Other apps' ids the app may call; its own is implied. Empty for `ihttp.p2p.call`: peer
+    /// to peer, an app calls only its own copies.
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub targets: Option<Vec<String>>,
+    /// The app's topic names, 1 to `MAX_TOPICS` of `[a-z0-9-]{1,32}`.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topics: Option<Vec<String>>,
 }
 
 /// What the app asks the host for; each is clamped by host policy whatever it says.
@@ -155,6 +161,36 @@ pub struct AppLimits {
     /// instance, in milliseconds: 1 to `abi::MAX_CLOSE_GRACE_MS`. Required, never defaulted: the
     /// publisher states the cleanup it needs, the consent screen and the host hold it to that.
     pub close_grace_ms: u32,
+    /// Present exactly when the manifest asks for `ihttp.p2p.serve` or `ihttp.p2p.call`.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub p2p: Option<P2pLimits>,
+    /// Present exactly when the manifest asks for a `group.topic.*` capability.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topics: Option<TopicLimits>,
+}
+
+/// What the app's peer-to-peer calls may take: the host clamps a fan-out to these, and a served
+/// response to `max_response_bytes`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(deny_unknown_fields)]
+pub struct P2pLimits {
+    pub max_fanout_concurrency: u32,
+    pub max_fanout_bytes: u32,
+    pub max_fanout_ms: u32,
+    pub max_response_bytes: u32,
+}
+
+/// What the app may send on its topics: the host refuses past these (`topic_bytes`,
+/// `topic_rate`), and the server caps the group the same way.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(deny_unknown_fields)]
+pub struct TopicLimits {
+    pub max_msg_bytes: u32,
+    pub max_msgs_per_s: u32,
 }
 
 /// The wasm module: its identity is the digest; locations are hints.

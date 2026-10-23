@@ -169,7 +169,7 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     rate_limiter: RateLimiter,
     /// Which account each live connection belongs to, keyed by session CID.
     /// Shared across clones, like the rate limiter. See `cid_attribution`.
-    connected_users: ConnectedAccounts,
+    pub(crate) connected_users: ConnectedAccounts,
     /// Whether the first account to CONNECT is made the Owner.
     ///
     /// False unless the operator asks for it by name. See

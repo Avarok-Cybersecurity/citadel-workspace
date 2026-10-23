@@ -8,8 +8,12 @@ pub mod apps_manifest;
 pub mod apps_manifest_check;
 /// The manifest's capability, limit and artifact checks, and their limits.
 pub mod apps_manifest_check_parts;
+/// The manifest rules of the peer-to-peer and topic capabilities and their limits.
+pub mod apps_manifest_check_peer;
 /// A document's hidden required-apps header.
 pub mod apps_md_header;
+/// A member's own peer-to-peer and topic settings, and `AuthorizePeer`'s question.
+pub mod apps_peer;
 /// The apps requests.
 pub mod apps_protocol;
 /// The answers to apps requests, and the apps audit log.

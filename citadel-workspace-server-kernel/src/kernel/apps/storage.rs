@@ -99,6 +99,24 @@ pub fn check_key(key: &str) -> Result<(), StorageRefusal> {
     Ok(())
 }
 
+/// The prefix the kernel keeps for the host's own records in an app's KV (a topic's group is
+/// `sys/topic/<name>` in the scope KV); no app write may name it.
+pub const RESERVED_PREFIX: &str = "sys/";
+
+/// The scope-KV key a topic's Citadel group is recorded under.
+pub fn topic_key(topic: &str) -> String {
+    format!("{RESERVED_PREFIX}topic/{topic}")
+}
+
+/// A key an app may write: a valid key outside `RESERVED_PREFIX`.
+pub fn check_app_write(key: &str) -> Result<(), StorageRefusal> {
+    check_key(key)?;
+    if key.starts_with(RESERVED_PREFIX) {
+        return Err(StorageRefusal::Policy("reserved_key"));
+    }
+    Ok(())
+}
+
 /// A namespace's keys and each value's length, read and written whole.
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct KvIndex {

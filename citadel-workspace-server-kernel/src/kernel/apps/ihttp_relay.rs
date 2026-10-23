@@ -45,6 +45,8 @@ pub struct IhttpRelay {
     pub(super) streams: HashMap<u64, RelayStream>,
     by_client: HashMap<ClientKey, u64>,
     next_id: u64,
+    /// `AuthorizePeer` questions per session, beside the streams they guard.
+    pub(crate) peer_checks: super::peer_limiter::PeerCheckLimiter,
 }
 
 impl IhttpRelay {

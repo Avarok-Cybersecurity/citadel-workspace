@@ -23,6 +23,8 @@ use ts_rs::TS;
 /// configuration, sign-in, keys, support.
 pub use citadel_app_sdk_types::Capability;
 
+pub use crate::apps_peer as peer;
+
 /// Whether a manifest entry for `cap` lists `hosts`.
 pub fn takes_hosts(cap: Capability) -> bool {
     matches!(cap, Capability::NetHost | Capability::NetServer)

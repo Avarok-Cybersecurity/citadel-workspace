@@ -39,6 +39,7 @@ fn ids(answer: &AppsResponse) -> (Vec<String>, Vec<String>) {
         AppsResponse::Installs {
             installs,
             disabled_for_me,
+            ..
         } => (
             installs.iter().map(|i| i.id.clone()).collect(),
             disabled_for_me.clone(),
