@@ -77,7 +77,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-
 tokio = { version = "1.44.1", default-features = false, features = ["macros", "sync"] }
 # `crypto.getRandomValues`, with the `getrandom_backend="wasm_js"` cfg the tenant worker sets.
 getrandom = { version = "0.3", features = ["wasm_js"] }
-citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "ad6f04d9", default-features = false }
+citadel_sdk = { git = "https://github.com/Avarok-Cybersecurity/Citadel-Protocol", rev = "55df9943", default-features = false }
 
 [dev-dependencies]
 citadel_sdk = { workspace = true, features = ["localhost-testing", "multi-threaded"] }
