@@ -91,6 +91,44 @@ admission = "none"
 # settings_file = "/data/server/sign-in/settings.json"  # where the admin's switch is kept
 
 # =============================================================================
+# Path policy (required): the network paths peer connections may take, in order of
+# precedence, each with its attempt timeout and the traffic classes it may carry.
+# No default: the server refuses to start without this section. Classes are Control,
+# Msg, File and Media; the server relay must carry Control. A hosted tenant's host
+# supplies its own from the tenant's plan (deploy/tenant-worker control/path-policy.mjs).
+# =============================================================================
+[path_policy]
+denied = []
+
+[[path_policy.rules]]
+kind = "Direct"
+enabled = true
+attempt_timeout_seconds = 30
+cost_weight = 0
+classes = ["Control", "Msg", "File", "Media"]
+
+[[path_policy.rules]]
+kind = "PeerRelay"
+enabled = true
+attempt_timeout_seconds = 30
+cost_weight = 1
+classes = ["Control", "Msg", "File", "Media"]
+
+[[path_policy.rules]]
+kind = "Turn"
+enabled = true
+attempt_timeout_seconds = 30
+cost_weight = 2
+classes = ["Control", "Msg", "File", "Media"]
+
+[[path_policy.rules]]
+kind = "ServerRelay"
+enabled = true
+attempt_timeout_seconds = 30
+cost_weight = 3
+classes = ["Control", "Msg", "File", "Media"]
+
+# =============================================================================
 # Documents (collaborative editing relay)
 # =============================================================================
 # Every key is required: the server refuses to start without this section.

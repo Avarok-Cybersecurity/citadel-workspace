@@ -27,7 +27,7 @@ import { authVersions } from "./control/auth-versions.mjs";
 import { TenantSignIn } from "./control/tenant-sign-in.mjs";
 import { newInstance, nodeStorage, startNode } from "./control/tenant-node.mjs";
 import { nextAlarm, TenantTelemetry } from "./control/tenant-telemetry.mjs";
-import { linkQuotaHost, TenantLinks } from "./control/tenant-links.mjs";
+import { TenantLinks } from "./control/tenant-links.mjs";
 import { SupportStore } from "./control/support-store.mjs";
 
 const FLUSH_MS = METERING.flush_seconds * 1000;
@@ -173,7 +173,6 @@ export class WorkspaceServer extends DurableObject {
     this.usageTable.save(this.meter.snapshot(now), now);
   }
 
-
   start() {
     const t0 = Date.now();
     this.wasm ??= newInstance();
@@ -183,7 +182,7 @@ export class WorkspaceServer extends DurableObject {
       ice: { mint: (memberId) => this.ice.mint(memberId) },
       signIn: this.signIn,
       grants: this.telemetry.grantHost(),
-      links: linkQuotaHost(() => enforcedEntitlements(this.provisioning.summary().entitlements)),
+      plan: () => enforcedEntitlements(this.provisioning.summary().entitlements),
       onExit: (outcome) => {
         this.exit = outcome;
         console.error(`[tenant] node exited: ${outcome}`);

@@ -6,7 +6,7 @@ use citadel_workspace_server_kernel::config::ServerConfig;
 use citadel_workspace_server_kernel::network::native_stun_servers;
 use citadel_workspace_server_kernel::run_server_with_base_path;
 use common::documents_test_utils::shipped_documents_section;
-use common::production_server::{sign_in_dir, sign_in_without_admission};
+use common::production_server::{sign_in_dir, sign_in_without_admission, test_path_policy_toml};
 
 fn repo(path: &str) -> String {
     std::fs::read_to_string(format!("{}/../{path}", env!("CARGO_MANIFEST_DIR"))).expect(path)
@@ -27,9 +27,10 @@ async fn startup_fails_without_them() {
     let config: ServerConfig = toml::from_str(&format!(
         "bind_addr = \"127.0.0.1:0\"\nworkspace_master_password = \"a-test-master-password\"\n\
          require_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\n\
-         {}\n{}",
+         {}\n{}\n{}",
         sign_in_without_admission(&sign_in_dir()),
-        shipped_documents_section()
+        shipped_documents_section(),
+        test_path_policy_toml()
     ))
     .expect("config");
     let refused = tokio::time::timeout(

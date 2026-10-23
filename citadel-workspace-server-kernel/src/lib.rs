@@ -16,6 +16,9 @@ pub mod kernel;
 pub mod network;
 #[cfg(test)]
 mod network_tests;
+pub mod path_policy;
+#[cfg(test)]
+mod path_policy_tests;
 mod platform;
 
 pub use citadel_workspace_types::WORKSPACE_ROOT_ID;
@@ -95,6 +98,11 @@ pub mod config {
         /// `host:port` endpoints. Required by the native server, with no default list; refused
         /// by a hosted one, whose host supplies them. See `crate::network`.
         pub stun_servers: Option<Vec<String>>,
+        /// `[path_policy]`: the network paths peer connections may take, in order, with each
+        /// one's attempt timeout and traffic classes. Required by the native server, with no
+        /// default; refused by a hosted one, whose host supplies it from the tenant's plan.
+        /// See `crate::path_policy`.
+        pub path_policy: Option<crate::path_policy::PathPolicyConfig>,
     }
 
     /// What server egress must know about the deployment it runs in: the host its pages are
@@ -139,6 +147,7 @@ pub mod config {
                 .field("sign_in", &self.sign_in)
                 .field("app_server_egress", &self.app_server_egress)
                 .field("stun_servers", &self.stun_servers)
+                .field("path_policy", &self.path_policy)
                 .finish()
         }
     }
@@ -828,6 +837,7 @@ pub async fn run_server_on<T: PlatformOps>(
 ) -> Result<(), NetworkError> {
     info!(target: "citadel", "Starting Citadel Workspace Server Kernel on an injected listener...");
     network::refuse_configured_stun_servers(config.stun_servers.as_deref())?;
+    path_policy::refuse_configured_path_policy(config.path_policy.as_ref())?;
     if config.sign_in.is_some() {
         return Err(NetworkError::msg(
             "[sign_in] is a native server's; a hosted server's host supplies its sign-in",
@@ -860,6 +870,7 @@ pub async fn run_server_on<T: PlatformOps>(
     NodeBuilder::<StackedRatchet, T>::default()
         .with_node_type(node_type)
         .with_stun_servers(network::builder_list(&network.stun_servers))
+        .with_path_policy(network.path_policy)
         .with_backend(backend)
         .with_server_argon_settings(server_argon_settings)
         // The same refusal of password-less transient accounts as the native server: a
@@ -982,10 +993,12 @@ pub async fn run_server_with_site_verify(
         NodeType::server(bind_address).map_err(|e| NetworkError::generic(e.to_string()))?;
 
     let stun_servers = network::native_stun_servers(config.stun_servers.as_deref())?;
+    let path_policy = path_policy::native_path_policy(config.path_policy.as_ref())?;
     let mut builder = NodeBuilder::default();
     builder
         .with_node_type(node_type)
         .with_stun_servers(network::builder_list(&stun_servers))
+        .with_path_policy(path_policy)
         .with_backend(backend_type_for_node_builder)
         .with_server_misc_settings(ServerMiscSettings {
             pq_sign_in: sign_in.pq_sign_in,
@@ -1405,6 +1418,7 @@ mod server_config_debug_tests {
             sign_in: None,
             app_server_egress: None,
             stun_servers: None,
+            path_policy: None,
         }
     }
 

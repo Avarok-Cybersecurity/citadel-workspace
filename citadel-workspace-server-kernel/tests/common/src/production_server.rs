@@ -21,6 +21,23 @@ pub fn test_stun_servers_toml() -> String {
     format!("stun_servers = [{}]", quoted.join(", "))
 }
 
+/// `kernel.toml`'s required `[path_policy]`: every path for every class, in the shipped order.
+/// A table, so it goes after every top-level key.
+pub fn test_path_policy_toml() -> String {
+    let rules: Vec<String> = ["Direct", "PeerRelay", "Turn", "ServerRelay"]
+        .iter()
+        .enumerate()
+        .map(|(weight, kind)| {
+            format!(
+                "[[path_policy.rules]]\nkind = \"{kind}\"\nenabled = true\n\
+                 attempt_timeout_seconds = 30\ncost_weight = {weight}\n\
+                 classes = [\"Control\", \"Msg\", \"File\", \"Media\"]\n"
+            )
+        })
+        .collect();
+    format!("[path_policy]\ndenied = []\n{}", rules.join("\n"))
+}
+
 fn free_addr() -> SocketAddr {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     listener.local_addr().expect("addr")
@@ -73,9 +90,10 @@ pub async fn start_native_server(
     let addr = free_addr();
     // The shipped `[documents]` limits, after `extra_toml`: a table takes every key after it.
     let config: ServerConfig = toml::from_str(&format!(
-        "bind_addr = \"{addr}\"\nworkspace_master_password = \"a-test-master-password\"\nrequire_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\n{}\n{tail}\n{}",
+        "bind_addr = \"{addr}\"\nworkspace_master_password = \"a-test-master-password\"\nrequire_platform_terms = false\nsecure_links_per_member = 5\nsecure_links_pool = 0\n{}\n{tail}\n{}\n{}",
         test_stun_servers_toml(),
-        crate::documents_test_utils::shipped_documents_section()
+        crate::documents_test_utils::shipped_documents_section(),
+        test_path_policy_toml()
     ))
     .expect("config");
     tokio::spawn(async move {

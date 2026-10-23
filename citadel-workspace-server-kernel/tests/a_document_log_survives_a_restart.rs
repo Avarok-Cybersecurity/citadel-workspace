@@ -37,6 +37,7 @@ async fn boot(db: &std::path::Path) -> (Kernel, tokio::task::JoinHandle<()>) {
     let mut builder = DefaultNodeBuilder::default();
     builder
         .with_stun_servers(citadel_sdk::test_common::LOCALHOST_STUN_SERVERS)
+        .with_path_policy(citadel_sdk::test_common::localhost_path_policy())
         .with_node_type(NodeType::server(addr).expect("server node type"))
         .with_backend(BackendType::sql(format!(
             "sqlite://{}?mode=rwc",
