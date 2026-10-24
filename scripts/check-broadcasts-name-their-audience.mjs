@@ -84,6 +84,9 @@ const SCOPED = new Map([
   // A document's CRDT updates and its readers' cursors: the update IS the document, so it
   // reaches exactly the sessions a Pull would answer.
   ['Documents', 'broadcast_to_node'],
+  // A document shared in a node's chat is chat content: it reaches the channel's readers,
+  // exactly the sessions its Pull and the channel's GetGroupMessages answer.
+  ['ChatDocuments', 'broadcast_to_group'],
 ]);
 
 /**

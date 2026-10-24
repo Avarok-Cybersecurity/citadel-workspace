@@ -11,6 +11,7 @@
 //! re-created after its node is deleted.
 
 use super::{group_stripe, BackendTransactionManager};
+use crate::kernel::documents::address::DocAddress;
 use crate::kernel::documents::log::LogHead;
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::documents::DocumentUpdate;
@@ -19,16 +20,16 @@ use std::collections::BTreeSet;
 use std::ops::RangeInclusive;
 use tokio::sync::OwnedMutexGuard;
 
-fn head_key(node_id: &str) -> String {
-    format!("citadel_workspace.documents.{node_id}.head")
+fn head_key(doc: &DocAddress) -> String {
+    format!("{}.head", doc.key_prefix())
 }
 
-fn update_key(node_id: &str, seq: u64) -> String {
-    format!("citadel_workspace.documents.{node_id}.update.{seq}")
+fn update_key(doc: &DocAddress, seq: u64) -> String {
+    format!("{}.update.{seq}", doc.key_prefix())
 }
 
-fn snapshot_key(node_id: &str) -> String {
-    format!("citadel_workspace.documents.{node_id}.snapshot")
+fn snapshot_key(doc: &DocAddress) -> String {
+    format!("{}.snapshot", doc.key_prefix())
 }
 
 /// The snapshot's bytes, and who stored it when. What it covers is the head's `snapshot_upto`,
@@ -52,7 +53,8 @@ pub(crate) enum SnapshotAuthor {
 }
 
 impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
-    /// Hold across any read-modify-write of `node_id`'s log.
+    /// Hold across any read-modify-write of any of `node_id`'s logs: its page's and its chat
+    /// documents'.
     pub(crate) async fn lock_document(&self, node_id: &str) -> OwnedMutexGuard<()> {
         self.document_mutex[group_stripe(node_id)]
             .clone()
@@ -71,27 +73,27 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
         guards
     }
 
-    pub(crate) async fn document_head(&self, node_id: &str) -> Result<LogHead, NetworkError> {
+    pub(crate) async fn document_head(&self, doc: &DocAddress) -> Result<LogHead, NetworkError> {
         Ok(self
-            .backend_get(&head_key(node_id))
+            .backend_get(&head_key(doc))
             .await?
             .unwrap_or(LogHead::EMPTY))
     }
 
     pub(crate) async fn save_document_head(
         &self,
-        node_id: &str,
+        doc: &DocAddress,
         head: &LogHead,
     ) -> Result<(), NetworkError> {
-        self.backend_save(&head_key(node_id), head).await
+        self.backend_save(&head_key(doc), head).await
     }
 
     pub(crate) async fn save_document_update(
         &self,
-        node_id: &str,
+        doc: &DocAddress,
         update: &DocumentUpdate,
     ) -> Result<(), NetworkError> {
-        self.backend_save(&update_key(node_id, update.seq), update)
+        self.backend_save(&update_key(doc, update.seq), update)
             .await
     }
 
@@ -99,17 +101,15 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
     /// error, not a gap: a reader handed a log with a hole merges a document that never existed.
     pub(crate) async fn document_updates(
         &self,
-        node_id: &str,
+        doc: &DocAddress,
         seqs: RangeInclusive<u64>,
     ) -> Result<Vec<DocumentUpdate>, NetworkError> {
         let mut updates = Vec::new();
         for seq in seqs {
             let update: DocumentUpdate = self
-                .backend_get(&update_key(node_id, seq))
+                .backend_get(&update_key(doc, seq))
                 .await?
-                .ok_or_else(|| {
-                    NetworkError::msg(format!("document {node_id} is missing update {seq}"))
-                })?;
+                .ok_or_else(|| NetworkError::msg(format!("{doc:?} is missing update {seq}")))?;
             updates.push(update);
         }
         Ok(updates)
@@ -117,36 +117,44 @@ impl<R: Ratchet + Send + Sync + 'static> BackendTransactionManager<R> {
 
     pub(crate) async fn document_snapshot(
         &self,
-        node_id: &str,
+        doc: &DocAddress,
     ) -> Result<Option<StoredSnapshot>, NetworkError> {
-        self.backend_get(&snapshot_key(node_id)).await
+        self.backend_get(&snapshot_key(doc)).await
     }
 
     pub(crate) async fn save_document_snapshot(
         &self,
-        node_id: &str,
+        doc: &DocAddress,
         snapshot: &StoredSnapshot,
     ) -> Result<(), NetworkError> {
-        self.backend_save(&snapshot_key(node_id), snapshot).await
+        self.backend_save(&snapshot_key(doc), snapshot).await
     }
 
     pub(crate) async fn drop_document_updates(
         &self,
-        node_id: &str,
+        doc: &DocAddress,
         seqs: RangeInclusive<u64>,
     ) -> Result<(), NetworkError> {
         for seq in seqs {
-            self.backend_delete(&update_key(node_id, seq)).await?;
+            self.backend_delete(&update_key(doc, seq)).await?;
         }
         Ok(())
     }
 
-    /// Drop `node_id`'s whole log. The caller holds its lock. The head goes last, so a delete
-    /// that fails part way still knows, on the retry, which updates are left.
+    /// Drop every log of `node_id`: its chat documents', then its page's. The caller holds its
+    /// lock. A delete that fails part way leaves what it has not reached listed, so the retry
+    /// finds it (`delete_chat_documents`).
     pub(crate) async fn delete_document_log(&self, node_id: &str) -> Result<(), NetworkError> {
-        let head = self.document_head(node_id).await?;
-        self.drop_document_updates(node_id, head.stored()).await?;
-        self.backend_delete(&snapshot_key(node_id)).await?;
-        self.backend_delete(&head_key(node_id)).await
+        self.delete_chat_documents(node_id).await?;
+        self.drop_document_log(&DocAddress::page(node_id)).await
+    }
+
+    /// Drop one whole log. The head goes last, so a delete that fails part way still knows, on
+    /// the retry, which updates are left.
+    pub(super) async fn drop_document_log(&self, doc: &DocAddress) -> Result<(), NetworkError> {
+        let head = self.document_head(doc).await?;
+        self.drop_document_updates(doc, head.stored()).await?;
+        self.backend_delete(&snapshot_key(doc)).await?;
+        self.backend_delete(&head_key(doc)).await
     }
 }

@@ -4,13 +4,13 @@
 //! compaction (`compact`).
 
 use super::compact::schedule;
-use super::{answer, no_such_node, node_exists, refused, within, Answer};
+use super::target::Target;
+use super::{node_exists, within, Answer};
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::documents::admission::{admit, AppendRefused};
 use crate::kernel::documents::crdt::update_clocks;
 use crate::kernel::documents::log::compaction_due;
 use crate::kernel::documents::DocumentsRelay;
-use crate::WorkspaceProtocolResponse;
 use citadel_sdk::prelude::Ratchet;
 use citadel_workspace_types::documents::{
     CompactionRequested, DocumentRefusal, DocumentUpdate, DocumentsResponse,
@@ -27,23 +27,25 @@ pub(super) async fn append<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     relay: &DocumentsRelay,
     requester_cid: Option<u64>,
-    node_id: &str,
+    target: &Target,
     written: Written<'_>,
 ) -> Answer {
+    let node_id = target.node_id();
+    let doc = target.doc();
     let config = &relay.config;
     let Some(author_cid) = requester_cid else {
-        return refused(DocumentRefusal::NoSession);
+        return target.refused(DocumentRefusal::NoSession);
     };
     if !relay
         .append_limiter
         .try_consume(author_cid, crate::platform::Instant::now())
     {
-        return refused(DocumentRefusal::AppendRateLimited {
+        return target.refused(DocumentRefusal::AppendRateLimited {
             node_id: node_id.to_string(),
         });
     }
     if let Err((bytes, max_bytes)) = within(written.update.len(), config.max_update_bytes) {
-        return refused(DocumentRefusal::UpdateTooLarge {
+        return target.refused(DocumentRefusal::UpdateTooLarge {
             node_id: node_id.to_string(),
             size_bytes: bytes,
             max_bytes,
@@ -52,7 +54,7 @@ pub(super) async fn append<R: Ratchet + Send + Sync + 'static>(
     let writes = match update_clocks(written.update) {
         Ok(writes) => writes,
         Err(reason) => {
-            return refused(DocumentRefusal::UpdateMalformed {
+            return target.refused(DocumentRefusal::UpdateMalformed {
                 node_id: node_id.to_string(),
                 reason,
             })
@@ -62,17 +64,17 @@ pub(super) async fn append<R: Ratchet + Send + Sync + 'static>(
     let backend = &kernel.domain_operations.backend_tx_manager;
     let _log = backend.lock_document(node_id).await;
     if !node_exists(kernel, node_id).await? {
-        return no_such_node(node_id);
+        return target.no_such_node();
     }
-    let current = backend.document_head(node_id).await?;
+    let current = backend.document_head(doc).await?;
     let size = written.update.len() as u64;
     let head = match admit(&current, &writes, author_cid, size, config) {
         Ok(head) => head,
         Err(refusal) => {
             if let AppendRefused::LogFull { .. } = refusal {
-                schedule(kernel, relay, node_id);
+                schedule(kernel, relay, target);
             }
-            return refused(named(node_id, refusal));
+            return target.refused(named(node_id, refusal));
         }
     };
     let entry = DocumentUpdate {
@@ -81,26 +83,31 @@ pub(super) async fn append<R: Ratchet + Send + Sync + 'static>(
         update: written.update.to_vec(),
         author_cid,
     };
+    // A chat document's first update makes its log: it is listed first, so the node's delete
+    // finds every log there is (`chat_documents_store`).
+    if current.latest_seq == 0 && doc.chat_doc.is_some() {
+        backend.list_chat_document(doc).await?;
+    }
     // The update before the head that counts it: a failure between the two leaves an update
     // nobody was told of, which the next append overwrites, never a head naming a missing one.
-    backend.save_document_update(node_id, &entry).await?;
-    backend.save_document_head(node_id, &head).await?;
+    backend.save_document_update(doc, &entry).await?;
+    backend.save_document_head(doc, &head).await?;
     if head.pending_bytes >= config.compact_at_pending_bytes {
-        schedule(kernel, relay, node_id);
+        schedule(kernel, relay, target);
     }
 
-    kernel.broadcast_to_node(
-        WorkspaceProtocolResponse::Documents(DocumentsResponse::DocumentUpdated {
+    target.announce(
+        kernel,
+        DocumentsResponse::DocumentUpdated {
             node_id: node_id.to_string(),
             seq: entry.seq,
             doc_version: entry.doc_version,
             update: entry.update,
             author_cid,
-        }),
+        },
         Some(author_cid),
-        node_id.to_string(),
     );
-    answer(DocumentsResponse::Appended {
+    target.answer(DocumentsResponse::Appended {
         node_id: node_id.to_string(),
         seq: head.latest_seq,
         client_seq: written.client_seq,

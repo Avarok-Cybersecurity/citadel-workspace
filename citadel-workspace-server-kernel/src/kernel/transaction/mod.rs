@@ -21,6 +21,7 @@ mod apps_artifact_store;
 mod apps_kv_store;
 pub(crate) mod apps_store;
 pub mod backend_ops_simple;
+mod chat_documents_store;
 pub(crate) mod documents_store;
 #[cfg(test)]
 mod documents_store_tests;

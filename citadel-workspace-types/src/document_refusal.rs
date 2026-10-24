@@ -1,12 +1,14 @@
 //! Why a documents request was not carried out: `documents`' refusals, in their own file.
 
+use crate::structs::Permission;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 /// Why a documents request was not carried out. A size is `size_bytes`, never `bytes`: the client
 /// decodes u64 fields by NAME (`WORKSPACE_BIGINT_FIELDS`), and `DocumentSnapshot::bytes` is an
-/// array, which would then fail to decode. Missing permission is not here: that is the
-/// standard `Error("Permission denied: ...")` every request answers with.
+/// array, which would then fail to decode. A page's missing permission is not here: that is the
+/// standard `Error("Permission denied: ...")` every request answers with. A chat document's is
+/// (`ChatDocumentDenied`), because an `Error` names no document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub enum DocumentRefusal {
@@ -101,4 +103,14 @@ pub enum DocumentRefusal {
     NoSession,
     /// This server was started without a `[documents]` configuration.
     NotConfigured,
+    /// `chat_doc` is not a chat document's id (`chat_documents::is_chat_document_id`).
+    ChatDocumentIdInvalid { node_id: String },
+    /// The channel's gate refused: the caller lacks `permission` on the node, or the node has no
+    /// chat, or no such node exists. One answer for all three, so it says nothing about which
+    /// nodes or channels exist. A chat document's refusal, not the page's plain `Error`, so it
+    /// carries the document's address and reaches only that document's readers.
+    ChatDocumentDenied {
+        node_id: String,
+        permission: Permission,
+    },
 }

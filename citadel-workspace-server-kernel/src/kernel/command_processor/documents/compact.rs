@@ -9,11 +9,11 @@
 
 use super::commit::{commit, now_ms};
 use super::node_exists;
+use super::target::Target;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::kernel::documents::materialise::materialise;
 use crate::kernel::documents::DocumentsRelay;
 use crate::kernel::transaction::documents_store::{SnapshotAuthor, StoredSnapshot};
-use crate::WorkspaceProtocolResponse;
 use citadel_logging::{error, info};
 use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::documents::{DocumentRefusal, DocumentsResponse};
@@ -21,37 +21,40 @@ use citadel_workspace_types::documents::{DocumentRefusal, DocumentsResponse};
 /// Frees the document's place in `compacting` however the compaction ends.
 struct InFlight {
     relay: DocumentsRelay,
-    node_id: String,
+    /// The log's key prefix: one per document, page or chat.
+    log: String,
 }
 
 impl Drop for InFlight {
     fn drop(&mut self) {
-        self.relay.compacting.lock().remove(&self.node_id);
+        self.relay.compacting.lock().remove(&self.log);
     }
 }
 
-/// Starts compacting `node_id` unless that is already under way.
+/// Starts compacting `target`'s log unless that is already under way.
 pub(super) fn schedule<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     relay: &DocumentsRelay,
-    node_id: &str,
+    target: &Target,
 ) {
-    if !relay.compacting.lock().insert(node_id.to_string()) {
+    let log = target.doc().key_prefix();
+    if !relay.compacting.lock().insert(log.clone()) {
         return;
     }
     let in_flight = InFlight {
         relay: relay.clone(),
-        node_id: node_id.to_string(),
+        log,
     };
     let kernel = kernel.clone();
+    let target = target.clone();
     crate::platform::spawn(async move {
-        let node_id = in_flight.node_id.clone();
-        match compact(&kernel, &in_flight.relay, &node_id).await {
+        let log = &in_flight.log;
+        match compact(&kernel, &in_flight.relay, &target).await {
             Ok(Some(upto_seq)) => {
-                info!(target: "citadel", "[DOCUMENTS] compacted {node_id} up to {upto_seq}")
+                info!(target: "citadel", "[DOCUMENTS] compacted {log} up to {upto_seq}")
             }
             Ok(None) => {}
-            Err(e) => error!(target: "citadel", "[DOCUMENTS] could not compact {node_id}: {e}"),
+            Err(e) => error!(target: "citadel", "[DOCUMENTS] could not compact {log}: {e}"),
         }
         drop(in_flight);
     });
@@ -62,26 +65,28 @@ pub(super) fn schedule<R: Ratchet + Send + Sync + 'static>(
 async fn compact<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     relay: &DocumentsRelay,
-    node_id: &str,
+    target: &Target,
 ) -> Result<Option<u64>, NetworkError> {
+    let node_id = target.node_id();
+    let doc = target.doc();
     let backend = &kernel.domain_operations.backend_tx_manager;
     let (base, tail, upto_seq) = {
         let _log = backend.lock_document(node_id).await;
         if !node_exists(kernel, node_id).await? {
             return Ok(None);
         }
-        let head = backend.document_head(node_id).await?;
+        let head = backend.document_head(doc).await?;
         if head.latest_seq == head.snapshot_upto {
             return Ok(None);
         }
-        let base = backend.document_snapshot(node_id).await?.map(|s| s.bytes);
+        let base = backend.document_snapshot(doc).await?.map(|s| s.bytes);
         if base.is_none() && head.snapshot_upto > 0 {
             return Err(NetworkError::msg(format!(
-                "document {node_id} names a snapshot it does not hold"
+                "{doc:?} names a snapshot it does not hold"
             )));
         }
         let tail = backend
-            .document_updates(node_id, head.snapshot_upto + 1..=head.latest_seq)
+            .document_updates(doc, head.snapshot_upto + 1..=head.latest_seq)
             .await?;
         (base, tail, head.latest_seq)
     };
@@ -106,7 +111,7 @@ async fn compact<R: Ratchet + Send + Sync + 'static>(
         stored_by: SnapshotAuthor::Server,
         stored_at_ms: now_ms()?,
     };
-    match commit(kernel, relay, node_id, stored, &held, upto_seq).await? {
+    match commit(kernel, relay, target, stored, &held, upto_seq).await? {
         Ok(()) => {}
         Err(DocumentRefusal::SnapshotBehind { .. }) | Err(DocumentRefusal::NoSuchNode { .. }) => {
             return Ok(None)
@@ -117,13 +122,13 @@ async fn compact<R: Ratchet + Send + Sync + 'static>(
             )))
         }
     }
-    kernel.broadcast_to_node(
-        WorkspaceProtocolResponse::Documents(DocumentsResponse::DocumentCompacted {
+    target.announce(
+        kernel,
+        DocumentsResponse::DocumentCompacted {
             node_id: node_id.to_string(),
             upto_seq,
-        }),
+        },
         None,
-        node_id.to_string(),
     );
     Ok(Some(upto_seq))
 }

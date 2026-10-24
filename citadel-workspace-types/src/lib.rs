@@ -18,6 +18,10 @@ pub mod apps_peer;
 pub mod apps_protocol;
 /// The answers to apps requests, and the apps audit log.
 pub mod apps_responses;
+/// Documents shared in a node's chat, on the page's relay; see `chat_documents`.
+pub mod chat_documents;
+#[cfg(test)]
+mod chat_documents_tests;
 /// The build script's cross-workspace dependency rule, here so it can be tested.
 ///
 /// The parent and the agent are separate cargo workspaces with separate lock
@@ -490,6 +494,8 @@ pub enum WorkspaceProtocolRequest {
 
     /// A document node's update log, snapshot and awareness; see `documents`.
     Documents(documents::DocumentsRequest),
+    /// A document shared in a node's chat; see `chat_documents`.
+    ChatDocuments(chat_documents::ChatDocumentsRequest),
     /// Secure links; see `secure_links`.
     SecureLinks(secure_links::SecureLinksRequest),
     /// Citadel Apps: listings, installs and their artifacts; see `apps_protocol`.
@@ -731,6 +737,7 @@ pub enum WorkspaceProtocolResponse {
     Roles(roles_protocol::RolesResponse),
 
     Documents(documents::DocumentsResponse),
+    ChatDocuments(chat_documents::ChatDocumentsResponse),
     SecureLinks(secure_links::SecureLinksResponse),
     Apps(apps_responses::AppsResponse),
 }

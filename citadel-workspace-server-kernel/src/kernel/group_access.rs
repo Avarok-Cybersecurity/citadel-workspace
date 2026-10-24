@@ -17,6 +17,7 @@
 use crate::handlers::domain::async_ops::AsyncPermissionOperations;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use citadel_sdk::prelude::Ratchet;
+use citadel_workspace_types::chat_documents::{CHANNEL_READ, CHANNEL_WRITE};
 use citadel_workspace_types::structs::Permission;
 
 /// The message returned for every denial.
@@ -55,7 +56,7 @@ pub async fn authorize_group_read<R: Ratchet>(
     user_id: &str,
     group_id: &str,
 ) -> Option<String> {
-    authorize_group(kernel, user_id, group_id, Permission::ViewContent).await
+    authorize_group(kernel, user_id, group_id, CHANNEL_READ).await
 }
 
 /// May this account WRITE to this channel — send, edit or delete?
@@ -74,7 +75,7 @@ pub async fn authorize_group_write<R: Ratchet>(
     user_id: &str,
     group_id: &str,
 ) -> Option<String> {
-    authorize_group(kernel, user_id, group_id, Permission::SendMessages).await
+    authorize_group(kernel, user_id, group_id, CHANNEL_WRITE).await
 }
 
 /// The node whose `chat_channel_id` is `group_id`, if any.

@@ -21,6 +21,8 @@ export type { ArtifactLocation } from './generated/ArtifactLocation.js';
 export type { ArtifactRef } from './generated/ArtifactRef.js';
 export type { Capability } from './generated/Capability.js';
 export type { CapabilityRequest } from './generated/CapabilityRequest.js';
+export type { ChatDocumentsRequest } from './generated/ChatDocumentsRequest.js';
+export type { ChatDocumentsResponse } from './generated/ChatDocumentsResponse.js';
 export type { CompactionRequested } from './generated/CompactionRequested.js';
 export type { ConsentReason } from './generated/ConsentReason.js';
 export type { CurrentTerms } from './generated/CurrentTerms.js';
