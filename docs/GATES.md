@@ -177,7 +177,7 @@ nor Linux or Windows rendering; scenarios that pin a motion tier keep it.
 | `check-baselines-are-committed.mjs` | A gate that rewrites its own baseline, left uncommitted, stops being a gate. |
 | `check-browser-installs-use-the-script.mjs` | Every browser install in CI goes through the install-chromium action, which runs scripts/ci/install-chromium.sh with the browser and apt packages cached. |
 | `check-bundle-budget.mjs` | Fails the build if the landing route's critical path grows past its budget. |
-| `check-calendar-grid-keyboard.mjs` | The Calendar's grids and views in a real browser engine (design §3.10): every day reachable by keyboard through one roving tab stop, each view laid out at 375px and on a desktop with 44px targets and no sideways scroll, and axe clean at rest. |
+| `check-calendar-grid-keyboard.mjs` | The Calendar's grids and views in a real browser engine (design §3.10): every day reachable by keyboard through one roving tab stop, each view laid out at 375px and on a desktop with 44px targets and no sideways scroll, and axe clean at rest; and the tab mounted whole, with each panel it opens (the event editor, a member's booking page and its setup), held to the same. |
 | `check-captured-is-not-failed.mjs` | What a spec CAPTURES from the console is not what it counts as a FAILURE. |
 | `check-cdoc-paint-perf.mjs` | Prints the Citadel Docs paint-path numbers on the 100-page golden: decode, first-page paint, atlas hit rate. |
 | `check-cdoc-scroll-perf.mjs` | Scrolling a long Citadel Docs document never drops frames, measured in a real browser. |
