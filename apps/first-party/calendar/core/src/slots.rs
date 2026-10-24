@@ -12,6 +12,7 @@ use crate::model_booking::{Availability, BookingRules, DateRange, Window};
 use crate::tz::{instant_of, TimeZonePort, TzError};
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
+use serde::{Deserialize, Serialize};
 
 /// Days one query may cover.
 pub const MAX_QUERY_DAYS: i64 = 366;
@@ -19,7 +20,8 @@ pub const MAX_QUERY_DAYS: i64 = 366;
 pub const MIN_INCREMENT_MIN: u8 = 5;
 
 /// `[start_ms, end_ms)`, UTC.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Interval {
     pub start_ms: i64,
     pub end_ms: i64,

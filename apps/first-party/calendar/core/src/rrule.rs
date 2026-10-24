@@ -7,19 +7,22 @@ use crate::civil::{days_in_month, CivilDate, CivilDateTime, Weekday, MS_PER_MINU
 use crate::model::{Freq, RRule, Recurrence};
 use crate::tz::{instant_of, TimeZonePort, TzError, Zone};
 use alloc::vec::Vec;
+use serde::Serialize;
 
 /// Candidates an expansion examines before it gives up (a daily rule over 136 years).
 pub const MAX_CANDIDATES: u32 = 50_000;
 /// Occurrences one expansion answers; a window that holds more is truncated, and says so.
 pub const MAX_OCCURRENCES: usize = 2_000;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Occurrence {
     pub start_ms: i64,
     pub end_ms: i64,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Expansion {
     pub occurrences: Vec<Occurrence>,
     /// The window held more than `MAX_OCCURRENCES`.

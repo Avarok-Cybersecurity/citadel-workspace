@@ -4,7 +4,7 @@
 # as every first-party app is (apps/first-party/compute-pool).
 [workspace]
 resolver = "2"
-members = ["core"]
+members = ["core", "glue"]
 exclude = ["sdk"]
 
 [workspace.package]

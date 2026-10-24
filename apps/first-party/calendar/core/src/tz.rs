@@ -20,6 +20,7 @@ pub const ZONE_NAME_MAX: usize = 64;
 /// An IANA time-zone name ("America/Chicago"). Its syntax is checked here; whether the database
 /// knows it is the port's to say.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export, type = "string"))]
 #[serde(try_from = "String", into = "String")]
 pub struct Zone(String);
 
@@ -52,7 +53,9 @@ impl From<Zone> for String {
 }
 
 /// What a wall time is in a zone. Offsets are seconds east of UTC.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "snake_case")]
 pub enum Resolution {
     Unique {
         offset_s: i32,

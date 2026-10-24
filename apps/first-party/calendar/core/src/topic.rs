@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 pub const TOPIC_MAX_BYTES: usize = 1024;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(deny_unknown_fields)]
 pub struct CalChange {
     pub node: String,

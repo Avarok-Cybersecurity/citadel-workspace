@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 /// `[start_min, end_min)` minutes of a day, in an availability's zone.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Window {
     pub start_min: u16,
     pub end_min: u16,
@@ -17,6 +18,7 @@ pub struct Window {
 
 /// A named weekly schedule, with date-specific overrides; a member may keep several.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Availability {
     pub id: String,
     pub name: String,
@@ -28,12 +30,14 @@ pub struct Availability {
 
 /// One date's hours in place of its weekday's; no windows is unavailable that day.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct DateOverride {
     pub date: CivilDate,
     pub windows: Vec<Window>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct EventType {
     pub id: String,
     pub name: String,
@@ -49,6 +53,7 @@ pub struct EventType {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum TypeKind {
     OneOnOne,
@@ -70,6 +75,7 @@ pub enum TypeKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum Strategy {
     /// The host with the fewest confirmed bookings in the period; ties by name.
@@ -82,6 +88,7 @@ pub enum Strategy {
 
 /// The six token pairs an event type may be coloured with (design §3.9); never a raw colour.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum ColorToken {
     Primary,
@@ -93,6 +100,7 @@ pub enum ColorToken {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Question {
     pub id: String,
     pub label: String,
@@ -101,6 +109,7 @@ pub struct Question {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum QuestionKind {
     Text,
@@ -109,6 +118,7 @@ pub enum QuestionKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct BookingRules {
     pub buffer_before_min: u16,
     pub buffer_after_min: u16,
@@ -121,6 +131,7 @@ pub struct BookingRules {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum DateRange {
     /// From now to `days` days ahead.
@@ -136,6 +147,7 @@ pub enum DateRange {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Booking {
     pub id: String,
     pub page: PageRef,
@@ -151,6 +163,7 @@ pub struct Booking {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum PageRef {
     Member { username: Username, slug: String },
@@ -158,6 +171,7 @@ pub enum PageRef {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum Booker {
     Member {
@@ -170,12 +184,14 @@ pub enum Booker {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Answer {
     pub question_id: String,
     pub value: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum BookingState {
     Requested,

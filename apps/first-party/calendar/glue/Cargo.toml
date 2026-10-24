@@ -1,0 +1,18 @@
+[package]
+name = "calendar-glue"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+calendar-core.workspace = true
+# Exactly the version of the wasm-bindgen CLI that scripts/build-calendar-glue.mjs runs (it reads
+# this from the lockfile and refuses any other): the glue and the binary are one build.
+wasm-bindgen = "=0.2.129"
+js-sys = "=0.3.106"
+serde = { version = "1.0.219", default-features = false, features = ["alloc", "derive"] }
+serde-wasm-bindgen = "0.6.5"

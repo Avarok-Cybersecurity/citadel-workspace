@@ -13,12 +13,14 @@ use crate::tz::{civil_of, instant_of, TimeZonePort, Zone};
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use serde::Serialize;
 
 pub const ICS_MAX_BYTES: usize = 1024 * 1024;
 /// A node's authored events are capped at 2048 keys; a file of more cannot be saved anyway.
 pub const ICS_MAX_EVENTS: usize = 2048;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Draft {
     pub uid: String,
     pub title: String,
@@ -29,7 +31,8 @@ pub struct Draft {
     pub cancelled: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Skipped {
     /// The VEVENT's place in the file, from 0.
     pub index: usize,
@@ -37,7 +40,8 @@ pub struct Skipped {
     pub why: &'static str,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Imported {
     pub drafts: Vec<Draft>,
     pub skipped: Vec<Skipped>,

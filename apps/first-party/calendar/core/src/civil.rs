@@ -10,6 +10,7 @@ pub const MS_PER_DAY: i64 = 86_400_000;
 
 /// A calendar date. Constructed only through [`CivilDate::new`], so it is always a real date.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export, as = "RawDate"))]
 #[serde(try_from = "RawDate", into = "RawDate")]
 pub struct CivilDate {
     year: i32,
@@ -17,8 +18,10 @@ pub struct CivilDate {
     day: u8,
 }
 
+/// A `CivilDate` as it crosses a boundary: `{ y, m, d }`, checked on the way in.
 #[derive(Serialize, Deserialize)]
-struct RawDate {
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "CivilDate"))]
+pub struct RawDate {
     y: i32,
     m: u8,
     d: u8,
@@ -43,6 +46,7 @@ impl From<CivilDate> for RawDate {
 
 /// Monday first, as ISO 8601 numbers weeks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum Weekday {
     Mon,
@@ -154,14 +158,17 @@ impl CivilDate {
 
 /// A wall-clock time on a date: `minute` of the day, 0 to 1439.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export, as = "RawDateTime"))]
 #[serde(try_from = "RawDateTime", into = "RawDateTime")]
 pub struct CivilDateTime {
     date: CivilDate,
     minute: u16,
 }
 
+/// A `CivilDateTime` as it crosses a boundary: `{ date, minute }`, checked on the way in.
 #[derive(Serialize, Deserialize)]
-struct RawDateTime {
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "CivilDateTime"))]
+pub struct RawDateTime {
     date: CivilDate,
     minute: u16,
 }

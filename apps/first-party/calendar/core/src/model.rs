@@ -13,6 +13,7 @@ pub type NodeId = String;
 pub type Username = String;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Event {
     pub id: EventId,
     pub rev: u32,
@@ -41,6 +42,7 @@ pub struct Event {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum EventKind {
     Plain,
@@ -51,6 +53,7 @@ pub enum EventKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum EventStatus {
     Confirmed,
@@ -61,6 +64,7 @@ pub enum EventStatus {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum When {
     Once {
@@ -78,6 +82,7 @@ pub enum When {
 /// A recurring event: wall-clock `start` in the event's zone, expanded per occurrence in that
 /// zone (`rrule`), so "09:00 every Monday" stays 09:00 across a DST change.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Recurrence {
     pub start: CivilDateTime,
     pub duration_min: u32,
@@ -89,6 +94,7 @@ pub struct Recurrence {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum Freq {
     Daily,
@@ -99,6 +105,7 @@ pub enum Freq {
 
 /// The RFC 5545 subset the Calendar makes and reads.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct RRule {
     pub freq: Freq,
     /// Every `interval` periods; at least 1.
@@ -112,6 +119,7 @@ pub struct RRule {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum Location {
     /// A call in the node's chat (`GroupCallControls`).
@@ -136,6 +144,7 @@ impl Location {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum LocationKind {
     InApp,
@@ -144,6 +153,7 @@ pub enum LocationKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum Invitee {
     Member {
@@ -156,6 +166,7 @@ pub enum Invitee {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum Visibility {
     Public,
@@ -166,6 +177,7 @@ pub enum Visibility {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Propagate {
     /// Projected into every descendant of the origin node (design §3.5).
     pub down: bool,
@@ -174,11 +186,13 @@ pub struct Propagate {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct ReminderOffset {
     pub minutes_before: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Source {
     pub app_id: String,
     /// The app's own reference for the event.

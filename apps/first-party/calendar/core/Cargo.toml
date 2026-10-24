@@ -8,6 +8,12 @@ publish.workspace = true
 [dependencies]
 citadel-app-sdk-types.workspace = true
 serde = { version = "1.0.219", default-features = false, features = ["alloc", "derive"] }
+ts-rs = { version = "11", optional = true, features = ["serde-compat"] }
+
+[features]
+# Writes the TypeScript the page is compiled against (bindings/), as ts-rs's export tests; needs
+# std. scripts/build-calendar-glue.mjs copies them to the UI.
+ts = ["dep:ts-rs"]
 
 [dev-dependencies]
 # The native TimeZonePort the tests use: the IANA database, embedded, so every zone's transitions

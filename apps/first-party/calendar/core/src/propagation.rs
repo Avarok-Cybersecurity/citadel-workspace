@@ -25,6 +25,7 @@ pub const MAX_UP_PULL: usize = 256;
 
 /// What a descendant holds of an ancestor's event: these fields, and only these.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 pub struct Projection {
     /// None for a `BusyOnly` event: the reader sees "Busy".
     pub title: Option<String>,
@@ -45,7 +46,9 @@ pub enum PropagationError {
 }
 
 /// One write of a fan-out, to `storage.node(node)`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "snake_case")]
 pub enum Write {
     Put {
         node: NodeId,
@@ -142,7 +145,9 @@ pub fn up_pull_targets(descendants: &[NodeId]) -> (&[NodeId], bool) {
 }
 
 /// What a reader does with a projection, given what it can read of the origin.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "snake_case")]
 pub enum Reconciled {
     /// The origin is unreadable to this reader: show the projection, without a link.
     ShowWithoutLink,
