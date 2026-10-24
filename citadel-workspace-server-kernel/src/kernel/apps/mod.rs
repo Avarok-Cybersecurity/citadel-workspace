@@ -47,7 +47,9 @@ pub mod peer_rules;
 pub mod records;
 pub mod rules;
 pub mod storage;
+pub mod storage_authored;
 pub mod storage_entitlement;
+pub mod storage_notice;
 pub mod storage_write;
 pub mod update;
 pub mod usage_meter;
@@ -84,6 +86,8 @@ mod install_tests;
 mod kernel_advertise_tests;
 #[cfg(test)]
 mod kernel_artifact_tests;
+#[cfg(test)]
+mod kernel_authored_tests;
 #[cfg(test)]
 mod kernel_call_backend_tests;
 #[cfg(test)]
@@ -136,6 +140,8 @@ mod runtime_wire_fixture_tests;
 mod runtime_wire_frames;
 #[cfg(test)]
 mod runtime_wire_relay;
+#[cfg(test)]
+mod storage_authored_tests;
 #[cfg(test)]
 mod storage_tests;
 #[cfg(test)]

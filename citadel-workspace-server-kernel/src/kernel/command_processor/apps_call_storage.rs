@@ -4,7 +4,8 @@
 //! The namespace comes from the install (app id and scope key) and the session (the member),
 //! never from the call. A shared write also takes the member's own permission: `EditContent`
 //! on the scope's node for `storage.scope` and for deleting a blob, `EditMdx` on the node for
-//! `storage.node`. Every write is decided and made under `APPS_LOCK`, against the install as it
+//! `storage.node`, `ViewContent` on the node for `storage.node.authored`, whose writes land in
+//! the caller's own namespace only (`kernel::apps::storage_authored`). Every write is decided and made under `APPS_LOCK`, against the install as it
 //! is then (`apps_call_storage_write`), so an uninstall's purge and a write never interleave and
 //! a grant withdrawn meanwhile is honoured; it counts toward the tenant's storage. The host's own
 //! `sys/` keys are neither written, read nor listed by an app. `storage.local` is the member's
@@ -14,9 +15,11 @@
 use super::apps::{Caller, Step};
 use super::apps_call::{reply_ok, reply_refused};
 use super::apps_call_blob::{blob_delete, blob_get, blob_put};
+use super::apps_call_storage_authored::list_authored;
 use super::apps_call_storage_write::{kv_write, Write};
 use super::apps_gather::holds_at;
 use crate::kernel::apps::storage::*;
+use crate::kernel::apps::storage_authored::{authored_namespace, Access};
 use crate::kernel::apps::storage_write::app_visible;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use citadel_app_sdk_types::calls::{KvBackend, KvPage, KvValue};
@@ -26,6 +29,16 @@ use citadel_sdk::prelude::{NetworkError, Ratchet};
 use citadel_workspace_types::apps_install::{AppInstall, AppsRefusal};
 use citadel_workspace_types::apps_manifest::AppManifest;
 use citadel_workspace_types::structs::Permission;
+
+/// The namespace a call addresses, or the refusal it is answered with.
+macro_rules! addressed {
+    ($resolved:expr) => {
+        match $resolved {
+            Ok(addressed) => addressed,
+            Err(why) => return Ok(refused(why)),
+        }
+    };
+}
 
 /// One key and the value written to it, or `None` to delete it.
 type KvWrite<'a> = (&'a str, Option<&'a [u8]>);
@@ -51,18 +64,26 @@ pub(super) fn root_of(install: &AppInstall) -> Step<StorageRoot> {
 
 /// The namespace `backend` names for `caller`, and the permission a write to it takes; None for
 /// the host-local backend.
+type Addressed = Option<(Namespace, Option<Permission>)>;
+
 fn namespace_of(
     backend: &KvBackend,
     caller: &Caller<'_>,
-) -> Option<(Namespace, Option<Permission>)> {
-    match backend {
+    access: Access,
+) -> Result<Addressed, StorageRefusal> {
+    Ok(match backend {
         KvBackend::User => Some((Namespace::User(caller.user.to_string()), None)),
         KvBackend::Scope => Some((Namespace::Scope, Some(Permission::EditContent))),
         KvBackend::Node { node_id } => {
             Some((Namespace::Node(node_id.clone()), Some(Permission::EditMdx)))
         }
+        KvBackend::NodeAuthored { node_id, author } => {
+            let named = author.as_deref();
+            let namespace = authored_namespace(node_id, named, caller.user, access)?;
+            Some((namespace, Some(Permission::ViewContent)))
+        }
         KvBackend::Local => None,
-    }
+    })
 }
 
 /// A namespace's cap: the platform's, or less where the app's manifest asks for less
@@ -83,7 +104,7 @@ pub(super) async fn quota_for<R: Ratchet + Send + Sync + 'static>(
     let declared = match namespace {
         Namespace::User(_) => Some(manifest.limits.storage_user_bytes),
         Namespace::Scope => Some(manifest.limits.storage_scope_bytes),
-        Namespace::Node(_) => None,
+        Namespace::Node(_) | Namespace::NodeAuthored { .. } => None,
     };
     let platform = quota_of(namespace);
     Ok(declared.map_or(platform, |bytes| platform.min(u64::from(bytes))))
@@ -100,7 +121,8 @@ pub(super) async fn serve_storage<R: Ratchet + Send + Sync + 'static>(
     let backend = &kernel.domain_operations.backend_tx_manager;
     let (kv, writes): (&KvBackend, Vec<KvWrite<'_>>) = match op {
         StorageOps::KvGet(a) => {
-            let Some((namespace, _)) = namespace_of(&a.backend, caller) else {
+            let Some((namespace, _)) = addressed!(namespace_of(&a.backend, caller, Access::Read))
+            else {
                 return Ok(unavailable("host_local"));
             };
             let id = root.namespace_id(&namespace);
@@ -114,7 +136,8 @@ pub(super) async fn serve_storage<R: Ratchet + Send + Sync + 'static>(
             }));
         }
         StorageOps::KvList(a) => {
-            let Some((namespace, _)) = namespace_of(&a.backend, caller) else {
+            let Some((namespace, _)) = addressed!(namespace_of(&a.backend, caller, Access::Read))
+            else {
                 return Ok(unavailable("host_local"));
             };
             let index = backend.kv_index(&root.namespace_id(&namespace)).await?;
@@ -145,13 +168,14 @@ pub(super) async fn serve_storage<R: Ratchet + Send + Sync + 'static>(
             let write = blob_write(caller, install, target, op, Some(Permission::EditContent));
             return blob_delete(kernel, &write, &a.sha256).await;
         }
+        StorageOps::KvListAuthored(a) => return list_authored(kernel, &root, a).await,
         StorageOps::StoreFileWrite(_)
         | StorageOps::StoreFileRead(_)
         | StorageOps::StoreFileList(_) => {
             return Ok(unavailable("files"));
         }
     };
-    let Some((namespace, needs)) = namespace_of(kv, caller) else {
+    let Some((namespace, needs)) = addressed!(namespace_of(kv, caller, Access::Write)) else {
         return Ok(unavailable("host_local"));
     };
     if let Some(Err(why)) = writes

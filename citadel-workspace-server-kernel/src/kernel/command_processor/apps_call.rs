@@ -73,6 +73,7 @@ async fn target_of<R: Ratchet + Send + Sync + 'static>(
         HostCall::Storage(StorageOps::KvSetMany(a)) => node_of(&a.backend),
         HostCall::Storage(StorageOps::KvDelete(a)) => node_of(&a.backend),
         HostCall::Storage(StorageOps::KvList(a)) => node_of(&a.backend),
+        HostCall::Storage(StorageOps::KvListAuthored(a)) => Some(a.node_id.clone()),
         _ => None,
     };
     let authority = authority_node(&install.scope, WORKSPACE_ROOT_ID).to_string();
@@ -96,7 +97,9 @@ async fn target_of<R: Ratchet + Send + Sync + 'static>(
 
 fn node_of(backend: &KvBackend) -> Option<String> {
     match backend {
-        KvBackend::Node { node_id } => Some(node_id.clone()),
+        KvBackend::Node { node_id } | KvBackend::NodeAuthored { node_id, .. } => {
+            Some(node_id.clone())
+        }
         KvBackend::User | KvBackend::Scope | KvBackend::Local => None,
     }
 }

@@ -27,6 +27,7 @@ pub(crate) fn runtime_spec() -> Spec {
             optional("storage.node"),
             optional("storage.blob"),
             optional("storage.local"),
+            optional("storage.node.authored"),
             { "cap": "net.server", "why": "Syncs", "optional": true, "hosts": [API_HOST] },
             { "cap": "ihttp.serve", "why": "Serves", "optional": true, "routes": ["GET /cards"] },
             { "cap": "ihttp.call", "why": "Calls", "optional": true, "targets": [] },

@@ -98,7 +98,9 @@ const SKIP = new Map([
   // 421: the topic ops and constants and the plane tables (TRANSPORT_CAPABILITY,
   // SERVE_PLANE_CAPABILITY), generated from the Rust constants (docs/plans/p2p-demo-design.md).
   // 423: TOPIC_ENVELOPE_TAG and TOPIC_ENVELOPE_OVERHEAD, which the agent caps a topic's group by.
-  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 423],
+  // 430: storage.node.authored, its KV_BACKEND_CAPABILITY row and the KvListAuthored op
+  // (Calendar design §3.3.1).
+  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 430],
 ]);
 
 if (!statSync(SRC, { throwIfNoEntry: false })) {

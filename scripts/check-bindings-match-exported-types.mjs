@@ -60,17 +60,57 @@ function rustFilesUnder(dir) {
     e.isDirectory() ? rustFilesUnder(join(dir, e.name)) : e.name.endsWith('.rs') ? [join(dir, e.name)] : []);
 }
 
-/** Whether `name` is defined with a ts-rs export (`#[ts(export)]`, or `ts(export)` in a `cfg_attr`) under `dir`. */
+/**
+ * Macros under `dir` whose body puts a ts-rs export on every item they wrap
+ * (citadel-app-sdk-types' `abi_types!`): an item inside one is exported though no attribute sits
+ * above it in the source.
+ */
+function exportingMacros(dir) {
+  const names = new Set();
+  for (const file of rustFilesUnder(dir)) {
+    const text = readFileSync(file, 'utf8');
+    for (const m of text.matchAll(/macro_rules!\s+([A-Za-z0-9_]+)\s*\{([\s\S]*?)\n\}/g)) {
+      if (/\bts\(export/.test(m[2])) names.add(m[1]);
+    }
+  }
+  return names;
+}
+
+/** The `pub struct`/`pub enum` names inside invocations of `macros` in `lines`, by brace depth. */
+function namesInsideMacros(lines, macros) {
+  const names = [];
+  let depth = 0;
+  for (const raw of lines) {
+    const line = raw.split('//')[0];
+    if (depth === 0) {
+      const opens = [...macros].some((mac) => new RegExp(`^\\s*${mac}!\\s*\\{`).test(line));
+      if (!opens) continue;
+    } else {
+      const m = line.match(/^\s*pub\s+(?:struct|enum)\s+([A-Za-z0-9_]+)/);
+      if (m) names.push(m[1]);
+    }
+    depth += (line.match(/\{/g) ?? []).length - (line.match(/\}/g) ?? []).length;
+  }
+  return names;
+}
+
+/**
+ * Whether `name` is defined with a ts-rs export under `dir`: `#[ts(export)]`, `ts(export)` in a
+ * `cfg_attr`, or inside a macro that adds one.
+ */
 function exportsType(dir, name) {
+  const macros = exportingMacros(dir);
   return rustFilesUnder(dir).some((file) => {
     const lines = readFileSync(file, 'utf8').split('\n');
+    if (namesInsideMacros(lines, macros).includes(name)) return true;
     return lines.some((line, i) => /\bts\(export/.test(line.split('//')[0])
       && lines.slice(i + 1, i + 12).some((l) => new RegExp(`^\\s*pub\\s+(?:struct|enum)\\s+${name}\\b`).test(l)));
   });
 }
 
 /**
- * Types this crate re-exports from a path dependency (`pub use dep_crate::Name;`) that the
+ * Types this crate re-exports from a path dependency (`pub use dep_crate::Name;`, or through a
+ * module, `pub use dep_crate::calls::Name;`) that the
  * dependency itself exports to TypeScript: ts-rs writes their binding here too, as a dependency of
  * the types that use them. Each must resolve to a real exported definition, or it is not counted.
  */
@@ -80,7 +120,7 @@ function reexportedTypes() {
     .map((m) => [m[1].replaceAll('-', '_'), resolve(ROOT, 'citadel-workspace-types', m[2], 'src')]));
   const names = new Set();
   for (const file of readdirSync(SRC).filter((f) => f.endsWith('.rs'))) {
-    for (const m of readFileSync(join(SRC, file), 'utf8').matchAll(/^\s*pub use ([a-z0-9_]+)::([A-Za-z0-9_]+);/gm)) {
+    for (const m of readFileSync(join(SRC, file), 'utf8').matchAll(/^\s*pub use ([a-z0-9_]+)::(?:[a-z0-9_]+::)*([A-Za-z0-9_]+);/gm)) {
       const dir = deps.get(m[1]);
       if (dir !== undefined && existsSync(dir) && exportsType(dir, m[2])) names.add(m[2]);
     }
