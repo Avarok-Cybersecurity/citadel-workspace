@@ -250,6 +250,8 @@ services:
       - INTERNAL_SERVICE_ALLOWED_ORIGINS=${INTERNAL_SERVICE_ALLOWED_ORIGINS}
       # Exactly three STUN servers, host:port; the binary refuses to start without them.
       - INTERNAL_SERVICE_STUN_SERVERS=${INTERNAL_SERVICE_STUN_SERVERS}
+      # apps.private_network, exactly true or false; the binary refuses to start without it.
+      - INTERNAL_SERVICE_APPS_PRIVATE_NETWORK=${INTERNAL_SERVICE_APPS_PRIVATE_NETWORK}
     deploy:
       resources:
         limits:

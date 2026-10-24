@@ -53,6 +53,8 @@ mod audience_tests;
 mod effective_tests;
 #[cfg(test)]
 mod egress_in_flight_tests;
+#[cfg(all(test, not(target_family = "wasm")))]
+mod egress_native_tests;
 #[cfg(test)]
 mod egress_tests;
 #[cfg(test)]

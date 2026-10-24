@@ -33,4 +33,5 @@ exec "$here/citadel-agent" \
   --data-dir "$HOME/@CitadelAgentDataDirectoryName@" \
   --allowed-origins '@CitadelWorkspaceOrigin@' \
   --stun-servers '@CitadelAgentStunServers@' \
+  --apps-private-network '@CitadelAgentAppsPrivateNetwork@' \
   "$@"
