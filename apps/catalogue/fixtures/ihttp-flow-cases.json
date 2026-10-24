@@ -1,0 +1,442 @@
+{
+  "_about": "Shared internal-HTTP flow cases: one stream opened by a RequestHead declaring body_len, then frames from the caller (client) or the serving app (server), each with the verdict every flow keeper must give it: ok, or fault (refused, ending the stream). Written by hand. Read by the kernel's StreamFlow (kernel::apps::ihttp_flow_corpus_tests) and the page's IhttpRouter (host/__tests__/ihttp-flow-corpus.test.ts). A case stops at its first fault or Cancel. A second RequestHead is not a flow step: the relay and the page both treat it as a replay (E8), outside StreamFlow.",
+  "cases": [
+    {
+      "name": "a_bodyless_get_and_its_answer",
+      "body_len": 0,
+      "steps": [
+        {
+          "from": "client",
+          "kind": "End",
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "ResponseHead",
+          "body_len": null,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 3,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "End",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "a_request_body_exactly_its_declared_length",
+      "body_len": 8,
+      "steps": [
+        {
+          "from": "client",
+          "kind": "Body",
+          "len": 4,
+          "expect": "ok"
+        },
+        {
+          "from": "client",
+          "kind": "Body",
+          "len": 4,
+          "expect": "ok"
+        },
+        {
+          "from": "client",
+          "kind": "End",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "a_request_body_longer_than_declared",
+      "body_len": 4,
+      "steps": [
+        {
+          "from": "client",
+          "kind": "Body",
+          "len": 5,
+          "expect": "fault"
+        }
+      ]
+    },
+    {
+      "name": "a_request_body_after_the_callers_end",
+      "body_len": null,
+      "steps": [
+        {
+          "from": "client",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "client",
+          "kind": "End",
+          "expect": "ok"
+        },
+        {
+          "from": "client",
+          "kind": "Body",
+          "len": 1,
+          "expect": "fault"
+        }
+      ]
+    },
+    {
+      "name": "a_response_longer_than_its_declared_length",
+      "body_len": 0,
+      "steps": [
+        {
+          "from": "server",
+          "kind": "ResponseHead",
+          "body_len": 2,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 3,
+          "expect": "fault"
+        }
+      ]
+    },
+    {
+      "name": "a_fifth_request_chunk_without_credit",
+      "body_len": null,
+      "steps": [
+        {
+          "from": "client",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "client",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "client",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "client",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "client",
+          "kind": "Body",
+          "len": 1,
+          "expect": "fault"
+        }
+      ]
+    },
+    {
+      "name": "a_fifth_response_chunk_without_credit",
+      "body_len": 0,
+      "steps": [
+        {
+          "from": "server",
+          "kind": "ResponseHead",
+          "body_len": null,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "fault"
+        }
+      ]
+    },
+    {
+      "name": "the_callers_credit_admits_a_fifth_response_chunk",
+      "body_len": 0,
+      "steps": [
+        {
+          "from": "server",
+          "kind": "ResponseHead",
+          "body_len": null,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "client",
+          "kind": "Credit",
+          "n": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "a_response_body_before_its_head",
+      "body_len": 0,
+      "steps": [
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "fault"
+        }
+      ]
+    },
+    {
+      "name": "a_response_end_before_its_head",
+      "body_len": 0,
+      "steps": [
+        {
+          "from": "server",
+          "kind": "End",
+          "expect": "fault"
+        }
+      ]
+    },
+    {
+      "name": "a_second_response_head",
+      "body_len": 0,
+      "steps": [
+        {
+          "from": "server",
+          "kind": "ResponseHead",
+          "body_len": null,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "ResponseHead",
+          "body_len": null,
+          "expect": "fault"
+        }
+      ]
+    },
+    {
+      "name": "a_response_head_from_the_caller",
+      "body_len": 0,
+      "steps": [
+        {
+          "from": "client",
+          "kind": "ResponseHead",
+          "body_len": null,
+          "expect": "fault"
+        }
+      ]
+    },
+    {
+      "name": "the_caller_cancels_mid_body",
+      "body_len": null,
+      "steps": [
+        {
+          "from": "client",
+          "kind": "Body",
+          "len": 2,
+          "expect": "ok"
+        },
+        {
+          "from": "client",
+          "kind": "Cancel",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "the_server_cancels_after_its_head",
+      "body_len": 0,
+      "steps": [
+        {
+          "from": "server",
+          "kind": "ResponseHead",
+          "body_len": null,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Cancel",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "a_cancel_after_the_callers_own_end",
+      "body_len": 0,
+      "steps": [
+        {
+          "from": "client",
+          "kind": "End",
+          "expect": "ok"
+        },
+        {
+          "from": "client",
+          "kind": "Cancel",
+          "expect": "ok"
+        }
+      ]
+    },
+    {
+      "name": "credit_sent_before_the_response_head_still_counts",
+      "body_len": 0,
+      "steps": [
+        {
+          "from": "client",
+          "kind": "End",
+          "expect": "ok"
+        },
+        {
+          "from": "client",
+          "kind": "Credit",
+          "n": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "ResponseHead",
+          "body_len": null,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 1,
+          "expect": "fault"
+        }
+      ]
+    },
+    {
+      "name": "a_request_body_shorter_than_declared_at_its_end",
+      "body_len": 4,
+      "steps": [
+        {
+          "from": "client",
+          "kind": "Body",
+          "len": 2,
+          "expect": "ok"
+        },
+        {
+          "from": "client",
+          "kind": "End",
+          "expect": "fault"
+        }
+      ]
+    },
+    {
+      "name": "a_response_body_shorter_than_declared_at_its_end",
+      "body_len": 0,
+      "steps": [
+        {
+          "from": "client",
+          "kind": "End",
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "ResponseHead",
+          "body_len": 4,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "Body",
+          "len": 2,
+          "expect": "ok"
+        },
+        {
+          "from": "server",
+          "kind": "End",
+          "expect": "fault"
+        }
+      ]
+    }
+  ]
+}

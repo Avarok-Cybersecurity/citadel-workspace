@@ -28,7 +28,15 @@ async fn blobs_round_trip_by_digest() {
     let got: HostReply<BytesValue> = call(&kernel, "bob", &id, &get_blob).await;
     assert_eq!(got.into_result().expect("read").bytes.0, bytes);
     let delete = HostCall::Storage(StorageOps::BlobDelete(BlobDelete { sha256 }));
-    let deleted: HostReply<()> = call(&kernel, "alice", &id, &delete).await;
+    // Deleting takes EditContent on the install's node, which a Member does not hold.
+    let refused: HostReply<()> = call(&kernel, "alice", &id, &delete).await;
+    assert_eq!(
+        refused,
+        HostReply::Refused(Refused::Policy("permission".into()))
+    );
+    let kept: HostReply<BytesValue> = call(&kernel, "bob", &id, &get_blob).await;
+    assert_eq!(kept.into_result().expect("still there").bytes.0, bytes);
+    let deleted: HostReply<()> = call(&kernel, "boss", &id, &delete).await;
     assert_eq!(deleted, HostReply::Ok(()));
     let gone: HostReply<BytesValue> = call(&kernel, "bob", &id, &get_blob).await;
     assert_eq!(

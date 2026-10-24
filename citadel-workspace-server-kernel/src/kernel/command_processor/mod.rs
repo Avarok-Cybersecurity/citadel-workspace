@@ -76,14 +76,21 @@ mod apps_call;
 mod apps_call_blob;
 /// The storage backends `Call` serves.
 mod apps_call_storage;
+/// Storage writes, decided and made under `APPS_LOCK`.
+mod apps_call_storage_write;
 /// The reads the apps decisions need, made before they decide, and what an install may do now.
 pub mod apps_gather;
 /// The kernel's own writes to a document's required-apps header.
 mod apps_header;
+/// `HostNetGrant`: what an install may reach from the member's machine.
+mod apps_host_net_grant;
 /// `AdvertiseService` and `IhttpSend`: internal HTTP relayed between sessions.
 mod apps_ihttp;
-/// `WithdrawService`, and an install's relay state ending with its release.
-mod apps_ihttp_end;
+/// `WithdrawService`, an install's relay state ending with its release or a member's access,
+/// and what every relay request settles: audit lines and timed-out streams' cancels.
+pub(crate) mod apps_ihttp_end;
+/// The checks before a relayed stream opens.
+mod apps_ihttp_open;
 /// Which install an internal-HTTP request is for.
 mod apps_ihttp_target;
 /// `Install`.

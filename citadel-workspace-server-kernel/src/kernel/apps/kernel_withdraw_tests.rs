@@ -155,7 +155,7 @@ async fn an_uninstall_ends_the_installs_advertisements_and_streams() {
         "the advertisement outlived the install"
     );
     let credit = IhttpFrameKind::Credit { n: 1 };
-    let end = relay.from_server(BOB, &id, served, &credit, now);
+    let end = relay.from_server(BOB, &id, served, &credit, |_| true, now);
     assert_eq!(
         end,
         Err(RelayFault::NoStream),

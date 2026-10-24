@@ -3,6 +3,9 @@
 //! The page origins come from the origin allowlist the agent already requires, so the two
 //! cannot disagree. An allowlist of `*` names no origin, and then host egress stays off: an
 //! agent that does not know which page is its own cannot refuse it as a target.
+//!
+//! Whether apps may reach a member's private network is not configured here: it is each
+//! member's own grant on this agent (citadel-internal-service's kernel/apps/settings.rs).
 
 use citadel_internal_service::{AppNetConfig, OriginPolicy};
 

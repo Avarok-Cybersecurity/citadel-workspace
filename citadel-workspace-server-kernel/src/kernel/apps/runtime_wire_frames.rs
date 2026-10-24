@@ -120,7 +120,8 @@ fn common() -> Vec<Value> {
 }
 
 /// What the page sends: header names lowercased (the wire takes no other), an empty query as
-/// none, and its own cancel reasons narrowed to the wire's closed set.
+/// none, and its own cancel reasons narrowed to the wire's closed set; an app's own words are
+/// `Caller`, never a guess.
 pub(super) fn to_wire() -> Value {
     let mixed = vec![("Content-Type".to_string(), "text/plain".to_string())];
     let lower = || vec![header("content-type", "text/plain")];
@@ -184,13 +185,19 @@ pub(super) fn to_wire() -> Value {
             "cancel: an unknown stream",
             3,
             cancel("unknown_stream"),
-            wire_cancel(CancelReason::Refused),
+            wire_cancel(CancelReason::Protocol),
         ),
         pair(
-            "cancel: a reason the wire has no word for",
+            "cancel: a stale stream id",
+            3,
+            cancel("stream_id"),
+            wire_cancel(CancelReason::Protocol),
+        ),
+        pair(
+            "cancel: an app's own words are the caller's",
             3,
             cancel("anything else"),
-            wire_cancel(CancelReason::Refused),
+            wire_cancel(CancelReason::Caller),
         ),
     ]);
     Value::Array(cases)
@@ -222,6 +229,9 @@ pub(super) fn from_wire() -> Value {
         ("no_route", CancelReason::NoRoute),
         ("refused", CancelReason::Refused),
         ("failed", CancelReason::Failed),
+        ("closed", CancelReason::Closed),
+        ("protocol", CancelReason::Protocol),
+        ("unavailable", CancelReason::Unavailable),
     ];
     for (text, reason) in reasons {
         cases.push(pair(

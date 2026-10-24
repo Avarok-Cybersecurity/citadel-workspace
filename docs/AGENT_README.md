@@ -23,7 +23,7 @@ archive is for terminal use and scripts.
 
 Then reload Citadel Workspace in your browser.
 
-Both flags matter:
+Every flag matters:
 
 - **`--bind` has no default.** Run the agent with no arguments and it exits with
   a usage error rather than starting. `127.0.0.1:12345` is what the web app
@@ -40,6 +40,13 @@ Both flags matter:
   public address, which it needs to connect directly to other members. The agent
   refuses to start without them; `INTERNAL_SERVICE_STUN_SERVERS` does the same
   and takes precedence.
+- **Apps reach your private network only if you say so,** on the agent page
+  under Apps, for your own account. Until then every app request to a private,
+  loopback or link-local address is refused; public hosts are unaffected.
+- **Self-update stops until the command carries every required flag.** An update
+  restarts the agent with the command you started it with; a version that needs a
+  flag that command lacks refuses to start, and the previous agent is put back
+  (docs/UPGRADING.md).
 - **`--backend filesystem` persists your account.** The default backend is
   in-memory, which is right for tests and wrong for you: without this flag your
   account and message history are gone the next time the agent restarts. Data

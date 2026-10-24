@@ -96,8 +96,8 @@ cp .env.example .env          # then edit it
 docker compose -f docker-compose.production.yml up -d --wait
 ```
 
-`.env` must set **two** variables, and a deployment that serves the UI a
-**third**. None has a default, and the stack will not come up without them —
+`.env` must set **four** variables, and a deployment that serves the UI a
+**fifth**. None has a default, and the stack will not come up without them —
 `--wait` fails while you look for a reason.
 
 `WORKSPACE_MASTER_PASSWORD`. The server refuses to start if it is missing or

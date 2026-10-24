@@ -185,6 +185,9 @@ run_deploy() { # <name> <service>...
   {
     [ -n "${NO_MASTER_PW:-}" ] || printf 'WORKSPACE_MASTER_PASSWORD=test-password-not-a-placeholder\n'
     [ -n "${NO_ORIGINS:-}" ] || printf 'INTERNAL_SERVICE_ALLOWED_ORIGINS=https://tenant.example\n'
+    # The agent's other required setting, under the same rule (NO_STUN=1 for the case that
+    # proves deploy.sh refuses without it).
+    [ -n "${NO_STUN:-}" ] || printf 'INTERNAL_SERVICE_STUN_SERVERS=stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302\n'
     # Required whenever a `ui` service is deployed, for the same reason as the
     # origins above: with the /ws proxy off, an empty value ships a page that
     # loads and can reach no agent. NO_LOOPBACK=1 for the case that proves
@@ -228,7 +231,8 @@ run_deploy() { # <name> <service>...
     flock -n 8 || fail "test harness could not take the lock it is meant to hold"
   fi
   ( cd "$dir" && HOME="$dir" PATH="$WORK/bin:$PATH" \
-      env -u INTERNAL_SERVICE_ALLOWED_ORIGINS bash ./deploy.sh --no-pull ${DEPLOY_ARGS:-} >"$dir/out.txt" 2>&1 ) || status=$?
+      env -u INTERNAL_SERVICE_ALLOWED_ORIGINS -u INTERNAL_SERVICE_STUN_SERVERS \
+        bash ./deploy.sh --no-pull ${DEPLOY_ARGS:-} >"$dir/out.txt" 2>&1 ) || status=$?
   [ -n "${HOLD_LOCK:-}" ] && exec 8>&-
   [ -n "${HOLD_CHECKOUT:-}" ] && exec 7<&-
   echo "$status" > "$dir/status.txt"
@@ -358,6 +362,26 @@ echo "  no-loopback -> a ui deploy without an agent origin is refused"; pass_cou
 d=$(NO_LOOPBACK=1 run_deploy no-loopback-server-only server)
 assert_succeeded "$d"
 echo "  no-loopback -> server-only is not asked for one"; pass_count=$((pass_count+1))
+
+# The agent refuses to start without its STUN servers, but only once its new container is
+# up. deploy.sh must refuse first, naming the key, and only
+# when the agent is deployed: a server-only tenant runs no agent to configure.
+d=$(NO_STUN=1 run_deploy no-stun server internal-service)
+assert_failed "$d"
+grep -q "INTERNAL_SERVICE_STUN_SERVERS is unset" "$d/out.txt" \
+  || fail "an agent deployment without STUN servers was not refused with a reason (see $d/out.txt)"
+grep -qE 'up -d' "$d/calls.txt" && fail "the STUN refusal came after a restart (see $d/out.txt)"
+echo "  no-stun     -> an agent deploy without STUN servers is refused"; pass_count=$((pass_count+1))
+
+# The control: the same agent deploy with no apps setting at all deploys. LAN access for
+# apps is each member's own grant on the agent page, not a deployment setting.
+d=$(run_deploy no-apps-setting server internal-service)
+assert_succeeded "$d"
+echo "  no-apps-env -> an agent deploy without any apps setting deploys"; pass_count=$((pass_count+1))
+
+d=$(NO_STUN=1 run_deploy no-agent-settings-server-only server)
+assert_succeeded "$d"
+echo "  agent-keys  -> server-only is not asked for STUN servers"; pass_count=$((pass_count+1))
 
 # The health wait names the port the .env binds, not a literal 12349. A tenant on any
 # other port was told to look at the wrong socket when the server did not come up.

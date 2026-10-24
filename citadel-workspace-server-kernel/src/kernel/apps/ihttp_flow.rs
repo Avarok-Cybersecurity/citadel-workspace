@@ -1,6 +1,7 @@
 //! One relayed internal-HTTP stream's flow (R4.4), pure: which frame each side may send next,
 //! body chunks only against credit the other side granted, bodies within their declared length
-//! and the caps, and when the stream is over.
+//! and the caps and, at `End`, all of a declared length, and when the stream is over. Credit is
+//! the receiver's buffer space, one chunk per unit, and may be granted before the response head.
 
 use citadel_ihttp_types::{
     IhttpFrameKind, INITIAL_CREDIT, MAX_REQUEST_BODY_BYTES, MAX_RESPONSE_BODY_BYTES,
@@ -24,7 +25,9 @@ pub enum FlowFault {
     NoCredit,
     /// More body than declared, or than the cap.
     TooLarge,
-    /// Anything after this side's `End`.
+    /// An `End` before the body reached the length its head declared.
+    ShortBody,
+    /// Anything after this side's `End` but `Credit` for the other side, or a `Cancel`.
     AfterEnd,
 }
 
@@ -34,6 +37,7 @@ struct Flow {
     credit: u32,
     bytes: u64,
     cap: u64,
+    declared: Option<u64>,
     head: bool,
     ended: bool,
 }
@@ -44,6 +48,7 @@ impl Flow {
             credit: INITIAL_CREDIT,
             bytes: 0,
             cap: declared.map_or(cap, |d| d.min(cap)),
+            declared,
             head,
             ended: false,
         }
@@ -94,7 +99,12 @@ impl StreamFlow {
             Side::Client => (&mut next.request, &mut next.response),
             Side::Server => (&mut next.response, &mut next.request),
         };
-        if own.ended && !matches!(kind, IhttpFrameKind::Credit { .. }) {
+        // An end that finished sending may still grant credit and still give up waiting.
+        let still_admitted = matches!(
+            kind,
+            IhttpFrameKind::Credit { .. } | IhttpFrameKind::Cancel { .. }
+        );
+        if own.ended && !still_admitted {
             return Err(FlowFault::AfterEnd);
         }
         match kind {
@@ -103,12 +113,18 @@ impl StreamFlow {
                 if side != Side::Server || own.head {
                     return Err(FlowFault::OutOfOrder);
                 }
+                // Credit the caller granted before the head is the caller's buffer, still free.
+                let credit = own.credit;
                 *own = Flow::new(MAX_RESPONSE_BODY_BYTES, *body_len, true);
+                own.credit = credit;
             }
             IhttpFrameKind::Body { bytes } => own.body(bytes.len())?,
             IhttpFrameKind::End => {
                 if !own.head {
                     return Err(FlowFault::OutOfOrder);
+                }
+                if own.declared.is_some_and(|declared| own.bytes < declared) {
+                    return Err(FlowFault::ShortBody);
                 }
                 own.ended = true;
             }
@@ -128,5 +144,10 @@ impl StreamFlow {
     /// Both sides ended, or either cancelled.
     pub fn is_over(&self) -> bool {
         self.cancelled || (self.request.ended && self.response.ended)
+    }
+
+    /// Body bytes both sides have sent so far.
+    pub fn body_bytes(&self) -> u64 {
+        self.request.bytes + self.response.bytes
     }
 }

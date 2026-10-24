@@ -100,6 +100,17 @@ toolchain and no working Docker build network.
 
 Data volumes (`server_data`, `internal_service_data`) are never touched.
 
+## Apps and your private network
+
+Whether Citadel apps may reach private addresses (your LAN, a NAS, printers, this
+computer's own services) is not an agent setting. Each member decides it for their own
+account on the agent page, under **Apps**: "Let apps reach my private network from this
+computer". Until they turn it on, every such request is refused; public hosts an app was
+approved for are unaffected. Only apps the workspace approved for `net.host.private` can
+ask at all. There is no `--apps-private-network` flag or
+`INTERNAL_SERVICE_APPS_PRIVATE_NETWORK` variable: no released agent had one, so nothing
+needs adding or removing.
+
 ## Rolling back, or pinning an exact build
 
 ```bash

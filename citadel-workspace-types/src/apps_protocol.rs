@@ -114,6 +114,13 @@ pub enum AppsRequest {
     /// The signed manifest of an install's running release, and of the one it waits on, so the
     /// client verifies the signature itself before it instantiates anything.
     GetRelease { install_id: String },
+    /// The caller's agent asks what `install_id` may reach from the caller's machine (`net.host`).
+    /// `tag` is the agent's own, echoed in the answer so it can match one to its question.
+    HostNetGrant {
+        install_id: String,
+        #[ts(type = "bigint")]
+        tag: u64,
+    },
     /// `AppManage`: the apps audit log, newest first, a page after `before_ms` if given.
     ListAudit {
         #[ts(type = "bigint | null")]

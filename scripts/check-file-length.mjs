@@ -97,7 +97,8 @@ const SKIP = new Map([
   // table, close reasons and the closing groups, generated from lifecycle.rs (docs/app-lifecycle.md).
   // 421: the topic ops and constants and the plane tables (TRANSPORT_CAPABILITY,
   // SERVE_PLANE_CAPABILITY), generated from the Rust constants (docs/plans/p2p-demo-design.md).
-  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 421],
+  // 423: TOPIC_ENVELOPE_TAG and TOPIC_ENVELOPE_OVERHEAD, which the agent caps a topic's group by.
+  ['lib/citadel-apps/sdk/generated/AbiConstants.ts', 423],
 ]);
 
 if (!statSync(SRC, { throwIfNoEntry: false })) {

@@ -12,6 +12,9 @@ use std::net::SocketAddr;
 use std::path::Path;
 
 pub mod handlers;
+mod hosted_kernel;
+#[cfg(test)]
+mod hosted_kernel_tests;
 pub mod kernel;
 pub mod network;
 #[cfg(test)]
@@ -759,6 +762,8 @@ async fn workspace_kernel(
     link_quota: kernel::secure_links::quota::LinkQuotaSourceHandle,
     artifact_fetcher: kernel::apps::fetcher::ArtifactFetcherHandle,
     server_egress: kernel::apps::egress::ServerEgressHandle,
+    storage: kernel::apps::storage_entitlement::StorageEntitlement,
+    usage_meter: kernel::apps::usage_meter::UsageMeterHandle,
 ) -> Result<kernel::async_kernel::AsyncWorkspaceServerKernel<StackedRatchet>, NetworkError> {
     if first_connect_admin {
         citadel_logging::warn!(target: "citadel", "⚠️  WORKSPACE_ALLOW_FIRST_CONNECT_ADMIN is on: the first account to connect becomes the workspace administrator. Intended for local development. On a reachable deployment this hands ownership to whoever registers first.");
@@ -801,6 +806,8 @@ async fn workspace_kernel(
         info!(target: "citadel", "No server egress: apps' net.server calls are answered unavailable.");
     }
     kernel.set_server_egress(server_egress);
+    kernel.set_usage_meter(Some(usage_meter));
+    kernel.set_storage_entitlement(Some(storage));
     Ok(kernel)
 }
 
@@ -814,7 +821,8 @@ async fn workspace_kernel(
 /// node's address and never bound. `ice_servers` is the host's relay-credential minter
 /// (`GetIceServers`), or `None` for a host that has none. `sign_in` is what the host gives
 /// sign-in: the post-quantum settings and the workspace's sign-in settings store. `telemetry` is
-/// the host's support-grant mirror and the callback that receives the built kernel.
+/// the host's support-grant mirror, its TURN and app usage meters, and the callback that
+/// receives the built kernel (`hosted_kernel`).
 /// `link_quota` is the host's secure-link limits (its plan); the host also runs the purge
 /// (`purge_expired_links`), through the kernel `telemetry.kernel_ready` hands it.
 /// `artifact_fetcher` fetches app artifacts by URL (`kernel::apps::fetcher`), or `None` for a
@@ -849,22 +857,17 @@ pub async fn run_server_on<T: PlatformOps>(
             config.bind_addr, e
         ))
     })?;
-    let workspace_structure = resolve_workspace_structure(&config, None)?;
-    let first_connect_admin = resolve_first_connect_admin(None, config.allow_first_connect_admin)?;
-    let mut kernel = workspace_kernel(
+    let kernel = hosted_kernel::hosted_kernel(
         &config,
-        workspace_structure,
-        first_connect_admin,
+        &backend,
         ice_servers,
         sign_in.settings,
+        telemetry,
         link_quota,
         artifact_fetcher,
         server_egress,
     )
     .await?;
-    kernel.set_support_grant_observer(telemetry.support_grants);
-    kernel.set_turn_usage_sink(telemetry.turn_usage);
-    (telemetry.kernel_ready)(kernel.clone());
 
     let node_type =
         NodeType::server(bind_address).map_err(|e| NetworkError::generic(e.to_string()))?;
@@ -983,6 +986,9 @@ pub async fn run_server_with_site_verify(
             ),
         )),
         resolve_server_egress(&config),
+        kernel::apps::storage_entitlement::StorageEntitlement::of(&backend_type_for_node_builder),
+        // Counted and logged, never billed: a native server has no plan to bill app usage to.
+        std::sync::Arc::new(kernel::apps::usage_meter::CountingMeter::default()),
     )
     .await?;
     spawn_link_purge(kernel.clone());

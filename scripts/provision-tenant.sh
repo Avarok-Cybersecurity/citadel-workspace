@@ -169,6 +169,14 @@ else
   ORIGINS=""
 fi
 
+# The agent's STUN servers, from the one file every packaged agent starts with
+# (apps/macos-agent/Info.plist, read and shape-checked by scripts/lib/agent-settings.py).
+# Required, not defaulted: the agent refuses to start without exactly three, and deploy.sh
+# refuses an agent deployment whose .env lacks them -- so a tenant written without them
+# could be provisioned and never deployed.
+STUN_SERVERS="$(python3 scripts/lib/agent-settings.py apps/macos-agent/Info.plist get CitadelAgentStunServers)" \
+  || die "could not read the agent's STUN servers from apps/macos-agent/Info.plist"
+
 # The WORKSPACE SERVER binds publicly so each user's own agent can dial in. That
 # is the supported topology and the protocol is E2E encrypted between client and
 # server.
@@ -192,6 +200,7 @@ WORKSPACE_BIND_ADDR=$BIND_ADDR
 INTERNAL_SERVICE_PORT=$AGENT_PORT
 INTERNAL_SERVICE_BIND_HOST=$AGENT_BIND_HOST
 INTERNAL_SERVICE_ALLOWED_ORIGINS=$ORIGINS
+INTERNAL_SERVICE_STUN_SERVERS=$STUN_SERVERS
 IMAGE_TAG=${IMAGE_TAG:-latest}
 EOF
   # The UI's published port must be the one the vhost proxies to: without it

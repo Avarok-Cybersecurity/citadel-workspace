@@ -11,10 +11,12 @@
 //! artifacts by URL.
 //!
 //! The app runtime's server side: `storage` the named backends' namespaces and limits;
-//! `egress` server egress (`net.server`) over the host's `EgressFetcher`, metered for now by an
-//! operator log line per response (the host's `bytes_in` meter is not wired to it yet);
+//! `egress` server egress (`net.server`) over the host's `EgressFetcher`; `usage_meter` the port
+//! egress and relay bytes are reported to (not wired to any plan's billing);
 //! `ihttp_relay` and `ihttp_flow` the internal-HTTP relay's advertisements, streams and flow,
-//! `ihttp_routes` the digest an advertisement names its route table by.
+//! `ihttp_audit` its audit line, `ihttp_routes` the digest an advertisement names its route
+//! table by.
+//! `host_net` what a member's agent may let an install reach from the member's machine.
 //!
 //! No I/O: the request handler (`command_processor::apps`) gathers the facts (permissions,
 //! roles, node views, members) and applies what these decide; the store is
@@ -30,7 +32,9 @@ pub mod facts;
 pub mod fetcher;
 #[cfg(not(target_family = "wasm"))]
 pub mod fetcher_native;
+pub mod host_net;
 pub mod ihttp_adverts;
+pub mod ihttp_audit;
 pub mod ihttp_flow;
 pub mod ihttp_relay;
 pub mod ihttp_relay_end;
@@ -43,7 +47,10 @@ pub mod peer_rules;
 pub mod records;
 pub mod rules;
 pub mod storage;
+pub mod storage_entitlement;
+pub mod storage_write;
 pub mod update;
+pub mod usage_meter;
 
 #[cfg(test)]
 mod artifact_tests;
@@ -53,10 +60,22 @@ mod audience_tests;
 mod effective_tests;
 #[cfg(test)]
 mod egress_in_flight_tests;
+#[cfg(all(test, not(target_family = "wasm")))]
+mod egress_native_tests;
 #[cfg(test)]
 mod egress_tests;
 #[cfg(test)]
 mod ihttp_adverts_tests;
+#[cfg(test)]
+mod ihttp_corpus;
+#[cfg(test)]
+mod ihttp_corpus_cases;
+#[cfg(test)]
+mod ihttp_corpus_tests;
+#[cfg(test)]
+mod ihttp_flow_corpus_tests;
+#[cfg(test)]
+mod ihttp_relay_hardening_tests;
 #[cfg(test)]
 mod ihttp_relay_tests;
 #[cfg(test)]
@@ -73,6 +92,10 @@ mod kernel_call_tests;
 mod kernel_effective_tests;
 #[cfg(test)]
 mod kernel_header_tests;
+#[cfg(test)]
+mod kernel_host_net_grant_tests;
+#[cfg(test)]
+mod kernel_ihttp_hardening_tests;
 #[cfg(test)]
 mod kernel_ihttp_tests;
 #[cfg(test)]
@@ -96,6 +119,8 @@ mod kernel_scope_tests;
 #[cfg(test)]
 mod kernel_session_tests;
 #[cfg(test)]
+mod kernel_storage_hardening_tests;
+#[cfg(test)]
 mod kernel_withdraw_tests;
 #[cfg(test)]
 mod md_header_tests;
@@ -113,6 +138,8 @@ mod runtime_wire_frames;
 mod runtime_wire_relay;
 #[cfg(test)]
 mod storage_tests;
+#[cfg(test)]
+mod storage_write_tests;
 #[cfg(test)]
 mod test_facts;
 #[cfg(test)]

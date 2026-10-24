@@ -5,9 +5,12 @@
 //! makes the name resolve to exactly those, so reqwest never asks DNS again and a second answer
 //! cannot rebind the connection. No redirects (each is decided by the policy, in
 //! `kernel::apps::egress`), no proxy (an environment `HTTPS_PROXY` would send the request
-//! somewhere the policy never saw), no cookie store, https only.
+//! somewhere the policy never saw), no cookie store, https only. The answer's headers are
+//! scrubbed by the policy's `response_header_ok` before anything else sees them.
 
 use super::egress_port::{EgressAnswer, EgressFailure, EgressFetcher, PinnedRequest};
+use citadel_app_net_policy::response_header_ok;
+use reqwest::header::HeaderMap;
 use std::net::IpAddr;
 use std::time::Duration;
 
@@ -15,6 +18,18 @@ use std::time::Duration;
 const RESOLVE_TIMEOUT_MS: u64 = 5_000;
 
 pub struct NativeEgressFetcher;
+
+/// The upstream's headers an app may be shown: printable values, none the policy denies.
+pub(super) fn shown_headers(headers: &HeaderMap) -> Vec<(String, String)> {
+    headers
+        .iter()
+        .filter(|(name, _)| response_header_ok(name.as_str()))
+        .filter_map(|(name, value)| {
+            let value = value.to_str().ok()?;
+            Some((name.as_str().to_string(), value.to_string()))
+        })
+        .collect()
+}
 
 fn failed(why: reqwest::Error) -> EgressFailure {
     if why.is_timeout() {
@@ -63,14 +78,7 @@ impl EgressFetcher for NativeEgressFetcher {
             return Err(EgressFailure::TooLarge);
         }
         let status = response.status().as_u16();
-        let headers = response
-            .headers()
-            .iter()
-            .filter_map(|(name, value)| {
-                let value = value.to_str().ok()?;
-                Some((name.as_str().to_string(), value.to_string()))
-            })
-            .collect();
+        let headers = shown_headers(response.headers());
         let mut body = Vec::new();
         while let Some(chunk) = response.chunk().await.map_err(failed)? {
             if (body.len() + chunk.len()) as u64 > max_body {

@@ -64,7 +64,7 @@ pub(super) async fn update<R: Ratchet + Send + Sync + 'static>(
     if let Ok(AppsResponse::Updated { install }) = &step {
         // Active: the new release runs now (an update waiting on consent keeps the old one).
         if matches!(install.state, InstallState::Active) {
-            end_install_relay(kernel, &install.id);
+            end_install_relay(kernel, &install.id, caller.now);
         }
     }
     finish(step)
@@ -215,7 +215,7 @@ pub(super) async fn consent<R: Ratchet + Send + Sync + 'static>(
         install.granted = granted.clone();
         backend.save_app_install(&install).await?;
         backend.save_app_pending(&install.id, None).await?;
-        end_install_relay(kernel, &install.id);
+        end_install_relay(kernel, &install.id, caller.now);
         if let Some(replaced) = replaced {
             backend
                 .sweep_apps_releases(&[replaced.manifest_sha256], &[replaced.artifact_sha256])

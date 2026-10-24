@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 
 mod app_net;
+mod apps_authority;
 mod log_setup;
 mod notice_token;
 mod shell_menu;
@@ -108,7 +109,38 @@ async fn run() -> Result<(), Box<dyn Error>> {
     }
 
     // Host egress for Citadel apps refuses every page origin this agent serves (app_net.rs).
+    // Whether it reaches a member's private network is that member's own grant, made on the
+    // agent page (citadel-internal-service's kernel/apps/settings.rs), not a flag.
     let app_net = app_net::app_net_config(&origins, opts.bind.port());
+
+    // Backend selection precedence:
+    //   1. INTERNAL_SERVICE_BACKEND / INTERNAL_SERVICE_DATA_DIR env vars
+    //   2. --backend / --data-dir CLI flags
+    //   3. InMemory default
+    //
+    // KEEP IN SYNC WITH `citadel_workspace_server_kernel::select_backend_type`
+    // (citadel-workspace-server-kernel/src/lib.rs:484). Both functions
+    // share the same precedence shape (env > config-or-cli > default)
+    // and the same empty-string-as-unset semantics. Drift between them
+    // means a deployment can end up on a different backend than the
+    // sibling service for the same configuration. The unit tests below
+    // mirror the kernel's backend_select_tests so a divergence loudly
+    // fails CI in both crates.
+    let default_dir = default_data_dir(Path::new(LEGACY_DATA_DIR).is_dir(), dirs2::home_dir())?;
+    let backend_type = select_backend_type(
+        std::env::var("INTERNAL_SERVICE_BACKEND").ok().as_deref(),
+        std::env::var("INTERNAL_SERVICE_DATA_DIR").ok().as_deref(),
+        opts.backend.as_deref(),
+        opts.data_dir.as_deref(),
+        &default_dir,
+    )?;
+
+    // Every required setting has resolved, and nothing is bound yet: an updating agent asks
+    // a staged version this before installing it (citadel-internal-service's
+    // updater/launch_check.rs), so one that would refuse its command is never swapped in.
+    if opts.check_launch {
+        return Ok(());
+    }
 
     // TLS by default. See BUILTIN_TLS_CERT for why the key ships in the binary,
     // and --no-tls for the one case where plain is right.
@@ -136,29 +168,10 @@ async fn run() -> Result<(), Box<dyn Error>> {
     }
     .with_supervisor(AGENT_SUPERVISOR)
     .with_telemetry(telemetry_uplink)
-    .with_app_net(app_net);
-
-    // Backend selection precedence:
-    //   1. INTERNAL_SERVICE_BACKEND / INTERNAL_SERVICE_DATA_DIR env vars
-    //   2. --backend / --data-dir CLI flags
-    //   3. InMemory default
-    //
-    // KEEP IN SYNC WITH `citadel_workspace_server_kernel::select_backend_type`
-    // (citadel-workspace-server-kernel/src/lib.rs:484). Both functions
-    // share the same precedence shape (env > config-or-cli > default)
-    // and the same empty-string-as-unset semantics. Drift between them
-    // means a deployment can end up on a different backend than the
-    // sibling service for the same configuration. The unit tests below
-    // mirror the kernel's backend_select_tests so a divergence loudly
-    // fails CI in both crates.
-    let default_dir = default_data_dir(Path::new(LEGACY_DATA_DIR).is_dir(), dirs2::home_dir())?;
-    let backend_type = select_backend_type(
-        std::env::var("INTERNAL_SERVICE_BACKEND").ok().as_deref(),
-        std::env::var("INTERNAL_SERVICE_DATA_DIR").ok().as_deref(),
-        opts.backend.as_deref(),
-        opts.data_dir.as_deref(),
-        &default_dir,
-    )?;
+    .with_app_net(
+        app_net,
+        std::sync::Arc::new(apps_authority::WorkspaceHostNetAuthority),
+    );
 
     // Initialize the node builder with StackedRatchet, which is a concrete implementation of the Ratchet trait
     let mut node_builder = NodeBuilder::<StackedRatchet>::default();
@@ -225,6 +238,11 @@ struct Options {
     /// UI.
     #[structopt(long)]
     no_tls: bool,
+    /// Resolve every required setting and exit 0, before binding anything; exit non-zero
+    /// with the reason when one does not resolve. What an updating agent asks of a staged
+    /// version with its own command.
+    #[structopt(long)]
+    check_launch: bool,
 }
 
 /// The certificate the agent serves, and the only one.
