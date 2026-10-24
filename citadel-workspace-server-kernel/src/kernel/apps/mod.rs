@@ -16,6 +16,7 @@
 //! `ihttp_relay` and `ihttp_flow` the internal-HTTP relay's advertisements, streams and flow,
 //! `ihttp_audit` its audit line, `ihttp_routes` the digest an advertisement names its route
 //! table by.
+//! `host_net` what a member's agent may let an install reach from the member's machine.
 //!
 //! No I/O: the request handler (`command_processor::apps`) gathers the facts (permissions,
 //! roles, node views, members) and applies what these decide; the store is
@@ -31,6 +32,7 @@ pub mod facts;
 pub mod fetcher;
 #[cfg(not(target_family = "wasm"))]
 pub mod fetcher_native;
+pub mod host_net;
 pub mod ihttp_adverts;
 pub mod ihttp_audit;
 pub mod ihttp_flow;
@@ -90,6 +92,8 @@ mod kernel_call_tests;
 mod kernel_effective_tests;
 #[cfg(test)]
 mod kernel_header_tests;
+#[cfg(test)]
+mod kernel_host_net_grant_tests;
 #[cfg(test)]
 mod kernel_ihttp_hardening_tests;
 #[cfg(test)]

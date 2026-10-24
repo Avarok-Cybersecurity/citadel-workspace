@@ -37,6 +37,7 @@ export type { EntityTypeConfig } from './generated/EntityTypeConfig.js';
 export type { GrantDetails } from './generated/GrantDetails.js';
 export type { GroupMessage } from './generated/GroupMessage.js';
 export type { GroupMessageType } from './generated/GroupMessageType.js';
+export type { HostNetGrant } from './generated/HostNetGrant.js';
 export type { IhttpAddress } from './generated/IhttpAddress.js';
 export type { IhttpFrom } from './generated/IhttpFrom.js';
 export type { InstallScope } from './generated/InstallScope.js';
