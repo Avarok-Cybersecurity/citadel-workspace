@@ -197,23 +197,15 @@ if [[ "$origins" == *"*"* ]]; then
     echo "  visits can drive this agent. This is for local experiments, not deployments."
 fi
 
-# The agent's two other required settings, on the same reasoning and only when the agent is
-# deployed. The binary refuses to start without either, but only once its new container is
-# up; caught here, the deploy stops before anything is pulled or restarted, naming the key.
+# The agent's other required setting, on the same reasoning and only when the agent is
+# deployed. The binary refuses to start without it, but only once its new container is up;
+# caught here, the deploy stops before anything is pulled or restarted, naming the key.
 if declares_service internal-service; then
     stun_servers=$(deploy_setting INTERNAL_SERVICE_STUN_SERVERS)
     if [[ -z "$stun_servers" ]]; then
         echo "ERROR: INTERNAL_SERVICE_STUN_SERVERS is unset or empty."
         echo "  Set it to exactly three host:port STUN servers, e.g. the value in .env.example:"
         echo "    INTERNAL_SERVICE_STUN_SERVERS=stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302"
-        exit 1
-    fi
-    private_network=$(deploy_setting INTERNAL_SERVICE_APPS_PRIVATE_NETWORK)
-    if [[ "$private_network" != "true" && "$private_network" != "false" ]]; then
-        echo "ERROR: INTERNAL_SERVICE_APPS_PRIVATE_NETWORK is [${private_network}]; it must be true or false."
-        echo "  It is apps.private_network: whether Citadel apps approved for net.host.private may"
-        echo "  reach private addresses through the agent. Unless you mean to allow that:"
-        echo "    INTERNAL_SERVICE_APPS_PRIVATE_NETWORK=false"
         exit 1
     fi
 fi

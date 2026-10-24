@@ -9,8 +9,6 @@ struct AgentSettings {
     let dataDirectory: URL
     /// Exactly three `host:port` STUN servers, as the agent's --stun-servers takes them.
     let stunServers: String
-    /// `apps.private_network`, exactly `true` or `false`, as --apps-private-network takes it.
-    let appsPrivateNetwork: String
 
     init(bundle: Bundle) throws {
         func string(_ key: String) throws -> String {
@@ -35,11 +33,6 @@ struct AgentSettings {
         dataDirectory = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(try string("CitadelAgentDataDirectoryName"), isDirectory: true)
         stunServers = try string("CitadelAgentStunServers")
-        let privateNetwork = try string("CitadelAgentAppsPrivateNetwork")
-        guard privateNetwork == "true" || privateNetwork == "false" else {
-            throw SettingsError.invalid("CitadelAgentAppsPrivateNetwork", privateNetwork)
-        }
-        appsPrivateNetwork = privateNetwork
     }
 
     /// The same flags the README gives a terminal user, spelled out rather than left to defaults.
@@ -48,8 +41,7 @@ struct AgentSettings {
          "--backend", "filesystem",
          "--data-dir", dataDirectory.path,
          "--allowed-origins", workspaceURL.absoluteString,
-         "--stun-servers", stunServers,
-         "--apps-private-network", appsPrivateNetwork]
+         "--stun-servers", stunServers]
     }
 }
 

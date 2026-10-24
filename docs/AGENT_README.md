@@ -18,7 +18,7 @@ flags below already set, and starts when you log in. On Windows,
 archive is for terminal use and scripts.
 
 ```bash
-./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302 --apps-private-network false
+./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302
 ```
 
 Then reload Citadel Workspace in your browser.
@@ -40,13 +40,9 @@ Every flag matters:
   public address, which it needs to connect directly to other members. The agent
   refuses to start without them; `INTERNAL_SERVICE_STUN_SERVERS` does the same
   and takes precedence.
-- **`--apps-private-network` is `apps.private_network`**, exactly `true` or
-  `false`: whether Citadel apps you approved for your local network
-  (`net.host.private`) may reach private, loopback and link-local addresses
-  through this agent. `false` refuses every such request, whatever the app or
-  the page asks; public hosts an app was granted are unaffected. There is no
-  default, and the agent refuses to start without it;
-  `INTERNAL_SERVICE_APPS_PRIVATE_NETWORK` does the same and takes precedence.
+- **Apps reach your private network only if you say so,** on the agent page
+  under Apps, for your own account. Until then every app request to a private,
+  loopback or link-local address is refused; public hosts are unaffected.
 - **Self-update stops until the command carries every required flag.** An update
   restarts the agent with the command you started it with; a version that needs a
   flag that command lacks refuses to start, and the previous agent is put back
@@ -90,7 +86,7 @@ shown to `%LOCALAPPDATA%\Citadel Agent\agent.log` (the menu's "Show Log"). Start
 terminal, as below, it prints in that terminal instead.
 
 ```powershell
-.\citadel-agent.exe --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302 --apps-private-network false
+.\citadel-agent.exe --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302
 ```
 
 ## Checking it is up

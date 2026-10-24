@@ -107,13 +107,10 @@ async fn run() -> Result<(), Box<dyn Error>> {
         );
     }
 
-    // Host egress for Citadel apps refuses every page origin this agent serves (app_net.rs),
-    // and reaches the member's private network only if their configuration says so.
-    let private_network = app_net::resolve_private_network(
-        std::env::var(app_net::PRIVATE_NETWORK_ENV).ok().as_deref(),
-        opts.apps_private_network.as_deref(),
-    )?;
-    let app_net = app_net::app_net_config(&origins, opts.bind.port(), private_network);
+    // Host egress for Citadel apps refuses every page origin this agent serves (app_net.rs).
+    // Whether it reaches a member's private network is that member's own grant, made on the
+    // agent page (citadel-internal-service's kernel/apps/settings.rs), not a flag.
+    let app_net = app_net::app_net_config(&origins, opts.bind.port());
 
     // Backend selection precedence:
     //   1. INTERNAL_SERVICE_BACKEND / INTERNAL_SERVICE_DATA_DIR env vars
@@ -229,11 +226,6 @@ struct Options {
     /// its public address from. Required; INTERNAL_SERVICE_STUN_SERVERS overrides it.
     #[structopt(long)]
     stun_servers: Option<String>,
-    /// `apps.private_network`: `true` lets apps approved for `net.host.private` reach the
-    /// member's LAN through this agent, `false` refuses it. Required, no default;
-    /// INTERNAL_SERVICE_APPS_PRIVATE_NETWORK overrides it.
-    #[structopt(long)]
-    apps_private_network: Option<String>,
     /// Serve plain `ws://` instead of `wss://`.
     ///
     /// Only correct when the page is itself on loopback and reaches the agent

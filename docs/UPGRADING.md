@@ -100,36 +100,16 @@ toolchain and no working Docker build network.
 
 Data volumes (`server_data`, `internal_service_data`) are never touched.
 
-## Agent 0.10 → 0.11: `apps.private_network`
+## Apps and your private network
 
-From 0.11 the agent requires `apps.private_network`: whether Citadel apps a member
-approved for `net.host.private` may reach private addresses through it. It has no
-default, so an agent started without it refuses to start. What that means depends on
-how the agent was installed:
-
-- **One-click installs carry it.** The Mac app, the `.deb`, the AppImage and the MSI
-  ship their launcher with the update, and the launcher passes the setting. Nothing
-  to do.
-- **A terminal or tarball agent must have the flag added BEFORE it updates itself.**
-  An agent that updates itself restarts with the command it was started with. If that
-  command has no `--apps-private-network`, the new version stops at once with:
-
-  ```
-  Error: "apps.private_network is not configured. Pass --apps-private-network false (or set INTERNAL_SERVICE_APPS_PRIVATE_NETWORK=false); `true` lets apps the member approved for net.host.private reach their LAN through this agent."
-  ```
-
-  The updater's watchdog then puts the previous agent back and starts it again, so you
-  keep a working agent, and it marks that version as failed so it is not installed
-  automatically again. Self-update stays blocked until you add
-  `--apps-private-network false` (or `true`) to the command you start the agent with,
-  or set `INTERNAL_SERVICE_APPS_PRIVATE_NETWORK` in its environment. Once the flag is
-  there, install the update from the app's update prompt.
-  `citadel-workspace-internal-service/tests/update_relaunch_keeps_a_working_agent.rs`
-  runs this path against the real watchdog.
-- **Self-hosted deployments add it to `.env`:**
-  `INTERNAL_SERVICE_APPS_PRIVATE_NETWORK=false`. `deploy.sh` refuses to deploy the
-  `internal-service` without it (or without `INTERNAL_SERVICE_STUN_SERVERS`) before it
-  pulls or restarts anything. A server-only tenant runs no agent and is not asked.
+Whether Citadel apps may reach private addresses (your LAN, a NAS, printers, this
+computer's own services) is not an agent setting. Each member decides it for their own
+account on the agent page, under **Apps**: "Let apps reach my private network from this
+computer". Until they turn it on, every such request is refused; public hosts an app was
+approved for are unaffected. Only apps the workspace approved for `net.host.private` can
+ask at all. There is no `--apps-private-network` flag or
+`INTERNAL_SERVICE_APPS_PRIVATE_NETWORK` variable: no released agent had one, so nothing
+needs adding or removing.
 
 ## Rolling back, or pinning an exact build
 

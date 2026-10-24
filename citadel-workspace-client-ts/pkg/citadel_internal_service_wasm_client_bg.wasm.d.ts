@@ -1,7 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
-export const verify_app_signature: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => number;
 export const close_connection: () => any;
 export const ensure_messenger_open: (a: number, b: number) => any;
 export const get_version: () => [number, number];
@@ -14,6 +13,7 @@ export const restart: (a: number, b: number) => any;
 export const send_direct_to_internal_service: (a: any) => any;
 export const send_media_frame: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number];
 export const send_p2p_message_reliable: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => any;
+export const verify_app_signature: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => number;
 export const wasm_bindgen_1030a4812425f079___closure__destroy___dyn_core_608f92abc48d28da___ops__function__FnMut_____Output________1_: (a: number, b: number) => void;
 export const wasm_bindgen_1030a4812425f079___closure__destroy___dyn_core_608f92abc48d28da___ops__function__FnMut__web_sys_5240f01e7b63b400___features__gen_CloseEvent__CloseEvent____Output_______: (a: number, b: number) => void;
 export const wasm_bindgen_1030a4812425f079___closure__destroy___dyn_core_608f92abc48d28da___ops__function__FnMut__web_sys_5240f01e7b63b400___features__gen_MessageEvent__MessageEvent____Output_______: (a: number, b: number) => void;

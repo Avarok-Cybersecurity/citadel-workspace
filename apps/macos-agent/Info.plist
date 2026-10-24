@@ -44,9 +44,5 @@
 	<string>.citadel-agent</string>
 	<key>CitadelAgentStunServers</key>
 	<string>stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302</string>
-	<!-- apps.private_network: whether apps approved for net.host.private may reach this
-	     machine's LAN through the agent. Off as shipped; the member turns it on. -->
-	<key>CitadelAgentAppsPrivateNetwork</key>
-	<string>false</string>
 </dict>
 </plist>

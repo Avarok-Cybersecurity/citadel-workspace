@@ -34,7 +34,6 @@ env:
   INTERNAL_SERVICE_ALLOWED_ORIGINS: "http://localhost:5291,http://127.0.0.1:5291"
   # Required like the allowlist: the agent will not start without its three STUN servers.
   INTERNAL_SERVICE_STUN_SERVERS: "stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302"
-  INTERNAL_SERVICE_APPS_PRIVATE_NETWORK: "false"
 
 jobs:
   # Jobs whose runs-on is the long `vars.CITADEL_MAC_RUNNER` expression may run on

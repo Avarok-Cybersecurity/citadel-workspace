@@ -86,7 +86,6 @@ runs:
           -d Icon="$(cygpath -w "$PWD/assets/brand/app.ico")" \
           -d Bind="$(s CitadelAgentBind)" -d Origin="$(s CitadelWorkspaceOrigin)" \
           -d Stun="$(s CitadelAgentStunServers)" -d DataDirName="$(s CitadelAgentDataDirectoryName)" \
-          -d AppsPrivateNetwork="$(s CitadelAgentAppsPrivateNetwork)" \
           -o Citadel-Agent-x64.msi
     - name: Sign the MSI (DISABLED -- see above)
       if: inputs.signing == 'enabled'

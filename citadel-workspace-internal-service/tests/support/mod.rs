@@ -11,7 +11,7 @@ pub const STUN_SERVERS: &str =
 
 /// Exactly the arguments 0.10.6's launcher passed (packaging/linux/citadel-agent-launch.in at
 /// agent-v0.10.6), in its order: what a tarball or hand-run agent relaunches with after a
-/// self-update. It has no `--apps-private-network`, because 0.10.6 had no such setting.
+/// self-update.
 pub fn launcher_0_10_6(bind: &str, data_dir: &Path) -> Vec<String> {
     let data_dir = data_dir.to_str().expect("a UTF-8 scratch path").to_string();
     [
@@ -30,9 +30,22 @@ pub fn launcher_0_10_6(bind: &str, data_dir: &Path) -> Vec<String> {
     .to_vec()
 }
 
+/// `args` without `--stun-servers` and its value: a command missing a setting the agent
+/// requires, which it refuses to start without.
+pub fn without_stun(args: Vec<String>) -> Vec<String> {
+    let mut kept = Vec::with_capacity(args.len());
+    let mut args = args.into_iter();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--stun-servers" => drop(args.next()),
+            _ => kept.push(arg),
+        }
+    }
+    kept
+}
+
 /// The settings CI exports for its stack; a test that runs the binary decides them itself.
-const AGENT_ENV: [&str; 3] = [
-    "INTERNAL_SERVICE_APPS_PRIVATE_NETWORK",
+const AGENT_ENV: [&str; 2] = [
     "INTERNAL_SERVICE_ALLOWED_ORIGINS",
     "INTERNAL_SERVICE_STUN_SERVERS",
 ];
@@ -56,14 +69,21 @@ pub const AGENT: &str = env!("CARGO_BIN_EXE_citadel-workspace-internal-service")
 /// Far longer than a refusal or a launch check takes (both come before anything is bound).
 const EXITS_WITHIN: Duration = Duration::from_secs(30);
 
-/// The shipped binary, run with the 0.10.6 launcher's arguments and `extra`, to its exit. One
-/// still running after `EXITS_WITHIN` started an agent: it is killed and the test fails.
-pub fn agent_that_exits(name: &str, extra: &[&str]) -> Output {
+/// The shipped binary, run with the 0.10.6 launcher's arguments (without `--stun-servers`
+/// unless `stun`) and `extra`, to its exit. One still running after `EXITS_WITHIN` started an
+/// agent: it is killed and the test fails.
+pub fn agent_that_exits(name: &str, stun: bool, extra: &[&str]) -> Output {
     let tmp = std::env::temp_dir().join(format!("agent-exits-{}-{name}", std::process::id()));
     std::fs::create_dir_all(&tmp).unwrap();
+    let launcher = launcher_0_10_6("127.0.0.1:0", &tmp.join("data"));
+    let launcher = if stun {
+        launcher
+    } else {
+        without_stun(launcher)
+    };
     let mut command = Command::new(AGENT);
     let mut agent = without_agent_env(&mut command)
-        .args(launcher_0_10_6("127.0.0.1:0", &tmp.join("data")))
+        .args(launcher)
         .args(extra)
         .env("TMPDIR", &tmp)
         .stdout(Stdio::piped())

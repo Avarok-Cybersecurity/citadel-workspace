@@ -89,8 +89,7 @@ const browser = await chromium.launch({ args: RESOLVER ? [`--host-resolver-rules
     console.error('Start the agent for this origin, then run this again:');
     console.error('  ./citadel-agent --bind 127.0.0.1:12345 --backend filesystem \\');
     console.error(`      --allowed-origins ${ORIGIN} \\`);
-    console.error('      --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302 \\');
-    console.error('      --apps-private-network false');
+    console.error('      --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302');
     await browser.close();
     process.exit(2);
   }

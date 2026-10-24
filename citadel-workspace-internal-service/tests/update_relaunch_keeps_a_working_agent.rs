@@ -1,13 +1,12 @@
-//! A tarball or hand-run agent updating itself into a version that requires
-//! `apps.private_network` relaunches with its old arguments, which do not carry it. The new
-//! version refuses to start; the real watchdog (citadel-internal-service's updater/watchdog.rs)
-//! must then put the old agent back and leave it answering. The member keeps a working agent,
-//! and their self-update stays blocked until they add the flag (docs/UPGRADING.md).
+//! An agent updating itself into a version that refuses the command it relaunches with (here,
+//! one without the STUN servers it requires) must not be left dead: the new version refuses to
+//! start, and the real watchdog (citadel-internal-service's updater/watchdog.rs) must put the
+//! old agent back and leave it answering.
 //!
 //! The binary under test plays three parts: the watchdog (started with its plan in
 //! `CITADEL_UPDATE_WATCHDOG`, as swap.rs starts it), the new version (`target`, run with the
-//! arguments given), and the old one (`backup`, run with `--apps-private-network false`
-//! appended: an agent that starts with the 0.10.6 arguments, as 0.10.x did).
+//! arguments given), and the old one (`backup`, run with `--stun-servers` appended: an agent
+//! that starts with the arguments given, as the old version did).
 #![cfg(all(unix, feature = "self-update"))]
 
 mod support;
@@ -94,9 +93,9 @@ struct Run {
     stderr: String,
 }
 
-/// The watchdog, run to its end on a swap whose new version is started with `extra` after the
-/// 0.10.6 launcher's arguments.
-fn update_relaunch(name: &str, extra: &[&str]) -> Run {
+/// The watchdog, run to its end on a swap whose new version is started with the 0.10.6
+/// launcher's arguments, without `--stun-servers` unless `stun`.
+fn update_relaunch(name: &str, stun: bool) -> Run {
     let dir = std::env::temp_dir().join(format!("agent-relaunch-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("home")).unwrap();
@@ -107,11 +106,15 @@ fn update_relaunch(name: &str, extra: &[&str]) -> Run {
     let backup_body = wrapper(
         &backup,
         &dir.join("backup.pid"),
-        " --apps-private-network false",
+        &format!(" --stun-servers {}", support::STUN_SERVERS),
     );
     let health: SocketAddr = format!("127.0.0.1:{}", free_port()).parse().unwrap();
-    let mut args = support::launcher_0_10_6(&health.to_string(), &dir.join("data"));
-    args.extend(extra.iter().map(|a| a.to_string()));
+    let launcher = support::launcher_0_10_6(&health.to_string(), &dir.join("data"));
+    let args = if stun {
+        launcher
+    } else {
+        support::without_stun(launcher)
+    };
     let plan = WatchPlan {
         parent_pid: gone_pid(),
         target,
@@ -148,14 +151,11 @@ fn update_relaunch(name: &str, extra: &[&str]) -> Run {
 }
 
 #[test]
-fn an_update_relaunched_without_the_flag_is_rolled_back_to_an_agent_that_answers() {
-    let run = update_relaunch("without-flag", &[]);
+fn an_update_relaunched_without_a_required_setting_is_rolled_back_to_an_agent_that_answers() {
+    let run = update_relaunch("without-stun", false);
     let why = &run.stderr;
     assert_eq!(run.exit, Some(1), "the watchdog rolled back: {why}");
-    assert!(
-        why.contains("apps.private_network is not configured"),
-        "{why}"
-    );
+    assert!(why.contains("no STUN servers configured"), "{why}");
     assert!(
         why.contains(&format!("rolling back {VERSION}: it exited")),
         "{why}"
@@ -181,9 +181,9 @@ fn an_update_relaunched_without_the_flag_is_rolled_back_to_an_agent_that_answers
 }
 
 #[test]
-fn the_same_update_relaunched_with_the_flag_is_kept() {
-    // The control: the refusal above is the missing flag's, not the swap's or the harness's.
-    let run = update_relaunch("with-flag", &["--apps-private-network", "false"]);
+fn the_same_update_relaunched_with_the_setting_is_kept() {
+    // The control: the refusal above is the missing setting's, not the swap's or the harness's.
+    let run = update_relaunch("with-stun", true);
     let why = &run.stderr;
     assert_eq!(run.exit, Some(0), "the watchdog kept the new agent: {why}");
     assert!(

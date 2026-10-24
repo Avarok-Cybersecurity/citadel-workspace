@@ -115,11 +115,6 @@ commas, that the agent learns its public address from for peer-to-peer connectio
 `.env.example`). Three, because the agent classifies its NAT by comparing three answers. The
 agent exits at startup without it rather than falling back to a list nobody chose.
 
-`INTERNAL_SERVICE_APPS_PRIVATE_NETWORK`. Exactly `true` or `false` (`apps.private_network`):
-whether Citadel apps approved for `net.host.private` may reach private, loopback and
-link-local addresses through the agent. `false` (the value in `.env.example`) refuses all of
-them whatever a page asks. The agent exits at startup without it.
-
 `LOOPBACK_AGENT_ORIGIN` — required by `./deploy.sh` whenever the deployment
 serves the UI (a server-only tenant does not). A publicly served UI has no
 agent of its own: each visitor's page dials the agent on the visitor's own
