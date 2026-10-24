@@ -1,5 +1,7 @@
-//! What the app holds itself to, which its manifest declares: the host clamps to the manifest,
-//! and a test here keeps these equal to `manifest.json`, so the two cannot drift apart.
+//! What the app holds itself to, which its manifest declares. The host holds it to some of these
+//! too (a P2P response to `max_response_bytes`, live P2P calls to `max_fanout_concurrency`, topic
+//! bodies and rate to `limits.topics`); the fan-out's bytes and time are the app's own (the SDK's
+//! fan-out plan). A test here keeps these equal to `manifest.json`, so the two cannot drift apart.
 
 /// `limits.p2p`.
 pub const MAX_FANOUT_CONCURRENCY: u32 = 8;
