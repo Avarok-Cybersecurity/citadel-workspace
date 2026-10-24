@@ -150,17 +150,30 @@ fi
 # first, then .env. Reading only the file rejected a correctly-configured deploy
 # that exports the value in the shell — which is exactly what
 # scripts/test-deploy-services.sh does, and how this check first failed.
-origins="${INTERNAL_SERVICE_ALLOWED_ORIGINS:-}"
-if [[ -z "$origins" ]]; then
-    # `|| true`: with pipefail, a .env that simply lacks this key makes grep exit 1, the
-    # pipeline exit 1, and `set -e` kill the deploy right here -- after the banner, with
-    # no message at all. A server-only tenant has every reason to omit the key. Empty is
-    # handled two lines down; absent must mean empty, not "abort silently".
-    origins=$(grep -E '^[[:space:]]*INTERNAL_SERVICE_ALLOWED_ORIGINS=' .env | tail -n1 | cut -d= -f2- || true)
-fi
-origins="${origins%$'\r'}"
-origins="${origins#"${origins%%[![:space:]]*}"}"
-origins="${origins%"${origins##*[![:space:]]}"}"
+# A deployment setting the way compose resolves `${VAR}`: the environment first, then .env,
+# trimmed of a CR and surrounding whitespace. Every required setting below is read through
+# this, so none of them can be read differently from the others.
+deploy_setting() { # <NAME>
+    local value
+    value=$(printenv "$1" || true)
+    if [[ -z "$value" ]]; then
+        # `|| true`: with pipefail, a .env that simply lacks this key makes grep exit 1, the
+        # pipeline exit 1, and `set -e` kill the deploy right here -- after the banner, with
+        # no message at all. A server-only tenant has every reason to omit the key. Empty is
+        # handled by the caller; absent must mean empty, not "abort silently".
+        value=$(grep -E "^[[:space:]]*$1=" .env | tail -n1 | cut -d= -f2- || true)
+    fi
+    value="${value%$'\r'}"
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    printf '%s' "$value"
+}
+# Whether the compose file declares <service>: asked of the file, so a guard cannot disagree
+# with what gets deployed.
+declares_service() { # <service>
+    docker compose -f "$COMPOSE_FILE" config --services 2>/dev/null | grep -qx "$1"
+}
+origins=$(deploy_setting INTERNAL_SERVICE_ALLOWED_ORIGINS)
 # ...but only when this deployment actually RUNS the internal service. A
 # server-only tenant's compose file declares just `server`: the agent is not
 # deployed at all, which is the whole point of that topology -- each user runs
@@ -172,7 +185,7 @@ origins="${origins%"${origins##*[![:space:]]}"}"
 # what gets deployed. `--services` is a metadata read; the fuller selection via
 # select-deploy-services.sh happens later and is the one source of truth for
 # pull/verify/restart.
-if [[ -z "$origins" ]] && docker compose -f "$COMPOSE_FILE" config --services 2>/dev/null | grep -qx 'internal-service'; then
+if [[ -z "$origins" ]] && declares_service internal-service; then
     echo "ERROR: INTERNAL_SERVICE_ALLOWED_ORIGINS is unset or empty."
     echo "  Set it to the origin(s) that may drive the internal service, e.g.:"
     echo "    INTERNAL_SERVICE_ALLOWED_ORIGINS=https://yourdomain.com"
@@ -182,6 +195,27 @@ fi
 if [[ "$origins" == *"*"* ]]; then
     echo "WARNING: INTERNAL_SERVICE_ALLOWED_ORIGINS contains '*'. Any page the user"
     echo "  visits can drive this agent. This is for local experiments, not deployments."
+fi
+
+# The agent's two other required settings, on the same reasoning and only when the agent is
+# deployed. The binary refuses to start without either, but only once its new container is
+# up; caught here, the deploy stops before anything is pulled or restarted, naming the key.
+if declares_service internal-service; then
+    stun_servers=$(deploy_setting INTERNAL_SERVICE_STUN_SERVERS)
+    if [[ -z "$stun_servers" ]]; then
+        echo "ERROR: INTERNAL_SERVICE_STUN_SERVERS is unset or empty."
+        echo "  Set it to exactly three host:port STUN servers, e.g. the value in .env.example:"
+        echo "    INTERNAL_SERVICE_STUN_SERVERS=stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302"
+        exit 1
+    fi
+    private_network=$(deploy_setting INTERNAL_SERVICE_APPS_PRIVATE_NETWORK)
+    if [[ "$private_network" != "true" && "$private_network" != "false" ]]; then
+        echo "ERROR: INTERNAL_SERVICE_APPS_PRIVATE_NETWORK is [${private_network}]; it must be true or false."
+        echo "  It is apps.private_network: whether Citadel apps approved for net.host.private may"
+        echo "  reach private addresses through the agent. Unless you mean to allow that:"
+        echo "    INTERNAL_SERVICE_APPS_PRIVATE_NETWORK=false"
+        exit 1
+    fi
 fi
 
 # The hosted UI's one off-origin socket, on exactly the same reasoning.
@@ -196,16 +230,8 @@ fi
 # Asked of the compose file, like the check above, so it cannot disagree with
 # what is actually deployed: a server-only tenant declares no `ui` and is not
 # interrogated about one.
-loopback_origin="${LOOPBACK_AGENT_ORIGIN:-}"
-if [[ -z "$loopback_origin" ]]; then
-    # `|| true` for the same reason as above: a .env without the key must mean
-    # empty, not "abort with no message".
-    loopback_origin=$(grep -E '^[[:space:]]*LOOPBACK_AGENT_ORIGIN=' .env | tail -n1 | cut -d= -f2- || true)
-fi
-loopback_origin="${loopback_origin%$'\r'}"
-loopback_origin="${loopback_origin#"${loopback_origin%%[![:space:]]*}"}"
-loopback_origin="${loopback_origin%"${loopback_origin##*[![:space:]]}"}"
-if [[ -z "$loopback_origin" ]] && docker compose -f "$COMPOSE_FILE" config --services 2>/dev/null | grep -qx 'ui'; then
+loopback_origin=$(deploy_setting LOOPBACK_AGENT_ORIGIN)
+if [[ -z "$loopback_origin" ]] && declares_service ui; then
     echo "ERROR: LOOPBACK_AGENT_ORIGIN is unset or empty, and this deployment serves the UI."
     echo "  The page would ship an empty agent origin and a Content-Security-Policy"
     echo "  that forbids the agent, so every visitor gets a page that loads and cannot"
