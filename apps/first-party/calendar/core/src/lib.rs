@@ -17,6 +17,7 @@ pub mod ics_props;
 pub mod ics_text;
 pub mod model;
 pub mod model_booking;
+pub mod nav;
 pub mod propagation;
 pub mod refusal;
 pub mod rrule;
@@ -34,6 +35,8 @@ mod codec_tests;
 mod hosts_tests;
 #[cfg(test)]
 mod ics_tests;
+#[cfg(test)]
+mod nav_tests;
 #[cfg(test)]
 mod propagation_tests;
 #[cfg(test)]

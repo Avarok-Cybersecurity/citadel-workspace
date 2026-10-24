@@ -7,6 +7,7 @@
 //! Values cross in the shapes of calendar-core's TypeScript bindings (`values`). A refusal is
 //! thrown as the core's `Refusal`.
 
+mod nav;
 mod offsets;
 mod values;
 
