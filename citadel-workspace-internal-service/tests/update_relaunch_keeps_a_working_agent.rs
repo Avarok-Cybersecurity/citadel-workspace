@@ -18,8 +18,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+use support::AGENT;
 
-const AGENT: &str = env!("CARGO_BIN_EXE_citadel-workspace-internal-service");
 /// What the plan names as the version being installed: the binary under test's own.
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The watchdog's own bound for a new agent to answer (`HEALTHY_WITHIN`), and so for the
@@ -160,9 +160,12 @@ fn an_update_relaunched_without_the_flag_is_rolled_back_to_an_agent_that_answers
         why.contains(&format!("rolling back {VERSION}: it exited")),
         "{why}"
     );
-    assert!(
-        run.plan.failed_marker.exists(),
-        "{VERSION} is not retried automatically"
+    assert_eq!(
+        std::fs::read_to_string(&run.plan.failed_marker)
+            .ok()
+            .as_deref(),
+        Some("it exited"),
+        "{VERSION} is not retried automatically, and the agent put back can say why"
     );
     assert_eq!(
         std::fs::read_to_string(&run.plan.target).unwrap(),

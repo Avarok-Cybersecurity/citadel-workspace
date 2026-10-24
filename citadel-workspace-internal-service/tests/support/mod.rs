@@ -2,7 +2,8 @@
 #![allow(dead_code)]
 
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
+use std::time::{Duration, Instant};
 
 /// The STUN servers `.env.example` ships.
 pub const STUN_SERVERS: &str =
@@ -36,7 +37,50 @@ const AGENT_ENV: [&str; 3] = [
     "INTERNAL_SERVICE_STUN_SERVERS",
 ];
 
+/// This test process without any of `AGENT_ENV`, for a test whose agent production code
+/// starts with this process's environment, as a relaunch does. Only for a test binary none of
+/// whose tests read them.
+pub fn clear_agent_env_of_this_process() {
+    for name in AGENT_ENV {
+        std::env::remove_var(name);
+    }
+}
+
 /// `command` without any of `AGENT_ENV`.
 pub fn without_agent_env(command: &mut Command) -> &mut Command {
     AGENT_ENV.iter().fold(command, |c, name| c.env_remove(name))
+}
+
+pub const AGENT: &str = env!("CARGO_BIN_EXE_citadel-workspace-internal-service");
+
+/// Far longer than a refusal or a launch check takes (both come before anything is bound).
+const EXITS_WITHIN: Duration = Duration::from_secs(30);
+
+/// The shipped binary, run with the 0.10.6 launcher's arguments and `extra`, to its exit. One
+/// still running after `EXITS_WITHIN` started an agent: it is killed and the test fails.
+pub fn agent_that_exits(name: &str, extra: &[&str]) -> Output {
+    let tmp = std::env::temp_dir().join(format!("agent-exits-{}-{name}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    let mut command = Command::new(AGENT);
+    let mut agent = without_agent_env(&mut command)
+        .args(launcher_0_10_6("127.0.0.1:0", &tmp.join("data")))
+        .args(extra)
+        .env("TMPDIR", &tmp)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("the agent binary runs");
+    let started = Instant::now();
+    while agent.try_wait().expect("the agent's status").is_none() {
+        if started.elapsed() > EXITS_WITHIN {
+            agent.kill().expect("kill the agent");
+            let _ = agent.wait();
+            std::fs::remove_dir_all(&tmp).unwrap();
+            panic!("the agent started and kept running: {extra:?}");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let output = agent.wait_with_output().expect("the agent's output");
+    std::fs::remove_dir_all(&tmp).unwrap();
+    output
 }
