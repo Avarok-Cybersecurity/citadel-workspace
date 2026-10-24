@@ -21,6 +21,8 @@ SHAPES = {
     "CitadelAgentBind": r"127\.0\.0\.1:[0-9]{1,5}",
     "CitadelAgentDataDirectoryName": r"\.?[A-Za-z0-9_-]+",
     "CitadelAgentStunServers": r"[a-z0-9.-]+:[0-9]{1,5}(,[a-z0-9.-]+:[0-9]{1,5}){2}",
+    # apps.private_network: whether apps may reach the LAN through the agent.
+    "CitadelAgentAppsPrivateNetwork": r"true|false",
 }
 
 

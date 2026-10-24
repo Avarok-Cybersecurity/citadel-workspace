@@ -84,7 +84,7 @@ if (-not (Test-Path $lnk)) { Fail "no Start-menu shortcut at $lnk" }
 $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
 if ($shortcut.TargetPath -ne $exe) { Fail "the shortcut targets '$($shortcut.TargetPath)', not $exe" }
 $arguments = $shortcut.Arguments
-foreach ($flag in '--bind', '--backend filesystem', '--data-dir', "--allowed-origins $origin", '--stun-servers') {
+foreach ($flag in '--bind', '--backend filesystem', '--data-dir', "--allowed-origins $origin", '--stun-servers', "--apps-private-network $(Setting 'CitadelAgentAppsPrivateNetwork')") {
   if (-not $arguments.Contains($flag)) { Fail "the shortcut's arguments lack '$flag': $arguments" }
 }
 Start-Process -FilePath $lnk   # as Explorer starts it: ShellExecute on the .lnk

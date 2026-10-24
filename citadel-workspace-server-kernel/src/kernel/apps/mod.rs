@@ -53,10 +53,20 @@ mod audience_tests;
 mod effective_tests;
 #[cfg(test)]
 mod egress_in_flight_tests;
+#[cfg(all(test, not(target_family = "wasm")))]
+mod egress_native_tests;
 #[cfg(test)]
 mod egress_tests;
 #[cfg(test)]
 mod ihttp_adverts_tests;
+#[cfg(test)]
+mod ihttp_corpus;
+#[cfg(test)]
+mod ihttp_corpus_cases;
+#[cfg(test)]
+mod ihttp_corpus_tests;
+#[cfg(test)]
+mod ihttp_flow_corpus_tests;
 #[cfg(test)]
 mod ihttp_relay_tests;
 #[cfg(test)]

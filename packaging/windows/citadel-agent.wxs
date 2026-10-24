@@ -3,9 +3,9 @@
   Citadel-Agent-x64.msi: the Windows one-click install (WiX 5, built by release-agent.yml).
 
     wix build -arch x64 -d Version=X.Y.Z -d AgentExe=path\citadel-agent.exe -d Icon=path\app.ico
-      -d Bind=... -d Origin=... -d Stun=... -d DataDirName=... -o Citadel-Agent-x64.msi citadel-agent.wxs
+      -d Bind=... -d Origin=... -d Stun=... -d AppsPrivateNetwork=... -d DataDirName=... -o Citadel-Agent-x64.msi citadel-agent.wxs
 
-  Bind, Origin, Stun and DataDirName come from apps/macos-agent/Info.plist through
+  Bind, Origin, Stun, AppsPrivateNetwork and DataDirName come from apps/macos-agent/Info.plist through
   scripts/lib/agent-settings.py: the flags the Mac app and the Linux launcher start the agent with.
   Nothing here has a default; an undefined variable fails the build.
 
@@ -30,7 +30,7 @@
 
     <!-- The flags on either side of the data directory, whose form differs by who expands it. -->
     <?define Head = "--bind $(var.Bind) --backend filesystem --data-dir" ?>
-    <?define Tail = "--allowed-origins $(var.Origin) --stun-servers $(var.Stun)" ?>
+    <?define Tail = "--allowed-origins $(var.Origin) --stun-servers $(var.Stun) --apps-private-network $(var.AppsPrivateNetwork)" ?>
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="Citadel Agent" />

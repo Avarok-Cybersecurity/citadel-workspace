@@ -18,12 +18,12 @@ flags below already set, and starts when you log in. On Windows,
 archive is for terminal use and scripts.
 
 ```bash
-./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302
+./citadel-agent --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302 --apps-private-network false
 ```
 
 Then reload Citadel Workspace in your browser.
 
-Both flags matter:
+Every flag matters:
 
 - **`--bind` has no default.** Run the agent with no arguments and it exits with
   a usage error rather than starting. `127.0.0.1:12345` is what the web app
@@ -40,6 +40,17 @@ Both flags matter:
   public address, which it needs to connect directly to other members. The agent
   refuses to start without them; `INTERNAL_SERVICE_STUN_SERVERS` does the same
   and takes precedence.
+- **`--apps-private-network` is `apps.private_network`**, exactly `true` or
+  `false`: whether Citadel apps you approved for your local network
+  (`net.host.private`) may reach private, loopback and link-local addresses
+  through this agent. `false` refuses every such request, whatever the app or
+  the page asks; public hosts an app was granted are unaffected. There is no
+  default, and the agent refuses to start without it;
+  `INTERNAL_SERVICE_APPS_PRIVATE_NETWORK` does the same and takes precedence.
+- **Self-update stops until the command carries every required flag.** An update
+  restarts the agent with the command you started it with; a version that needs a
+  flag that command lacks refuses to start, and the previous agent is put back
+  (docs/UPGRADING.md).
 - **`--backend filesystem` persists your account.** The default backend is
   in-memory, which is right for tests and wrong for you: without this flag your
   account and message history are gone the next time the agent restarts. Data
@@ -79,7 +90,7 @@ shown to `%LOCALAPPDATA%\Citadel Agent\agent.log` (the menu's "Show Log"). Start
 terminal, as below, it prints in that terminal instead.
 
 ```powershell
-.\citadel-agent.exe --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302
+.\citadel-agent.exe --bind 127.0.0.1:12345 --backend filesystem --allowed-origins https://work.avarok.net --stun-servers stun.cloudflare.com:3478,stun1.l.google.com:19302,stun4.l.google.com:19302 --apps-private-network false
 ```
 
 ## Checking it is up
