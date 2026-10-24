@@ -17,9 +17,12 @@
 //!   serves the storage backends and server egress; `AdvertiseService` and `IhttpSend`
 //!   (`apps_ihttp`) relay internal HTTP between members' sessions, and `WithdrawService`
 //!   (`apps_ihttp_end`) ends what an instance served when its app closed.
+//! - A member's agent: `HostNetGrant` (`apps_host_net_grant`) says what an install may reach
+//!   from the member's machine, so the agent does not take the page's word for it.
 //! - `RequestInstall` is copy-link only in this release.
 
 use super::apps_call::call;
+use super::apps_host_net_grant::grant as host_net_grant;
 use super::apps_ihttp::{advertise, send};
 use super::apps_ihttp_end::withdraw;
 use super::apps_install::install;
@@ -188,6 +191,9 @@ async fn respond<R: Ratchet + Send + Sync + 'static>(
             fetch_artifact(kernel, &caller, sha256, *index).await
         }
         AppsRequest::GetRelease { install_id } => get_release(kernel, &caller, install_id).await,
+        AppsRequest::HostNetGrant { install_id, tag } => {
+            host_net_grant(kernel, &caller, install_id, *tag).await
+        }
         AppsRequest::ListAudit { before_ms } => list_audit(kernel, &caller, *before_ms).await,
         AppsRequest::RequestInstall { .. } => refuse(AppsRefusal::InstallRequestsNotOffered),
         AppsRequest::Call {

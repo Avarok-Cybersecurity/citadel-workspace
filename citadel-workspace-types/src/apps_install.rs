@@ -60,6 +60,21 @@ pub struct GrantDetails {
     pub topics: Vec<String>,
 }
 
+/// What the workspace server says one install may reach from one member's machine now. The
+/// member's agent asks for it before every `net.host` fetch it has no fresh answer for, and
+/// takes nothing the page claims beyond it: the page's grant may narrow these hosts, never widen
+/// them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct HostNetGrant {
+    pub app_id: String,
+    /// The install's `net.host` hosts (`GrantDetails::host_network_hosts`).
+    pub hosts: Vec<String>,
+    /// `net.host.private` is effective for this member: granted, and its installer still holds
+    /// `AppInstallAllowPrivateNetwork`.
+    pub private: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct PreviousRelease {

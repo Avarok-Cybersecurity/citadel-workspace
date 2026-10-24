@@ -72,6 +72,7 @@ export const WORKSPACE_BIGINT_FIELDS: ReadonlySet<string> = new Set([
   'since_seq',
   'size_bytes',
   'stored_upto_seq',
+  'tag',
   'time_ms',
   'time_to_connect_ms',
   'timestamp',

@@ -82,6 +82,8 @@ mod apps_call_storage_write;
 pub mod apps_gather;
 /// The kernel's own writes to a document's required-apps header.
 mod apps_header;
+/// `HostNetGrant`: what an install may reach from the member's machine.
+mod apps_host_net_grant;
 /// `AdvertiseService` and `IhttpSend`: internal HTTP relayed between sessions.
 mod apps_ihttp;
 /// `WithdrawService`, an install's relay state ending with its release or a member's access,

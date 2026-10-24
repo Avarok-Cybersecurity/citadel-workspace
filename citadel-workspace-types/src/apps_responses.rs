@@ -4,7 +4,7 @@
 
 use crate::apps::peer::{PeerConsent, PeerDirection, PeerForMe};
 use crate::apps::{Capability, InstallScope};
-use crate::apps_install::{AppInstall, AppsRefusal, ListingSource};
+use crate::apps_install::{AppInstall, AppsRefusal, HostNetGrant, ListingSource};
 use crate::apps_protocol::IhttpFrom;
 use citadel_internal_service_types::plaintext_debug_fmt;
 use custom_debug::Debug;
@@ -99,6 +99,15 @@ pub enum AppsResponse {
         install_id: String,
         current: AppListing,
         waiting_on: Option<AppListing>,
+    },
+    /// The answer to `HostNetGrant`. `None` for every refusal alike: no such install, suspended,
+    /// not reaching the caller, its installer no longer holding `AppInstallAllowHostNetwork`, or
+    /// turned off by the caller for themselves.
+    HostNetGrant {
+        install_id: String,
+        #[ts(type = "bigint")]
+        tag: u64,
+        grant: Option<HostNetGrant>,
     },
     Published {
         entry_id: String,
