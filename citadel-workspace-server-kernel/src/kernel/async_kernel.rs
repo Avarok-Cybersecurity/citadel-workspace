@@ -193,6 +193,9 @@ pub struct AsyncWorkspaceServerKernel<R: Ratchet> {
     server_egress: crate::kernel::apps::egress::ServerEgressHandle,
     /// The internal-HTTP relay's advertisements and streams, shared across clones.
     apps_relay: crate::kernel::apps::ihttp_relay::RelayHandle,
+    /// Where apps' egress and relay bytes are reported: the host's meter, or none, which meters
+    /// none.
+    usage_meter: Option<crate::kernel::apps::usage_meter::UsageMeterHandle>,
 }
 
 /// Ends a connection's relayed streams and advertisements with its attribution.
@@ -210,7 +213,8 @@ impl Drop for SessionRelay {
         if !self.attribution.is_current() {
             return;
         }
-        let closed = self.apps_relay.lock().forget_session(self.cid);
+        let closed =
+            super::command_processor::apps_ihttp_end::end_session_relay(&self.apps_relay, self.cid);
         if closed > 0 {
             info!(target: "citadel", "[APPS] Session {} ended with {closed} relayed stream(s) open", self.cid);
         }
@@ -242,6 +246,7 @@ impl<R: Ratchet> Clone for AsyncWorkspaceServerKernel<R> {
             artifact_fetcher: self.artifact_fetcher.clone(),
             server_egress: self.server_egress.clone(),
             apps_relay: self.apps_relay.clone(),
+            usage_meter: self.usage_meter.clone(),
             // RateLimiter::Clone shares the same Arc<Mutex<HashMap>>,
             // which is exactly what we want: every clone of the kernel
             // sees the same per-CID buckets.
@@ -294,6 +299,26 @@ impl<R: Ratchet + Send + Sync + 'static> AsyncWorkspaceServerKernel<R> {
             artifact_fetcher: None,
             server_egress: None,
             apps_relay: Default::default(),
+            usage_meter: None,
+        }
+    }
+
+    /// Set by the server bootstrap: the host's usage meter for apps, or none.
+    pub fn set_usage_meter(
+        &mut self,
+        meter: Option<crate::kernel::apps::usage_meter::UsageMeterHandle>,
+    ) {
+        self.usage_meter = meter;
+    }
+
+    pub(crate) fn meter(
+        &self,
+        cid: Option<u64>,
+        usage: crate::kernel::apps::usage_meter::Usage,
+        bytes: u64,
+    ) {
+        if let Some(meter) = &self.usage_meter {
+            meter.add(cid, usage, bytes);
         }
     }
 

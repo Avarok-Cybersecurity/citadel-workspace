@@ -82,8 +82,11 @@ pub mod apps_gather;
 mod apps_header;
 /// `AdvertiseService` and `IhttpSend`: internal HTTP relayed between sessions.
 mod apps_ihttp;
-/// `WithdrawService`, and an install's relay state ending with its release.
-mod apps_ihttp_end;
+/// `WithdrawService`, an install's relay state ending with its release or a member's access,
+/// and what every relay request settles: audit lines and timed-out streams' cancels.
+pub(crate) mod apps_ihttp_end;
+/// The checks before a relayed stream opens.
+mod apps_ihttp_open;
 /// Which install an internal-HTTP request is for.
 mod apps_ihttp_target;
 /// `Install`.

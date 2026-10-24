@@ -8,6 +8,11 @@ use super::ihttp_relay_types::{Endpoint, Forward, RelayFault};
 use citadel_ihttp_types::IhttpFrameKind;
 
 const NOW: u64 = 1_000_000;
+
+/// A frame's destination as every test here names it: wherever its stream goes.
+fn any(_: &Endpoint) -> bool {
+    true
+}
 const UNTIL: u64 = NOW + 60_000;
 
 fn end(cid: u64, user: &str, install: &str) -> Endpoint {
@@ -56,15 +61,17 @@ fn one_instance_withdrawing_leaves_a_sibling_serving_and_its_streams_open() {
         .advertise("i1", 2, "bob", "tab-b", UNTIL, NOW)
         .unwrap();
     let served = call(&mut relay, "c1", 1);
-    assert_eq!(relay.withdraw("i1", 2, "tab-a"), Ended::default());
+    assert_eq!(relay.withdraw("i1", 2, "tab-a", NOW), Ended::default());
     assert_eq!(relay.host("i1", None, NOW), Some((2, "bob".into())));
-    assert!(relay.from_server(2, "i1", served, &credit(), NOW).is_ok());
+    assert!(relay
+        .from_server(2, "i1", served, &credit(), any, NOW)
+        .is_ok());
     // Control: the last instance takes the advertisement and the stream with it.
-    let ended = relay.withdraw("i1", 2, "tab-b");
+    let ended = relay.withdraw("i1", 2, "tab-b", NOW);
     assert_eq!(ended.closed, 1);
     assert_eq!(relay.host("i1", None, NOW), None);
     assert_eq!(
-        relay.from_server(2, "i1", served, &credit(), NOW),
+        relay.from_server(2, "i1", served, &credit(), any, NOW),
         Err(RelayFault::NoStream)
     );
 }
@@ -74,7 +81,7 @@ fn a_withdrawal_tells_each_caller_on_the_id_it_knows() {
     let mut relay = IhttpRelay::default();
     relay.advertise("i1", 2, "bob", "z", UNTIL, NOW).unwrap();
     call(&mut relay, "c1", 7);
-    let ended = relay.withdraw("i1", 2, "z");
+    let ended = relay.withdraw("i1", 2, "z", NOW);
     assert_eq!(
         ended.tell,
         [Forward {
@@ -84,7 +91,7 @@ fn a_withdrawal_tells_each_caller_on_the_id_it_knows() {
         }]
     );
     assert_eq!(
-        relay.from_client(1, "c1", 7, &credit(), NOW),
+        relay.from_client(1, "c1", 7, &credit(), any, NOW),
         Err(RelayFault::NoStream)
     );
 }
@@ -97,9 +104,11 @@ fn a_withdrawal_ends_only_what_the_session_serves_for_that_install() {
         .open(end(1, "alice", "c1"), 3, end(3, "carol", "i1"), None, NOW)
         .unwrap();
     call(&mut relay, "c1", 4);
-    assert_eq!(relay.withdraw("i1", 2, "z").closed, 1);
+    assert_eq!(relay.withdraw("i1", 2, "z", NOW).closed, 1);
     assert!(
-        relay.from_server(3, "i1", other, &credit(), NOW).is_ok(),
+        relay
+            .from_server(3, "i1", other, &credit(), any, NOW)
+            .is_ok(),
         "carol's host still serves her stream"
     );
 }
@@ -129,13 +138,13 @@ fn an_uninstall_ends_every_stream_of_the_install_both_ways_and_its_adverts() {
     relay
         .open(end(1, "alice", "i1"), 2, end(2, "bob", "i1"), None, NOW)
         .unwrap();
-    let ended = relay.forget_install("i1");
+    let ended = relay.forget_install("i1", NOW);
     assert_eq!(ended.closed, 2);
     assert_eq!(ended.tell.len(), 1, "{:?}", ended.tell);
     assert_eq!(ended.tell[0].to, end(1, "alice", "c1"));
     assert_eq!(relay.host("i1", None, NOW), None);
     assert_eq!(
-        relay.from_server(2, "i1", served, &credit(), NOW),
+        relay.from_server(2, "i1", served, &credit(), any, NOW),
         Err(RelayFault::NoStream)
     );
 }
@@ -144,7 +153,7 @@ fn an_uninstall_ends_every_stream_of_the_install_both_ways_and_its_adverts() {
 fn an_uninstalled_caller_is_cancelled_at_the_server() {
     let mut relay = IhttpRelay::default();
     let served = call(&mut relay, "c1", 1);
-    let ended = relay.forget_install("c1");
+    let ended = relay.forget_install("c1", NOW);
     assert_eq!(
         ended.tell,
         [Forward {
@@ -164,6 +173,6 @@ fn expired_instances_lapse_and_take_the_advert_when_none_is_left() {
     relay.advertise("i1", 2, "bob", "long", UNTIL, NOW).unwrap();
     relay.expire(NOW + 1_000);
     assert_eq!(relay.host("i1", None, NOW + 1_000), Some((2, "bob".into())));
-    assert_eq!(relay.withdraw("i1", 2, "long").closed, 0);
+    assert_eq!(relay.withdraw("i1", 2, "long", NOW).closed, 0);
     assert_eq!(relay.host("i1", None, NOW + 1_000), None);
 }

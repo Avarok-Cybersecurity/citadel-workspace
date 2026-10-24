@@ -3,15 +3,22 @@
 //! (uninstall, rollback, an update taking effect). The surviving end of every stream that closed
 //! is sent `Cancel { Closed }` at once, as the relay would forward a cancel, rather than left to
 //! wait out the stream's deadline.
+//!
+//! Every use of the relay goes through `with_relay`, which settles what the relay recorded: an
+//! `[APPS-IHTTP]` audit line per stream opened or closed (`kernel::apps::ihttp_audit`), and
+//! `Cancel { Timeout }` to both ends of every stream whose deadline passed.
 
 use super::apps::{finish, Answer, Caller};
 use super::apps_member::visible_install;
 use crate::kernel::apps::ihttp_adverts::is_instance_name;
-use crate::kernel::apps::ihttp_relay_end::Ended;
+use crate::kernel::apps::ihttp_audit::audit_line;
+use crate::kernel::apps::ihttp_relay::{
+    CloseReason, Forward, IhttpRelay, RelayHandle, RelayRecord,
+};
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::WorkspaceProtocolResponse;
 use citadel_ihttp_types::{CancelReason, IhttpFrame, IhttpFrameKind, IHTTP_VERSION};
-use citadel_logging::warn;
+use citadel_logging::{info, warn};
 use citadel_sdk::prelude::Ratchet;
 use citadel_workspace_types::apps_install::AppsRefusal;
 use citadel_workspace_types::apps_protocol::IhttpFrom;
@@ -30,12 +37,11 @@ pub(super) async fn withdraw<R: Ratchet + Send + Sync + 'static>(
         }
         // An install the caller cannot see is `Unavailable`, as for every other request.
         let (install, _) = visible_install(kernel, caller, install_id).await?;
-        let ended = kernel
-            .apps_relay()
-            .lock()
-            .withdraw(&install.id, cid, instance);
+        let ended = with_relay(kernel, |relay| {
+            relay.withdraw(&install.id, cid, instance, caller.now)
+        });
         let closed_streams = u32::try_from(ended.closed).unwrap_or(u32::MAX);
-        tell_closed(kernel, ended);
+        tell(kernel, ended.tell, CancelReason::Closed);
         Ok(AppsResponse::Withdrawn {
             install_id: install.id,
             closed_streams,
@@ -48,22 +54,73 @@ pub(super) async fn withdraw<R: Ratchet + Send + Sync + 'static>(
 pub(super) fn end_install_relay<R: Ratchet + Send + Sync + 'static>(
     kernel: &AsyncWorkspaceServerKernel<R>,
     install_id: &str,
+    now_ms: u64,
 ) {
-    let ended = kernel.apps_relay().lock().forget_install(install_id);
-    tell_closed(kernel, ended);
+    let ended = with_relay(kernel, |relay| relay.forget_install(install_id, now_ms));
+    tell(kernel, ended.tell, CancelReason::Closed);
 }
 
-fn tell_closed<R: Ratchet + Send + Sync + 'static>(
+/// The session `cid` ended (its connection's relay handle dropped): its advertisements and
+/// streams end, with their audit lines. Nobody can be told from here. Answers how many closed.
+pub(crate) fn end_session_relay(relay: &RelayHandle, cid: u64) -> usize {
+    let (closed, records) = {
+        let mut relay = relay.lock();
+        (relay.forget_session(cid), relay.take_records())
+    };
+    records
+        .iter()
+        .for_each(|record| info!(target: "citadel", "{}", audit_line(record)));
+    closed
+}
+
+/// Runs `use_relay` on the kernel's relay, then settles what it recorded, with the lock released.
+pub(crate) fn with_relay<R: Ratchet + Send + Sync + 'static, T>(
     kernel: &AsyncWorkspaceServerKernel<R>,
-    ended: Ended,
+    use_relay: impl FnOnce(&mut IhttpRelay) -> T,
+) -> T {
+    let (answer, records) = {
+        let mut relay = kernel.apps_relay().lock();
+        let answer = use_relay(&mut relay);
+        (answer, relay.take_records())
+    };
+    settle(kernel, records);
+    answer
+}
+
+fn settle<R: Ratchet + Send + Sync + 'static>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    records: Vec<RelayRecord>,
 ) {
-    for forward in ended.tell {
+    let mut timed_out = Vec::new();
+    for record in records {
+        info!(target: "citadel", "{}", audit_line(&record));
+        if record.closed == Some(CloseReason::Timeout) {
+            timed_out.push(Forward {
+                from: record.server.clone(),
+                to: record.client.clone(),
+                stream: record.client_stream,
+            });
+            timed_out.push(Forward {
+                from: record.client,
+                to: record.server,
+                stream: record.stream,
+            });
+        }
+    }
+    tell(kernel, timed_out, CancelReason::Timeout);
+}
+
+/// Sends each end in `ends` `Cancel { reason }` on the id it knows its stream by.
+fn tell<R: Ratchet + Send + Sync + 'static>(
+    kernel: &AsyncWorkspaceServerKernel<R>,
+    ends: Vec<Forward>,
+    reason: CancelReason,
+) {
+    for forward in ends {
         let cancel = IhttpFrame {
             v: IHTTP_VERSION,
             stream: forward.stream,
-            kind: IhttpFrameKind::Cancel {
-                reason: CancelReason::Closed,
-            },
+            kind: IhttpFrameKind::Cancel { reason },
         };
         let frame = match citadel_ihttp_types::encode(&cancel) {
             Ok(frame) => frame,

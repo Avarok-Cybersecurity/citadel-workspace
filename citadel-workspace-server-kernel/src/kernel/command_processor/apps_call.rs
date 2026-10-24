@@ -18,6 +18,7 @@ use super::apps_call_storage::serve_storage;
 use super::apps_gather::{effective_for, subtree};
 use super::apps_member::visible_install;
 use crate::kernel::apps::facts::authority_node;
+use crate::kernel::apps::usage_meter::Usage;
 use crate::kernel::async_kernel::AsyncWorkspaceServerKernel;
 use crate::WORKSPACE_ROOT_ID;
 use citadel_app_sdk_types::calls::{KvBackend, ServerFetch};
@@ -142,6 +143,11 @@ async fn server_fetch<R: Ratchet + Send + Sync + 'static>(
     let key = (install.id.clone(), caller.user.to_string());
     let hosts = &install.details.server_network_hosts;
     let answer = egress.fetch(&key, hosts, &fetch.request, caller.now).await;
+    if let Ok(response) = &answer {
+        // The bytes came in whether or not the answer is delivered below.
+        let bytes = response.body.0.len() as u64;
+        kernel.meter(caller.cid, Usage::EgressIn, bytes);
+    }
     // A response for an install that ended meanwhile is not delivered to what replaced it.
     let backend = &kernel.domain_operations.backend_tx_manager;
     let now = backend.app_install(&install.id).await?;

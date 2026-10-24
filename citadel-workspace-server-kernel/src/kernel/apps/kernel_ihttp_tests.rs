@@ -61,6 +61,17 @@ async fn a_request_reaches_the_advertising_session_and_the_answer_comes_back() {
     )
     .await;
     assert_eq!(refusal(&forged), Some(&AppsRefusal::Unavailable));
+    // And it changed nothing: the caller's own End is still its first.
+    let own = send(
+        &kernel,
+        "alice",
+        ALICE,
+        &id,
+        user("bob"),
+        frame(1, IhttpFrameKind::End),
+    )
+    .await;
+    assert_eq!(own, AppsResponse::IhttpSent);
 }
 
 #[tokio::test]

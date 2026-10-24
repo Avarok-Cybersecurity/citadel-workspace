@@ -185,9 +185,17 @@ the page going away.
   and a consent.
 - **An egress answer for an install that ended** while its request was out is withheld, with
   `{unavailable: "install_ended"}` (`command_processor/apps_call.rs`).
+- **A stream past its deadline** is closed at the next relay request after the deadline passes,
+  and both ends are sent `Cancel { Timeout }` (`ihttp_relay_end.rs` `expire`, settled in
+  `apps_ihttp_end.rs` `with_relay`). The kernel has no timer of its own, so a relay that nobody
+  uses closes nothing until it is next used; each host's own deadline covers that gap.
+- **Every stream the relay opens or closes** is logged as one `[APPS-IHTTP]` audit line
+  (`kernel/apps/ihttp_audit.rs`), with why it closed: `ended`, `cancel:<reason>`, `timeout`,
+  `closed` or `session`.
 - **Limitation: session end.** When a session ends, its advertisements and streams are dropped
   without telling the callers (`forget_session`, run when the session's relay handle drops). The
-  surviving ends find out at their stream deadline.
+  stream leaves the relay at once, so the kernel never sends its surviving end a timeout; that
+  end finds out at its own host's deadline.
 
 ## Proofs
 
@@ -212,7 +220,8 @@ test went red, and the file was restored to its exact earlier bytes.
 - **Zone runtime:** `runtime/__tests__/a-zone-runs-while-seen-and-closes.test.ts` and
   `zone-close.test.ts`.
 - **Server:** `kernel_withdraw_tests.rs`, `ihttp_adverts_tests.rs`,
-  `kernel_release_change_tests.rs` and `egress_in_flight_tests.rs`.
+  `kernel_release_change_tests.rs`, `egress_in_flight_tests.rs`,
+  `ihttp_relay_hardening_tests.rs` and `kernel_ihttp_hardening_tests.rs`.
 - **Real browser:** `npm run check:app-zone`, lifecycle scenario. It checks:
   - scrolled away, it is suspended: no frame loop and no frames;
   - back in view, it runs;

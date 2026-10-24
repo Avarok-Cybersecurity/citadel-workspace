@@ -801,6 +801,9 @@ async fn workspace_kernel(
         info!(target: "citadel", "No server egress: apps' net.server calls are answered unavailable.");
     }
     kernel.set_server_egress(server_egress);
+    // Counted and logged, never billed: wiring app usage to a plan is the owner's decision.
+    let meter = kernel::apps::usage_meter::CountingMeter::default();
+    kernel.set_usage_meter(Some(std::sync::Arc::new(meter)));
     Ok(kernel)
 }
 

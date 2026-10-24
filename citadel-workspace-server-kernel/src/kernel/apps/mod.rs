@@ -11,10 +11,11 @@
 //! artifacts by URL.
 //!
 //! The app runtime's server side: `storage` the named backends' namespaces and limits;
-//! `egress` server egress (`net.server`) over the host's `EgressFetcher`, metered for now by an
-//! operator log line per response (the host's `bytes_in` meter is not wired to it yet);
+//! `egress` server egress (`net.server`) over the host's `EgressFetcher`; `usage_meter` the port
+//! egress and relay bytes are reported to (not wired to any plan's billing);
 //! `ihttp_relay` and `ihttp_flow` the internal-HTTP relay's advertisements, streams and flow,
-//! `ihttp_routes` the digest an advertisement names its route table by.
+//! `ihttp_audit` its audit line, `ihttp_routes` the digest an advertisement names its route
+//! table by.
 //!
 //! No I/O: the request handler (`command_processor::apps`) gathers the facts (permissions,
 //! roles, node views, members) and applies what these decide; the store is
@@ -31,6 +32,7 @@ pub mod fetcher;
 #[cfg(not(target_family = "wasm"))]
 pub mod fetcher_native;
 pub mod ihttp_adverts;
+pub mod ihttp_audit;
 pub mod ihttp_flow;
 pub mod ihttp_relay;
 pub mod ihttp_relay_end;
@@ -44,6 +46,7 @@ pub mod records;
 pub mod rules;
 pub mod storage;
 pub mod update;
+pub mod usage_meter;
 
 #[cfg(test)]
 mod artifact_tests;
@@ -57,6 +60,8 @@ mod egress_in_flight_tests;
 mod egress_tests;
 #[cfg(test)]
 mod ihttp_adverts_tests;
+#[cfg(test)]
+mod ihttp_relay_hardening_tests;
 #[cfg(test)]
 mod ihttp_relay_tests;
 #[cfg(test)]
@@ -73,6 +78,8 @@ mod kernel_call_tests;
 mod kernel_effective_tests;
 #[cfg(test)]
 mod kernel_header_tests;
+#[cfg(test)]
+mod kernel_ihttp_hardening_tests;
 #[cfg(test)]
 mod kernel_ihttp_tests;
 #[cfg(test)]
