@@ -105,13 +105,10 @@ impl Pool {
         let digest = crate::sha256::sha256(&citadel_app_sdk_types::encode(&record.result));
         let outcome = if verified { "verified" } else { "wrong answer" };
         let line = alloc::format!("job {:x} done in {ms} ms: {outcome}", record.job_id);
-        alloc::vec![
-            Action::Log(line),
-            Action::Publish(PoolMsg::Done {
-                job_id: record.job_id,
-                digest
-            }),
-            Action::Save(record),
-        ]
+        let done = self.publish(PoolMsg::Done {
+            job_id: record.job_id,
+            digest,
+        });
+        alloc::vec![Action::Log(line), done, Action::Save(record)]
     }
 }

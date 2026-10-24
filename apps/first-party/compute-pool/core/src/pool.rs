@@ -133,9 +133,8 @@ impl Pool {
         let mut out = Vec::new();
         self.since_heartbeat = self.since_heartbeat.saturating_add(dt_ms);
         if self.since_heartbeat >= HEARTBEAT_MS {
-            self.since_heartbeat = 0;
             let load = u32::from(self.running.is_some());
-            out.push(Action::Publish(PoolMsg::Heartbeat {
+            out.push(self.publish(PoolMsg::Heartbeat {
                 cores: self.cores,
                 load,
             }));
@@ -176,10 +175,19 @@ impl Pool {
             dispatched_ms: self.now_ms,
             answers: BTreeMap::new(),
         });
-        Some(alloc::vec![Action::Publish(PoolMsg::Announce {
+        Some(alloc::vec![self.publish(PoolMsg::Announce {
             job_id,
             chunks: CHUNKS
         })])
+    }
+
+    /// Every message says this member is there, so each one restarts the heartbeat interval. A
+    /// heartbeat on top of a job's Done and the next job's Announce made three in one second, over
+    /// the topic's two (`TOPIC_MAX_MSGS_PER_S`), and the host refused whichever came third -- an
+    /// Announce nobody then claimed, or a Claim, so the job ran with no workers.
+    fn publish(&mut self, msg: PoolMsg) -> Action {
+        self.since_heartbeat = 0;
+        Action::Publish(msg)
     }
 
     /// Hand the chunks out round-robin to the claimants; with none, this member does them all.
@@ -217,7 +225,7 @@ impl Pool {
         match msg {
             PoolMsg::Heartbeat { cores, load } => (peer.cores, peer.load) = (cores, load),
             PoolMsg::Announce { job_id, .. } => {
-                return alloc::vec![Action::Publish(PoolMsg::Claim { job_id })];
+                return alloc::vec![self.publish(PoolMsg::Claim { job_id })];
             }
             PoolMsg::Claim { job_id } => {
                 if let Some(r) = self.running.as_mut() {

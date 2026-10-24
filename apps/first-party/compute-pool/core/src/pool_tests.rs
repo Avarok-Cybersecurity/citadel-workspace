@@ -59,6 +59,33 @@ fn a_member_heartbeats_on_its_first_tick_and_then_every_interval() {
     assert_eq!(published(&pool.tick(1)), [beat]);
 }
 
+/// Jobs run back to back, as the Compute Pool spec runs them: no second of this member's own
+/// time ever carries more messages than the topic admits, heartbeats included.
+#[test]
+fn back_to_back_jobs_never_publish_over_the_topic_rate() {
+    let mut pool = Pool::new("alice", 4);
+    let mut sent: Vec<u64> = Vec::new();
+    let mut now: u64 = 0;
+    while now < 60_000 {
+        let mut out = pool.tick(16);
+        now += 16;
+        if pool.progress().is_none() {
+            out.extend(pool.run(job()).unwrap());
+        }
+        sent.extend(published(&out).iter().map(|_| now));
+    }
+    let worst = sent
+        .iter()
+        .map(|&t| sent.iter().filter(|&&u| u >= t && u < t + 1000).count())
+        .max()
+        .unwrap();
+    assert!(sent.len() > 40, "jobs ran: {}", sent.len());
+    assert!(
+        worst <= TOPIC_MAX_MSGS_PER_S as usize,
+        "{worst} messages in one second"
+    );
+}
+
 #[test]
 fn an_announcement_is_claimed_and_a_claim_after_the_window_is_ignored() {
     let mut bob = Pool::new("bob", 2);
