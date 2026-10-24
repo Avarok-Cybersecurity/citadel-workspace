@@ -60,6 +60,14 @@ mod egress_tests;
 #[cfg(test)]
 mod ihttp_adverts_tests;
 #[cfg(test)]
+mod ihttp_corpus;
+#[cfg(test)]
+mod ihttp_corpus_cases;
+#[cfg(test)]
+mod ihttp_corpus_tests;
+#[cfg(test)]
+mod ihttp_flow_corpus_tests;
+#[cfg(test)]
 mod ihttp_relay_tests;
 #[cfg(test)]
 mod install_tests;

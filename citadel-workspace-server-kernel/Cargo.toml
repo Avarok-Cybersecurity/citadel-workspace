@@ -89,6 +89,8 @@ common = { path = "./tests/common", package = "citadel-workspace-server-kernel-t
 # The signed support request, verified before the kernel serves it (support_reads_are_signed.rs).
 citadel-support-signature = { path = "../citadel-support-signature" }
 
+# Frames a hostile peer writes without `encode`, for the shared frame corpus (ihttp_corpus.rs).
+ciborium = { version = "0.2.2", default-features = false, features = ["std"] }
 rstest = { workspace = true }
 bincode = { workspace = true }
 libc = "0.2"

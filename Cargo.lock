@@ -1134,6 +1134,7 @@ dependencies = [
  "bincode 2.0.1",
  "cdoc-crdt",
  "chrono",
+ "ciborium",
  "citadel-app-id",
  "citadel-app-net-policy",
  "citadel-app-sdk-types",
