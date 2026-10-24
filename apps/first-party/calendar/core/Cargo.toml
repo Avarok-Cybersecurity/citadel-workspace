@@ -1,0 +1,16 @@
+[package]
+name = "calendar-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+citadel-app-sdk-types.workspace = true
+serde = { version = "1.0.219", default-features = false, features = ["alloc", "derive"] }
+
+[dev-dependencies]
+# The native TimeZonePort the tests use: the IANA database, embedded, so every zone's transitions
+# are checked against the same rules the page's Intl adapter is held to.
+jiff = { version = "0.2.37", default-features = false, features = ["std", "tz-system", "tzdb-bundle-always"] }
+proptest = "1.11.0"
