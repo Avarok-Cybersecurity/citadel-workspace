@@ -9,9 +9,12 @@ const KEEP_PERIODS = 24;
 const FIELDS = [
   "period_end", "bytes_in", "bytes_out", "frames_in", "active_seconds", "peak_connections",
   "relayed_p2p_bytes", "group_fanout_bytes", "turn_bytes", "turn_refused_bytes",
+  "app_egress_bytes", "app_relay_ihttp_bytes",
 ];
 /** Columns added after the table first shipped: an object made before them gains them, at 0. */
-const ADDED = ["relayed_p2p_bytes", "group_fanout_bytes", "turn_bytes", "turn_refused_bytes"];
+const ADDED = [
+  "relayed_p2p_bytes", "group_fanout_bytes", "turn_bytes", "turn_refused_bytes", "app_egress_bytes", "app_relay_ihttp_bytes",
+];
 
 export class UsageTable {
   constructor(sql) {

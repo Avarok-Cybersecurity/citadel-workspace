@@ -111,9 +111,9 @@
     }
   ],
   "metering": {
-    "$comment": "Approved 2026-09-23 (the owner asked for cost passed through plus a margin; docs/plans/tenant-quotas.md). Until the SDK RelayGate exists the metered quantity is every byte a tenant sends INTO its object (bytes_in): each relayed byte arrives once, and control traffic is small beside it. gb_bytes: a billed GB is 10^9 bytes. max_frame_bytes: one WebSocket message larger than this closes the socket (1009), to protect the 128 MB isolate. flush_seconds: how often an object with open sockets writes its counters to its own storage.",
+    "$comment": "Approved 2026-09-23 (the owner asked for cost passed through plus a margin; docs/plans/tenant-quotas.md). relay_quota_fields are the period totals one relay quota adds up (control/meter.mjs relayBytes), the one list of them: every byte a tenant sends INTO its object (bytes_in; until the SDK RelayGate exists each relayed byte arrives once, and control traffic is small beside it), the TURN bytes members' agents report (turn_bytes), and the bodies apps' server egress brings in (app_egress_bytes; approved 2026-10-24, no per-member cap). An iHTTP frame the node relays between apps (app_relay_ihttp_bytes) is already in bytes_in, so it is recorded but never listed here: it would be billed twice. gb_bytes: a billed GB is 10^9 bytes. max_frame_bytes: one WebSocket message larger than this closes the socket (1009), to protect the 128 MB isolate. flush_seconds: how often an object with open sockets writes its counters to its own storage.",
     "status": "approved",
-    "metered_quantity": "bytes_in",
+    "relay_quota_fields": ["bytes_in", "turn_bytes", "app_egress_bytes"],
     "gb_bytes": 1000000000,
     "max_frame_bytes": 4194304,
     "flush_seconds": 60

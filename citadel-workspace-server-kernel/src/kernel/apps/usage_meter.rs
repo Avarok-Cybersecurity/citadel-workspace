@@ -2,9 +2,10 @@
 //! brought in, and frames relayed between sessions as internal HTTP. The kernel reports each
 //! use where it happens; what the host does with it is the host's.
 //!
-//! `CountingMeter` is the one implementation: it keeps a running total per session and kind and
-//! logs each use for the operator. Nothing here bills: wiring a meter to a plan's overage is the
-//! host's, and is not done.
+//! `CountingMeter` is the native server's: it keeps a running total per session and kind and
+//! logs each use for the operator, and bills nothing. A hosted server's host passes its own
+//! (`HostedTelemetry::usage_meter`); the tenant Durable Object's counts each kind into its
+//! billing period (deploy/tenant-worker server-wasm `usage.rs`).
 
 use citadel_logging::info;
 use parking_lot::Mutex;

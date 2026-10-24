@@ -7,6 +7,7 @@
  * Totals are absolute for their period, never deltas, so writing the same snapshot twice (an
  * alarm that runs twice) changes nothing.
  */
+import { METERING } from "./plans.mjs";
 
 const EMPTY = {
   bytes_in: 0, bytes_out: 0, frames_in: 0, active_seconds: 0, peak_connections: 0,
@@ -19,7 +20,17 @@ const EMPTY = {
   // TURN bytes claimed in reports the per-member ceiling refused (turn-cap.mjs): not billed,
   // kept so a member's agent over its ceiling shows in the period's record.
   turn_refused_bytes: 0,
+  // What apps cost (server-wasm usage.rs, control/apps-usage.mjs): the bodies server egress
+  // brought in, which never cross the object's sockets, and the iHTTP frames the node relayed,
+  // which did and are already in bytes_in. Which of them the quota counts is tiers.json's.
+  app_egress_bytes: 0, app_relay_ihttp_bytes: 0,
 };
+
+/** The totals a period's relay quota adds up (tiers.json `metering.relay_quota_fields`). */
+export const RELAY_QUOTA_FIELDS = Object.freeze([...(METERING.relay_quota_fields ?? [])]);
+if (RELAY_QUOTA_FIELDS.length === 0 || new Set(RELAY_QUOTA_FIELDS).size !== RELAY_QUOTA_FIELDS.length || !RELAY_QUOTA_FIELDS.every((f) => Object.hasOwn(EMPTY, f))) {
+  throw new Error(`tiers.json metering.relay_quota_fields names distinct metered totals (${JSON.stringify(METERING.relay_quota_fields)})`);
+}
 
 /** Each split total, and the node counter (server-wasm `TenantServer::traffic`) it grows with. */
 const TRAFFIC = [
@@ -42,15 +53,14 @@ export function trafficGrowth(last, sample) {
   );
 }
 
-/**
- * What a period's relay quota counts: the bytes the tenant's object carried (`bytes_in`) and the
- * TURN bytes members' agents reported (`turn_bytes`), one quota for both.
- */
+/** What a period's relay quota counts: the sum of `RELAY_QUOTA_FIELDS`, one quota for all of them. */
 export function relayBytes(period) {
-  for (const field of ["bytes_in", "turn_bytes"]) {
+  let total = 0;
+  for (const field of RELAY_QUOTA_FIELDS) {
     if (!Number.isSafeInteger(period[field]) || period[field] < 0) throw new Error(`period ${field} is a byte count (${JSON.stringify(period[field])})`);
+    total += period[field];
   }
-  return period.bytes_in + period.turn_bytes;
+  return total;
 }
 
 /** The UTC calendar month holding `nowMs`, as `{start, end}` in seconds. */
@@ -108,6 +118,21 @@ export class Meter {
   turnRefused(bytes) {
     if (!Number.isSafeInteger(bytes) || bytes < 0) throw new Error(`TURN usage is a byte count (${JSON.stringify(bytes)})`);
     this.totals.turn_refused_bytes += bytes;
+  }
+
+  /** `bytes` more of a server egress answer an app's `net.server` call brought in. */
+  appEgress(bytes) {
+    this.#app("app_egress_bytes", bytes);
+  }
+
+  /** `bytes` more of iHTTP frames the node relayed between members' apps. */
+  appRelay(bytes) {
+    this.#app("app_relay_ihttp_bytes", bytes);
+  }
+
+  #app(total, bytes) {
+    if (!Number.isSafeInteger(bytes) || bytes < 0) throw new Error(`app usage is a byte count (${JSON.stringify(bytes)})`);
+    this.totals[total] += bytes;
   }
 
   get openCount() {
