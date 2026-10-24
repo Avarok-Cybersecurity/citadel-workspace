@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 
 mod app_net;
+mod apps_authority;
 mod log_setup;
 mod notice_token;
 mod shell_menu;
@@ -167,7 +168,10 @@ async fn run() -> Result<(), Box<dyn Error>> {
     }
     .with_supervisor(AGENT_SUPERVISOR)
     .with_telemetry(telemetry_uplink)
-    .with_app_net(app_net);
+    .with_app_net(
+        app_net,
+        std::sync::Arc::new(apps_authority::WorkspaceHostNetAuthority),
+    );
 
     // Initialize the node builder with StackedRatchet, which is a concrete implementation of the Ratchet trait
     let mut node_builder = NodeBuilder::<StackedRatchet>::default();
